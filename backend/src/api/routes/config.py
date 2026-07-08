@@ -257,3 +257,34 @@ async def set_provider_key(req: ProviderKeyRequest):
         "validated": True,
         "message": f"API key saved for {info['name']}"
     }
+
+
+class DeleteProviderKeyRequest(BaseModel):
+    provider: str
+
+
+@router.delete("/settings/provider-key")
+async def delete_provider_key(req: DeleteProviderKeyRequest):
+    """
+    Delete a stored provider API key.
+
+    Previously, once a key was saved via POST /settings/provider-key, there
+    was no way to revoke it without manually editing settings.json. This
+    endpoint allows the frontend to remove a key cleanly.
+    """
+    if req.provider not in PROVIDER_INFO:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}"
+        )
+
+    info = PROVIDER_INFO[req.provider]
+    removed = settings.delete_api_key(req.provider)
+
+    return {
+        "provider": req.provider,
+        "name": info["name"],
+        "deleted": removed,
+        "message": f"API key removed for {info['name']}" if removed
+                   else f"No API key was stored for {info['name']}",
+    }

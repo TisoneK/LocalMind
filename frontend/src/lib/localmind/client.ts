@@ -463,6 +463,13 @@ class LocalMindClient {
     });
   }
 
+  async deleteProviderKey(provider: string): Promise<void> {
+    await this.request('/api/settings/provider-key', {
+      method: 'DELETE',
+      body: JSON.stringify({ provider }),
+    });
+  }
+
   // ── File Write Confirmation ─────────────────────────────────────────
 
   async confirmWrite(path: string, content: string): Promise<{ path: string; filename: string }> {

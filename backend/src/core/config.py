@@ -205,17 +205,14 @@ class Settings(BaseSettings):
         if not path.exists():
             logger.info(f"[config] No runtime settings file at {path}")
             return
+        # Always read as UTF-8 — we always write UTF-8. The previous
+        # multi-encoding fallback (utf-16, cp1252, latin-1) masked real
+        # corruption by silently decoding bad bytes as latin-1, which
+        # corrupted API keys. Fail loudly on decode errors instead.
         try:
             import json
-            # Try multiple encodings to handle files saved with different encodings
-            content = ""
-            for enc in ["utf-8-sig", "utf-16", "utf-16-le", "cp1252", "latin-1"]:
-                try:
-                    with open(path, "r", encoding=enc) as f:
-                        content = f.read()
-                    break
-                except UnicodeDecodeError:
-                    continue
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
             if not content.strip():
                 return
             data = json.loads(content)
@@ -240,46 +237,84 @@ class Settings(BaseSettings):
         except Exception as e:
             logger.warning(f"[config] Failed to load runtime settings: {e}")
 
+    def _secure_write_json(self, path: Path, data: dict) -> None:
+        """
+        Write JSON to a file with restricted permissions (0600).
+
+        The settings file contains cloud-provider API keys, so it must not
+        be world-readable. On Unix, os.open with mode 0o600 creates the file
+        owner-only. On Windows, the file ACL inherits from the parent dir
+        (typically user-only in the home directory).
+
+        If the file already exists with broader permissions, they are tightened.
+        """
+        import json
+        path.parent.mkdir(parents=True, exist_ok=True)
+        content = json.dumps(data, indent=2)
+        # O_WRONLY | O_CREAT | O_TRUNC, mode 0600 (owner read/write only)
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(content)
+        except Exception:
+            # If fdopen fails, os.open already created/truncated the file.
+            # The fd is still open — close it to avoid leaking the descriptor.
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            raise
+        # Also tighten permissions on an existing file (in case it was
+        # created with broader perms by a previous version of LocalMind)
+        try:
+            os.chmod(str(path), 0o600)
+        except OSError:
+            pass  # Non-fatal: some filesystems don't support chmod
+
+    def _load_json_file(self, path: Path) -> dict:
+        """Load JSON from a file, returning {} on any error."""
+        import json
+        if not path.exists():
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
     def save_runtime_settings(self, **kwargs) -> None:
         """Save runtime settings to JSON file for persistence across restarts."""
-        path = self._runtime_settings_path()
-        import json
-        # Load existing to merge
-        existing = {}
-        if path.exists():
-            try:
-                with open(path, "r") as f:
-                    existing = json.load(f)
-            except Exception:
-                pass
-        # Merge and save
+        existing = self._load_json_file(self._runtime_settings_path())
         existing.update(kwargs)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(existing, f, indent=2)
+        self._secure_write_json(self._runtime_settings_path(), existing)
 
     def save_api_key(self, provider: str, api_key: str) -> None:
         """Save an API key for a provider."""
-        import json
         path = self._runtime_settings_path()
-        # Load existing
-        existing = {}
-        if path.exists():
-            try:
-                with open(path, "r") as f:
-                    existing = json.load(f)
-            except Exception:
-                pass
-        # Update API keys
+        existing = self._load_json_file(path)
         api_keys = existing.get("api_keys", {})
         api_keys[provider] = api_key
         existing["api_keys"] = api_keys
-        # Save
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(existing, f, indent=2)
+        self._secure_write_json(path, existing)
         # Update runtime cache
         self._runtime_api_keys[provider] = api_key
+
+    def delete_api_key(self, provider: str) -> bool:
+        """Delete a stored API key for a provider.
+
+        Returns True if a key was removed, False if no key was stored.
+        """
+        path = self._runtime_settings_path()
+        existing = self._load_json_file(path)
+        api_keys = existing.get("api_keys", {})
+        if provider not in api_keys:
+            return False
+        del api_keys[provider]
+        existing["api_keys"] = api_keys
+        self._secure_write_json(path, existing)
+        # Update runtime cache
+        self._runtime_api_keys.pop(provider, None)
+        return True
 
     def get_api_key(self, provider: str) -> str | None:
         """Get API key for a provider. Checks runtime storage first, then env vars."""
