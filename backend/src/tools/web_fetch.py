@@ -20,9 +20,12 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import re
+import socket
 from typing import Optional
+from urllib.parse import urlparse
 
 from core.models import Intent, ToolResult, RiskLevel
 from tools import register_tool
@@ -37,6 +40,114 @@ because the AnswerSynthesizer pre-processes content before sending to the LLM
 extract the answer after noise removal. 4000 was too thin for weather pages,
 sports fixtures, and other structured data."""
 WEB_FETCH_MAX_CONTENT_LENGTH = 2 * 1024 * 1024  # 2 MB -- don't fetch huge files
+
+
+# ── SSRF Protection ──────────────────────────────────────────────────────
+#
+# web_fetch is an agent-callable tool: the LLM can be coerced (via prompt
+# injection in search results, file contents, or chat) into fetching
+# arbitrary URLs. Without SSRF protection, an attacker can use web_fetch
+# to:
+#   - Read cloud metadata endpoints (169.254.169.254) to steal IAM creds
+#   - Probe internal services bound to localhost (databases, admin panels)
+#   - Hit the Ollama API itself (localhost:11434) to execute models
+#   - Access the Docker socket proxy or Kubernetes API
+#
+# _is_url_safe() resolves the hostname and rejects any URL whose resolved
+# IP is in a private/loopback/link-local/metadata range.
+
+# Cloud metadata endpoints that must never be fetched
+_METADATA_HOSTS = {
+    "169.254.169.254",   # AWS / Azure / GCP instance metadata
+    "fd00:ec2::254",     # AWS IPv6 metadata
+    "metadata.google.internal",  # GCP metadata (also resolves to 169.254.169.254)
+}
+
+
+def _is_ip_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Return True if an IP address is in a blocked (private/internal) range."""
+    return (
+        ip.is_private           # RFC 1918: 10/8, 172.16/12, 192.168/16
+        or ip.is_loopback       # 127/8, ::1
+        or ip.is_link_local     # 169.254/16 (includes cloud metadata)
+        or ip.is_multicast      # 224/4, ff00::/8
+        or ip.is_reserved       # various reserved ranges
+        or ip.is_unspecified    # 0/8, ::/128
+    )
+
+
+def _is_url_safe(url: str) -> tuple[bool, str]:
+    """
+    Validate a URL for safe fetching.
+
+    Checks:
+      1. Scheme is http or https (rejects file://, gopher://, etc.)
+      2. Hostname is not a known metadata endpoint
+      3. If hostname is a literal IP, it's not in a blocked range
+      4. If hostname is a domain, all resolved IPs are not in blocked ranges
+
+    Returns (is_safe, reason). reason is empty when safe.
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception as e:
+        return False, f"Invalid URL: {e}"
+
+    # Only http and https are allowed
+    if parsed.scheme not in ("http", "https"):
+        return False, f"URL scheme '{parsed.scheme}' is not allowed (only http/https)"
+
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "URL has no hostname"
+
+    # Block known metadata hosts by name
+    if hostname.lower() in _METADATA_HOSTS:
+        return False, f"Blocked: {hostname} is a cloud metadata endpoint"
+
+    # If hostname is a literal IP, check it directly
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if _is_ip_blocked(ip):
+            return False, f"Blocked: {hostname} is a private/loopback/link-local address"
+        return True, ""
+    except ValueError:
+        pass  # hostname is a domain name, not an IP — resolve it below
+
+    # Resolve the domain and check ALL resolved IPs
+    # A domain that resolves to both public and private IPs (DNS rebinding)
+    # is blocked if ANY IP is private.
+    #
+    # We use socket.gethostbyname_ex() which returns (hostname, aliaslist, ipaddrlist).
+    # A short default timeout is set via socket.setdefaulttimeout to avoid
+    # blocking on slow/hanging DNS servers.
+    old_timeout = socket.getdefaulttimeout()
+    try:
+        socket.setdefaulttimeout(3)
+        try:
+            _hostname, _aliases, ip_list = socket.gethostbyname_ex(hostname)
+        except socket.gaierror as e:
+            return False, f"Could not resolve hostname '{hostname}': {e}"
+        except Exception as e:
+            return False, f"DNS lookup failed for '{hostname}': {e}"
+    finally:
+        socket.setdefaulttimeout(old_timeout)
+
+    if not ip_list:
+        return False, f"No DNS records found for '{hostname}'"
+
+    for ip_str in ip_list:
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if _is_ip_blocked(ip):
+            return False, (
+                f"Blocked: '{hostname}' resolves to {ip_str} which is a "
+                f"private/loopback/link-local address"
+            )
+
+    return True, ""
 
 
 def _extract_readable_content(html: str) -> str:
@@ -139,6 +250,26 @@ async def web_fetch(url: str) -> ToolResult:
     # Add protocol if missing
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
+
+    # SSRF protection: reject URLs pointing to private/internal/metadata IPs.
+    # This prevents the agent from being coerced into fetching cloud metadata
+    # endpoints, internal services, or localhost-bound APIs.
+    is_safe, reason = _is_url_safe(url)
+    if not is_safe:
+        logger.warning("[web_fetch] SSRF blocked: %s — %s", url, reason)
+        return ToolResult(
+            content=(
+                f"Refused to fetch '{url}' for security reasons: {reason}. "
+                f"web_fetch is restricted to public internet addresses to prevent "
+                f"SSRF attacks on internal services and cloud metadata endpoints."
+            ),
+            risk=RiskLevel.HIGH,
+            source="web_fetch",
+            success=False,
+            error_type="ssrf_blocked",
+            error_message=reason,
+            metadata={"url": url},
+        )
 
     try:
         import httpx
