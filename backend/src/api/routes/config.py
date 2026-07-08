@@ -154,9 +154,12 @@ async def get_settings():
     embed_model = settings.ollama_embed_model
 
     # Build provider info (whether API key is set)
+    # Check both runtime-stored keys (settings.json) and env vars.
     providers = {}
     for prov, info in PROVIDER_INFO.items():
-        key_set = bool(os.getenv(info["key_env"], ""))
+        runtime_key = settings.get_api_key(prov)
+        env_key = os.getenv(info["key_env"], "")
+        key_set = bool(runtime_key or env_key)
         model_env = info["model_env"]
         model_value = getattr(settings, model_env.lower(), "") or info["default_model"]
         providers[prov] = {
@@ -186,50 +189,64 @@ async def set_adapter(req: AdapterConfig):
             detail=f"Invalid adapter. Valid: {valid_adapters}"
         )
 
-    # For cloud providers, check if API key is set
+    # For cloud providers, check if an API key is available.
+    # Check both runtime-stored keys (settings.json) and env vars.
     if req.adapter != "ollama":
         info = PROVIDER_INFO.get(req.adapter)
         if info:
-            api_key = os.getenv(info["key_env"], "")
-            if not api_key:
+            runtime_key = settings.get_api_key(req.adapter)
+            env_key = os.getenv(info["key_env"], "")
+            if not (runtime_key or env_key):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"API key not set for {info['name']}. Set {info['key_env']} in .env or environment."
+                    detail=f"API key not set for {info['name']}. Set it via the Settings UI or {info['key_env']} in .env."
                 )
 
     settings.localmind_adapter = req.adapter
     # Clear adapter cache so new adapter is used for next request
     clear_adapter_cache()
-    if req.model:
-        # Set model for this provider
-        model_field_map = {
-            "openai": "openai_model",
-            "anthropic": "anthropic_model",
-            "openrouter": "openrouter_model",
-            "deepseek": "deepseek_model",
-            "lite-llm": "litellm_model",
-            "zen": "zen_model",
-            "groq": "groq_model",
-            "together": "together_model",
-            "fireworks": "fireworks_model",
-            "deepinfra": "deepinfra_model",
-            "mistral": "mistral_model",
-            "cohere": "cohere_model",
-            "vercel": "vercel_model",
-            "cloudflare": "cloudflare_model",
-        }
-        if req.adapter in model_field_map:
-            setattr(settings, model_field_map[req.adapter], req.model)
 
-    # Persist runtime settings to JSON file for restart survival
+    # Resolve the model for this adapter: use the provided model, or fall
+    # back to the adapter's current model setting, or the provider default.
+    # Previously, calling set_adapter without a model saved model="" to
+    # settings.json, wiping any previously-saved model on restart.
+    model_field_map = {
+        "ollama": "ollama_model",
+        "openai": "openai_model",
+        "anthropic": "anthropic_model",
+        "openrouter": "openrouter_model",
+        "deepseek": "deepseek_model",
+        "lite-llm": "litellm_model",
+        "zen": "zen_model",
+        "groq": "groq_model",
+        "together": "together_model",
+        "fireworks": "fireworks_model",
+        "deepinfra": "deepinfra_model",
+        "mistral": "mistral_model",
+        "cohere": "cohere_model",
+        "vercel": "vercel_model",
+        "cloudflare": "cloudflare_model",
+    }
+    model_field = model_field_map.get(req.adapter)
+    if model_field:
+        # Use provided model, or keep the existing model if no model given
+        resolved_model = req.model or getattr(settings, model_field, "")
+        if resolved_model:
+            setattr(settings, model_field, resolved_model)
+    else:
+        resolved_model = req.model or ""
+
+    # Persist runtime settings to JSON file for restart survival.
+    # save_runtime_settings preserves existing values when a kwarg is empty,
+    # so passing model="" won't wipe a previously-saved model.
     settings.save_runtime_settings(
         adapter=req.adapter,
-        model=req.model or "",
+        model=resolved_model,
     )
 
     return {
         "adapter": settings.localmind_adapter,
-        "model": req.model or "default",
+        "model": resolved_model or "default",
         "message": f"Switched to {req.adapter}"
     }
 

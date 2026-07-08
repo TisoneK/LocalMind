@@ -565,18 +565,32 @@ class LocalMindClient {
   }
 
   /**
-   * Restore the persisted adapter on app mount.
-   * Sends a POST /api/settings/adapter call if a saved adapter exists.
-   * Failures are non-fatal — the backend keeps its current adapter.
+   * Sync the frontend's localStorage settings from the backend.
+   *
+   * The backend's ~/LocalMind/settings.json is the source of truth — it's
+   * loaded at startup and contains the adapter, model, and API keys.
+   * Previously, this method PUSHED localStorage state to the backend on
+   * mount via POST /api/settings/adapter, which overwrote the backend's
+   * settings.json with stale localStorage values (or empty values when
+   * localStorage was empty, wiping the saved model).
+   *
+   * Now: PULL from the backend instead. GET /api/settings returns the
+   * current adapter+model, which we cache in localStorage for offline
+   * display. The backend is never overwritten on mount — only when the
+   * user explicitly changes a setting via the Settings modal.
    */
   async restorePersistedAdapter(): Promise<void> {
-    const saved = this.getPersistedSettings();
-    if (!saved.adapter) return;
     try {
-      await this.setAdapter(saved.adapter, saved.model);
+      const settings = await this.getSettings();
+      if (settings.adapter) {
+        this.savePersistedSettings({
+          adapter: settings.adapter,
+          model: settings.model || '',
+        });
+      }
     } catch {
-      // Non-fatal: backend may not be ready yet, or adapter may be invalid.
-      // The user can reconfigure via the settings UI.
+      // Non-fatal: backend may not be ready yet.
+      // The useModels/useHealth hooks will retry and sync once it's up.
     }
   }
 }

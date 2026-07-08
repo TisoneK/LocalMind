@@ -283,9 +283,23 @@ class Settings(BaseSettings):
             return {}
 
     def save_runtime_settings(self, **kwargs) -> None:
-        """Save runtime settings to JSON file for persistence across restarts."""
+        """Save runtime settings to JSON file for persistence across restarts.
+
+        Preserves existing values: if a kwarg is empty/None, the existing
+        value in the file is kept rather than overwritten with empty. This
+        prevents set_adapter(adapter='zen', model='') from wiping a
+        previously-saved model name.
+        """
         existing = self._load_json_file(self._runtime_settings_path())
-        existing.update(kwargs)
+        for key, value in kwargs.items():
+            # Only overwrite if the new value is non-empty; otherwise keep
+            # the existing value so partial updates don't clobber the file.
+            if value is not None and value != "":
+                existing[key] = value
+            elif key not in existing:
+                # Key doesn't exist yet — write it even if empty so the
+                # file shape is predictable. (e.g. first-time adapter save)
+                existing[key] = value
         self._secure_write_json(self._runtime_settings_path(), existing)
 
     def save_api_key(self, provider: str, api_key: str) -> None:
