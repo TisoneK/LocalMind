@@ -291,7 +291,7 @@ export function WorkspaceLayout() {
       <div className="flex-1 min-w-0">
         <CenterPanel
           messages={messages}
-          selectedModel={currentModel || { id: effectiveModelId, name: effectiveModelId, provider: modelProvider || 'ollama' }}
+          selectedModel={currentModel || { id: effectiveModelId, name: effectiveModelId, provider: modelProvider || '' }}
           isStreaming={isStreaming}
           health={health}
           onSend={handleSend}

@@ -1352,7 +1352,7 @@ interface ModelsState {
 export function useModels(): ModelsState {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [current, setCurrent] = useState('');
-  const [provider, setProvider] = useState('ollama');
+  const [provider, setProvider] = useState('');
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {

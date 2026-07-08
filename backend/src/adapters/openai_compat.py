@@ -209,7 +209,14 @@ class OpenAICompatAdapter(BaseAdapter):
 
         self._provider_name = cfg.name
         self._base_url = cfg.base_url.rstrip("/")
-        self._model = model_override or cfg.default_model
+        # Read the model from settings (set by select_model or settings.json),
+        # falling back to the provider default. Previously this only used
+        # cfg.default_model (a static value evaluated at import time), so
+        # model selection via the UI had NO EFFECT on which model the
+        # adapter actually used for chat requests.
+        settings_model_attr = f"{provider.replace('-', '')}_model"
+        settings_model = getattr(settings, settings_model_attr, "") or ""
+        self._model = model_override or settings_model or cfg.default_model
         self._headers = {
             "Authorization": f"Bearer {api_key}",
             **(cfg.headers or {}),

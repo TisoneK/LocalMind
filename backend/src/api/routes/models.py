@@ -207,6 +207,14 @@ async def select_model(req: SelectModelRequest):
             setattr(settings, setting_key, model)
         clear_adapter_cache(adapter_name)
 
+        # Persist the model selection to settings.json so it survives
+        # restarts. Previously the model was only set in-memory and lost
+        # on restart.
+        settings.save_runtime_settings(
+            adapter=adapter_name,
+            model=model,
+        )
+
     return SelectModelResponse(
         selected=model,
         message=f"Active model switched to {model}",
