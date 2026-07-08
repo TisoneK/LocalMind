@@ -50,7 +50,10 @@ async def open_file(req: OpenFileRequest):
 
     try:
         if sys.platform == "win32":
-            subprocess.Popen(["start", "", str(path)], shell=True)
+            # SECURITY: Avoid shell=True — "start" is a cmd.exe builtin, so
+            # invoke cmd explicitly with the list form. This prevents shell
+            # metacharacter injection via the path.
+            subprocess.Popen(["cmd", "/c", "start", "", str(path)])
         elif sys.platform == "darwin":
             subprocess.Popen(["open", str(path)])
         else:

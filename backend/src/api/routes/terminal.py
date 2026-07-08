@@ -33,13 +33,32 @@ logger = logging.getLogger(__name__)
 _terminal_sessions: dict[str, dict] = {}
 
 MAX_HISTORY = 500          # max commands per session
+MAX_SESSIONS = 50          # cap concurrent sessions to prevent memory exhaustion
 DEFAULT_TIMEOUT = 30       # seconds
 MAX_OUTPUT_BYTES = 1_000_000  # 1 MB output cap to prevent memory exhaustion
+
+# Track PIDs of processes spawned by LocalMind terminal sessions.
+# Only these PIDs can be killed via POST /api/terminal/kill — this prevents
+# arbitrary process termination (e.g. killing Ollama, IDEs, security tools).
+_spawned_pids: set[int] = set()
 
 
 def _get_session(session_id: str) -> dict:
     """Get or create a terminal session with defaults."""
     if session_id not in _terminal_sessions:
+        # SECURITY: Enforce a cap on concurrent sessions to prevent
+        # memory exhaustion from unbounded session creation. When the
+        # cap is reached, evict the oldest session (LRU).
+        if len(_terminal_sessions) >= MAX_SESSIONS:
+            oldest_id = min(
+                _terminal_sessions,
+                key=lambda sid: _terminal_sessions[sid].get("created_at", 0),
+            )
+            logger.warning(
+                "[terminal] session cap reached (%d), evicting oldest: %s",
+                MAX_SESSIONS, oldest_id,
+            )
+            del _terminal_sessions[oldest_id]
         _terminal_sessions[session_id] = {
             "cwd": os.path.expanduser("~"),
             "history": [],
@@ -331,6 +350,10 @@ async def execute_terminal_command(request: TerminalRequest):
             env=env,
         )
 
+        # Track the PID so POST /api/terminal/kill can verify ownership
+        # before sending SIGKILL. This prevents arbitrary process kills.
+        _spawned_pids.add(process.pid)
+
         try:
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(),
@@ -484,11 +507,32 @@ async def set_session_cwd(session_id: str, cwd: str):
 
 @router.post("/terminal/kill", response_model=ProcessKillResponse)
 async def kill_process(request: ProcessKillRequest):
-    """Attempt to kill a running process by PID."""
+    """Attempt to kill a running process by PID.
+
+    SECURITY: Only processes spawned by LocalMind terminal sessions can be
+    killed. This prevents arbitrary process termination (e.g. killing Ollama,
+    IDEs, security tools, or system services).
+    """
+    # Reject system PIDs (0 = kernel, 1 = init/systemd, 2-4 = kernel threads)
+    if request.pid <= 4:
+        return ProcessKillResponse(
+            success=False,
+            message=f"Refused to kill system PID {request.pid}",
+        )
+
+    # Verify the PID was spawned by LocalMind
+    if request.pid not in _spawned_pids:
+        return ProcessKillResponse(
+            success=False,
+            message=f"PID {request.pid} was not spawned by LocalMind. Only terminal session processes can be killed.",
+        )
+
     try:
         os.kill(request.pid, 9)
+        _spawned_pids.discard(request.pid)
         return ProcessKillResponse(success=True, message=f"Sent SIGKILL to PID {request.pid}")
     except ProcessLookupError:
+        _spawned_pids.discard(request.pid)
         return ProcessKillResponse(success=False, message=f"PID {request.pid} not found")
     except PermissionError:
         return ProcessKillResponse(success=False, message=f"Permission denied for PID {request.pid}")

@@ -313,12 +313,17 @@ def _open_file(path: Path) -> tuple[str, RiskLevel]:
     """Open a file with the system default handler. path must be fully resolved."""
     if not path.exists():
         return f"File not found: {path}", RiskLevel.LOW
-    cmd = (
-        f'start "" "{path}"' if IS_WIN else
-        f'open "{path}"'     if IS_MAC else
-        f'xdg-open "{path}"'
-    )
-    _run(cmd)
+    # SECURITY: Use the list form (shell=False) to avoid command injection.
+    # Previously this built a shell string like f'start "" "{path}"' which
+    # would interpret shell metacharacters in the path (backticks, $(), ;).
+    if IS_WIN:
+        # On Windows, "start" is a cmd.exe builtin so we need shell=True,
+        # but we pass the path as a list element so subprocess handles quoting.
+        _run(["cmd", "/c", "start", "", str(path)])
+    elif IS_MAC:
+        _run(["open", str(path)])
+    else:
+        _run(["xdg-open", str(path)])
     return f"✅  Opening {path.name} from {path.parent}", RiskLevel.LOW
 
 
@@ -330,12 +335,21 @@ def _open_website(url: str) -> tuple[str, RiskLevel]:
     if not resolved.startswith(("http://", "https://")):
         resolved = "https://" + resolved
 
-    cmd = (
-        f"start {resolved}"  if IS_WIN else
-        f"open {resolved}"   if IS_MAC else
-        f"xdg-open {resolved}"
-    )
-    _run(cmd)
+    # SECURITY: Validate the URL scheme — only http/https are safe to open.
+    # Reject file://, gopher://, javascript:, data:, etc. which could be
+    # abused for local file access or script execution.
+    from urllib.parse import urlparse
+    parsed = urlparse(resolved)
+    if parsed.scheme not in ("http", "https"):
+        return f"Refused to open URL with unsafe scheme: {parsed.scheme}", RiskLevel.MEDIUM
+
+    # Use the list form (shell=False) to avoid command injection via the URL.
+    if IS_WIN:
+        _run(["cmd", "/c", "start", resolved])
+    elif IS_MAC:
+        _run(["open", resolved])
+    else:
+        _run(["xdg-open", resolved])
     return f"✅  Opening {resolved} in your browser…", RiskLevel.LOW
 
 

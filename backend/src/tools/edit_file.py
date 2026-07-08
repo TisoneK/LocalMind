@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from core.models import Intent, ToolResult, RiskLevel
+from core.config import settings
 from tools import register_tool
 
 logger = logging.getLogger(__name__)
@@ -427,6 +428,22 @@ async def _edit_from_payload(payload: Dict[str, Any]) -> ToolResult:
 
     # Resolve path
     filepath = _resolve_path(raw_path)
+
+    # SECURITY: Only allow editing files within user-approved folders.
+    # Without this check, the agent could edit ~/.ssh/authorized_keys,
+    # ~/.bashrc, ~/.aws/credentials, or the LocalMind DB itself.
+    if not settings.is_path_allowed(filepath):
+        return ToolResult(
+            content=(
+                f"Access denied: '{filepath}' is outside the allowed folders. "
+                f"File editing is restricted to your user directories for safety."
+            ),
+            risk=RiskLevel.HIGH,
+            source="edit_file",
+            success=False,
+            error_type="permission_denied",
+            error_message=f"Path not in allowed read paths: {filepath}",
+        )
 
     # Check file exists
     if not filepath.exists():

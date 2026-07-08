@@ -270,6 +270,22 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                     p = candidate
                     break
         if p.exists() and p.is_file():
+            # SECURITY: Only allow reading files within user-approved folders.
+            # Without this check, the agent could read ~/.ssh/id_rsa,
+            # ~/.aws/credentials, /etc/passwd, or the LocalMind DB.
+            if not settings.is_path_allowed(p):
+                logger.warning("[file_task] blocked read of path outside allowed folders: %s", p)
+                return ToolResult(
+                    content=(
+                        f"Access denied: '{p}' is outside the allowed folders. "
+                        f"File reading is restricted to your user directories for safety."
+                    ),
+                    risk=RiskLevel.HIGH,
+                    source="file_reader",
+                    success=False,
+                    error_type="permission_denied",
+                    error_message=f"Path not in allowed read paths: {p}",
+                )
             try:
                 data = p.read_bytes()
                 attachment = await parse_file(

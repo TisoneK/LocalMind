@@ -381,9 +381,20 @@ async def chat(
                 )
             uploads_dir = Path(settings.localmind_uploads_path)
             uploads_dir.mkdir(parents=True, exist_ok=True)
-            dest = uploads_dir / file.filename
+            # SECURITY: Sanitize the filename to prevent path traversal.
+            # A malicious filename like "../../etc/cron.d/evil" or
+            # "..\\..\\..\\Windows\\System32\\evil.dll" must not escape
+            # the uploads directory. We strip all directory components
+            # and reject null bytes / absolute paths.
+            safe_name = Path(file.filename).name  # strips ../ and drive prefixes
+            if not safe_name or safe_name in (".", "..") or "\x00" in safe_name:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid filename. Filenames must be non-empty and cannot contain path separators or null bytes.",
+                )
+            dest = uploads_dir / safe_name
             dest.write_bytes(file_bytes)
-            filename = file.filename
+            filename = safe_name
             file_content_type = file.content_type or "application/octet-stream"
             # Do NOT fall back to the uploads path — that would store our internal
             # copy location as the "source", which is wrong. file_full_path must
