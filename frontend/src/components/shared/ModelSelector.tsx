@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { ModelOption } from '@/types';
 
 interface ModelSelectorProps {
@@ -10,19 +10,25 @@ interface ModelSelectorProps {
   models?: ModelOption[];
 }
 
-// Fallback models if none provided by API
-const fallbackModels: ModelOption[] = [
-  { id: 'qwen3-235b', name: 'Qwen3-235B-A22B', provider: 'Ollama', size: '235B' },
-  { id: 'deepseek-r1', name: 'DeepSeek-R1-0528', provider: 'Ollama', size: '671B' },
-  { id: 'llama3.3', name: 'Llama 3.3 70B', provider: 'Ollama', size: '70B' },
-  { id: 'codestral', name: 'Codestral 22B', provider: 'Ollama', size: '22B' },
-  { id: 'mistral-small', name: 'Mistral Small 24B', provider: 'Ollama', size: '24B' },
-];
-
 export function ModelSelector({ selectedModel, onModelChange, models }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
-  const modelList = models && models.length > 0 ? models : fallbackModels;
-  const current = modelList.find((m) => m.id === selectedModel) || modelList[0];
+
+  // Use API-provided models, or empty list while loading.
+  // Previously this fell back to a hardcoded list of 5 Ollama models
+  // (Qwen3-235B, DeepSeek-R1, etc.), which caused the sidebar to show
+  // "Qwen3-235B-A22B" even when the backend was using a cloud provider.
+  const modelList = models || [];
+
+  // Find the current model in the list. If not found (e.g. the backend's
+  // current model isn't in the available list), synthesize a display entry
+  // so the button shows the actual model name, not a random fallback.
+  const fromList = modelList.find((m) => m.id === selectedModel);
+  const current: ModelOption = fromList || {
+    id: selectedModel,
+    name: selectedModel || 'Loading…',
+    provider: '',
+    size: '',
+  };
 
   // Group models: free vs paid
   const freeModels = modelList.filter((m) => m.id.toLowerCase().includes('free'));
@@ -71,6 +77,12 @@ export function ModelSelector({ selectedModel, onModelChange, models }: ModelSel
                   </button>
                 ))}
               </>
+            )}
+
+            {modelList.length === 0 && (
+              <div className="px-2 py-2 text-xs text-[#8ab08a]">
+                Loading models…
+              </div>
             )}
 
             {paidModels.length > 0 && (

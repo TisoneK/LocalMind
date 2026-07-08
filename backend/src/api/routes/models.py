@@ -128,6 +128,18 @@ async def list_models():
             ])
             current_model = current_model or "minimax-m2.5-free"
 
+        # For non-Zen cloud providers (DeepSeek, OpenAI, etc.), we can't
+        # list available models — but we must include the current model so
+        # the UI can display it. Otherwise the model selector shows an
+        # empty list and the sidebar falls back to a hardcoded name.
+        if not model_options and current_model:
+            model_options.append({
+                "id": current_model,
+                "name": current_model,
+                "provider": adapter_name,
+                "size": "Cloud",
+            })
+
     return {
         "models": model_options,
         "current": current_model,

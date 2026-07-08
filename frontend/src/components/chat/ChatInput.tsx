@@ -185,7 +185,7 @@ export function ChatInput({ onSend, onAbort, isStreaming, modelName, modelProvid
           </span>
         </div>
         <span className="text-[9px] text-[#8ab08a]">
-          {modelName || 'Qwen3-235B'} · {modelProvider || 'Ollama'}
+          {modelName || 'Loading…'} · {modelProvider || '—'}
         </span>
       </div>
     </div>
