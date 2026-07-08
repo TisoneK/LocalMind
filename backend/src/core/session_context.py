@@ -283,7 +283,7 @@ class SessionContextManager:
 
 
 def _resolve_path(target: str, current_cwd: str) -> Optional[Path]:
-    """
+    r"""
     Resolve a path target relative to the current CWD.
 
     Handles:
