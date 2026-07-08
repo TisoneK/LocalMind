@@ -151,13 +151,21 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
         # Pre-warm the embedding model so the first memory retrieval call
         # (step 5) doesn't cold-load Ollama and hang for 180s.
+        # Embeddings are always served by local Ollama (nomic-embed-text)
+        # even when the LLM adapter is cloud-based. Skip the warmup when
+        # Ollama isn't running — memory search falls back to keyword matching.
         if not self._warmed_up:
-            try:
-                await self._memory._store.warmup()
-                self._warmed_up = True
-                logger.info("[engine] vector store embedding model warmed up")
-            except Exception as e:
-                logger.warning(f"[engine] vector store warmup failed (non-fatal): {e}")
+            if settings.localmind_adapter == "ollama" or settings.is_ollama_configured():
+                try:
+                    await self._memory._store.warmup()
+                    self._warmed_up = True
+                    logger.info("[engine] vector store embedding model warmed up")
+                except Exception as e:
+                    logger.warning(f"[engine] vector store warmup failed (non-fatal): {e}")
+                    self._warmed_up = True  # Don't retry on every request
+            else:
+                logger.info("[engine] skipping embedding warmup — Ollama not running (cloud adapter active)")
+                self._warmed_up = True  # Don't retry on every request
 
         # P11: Run memory consolidation on startup to merge near-duplicate
         # facts that accumulated from previous sessions. This is fire-and-forget

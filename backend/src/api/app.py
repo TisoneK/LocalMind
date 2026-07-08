@@ -118,8 +118,15 @@ def create_app() -> FastAPI:
                 if vector_store._ready:
                     count = await vector_store.count()
                     logger.info(f"[startup] VectorStore ready — {count} facts stored")
-                    # Warm up Ollama embedding model
-                    await vector_store.warmup()
+                    # Warm up the embedding model. This is Ollama-based even
+                    # when using a cloud LLM adapter, because embeddings are
+                    # always local (nomic-embed-text). Skip silently when
+                    # Ollama isn't running — memory search will fall back to
+                    # keyword matching until Ollama is started.
+                    if settings.localmind_adapter == "ollama" or settings.is_ollama_configured():
+                        await vector_store.warmup()
+                    else:
+                        logger.info("[startup] skipping embedding warmup — Ollama not running (cloud adapter active)")
                 else:
                     logger.info("[startup] VectorStore not ready")
             except Exception as e:
@@ -136,7 +143,18 @@ def create_app() -> FastAPI:
 
             Models are warmed concurrently (asyncio.gather) so total startup cost is
             bounded by the slowest model, not the sum of all models.
+
+            SKIPPED entirely when the active adapter is not Ollama — cloud providers
+            don't need VRAM pre-loading, and running this would overwrite the cloud
+            model list (fetched by engine.startup) with an empty Ollama list.
             """
+            if settings.localmind_adapter != "ollama":
+                logger.info(
+                    "[startup] skipping Ollama LLM warmup — active adapter is '%s'",
+                    settings.localmind_adapter,
+                )
+                return
+
             from adapters.ollama import OllamaAdapter
             from core.model_router import update_pulled_models
 

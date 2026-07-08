@@ -23,8 +23,27 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Locate localmind.md relative to this file (project root).
-_KNOWLEDGE_DOC_PATH = Path(__file__).parent.parent / "localmind.md"
+
+def _find_knowledge_doc() -> Path | None:
+    """
+    Locate localmind.md by searching upward from this file.
+
+    The file lives at the repository root, but this module is at
+    backend/src/core/knowledge_writer.py — so parent.parent only
+    reaches backend/src/, not the repo root. We walk up the tree
+    so the path resolves correctly in both dev (repo checkout) and
+    installed (site-packages) layouts.
+    """
+    here = Path(__file__).resolve()
+    for candidate_dir in [here.parent, *here.parents]:
+        candidate = candidate_dir / "localmind.md"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+# Resolve once at import time; may be None if the file isn't present.
+_KNOWLEDGE_DOC_PATH: Path | None = _find_knowledge_doc()
 
 # Mapping: placeholder token → callable that returns the live value string.
 # All callables are evaluated lazily at write time so settings are fully
@@ -88,10 +107,9 @@ def update_knowledge_doc() -> bool:
     Returns True if the file was written (values changed or placeholders found),
     False if nothing changed or the file could not be found/written.
     """
-    if not _KNOWLEDGE_DOC_PATH.exists():
+    if _KNOWLEDGE_DOC_PATH is None or not _KNOWLEDGE_DOC_PATH.exists():
         logger.warning(
-            "[knowledge_writer] localmind.md not found at %s — skipping update",
-            _KNOWLEDGE_DOC_PATH,
+            "[knowledge_writer] localmind.md not found — skipping update",
         )
         return False
 
