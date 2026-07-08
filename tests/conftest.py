@@ -5,7 +5,16 @@ from __future__ import annotations
 import pytest
 import tempfile
 import os
+import sys
 from pathlib import Path
+
+# Ensure backend/src/ is on sys.path so test modules can import
+# `from tools.file_reader import ...`, `from adapters.ollama import ...`, etc.
+# The pyproject.toml `pythonpath = ["src"]` setting should handle this, but
+# some pytest versions don't honor it reliably — this is a guaranteed fallback.
+_BACKEND_SRC = str(Path(__file__).resolve().parent.parent / "backend" / "src")
+if _BACKEND_SRC not in sys.path:
+    sys.path.insert(0, _BACKEND_SRC)
 
 
 @pytest.fixture(autouse=True)

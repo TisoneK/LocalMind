@@ -107,3 +107,7 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["../tests"]
 pythonpath = ["src"]
+# Use importlib mode to avoid package name conflicts between tests/tools/
+# and backend/src/tools/ — both define a "tools" package, and the default
+# prepend mode causes the test package to shadow the source package.
+importmode = "importlib"
