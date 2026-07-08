@@ -120,7 +120,7 @@ export function WorkspaceLayout() {
   const { todos, toggleTodo, addTodo } = useTodos(currentSessionId);
   const { observation } = useObservability(currentSessionId);
   const { metrics: polledMetrics } = useMetrics(isStreaming);
-  const { models, current: currentModelId, provider: modelProvider, selectModel } = useModels();
+  const { models, current: currentModelId, provider: modelProvider, selectModel, refresh: refreshModels } = useModels();
   const { facts: memoryFacts } = useMemory();
 
   // Sync selectedModel from the backend's /api/models "current" field.
@@ -146,6 +146,12 @@ export function WorkspaceLayout() {
     ? lastMetrics
     : polledMetrics;
 
+  // Clear liveActions when switching sessions so the Actions panel doesn't
+  // show the previous session's tool calls.
+  useEffect(() => {
+    setLiveActions([]);
+  }, [currentSessionId]);
+
   // FIX 3: Derive actions from live tool_calls so the Actions panel
   // always shows what's happening. When the API returns historical
   // actions, we merge them — live actions take priority.
@@ -165,6 +171,10 @@ export function WorkspaceLayout() {
         duration: tc.duration ? tc.duration / 1000 : undefined,
       }));
       setLiveActions(newActions);
+    } else {
+      // Clear live actions when no tool calls are active so the panel
+      // doesn't show stale data from the previous turn.
+      setLiveActions([]);
     }
   }, [activeToolCalls]);
 
@@ -336,6 +346,7 @@ export function WorkspaceLayout() {
           forceTerminalTab={forceTerminalTab}
           onTerminalTabShown={() => setForceTerminalTab(false)}
           width={rightPanelWidth}
+          onModelsRefresh={refreshModels}
         />
       </div>
     </div>

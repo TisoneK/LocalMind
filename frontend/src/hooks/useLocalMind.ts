@@ -195,41 +195,46 @@ export function useChat(
     const loadHistory = async () => {
       if (!sessionId) {
         if (mounted) {
-          console.log('[useChat] setMessages([]) — sessionId is null');
           setMessages([]);
+          setLiveObservation(null);
+          setCurrentIntent(undefined);
+          setCurrentConfidence(undefined);
+          setActiveToolCalls([]);
         }
         return;
+      }
+      // Clear stale data from the previous session immediately so the
+      // Observe/Actions panels don't show the old session's data while
+      // the new history loads.
+      if (prevSessionIdRef.current && prevSessionIdRef.current !== sessionId) {
+        setLiveObservation(null);
+        setCurrentIntent(undefined);
+        setCurrentConfidence(undefined);
+        setActiveToolCalls([]);
       }
       // Skip if we're actively streaming to this session — the messages
       // are already in local state and the DB may not have them yet.
       if (streamingSessionRef.current === sessionId) {
-        console.log('[useChat] SKIP loadHistory — streaming to this session');
         return;
       }
       // Skip if the sessionId was just created (handleSend just called
       // setCurrentSessionId but send() hasn't run yet). This catches the
-      // StrictMode double-mount: the first mount's cleanup ran, the second
-      // mount sees isStreamingRef.current=false but a fresh sessionId.
+      // StrictMode double-mount.
       if (prevSessionIdRef.current === null && sessionId) {
-        console.log('[useChat] SKIP loadHistory — fresh sessionId (prev=null)');
         return;
       }
       // Skip if we just sent a message to this session — the stream is
       // pending and the in-flight messages are already in state.
       if (prevSessionIdRef.current === sessionId && isStreamingRef.current) {
-        console.log('[useChat] SKIP loadHistory — send in progress');
         return;
       }
       const history = await localmindClient.getSessionHistory(sessionId);
-      // Always update messages when switching sessions, even if empty
       if (mounted) {
-        console.log('[useChat] setMessages from history —', history.length, 'messages');
         setMessages(history);
       }
     };
 
     if (prevSessionIdRef.current !== sessionId) {
-      console.log('[useChat] sessionId changed:', prevSessionIdRef.current, '→', sessionId);
       prevSessionIdRef.current = sessionId;
     }
 
@@ -1280,14 +1285,17 @@ export function useTerminal(initialSessionId: string = 'default') {
 // ─── useObservability ──────────────────────────────────────────────────
 
 export function useObservability(sessionId: string | null) {
-  const defaultObs: ObservationData = { intent: 'chat', confidence: 0, toolsUsed: [], memoryHits: 0, contextTokens: 0, latency: 0 };
-  const [observation, setObservation] = useState<ObservationData>(defaultObs);
+  // Don't default intent to 'chat' — that masks the empty state.
+  // The ObservabilityTab uses hasData = confidence>0 || toolsUsed>0 || latency>0
+  // to decide whether to show real data or the "—" placeholder.
+  const emptyObs: ObservationData = { intent: '' as any, confidence: 0, toolsUsed: [], memoryHits: 0, contextTokens: 0, latency: 0 };
+  const [observation, setObservation] = useState<ObservationData>(emptyObs);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      if (!sessionId) { queueMicrotask(() => { if (mounted) { setObservation(defaultObs); setLoading(false); } }); return; }
+      if (!sessionId) { queueMicrotask(() => { if (mounted) { setObservation(emptyObs); setLoading(false); } }); return; }
       const data = await localmindClient.getObservability(sessionId);
       if (mounted) { setObservation({ intent: data.intent, confidence: data.confidence, toolsUsed: data.toolsUsed, memoryHits: data.memoryHits, contextTokens: data.contextTokens, latency: data.latency }); setLoading(false); }
     };

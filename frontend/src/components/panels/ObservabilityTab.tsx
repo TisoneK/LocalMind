@@ -67,10 +67,14 @@ export function ObservabilityTab({ observation }: ObservabilityTabProps) {
   const memoryHits = Number.isFinite(observation.memoryHits) ? observation.memoryHits : 0;
   const toolsUsed = observation.toolsUsed ?? [];
 
-  // Whether real data has been received (vs. initial zeros)
-  const hasData = observation.intent !== undefined || observation.confidence > 0 || toolsUsed.length > 0 || latency > 0;
+  // Whether real data has been received (vs. initial zeros).
+  // Don't check observation.intent — the default state has intent='chat',
+  // which would make hasData always true and mask the empty state.
+  const hasData = observation.confidence > 0 || toolsUsed.length > 0 || latency > 0;
 
-  const intentConfig = intentLabels[observation.intent] || intentLabels.chat;
+  const intentConfig = hasData
+    ? (intentLabels[observation.intent] || { label: observation.intent || 'Unknown', color: 'text-[#8ab08a]', bg: 'bg-[#1a2a1a]' })
+    : intentLabels.chat;
 
   // FIX: Dynamic pipeline status — previously the pipeline was hardcoded
   // with steps 3/5 done. Now we infer status from the observation data:

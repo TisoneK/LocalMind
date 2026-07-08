@@ -92,6 +92,8 @@ export interface Session {
   timestamp: string;
   messageCount: number;
   active: boolean;
+  /** Human-readable date from the backend (e.g. "14:30" or "Jan 05") */
+  formattedDate?: string;
 }
 
 export interface ActionItem {

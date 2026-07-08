@@ -64,6 +64,7 @@ async def list_sessions():
             "timestamp": raw_ts,
             "formattedDate": formatted_date,
             "messageCount": session.get("message_count", 0),
+            "last_message": (session.get("last_message") or "")[:120],
         })
 
     return {"sessions": frontend_sessions}

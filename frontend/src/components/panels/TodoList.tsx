@@ -28,29 +28,29 @@ export function TodoList({ todos, onToggle, onAdd }: TodoListProps) {
 
   return (
     <div className="space-y-2">
-      {/* Progress header — only show stats when there are tasks */}
-      {total > 0 && (
-        <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-medium text-[#d4e8d4]">Tasks</span>
+      {/* Header — always show so the + button is accessible even with 0 todos */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-medium text-[#d4e8d4]">Tasks</span>
+          {total > 0 && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#1a2a1a] text-[#39d353] font-mono">
               {completed}/{total}
             </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-[#8ab08a]">{percentage}%</span>
-            {onAdd && (
-              <button
-                onClick={() => setShowInput(!showInput)}
-                className="p-0.5 rounded text-[#8ab08a] hover:text-[#39d353] hover:bg-[#1a2a1a] transition-colors"
-                title="Add task"
-              >
-                <Plus className="h-3 w-3" />
-              </button>
-            )}
-          </div>
+          )}
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          {total > 0 && <span className="text-[10px] text-[#8ab08a]">{percentage}%</span>}
+          {onAdd && (
+            <button
+              onClick={() => setShowInput(!showInput)}
+              className="p-0.5 rounded text-[#8ab08a] hover:text-[#39d353] hover:bg-[#1a2a1a] transition-colors"
+              title="Add task"
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Progress bar — only show when there are tasks */}
       {total > 0 && (

@@ -181,9 +181,10 @@ class LocalMindClient {
     return (data.sessions || []).map((s) => ({
       id: s.id,
       title: s.title || 'New Chat',
-      lastMessage: '',
+      lastMessage: s.last_message || s.lastMessage || s.preview || '',
       timestamp: s.formattedDate || String(s.timestamp || ''),
-      messageCount: s.messageCount || 0,
+      formattedDate: s.formattedDate,
+      messageCount: s.messageCount ?? s.message_count ?? 0,
       active: false,
     }));
   }

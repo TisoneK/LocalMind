@@ -304,17 +304,21 @@ export function LeftPanel({
         </div>
       )}
 
-      {/* Todos — only show when there are actual tasks */}
-      {activeToolCalls.filter(tc => tc.status === 'running').length === 0 && todos.length > 0 && (
+      {/* Todos — always show so users can add tasks even when the list is empty.
+          Previously the `todos.length > 0` condition made it impossible to
+          create the first todo via the UI (chicken-and-egg). */}
+      {activeToolCalls.filter(tc => tc.status === 'running').length === 0 && (
         <div className="border-t border-[#1a2a1a] p-3">
           <div className="flex items-center gap-1.5 mb-2">
             <CheckSquare className="h-3 w-3 text-[#e8a420]" />
             <span className="text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
               Todos
             </span>
-            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-[#1a2a1a] text-[#8ab08a] font-mono">
-              {todos.filter(t => t.completed).length}/{todos.length}
-            </span>
+            {todos.length > 0 && (
+              <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-[#1a2a1a] text-[#8ab08a] font-mono">
+                {todos.filter(t => t.completed).length}/{todos.length}
+              </span>
+            )}
           </div>
           <TodoList todos={todos} onToggle={onToggleTodo} onAdd={onAddTodo} />
         </div>

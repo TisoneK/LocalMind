@@ -8,7 +8,6 @@ import { ObservabilityTab } from '@/components/panels/ObservabilityTab';
 import { MemoryTab } from '@/components/panels/MemoryTab';
 import { PerformanceMetrics } from '@/components/panels/PerformanceMetrics';
 import { SettingsModal } from '@/components/shared/SettingsModal';
-import { useModels } from '@/hooks/useLocalMind';
 
 interface RightPanelProps {
   terminalLines: TerminalLine[];
@@ -32,6 +31,8 @@ interface RightPanelProps {
   /** Called after the terminal tab has been shown */
   onTerminalTabShown?: () => void;
   width?: number;
+  /** Called when settings change so the parent can refresh its model list */
+  onModelsRefresh?: () => Promise<void>;
 }
 
 type RightTab = 'terminal' | 'observability' | 'memory' | 'actions';
@@ -55,10 +56,15 @@ export function RightPanel({
   forceTerminalTab,
   onTerminalTabShown,
   width = 320,
+  onModelsRefresh,
 }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<RightTab>('observability');
   const [showSettings, setShowSettings] = useState(false);
-  const { refresh: refreshModels } = useModels();
+  // Use the parent's refresh function instead of calling useModels() again.
+  // Previously this created a SECOND useModels instance whose state was
+  // independent from the one in WorkspaceLayout — so saving settings only
+  // refreshed this instance, leaving the sidebar's model list stale.
+  const refreshModels = onModelsRefresh || (() => Promise.resolve());
   const isCompact = width < 250;
 
   // FIX 4: When the parent signals to force the terminal tab, switch to it
