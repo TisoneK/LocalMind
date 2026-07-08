@@ -1,0 +1,124 @@
+{
+  "name": "localmind-electron",
+  "version": "0.5.0",
+  "description": "LocalMind - Local AI with file reading, web search, memory, and tool use on top of Ollama",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "wait-on http://localhost:3000 && electron .",
+    "vite": "npm --prefix ../frontend run dev",
+    "electron": "wait-on http://localhost:3000 && electron .",
+    "build": "electron-builder --publish never",
+    "build:win": "electron-builder --win --publish never",
+    "build:mac": "electron-builder --mac --publish never",
+    "build:linux": "electron-builder --linux --publish never"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "wait-on": "^8.0.0"
+  },
+  "build": {
+    "appId": "dev.skytechsolutions.localmind",
+    "productName": "LocalMind",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "tray-icon.js",
+      "package.json",
+      {
+        "from": "../frontend/dist",
+        "to": "frontend/dist"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/server.py",
+        "to": "app/backend/server.py"
+      },
+      {
+        "from": "../backend/src/api",
+        "to": "app/backend/src/api"
+      },
+      {
+        "from": "../backend/src/core",
+        "to": "app/backend/src/core"
+      },
+      {
+        "from": "../backend/src/tools",
+        "to": "app/backend/src/tools"
+      },
+      {
+        "from": "../backend/src/adapters",
+        "to": "app/backend/src/adapters"
+      },
+      {
+        "from": "../backend/src/storage",
+        "to": "app/backend/src/storage"
+      },
+      {
+        "from": "../backend/src/cli",
+        "to": "app/backend/src/cli"
+      },
+      {
+        "from": "../backend/pyproject.toml",
+        "to": "app/backend/pyproject.toml"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "LocalMind-Setup-${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "artifactName": "LocalMind-${version}-${arch}.${ext}",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "LocalMind-${version}-${arch}.${ext}",
+      "category": "Development"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LocalMind"
+    },
+    "dmg": {
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,329 @@
+'use client';
+
+import { useState, useCallback, useEffect } from 'react';
+import { LeftPanel } from './LeftPanel';
+import { CenterPanel } from './CenterPanel';
+import { RightPanel } from './RightPanel';
+import { ToolCall, ToolExecutionEvent, ActionItem } from '@/types';
+import {
+  useSessions,
+  useChat,
+  useActions,
+  useFileTree,
+  useTodos,
+  useTerminal,
+  useObservability,
+  useMetrics,
+  useModels,
+  useMemory,
+  useHealth,
+} from '@/hooks/useLocalMind';
+import { localmindClient, getPersistedSettings } from '@/lib/localmind/client';
+
+export function WorkspaceLayout() {
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(280);
+  const [rightPanelWidth, setRightPanelWidth] = useState(320);
+  const [isResizingLeft, setIsResizingLeft] = useState(false);
+  const [isResizingRight, setIsResizingRight] = useState(false);
+
+  // Handle left panel resize
+  const handleMouseMoveLeft = useCallback((e: MouseEvent) => {
+    if (!isResizingLeft) return;
+    const newWidth = Math.min(Math.max(e.clientX, 180), 400);
+    setLeftPanelWidth(newWidth);
+  }, [isResizingLeft]);
+
+  const handleMouseUpLeft = useCallback(() => {
+    setIsResizingLeft(false);
+  }, []);
+
+  // Handle right panel resize
+  const handleMouseMoveRight = useCallback((e: MouseEvent) => {
+    if (!isResizingRight) return;
+    const newWidth = Math.min(Math.max(window.innerWidth - e.clientX, 200), 500);
+    setRightPanelWidth(newWidth);
+  }, [isResizingRight]);
+
+  const handleMouseUpRight = useCallback(() => {
+    setIsResizingRight(false);
+  }, []);
+
+  // Add/remove global mouse listeners
+  useEffect(() => {
+    if (isResizingLeft) {
+      document.addEventListener('mousemove', handleMouseMoveLeft);
+      document.addEventListener('mouseup', handleMouseUpLeft);
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMoveLeft);
+      document.removeEventListener('mouseup', handleMouseUpLeft);
+    };
+  }, [isResizingLeft, handleMouseMoveLeft, handleMouseUpLeft]);
+
+  useEffect(() => {
+    if (isResizingRight) {
+      document.addEventListener('mousemove', handleMouseMoveRight);
+      document.addEventListener('mouseup', handleMouseUpRight);
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMoveRight);
+      document.removeEventListener('mouseup', handleMouseUpRight);
+    };
+  }, [isResizingRight, handleMouseMoveRight, handleMouseUpRight]);
+
+  // Session state
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState('qwen3-235b');
+
+  // FIX 8: Persisted actions — derived from live tool_calls so the Actions
+  // panel is never empty during agent execution. The API-backed actions are
+  // used as a fallback for historical data.
+  const [liveActions, setLiveActions] = useState<ActionItem[]>([]);
+
+  // Terminal hook — created first so we can reference addToolOutput in useChat
+  const terminal = useTerminal();
+
+  // FIX 8: Restore persisted adapter on mount
+  useEffect(() => {
+    localmindClient.restorePersistedAdapter();
+    // Also restore persisted model selection
+    const saved = getPersistedSettings();
+    if (saved?.model) {
+      setSelectedModel(saved.model);
+    }
+  }, []);
+
+  // Terminal event callback — bridges AI tool output to the terminal panel.
+  // When the agent executes a shell or code_exec tool, the SSE stream
+  // includes terminal_event messages. This callback receives them and
+  // pushes the command + output into the terminal panel so the user can
+  // see exactly what the AI is doing in real-time.
+  const handleTerminalEvent = useCallback(
+    (event: ToolExecutionEvent) => {
+      terminal.addToolOutput(event);
+    },
+    [terminal]
+  );
+
+  // Hook data — useChat receives the terminal event callback
+  const health = useHealth();
+  const { sessions, refresh: refreshSessions, deleteSession } = useSessions();
+  const { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, send, abort, setMessages } =
+    useChat(currentSessionId, handleTerminalEvent);
+  const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId);
+  const { files } = useFileTree();
+  const { todos, toggleTodo, addTodo } = useTodos(currentSessionId);
+  const { observation } = useObservability(currentSessionId);
+  const { metrics: polledMetrics } = useMetrics(isStreaming);
+  const { models, current: currentModelId, selectModel } = useModels();
+  const { facts: memoryFacts } = useMemory();
+
+  // When models load, set the selected model to the current one
+  const effectiveModelId = currentModelId || selectedModel;
+  const currentModel = models.find((m) => m.id === effectiveModelId);
+
+  // Merge metrics: prefer SSE-driven lastMetrics (instant) over polled metrics.
+  // When a turn_complete event arrives, lastMetrics is populated immediately
+  // with tokens_approx and total_latency_ms. The polled metrics lag behind
+  // by up to 5s. Use lastMetrics when available, otherwise fall back to poll.
+  const metrics = lastMetrics && (lastMetrics.totalTokens > 0 || lastMetrics.latency > 0)
+    ? lastMetrics
+    : polledMetrics;
+
+  // FIX 3: Derive actions from live tool_calls so the Actions panel
+  // always shows what's happening. When the API returns historical
+  // actions, we merge them — live actions take priority.
+  useEffect(() => {
+    if (activeToolCalls.length > 0) {
+      const newActions: ActionItem[] = activeToolCalls.map((tc) => ({
+        id: tc.id,
+        type: tc.name as ActionItem['type'],
+        label: tc.label || tc.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()),
+        detail: tc.input || '',
+        status: tc.status,
+        timestamp: new Date().toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }),
+        duration: tc.duration ? tc.duration / 1000 : undefined,
+      }));
+      setLiveActions(newActions);
+    }
+  }, [activeToolCalls]);
+
+  // FIX: Don't clear liveActions when streaming ends — keep them visible
+  // until the API catches up. Previously, liveActions were cleared after 5s,
+  // causing the sidebar to flash "No actions yet" when apiActions was still
+  // empty. Now we merge live and API actions, deduplicating by ID, with live
+  // actions taking priority (they're more recent and accurate).
+  // Live actions are only cleared when a NEW streaming session starts
+  // (handled in the send() function via setActiveToolCalls([])).
+
+  // Merge: live actions override API actions by ID; API actions fill in the rest
+  const actions = (() => {
+    if (liveActions.length === 0) return apiActions;
+    if (apiActions.length === 0) return liveActions;
+    // Build a merged list: live actions first, then API actions not already present
+    const liveIds = new Set(liveActions.map(a => a.id));
+    const extras = apiActions.filter(a => !liveIds.has(a.id));
+    return [...liveActions, ...extras];
+  })();
+
+  // FIX 4: Auto-switch right panel to Terminal tab when agent runs
+  // shell or code_exec commands, so the user sees the output immediately.
+  const [forceTerminalTab, setForceTerminalTab] = useState(false);
+  useEffect(() => {
+    if (activeToolCalls.some(tc => (tc.name === 'shell' || tc.name === 'code_exec') && tc.status === 'running')) {
+      setForceTerminalTab(true);
+      // Auto-uncollapse the right panel if it's collapsed
+      if (rightPanelCollapsed) {
+        setRightPanelCollapsed(false);
+      }
+    }
+  }, [activeToolCalls, rightPanelCollapsed]);
+
+  // Handle new chat
+  const handleNewChat = useCallback(() => {
+    const newId = `session-${Date.now()}`;
+    setCurrentSessionId(newId);
+    setMessages([]);
+    refreshSessions();
+  }, [setMessages, refreshSessions]);
+
+  // Handle session selection
+  const handleSelectSession = useCallback(
+    (sessionId: string) => {
+      setCurrentSessionId(sessionId);
+    },
+    []
+  );
+
+  // FIX: Handle session deletion — must reset active session state
+  // when the currently active session is deleted. Without this fix,
+  // deleting the active chat removes it from the sidebar but the
+  // center panel keeps showing the deleted session's messages.
+  const handleDeleteSession = useCallback(
+    async (sessionId: string) => {
+      await deleteSession(sessionId);
+      // If the deleted session is the active one, clear everything
+      if (sessionId === currentSessionId) {
+        setCurrentSessionId(null);
+        setMessages([]);
+      }
+      // Always refresh the session list after deletion
+      refreshSessions();
+    },
+    [currentSessionId, deleteSession, setMessages, refreshSessions]
+  );
+
+  // Handle model change
+  const handleModelChange = useCallback(
+    async (modelId: string) => {
+      setSelectedModel(modelId);
+      await selectModel(modelId);
+    },
+    [selectModel]
+  );
+
+  // Handle chat send
+  const handleSend = useCallback(
+    (message: string) => {
+      let activeSessionId = currentSessionId;
+      if (!activeSessionId) {
+        activeSessionId = `session-${Date.now()}`;
+        setCurrentSessionId(activeSessionId);
+      }
+      send(message, activeSessionId);
+      // Refresh sessions list so the new message appears in the sidebar immediately
+      refreshSessions();
+      setTimeout(() => refreshActions(), 2000);
+    },
+    [currentSessionId, send, refreshSessions, refreshActions]
+  );
+
+  return (
+    <div className="h-screen w-screen flex overflow-hidden bg-[#0a0f0a]">
+      {/* Left Panel */}
+      <div style={{ width: leftPanelWidth }} className="shrink-0 relative">
+        <LeftPanel
+          sessions={sessions}
+          actions={actions}
+          files={files}
+          todos={todos}
+          activeToolCalls={activeToolCalls}
+          models={models}
+          selectedModel={effectiveModelId}
+          onModelChange={handleModelChange}
+          currentSessionId={currentSessionId}
+          onSelectSession={handleSelectSession}
+          onNewChat={handleNewChat}
+          onDeleteSession={handleDeleteSession}
+          onToggleTodo={toggleTodo}
+          onAddTodo={addTodo}
+          onAbort={abort}
+          width={leftPanelWidth}
+        />
+        {/* Left resize handle */}
+        <div
+          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#39d353]/30 transition-colors"
+          onMouseDown={() => setIsResizingLeft(true)}
+        />
+      </div>
+
+      {/* Center Panel - flex: 1 */}
+      <div className="flex-1 min-w-0">
+        <CenterPanel
+          messages={messages}
+          selectedModel={currentModel || { id: effectiveModelId, name: effectiveModelId, provider: 'Ollama' }}
+          isStreaming={isStreaming}
+          health={health}
+          onSend={handleSend}
+          onAbort={abort}
+          currentIntent={currentIntent}
+          currentConfidence={currentConfidence}
+          memoryCount={memoryFacts.length}
+          activeToolCalls={activeToolCalls}
+        />
+      </div>
+
+      {/* Right Panel - 320px, collapsible */}
+      <div
+        className={`shrink-0 relative transition-all duration-300 ${
+          rightPanelCollapsed ? 'w-10' : ''
+        }`}
+        style={{ width: rightPanelCollapsed ? undefined : rightPanelWidth }}
+      >
+        {/* Right resize handle */}
+        {!rightPanelCollapsed && (
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#39d353]/30 transition-colors z-10"
+            onMouseDown={() => setIsResizingRight(true)}
+          />
+        )}
+        <RightPanel
+          terminalLines={terminal.lines}
+          isTerminalRunning={terminal.isRunning}
+          onTerminalExecute={terminal.execute}
+          onTerminalClear={terminal.clear}
+          terminalCwd={terminal.cwd}
+          terminalSessionId={terminal.sessionId}
+          terminalHistory={terminal.history}
+          onTerminalTabComplete={terminal.tabComplete}
+          onTerminalSessionChange={terminal.changeSession}
+          toolExecutionLog={[]}
+          observation={liveObservation || observation}
+          memoryFacts={memoryFacts}
+          metrics={metrics}
+          lastMetrics={lastMetrics}
+          collapsed={rightPanelCollapsed}
+          onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
+          forceTerminalTab={forceTerminalTab}
+          onTerminalTabShown={() => setForceTerminalTab(false)}
+          width={rightPanelWidth}
+        />
+      </div>
+    </div>
+  );
+}

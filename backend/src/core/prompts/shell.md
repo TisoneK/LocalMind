@@ -1,0 +1,1 @@
+The user wants to run a system command. The command has been executed and the output is below. Interpret the result for the user in plain language. Don't echo raw terminal output — summarize what it means.
