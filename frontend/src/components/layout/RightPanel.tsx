@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Terminal, Eye, Brain, PanelRightClose, PanelRight, Settings } from 'lucide-react';
-import { TerminalLine, ObservationData, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, ToolExecutionLogEntry } from '@/types';
+import { TerminalLine, ObservationData, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion } from '@/types';
 import { TerminalPanel } from '@/components/panels/TerminalPanel';
 import { ObservabilityTab } from '@/components/panels/ObservabilityTab';
 import { MemoryTab } from '@/components/panels/MemoryTab';
 import { PerformanceMetrics } from '@/components/panels/PerformanceMetrics';
-// SettingsModal import removed - component needs to be created
+import { SettingsModal } from '@/components/shared/SettingsModal';
 import { useModels } from '@/hooks/useLocalMind';
 
 interface RightPanelProps {
@@ -20,7 +20,6 @@ interface RightPanelProps {
   terminalHistory?: string[];
   onTerminalTabComplete?: (partial: string) => Promise<CompletionSuggestion[]>;
   onTerminalSessionChange?: (sessionId: string) => void;
-  toolExecutionLog?: ToolExecutionLogEntry[];
   observation: ObservationData;
   memoryFacts: MemoryFact[];
   metrics: PerformanceMetricsType;
@@ -47,7 +46,6 @@ export function RightPanel({
   terminalHistory,
   onTerminalTabComplete,
   onTerminalSessionChange,
-  toolExecutionLog,
   observation,
   memoryFacts,
   metrics,
@@ -185,7 +183,6 @@ export function RightPanel({
             onTabComplete={onTerminalTabComplete}
             history={terminalHistory}
             onSessionChange={onTerminalSessionChange}
-            toolExecutionLog={toolExecutionLog}
           />
         )}
         {activeTab === 'observability' && <ObservabilityTab observation={observation} />}
@@ -195,7 +192,9 @@ export function RightPanel({
       {/* Performance metrics */}
       <PerformanceMetrics metrics={metrics} lastMetrics={lastMetrics} />
 
-      {/* {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onSave={refreshModels} />} */}
+      {showSettings && (
+        <SettingsModal onClose={() => setShowSettings(false)} onSave={refreshModels} />
+      )}
     </div>
   );
 }

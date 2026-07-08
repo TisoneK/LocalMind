@@ -470,6 +470,23 @@ class LocalMindClient {
     });
   }
 
+  // ── Ollama URL (Ollama adapter only) ────────────────────────────────
+
+  async getOllamaUrl(): Promise<{ url: string; is_remote: boolean }> {
+    return this.request('/api/ollama/url');
+  }
+
+  async setOllamaUrl(url: string): Promise<{ url: string; reachable: boolean; message: string }> {
+    return this.request('/api/ollama/url', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    });
+  }
+
+  async resetOllamaUrl(): Promise<void> {
+    await this.request('/api/ollama/url', { method: 'DELETE' });
+  }
+
   // ── File Write Confirmation ─────────────────────────────────────────
 
   async confirmWrite(path: string, content: string): Promise<{ path: string; filename: string }> {

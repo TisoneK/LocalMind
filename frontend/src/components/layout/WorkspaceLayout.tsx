@@ -312,7 +312,6 @@ export function WorkspaceLayout() {
           terminalHistory={terminal.history}
           onTerminalTabComplete={terminal.tabComplete}
           onTerminalSessionChange={terminal.changeSession}
-          toolExecutionLog={[]}
           observation={liveObservation || observation}
           memoryFacts={memoryFacts}
           metrics={metrics}

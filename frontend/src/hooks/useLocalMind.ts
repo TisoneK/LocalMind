@@ -706,19 +706,22 @@ export function useChat(
           // NOTE: Compute the updated list first, then call both setters
           // sequentially. Calling setMessages *inside* the setActiveToolCalls
           // updater is a React anti-pattern that double-fires under StrictMode.
-          let updatedToolCalls: ToolCall[] | null = null;
+          let didUpdate = false;
+          const updatedToolCalls: ToolCall[] = [];
           setActiveToolCalls((prev) => {
             const hasRunning = prev.some((tc) => tc.status === 'running');
             if (!hasRunning) return prev;
-            updatedToolCalls = prev.map((tc) =>
+            const mapped = prev.map((tc) =>
               tc.status === 'running'
                 ? { ...tc, status: 'done' as const, duration: tc.duration || 0 }
                 : tc
             );
-            return updatedToolCalls;
+            updatedToolCalls.push(...mapped);
+            didUpdate = true;
+            return mapped;
           });
           // Sync the message's toolCalls array too (outside the updater)
-          if (updatedToolCalls) {
+          if (didUpdate && updatedToolCalls.length > 0) {
             setMessages((prevMsgs) => {
               const msgs = [...prevMsgs];
               const last = msgs[msgs.length - 1];
