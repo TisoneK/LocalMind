@@ -1343,6 +1343,7 @@ export function useMetrics(isStreaming?: boolean, intervalMs = 5000) {  // 5s �
 interface ModelsState {
   models: ModelOption[];
   current: string;
+  provider: string;
   loading: boolean;
   selectModel: (modelId: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -1351,11 +1352,16 @@ interface ModelsState {
 export function useModels(): ModelsState {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [current, setCurrent] = useState('');
+  const [provider, setProvider] = useState('ollama');
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    try { const data = await localmindClient.getModels(); setModels(data.models); setCurrent(data.current); }
-    catch { /* keep */ } finally { setLoading(false); }
+    try {
+      const data = await localmindClient.getModels();
+      setModels(data.models);
+      setCurrent(data.current);
+      setProvider(data.provider);
+    } catch { /* keep */ } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -1368,10 +1374,11 @@ export function useModels(): ModelsState {
       const data = await localmindClient.getModels();
       setModels(data.models);
       setCurrent(data.current);
+      setProvider(data.provider);
     } catch { /* keep */ }
   }, []);
 
-  return { models, current, loading, selectModel, refresh };
+  return { models, current, provider, loading, selectModel, refresh };
 }
 
 // ─── useMemory ─────────────────────────────────────────────────────────

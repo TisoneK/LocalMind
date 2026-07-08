@@ -87,7 +87,31 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def startup():
-        logger.info(f"LocalMind — adapter: {settings.localmind_adapter} | model: {settings.ollama_model} | ui: {UI_HTML.exists()}")
+        # Log the actual active model based on the adapter, not always ollama_model.
+        # Previously this always showed settings.ollama_model, which is empty when
+        # using a cloud adapter — making it look like no model is configured.
+        _adapter = settings.localmind_adapter
+        _model_map = {
+            "ollama": settings.ollama_model,
+            "openai": settings.openai_model,
+            "anthropic": settings.anthropic_model,
+            "openrouter": settings.openrouter_model,
+            "deepseek": settings.deepseek_model,
+            "lite-llm": settings.litellm_model,
+            "zen": settings.zen_model,
+            "groq": settings.groq_model,
+            "together": settings.together_model,
+            "fireworks": settings.fireworks_model,
+            "deepinfra": settings.deepinfra_model,
+            "mistral": settings.mistral_model,
+            "cohere": settings.cohere_model,
+            "vercel": settings.vercel_model,
+            "cloudflare": settings.cloudflare_model,
+        }
+        _active_model = _model_map.get(_adapter, "") or "(default)"
+        logger.info(
+            f"LocalMind — adapter: {_adapter} | model: {_active_model} | ui: {UI_HTML.exists()}"
+        )
 
         # Write live config values into localmind.md so the model always reads
         # accurate self-knowledge. Runs before any LLM call so the first request

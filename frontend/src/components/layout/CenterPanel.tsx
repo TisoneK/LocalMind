@@ -58,13 +58,16 @@ export function CenterPanel({
     : null;
 
   // Clean up model name for display: remove internal suffixes, format nicely
-  const displayModelName = (selectedModel?.name || selectedModel?.id || 'Unknown')
-    .replace(/\s*-\s*zen$/i, '')
-    .replace(/\s*-\s*local$/i, '')
-    .replace(/^ollama[:\/]/, '')
-    .replace(/_/g, ' ')
-    .replace(/^\w/, c => c.toUpperCase())
-    .trim();
+  const rawModelName = selectedModel?.name || selectedModel?.id || '';
+  const displayModelName = rawModelName
+    ? rawModelName
+        .replace(/\s*-\s*zen$/i, '')
+        .replace(/\s*-\s*local$/i, '')
+        .replace(/^ollama[:\/]/, '')
+        .replace(/_/g, ' ')
+        .replace(/^\w/, c => c.toUpperCase())
+        .trim()
+    : 'Connecting…';
 
   return (
     <div className="h-full flex flex-col bg-[#0a0f0a]">

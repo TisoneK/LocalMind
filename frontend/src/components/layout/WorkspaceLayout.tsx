@@ -74,7 +74,11 @@ export function WorkspaceLayout() {
 
   // Session state
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState('qwen3-235b');
+  // selectedModel starts empty — synced from the backend's /api/models
+  // "current" field once it loads. Previously defaulted to 'qwen3-235b'
+  // (a hardcoded Ollama model), which caused a UI/backend desync: the
+  // sidebar showed "Qwen3-235B-A22B" even when the backend was using Zen.
+  const [selectedModel, setSelectedModel] = useState('');
 
   // FIX 8: Persisted actions — derived from live tool_calls so the Actions
   // panel is never empty during agent execution. The API-backed actions are
@@ -116,10 +120,21 @@ export function WorkspaceLayout() {
   const { todos, toggleTodo, addTodo } = useTodos(currentSessionId);
   const { observation } = useObservability(currentSessionId);
   const { metrics: polledMetrics } = useMetrics(isStreaming);
-  const { models, current: currentModelId, selectModel } = useModels();
+  const { models, current: currentModelId, provider: modelProvider, selectModel } = useModels();
   const { facts: memoryFacts } = useMemory();
 
-  // When models load, set the selected model to the current one
+  // Sync selectedModel from the backend's /api/models "current" field.
+  // This runs whenever the models list refreshes (on mount, after model
+  // switch, etc.) so the UI always reflects the backend's active model.
+  useEffect(() => {
+    if (currentModelId && currentModelId !== selectedModel) {
+      setSelectedModel(currentModelId);
+    }
+  }, [currentModelId, selectedModel]);
+
+  // effectiveModelId prefers the backend-reported current model, falling
+  // back to selectedModel (which is also synced above). This ensures the
+  // UI never shows a stale/hardcoded model name.
   const effectiveModelId = currentModelId || selectedModel;
   const currentModel = models.find((m) => m.id === effectiveModelId);
 
@@ -276,7 +291,7 @@ export function WorkspaceLayout() {
       <div className="flex-1 min-w-0">
         <CenterPanel
           messages={messages}
-          selectedModel={currentModel || { id: effectiveModelId, name: effectiveModelId, provider: 'Ollama' }}
+          selectedModel={currentModel || { id: effectiveModelId, name: effectiveModelId, provider: modelProvider || 'ollama' }}
           isStreaming={isStreaming}
           health={health}
           onSend={handleSend}
