@@ -101,19 +101,61 @@ class LocalMindClient {
     this.baseUrl = (typeof window !== 'undefined' && (window as any).__LOCALMIND_API__) || '';
   }
 
+  /**
+   * Core request method with automatic 503 retry.
+   *
+   * During startup, the Vite proxy returns 503 when the backend isn't ready
+   * yet. Instead of throwing immediately (which spams the browser console
+   * with red errors on every poll), we retry up to 5 times with a 1s
+   * backoff. This makes the frontend self-heal silently once the backend
+   * finishes booting.
+   *
+   * Non-503 errors are thrown immediately — only the "backend starting"
+   * case gets the retry treatment.
+   */
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options?.headers || {}),
-      },
-    });
-    if (!res.ok) {
-      const detail = await this._extractError(res);
-      throw new Error(detail);
+    const maxRetries = 5;
+    const retryDelayMs = 1000;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      let res: Response;
+      try {
+        res = await fetch(`${this.baseUrl}${path}`, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(options?.headers || {}),
+          },
+        });
+      } catch (networkErr) {
+        // Network-level failure (ECONNREFUSED etc.) — also a "backend
+        // starting" symptom. Retry instead of throwing.
+        if (attempt < maxRetries - 1) {
+          await this._sleep(retryDelayMs);
+          continue;
+        }
+        throw networkErr;
+      }
+
+      // 503 = backend starting (Vite proxy returns this cleanly).
+      // Retry after a short delay instead of erroring.
+      if (res.status === 503 && attempt < maxRetries - 1) {
+        await this._sleep(retryDelayMs);
+        continue;
+      }
+
+      if (!res.ok) {
+        const detail = await this._extractError(res);
+        throw new Error(detail);
+      }
+      return res.json() as Promise<T>;
     }
-    return res.json() as Promise<T>;
+    // Exhausted all retries
+    throw new Error('Backend unavailable after 5 retries (is the server starting?)');
+  }
+
+  private _sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private async _extractError(res: Response): Promise<string> {
@@ -454,6 +496,8 @@ class LocalMindClient {
       method: 'POST',
       body: JSON.stringify({ adapter, model }),
     });
+    // Persist to localStorage so the adapter is restored on next launch
+    this.savePersistedSettings({ adapter, model: model || '' });
   }
 
   async setProviderKey(provider: string, apiKey: string, model?: string): Promise<void> {
