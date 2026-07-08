@@ -54,7 +54,6 @@ from core.agent.constants import (
 )
 from core.thinking_dispatcher import ThinkingDispatcher
 from storage.db import SessionStore
-from adapters import get_adapter
 from adapters.ollama import _is_small_model
 from tools import dispatch, available_tools
 from core.agent.tool_dispatch import dispatch_with_retry
@@ -62,6 +61,19 @@ from core.safety_gate import check as safety_check
 from core.session_context import SessionContextManager
 
 logger = logging.getLogger(__name__)
+
+
+def get_adapter(*args, **kwargs):
+    """Deferred-lookup wrapper for adapters.get_adapter.
+
+    Looks up get_adapter from the core.engine package at call time so that
+    test patches (patch("core.engine.get_adapter", ...)) take effect on
+    code in this submodule. Without this, a module-level
+    `from adapters import get_adapter` would create a separate binding
+    that the patch cannot reach.
+    """
+    from core.engine import get_adapter as _real
+    return _real(*args, **kwargs)
 
 
 def _safe_task(coro) -> asyncio.Task:
