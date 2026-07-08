@@ -4,6 +4,8 @@ import time
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from api.routes.health import _SERVER_START
+
 router = APIRouter()
 
 
@@ -51,5 +53,5 @@ async def get_metrics():
         "totalTokens": streaming.get("totalTokens", 0),
         "promptTokens": streaming.get("promptTokens", 0),
         "completionTokens": streaming.get("completionTokens", 0),
-        "uptime": time.time() - 1694000000,  # Placeholder uptime
+        "uptime": round(time.time() - _SERVER_START, 2),
     }

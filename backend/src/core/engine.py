@@ -2350,15 +2350,15 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # re imported at module level
 
         _BLOCKED_PATTERNS = [
-            r"'b(ignore|bypass|override|disable|forget)'b.{0,30}'b(safety|rules|guidelines|instructions|system prompt|restrictions)'b",
-            r"'byou (are|must|should|will)'b.{0,40}'b(lie|deceive|pretend|ignore|always agree|never refuse)'b",
-            r"'b(always|never) (tell|say|respond|answer|agree|refuse)'b",
-            r"'bact (as|like)'b.{0,30}'b(jailbreak|unrestricted|dan|evil|unfiltered)'b",
-            r"'byou (are|were) (wrong|stupid|dumb|useless|broken|terrible|awful|bad)'b",
-            r"'b(hate|despise|dislike) (you|yourself|itself)'b",
-            r"(system|assistant|user)'s*:'s*(ignore|disregard|forget)",
-            r"<'s*(system|instruction|prompt)'s*>",
-            r"'b(lie|make up|fabricate|hallucinate)'b.{0,20}'b(answers?|results?|facts?|data)'b",
+            r"\b(ignore|bypass|override|disable|forget)\b.{0,30}\b(safety|rules|guidelines|instructions|system prompt|restrictions)\b",
+            r"\byou (are|must|should|will)\b.{0,40}\b(lie|deceive|pretend|ignore|always agree|never refuse)\b",
+            r"\b(always|never) (tell|say|respond|answer|agree|refuse)\b",
+            r"\bact (as|like)\b.{0,30}\b(jailbreak|unrestricted|dan|evil|unfiltered)\b",
+            r"\byou (are|were) (wrong|stupid|dumb|useless|broken|terrible|awful|bad)\b",
+            r"\b(hate|despise|dislike) (you|yourself|itself)\b",
+            r"(system|assistant|user)\s*:\s*(ignore|disregard|forget)",
+            r"<\s*(system|instruction|prompt)\s*>",
+            r"\b(lie|make up|fabricate|hallucinate)\b.{0,20}\b(answers?|results?|facts?|data)\b",
         ]
         fact_lower = fact.lower()
         for pattern in _BLOCKED_PATTERNS:

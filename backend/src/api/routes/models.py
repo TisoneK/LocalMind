@@ -148,9 +148,12 @@ async def select_model(req: SelectModelRequest):
     model = req.model.strip()
 
     if adapter_name == "ollama":
-        # Verify the model exists in Ollama before switching
-        adapter = OllamaAdapter()
+        # Verify the model exists in Ollama before switching.
+        # Use get_adapter() (consistent with list_models above) instead of
+        # constructing OllamaAdapter() directly — OllamaAdapter was never
+        # imported in this module, which would raise NameError at runtime.
         try:
+            adapter = get_adapter("ollama")
             available = set(await adapter.list_models())
         except Exception:
             available = set()
