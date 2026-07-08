@@ -23,7 +23,9 @@ function FileResultChip({ result }: { result: FileResult }) {
     modified: { icon: <FileEdit className="h-3 w-3" />, color: 'text-[#e8a420] border-[#e8a420]/30 bg-[#e8a420]/5' },
     deleted: { icon: <FileMinus className="h-3 w-3" />, color: 'text-[#e05555] border-[#e05555]/30 bg-[#e05555]/5' },
   };
-  const config = statusConfig[result.status];
+  // Defensive: fall back to 'created' if the backend sends an unexpected status
+  // (e.g. 'renamed', 'moved'). Previously this would crash with TypeError.
+  const config = statusConfig[result.status as keyof typeof statusConfig] ?? statusConfig.created;
 
   return (
     <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[10px] font-mono ${config.color}`}>

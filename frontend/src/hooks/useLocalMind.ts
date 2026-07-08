@@ -682,12 +682,6 @@ export function useChat(
             }
           } catch {
             if (rawData && rawData !== "[DONE]" && !_isPromptLeak(rawData)) {
-              try {
-                const parsed = JSON.parse(rawData);
-                if (parsed.type === "terminal_event") {
-                  return;
-                }
-              } catch {}
               const trimmedRaw = rawData.trim();
               if (trimmedRaw.startsWith("<invoke") || trimmedRaw.startsWith("</invoke") || trimmedRaw.startsWith("[invoke") || trimmedRaw.startsWith("[/invoke")) {
                 return;
@@ -708,22 +702,28 @@ export function useChat(
           setIsStreaming(false);
           streamingSessionRef.current = null;
           abortRef.current = null;
-          // Mark any remaining running tool calls as done
+          // Mark any remaining running tool calls as done.
+          // NOTE: Compute the updated list first, then call both setters
+          // sequentially. Calling setMessages *inside* the setActiveToolCalls
+          // updater is a React anti-pattern that double-fires under StrictMode.
+          let updatedToolCalls: ToolCall[] | null = null;
           setActiveToolCalls((prev) => {
             const hasRunning = prev.some((tc) => tc.status === 'running');
             if (!hasRunning) return prev;
-            const updated = prev.map((tc) =>
+            updatedToolCalls = prev.map((tc) =>
               tc.status === 'running'
                 ? { ...tc, status: 'done' as const, duration: tc.duration || 0 }
                 : tc
             );
-            // Sync the message's toolCalls array too
+            return updatedToolCalls;
+          });
+          // Sync the message's toolCalls array too (outside the updater)
+          if (updatedToolCalls) {
             setMessages((prevMsgs) => {
               const msgs = [...prevMsgs];
               const last = msgs[msgs.length - 1];
               if (last && last.role === 'assistant' && last.toolCalls) {
-                // Replace toolCalls with the updated versions
-                const updatedMap = new Map(updated.map(tc => [tc.id, tc]));
+                const updatedMap = new Map(updatedToolCalls.map(tc => [tc.id, tc]));
                 msgs[msgs.length - 1] = {
                   ...last,
                   toolCalls: last.toolCalls.map(tc => updatedMap.get(tc.id) || tc),
@@ -731,8 +731,7 @@ export function useChat(
               }
               return msgs;
             });
-            return updated;
-          });
+          }
         },
         () => {
           setIsStreaming(false);
@@ -1211,7 +1210,7 @@ export function useTerminal(initialSessionId: string = 'default') {
       // Add the output lines
       if (event.output) {
         // For non-shell tools, trim very long output
-        const maxOutputLines = event.tool in ('shell', 'code_exec') ? 100 : 30;
+        const maxOutputLines = ['shell', 'code_exec'].includes(event.tool) ? 100 : 30;
         const outputLines = event.output.split('\n').slice(0, maxOutputLines);
         for (const line of outputLines) {
           setLines((prev) => [

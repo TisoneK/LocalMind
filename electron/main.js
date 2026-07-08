@@ -160,7 +160,11 @@ async function startPythonBackend() {
   backendStatus = 'starting';
   sendBackendStatus('starting');
 
-  pythonProcess = spawn('.venv\\Scripts\\python.exe', [serverScript], {
+  // Platform-correct Python venv path: Windows uses .venv\Scripts\, Unix uses .venv/bin/
+  const pythonBin = process.platform === 'win32'
+    ? '.venv\\Scripts\\python.exe'
+    : '.venv/bin/python';
+  pythonProcess = spawn(pythonBin, [serverScript], {
     cwd: path.join(projectRoot, 'backend'),
     env: { ...process.env },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -571,6 +575,25 @@ function registerIpcHandlers() {
       return pkgData.version || '0.0.0';
     } catch (_) {
       return '0.0.0';
+    }
+  });
+
+  // Open an external URL in the system's default browser.
+  // SECURITY: Only http/https URLs are allowed — this prevents file://,
+  // javascript:, and other dangerous schemes from being opened.
+  ipcMain.handle('open-external', async (_event, url) => {
+    if (typeof url !== 'string') {
+      return { success: false, error: 'URL must be a string' };
+    }
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return { success: false, error: `Refused to open URL with scheme: ${parsed.protocol}` };
+      }
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
     }
   });
 

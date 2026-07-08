@@ -86,7 +86,7 @@ export function LeftPanel({
           </div>
           <span className="text-sm font-bold text-[#d4e8d4] tracking-tight">LocalMind</span>
           <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#39d353]/10 text-[#39d353] font-mono">
-            v0.3
+            v0.5
           </span>
         </div>
         <ModelSelector

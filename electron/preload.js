@@ -51,6 +51,14 @@ const electronAPI = {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   /**
+   * Open an external URL in the system's default browser.
+   * Only http/https URLs are allowed — other schemes are rejected.
+   * @param {string} url - The URL to open
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+
+  /**
    * Listen for backend status updates.
    * Status values: 'stopped' | 'starting' | 'ready' | 'error'
    * @param {function(string): void} callback - Called with the new status
