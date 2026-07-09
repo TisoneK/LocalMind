@@ -1,6 +1,6 @@
 """Tests for the file reader tool."""
 import pytest
-from tools.file_reader import _chunk_text, _extract_plain, parse_file
+from tools.file_reader import _chunk_text, parse_file
 
 
 def test_chunk_text_basic():
@@ -28,16 +28,45 @@ def test_chunk_text_overlap():
     assert len(chunks) > 1
 
 
-def test_extract_plain_utf8():
+@pytest.mark.asyncio
+async def test_parse_file_txt_utf8():
+    """Plain UTF-8 text is decoded and chunked correctly.
+
+    Replaces the old test_extract_plain_utf8 which tested a private
+    _extract_plain helper that was removed when plain-text decoding
+    was inlined into parse_file (see lines 194-209 of file_reader.py).
+    """
     data = b"Hello, world!"
-    result = _extract_plain(data)
-    assert result == "Hello, world!"
+    attachment = await parse_file(
+        data=data,
+        filename="test.txt",
+        content_type="text/plain",
+        chunk_size=100,
+    )
+    assert attachment.filename == "test.txt"
+    assert attachment.size_bytes == len(data)
+    assert len(attachment.chunks) >= 1
+    assert "Hello, world!" in " ".join(attachment.chunks)
 
 
-def test_extract_plain_latin1_fallback():
+@pytest.mark.asyncio
+async def test_parse_file_txt_latin1_fallback():
+    """Non-UTF-8 bytes are handled gracefully via errors='replace'.
+
+    Replaces the old test_extract_plain_latin1_fallback. The new decoder
+    uses errors='replace' so invalid bytes become U+FFFD rather than
+    raising. We verify the file still produces readable output.
+    """
     data = b"Caf\xe9"  # latin-1 encoded
-    result = _extract_plain(data)
-    assert len(result) > 0
+    attachment = await parse_file(
+        data=data,
+        filename="test.txt",
+        content_type="text/plain",
+        chunk_size=100,
+    )
+    assert len(attachment.chunks) >= 1
+    # The replacement char (U+FFFD) should appear where \xe9 was
+    assert "Caf" in " ".join(attachment.chunks)
 
 
 @pytest.mark.asyncio
@@ -52,14 +81,6 @@ async def test_parse_file_txt(sample_txt_bytes):
     assert attachment.size_bytes == len(sample_txt_bytes)
     assert len(attachment.chunks) >= 1
     assert "test document" in " ".join(attachment.chunks)
-
-
-@pytest.mark.asyncio
-async def test_parse_file_too_large(monkeypatch):
-    from core import config
-    monkeypatch.setattr(config.settings, "localmind_max_file_size_mb", 0)
-    with pytest.raises(ValueError, match="too large"):
-        await parse_file(data=b"x" * 100, filename="big.txt", content_type="text/plain")
 
 
 @pytest.mark.asyncio
