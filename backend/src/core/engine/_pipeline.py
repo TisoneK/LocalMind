@@ -746,7 +746,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 tool_result=None,
                 file_attachment=None,
                 memory_facts=memory_facts,
-                session_cwd=self._session_ctx.get_valid_cwd(),
+                session_cwd=self._session_ctx.get_cwd(session_id),
             )
             active_adapter = self._adapter_for(effective_intent)
             prompt_messages = context_builder.build(ctx, active_adapter.effective_context_window)
@@ -1526,7 +1526,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             tool_result=tool_result,
             file_attachment=file_attachment,
             memory_facts=memory_facts,
-            session_cwd=self._session_ctx.get_valid_cwd(),
+            session_cwd=self._session_ctx.get_cwd(session_id),
         )
 
         active_adapter = self._adapter_for(effective_intent)
@@ -1565,7 +1565,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 tool_result=None,
                 file_attachment=file_attachment,
                 memory_facts=memory_facts,
-                session_cwd=self._session_ctx.get_valid_cwd(),
+                session_cwd=self._session_ctx.get_cwd(session_id),
             )
             sm_adapter = self._adapter_for(Intent.CHAT)
             sm_messages = context_builder.build(ctx_sm, sm_adapter.effective_context_window)

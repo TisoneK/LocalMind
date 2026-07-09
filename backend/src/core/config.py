@@ -29,11 +29,18 @@ def _allowed_user_folders() -> list[str]:
     Covers standard Windows shell folders plus the observed user top-level
     folders from C:\\Users\\tison.  Keeping both platforms in sync ensures
     is_path_allowed() works correctly regardless of where LocalMind runs.
+
+    The home directory itself is included so the file explorer can list
+    its top-level contents (not just specific subdirectories).
     """
     if sys.platform == "win32":
         base = Path(os.environ.get("USERPROFILE", Path.home()))
     else:
         base = Path.home()
+
+    # Always include the home directory itself so the file explorer can
+    # list its contents. Without this, GET /api/files?path=~ returns 403.
+    folders = [str(base)]
 
     # Standard shell folders present on both Windows and *nix home dirs
     standard = [
@@ -46,7 +53,8 @@ def _allowed_user_folders() -> list[str]:
         "workflows", "examples", "factory", "config", "data", "OneDrive",
         "Code", "Projects", "src", "repos", "builds", "workspace",
     ]
-    return [str(base / folder) for folder in standard + user_created]
+    folders.extend(str(base / folder) for folder in standard + user_created)
+    return folders
 
 
 class Settings(BaseSettings):

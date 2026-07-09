@@ -325,46 +325,73 @@ class ThinkingDispatcher:
         _json_buffer: list[str] = []
 
         try:
+            # Use a queue to stream thinking tokens in real-time while
+            # collecting the JSON output. This avoids the async generator
+            # + asyncio.wait_for incompatibility.
+            _thinking_queue: asyncio.Queue = asyncio.Queue()
+            _SENTINEL = object()
+
             async def _stream_and_collect():
                 nonlocal _in_json, _brace_depth
-                async for chunk in self._adapter.chat(
-                    messages,
-                    temperature=DISPATCHER_TEMPERATURE,
-                    intent="chat",
-                ):
-                    text = _filter_system_leaks(chunk.text)
-                    if not text:
-                        continue
-                    raw_chunks.append(text)
-                    if not _in_json:
-                        brace_idx = text.find('{')
-                        if brace_idx >= 0:
-                            pre_brace = text[:brace_idx]
-                            if pre_brace.strip():
-                                _thinking_buffer.append(pre_brace)
-                                # Yield thinking tokens in real-time so the
-                                # user sees the model's reasoning as it happens,
-                                # not after the full JSON is parsed.
-                                yield StreamChunk(text="", thinking=pre_brace)
-                            _in_json = True
-                            _brace_depth = 1
-                            json_part = text[brace_idx + 1:]
-                            if json_part:
-                                _json_buffer.append(json_part)
-                            for ch in json_part:
+                try:
+                    async for chunk in self._adapter.chat(
+                        messages,
+                        temperature=DISPATCHER_TEMPERATURE,
+                        intent="chat",
+                    ):
+                        text = _filter_system_leaks(chunk.text)
+                        if not text:
+                            continue
+                        raw_chunks.append(text)
+                        if not _in_json:
+                            brace_idx = text.find('{')
+                            if brace_idx >= 0:
+                                pre_brace = text[:brace_idx]
+                                if pre_brace.strip():
+                                    _thinking_buffer.append(pre_brace)
+                                    await _thinking_queue.put(pre_brace)
+                                _in_json = True
+                                _brace_depth = 1
+                                json_part = text[brace_idx + 1:]
+                                if json_part:
+                                    _json_buffer.append(json_part)
+                                for ch in json_part:
+                                    if ch == '{': _brace_depth += 1
+                                    elif ch == '}': _brace_depth -= 1
+                            else:
+                                _thinking_buffer.append(text)
+                                await _thinking_queue.put(text)
+                        else:
+                            _json_buffer.append(text)
+                            for ch in text:
                                 if ch == '{': _brace_depth += 1
                                 elif ch == '}': _brace_depth -= 1
-                        else:
-                            _thinking_buffer.append(text)
-                            # Yield thinking tokens in real-time
-                            yield StreamChunk(text="", thinking=text)
-                    else:
-                        _json_buffer.append(text)
-                        for ch in text:
-                            if ch == '{': _brace_depth += 1
-                            elif ch == '}': _brace_depth -= 1
+                finally:
+                    await _thinking_queue.put(_SENTINEL)
 
-            await asyncio.wait_for(_stream_and_collect(), timeout=DISPATCHER_TIMEOUT_SECS)
+            # Start the collection task
+            _collect_task = asyncio.create_task(_stream_and_collect())
+
+            # Stream thinking tokens in real-time with timeout
+            try:
+                while True:
+                    try:
+                        item = await asyncio.wait_for(
+                            _thinking_queue.get(),
+                            timeout=DISPATCHER_TIMEOUT_SECS,
+                        )
+                    except asyncio.TimeoutError:
+                        _collect_task.cancel()
+                        logger.warning("[dispatcher] timed out — falling back")
+                        break
+                    if item is _SENTINEL:
+                        break
+                    yield StreamChunk(text="", thinking=item)
+                # Ensure the task completes
+                await _collect_task
+            except Exception:
+                _collect_task.cancel()
+                raise
 
         except asyncio.TimeoutError:
             logger.warning("[dispatcher] timed out — falling back to minimal profile")

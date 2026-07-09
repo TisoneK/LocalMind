@@ -2347,30 +2347,40 @@ class AgentLoop:
 
         try:
             _plan_timeout = PLAN_TIMEOUT_SECS
+
+            # Use a queue for real-time streaming with timeout
+            _plan_queue: asyncio.Queue = asyncio.Queue()
+            _SENTINEL = object()
+
             async def _stream_plan():
-                async for chunk in active_adapter.chat(
-                    planning_messages,
-                    temperature=0.1,
-                    intent="chat",
-                ):
-                    text = _filter_system_leaks(chunk.text)
-                    if text:
-                        yield text
+                try:
+                    async for chunk in active_adapter.chat(
+                        planning_messages,
+                        temperature=0.1,
+                        intent="chat",
+                    ):
+                        text = _filter_system_leaks(chunk.text)
+                        if text:
+                            await _plan_queue.put(text)
+                finally:
+                    await _plan_queue.put(_SENTINEL)
 
-            # Use wait_for with a wrapper that collects the async generator
-            collected = []
-            async def _collect():
-                async for token in _stream_plan():
-                    collected.append(token)
-                    yield token
-
+            _task = asyncio.create_task(_stream_plan())
             try:
-                async for token in asyncio.wait_for(_collect().__aiter__(), timeout=_plan_timeout):
-                    yield token
-            except asyncio.TimeoutError:
-                logger.warning(f"[agent.loop] planning stream timed out ({_plan_timeout}s)")
-                if collected:
-                    yield "".join(collected)
+                while True:
+                    try:
+                        item = await asyncio.wait_for(_plan_queue.get(), timeout=_plan_timeout)
+                    except asyncio.TimeoutError:
+                        _task.cancel()
+                        logger.warning(f"[agent.loop] planning stream timed out ({_plan_timeout}s)")
+                        break
+                    if item is _SENTINEL:
+                        break
+                    yield item
+                await _task
+            except Exception:
+                _task.cancel()
+                raise
 
         except Exception as exc:
             logger.warning(f"[agent.loop] planning stream failed (non-fatal): {exc}")
