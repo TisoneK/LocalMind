@@ -127,11 +127,25 @@
 - **Related commit:** `fix(core): resolve undefined secondary_intent in engine pipeline — restores secondary intent routing`
 
 #### C4: Test suite is broken — stale imports
-- **Description:** `tests/tools/test_file_reader.py` imports `_extract_plain` from `tools.file_reader`, but that function no longer exists (the module exports `_parse_pdf`, `_parse_docx`, `_parse_csv_xlsx`, `_parse_image` instead). `tests/tools/test_web_search.py` imports `run` from `tools.web_search`, but the function was renamed to `web_search`. pytest cannot collect either file — the entire test suite is blocked.
-- **Impact:** No tests can run. The CONTRIBUTING.md says "Run pytest — all tests must pass" but the suite cannot even be collected. Any future regression will go undetected. The source was refactored (renamed `run` → `web_search`, split `_extract_plain` into format-specific parsers) but the tests were never updated.
-- **Recommendation:** Update `test_file_reader.py` to import the new parser functions (`_parse_pdf`, `_parse_docx`, etc.) and test them directly. Update `test_web_search.py` to import `web_search` instead of `run`. Run `pytest ../tests --collect-only` to confirm collection succeeds, then run the full suite.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Description:** `tests/tools/test_file_reader.py` imported `_extract_plain` from `tools.file_reader`, but that function no longer exists (the module exports `_parse_pdf`, `_parse_docx`, `_parse_csv_xlsx`, `_parse_image` instead). `tests/tools/test_web_search.py` imported `run` from `tools.web_search`, but the function was renamed to `web_search` with a different signature (`run(input_dict, context)` → `web_search(query: str)`). pytest could not collect either file — the entire test suite was blocked.
+- **Impact:** No tests could run. The CONTRIBUTING.md says "Run pytest — all tests must pass" but the suite could not even be collected. Any future regression went undetected. The source was refactored but the tests were never updated.
+- **Recommendation:** Update `test_file_reader.py` to test `parse_file` directly (the plain-text path now lives inside `parse_file`, not a separate `_extract_plain` helper). Update `test_web_search.py` to import `web_search`, call it with a string query, and patch `_search_ddg`/`_search_searxng` (the racing-tier architecture replaced the single `_search_duckduckgo`).
+- **Status:** ✅ Fixed
+- **Related commit:** `test(tools): fix stale imports in test_file_reader and test_web_search — unblocks test suite`
+- **Note:** Fixing C4 also revealed a bonus bug in `_chunk_text` — infinite loop when `overlap >= chunk_size` (see C6 below). After this fix, the test suite collects and runs: **179 pass, 15 fail** (the 15 failures are pre-existing issues in `test_chat.py` and `test_empty_agent_fix.py`, tracked as C7).
+
+#### C6: `_chunk_text` infinite loop when `overlap >= chunk_size` *(found during C4 fix)*
+- **Description:** `backend/src/tools/file_reader.py:_chunk_text()` used `i += chunk_size - overlap` as the loop increment. When `overlap >= chunk_size`, the increment is ≤ 0, so `i` never advances past `len(words)` — infinite loop. The default `localmind_chunk_overlap_tokens=200` combined with any `chunk_size < 200` triggers this. In production it worked only because `parse_file` defaults to `chunk_size=1500`.
+- **Impact:** Any caller passing a small chunk_size (e.g. tests, or future code paths) would hang the server forever. The test `test_parse_file_txt_utf8` exposed this immediately.
+- **Recommendation:** Clamp the step: `step = max(1, chunk_size - overlap)`.
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(tools): guard _chunk_text against infinite loop when overlap >= chunk_size`
+
+#### C7: 15 pre-existing test failures in test_chat.py and test_empty_agent_fix.py *(revealed by C4 fix)*
+- **Description:** Once the test suite could collect and run (C4 fix), 15 pre-existing failures surfaced: 5 in `tests/api/test_chat.py` (assertion failures — likely need a mocked Ollama adapter or testing against a changed SSE event format) and 10 in `tests/core/test_empty_agent_fix.py` (testing for `base.md`, skill files, sub-agent registry, and constants that were refactored away — e.g. `test_sub_agent_registry_has_four_agents` checks for 4 agents, `test_base_md_exists_and_has_substance` checks for a file that may not exist).
+- **Impact:** These tests were silently broken (masked by the C4 collection errors). They test functionality that has since been refactored. They give false signal if someone runs `pytest` expecting green.
+- **Recommendation:** Separate effort — audit each failing test, either update to match current source or remove if testing removed features. The `test_empty_agent_fix.py` suite in particular looks like it was written for an earlier architecture (v0.x personality/skill system) that has since been replaced by the v4.0 ThinkingDispatcher architecture.
+- **Status:** Open (follow-up)
 
 #### C5: No CI — broken tests and lint go undetected
 - **Description:** There is no `.github/workflows/` directory. No automated checks run on push or PR. The baseline shows 862 lint errors, a broken test suite, and 10 runtime bugs — none of which were caught before they reached `main`.
