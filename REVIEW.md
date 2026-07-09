@@ -222,11 +222,14 @@
 - **Related commit:** `fix(tools): replace bare except with specific exceptions in installed_programs`
 
 #### M3: 1.1MB frontend JS bundle — no code splitting
-- **Description:** `vite build` produces a single 1,123 KB JS chunk (367 KB gzipped). Vite warns: "Some chunks are larger than 500 kB after minification."
-- **Impact:** First page load fetches the entire app. On slow connections this is several seconds of blank screen. Electron loads from local disk so impact is lower there, but web/preview mode suffers.
-- **Recommendation:** Add `build.rollupOptions.output.manualChunks` to split vendor libs (react, radix, recharts, react-markdown) into separate chunks. Use `React.lazy()` + `Suspense` for route-level code splitting of panels (FileExplorer, TerminalPanel, MemoryTab, etc.).
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Description:** `vite build` produced a single 1,123 KB JS chunk (367 KB gzipped). Vite warned: "Some chunks are larger than 500 kB after minification."
+- **Impact:** First page load fetched the entire app. On slow connections this was several seconds of blank screen.
+- **Recommendation:** Add `manualChunks` + switch to `PrismLight` for syntax highlighting.
+- **Status:** ✅ Fixed
+- **Related commit:** `perf(frontend): split bundle + use PrismLight — 1.1MB → 566KB (50% reduction)`
+- **Note:** Two changes: (1) Switched `react-syntax-highlighter` from `Prism` (all 270+ languages, 787KB) to `PrismLight` (14 registered languages, 230KB). (2) Added `manualChunks` to split vendor libs. Total JS: 1,123KB → 566KB (50% reduction).
+- **Status:** ✅ Fixed
+- **Related commit:** `perf(frontend): split bundle + use PrismLight — 1.1MB → 566KB (50% reduction)`
 
 #### M4: No changelog file
 - **Description:** No `CHANGELOG.md` exists. The kickoff template emphasizes changelog/devlog conventions. `docs/worklog-2025-01-empty-agent-fix.md` is the only devlog-style entry.
@@ -299,9 +302,18 @@ GitHub reported 47 security vulnerabilities on the default branch at the start o
 
 Source: https://github.com/TisoneK/LocalMind/security/dependabot
 
-### NPM Audit (15 vulnerabilities — build-time only)
+### NPM Audit (15 → 10 vulnerabilities — build-time only)
 
-`npm audit` found 15 vulnerabilities (2 critical, 12 high, 1 moderate). All are in **electron-builder and its transitive dependencies** (tar, tmp, cacache, make-fetch-happen, node-gyp, app-builder-lib, dmg-builder, electron-builder-squirrel-windows).
+`npm audit` initially found 15 vulnerabilities (2 critical, 12 high, 1 moderate). After running `npm audit fix` (non-breaking), this dropped to **10 high vulnerabilities** (0 critical). All remaining are in **electron and electron-builder transitive deps** (tar, node-tar).
+
+**Fixed by `npm audit fix`:**
+- `tmp` (high — path traversal) → updated
+- 2 critical vulnerabilities → resolved
+
+**Remaining 10 high (need `--force`):**
+- `electron <=39.8.4` — needs major version bump to v34+ (breaking)
+- `tar <=7.5.15` — transitive dep of electron-builder
+- These require `npm audit fix --force` which bumps electron and electron-builder to major versions — potential breaking changes. Recommend testing in a separate branch.
 
 **Impact:** These are **build-time** vulnerabilities in the Electron packaging toolchain, not runtime vulnerabilities. They affect the developer who runs `npm run build` to produce the Electron installer, not the end user running the app. The vulnerable code paths (tar extraction, temp file handling) are exercised during installer creation, not during app execution.
 
@@ -324,25 +336,27 @@ Source: https://github.com/TisoneK/LocalMind/security/dependabot
 
 ## Next Steps
 
-This review covers the **discovery phase only**, per the agreed scope. The baseline is unhealthy:
+The fix phase is complete. The baseline was unhealthy at the start:
 
 - **5 Critical** issues (empty README, 2 runtime crash bugs, broken tests, no CI)
 - **7 High** issues (862 lint errors, broken eslint, version mismatch, Windows-only script, 5 tsc errors, 2 more F821 bugs)
 - **7 Medium** issues (stale architecture doc, bare-excepts, bundle size, no changelog, convention mismatch, dead imports, deprecations)
 - **5 Low** issues (formatting)
 
-**Proposed fix order** (awaiting user confirmation):
+**Fix order completed:**
 
-1. **C2 + C3** — Fix the 2 runtime crash bugs (asyncio import, secondary_intent). Fast, high-value.
-2. **C4** — Fix the broken test suite (update stale imports). Unblocks all future test runs.
-3. **H7 + H6** — Fix the remaining 2 F821 bugs (exc scope, ToolCallResult).
-4. **C1** — Write README.md. High-visibility, uses existing docs as source.
-5. **H1 (partial)** — Run `ruff check . --fix` to clear 228 auto-fixable errors safely.
-6. **H2 + H5** — Fix frontend: add eslint config, fix 5 tsc errors.
-7. **H3 + H4** — Fix version mismatch + cross-platform dev:backend script.
-8. **C5** — Add CI workflow (now that lint+tests pass).
-9. **M1–M7** — Medium fixes (stale docs, bare-excepts, bundle splitting, changelog, etc.).
-10. **L1–L5** — Low-priority formatting (mostly auto-fixable).
+1. ✅ **C2 + C3** — Fixed runtime crash bugs (asyncio import, secondary_intent)
+2. ✅ **C4 + C6** — Fixed broken test suite + bonus `_chunk_text` infinite loop
+3. ✅ **H6 + H7** — Fixed remaining F821 bugs (ToolCallResult, exc scope)
+4. ✅ **C1** — Wrote comprehensive README.md (242 lines)
+5. ✅ **H1 (partial)** — `ruff --fix` cleared 228 errors (862 → 613)
+6. ✅ **H2 + H5** — Fixed frontend: eslint config + 5 tsc errors
+7. ✅ **H3 + H4** — Fixed version mismatch + cross-platform dev:backend
+8. ✅ **C7** — Fixed 15 pre-existing test failures (194/194 pass)
+9. ✅ **M1–M7** — Medium fixes (ARCHITECTURE.md, bare-excepts, CHANGELOG, CONTRIBUTING, Pydantic, bundle splitting)
+10. ✅ **Security** — npm audit fix (2 critical + 2 high cleared)
+11. ⏳ **C5** — CI workflow file written but needs PAT `workflow` scope to push
+12. ⏳ **L1–L5** — Low-priority formatting (613 ruff errors remain, mostly E501 line-length)
 
 Each fix = one conventional commit, pushed to main, REVIEW.md updated with status + commit SHA.
 
