@@ -82,11 +82,10 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     # Cohere
     "command-r-plus": 128000,
     "command-r": 128000,
-    # Cerebras (Llama 3.3 70B, gpt-oss-120B, Qwen3 32B)
-    "llama-3.3-70b": 128000,
-    "llama4-scout-17b-16e-instruct": 128000,
-    "qwen-3-32b": 128000,
+    # Cerebras (production: gpt-oss-120b; preview: gemma-4-31b, zai-glm-4.7)
     "gpt-oss-120b": 128000,
+    "gemma-4-31b": 128000,
+    "zai-glm-4.7": 128000,
     # SambaNova
     "Meta-Llama-3.3-70B-Instruct": 128000,
     "DeepSeek-R1": 128000,
@@ -94,8 +93,11 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "gemini-2.5-flash": 1048576,
     "gemini-2.5-pro": 1048576,
     "gemini-2.5-flash-lite": 1048576,
-    # Chutes (varies by underlying model; conservative default)
-    "unsloth/Llama-3.3-70B-Instruct": 128000,
+    # Chutes (all current models are TEE-suffixed)
+    "deepseek-ai/DeepSeek-V3.2-TEE": 131072,
+    "Qwen/Qwen3.6-27B-TEE": 262144,
+    "zai-org/GLM-5.2-TEE": 1048576,
+    "moonshotai/Kimi-K2.6-TEE": 262144,
     # Default fallback
     "default": 32768,
 }
@@ -212,8 +214,9 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="Cerebras",
         base_url="https://api.cerebras.ai/v1",
         api_key=os.getenv("CEREBRAS_API_KEY", ""),
-        # llama-3.3-70b is broadly available; gpt-oss-120b also available
-        default_model="llama-3.3-70b",
+        # gpt-oss-120b is the current production model. llama-3.3-70b and
+        # qwen-3-32b were deprecated — see inference-docs.cerebras.ai/support/deprecation
+        default_model="gpt-oss-120b",
     ),
     "sambanova": ProviderConfig(
         name="SambaNova",
@@ -230,9 +233,12 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
     ),
     "chutes": ProviderConfig(
         name="Chutes AI",
-        base_url="https://api.chutes.ai/v1",
+        # llm.chutes.ai is the inference host; api.chutes.ai is management only.
+        # All current Chutes models are TEE-suffixed (e.g. deepseek-ai/DeepSeek-V3.2-TEE).
+        # See https://llm.chutes.ai/v1/models for the live list.
+        base_url="https://llm.chutes.ai/v1",
         api_key=os.getenv("CHUTES_API_KEY", ""),
-        default_model="unsloth/Llama-3.3-70B-Instruct",
+        default_model="deepseek-ai/DeepSeek-V3.2-TEE",
     ),
 }
 

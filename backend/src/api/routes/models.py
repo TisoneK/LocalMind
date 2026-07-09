@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from adapters import clear_adapter_cache, get_adapter
 from core.config import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -123,16 +127,29 @@ async def list_models():
         }
         current_model = model_setting_map.get(adapter_name, "")
 
-        # Zen: use adapter.list_models() to get full model list from opencode.ai
-        if adapter_name == "zen":
-            available = await adapter.list_models()
-            model_options.extend([{"id": m, "name": m, "provider": "zen", "size": "Cloud"} for m in available])
-            current_model = current_model or "minimax-m2.5-free"
+        # Providers that expose a working OpenAI-compatible /models endpoint
+        # can be queried live so the model selector shows the full current list.
+        # Zen: opencode.ai/zen/v1/models
+        # Cerebras: api.cerebras.ai/v1/models (gpt-oss-120b, gemma-4-31b, zai-glm-4.7)
+        # Gemini: generativelanguage.googleapis.com/v1beta/openai/models
+        # Chutes: llm.chutes.ai/v1/models (all TEE-suffixed)
+        if adapter_name in ("zen", "cerebras", "gemini", "chutes"):
+            try:
+                available = await adapter.list_models()
+                model_options.extend(
+                    [{"id": m, "name": m, "provider": adapter_name, "size": "Cloud"} for m in available]
+                )
+            except Exception as exc:
+                logger.warning("[models] failed to list models for %s: %s", adapter_name, exc)
 
-        # For non-Zen cloud providers (DeepSeek, OpenAI, etc.), we can't
-        # list available models — but we must include the current model so
-        # the UI can display it. Otherwise the model selector shows an
-        # empty list and the sidebar falls back to a hardcoded name.
+        # Zen-specific default when no model is configured
+        if adapter_name == "zen" and not current_model:
+            current_model = "minimax-m2.5-free"
+
+        # For cloud providers without a listable /models endpoint (DeepSeek,
+        # OpenAI, etc.), include the current model so the UI can display it.
+        # Otherwise the model selector shows an empty list and the sidebar
+        # falls back to a hardcoded name.
         if not model_options and current_model:
             model_options.append(
                 {

@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New providers appear in the model selector, health endpoint, and startup logging alongside the existing 14 providers
 
 ### Fixed
+- Fixed Cerebras default model — `llama-3.3-70b` was deprecated by Cerebras and returned 404; switched to `gpt-oss-120b` (the current production model)
+- Fixed Chutes AI base URL — was pointing to the management API (`api.chutes.ai`); now correctly points to the inference endpoint (`llm.chutes.ai`). Also updated the default model to `deepseek-ai/DeepSeek-V3.2-TEE` since all current Chutes models are TEE-suffixed
+- Fixed model selector not showing available models for Cerebras, Gemini, and Chutes — these providers expose OpenAI-compatible `/models` endpoints, so the selector now lists live models (matching the existing Zen behavior)
 - Fixed provider errors (invalid API key, rate limit, network failure) appearing as garbled text in the chat instead of a clear error message — error responses now surface as a proper error notification
 - Fixed `asyncio` not imported in `ollama.py` — streaming chat was crashing with `NameError`
 - Fixed undefined `secondary_intent` in engine pipeline — secondary intent routing now works

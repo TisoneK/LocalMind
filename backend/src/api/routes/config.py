@@ -123,8 +123,10 @@ PROVIDER_INFO = {
         "name": "Cerebras",
         "model_env": "CEREBRAS_MODEL",
         "key_env": "CEREBRAS_API_KEY",
-        # 1M tokens/day free, no credit card — most generous free tier
-        "default_model": "llama-3.3-70b",
+        # 1M tokens/day free, no credit card — most generous free tier.
+        # llama-3.3-70b and qwen-3-32b were deprecated; gpt-oss-120b is the
+        # current production model.
+        "default_model": "gpt-oss-120b",
     },
     "sambanova": {
         "name": "SambaNova",
@@ -143,7 +145,9 @@ PROVIDER_INFO = {
         "name": "Chutes AI",
         "model_env": "CHUTES_MODEL",
         "key_env": "CHUTES_API_KEY",
-        "default_model": "unsloth/Llama-3.3-70B-Instruct",
+        # All Chutes models are TEE-suffixed; deepseek-v3.2 is a solid default.
+        # See https://llm.chutes.ai/v1/models for the live list.
+        "default_model": "deepseek-ai/DeepSeek-V3.2-TEE",
     },
     # Local
     "lite-llm": {
