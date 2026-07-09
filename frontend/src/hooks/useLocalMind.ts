@@ -128,7 +128,7 @@ interface ChatState {
   activeToolCalls: ToolCall[];
   liveObservation: ObservationData | null;
   lastMetrics: PerformanceMetrics | null;
-  send: (message: string, sessionIdOverride?: string) => void;
+  send: (message: string, sessionIdOverride?: string, tool?: string) => void;
   abort: () => void;
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onTerminalEvent?: (event: TerminalEventData) => void;
@@ -246,7 +246,7 @@ export function useChat(
   }, [sessionId]);
 
   const send = useCallback(
-    (message: string, sessionIdOverride?: string) => {
+    (message: string, sessionIdOverride?: string, tool?: string) => {
       // Use the override (passed by handleSend when creating a new session)
       // so we never see sessionId===null on the first message.
       const effectiveSessionId = sessionIdOverride ?? sessionId;
@@ -361,6 +361,8 @@ export function useChat(
 
               case 'tool_call': {
                 const tc = parsed.tool_call || parsed;
+                // Dispatch event so RightPanel can auto-switch to the Observe tab
+                window.dispatchEvent(new CustomEvent('localmind:tool-call-started'));
                 // FIX 2: Build human-readable label from tool_args if LLM didn't provide one.
                 // This replaces raw tool names like "file_write" with descriptions
                 // like "Creating hello world script" in Task Progress.
@@ -473,12 +475,10 @@ export function useChat(
 
               case 'obs_event': {
                 const obs = parsed.obs_event || parsed;
-                console.log('[obs_event] raw event:', JSON.stringify(parsed));
                 if (obs.intent) setCurrentIntent(obs.intent);
                 if (obs.confidence) setCurrentConfidence(obs.confidence);
                 // Update live observation from obs_event data
                 const obsData = obs.data || obs;
-                console.log('[obs_event] obsData:', JSON.stringify(obsData));
                 if (obsData) {
                   setLiveObservation((prev) => ({
                     intent: (obsData.intent || obs.intent || prev?.intent || 'chat') as any,
@@ -741,6 +741,7 @@ export function useChat(
             });
           }
         },
+        // onError
         () => {
           setIsStreaming(false);
           streamingSessionRef.current = null;
@@ -756,7 +757,9 @@ export function useChat(
             }
             return updated;
           });
-        }
+        },
+        // toolHint — passed as X-LocalMind-Intent header
+        tool
       );
 
       abortRef.current = abortFn;
@@ -800,6 +803,7 @@ function _toolToIntent(toolName: string, fallback: string = 'chat'): string {
     memory_op: 'memory',
     sysinfo: 'chat',
     edit_file: 'file',
+    grep: 'search',
   };
   return map[toolName] || fallback;
 }
@@ -1406,5 +1410,12 @@ export function useMemory() {
     try { await localmindClient.storeMemory(content, source); const data = await localmindClient.getMemory(); setFacts(data); } catch { /* */ }
   }, []);
 
-  return { facts, loading, refresh, storeFact };
+  const deleteFact = useCallback(async (id: string) => {
+    try {
+      await localmindClient.deleteMemory(id);
+      setFacts((prev) => prev.filter((f) => f.id !== id));
+    } catch { /* keep */ }
+  }, []);
+
+  return { facts, loading, refresh, storeFact, deleteFact };
 }

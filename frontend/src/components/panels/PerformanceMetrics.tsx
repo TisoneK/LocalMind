@@ -16,9 +16,9 @@ interface PerformanceMetricsProps {
   lastMetrics?: PerformanceMetricsType | null;
 }
 
-/** Display "—" for zero/undefined, otherwise format the number */
+/** Display "—" for undefined/null, otherwise format the number (including 0) */
 function fmtTok(v: number | undefined): string {
-  if (v === undefined || v === null || v === 0) return '—';
+  if (v === undefined || v === null) return '—';
   return v.toLocaleString();
 }
 

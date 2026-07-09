@@ -21,6 +21,7 @@ interface RightPanelProps {
   onTerminalSessionChange?: (sessionId: string) => void;
   observation: ObservationData;
   memoryFacts: MemoryFact[];
+  onMemoryDelete?: (id: string) => void;
   metrics: PerformanceMetricsType;
   /** SSE-driven lastMetrics for instant token display */
   lastMetrics?: PerformanceMetricsType | null;
@@ -49,6 +50,7 @@ export function RightPanel({
   onTerminalSessionChange,
   observation,
   memoryFacts,
+  onMemoryDelete,
   metrics,
   lastMetrics,
   collapsed,
@@ -73,7 +75,7 @@ export function RightPanel({
       setActiveTab('terminal');
       onTerminalTabShown?.();
     }
-  }, [forceTerminalTab]);
+  }, [forceTerminalTab, activeTab, onTerminalTabShown]);
 
   // v0.7: Auto-switch to Observe tab when a tool call fires
   // This ensures users see real-time action progress instead of
@@ -192,7 +194,7 @@ export function RightPanel({
           />
         )}
         {activeTab === 'observability' && <ObservabilityTab observation={observation} />}
-        {activeTab === 'memory' && <MemoryTab facts={memoryFacts} />}
+        {activeTab === 'memory' && <MemoryTab facts={memoryFacts} onDelete={onMemoryDelete} />}
       </div>
 
       {/* Performance metrics */}

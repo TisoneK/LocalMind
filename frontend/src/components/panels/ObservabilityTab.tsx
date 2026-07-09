@@ -155,8 +155,8 @@ export function ObservabilityTab({ observation }: ObservabilityTabProps) {
         </div>
         <div className="space-y-2">
           <MetricBar label="Confidence" value={hasData ? Math.round(confidence * 100) : 0} max={100} color="bg-[#39d353]" fallback="—" />
-          <MetricBar label="Context Tokens" value={contextTokens} max={8192} color="bg-[#e8a420]" fallback="—" />
-          <MetricBar label="Latency" value={latency} max={Math.max(1000, latency * 1.2)} color="bg-[#e05555]" fallback="—" />
+          <MetricBar label="Context Tokens" value={contextTokens} max={32768} color="bg-[#e8a420]" fallback="—" />
+          <MetricBar label="Latency" value={latency} max={10000} color="bg-[#e05555]" fallback="—" />
         </div>
       </div>
 
@@ -214,9 +214,9 @@ export function ObservabilityTab({ observation }: ObservabilityTabProps) {
               <span className={`text-[10px] ${stepTextClass(step.status)}`}>
                 {step.name}
               </span>
-              {i < pipelineSteps.length && (
-                <span className="text-[9px] text-[#8ab08a] ml-auto">
-                  {stepSuffix(step.status)}
+              {i < pipelineSteps.length - 1 && (
+                <span className="text-[9px] text-[#5a7a5a] ml-auto">
+                  →
                 </span>
               )}
             </div>

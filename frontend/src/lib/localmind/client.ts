@@ -217,6 +217,9 @@ class LocalMindClient {
    * @param onChunk  Called with each raw SSE data payload (JSON string)
    * @param onDone   Called when the stream completes normally
    * @param onError  Called when the stream fails or is aborted
+   * @param toolHint  Optional tool/intent hint (e.g. 'code_exec', 'shell') sent
+   *                   as X-LocalMind-Intent header so the backend can skip the
+   *                   dispatcher LLM call for trivial messages.
    * @returns An abort function — call it to cancel the stream
    */
   streamChat(
@@ -224,7 +227,8 @@ class LocalMindClient {
     sessionId: string,
     onChunk: (rawData: string) => void,
     onDone: () => void,
-    onError: () => void
+    onError: () => void,
+    toolHint?: string
   ): () => void {
     const controller = new AbortController();
 
@@ -232,10 +236,17 @@ class LocalMindClient {
     formData.append('message', message);
     formData.append('session_id', sessionId);
 
+    const headers: Record<string, string> = {};
+    if (toolHint) {
+      headers['X-LocalMind-Intent'] = toolHint;
+      headers['X-Intent-Confidence'] = '1.0';
+    }
+
     fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       body: formData,
       signal: controller.signal,
+      headers,
     })
       .then(async (res) => {
         if (!res.ok || !res.body) {
@@ -478,6 +489,12 @@ class LocalMindClient {
         fact: content,
         source: source || 'manual',
       }),
+    });
+  }
+
+  async deleteMemory(factId: string): Promise<void> {
+    await this.request(`/api/memory/${encodeURIComponent(factId)}`, {
+      method: 'DELETE',
     });
   }
 

@@ -63,6 +63,13 @@ const statusConfig: Record<string, { icon: React.ReactNode; color: string }> = {
 };
 
 export function ActionHistory({ actions }: ActionHistoryProps) {
+  if (actions.length === 0) {
+    return (
+      <div className="px-2.5 py-4 text-center text-[10px] text-[#8ab08a]">
+        No actions yet.
+      </div>
+    );
+  }
   return (
     <div className="space-y-0.5">
       {actions.map((action) => {

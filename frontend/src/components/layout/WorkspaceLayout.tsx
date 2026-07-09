@@ -121,7 +121,7 @@ export function WorkspaceLayout() {
   const { observation } = useObservability(currentSessionId);
   const { metrics: polledMetrics } = useMetrics(isStreaming);
   const { models, current: currentModelId, provider: modelProvider, selectModel, refresh: refreshModels } = useModels();
-  const { facts: memoryFacts } = useMemory();
+  const { facts: memoryFacts, deleteFact } = useMemory();
 
   // Sync selectedModel from the backend's /api/models "current" field.
   // This runs whenever the models list refreshes (on mount, after model
@@ -254,13 +254,13 @@ export function WorkspaceLayout() {
 
   // Handle chat send
   const handleSend = useCallback(
-    (message: string) => {
+    (message: string, tool?: string) => {
       let activeSessionId = currentSessionId;
       if (!activeSessionId) {
         activeSessionId = `session-${Date.now()}`;
         setCurrentSessionId(activeSessionId);
       }
-      send(message, activeSessionId);
+      send(message, activeSessionId, tool);
       // Refresh sessions list so the new message appears in the sidebar immediately
       refreshSessions();
       setTimeout(() => refreshActions(), 2000);
@@ -309,7 +309,6 @@ export function WorkspaceLayout() {
           currentIntent={currentIntent}
           currentConfidence={currentConfidence}
           memoryCount={memoryFacts.length}
-          activeToolCalls={activeToolCalls}
         />
       </div>
 
@@ -339,6 +338,7 @@ export function WorkspaceLayout() {
           onTerminalSessionChange={terminal.changeSession}
           observation={liveObservation || observation}
           memoryFacts={memoryFacts}
+          onMemoryDelete={deleteFact}
           metrics={metrics}
           lastMetrics={lastMetrics}
           collapsed={rightPanelCollapsed}

@@ -3,8 +3,6 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   Send,
-  Paperclip,
-  Mic,
   ChevronDown,
   Wrench,
   Zap,
@@ -22,7 +20,7 @@ const toolOptions = [
 ];
 
 interface ChatInputProps {
-  onSend: (message: string) => void;
+  onSend: (message: string, tool?: string) => void;
   onAbort: () => void;
   isStreaming: boolean;
   modelName?: string;
@@ -54,12 +52,14 @@ export function ChatInput({ onSend, onAbort, isStreaming, modelName, modelProvid
     }
   }, [input]);
 
-  const currentTool = toolOptions.find((t) => t.id === selectedTool)!;
+  const currentTool = toolOptions.find((t) => t.id === selectedTool) ?? toolOptions[0];
 
   const handleSend = () => {
     const msg = input.trim();
     if (!msg || isStreaming) return;
-    onSend(msg);
+    // Pass the selected tool to onSend so the backend can use it as an
+    // intent hint. 'auto' means let the dispatcher decide.
+    onSend(msg, selectedTool === 'auto' ? undefined : selectedTool);
     setInput('');
     // Reset textarea height
     if (textareaRef.current) {
@@ -132,16 +132,6 @@ export function ChatInput({ onSend, onAbort, isStreaming, modelName, modelProvid
                 </div>
               )}
             </div>
-
-            {/* File attach */}
-            <button className="p-1 rounded text-[#8ab08a] hover:text-[#d4e8d4] hover:bg-[#1a2a1a] transition-colors">
-              <Paperclip className="h-3.5 w-3.5" />
-            </button>
-
-            {/* Voice input */}
-            <button className="p-1 rounded text-[#8ab08a] hover:text-[#d4e8d4] hover:bg-[#1a2a1a] transition-colors">
-              <Mic className="h-3.5 w-3.5" />
-            </button>
 
             {/* Send / Abort */}
             {isStreaming ? (

@@ -54,6 +54,8 @@ interface TerminalPanelProps {
   onTabComplete?: (partial: string) => Promise<CompletionSuggestion[]>;
   history?: string[];
   onSessionChange?: (sessionId: string) => void;
+  /** Called when the user clicks Cancel or presses Ctrl+C on a running command */
+  onAbort?: () => void;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────
@@ -68,6 +70,7 @@ export function TerminalPanel({
   onTabComplete,
   history = [],
   onSessionChange,
+  onAbort,
 }: TerminalPanelProps) {
   // ── State ──
   const [input, setInput] = useState('');
@@ -85,12 +88,32 @@ export function TerminalPanel({
   const [commandHistoryIndex, setCommandHistoryIndex] = useState(-1);
   const [savedInput, setSavedInput] = useState('');
   const [lineFilter, setLineFilter] = useState<TerminalFilter>('all');
+  const [terminalDims, setTerminalDims] = useState('80x24');
 
   // ── Refs ──
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Detect platform-appropriate shell name for the status bar
+  const shellName = typeof navigator !== 'undefined' && navigator.platform?.includes('Win')
+    ? 'powershell'
+    : 'bash';
+
+  // Compute terminal dimensions from the scroll container size
+  useEffect(() => {
+    const update = () => {
+      if (!scrollRef.current) return;
+      const cols = Math.max(1, Math.floor(scrollRef.current.clientWidth / 7.2));
+      const rows = Math.max(1, Math.floor(scrollRef.current.clientHeight / 14));
+      setTerminalDims(`${cols}x${rows}`);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (scrollRef.current) ro.observe(scrollRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   // ── Auto-scroll ──
   useEffect(() => {
@@ -116,20 +139,10 @@ export function TerminalPanel({
     const isWindows = /Windows/.test(navigator.userAgent);
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      console.log('[TerminalPanel] run-code event, detail:', detail, 'isRunning:', isRunning);
-      if (!detail?.code) {
-        console.log('[TerminalPanel] No code in detail, returning');
-        return;
-      }
-      if (isRunning) {
-        console.log('[TerminalPanel] isRunning is true, returning');
-        return;
-      }
-      if (!onExecute) {
-        console.log('[TerminalPanel] No onExecute, returning');
-        return;
-      }
-      console.log('[TerminalPanel] Will execute code - using setTimeout to defer'); setTimeout(() => { try {
+      if (!detail?.code) return;
+      if (isRunning) return;
+      if (!onExecute) return;
+      setTimeout(() => { try {
         const { code, language } = detail;
         const lang = language?.toLowerCase() || '';
         if (['python', 'py'].includes(lang)) {
@@ -194,7 +207,7 @@ export function TerminalPanel({
   );
 
   // ── Debounced completion ──
-  const completionTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const completionTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (completionTimerRef.current) clearTimeout(completionTimerRef.current);
     if (input.trim() && input.length > 1) {
@@ -313,6 +326,7 @@ export function TerminalPanel({
       // Ctrl+C to cancel running command
       if (e.key === 'c' && e.ctrlKey && isRunning) {
         e.preventDefault();
+        onAbort?.();
         return;
       }
 
@@ -339,6 +353,7 @@ export function TerminalPanel({
       savedInput,
       onClear,
       handleSubmit,
+      onAbort,
     ]
   );
 
@@ -648,24 +663,13 @@ export function TerminalPanel({
           </div>
           {isRunning && (
             <button
+              onClick={() => onAbort?.()}
               className="px-1.5 py-0.5 text-[9px] text-[#f85149] hover:bg-[#1a2a1a] rounded transition-colors shrink-0"
               title="Cancel (Ctrl+C)"
             >
               Cancel
             </button>
           )}
-        </div>
-      )}
-
-      {/* ── Static Cursor (when no input field) ── */}
-      {!onExecute && (
-        <div className="flex px-2 py-1 bg-[#080d08]">
-          <span className="text-[9px] text-[#6a8a6a] w-16 shrink-0 select-none">
-            {new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          </span>
-          <span className="text-[#39d353]">
-            $ <span className="inline-block w-1.5 h-3.5 bg-[#39d353] animate-pulse" />
-          </span>
         </div>
       )}
 
@@ -680,8 +684,8 @@ export function TerminalPanel({
           )}
         </div>
         <div className="flex items-center gap-2 text-[9px] text-[#6a8a6a]">
-          <span>bash</span>
-          <span>80x24</span>
+          <span>{shellName}</span>
+          <span>{terminalDims}</span>
         </div>
       </div>
     </div>

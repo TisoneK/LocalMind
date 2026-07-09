@@ -15,6 +15,20 @@ import { ChatMessage as ChatMessageType, ModelOption } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 
+// Human-readable labels for intent values shown in the header badge.
+// Previously the raw snake_case value (e.g. "code", "general_question")
+// was displayed directly — inconsistent with the Observability tab.
+const INTENT_LABELS: Record<string, string> = {
+  code: 'Code',
+  file: 'File',
+  chat: 'Chat',
+  search: 'Search',
+  shell: 'Shell',
+  memory: 'Memory',
+  general_question: 'Chat',
+  general: 'Chat',
+};
+
 interface HealthState {
   status: 'online' | 'offline' | 'checking';
   version?: string;
@@ -26,12 +40,11 @@ interface CenterPanelProps {
   selectedModel: ModelOption;
   isStreaming: boolean;
   health: HealthState;
-  onSend: (message: string) => void;
+  onSend: (message: string, tool?: string) => void;
   onAbort: () => void;
   currentIntent?: string;
   currentConfidence?: number;
   memoryCount: number;
-  activeToolCalls?: import('@/types').ToolCall[];
 }
 
 export function CenterPanel({
@@ -103,7 +116,9 @@ export function CenterPanel({
           {currentIntent && (
             <div className="flex items-center gap-1.5" title={`Intent: ${currentIntent}`}>
               <Wrench className="h-3 w-3 text-[#8ab08a]" />
-              <span className="text-[10px] text-[#8ab08a]">{currentIntent}</span>
+              <span className="text-[10px] text-[#8ab08a]">
+                {INTENT_LABELS[currentIntent] || currentIntent}
+              </span>
             </div>
           )}
           <div className="w-px h-3 bg-[#1a2a1a]" />

@@ -1,17 +1,20 @@
 'use client';
 
-import { Database, TrendingUp, Clock } from 'lucide-react';
+import { Database, TrendingUp, Clock, Trash2 } from 'lucide-react';
 import { MemoryFact } from '@/types';
 
 interface MemoryTabProps {
   facts: MemoryFact[];
+  onDelete?: (id: string) => void;
 }
 
 function RelevanceBar({ value }: { value: number }) {
-  // FIX: Guard against NaN / undefined / null values
-  const safeValue = Number.isFinite(value) ? value : 0;
-  const percentage = Math.round(safeValue * 100);
-  const color = safeValue >= 0.9 ? 'bg-[#39d353]' : safeValue >= 0.8 ? 'bg-[#e8a420]' : 'bg-[#8ab08a]';
+  // Guard against NaN / undefined / null values.
+  // Normalize: if value > 1, assume it's already on a 0-100 scale.
+  const raw = Number.isFinite(value) ? value : 0;
+  const normalized = raw > 1 ? raw / 100 : raw;
+  const percentage = Math.round(normalized * 100);
+  const color = normalized >= 0.9 ? 'bg-[#39d353]' : normalized >= 0.8 ? 'bg-[#e8a420]' : 'bg-[#8ab08a]';
 
   return (
     <div className="flex items-center gap-2">
@@ -50,7 +53,7 @@ function formatMemoryTimestamp(ts: string): string {
   return ts;
 }
 
-export function MemoryTab({ facts }: MemoryTabProps) {
+export function MemoryTab({ facts, onDelete }: MemoryTabProps) {
   // FIX: Guard against division by zero when facts array is empty.
   // Previously, facts.length === 0 caused NaN% in the Avg Rel display
   // because (0 / 0) * 100 = NaN.
@@ -108,6 +111,15 @@ export function MemoryTab({ facts }: MemoryTabProps) {
                     {formatMemoryTimestamp(fact.timestamp)}
                   </span>
                 </div>
+                {onDelete && (
+                  <button
+                    onClick={() => onDelete(fact.id)}
+                    className="p-0.5 rounded text-[#8ab08a] hover:text-[#e05555] hover:bg-[#1a2a1a] transition-colors"
+                    title="Delete fact"
+                  >
+                    <Trash2 className="h-2.5 w-2.5" />
+                  </button>
+                )}
               </div>
               <div className="mt-1.5">
                 <RelevanceBar value={fact.relevance} />
