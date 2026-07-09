@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New providers appear in the model selector, health endpoint, and startup logging alongside the existing 14 providers
 
 ### Changed
+- Provider list in the Settings panel is now sorted alphabetically (A–Z) by display name, making any provider easy to find regardless of when it was added. Both the quick-pick button row (first 8) and the "More providers" dropdown follow the same A–Z order
 - The Settings panel no longer hardcodes any model IDs — default models now come live from the backend (`GET /api/settings`), and the full model list comes live from each provider (`GET /api/models?provider=...`). When a provider deprecates a model, only the backend needs updating and the frontend follows automatically. Previously the frontend duplicated every provider's default model ID in a hardcoded array, which drifted from the backend and caused 404 errors when providers deprecated models
 
 ### Fixed
