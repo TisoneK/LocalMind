@@ -2377,7 +2377,12 @@ class AgentLoop:
                     if item is _SENTINEL:
                         break
                     yield item
-                await _task
+                # Ensure the task completes — but don't hang if it already
+                # finished or errored. Use a short timeout.
+                try:
+                    await asyncio.wait_for(_task, timeout=5)
+                except (asyncio.TimeoutError, Exception):
+                    _task.cancel()
             except Exception:
                 _task.cancel()
                 raise

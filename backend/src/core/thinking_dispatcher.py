@@ -387,8 +387,12 @@ class ThinkingDispatcher:
                     if item is _SENTINEL:
                         break
                     yield StreamChunk(text="", thinking=item)
-                # Ensure the task completes
-                await _collect_task
+                # Ensure the task completes — but don't hang if it already
+                # finished or errored. Use a short timeout.
+                try:
+                    await asyncio.wait_for(_collect_task, timeout=5)
+                except (asyncio.TimeoutError, Exception):
+                    _collect_task.cancel()
             except Exception:
                 _collect_task.cancel()
                 raise

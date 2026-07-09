@@ -169,6 +169,30 @@ export function useChat(
     isStreamingRef.current = isStreaming;
   }, [isStreaming]);
 
+  // SAFETY: If isStreaming stays true for more than 120s, force-reset it.
+  // This prevents the "second message hangs forever" bug where a stream
+  // error or backend hang leaves isStreaming stuck true, causing all
+  // subsequent send() calls to silently return.
+  useEffect(() => {
+    if (!isStreaming) return;
+    const timer = setTimeout(() => {
+      if (isStreamingRef.current) {
+        console.warn('[useChat] force-resetting isStreaming after 120s timeout');
+        setIsStreaming(false);
+        streamingSessionRef.current = null;
+        abortRef.current = null;
+        setActiveToolCalls((prev) =>
+          prev.map((tc) =>
+            tc.status === 'running'
+              ? { ...tc, status: 'done' as const, duration: tc.duration || 120000 }
+              : tc
+          )
+        );
+      }
+    }, 120000);
+    return () => clearTimeout(timer);
+  }, [isStreaming]);
+
   // FIX: Auto-timeout for stuck tool calls. If a tool_call stays in "running"
   // status for more than 60 seconds, mark it as "done" — the backend likely
   // completed without sending a tool_result event. This prevents infinite spinners.
