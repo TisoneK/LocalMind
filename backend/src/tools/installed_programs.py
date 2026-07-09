@@ -42,13 +42,13 @@ def _list_windows() -> list[dict]:
                         sub = winreg.OpenKey(key, winreg.EnumKey(key, i))
                         name = winreg.QueryValueEx(sub, "DisplayName")[0]
                         try: version = winreg.QueryValueEx(sub, "DisplayVersion")[0]
-                        except: version = ""
+                        except OSError: version = ""
                         try: publisher = winreg.QueryValueEx(sub, "Publisher")[0]
-                        except: publisher = ""
+                        except OSError: publisher = ""
                         if name and name.strip():
                             programs.append({"name": name.strip(), "version": version, "publisher": publisher})
-                    except: continue
-            except: continue
+                    except OSError: continue
+            except OSError: continue
         seen, unique = set(), []
         for p in programs:
             if p["name"].lower() not in seen:
@@ -72,7 +72,7 @@ def _list_linux() -> list[dict]:
                 if len(parts) >= 3:
                     programs.append({"name": parts[1], "version": parts[2], "publisher": ""})
         if programs: return programs
-    except: pass
+    except (OSError, subprocess.SubprocessError): pass
     try:
         out = subprocess.check_output(["rpm","-qa","--queryformat","%{NAME}|%{VERSION}\n"],
                                        stderr=subprocess.DEVNULL, timeout=10).decode("utf-8","replace")
@@ -81,7 +81,7 @@ def _list_linux() -> list[dict]:
             parts = line.split("|")
             programs.append({"name": parts[0], "version": parts[1] if len(parts)>1 else "", "publisher": ""})
         if programs: return programs
-    except: pass
+    except (OSError, subprocess.SubprocessError): pass
     return []
 
 
@@ -97,7 +97,7 @@ def _list_macos() -> list[dict]:
             parts = line.split()
             if parts:
                 programs.append({"name": parts[0], "version": parts[1] if len(parts)>1 else "", "publisher": "Homebrew"})
-    except: pass
+    except (OSError, subprocess.SubprocessError): pass
     return programs
 
 
