@@ -78,10 +78,12 @@ from core.agent.agent_filters import (
 
 
 def _parse_plan_steps(plan_text: str) -> list[str]:
-    """Parse the UNDERSTANDING/STEPS/ARGS_PRECHECK plan format into todo items.
+    """Parse the UNDERSTANDING/WHAT I KNOW/WHAT I'LL VERIFY/STEPS/ARGS_PRECHECK plan format.
 
     The planning prompt asks the model to respond with:
-        UNDERSTANDING: [what the user wants]
+        UNDERSTANDING: [what the user needs]
+        WHAT I KNOW: [relevant context]
+        WHAT I'LL VERIFY: [verification plan]
         STEPS:
         1. [step description]
         2. [next step]
