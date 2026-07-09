@@ -32,15 +32,19 @@ def get_adapter(name: str, model_override: str = "") -> BaseAdapter:
             "cohere",
             "vercel",
             "cloudflare",
+            "cerebras",
+            "sambanova",
+            "gemini",
+            "chutes",
         ):
             from adapters.openai_compat import OpenAICompatAdapter
 
-            _adapter_cache[cache_key] = OpenAICompatAdapter(
-                provider=name, model_override=model_override
-            )
+            _adapter_cache[cache_key] = OpenAICompatAdapter(provider=name, model_override=model_override)
         else:
             raise ValueError(
-                f"Unknown adapter: '{name}'. Available: ollama, openai, anthropic, openrouter, deepseek, lite-llm, zen, groq, together, fireworks, deepinfra, mistral, cohere, vercel, cloudflare"
+                f"Unknown adapter: '{name}'. Available: ollama, openai, anthropic, openrouter, "
+                "deepseek, lite-llm, zen, groq, together, fireworks, deepinfra, mistral, "
+                "cohere, vercel, cloudflare, cerebras, sambanova, gemini, chutes"
             )
     return _adapter_cache[cache_key]
 

@@ -25,6 +25,10 @@ const PROVIDERS: ProviderDef[] = [
   { id: 'cohere', name: 'Cohere', defaultModel: 'command-r-plus' },
   { id: 'vercel', name: 'Vercel AI Gateway', defaultModel: 'gpt-4o-mini' },
   { id: 'cloudflare', name: 'Cloudflare AI Gateway', defaultModel: '@cf/meta/llama-3.1-70b-instruct' },
+  { id: 'cerebras', name: 'Cerebras (1M tokens/day free)', defaultModel: 'llama-3.3-70b' },
+  { id: 'sambanova', name: 'SambaNova', defaultModel: 'Meta-Llama-3.3-70B-Instruct' },
+  { id: 'gemini', name: 'Google Gemini', defaultModel: 'gemini-2.5-flash' },
+  { id: 'chutes', name: 'Chutes AI', defaultModel: 'unsloth/Llama-3.3-70B-Instruct' },
   { id: 'lite-llm', name: 'LiteLLM Proxy', defaultModel: 'gpt-4' },
   { id: 'zen', name: 'Zen AI', defaultModel: 'gpt-4o-mini' },
 ];

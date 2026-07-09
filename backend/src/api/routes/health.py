@@ -88,6 +88,10 @@ async def health():
         "cohere": settings.cohere_model,
         "vercel": settings.vercel_model,
         "cloudflare": settings.cloudflare_model,
+        "cerebras": settings.cerebras_model,
+        "sambanova": settings.sambanova_model,
+        "gemini": settings.gemini_model,
+        "chutes": settings.chutes_model,
     }
     current_model = model_setting_map.get(adapter_name) or settings.ollama_model
 

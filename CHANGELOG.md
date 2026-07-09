@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added 4 new free-tier-friendly LLM providers: Cerebras (1M tokens/day free), SambaNova, Google Gemini, and Chutes AI — all selectable from the Settings panel
+- New providers appear in the model selector, health endpoint, and startup logging alongside the existing 14 providers
+
 ### Fixed
 - Fixed provider errors (invalid API key, rate limit, network failure) appearing as garbled text in the chat instead of a clear error message — error responses now surface as a proper error notification
 - Fixed `asyncio` not imported in `ollama.py` — streaming chat was crashing with `NameError`

@@ -121,6 +121,10 @@ class Settings(BaseSettings):
     cohere_model: str = ""
     vercel_model: str = ""
     cloudflare_model: str = ""
+    cerebras_model: str = ""
+    sambanova_model: str = ""
+    gemini_model: str = ""
+    chutes_model: str = ""
 
     # Server
     localmind_host: str = "127.0.0.1"
@@ -398,6 +402,10 @@ class Settings(BaseSettings):
             "cohere": "COHERE_API_KEY",
             "vercel": "VERCEL_API_KEY",
             "cloudflare": "CLOUDFLARE_API_KEY",
+            "cerebras": "CEREBRAS_API_KEY",
+            "sambanova": "SAMBANOVA_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "chutes": "CHUTES_API_KEY",
         }
         env_var = env_key_map.get(provider)
         if env_var:

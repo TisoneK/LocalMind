@@ -118,6 +118,33 @@ PROVIDER_INFO = {
         "key_env": "CLOUDFLARE_API_KEY",
         "default_model": "@cf/meta/llama-3.1-70b-instruct",
     },
+    # Free-tier-friendly providers (OpenAI-compatible, generous free quotas)
+    "cerebras": {
+        "name": "Cerebras",
+        "model_env": "CEREBRAS_MODEL",
+        "key_env": "CEREBRAS_API_KEY",
+        # 1M tokens/day free, no credit card — most generous free tier
+        "default_model": "llama-3.3-70b",
+    },
+    "sambanova": {
+        "name": "SambaNova",
+        "model_env": "SAMBANOVA_MODEL",
+        "key_env": "SAMBANOVA_API_KEY",
+        "default_model": "Meta-Llama-3.3-70B-Instruct",
+    },
+    "gemini": {
+        "name": "Google Gemini",
+        "model_env": "GEMINI_MODEL",
+        "key_env": "GEMINI_API_KEY",
+        # Google AI Studio free tier — gemini-2.5-flash ~10 req/min
+        "default_model": "gemini-2.5-flash",
+    },
+    "chutes": {
+        "name": "Chutes AI",
+        "model_env": "CHUTES_MODEL",
+        "key_env": "CHUTES_API_KEY",
+        "default_model": "unsloth/Llama-3.3-70B-Instruct",
+    },
     # Local
     "lite-llm": {
         "name": "LiteLLM",
@@ -151,6 +178,10 @@ async def get_settings():
         "cohere": settings.cohere_model,
         "vercel": settings.vercel_model,
         "cloudflare": settings.cloudflare_model,
+        "cerebras": settings.cerebras_model,
+        "sambanova": settings.sambanova_model,
+        "gemini": settings.gemini_model,
+        "chutes": settings.chutes_model,
     }
     current_model = model_setting_map.get(adapter) or settings.ollama_model
     embed_model = settings.ollama_embed_model
@@ -200,6 +231,10 @@ async def set_adapter(req: AdapterConfig):
         "cohere",
         "vercel",
         "cloudflare",
+        "cerebras",
+        "sambanova",
+        "gemini",
+        "chutes",
     ]
     if req.adapter not in valid_adapters:
         raise HTTPException(status_code=400, detail=f"Invalid adapter. Valid: {valid_adapters}")
@@ -241,6 +276,10 @@ async def set_adapter(req: AdapterConfig):
         "cohere": "cohere_model",
         "vercel": "vercel_model",
         "cloudflare": "cloudflare_model",
+        "cerebras": "cerebras_model",
+        "sambanova": "sambanova_model",
+        "gemini": "gemini_model",
+        "chutes": "chutes_model",
     }
     model_field = model_field_map.get(req.adapter)
     if model_field:
@@ -273,9 +312,7 @@ async def set_provider_key(req: ProviderKeyRequest):
     The key is saved to settings.json so it persists across restarts.
     """
     if req.provider not in PROVIDER_INFO:
-        raise HTTPException(
-            status_code=400, detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}"
-        )
+        raise HTTPException(status_code=400, detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}")
 
     info = PROVIDER_INFO[req.provider]
 
@@ -304,9 +341,7 @@ async def delete_provider_key(req: DeleteProviderKeyRequest):
     endpoint allows the frontend to remove a key cleanly.
     """
     if req.provider not in PROVIDER_INFO:
-        raise HTTPException(
-            status_code=400, detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}"
-        )
+        raise HTTPException(status_code=400, detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}")
 
     info = PROVIDER_INFO[req.provider]
     removed = settings.delete_api_key(req.provider)
@@ -315,7 +350,5 @@ async def delete_provider_key(req: DeleteProviderKeyRequest):
         "provider": req.provider,
         "name": info["name"],
         "deleted": removed,
-        "message": f"API key removed for {info['name']}"
-        if removed
-        else f"No API key was stored for {info['name']}",
+        "message": f"API key removed for {info['name']}" if removed else f"No API key was stored for {info['name']}",
     }

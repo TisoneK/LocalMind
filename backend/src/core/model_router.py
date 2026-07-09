@@ -162,6 +162,10 @@ def best_model_for(intent: Intent, fallback: str) -> str:
         "cohere": settings.cohere_model,
         "vercel": settings.vercel_model,
         "cloudflare": settings.cloudflare_model,
+        "cerebras": settings.cerebras_model,
+        "sambanova": settings.sambanova_model,
+        "gemini": settings.gemini_model,
+        "chutes": settings.chutes_model,
     }
 
     if adapter_name in provider_model_map:
@@ -175,9 +179,7 @@ def best_model_for(intent: Intent, fallback: str) -> str:
         if adapter_name in PROVIDER_CONFIGS:
             return PROVIDER_CONFIGS[adapter_name].default_model
         # Fallback shouldn't happen, but guard against misconfiguration
-        logger.warning(
-            f"[model_router] no default model for adapter '{adapter_name}', using Ollama fallback"
-        )
+        logger.warning(f"[model_router] no default model for adapter '{adapter_name}', using Ollama fallback")
         # Don't fall through to Ollama logic — return a safe default
         return fallback
 
@@ -188,9 +190,7 @@ def best_model_for(intent: Intent, fallback: str) -> str:
         if _is_available(candidate):
             resolved = _resolve(candidate)
             if resolved != fallback:
-                logger.debug(
-                    f"[model_router] {intent.value} → {resolved} (preferred over {fallback})"
-                )
+                logger.debug(f"[model_router] {intent.value} → {resolved} (preferred over {fallback})")
             return resolved
 
     # Nothing preferred is pulled — use the main model

@@ -82,6 +82,20 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     # Cohere
     "command-r-plus": 128000,
     "command-r": 128000,
+    # Cerebras (Llama 3.3 70B, gpt-oss-120B, Qwen3 32B)
+    "llama-3.3-70b": 128000,
+    "llama4-scout-17b-16e-instruct": 128000,
+    "qwen-3-32b": 128000,
+    "gpt-oss-120b": 128000,
+    # SambaNova
+    "Meta-Llama-3.3-70B-Instruct": 128000,
+    "DeepSeek-R1": 128000,
+    # Google Gemini (via OpenAI-compatible endpoint)
+    "gemini-2.5-flash": 1048576,
+    "gemini-2.5-pro": 1048576,
+    "gemini-2.5-flash-lite": 1048576,
+    # Chutes (varies by underlying model; conservative default)
+    "unsloth/Llama-3.3-70B-Instruct": 128000,
     # Default fallback
     "default": 32768,
 }
@@ -192,6 +206,33 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         base_url=os.getenv("CLOUDFLARE_GATEWAY_URL", "https://gateway.ai.cloudflare.com"),
         api_key=os.getenv("CLOUDFLARE_API_KEY", ""),
         default_model="@cf/meta/llama-3.1-70b-instruct",
+    ),
+    # Free-tier-friendly providers with strong OpenAI compatibility
+    "cerebras": ProviderConfig(
+        name="Cerebras",
+        base_url="https://api.cerebras.ai/v1",
+        api_key=os.getenv("CEREBRAS_API_KEY", ""),
+        # llama-3.3-70b is broadly available; gpt-oss-120b also available
+        default_model="llama-3.3-70b",
+    ),
+    "sambanova": ProviderConfig(
+        name="SambaNova",
+        base_url="https://api.sambanova.ai/v1",
+        api_key=os.getenv("SAMBANOVA_API_KEY", ""),
+        default_model="Meta-Llama-3.3-70B-Instruct",
+    ),
+    "gemini": ProviderConfig(
+        name="Google Gemini",
+        # Google's official OpenAI-compatible endpoint
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+        api_key=os.getenv("GEMINI_API_KEY", ""),
+        default_model="gemini-2.5-flash",
+    ),
+    "chutes": ProviderConfig(
+        name="Chutes AI",
+        base_url="https://api.chutes.ai/v1",
+        api_key=os.getenv("CHUTES_API_KEY", ""),
+        default_model="unsloth/Llama-3.3-70B-Instruct",
     ),
 }
 

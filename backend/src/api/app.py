@@ -127,11 +127,13 @@ def create_app() -> FastAPI:
             "cohere": settings.cohere_model,
             "vercel": settings.vercel_model,
             "cloudflare": settings.cloudflare_model,
+            "cerebras": settings.cerebras_model,
+            "sambanova": settings.sambanova_model,
+            "gemini": settings.gemini_model,
+            "chutes": settings.chutes_model,
         }
         _active_model = _model_map.get(_adapter, "") or "(default)"
-        logger.info(
-            f"LocalMind — adapter: {_adapter} | model: {_active_model} | ui: {UI_HTML.exists()}"
-        )
+        logger.info(f"LocalMind — adapter: {_adapter} | model: {_active_model} | ui: {UI_HTML.exists()}")
 
         # Write live config values into localmind.md so the model always reads
         # accurate self-knowledge. Runs before any LLM call so the first request
@@ -228,9 +230,7 @@ def create_app() -> FastAPI:
             # Warm every model that is actually pulled locally
             async def _warm_one(model_name: str):
                 if pulled and model_name not in pulled:
-                    logger.info(
-                        f"[startup] skipping warmup for '{model_name}' — not pulled locally"
-                    )
+                    logger.info(f"[startup] skipping warmup for '{model_name}' — not pulled locally")
                     return
                 adapter = OllamaAdapter(model_override=model_name)
                 await adapter.warmup()

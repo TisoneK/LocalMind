@@ -82,9 +82,7 @@ async def list_models():
     if adapter_name == "ollama":
         # Ollama: show pulled models with profiles
         for model_name, profile in OLLAMA_MODEL_PROFILES.items():
-            is_available = model_name in available or any(
-                a.startswith(model_name.split(":")[0]) for a in available
-            )
+            is_available = model_name in available or any(a.startswith(model_name.split(":")[0]) for a in available)
             if is_available:
                 model_options.append(
                     {
@@ -97,9 +95,7 @@ async def list_models():
         # Include pulled models not in profiles
         for name in available:
             if not any(m["id"] == name for m in model_options):
-                model_options.append(
-                    {"id": name, "name": name, "provider": "ollama", "size": "Unknown"}
-                )
+                model_options.append({"id": name, "name": name, "provider": "ollama", "size": "Unknown"})
         current_model = settings.ollama_model
     else:
         # Cloud providers: show configured model (can't list, can only configure)
@@ -120,15 +116,17 @@ async def list_models():
             "cohere": settings.cohere_model,
             "vercel": settings.vercel_model,
             "cloudflare": settings.cloudflare_model,
+            "cerebras": settings.cerebras_model,
+            "sambanova": settings.sambanova_model,
+            "gemini": settings.gemini_model,
+            "chutes": settings.chutes_model,
         }
         current_model = model_setting_map.get(adapter_name, "")
 
         # Zen: use adapter.list_models() to get full model list from opencode.ai
         if adapter_name == "zen":
             available = await adapter.list_models()
-            model_options.extend(
-                [{"id": m, "name": m, "provider": "zen", "size": "Cloud"} for m in available]
-            )
+            model_options.extend([{"id": m, "name": m, "provider": "zen", "size": "Cloud"} for m in available])
             current_model = current_model or "minimax-m2.5-free"
 
         # For non-Zen cloud providers (DeepSeek, OpenAI, etc.), we can't
@@ -187,14 +185,10 @@ async def select_model(req: SelectModelRequest):
             available = set()
 
         # Accept exact match or prefix match (e.g. "llama3.1" for "llama3.1:8b")
-        model_available = model in available or any(
-            a.startswith(model.split(":")[0]) for a in available
-        )
+        model_available = model in available or any(a.startswith(model.split(":")[0]) for a in available)
 
         if not model_available and available:
-            raise HTTPException(
-                status_code=404, detail=f"Model '{model}' is not pulled. Run: ollama pull {model}"
-            )
+            raise HTTPException(status_code=404, detail=f"Model '{model}' is not pulled. Run: ollama pull {model}")
 
         # Mutate settings in-place — all subsequent Engine instances read from settings
         settings.ollama_model = model
@@ -216,6 +210,10 @@ async def select_model(req: SelectModelRequest):
             "cohere": "cohere_model",
             "vercel": "vercel_model",
             "cloudflare": "cloudflare_model",
+            "cerebras": "cerebras_model",
+            "sambanova": "sambanova_model",
+            "gemini": "gemini_model",
+            "chutes": "chutes_model",
         }
         setting_key = model_setting_map.get(adapter_name)
         if setting_key:
