@@ -147,6 +147,21 @@ async def list_models():
     }
 
 
+# Debug endpoint to check settings state
+@router.get("/models/debug")
+async def debug_models():
+    """Debug endpoint showing raw settings values for adapter/model diagnosis."""
+    return {
+        "localmind_adapter": settings.localmind_adapter,
+        "ollama_model": settings.ollama_model,
+        "zen_model": settings.zen_model,
+        "ollama_ready": settings.ollama_ready,
+        "is_ollama_configured": settings.is_ollama_configured(),
+        "runtime_settings_path": str(settings._runtime_settings_path()),
+        "runtime_settings_exists": settings._runtime_settings_path().exists(),
+    }
+
+
 @router.post("/models/select", response_model=SelectModelResponse)
 async def select_model(req: SelectModelRequest):
     """
