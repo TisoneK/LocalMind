@@ -463,8 +463,12 @@ class LocalMindClient {
 
   // ── Models ──────────────────────────────────────────────────────────
 
-  async getModels(): Promise<ModelsResponse> {
-    return this.request<ModelsResponse>('/api/models');
+  async getModels(provider?: string): Promise<ModelsResponse> {
+    // When `provider` is given, fetch models for that specific provider
+    // (used by the Settings modal's "Add Key" form). Without it, returns
+    // models for the currently active adapter (used by the chat sidebar).
+    const query = provider ? `?provider=${encodeURIComponent(provider)}` : '';
+    return this.request<ModelsResponse>(`/api/models${query}`);
   }
 
   async selectModel(modelId: string): Promise<void> {

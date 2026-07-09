@@ -14,6 +14,126 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+# ── Shared provider → settings-attribute maps ────────────────────────────────
+# Single source of truth for mapping provider IDs to Settings model fields.
+# Previously this map was duplicated in list_models() and select_model(),
+# which meant every new provider needed to be added in two places.
+# Now both call sites read from these helpers.
+
+
+def _model_setting_attr(provider: str) -> str | None:
+    """Return the Settings attribute name for a provider's model field."""
+    return {
+        "openai": "openai_model",
+        "anthropic": "anthropic_model",
+        "openrouter": "openrouter_model",
+        "deepseek": "deepseek_model",
+        "lite-llm": "litellm_model",
+        "zen": "zen_model",
+        "groq": "groq_model",
+        "together": "together_model",
+        "fireworks": "fireworks_model",
+        "deepinfra": "deepinfra_model",
+        "mistral": "mistral_model",
+        "cohere": "cohere_model",
+        "vercel": "vercel_model",
+        "cloudflare": "cloudflare_model",
+        "cerebras": "cerebras_model",
+        "sambanova": "sambanova_model",
+        "gemini": "gemini_model",
+        "chutes": "chutes_model",
+    }.get(provider)
+
+
+def _build_model_setting_map() -> dict[str, str]:
+    """Return {provider_id: current_model_value} for all cloud providers."""
+    return {
+        prov: getattr(settings, attr, "") or ""
+        for prov, attr in {
+            "openai": "openai_model",
+            "anthropic": "anthropic_model",
+            "openrouter": "openrouter_model",
+            "deepseek": "deepseek_model",
+            "lite-llm": "litellm_model",
+            "zen": "zen_model",
+            "groq": "groq_model",
+            "together": "together_model",
+            "fireworks": "fireworks_model",
+            "deepinfra": "deepinfra_model",
+            "mistral": "mistral_model",
+            "cohere": "cohere_model",
+            "vercel": "vercel_model",
+            "cloudflare": "cloudflare_model",
+            "cerebras": "cerebras_model",
+            "sambanova": "sambanova_model",
+            "gemini": "gemini_model",
+            "chutes": "chutes_model",
+        }.items()
+    }
+
+
+async def _list_models_for_provider(provider: str) -> dict:
+    """
+    List models for a specific provider without switching the active adapter.
+
+    Used by the Settings modal so users picking a provider can see a live
+    dropdown of that provider's available models — no free-text typing
+    required. Falls back gracefully to just the default model if the
+    provider's /models endpoint is unreachable or no API key is saved.
+    """
+    from adapters.openai_compat import PROVIDER_CONFIGS
+
+    # Validate the provider ID
+    if provider == "ollama":
+        # Ollama doesn't make sense here — it's the local adapter, not a
+        # key-based provider. Return empty so the frontend hides the dropdown.
+        return {"models": [], "current": "", "provider": "ollama"}
+
+    cfg = PROVIDER_CONFIGS.get(provider)
+    if not cfg:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+
+    current_model = getattr(settings, _model_setting_attr(provider) or "", "") or ""
+    model_options: list[dict] = []
+
+    # Always include the configured/default model so the dropdown is never empty
+    fallback_model = current_model or cfg.default_model
+    if fallback_model:
+        model_options.append({"id": fallback_model, "name": fallback_model, "provider": provider, "size": "Cloud"})
+
+    # Try to fetch the live model list. This requires a saved API key for the
+    # provider — without one, the provider's /models endpoint will 401 and we
+    # just return the default. The frontend shows the dropdown only when
+    # models are available.
+    try:
+        # Create a throwaway adapter instance for this provider. We don't use
+        # get_adapter() because that would cache an instance for a provider
+        # that isn't the active adapter — confusing for the adapter cache.
+        from adapters.openai_compat import OpenAICompatAdapter
+
+        adapter = OpenAICompatAdapter(provider=provider)
+        available = await adapter.list_models()
+        await adapter.close()
+
+        # Merge: add any live models not already in the list
+        existing_ids = {m["id"] for m in model_options}
+        for m in available:
+            if m and m not in existing_ids:
+                model_options.append({"id": m, "name": m, "provider": provider, "size": "Cloud"})
+                existing_ids.add(m)
+    except Exception as exc:
+        # No API key saved, or provider /models endpoint unreachable.
+        # Non-fatal — the dropdown will just show the default model.
+        logger.debug("[models] could not list live models for %s: %s", provider, exc)
+
+    return {
+        "models": model_options,
+        "current": current_model or fallback_model,
+        "provider": provider,
+    }
+
+
 # Human-readable profiles shown in the UI (Ollama only)
 OLLAMA_MODEL_PROFILES = {
     "llama3.2:3b": {"label": "Fast & Light", "best_for": "Chat, Q&A, quick tasks", "min_ram_gb": 4},
@@ -64,11 +184,25 @@ class SelectModelResponse(BaseModel):
 
 
 @router.get("/models")
-async def list_models():
+async def list_models(provider: str | None = None):
     """
-    List available models based on the configured adapter.
-    Returns {models: ModelOption[], current: string, provider: string}
+    List available models.
+
+    Without a `provider` query param: returns models for the currently
+    active adapter (used by the chat sidebar's model selector).
+
+    With `?provider=cerebras` (etc.): returns models for that specific
+    provider, regardless of which adapter is currently active. Used by
+    the Settings modal's "Add Key" form so users can pick a model from
+    a live dropdown instead of typing a free-text model ID. Requires
+    that the provider has a saved API key (otherwise the provider's
+    /models endpoint will 401 and we return just the default model).
     """
+    # When a specific provider is requested, build a focused response
+    # without disturbing the active adapter's cached instance.
+    if provider is not None:
+        return await _list_models_for_provider(provider)
+
     adapter_name = settings.localmind_adapter
 
     # Get adapter - but don't create new instance, just get the class
@@ -105,26 +239,7 @@ async def list_models():
         # Cloud providers: show configured model (can't list, can only configure)
 
         # Get model from settings or use adapter default
-        model_setting_map = {
-            "openai": settings.openai_model,
-            "anthropic": settings.anthropic_model,
-            "openrouter": settings.openrouter_model,
-            "deepseek": settings.deepseek_model,
-            "lite-llm": settings.litellm_model,
-            "zen": settings.zen_model,
-            "groq": settings.groq_model,
-            "together": settings.together_model,
-            "fireworks": settings.fireworks_model,
-            "deepinfra": settings.deepinfra_model,
-            "mistral": settings.mistral_model,
-            "cohere": settings.cohere_model,
-            "vercel": settings.vercel_model,
-            "cloudflare": settings.cloudflare_model,
-            "cerebras": settings.cerebras_model,
-            "sambanova": settings.sambanova_model,
-            "gemini": settings.gemini_model,
-            "chutes": settings.chutes_model,
-        }
+        model_setting_map = _build_model_setting_map()
         current_model = model_setting_map.get(adapter_name, "")
 
         # Providers that expose a working OpenAI-compatible /models endpoint
@@ -212,27 +327,7 @@ async def select_model(req: SelectModelRequest):
         clear_adapter_cache("ollama")
     else:
         # Cloud providers: update the appropriate setting
-        model_setting_map = {
-            "openai": "openai_model",
-            "anthropic": "anthropic_model",
-            "openrouter": "openrouter_model",
-            "deepseek": "deepseek_model",
-            "lite-llm": "litellm_model",
-            "zen": "zen_model",
-            "groq": "groq_model",
-            "together": "together_model",
-            "fireworks": "fireworks_model",
-            "deepinfra": "deepinfra_model",
-            "mistral": "mistral_model",
-            "cohere": "cohere_model",
-            "vercel": "vercel_model",
-            "cloudflare": "cloudflare_model",
-            "cerebras": "cerebras_model",
-            "sambanova": "sambanova_model",
-            "gemini": "gemini_model",
-            "chutes": "chutes_model",
-        }
-        setting_key = model_setting_map.get(adapter_name)
+        setting_key = _model_setting_attr(adapter_name)
         if setting_key:
             setattr(settings, setting_key, model)
         clear_adapter_cache(adapter_name)

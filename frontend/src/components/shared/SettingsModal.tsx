@@ -4,34 +4,54 @@ import { useState, useEffect, useCallback } from 'react';
 import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
 
-// ── Provider definitions (mirrors backend PROVIDER_INFO in config.py) ──
+// ── Provider definitions ──
+// Only `id` and `name` (display label) are hardcoded here — these are
+// stable UI strings. Model IDs are NEVER hardcoded: the live default for
+// each provider comes from GET /api/settings (which reads the backend's
+// PROVIDER_CONFIGS), and the full model list comes from GET /api/models?provider=...
+// This way, when a provider deprecates a model, only the backend needs
+// updating and the frontend follows automatically.
 
 interface ProviderDef {
   id: string;
   name: string;
-  defaultModel: string;
 }
 
 const PROVIDERS: ProviderDef[] = [
-  { id: 'openai', name: 'OpenAI', defaultModel: 'gpt-4o-mini' },
-  { id: 'anthropic', name: 'Anthropic', defaultModel: 'claude-3-5-sonnet-20241022' },
-  { id: 'openrouter', name: 'OpenRouter', defaultModel: 'openrouter/auto' },
-  { id: 'deepseek', name: 'DeepSeek', defaultModel: 'deepseek-chat' },
-  { id: 'groq', name: 'Groq', defaultModel: 'llama-3.1-70b-versatile' },
-  { id: 'together', name: 'Together AI', defaultModel: 'meta-llama/Llama-3.1-70B-Instruct-Turbo' },
-  { id: 'fireworks', name: 'Fireworks AI', defaultModel: 'accounts/fireworks/models/llama-v3-70b-instruct' },
-  { id: 'deepinfra', name: 'DeepInfra', defaultModel: 'meta-llama/Llama-3.1-70B-Instruct' },
-  { id: 'mistral', name: 'Mistral AI', defaultModel: 'mistral-large-latest' },
-  { id: 'cohere', name: 'Cohere', defaultModel: 'command-r-plus' },
-  { id: 'vercel', name: 'Vercel AI Gateway', defaultModel: 'gpt-4o-mini' },
-  { id: 'cloudflare', name: 'Cloudflare AI Gateway', defaultModel: '@cf/meta/llama-3.1-70b-instruct' },
-  { id: 'cerebras', name: 'Cerebras (1M tokens/day free)', defaultModel: 'gpt-oss-120b' },
-  { id: 'sambanova', name: 'SambaNova', defaultModel: 'Meta-Llama-3.3-70B-Instruct' },
-  { id: 'gemini', name: 'Google Gemini', defaultModel: 'gemini-2.5-flash' },
-  { id: 'chutes', name: 'Chutes AI', defaultModel: 'deepseek-ai/DeepSeek-V3.2-TEE' },
-  { id: 'lite-llm', name: 'LiteLLM Proxy', defaultModel: 'gpt-4' },
-  { id: 'zen', name: 'Zen AI', defaultModel: 'gpt-4o-mini' },
+  { id: 'openai', name: 'OpenAI' },
+  { id: 'anthropic', name: 'Anthropic' },
+  { id: 'openrouter', name: 'OpenRouter' },
+  { id: 'deepseek', name: 'DeepSeek' },
+  { id: 'groq', name: 'Groq' },
+  { id: 'together', name: 'Together AI' },
+  { id: 'fireworks', name: 'Fireworks AI' },
+  { id: 'deepinfra', name: 'DeepInfra' },
+  { id: 'mistral', name: 'Mistral AI' },
+  { id: 'cohere', name: 'Cohere' },
+  { id: 'vercel', name: 'Vercel AI Gateway' },
+  { id: 'cloudflare', name: 'Cloudflare AI Gateway' },
+  { id: 'cerebras', name: 'Cerebras (1M tokens/day free)' },
+  { id: 'sambanova', name: 'SambaNova' },
+  { id: 'gemini', name: 'Google Gemini' },
+  { id: 'chutes', name: 'Chutes AI' },
+  { id: 'lite-llm', name: 'LiteLLM Proxy' },
+  { id: 'zen', name: 'Zen AI' },
 ];
+
+// Shape of the per-provider info returned by GET /api/settings
+interface ProviderInfo {
+  name: string;
+  api_key_set: boolean;
+  model: string;
+  default_model: string;
+}
+
+interface ModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  size?: string;
+}
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -45,9 +65,17 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const [model, setModel] = useState('');
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
   const [providerKeys, setProviderKeys] = useState<Record<string, boolean>>({});
+  // Live default models per provider — sourced from GET /api/settings.
+  // Replaces the previously-hardcoded `defaultModel` field on PROVIDERS.
+  const [providerDefaults, setProviderDefaults] = useState<Record<string, string>>({});
   const [newKeyProvider, setNewKeyProvider] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
   const [newKeyModel, setNewKeyModel] = useState('');
+  // Live model list for the currently-selected provider in the Add Key form.
+  // Populated from GET /api/models?provider=... so users pick from a real
+  // dropdown instead of typing a free-text model ID.
+  const [providerModels, setProviderModels] = useState<ModelOption[]>([]);
+  const [providerModelsLoading, setProviderModelsLoading] = useState(false);
   const [status, setStatus] = useState<Status>('idle');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -59,14 +87,21 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         const settings = await localmindClient.getSettings();
         setAdapter(settings.adapter);
         setModel(settings.model);
-        // Build provider key status from providers object
+        // Build provider key status AND live default-model map from the
+        // providers object returned by /api/settings. This is the single
+        // source of truth for default models — no hardcoded values.
         const keyStatus: Record<string, boolean> = {};
+        const defaults: Record<string, string> = {};
         if (settings.providers) {
-          for (const [id, info] of Object.entries(settings.providers) as [string, any][]) {
+          for (const [id, info] of Object.entries(settings.providers) as [string, ProviderInfo][]) {
             keyStatus[id] = info?.api_key_set ?? false;
+            if (info?.default_model) {
+              defaults[id] = info.default_model;
+            }
           }
         }
         setProviderKeys(keyStatus);
+        setProviderDefaults(defaults);
         // Load Ollama URL if using ollama adapter
         if (settings.adapter === 'ollama') {
           try {
@@ -84,6 +119,36 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       }
     })();
   }, []);
+
+  // When the user picks a provider in the Add Key form, fetch that
+  // provider's live model list so the model field can be a dropdown
+  // instead of a free-text input. If the provider has no saved key yet,
+  // the backend returns just the default model — still enough to show
+  // a useful dropdown. After the key is saved, re-fetching will return
+  // the full live list.
+  useEffect(() => {
+    if (!newKeyProvider) {
+      setProviderModels([]);
+      return;
+    }
+    let cancelled = false;
+    setProviderModelsLoading(true);
+    localmindClient
+      .getModels(newKeyProvider)
+      .then((data) => {
+        if (!cancelled) setProviderModels(data.models || []);
+      })
+      .catch(() => {
+        // Non-fatal — the model field falls back to free-text input
+        if (!cancelled) setProviderModels([]);
+      })
+      .finally(() => {
+        if (!cancelled) setProviderModelsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [newKeyProvider]);
 
   const handleAdapterSwitch = useCallback(async (newAdapter: string) => {
     setAdapter(newAdapter);
@@ -116,6 +181,16 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       setStatus('success');
       setMessage(`API key saved for ${newKeyProvider}`);
       onSave();
+      // Re-fetch the live model list now that the key is saved — the
+      // provider's /models endpoint will return the full list instead of
+      // just the default. The useEffect on newKeyProvider won't re-fire
+      // (the provider didn't change), so we trigger it manually.
+      try {
+        const data = await localmindClient.getModels(newKeyProvider);
+        setProviderModels(data.models || []);
+      } catch {
+        /* non-fatal */
+      }
     } catch (err) {
       setStatus('error');
       setMessage(err instanceof Error ? err.message : 'Failed to save API key');
@@ -385,10 +460,41 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                     value={newKeyModel}
                     onChange={(e) => setNewKeyModel(e.target.value)}
                     placeholder={`Model (optional, default: ${
-                      PROVIDERS.find((p) => p.id === newKeyProvider)?.defaultModel || ''
+                      providerDefaults[newKeyProvider] || 'provider default'
                     })`}
                     className="w-full rounded-lg border border-[#1a2a1a] bg-[#0a0f0a] px-3 py-2 text-sm text-[#d4e8d4] focus:border-[#39d353] outline-none"
                   />
+                  {/* Live model dropdown — populated from GET /api/models?provider=...
+                      Replaces the old free-text-only input. When the provider has
+                      a saved key, this shows the full live model list from the
+                      provider's /models endpoint. Without a key, it shows just
+                      the backend's configured default. Clicking a model fills
+                      the input above so the user can still edit it if needed. */}
+                  {providerModels.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {providerModels.map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setNewKeyModel(m.id)}
+                          className={`rounded px-2 py-1 text-[11px] font-mono transition-colors ${
+                            newKeyModel === m.id
+                              ? 'border border-[#39d353] bg-[#39d353]/10 text-[#39d353]'
+                              : 'border border-[#1a2a1a] text-[#8ab08a] hover:border-[#39d353]/30 hover:text-[#d4e8d4]'
+                          }`}
+                          title={`Use ${m.id}`}
+                        >
+                          {m.id}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {providerModelsLoading && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-[#8ab08a]">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Loading models…
+                    </div>
+                  )}
                   <button
                     onClick={handleSaveKey}
                     disabled={status === 'saving' || !newKeyProvider || !newKeyValue.trim()}

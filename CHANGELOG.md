@@ -8,8 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Model picker in the Settings panel now shows a live dropdown of available models for the selected provider, fetched from the provider's `/models` endpoint — no more typing model IDs by hand
 - Added 4 new free-tier-friendly LLM providers: Cerebras (1M tokens/day free), SambaNova, Google Gemini, and Chutes AI — all selectable from the Settings panel
 - New providers appear in the model selector, health endpoint, and startup logging alongside the existing 14 providers
+
+### Changed
+- The Settings panel no longer hardcodes any model IDs — default models now come live from the backend (`GET /api/settings`), and the full model list comes live from each provider (`GET /api/models?provider=...`). When a provider deprecates a model, only the backend needs updating and the frontend follows automatically. Previously the frontend duplicated every provider's default model ID in a hardcoded array, which drifted from the backend and caused 404 errors when providers deprecated models
 
 ### Fixed
 - Fixed Cerebras default model — `llama-3.3-70b` was deprecated by Cerebras and returned 404; switched to `gpt-oss-120b` (the current production model)
