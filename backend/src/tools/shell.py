@@ -244,8 +244,11 @@ def _show_files(path: Path) -> tuple[str, RiskLevel]:
         if files:
             lines.append(f"\nFiles ({len(files)}):")
             for f in files[:30]:
-                size = _human_size(f.stat().st_size)
-                lines.append(f"  📄  {f.name}  ({size})")
+                stat = f.stat()
+                size = _human_size(stat.st_size)
+                import datetime as _dt
+                mod_date = _dt.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+                lines.append(f"  📄  {f.name}  ({size}, modified {mod_date})")
             if len(files) > 30:
                 lines.append(f"  … and {len(files) - 30} more files")
 

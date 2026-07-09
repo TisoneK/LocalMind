@@ -115,11 +115,16 @@ async def list_files(path: str = ""):
         for entry in os.scandir(dir_path):
             try:
                 stat = entry.stat()
+                import datetime
                 entries.append({
                     "name": entry.name,
                     "type": "folder" if entry.is_dir() else "file",
                     "path": entry.path,
                     "size": stat.st_size if entry.is_file() else 0,
+                    "modified": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "created": datetime.datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "extension": Path(entry.name).suffix.lower().lstrip(".") if entry.is_file() else "",
+                    "is_symlink": entry.is_symlink(),
                 })
             except PermissionError:
                 continue
@@ -130,6 +135,47 @@ async def list_files(path: str = ""):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list directory: {e}")
+
+
+@router.get("/files/meta")
+async def get_file_meta(path: str):
+    """Get detailed metadata for a single file or directory."""
+    try:
+        file_path = Path(path).resolve()
+
+        if not settings.is_path_allowed(file_path):
+            raise HTTPException(status_code=403, detail="Path is outside allowed folders")
+
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+        stat = file_path.stat()
+        import datetime
+
+        return {
+            "name": file_path.name,
+            "path": str(file_path),
+            "type": "folder" if file_path.is_dir() else "file",
+            "size": stat.st_size,
+            "size_human": _human_size(stat.st_size),
+            "modified": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            "created": datetime.datetime.fromtimestamp(stat.st_ctime).isoformat(),
+            "extension": file_path.suffix.lower().lstrip(".") if file_path.is_file() else "",
+            "is_symlink": file_path.is_symlink(),
+            "parent": str(file_path.parent),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get file metadata: {e}")
+
+
+def _human_size(n: int) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024:
+            return f"{n:.1f} {unit}"
+        n //= 1024
+    return f"{n:.1f} PB"
 
 
 @router.post("/confirm-write")
