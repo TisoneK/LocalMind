@@ -35,6 +35,7 @@ const PROVIDERS: ProviderDef[] = [
   { id: 'sambanova', name: 'SambaNova' },
   { id: 'together', name: 'Together AI' },
   { id: 'vercel', name: 'Vercel AI Gateway' },
+  { id: 'zai', name: 'Z.ai (GLM-5.2 free)' },
   { id: 'zen', name: 'Zen AI' },
 ];
 

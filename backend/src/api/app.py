@@ -131,6 +131,7 @@ def create_app() -> FastAPI:
             "sambanova": settings.sambanova_model,
             "gemini": settings.gemini_model,
             "chutes": settings.chutes_model,
+            "zai": settings.zai_model,
         }
         _active_model = _model_map.get(_adapter, "") or "(default)"
         logger.info(f"LocalMind — adapter: {_adapter} | model: {_active_model} | ui: {UI_HTML.exists()}")

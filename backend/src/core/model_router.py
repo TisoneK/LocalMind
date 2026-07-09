@@ -166,6 +166,7 @@ def best_model_for(intent: Intent, fallback: str) -> str:
         "sambanova": settings.sambanova_model,
         "gemini": settings.gemini_model,
         "chutes": settings.chutes_model,
+        "zai": settings.zai_model,
     }
 
     if adapter_name in provider_model_map:

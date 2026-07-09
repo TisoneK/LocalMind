@@ -99,6 +99,13 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "Qwen/Qwen3.6-27B-TEE": 262144,
     "zai-org/GLM-5.2-TEE": 1048576,
     "moonshotai/Kimi-K2.6-TEE": 262144,
+    # Z.ai (GLM models — free tier)
+    "glm-4.5-flash": 128000,
+    "glm-5.2": 1048576,
+    "glm-5.1": 1048576,
+    "glm-5": 128000,
+    "glm-5-turbo": 128000,
+    "glm-4.7": 128000,
     # Default fallback
     "default": 32768,
 }
@@ -240,6 +247,15 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         base_url="https://llm.chutes.ai/v1",
         api_key=os.getenv("CHUTES_API_KEY", ""),
         default_model="deepseek-ai/DeepSeek-V3.2-TEE",
+    ),
+    "zai": ProviderConfig(
+        name="Z.ai (GLM)",
+        # Z.ai's OpenAI-compatible endpoint. Free tier includes GLM-5.2,
+        # GLM-5.1, GLM-5, GLM-5-Turbo, GLM-4.7 (limited-time free) and
+        # GLM-4.5-Flash (always free). Get a key at z.ai/manage-apikey/billing
+        base_url="https://api.z.ai/api/paas/v4",
+        api_key=os.getenv("ZAI_API_KEY", ""),
+        default_model="glm-4.5-flash",
     ),
 }
 

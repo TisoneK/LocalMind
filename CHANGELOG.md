@@ -8,8 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added Z.ai as a new LLM provider — offers free access to GLM-5.2, GLM-5.1, GLM-5, GLM-5-Turbo, GLM-4.7 (limited-time free) and GLM-4.5-Flash (always free). Sign up at `z.ai/manage-apikey/billing` to get an API key, then select "Z.ai (GLM-5.2 free)" in Settings. The model dropdown shows all available GLM models live from Z.ai's `/models` endpoint
 - Automatic retry on HTTP 429 (rate limit) responses — the adapter now retries up to 2 times (3 total attempts) with exponential backoff (2s, then 4s), respecting the provider's `Retry-After` header when present. This makes transient per-minute burst limits (common on Cerebras's free tier) invisible to the user in most cases. Only 429s are retried; permanent errors (400/401/402/403/404) fail immediately without wasting time
-- Model picker in the Settings panel now shows a live dropdown of available models for the selected provider, fetched from the provider's `/models` endpoint — no more typing model IDs by hand
 - Added 4 new free-tier-friendly LLM providers: Cerebras (1M tokens/day free), SambaNova, Google Gemini, and Chutes AI — all selectable from the Settings panel
 - New providers appear in the model selector, health endpoint, and startup logging alongside the existing 14 providers
 

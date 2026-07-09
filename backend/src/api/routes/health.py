@@ -92,6 +92,7 @@ async def health():
         "sambanova": settings.sambanova_model,
         "gemini": settings.gemini_model,
         "chutes": settings.chutes_model,
+        "zai": settings.zai_model,
     }
     current_model = model_setting_map.get(adapter_name) or settings.ollama_model
 

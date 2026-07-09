@@ -125,6 +125,7 @@ class Settings(BaseSettings):
     sambanova_model: str = ""
     gemini_model: str = ""
     chutes_model: str = ""
+    zai_model: str = ""
 
     # Server
     localmind_host: str = "127.0.0.1"
@@ -406,6 +407,7 @@ class Settings(BaseSettings):
             "sambanova": "SAMBANOVA_API_KEY",
             "gemini": "GEMINI_API_KEY",
             "chutes": "CHUTES_API_KEY",
+            "zai": "ZAI_API_KEY",
         }
         env_var = env_key_map.get(provider)
         if env_var:

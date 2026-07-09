@@ -43,6 +43,7 @@ def _model_setting_attr(provider: str) -> str | None:
         "sambanova": "sambanova_model",
         "gemini": "gemini_model",
         "chutes": "chutes_model",
+        "zai": "zai_model",
     }.get(provider)
 
 
@@ -69,6 +70,7 @@ def _build_model_setting_map() -> dict[str, str]:
             "sambanova": "sambanova_model",
             "gemini": "gemini_model",
             "chutes": "chutes_model",
+            "zai": "zai_model",
         }.items()
     }
 
@@ -248,7 +250,8 @@ async def list_models(provider: str | None = None):
         # Cerebras: api.cerebras.ai/v1/models (gpt-oss-120b, gemma-4-31b, zai-glm-4.7)
         # Gemini: generativelanguage.googleapis.com/v1beta/openai/models
         # Chutes: llm.chutes.ai/v1/models (all TEE-suffixed)
-        if adapter_name in ("zen", "cerebras", "gemini", "chutes"):
+        # Z.ai: api.z.ai/api/paas/v4/models (GLM-5.2, GLM-4.5-Flash, etc.)
+        if adapter_name in ("zen", "cerebras", "gemini", "chutes", "zai"):
             try:
                 available = await adapter.list_models()
                 model_options.extend(

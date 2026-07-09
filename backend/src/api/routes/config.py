@@ -149,6 +149,14 @@ PROVIDER_INFO = {
         # See https://llm.chutes.ai/v1/models for the live list.
         "default_model": "deepseek-ai/DeepSeek-V3.2-TEE",
     },
+    "zai": {
+        "name": "Z.ai (GLM)",
+        "model_env": "ZAI_MODEL",
+        "key_env": "ZAI_API_KEY",
+        # Free tier: GLM-5.2, GLM-5.1, GLM-5, GLM-5-Turbo, GLM-4.7 (limited-time
+        # free) + GLM-4.5-Flash (always free). Get a key at z.ai/manage-apikey/billing
+        "default_model": "glm-4.5-flash",
+    },
     # Local
     "lite-llm": {
         "name": "LiteLLM",
@@ -186,6 +194,7 @@ async def get_settings():
         "sambanova": settings.sambanova_model,
         "gemini": settings.gemini_model,
         "chutes": settings.chutes_model,
+        "zai": settings.zai_model,
     }
     current_model = model_setting_map.get(adapter) or settings.ollama_model
     embed_model = settings.ollama_embed_model
@@ -239,6 +248,7 @@ async def set_adapter(req: AdapterConfig):
         "sambanova",
         "gemini",
         "chutes",
+        "zai",
     ]
     if req.adapter not in valid_adapters:
         raise HTTPException(status_code=400, detail=f"Invalid adapter. Valid: {valid_adapters}")
@@ -284,6 +294,7 @@ async def set_adapter(req: AdapterConfig):
         "sambanova": "sambanova_model",
         "gemini": "gemini_model",
         "chutes": "chutes_model",
+        "zai": "zai_model",
     }
     model_field = model_field_map.get(req.adapter)
     if model_field:
