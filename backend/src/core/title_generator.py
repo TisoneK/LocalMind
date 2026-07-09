@@ -53,22 +53,17 @@ def generate_title_smart(message: str, intent: str | None = None) -> str:
         if clean.startswith(prefix) or clean.startswith(prefix.lower()):
             return "Error — try again"
 
-    # Detect simple greeting messages and make them more distinctive
+    # Detect simple greeting messages — use the greeting itself as the
+    # placeholder title. The LLM will refine it in ~2s.
     _GREETING_PATTERNS = {
-        r"^(hi|hey|hello|hola|yo|sup|what'?s up)[\s!?.]*$": None,  # pure greetings
+        r"^(hi|hey|hello|hola|yo|sup|what'?s up)[\s!?.]*$": None,
     }
-    # re and datetime imported at module level — no inner re-imports
-    # (inner imports cause UnboundLocalError by shadowing module-level names)
     for pattern in _GREETING_PATTERNS:
         if re.match(pattern, clean, re.IGNORECASE):
-            # Add timestamp context to make greeting titles unique
-            hour = datetime.now().hour
-            if hour < 12:
-                return "Morning greeting"
-            elif hour < 17:
-                return "Afternoon greeting"
-            else:
-                return "Evening greeting"
+            # Use the actual greeting text, capitalized — the LLM will
+            # refine it shortly. Previously this returned "Morning greeting"
+            # which was generic and identical for every morning session.
+            return clean.capitalize()
 
     # Strip common leading filler words
     clean = re.sub(
@@ -113,16 +108,15 @@ async def refine_title_async(session_id: str, message: str) -> None:
                     "of 2–5 words that captures the topic. Output ONLY the title — no quotes, "
                     "no punctuation at the end, no explanation.\n"
                     "\n"
-                    "IMPORTANT RULES:\n"
-                    "- NEVER use generic titles like 'Greeting', 'Greeting Message', 'Hello', 'Chat', or 'Conversation'.\n"
-                    "- For greeting messages (hi, hello, hey), include the user's specific context or time.\n"
-                    "  Examples: 'Hi' → 'Morning greeting', 'Hey there' → 'Casual check-in', 'Hello!' → 'Friendly hello'\n"
-                    "- For task-based messages, describe the TASK not the tool.\n"
-                    "  Examples: 'Create a todo app' → 'Todo App', 'Search for weather' → 'Weather Lookup'\n"
-                    "- Be specific and unique — every session title should be distinguishable."
+                    "RULES:\n"
+                    "- Be specific to what the user is asking about, not generic.\n"
+                    "- For greetings, describe the interaction: 'Quick hello', 'Evening chat', 'Casual intro'.\n"
+                    "- For tasks, describe the task: 'Python debug help', 'File search request', 'Weather check'.\n"
+                    "- Never use generic words alone: Greeting, Hello, Chat, Conversation, Question.\n"
+                    "- Never copy these examples verbatim — generate a unique title for each message."
                 ),
             },
-            {"role": "user", "content": message[:300]},  # cap to avoid blowing context
+            {"role": "user", "content": message[:300]},
         ]
 
         adapter = get_adapter(settings.localmind_adapter)

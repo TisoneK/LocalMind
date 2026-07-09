@@ -97,6 +97,15 @@ export function useSessions() {
     refresh();
   }, [refresh]);
 
+  // Poll for session updates every 10s so the sidebar picks up
+  // LLM-generated titles that are written ~2-5s after the first message.
+  // Without this, the placeholder title ("Morning greeting") stays forever
+  // because the sidebar only refreshes on send/delete/new chat.
+  useEffect(() => {
+    const id = setInterval(refresh, 10000);
+    return () => clearInterval(id);
+  }, [refresh]);
+
   const deleteSession = useCallback(
     async (sessionId: string) => {
       await localmindClient.deleteSession(sessionId);
