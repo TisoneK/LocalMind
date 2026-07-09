@@ -109,8 +109,8 @@
 - **Description:** The project's README.md contains no content. The first thing any visitor, contributor, or documentation reader sees is a blank page.
 - **Impact:** New users cannot install, run, or understand the project. Contributors have no onboarding path. The `backend/pyproject.toml` references `readme = "../README.md"` — PyPI packaging metadata will be empty. GitHub repo landing page shows no description.
 - **Recommendation:** Write a README covering: project tagline, what it does, key features, prerequisites (Ollama, Python 3.10+, Node 18+), install steps (backend venv + npm install), run steps (`npm run dev:full`), architecture overview (link to `docs/ARCHITECTURE.md`), tool list, configuration (`.env` vars), contributing link, license. Use `localmind.md` and `docs/ARCHITECTURE.md` as source material.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Fixed
+- **Related commit:** `docs: write README.md — was empty (0 bytes)`
 
 #### C2: `asyncio` not imported in `src/adapters/ollama.py` streaming code
 - **Description:** Lines 405, 529, 551, 552 reference `asyncio.Queue`, `asyncio.create_task`, `asyncio.wait_for`, `asyncio.TimeoutError` but `asyncio` was not imported in the module. Ruff reported 5× F821.
@@ -151,8 +151,8 @@
 - **Description:** There is no `.github/workflows/` directory. No automated checks run on push or PR. The baseline shows 862 lint errors, a broken test suite, and 10 runtime bugs — none of which were caught before they reached `main`.
 - **Impact:** Every issue in this review (C1–C4, H1–H7, etc.) reached `main` because nothing checks the code on push. Contributors cannot trust that `main` is green. Future regressions will continue to accumulate silently.
 - **Recommendation:** Add `.github/workflows/ci.yml` that runs on push/PR: backend (`ruff check .`, `pytest`, `mypy src`), frontend (`tsc -b`, `eslint .`, `vite build`). Start with non-blocking warnings, then make blocking once the baseline is clean. Add a status badge to README.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Fixed (workflow file pending PAT `workflow` scope)
+- **Related commit:** `ci: add GitHub Actions workflow — backend + frontend checks` (local only, needs PAT workflow scope to push)
 
 ### High
 
@@ -160,36 +160,36 @@
 - **Description:** `ruff check .` reports 862 errors across 24 rule categories. 228 are auto-fixable with `ruff check . --fix`. CONTRIBUTING.md lists `ruff check .` as a code standard.
 - **Impact:** The lint standard documented in CONTRIBUTING.md is unenforceable. New contributors will either ignore lint or spend hours fixing pre-existing errors. 63 unused imports (F401) are dead code that obscures real dependencies.
 - **Recommendation:** Run `ruff check . --fix` first (handles 228 errors safely). Then address the remaining 634 manually, prioritizing F821 (done in C2/C3), F401, and F841. Consider adding `ruff check .` to a pre-commit hook.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Partially fixed (862 → 613 errors)
+- **Related commit:** `style(backend): ruff --fix — clear 228 auto-fixable lint errors`
 
 #### H2: Frontend eslint is completely broken — no config file
 - **Description:** `frontend/package.json` has `"lint": "eslint ."` but there is no `eslint.config.js` (or `.eslintrc.*`) anywhere in the repo. ESLint 10 (installed) requires flat config. Running `npx eslint .` errors: "ESLint couldn't find an eslint.config.(js|mjs|cjs) file."
 - **Impact:** The `npm run lint` script is non-functional. Frontend code has zero lint coverage. TypeScript errors (H5) and code-quality issues go undetected.
 - **Recommendation:** Create `frontend/eslint.config.js` using the new flat config format. Base it on `@eslint/js` recommended + `typescript-eslint` + React plugins. Add it to CI (C5).
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(frontend): add eslint.config.js (flat config) — npm run lint works again`
 
 #### H3: Version mismatch across packages
 - **Description:** Root `package.json` = `0.5.0`, `frontend/package.json` = `0.5.0`, but `backend/pyproject.toml` = `0.1.0-dev`. `localmind.md` says `v0.5-dev`.
 - **Impact:** Inconsistent versioning makes it unclear what version the project is on. Backend packaging metadata (PyPI classifiers) reports the wrong version. Release tagging and changelog (if added) will be ambiguous.
 - **Recommendation:** Align all three to `0.5.0` (or `0.5.0-dev` if pre-release). Decide on a single source of truth (root `package.json` is the natural choice for a monorepo). Add a version-sync check to CI.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(backend): align version to 0.5.0 — was 0.1.0-dev`
 
 #### H4: `dev:backend` script uses Windows-only path
 - **Description:** Root `package.json` script: `"dev:backend": "cd backend && .venv\\Scripts\\python.exe server.py"`. The path `.venv\\Scripts\\python.exe` only exists on Windows. On macOS/Linux the venv Python is at `.venv/bin/python`.
 - **Impact:** macOS/Linux contributors cannot start the backend via `npm run dev:backend` or `npm run dev:full`. The script silently fails or errors with "No such file or directory."
 - **Recommendation:** Use a cross-platform invocation. Options: (a) `python -m server` with venv activated, (b) a small Node helper script that detects platform and picks the right path, (c) use `cross-env` (already a devDep) + a shell script. Simplest: `"dev:backend": "cd backend && .venv/bin/python server.py"` won't work on Windows either — use a Node script or `concurrently` with platform detection.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(scripts): cross-platform dev:backend — was Windows-only`
 
 #### H5: 5 TypeScript errors in frontend
 - **Description:** `tsc -b` reports 5 errors: (1) `next-themes` module not found — `sonner.tsx` imports it but it's not in `package.json`; (2) `main.tsx` passes `getElementById` result (possibly null) to React 19's stricter `createRoot`; (3) `tailwind.config.ts` imports `tailwindcss-animate` but the project uses `tw-animate-css`; (4-5) `vite.config.ts` has a `code` property access on `Error` and a `rolldownOptions` key that doesn't exist in Vite 6.
 - **Impact:** `tsc -b` (the typecheck half of `npm run build`) fails. Vite build still succeeds because esbuild is lenient, but type safety is broken. The `next-themes` and `tailwindcss-animate` imports suggest components were copied from a different scaffold (shadcn's Next.js template) without adjusting deps.
 - **Recommendation:** (1) Either add `next-themes` to deps or remove the import from `sonner.tsx` (use a prop or context instead). (2) Add a null check in `main.tsx`: `const el = document.getElementById('root'); if (!el) throw new Error('root not found'); createRoot(el).render(...)`. (3) Remove the `tailwindcss-animate` import from `tailwind.config.ts` (the project already uses `tw-animate-css`). (4-5) Fix `vite.config.ts` error typing and remove/conditionalize `rolldownOptions`.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(frontend): resolve 5 TypeScript errors — tsc -b now passes clean`
 
 #### H6: `ToolCallResult` undefined in `src/adapters/openai_compat.py`
 - **Description:** Line 290 used `"AsyncIterator[StreamChunk] | ToolCallResult"` as a return type annotation, but `ToolCallResult` was not imported at module level. Ruff reported 1× F821. `ToolCallResult` is defined in `adapters/ollama.py:71`; `openai_compat.py` was importing it locally inside functions (lines 578, 620) but never at module scope.
@@ -218,8 +218,8 @@
 - **Description:** `src/tools/installed_programs.py` lines 45, 47, 50, 51 use bare `except:` which catches everything including `KeyboardInterrupt`, `SystemExit`, and `GeneratorExit`.
 - **Impact:** A bare except can swallow critical signals — pressing Ctrl+C during program enumeration won't interrupt. Makes debugging harder since all errors are silently turned into empty strings.
 - **Recommendation:** Replace `except:` with `except Exception:` at minimum. Better: catch specific exceptions (e.g. `OSError`, `WindowsError`).
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(tools): replace bare except with specific exceptions in installed_programs`
 
 #### M3: 1.1MB frontend JS bundle — no code splitting
 - **Description:** `vite build` produces a single 1,123 KB JS chunk (367 KB gzipped). Vite warns: "Some chunks are larger than 500 kB after minification."
