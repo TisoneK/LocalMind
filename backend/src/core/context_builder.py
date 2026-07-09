@@ -105,8 +105,20 @@ def _build_environment_context(session_cwd: str | None = None) -> str:
         common_cmds = "Common commands: `ls`, `cat`, `cp`, `mv`, `mkdir`, `rm`, `chmod`"
 
     # Build context string
+    import datetime
+    now = datetime.datetime.now()
+    date_str = now.strftime("%A, %B %d, %Y")
+    time_str = now.strftime("%H:%M")
+    tz = now.strftime("%z")
+    if tz:
+        tz_str = f" (UTC{tz[:3]}:{tz[3:]})"
+    else:
+        tz_str = ""
+
     context = f"""## Environment
 - {os_info}
+- Current date: {date_str}
+- Current time: {time_str}{tz_str}
 - Working directory: {cwd}
 - Home: {home}
 - {os_guidance}
