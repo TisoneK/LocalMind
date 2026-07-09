@@ -484,7 +484,8 @@ export function useChat(
                     intent: (obsData.intent || obs.intent || prev?.intent || 'chat') as any,
                     confidence: Number(obsData.confidence || obs.confidence || prev?.confidence || 0),
                     toolsUsed: obsData.tools_used ? obsData.tools_used.split(',') : (prev?.toolsUsed ?? []),
-                    memoryHits: Number(obsData.memory_hits || prev?.memoryHits || 0),
+                    // Backend sends 'memory_facts' in turn_complete, not 'memory_hits'
+                    memoryHits: Number(obsData.memory_facts || obsData.memory_hits || prev?.memoryHits || 0),
                     contextTokens: Number(obsData.tokens_approx || obsData.context_tokens || prev?.contextTokens || 0),
                     latency: Number(obsData.total_latency_ms || obsData.latency_ms || obsData.latency || prev?.latency || 0),
                   }));

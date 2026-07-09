@@ -92,9 +92,15 @@ async def open_folder(req: OpenFileRequest):
 
 
 @router.get("/files")
-async def list_files(path: str = "."):
-    """List files and directories at the given path (read-only, no side effects)."""
+async def list_files(path: str = ""):
+    """List files and directories at the given path (read-only, no side effects).
+
+    Defaults to the user's home directory (~) when no path is provided,
+    NOT the server's CWD (which is backend/ in dev mode).
+    """
     try:
+        if not path or path == ".":
+            path = os.path.expanduser("~")
         dir_path = Path(path).resolve()
 
         if not settings.is_path_allowed(dir_path):

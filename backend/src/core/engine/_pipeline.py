@@ -67,6 +67,7 @@ from ._helpers import (
     _parse_chat_agent_output,
     _resolve_intent,
     _approx_tokens,
+    DuplicateFilter,
     INTENT_HISTORY_WINDOW,
     INTENT_HISTORY_MAX_SESSIONS,
     MEMORY_DEDUP_THRESHOLD,
@@ -611,6 +612,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # No client pre-classification — run the ThinkingDispatcher
             self._dispatcher = ThinkingDispatcher(adapter)
 
+            # Emit a status update so the user sees progress during the
+            # 10-30s dispatcher LLM call. Without this, the UI shows a
+            # blank "Thinking..." with no indication of what's happening.
+            yield StreamChunk(text="", done=False, status="Analyzing your request...")
+
             # Start memory retrieval IN PARALLEL with the dispatcher.
             _memory_task = asyncio.create_task(
                 self._memory.compose(
@@ -619,6 +625,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     session_id=session_id,
                 )
             )
+
+            yield StreamChunk(text="", done=False, status="Retrieving relevant memory...")
 
             async for output in self._dispatcher.dispatch(
                 message=message,
@@ -756,16 +764,20 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # uncertain response is trust-destroying noise. Only add a subtle
             # hint for truly ambiguous agent intents, not for normal conversation.
             full_response_chunks: list[str] = []
+            _dup_filter = DuplicateFilter()
 
             _obs.emit("thinking_start", intent="chat")
             self._metrics.start_request()
             async for chunk in active_adapter.chat(prompt_messages, intent="chat"):
                 safe_text = _filter_system_leaks(chunk.text)
-                full_response_chunks.append(safe_text)
-                yield StreamChunk(text=safe_text, done=chunk.done)
+                # Suppress duplicate paragraphs (small models sometimes loop)
+                filtered = _dup_filter.feed(safe_text)
+                if filtered:
+                    full_response_chunks.append(filtered)
+                    yield StreamChunk(text=filtered, done=chunk.done)
             # Record streaming completion — include prompt and completion token
             # breakdown so the frontend metrics bar shows real counts instead of 0/0.
-            response_so_far = "".join(full_response_chunks)
+            response_so_far = _dup_filter.text
             token_count = _approx_tokens(response_so_far)
             prompt_token_count = _approx_tokens(
                 "".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict))

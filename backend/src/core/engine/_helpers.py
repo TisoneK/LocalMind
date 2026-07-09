@@ -201,3 +201,61 @@ def _approx_tokens(text: str) -> int:
     )
     ratio = 1.5 if cjk_and_arabic > len(text) * 0.2 else 4.0
     return max(1, round(len(text) / ratio))
+
+
+# ── Duplicate text detection ────────────────────────────────────────────
+
+class DuplicateFilter:
+    """Detects and suppresses duplicate paragraphs in streaming output.
+
+    Small models (especially free-tier) sometimes loop, repeating the same
+    paragraph or sentence multiple times. This filter tracks the accumulated
+    text and suppresses tokens that would create a duplicate paragraph.
+
+    Strategy: after each new chunk, check if the text since the last paragraph
+    boundary (\n\n) matches any earlier complete paragraph. If it does, suppress
+    the matching portion.
+    """
+
+    def __init__(self):
+        self._accumulated: str = ""
+        self._seen_paragraphs: list[str] = []
+        self._min_dup_len: int = 30  # Only check for dups >= 30 chars
+        self._suppressing: bool = False
+
+    def feed(self, new_text: str) -> str:
+        """Feed new text and return the non-duplicate portion."""
+        if not new_text:
+            return new_text
+
+        self._accumulated += new_text
+
+        # Split into paragraphs — everything before the last \n\n is "complete"
+        parts = self._accumulated.rsplit('\n\n', 1)
+        if len(parts) == 2:
+            # We have a complete paragraph boundary
+            complete_para = parts[0].rsplit('\n\n', 1)[-1].strip()
+            if len(complete_para) >= self._min_dup_len:
+                # Check if this paragraph was already seen
+                if complete_para in self._seen_paragraphs:
+                    # Duplicate! Suppress by removing the duplicate from accumulated
+                    self._accumulated = parts[0]  # Keep everything before the dup
+                    return ""
+                else:
+                    self._seen_paragraphs.append(complete_para)
+
+        # Also check the current (incomplete) paragraph for duplicates
+        current_para = parts[-1].strip()
+        if len(current_para) >= self._min_dup_len:
+            # Check if current paragraph exactly matches a seen one
+            if current_para in self._seen_paragraphs:
+                # The full current paragraph is a duplicate — suppress
+                self._accumulated = parts[0] if len(parts) == 2 else ""
+                return ""
+
+        return new_text
+
+    @property
+    def text(self) -> str:
+        """Return the filtered accumulated text."""
+        return self._accumulated
