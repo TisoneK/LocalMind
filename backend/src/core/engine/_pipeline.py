@@ -156,7 +156,10 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # even when the LLM adapter is cloud-based. Skip the warmup when
         # Ollama isn't running — memory search falls back to keyword matching.
         if not self._warmed_up:
-            if settings.localmind_adapter == "ollama" or settings.is_ollama_configured():
+            # Only try Ollama embedding warmup when the adapter is Ollama.
+            # Cloud adapters (Zen, OpenAI, etc.) don't need this, and trying
+            # to connect to Ollama when it's not running produces noisy errors.
+            if settings.localmind_adapter == "ollama":
                 try:
                     await self._memory._store.warmup()
                     self._warmed_up = True
@@ -165,7 +168,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     logger.warning(f"[engine] vector store warmup failed (non-fatal): {e}")
                     self._warmed_up = True  # Don't retry on every request
             else:
-                logger.info("[engine] skipping embedding warmup — Ollama not running (cloud adapter active)")
+                logger.info("[engine] skipping embedding warmup — cloud adapter active (Ollama not needed)")
                 self._warmed_up = True  # Don't retry on every request
 
         # P11: Run memory consolidation on startup to merge near-duplicate

@@ -158,8 +158,10 @@ class Settings(BaseSettings):
     localmind_require_write_permission: bool = False
 
     def is_ollama_configured(self) -> bool:
-        """Return True only when Ollama has been explicitly confirmed working."""
-        return self.ollama_ready
+        """Return True only when Ollama has been explicitly confirmed working
+        AND the adapter is ollama. Cloud adapters should never trigger Ollama
+        warmup code paths."""
+        return self.ollama_ready and self.localmind_adapter == "ollama"
 
     def resolve_paths(self) -> None:
         """Resolve dynamic paths after init. Call once at startup."""
@@ -177,10 +179,13 @@ class Settings(BaseSettings):
                 p = (home / p).resolve()
             self.localmind_db_path = str(p)
 
-        # Auto-mark as configured if .env/env vars differ from compiled-in defaults
-        _DEFAULT_URL   = "http://localhost:11434"
-        _DEFAULT_MODEL = "llama3.1:8b"
-        if self.ollama_base_url != _DEFAULT_URL or self.ollama_model != _DEFAULT_MODEL:
+        # Auto-mark Ollama as configured ONLY if the adapter is ollama AND
+        # a model is explicitly set. Previously this checked if ollama_base_url
+        # or ollama_model differed from compiled defaults — but since
+        # ollama_model defaults to "" (empty), it always differed from
+        # "llama3.1:8b", causing is_ollama_configured() to return True even
+        # when the user was on a cloud adapter like Zen.
+        if self.localmind_adapter == "ollama" and self.ollama_model:
             self.ollama_ready = True
 
     def allowed_read_paths(self) -> list[Path]:

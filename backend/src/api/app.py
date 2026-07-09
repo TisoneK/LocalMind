@@ -122,8 +122,8 @@ def create_app() -> FastAPI:
         from api.routes.health import set_engine_ready
         set_engine_ready()
 
-        if not settings.is_ollama_configured():
-            logger.info("[startup] Ollama not configured — skipping warmup. Use the UI settings to connect.")
+        if settings.localmind_adapter != "ollama":
+            logger.info("[startup] Cloud adapter '%s' active — skipping Ollama warmup entirely.", settings.localmind_adapter)
             return
 
         # Single authoritative startup: warms LLM router, embed model,
@@ -147,10 +147,10 @@ def create_app() -> FastAPI:
                     # always local (nomic-embed-text). Skip silently when
                     # Ollama isn't running — memory search will fall back to
                     # keyword matching until Ollama is started.
-                    if settings.localmind_adapter == "ollama" or settings.is_ollama_configured():
+                    if settings.localmind_adapter == "ollama":
                         await vector_store.warmup()
                     else:
-                        logger.info("[startup] skipping embedding warmup — Ollama not running (cloud adapter active)")
+                        logger.info("[startup] skipping embedding warmup — cloud adapter active")
                 else:
                     logger.info("[startup] VectorStore not ready")
             except Exception as e:
@@ -210,7 +210,7 @@ def create_app() -> FastAPI:
 
         background_tasks = set()
 
-        if settings.is_ollama_configured():
+        if settings.localmind_adapter == "ollama":
             for coro in (warm_vector_store(), warm_llm_models()):
                 task = asyncio.create_task(coro)
                 background_tasks.add(task)
