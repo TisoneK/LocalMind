@@ -19,11 +19,17 @@ def client():
 
 
 def _mock_stream(text="Hello!", intent="chat", confidence=0.95):
-    """Patch Engine.process to yield predictable chunks + obs events."""
+    """Patch Engine.process to yield predictable chunks + obs events.
+
+    The signature must match Engine.process's actual parameters, including
+    client_intent/client_confidence (added in v0.11 for client-side
+    pre-classification) and **kwargs for forward-compat.
+    """
     from core.models import StreamChunk
 
     async def _process(self, message, session_id, file=None, filename=None,
-                        content_type=None, obs=None, original_path=None):
+                        content_type=None, obs=None, original_path=None,
+                        client_intent=None, client_confidence=0.0, **kwargs):
         if obs:
             obs.emit("intent_classified", primary=intent, secondary="none",
                      confidence=confidence)
