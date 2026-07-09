@@ -429,8 +429,13 @@ async def chat(
             raise
         except Exception as exc:
             logger.error(f"[chat] file upload error: {exc}", exc_info=True)
+            # Capture the error message while `exc` is still bound.
+            # PEP 3110 unbinds `exc` when the except block exits, but the
+            # _err() generator below is iterated later by FastAPI — by
+            # then `exc` would be gone and the f-string would raise NameError.
+            _upload_error_msg = f"File upload failed: {exc}"
             async def _err():
-                yield _sse({"error": f"File upload failed: {exc}", "done": True})
+                yield _sse({"error": _upload_error_msg, "done": True})
             return StreamingResponse(
                 _err(), media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
