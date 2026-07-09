@@ -306,22 +306,16 @@ class OpenAICompatAdapter(BaseAdapter):
         """
         Add provider-specific parameters to the API request payload.
 
-        Gemini: Gemini's safety filters are aggressive and can silently block
-        responses to normal queries (e.g. sports scores, news), returning an
-        empty content stream with finish_reason=SAFETY. This manifests as
-        the user seeing a blank response with no error. Setting all safety
-        categories to BLOCK_NONE via the OpenAI-compat endpoint's extra body
-        support prevents this. See:
-        https://ai.google.dev/gemini-api/docs/openai#extra_body
+        Note: Gemini's safety_settings CANNOT be passed via the OpenAI-compat
+        endpoint — it rejects any unknown top-level field with HTTP 400
+        ("Unknown name 'safety_settings': Cannot find field"). This is a
+        known limitation of the compat layer (the field only works on the
+        native v1beta generateContent API). We handle Gemini safety blocks
+        via finish_reason detection in the streaming parsers instead —
+        surfacing a clear error message when the filter triggers.
         """
-        if self._provider_key == "gemini":
-            payload["safety_settings"] = [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
-            ]
+        # Currently a no-op — kept as an extension point for future
+        # provider-specific params that ARE supported by the compat layer.
         return payload
 
     # ─────────────────────────────────────────────────────────────────────
