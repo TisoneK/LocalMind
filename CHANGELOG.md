@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Fixed provider errors (invalid API key, rate limit, network failure) appearing as garbled text in the chat instead of a clear error message — error responses now surface as a proper error notification
 - Fixed `asyncio` not imported in `ollama.py` — streaming chat was crashing with `NameError`
 - Fixed undefined `secondary_intent` in engine pipeline — secondary intent routing now works
 - Fixed `ToolCallResult` undefined in `openai_compat.py` — added `TYPE_CHECKING` import

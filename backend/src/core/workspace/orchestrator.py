@@ -305,6 +305,9 @@ class WorkspaceOrchestrator:
         chunks: list[str] = []
         try:
             async for chunk in self._adapter.chat(messages, temperature=0.0):
+                if chunk.error:
+                    logger.warning("[orch] planner adapter error: %s", chunk.error[:120])
+                    break
                 chunks.append(chunk.text)
         except Exception as exc:
             logger.warning("[orch] planner LLM failed: %s", exc)
@@ -433,9 +436,7 @@ class WorkspaceOrchestrator:
         if not ToolRegistry.exists(tool_name):
             # No contract registered — this should not happen after T2 ships.
             # Treat as a hard reject to prevent unvalidated execution.
-            err = (
-                f"[{tool_name}] no contract registered. Register a ToolContract before dispatching."
-            )
+            err = f"[{tool_name}] no contract registered. Register a ToolContract before dispatching."
             logger.error("[orch] %s", err)
             ws.write_outbox(tool_name, f"[ContractError] {err}")
             ws.write_context(tool_name, f"Schema error: {err}")
@@ -514,9 +515,7 @@ class WorkspaceOrchestrator:
         except Exception as exc:
             ws.write_outbox(tool_name, f"[Error: {exc}]")
             ws.write_context(tool_name, f"Tool error: {exc}")
-            obs.emit(
-                "workspace_tool_error", task_id=task["id"], tool=tool_name, error=str(exc)[:80]
-            )
+            obs.emit("workspace_tool_error", task_id=task["id"], tool=tool_name, error=str(exc)[:80])
             raise
 
     # ── Synthesis ─────────────────────────────────────────────────────────────
@@ -543,6 +542,9 @@ class WorkspaceOrchestrator:
         ]
 
         async for chunk in self._adapter.chat(messages):
+            if chunk.error:
+                yield StreamChunk(text="", done=True, error=chunk.error)
+                return
             yield StreamChunk(text=chunk.text, done=chunk.done)
 
 

@@ -105,12 +105,8 @@ CODER_AGENT = SubAgentType(
         "your approach — you just write the code, test it, and report the result. "
         "If the code fails, you fix it and try again. You don't give up."
     ),
-    allowed_intents=frozenset(
-        {Intent.CODE_EXEC, Intent.FILE_WRITE, Intent.FILE_EDIT, Intent.FILE_TASK, Intent.SHELL}
-    ),
-    allowed_tools=frozenset(
-        {"code_exec", "file_write", "edit_file", "file_task", "shell", "sysinfo"}
-    ),
+    allowed_intents=frozenset({Intent.CODE_EXEC, Intent.FILE_WRITE, Intent.FILE_EDIT, Intent.FILE_TASK, Intent.SHELL}),
+    allowed_tools=frozenset({"code_exec", "file_write", "edit_file", "file_task", "shell", "sysinfo"}),
 )
 
 RESEARCHER_AGENT = SubAgentType(
@@ -326,9 +322,7 @@ class SubAgent:
                     if isinstance(result, MultiToolCallResult):
                         # Process each tool call
                         for tc in result.calls:
-                            _obs_text = await _dispatch_sub_agent_tool(
-                                tc.tool_name, tc.tool_args, dispatch
-                            )
+                            _obs_text = await _dispatch_sub_agent_tool(tc.tool_name, tc.tool_args, dispatch)
                             messages.append(
                                 {
                                     "role": "assistant",
@@ -409,6 +403,9 @@ class SubAgent:
                 # No tool call (or fallback) — stream the final text answer
                 chunks = []
                 async for chunk in self._adapter.chat(messages, temperature=0.2):
+                    if hasattr(chunk, "error") and chunk.error:
+                        logger.warning("[sub_agent] adapter error: %s", chunk.error[:120])
+                        break
                     chunks.append(chunk.text if hasattr(chunk, "text") else str(chunk))
                 full_text += "".join(chunks)
                 break
@@ -508,6 +505,9 @@ async def decompose_task(
     try:
         chunks = []
         async for chunk in adapter.chat(messages, temperature=0.0):
+            if hasattr(chunk, "error") and chunk.error:
+                logger.warning("[sub_agent] adapter error: %s", chunk.error[:120])
+                break
             chunks.append(chunk.text if hasattr(chunk, "text") else str(chunk))
 
         raw = "".join(chunks).strip()
@@ -536,8 +536,7 @@ async def decompose_task(
             unique_agents = set(st.agent_name for st in sub_tasks)
             if len(unique_agents) <= 1 and len(sub_tasks) <= 2:
                 logger.info(
-                    "[decomposer] single-domain decomposition (%s) — "
-                    "falling back to standard agent loop",
+                    "[decomposer] single-domain decomposition (%s) — falling back to standard agent loop",
                     unique_agents,
                 )
                 return []
@@ -663,8 +662,7 @@ def should_use_sub_agents(
     # Heuristic: CODE_EXEC with research terms
     if effective_intent == Intent.CODE_EXEC:
         _has_research = any(
-            kw in message.lower()
-            for kw in ("search", "find", "look up", "research", "latest", "current")
+            kw in message.lower() for kw in ("search", "find", "look up", "research", "latest", "current")
         )
         if _has_research and len(message) > 60:
             return True
@@ -752,6 +750,9 @@ async def synthesize_sub_agent_results(
 
         chunks = []
         async for chunk in adapter.chat(messages, temperature=0.2):
+            if hasattr(chunk, "error") and chunk.error:
+                logger.warning("[sub_agent] adapter error: %s", chunk.error[:120])
+                break
             chunks.append(chunk.text if hasattr(chunk, "text") else str(chunk))
 
         synthesized = "".join(chunks).strip()
@@ -827,9 +828,7 @@ async def execute_sub_tasks(
             for dep_id in task.depends_on:
                 dep_result = completed.get(dep_id)
                 if dep_result:
-                    dep_contexts.append(
-                        f"[Result from {dep_result.agent_name} agent]:\n{dep_result.output[:1500]}"
-                    )
+                    dep_contexts.append(f"[Result from {dep_result.agent_name} agent]:\n{dep_result.output[:1500]}")
             context = "\n\n".join(dep_contexts) if dep_contexts else ""
 
             # Get the sub-agent type
@@ -911,9 +910,7 @@ async def execute_sub_tasks(
 
     # If nothing succeeded, we still want some output
     if not final_output and failed_tasks:
-        final_output = (
-            "I wasn't able to complete this multi-step task. Let me try a different approach."
-        )
+        final_output = "I wasn't able to complete this multi-step task. Let me try a different approach."
 
     total_ms = round((time.monotonic() - t0) * 1000)
 

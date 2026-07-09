@@ -92,6 +92,9 @@ async def maybe_compress_history(
             ],
             temperature=0.2,
         ):
+            if chunk.error:
+                logger.warning("[summarizer] adapter error: %s", chunk.error[:120])
+                break
             summary_chunks.append(chunk.text)
         summary_text = "".join(summary_chunks).strip()
     except Exception as e:
@@ -108,8 +111,5 @@ async def maybe_compress_history(
 
     compressed = system_msgs + [summary_msg] + to_keep
     new_count = _rough_token_count(compressed)
-    logger.info(
-        f"[summarizer] compressed {n_to_compress} messages → summary "
-        f"({used} → {new_count} tokens approx)"
-    )
+    logger.info(f"[summarizer] compressed {n_to_compress} messages → summary ({used} → {new_count} tokens approx)")
     return compressed

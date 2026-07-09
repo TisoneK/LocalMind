@@ -101,9 +101,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # Don't cache adapter at init - get fresh one each time to respect setting changes
         self._memory = MemoryComposer()
         self._agent_loop = AgentLoop(adapter=None)  # Set adapter dynamically
-        self._agent_orchestrator = AgentOrchestrator(
-            adapter=None
-        )  # Three-layer pipeline orchestrator
+        self._agent_orchestrator = AgentOrchestrator(adapter=None)  # Three-layer pipeline orchestrator
         self._orchestrator = WorkspaceOrchestrator(adapter=None)
         self._metrics = MetricsStore()
         self._flywheel = FlywheelLogger()
@@ -173,9 +171,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     logger.warning(f"[engine] vector store warmup failed (non-fatal): {e}")
                     self._warmed_up = True  # Don't retry on every request
             else:
-                logger.info(
-                    "[engine] skipping embedding warmup — cloud adapter active (Ollama not needed)"
-                )
+                logger.info("[engine] skipping embedding warmup — cloud adapter active (Ollama not needed)")
                 self._warmed_up = True  # Don't retry on every request
 
         # P11: Run memory consolidation on startup to merge near-duplicate
@@ -192,9 +188,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         """Track a rolling window of intent values per session."""
         # Prune old sessions to prevent unbounded memory growth
         if len(self._intent_history) > INTENT_HISTORY_MAX_SESSIONS:
-            oldest = sorted(self._intent_history.keys())[
-                : len(self._intent_history) - INTENT_HISTORY_MAX_SESSIONS
-            ]
+            oldest = sorted(self._intent_history.keys())[: len(self._intent_history) - INTENT_HISTORY_MAX_SESSIONS]
             for sid in oldest:
                 del self._intent_history[sid]
         history = self._intent_history.setdefault(session_id, [])
@@ -259,10 +253,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # v0.11 PERFORMANCE: Skip Chat Agent for simple queries that don't need
         # reformulation. This saves 2-5s per simple query.
         if CHAT_AGENT_MIN_COMPLEXITY > 0:
-            _is_simple = any(
-                re.match(pattern, message.strip(), re.IGNORECASE)
-                for pattern in CHAT_AGENT_SKIP_PATTERNS
-            )
+            _is_simple = any(re.match(pattern, message.strip(), re.IGNORECASE) for pattern in CHAT_AGENT_SKIP_PATTERNS)
             if _is_simple:
                 logger.info(f"[engine] Skipping Chat Agent for simple query: {message[:50]}")
                 return message, ""
@@ -301,6 +292,9 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     temperature=0.3,
                     intent="chat",
                 ):
+                    if chunk.error:
+                        logger.warning("[chat_agent] adapter error: %s", chunk.error[:120])
+                        break
                     safe_text = _filter_system_leaks(chunk.text)
                     if safe_text:
                         full_response.append(safe_text)
@@ -462,6 +456,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     temperature=0.3,
                     intent="chat",
                 ):
+                    if chunk.error:
+                        logger.warning(
+                            "[chat_agent_clarification] adapter error: %s",
+                            chunk.error[:120],
+                        )
+                        break
                     safe_text = _filter_system_leaks(chunk.text)
                     if safe_text:
                         full_response.append(safe_text)
@@ -476,27 +476,16 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 return reformulated
             else:
                 # Fallback: concatenate original request + answer
-                return (
-                    f"{original_request}\n\n"
-                    f"[Clarification: {clarification_question} → {user_answer}]"
-                )
+                return f"{original_request}\n\n[Clarification: {clarification_question} → {user_answer}]"
 
         except asyncio.TimeoutError:
-            logger.warning(
-                "[engine] Chat Agent clarification reformulation timed out — using fallback"
-            )
+            logger.warning("[engine] Chat Agent clarification reformulation timed out — using fallback")
             obs.emit("chat_agent_clarification_timeout", timeout=CHAT_AGENT_TIMEOUT_SECS)
-            return (
-                f"{original_request}\n\n[Clarification: {clarification_question} → {user_answer}]"
-            )
+            return f"{original_request}\n\n[Clarification: {clarification_question} → {user_answer}]"
         except Exception as e:
-            logger.warning(
-                f"[engine] Chat Agent clarification reformulation failed (non-fatal): {e}"
-            )
+            logger.warning(f"[engine] Chat Agent clarification reformulation failed (non-fatal): {e}")
             obs.emit("chat_agent_clarification_failed", error=str(e)[:80])
-            return (
-                f"{original_request}\n\n[Clarification: {clarification_question} → {user_answer}]"
-            )
+            return f"{original_request}\n\n[Clarification: {clarification_question} → {user_answer}]"
 
     async def process(
         self,
@@ -607,11 +596,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     Intent.FILE_TASK,
                     Intent.SYSINFO,
                 )
-                _client_mode = (
-                    ExecutionMode.DIRECT
-                    if _client_intent == Intent.CHAT
-                    else ExecutionMode.SINGLE_TOOL
-                )
+                _client_mode = ExecutionMode.DIRECT if _client_intent == Intent.CHAT else ExecutionMode.SINGLE_TOOL
                 # Map client intent to capabilities
                 _client_capabilities = []
                 _intent_to_cap = {v: k for k, v in CAPABILITY_TO_INTENT.items()}
@@ -636,9 +621,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     f"[engine] Client pre-classified: {client_intent} "
                     f"(confidence={client_confidence}) — skipping dispatcher"
                 )
-                _obs.emit(
-                    "client_preclassified", intent=client_intent, confidence=client_confidence
-                )
+                _obs.emit("client_preclassified", intent=client_intent, confidence=client_confidence)
             except ValueError:
                 _client_intent = None
 
@@ -803,6 +786,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             _obs.emit("thinking_start", intent="chat")
             self._metrics.start_request()
             async for chunk in active_adapter.chat(prompt_messages, intent="chat"):
+                # Propagate adapter errors to the SSE bridge so the frontend
+                # shows a proper error message instead of an empty response.
+                if chunk.error:
+                    yield StreamChunk(text="", done=True, error=chunk.error)
+                    return
                 safe_text = _filter_system_leaks(chunk.text)
                 # Suppress duplicate paragraphs (small models sometimes loop)
                 filtered = _dup_filter.feed(safe_text)
@@ -854,16 +842,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # v0.7: Fabricated time-sensitive data patterns
                 # These catch when the model answers from training data for
                 # time-sensitive queries (weather, sports, prices, news)
-                re.compile(
-                    r"\b(current temperature|temperature (is|was|of))\b.{0,20}\d+°", re.IGNORECASE
-                ),
+                re.compile(r"\b(current temperature|temperature (is|was|of))\b.{0,20}\d+°", re.IGNORECASE),
                 re.compile(r"\b(forecast|weather)\b.{0,30}\d+°(C|F)", re.IGNORECASE),
-                re.compile(
-                    r"\b(score|result)\b.{0,15}\d+\s*[-–]\s*\d+", re.IGNORECASE
-                ),  # "score 2-1"
-                re.compile(
-                    r"\b(played|vs|versus|against)\b.{0,30}\b(score|won|lost|drew)\b", re.IGNORECASE
-                ),
+                re.compile(r"\b(score|result)\b.{0,15}\d+\s*[-–]\s*\d+", re.IGNORECASE),  # "score 2-1"
+                re.compile(r"\b(played|vs|versus|against)\b.{0,30}\b(score|won|lost|drew)\b", re.IGNORECASE),
                 re.compile(
                     r"\b(table|standings|rankings?)\b.{0,10}\b(1\.|1st|2nd|3rd)", re.IGNORECASE
                 ),  # Fabricated league tables
@@ -923,9 +905,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
             total_ms = round((time.monotonic() - t0) * 1000)
             self._metrics.record("chat", latency_ms=total_ms, success=True)
-            _prompt_tok = _approx_tokens(
-                "".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict))
-            )
+            _prompt_tok = _approx_tokens("".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict)))
             _obs.emit(
                 "turn_complete",
                 intent="chat",
@@ -948,11 +928,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             )
 
             # Post-response memory (pass user message for user-initiated fact extraction)
-            _safe_task(
-                self._maybe_store_response_facts(
-                    response_text, session_id, _obs, user_message=message
-                )
-            )
+            _safe_task(self._maybe_store_response_facts(response_text, session_id, _obs, user_message=message))
 
             # Explicitly yield a done chunk so the SSE bridge sends {"type":"done"}
             # to the frontend. Without this, the frontend relies on the stream
@@ -1048,9 +1024,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # WEB_SEARCH is excluded — it goes through direct dispatch + context_builder.
         # FILE_TASK with an attachment uses the inline fast-path below instead.
         # CHAT exits early (step 2b) and never reaches here.
-        _file_task_with_attachment = (
-            effective_intent == Intent.FILE_TASK and file_attachment is not None
-        )
+        _file_task_with_attachment = effective_intent == Intent.FILE_TASK and file_attachment is not None
 
         # ── 5c. Pending write confirmation fast-path ──────────────────────────
         # When the orchestrator's file_write contract hits requires_confirmation,
@@ -1075,11 +1049,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 "proceed",
             }
             _msg_lower = message.strip().lower().rstrip("!.")
-            if (
-                _msg_lower in _confirm_words
-                or _msg_lower.startswith("yes")
-                or _msg_lower.startswith("save")
-            ):
+            if _msg_lower in _confirm_words or _msg_lower.startswith("yes") or _msg_lower.startswith("save"):
                 # Execute the stored write immediately
                 from pathlib import Path
 
@@ -1123,16 +1093,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 yield StreamChunk(
                     text=_text,
                     done=False,
-                    metadata={"path": str(_filepath), "filename": _filepath.name}
-                    if _result.success
-                    else {},
+                    metadata={"path": str(_filepath), "filename": _filepath.name} if _result.success else {},
                 )
                 yield StreamChunk(
                     text="",
                     done=True,
-                    metadata={"path": str(_filepath), "filename": _filepath.name}
-                    if _result.success
-                    else {},
+                    metadata={"path": str(_filepath), "filename": _filepath.name} if _result.success else {},
                 )
                 return
             else:
@@ -1188,11 +1154,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # 5d. FILE_WRITE recovery — inject last cached code when user says
         # "save it" / "update the file" without supplying inline code.
         _fence_present = "```" in message
-        if (
-            effective_intent == Intent.FILE_WRITE
-            and session_id in self._last_code
-            and not _fence_present
-        ):
+        if effective_intent == Intent.FILE_WRITE and session_id in self._last_code and not _fence_present:
             _cached = self._last_code.pop(session_id)
             _lang = _cached.get("lang", "")
             _code = _cached.get("code", "")
@@ -1243,11 +1205,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             total_ms = round((time.monotonic() - t0) * 1000)
             self._metrics.record(effective_intent.value, latency_ms=total_ms, success=True)
             _pt = _approx_tokens(
-                "".join(
-                    m.get("content", "")
-                    for m in prompt_messages
-                    if isinstance(m, dict) and m.get("content")
-                )
+                "".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict) and m.get("content"))
             )
             _obs.emit(
                 "turn_complete",
@@ -1362,9 +1320,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     success=bool(tool_result),
                     latency_ms=tool_latency,
                 )
-                self._metrics.record(
-                    effective_intent.value, latency_ms=tool_latency, success=bool(tool_result)
-                )
+                self._metrics.record(effective_intent.value, latency_ms=tool_latency, success=bool(tool_result))
 
                 # Bridge diff metadata from edit_file tool results.
                 # When edit_file produces structured diff hunks, emit a
@@ -1391,9 +1347,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # injected result and answers from its training data instead).
                 if effective_intent == Intent.SYSINFO and tool_result and tool_result.content:
                     result_text = tool_result.content.strip()
-                    _obs.emit(
-                        "tool_status", tool="sysinfo", label="Getting system info", status="done"
-                    )
+                    _obs.emit("tool_status", tool="sysinfo", label="Getting system info", status="done")
                     self._persist_assistant_message(session_id, result_text)
                     total_ms = round((time.monotonic() - t0) * 1000)
                     self._metrics.record("sysinfo", latency_ms=total_ms, success=True)
@@ -1452,18 +1406,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             file_char_budget = min(round(cw * 0.40) * 4, MAX_FILE_TOKENS * 4)
             all_chunks = "\n\n---\n\n".join(file_attachment.chunks)
             if len(all_chunks) > file_char_budget:
-                all_chunks = (
-                    all_chunks[:file_char_budget] + "\n\n[... content truncated for performance]"
-                )
+                all_chunks = all_chunks[:file_char_budget] + "\n\n[... content truncated for performance]"
 
             # Response contract: structured output for summarize/general queries;
             # direct answer for specific questions. The contract ensures consistent,
             # scannable output regardless of model size.
-            _file_ext = (
-                file_attachment.filename.rsplit(".", 1)[-1].lower()
-                if "." in file_attachment.filename
-                else ""
-            )
+            _file_ext = file_attachment.filename.rsplit(".", 1)[-1].lower() if "." in file_attachment.filename else ""
             _is_doc = _file_ext in ("pdf", "docx", "doc", "txt", "md")
             _contract = (
                 (
@@ -1497,9 +1445,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # Without intent=, the adapter falls back to the default 120s client timeout.
             full_response: list[str] = []
             self._metrics.start_request()
-            async for chunk in active_adapter.chat(
-                _file_messages, temperature=0.0, intent="file_task"
-            ):
+            async for chunk in active_adapter.chat(_file_messages, temperature=0.0, intent="file_task"):
+                if chunk.error:
+                    yield StreamChunk(text="", done=True, error=chunk.error)
+                    return
                 safe = _filter_system_leaks(chunk.text)
                 full_response.append(safe)
                 yield StreamChunk(text=safe, done=chunk.done)
@@ -1616,8 +1565,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         skipped=["orchestrator", "planning"],
                     )
                     logger.info(
-                        "[engine] dispatcher confidence %.2f ≥ 0.7 — "
-                        "skipping orchestrator + planning (saves ~5-16s)",
+                        "[engine] dispatcher confidence %.2f ≥ 0.7 — skipping orchestrator + planning (saves ~5-16s)",
                         _dispatcher_confidence,
                     )
             else:
@@ -1626,9 +1574,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # The dispatcher already reformulated for simple intents.
                 # This saves 2-5s for ~15-20% of requests.
                 _is_trivial = (
-                    effective_intent == Intent.CHAT
-                    and _dispatcher_confidence >= 0.8
-                    and len(message.strip()) < 100
+                    effective_intent == Intent.CHAT and _dispatcher_confidence >= 0.8 and len(message.strip()) < 100
                 )
 
                 if _is_trivial and _dispatcher_reformulated:
@@ -1801,12 +1747,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             )
             sm_adapter = self._adapter_for(Intent.CHAT)
             sm_messages = context_builder.build(ctx_sm, sm_adapter.effective_context_window)
-            sm_messages = await maybe_compress_history(
-                sm_messages, sm_adapter, sm_adapter.effective_context_window
-            )
+            sm_messages = await maybe_compress_history(sm_messages, sm_adapter, sm_adapter.effective_context_window)
 
             _obs.emit("thinking_start", intent="file_write")
             async for chunk in sm_adapter.chat(sm_messages, intent="chat"):
+                if chunk.error:
+                    yield StreamChunk(text="", done=True, error=chunk.error)
+                    return
                 safe_text = _filter_system_leaks(chunk.text)
                 full_response_chunks.append(safe_text)
                 yield StreamChunk(text=safe_text, done=False)
@@ -1815,9 +1762,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             response_text = "".join(full_response_chunks)
 
             # Extract last code block and write it to disk
-            _FENCE_RE_SM = re.compile(
-                r"```(?P<lang>\w+)?\s*\n(?P<code>[\s\S]+?)\n```", re.IGNORECASE
-            )
+            _FENCE_RE_SM = re.compile(r"```(?P<lang>\w+)?\s*\n(?P<code>[\s\S]+?)\n```", re.IGNORECASE)
             sm_blocks = _FENCE_RE_SM.findall(response_text)
             if sm_blocks:
                 import os as _os
@@ -1889,11 +1834,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 context_tokens=0,
                 latency_ms=total_ms,
             )
-            _safe_task(
-                self._maybe_store_response_facts(
-                    response_text, session_id, _obs, user_message=message
-                )
-            )
+            _safe_task(self._maybe_store_response_facts(response_text, session_id, _obs, user_message=message))
             yield StreamChunk(text="", done=True)
             return
 
@@ -2008,8 +1949,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                             # Sub-agent execution failed — fall through to
                             # standard agent loop as a recovery path.
                             logger.info(
-                                "[engine] sub-agent execution failed — "
-                                "falling back to agent loop (session=%s)",
+                                "[engine] sub-agent execution failed — falling back to agent loop (session=%s)",
                                 session_id[:8],
                             )
                     # else: decomposition returned <2 tasks — not multi-domain,
@@ -2033,15 +1973,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         active_adapter._model,
                     )
                     # dispatch_with_retry imported at module level — do NOT re-import here
-                    code_result, code_failed, _ = await dispatch_with_retry(
-                        Intent.CODE_EXEC, message
-                    )
+                    code_result, code_failed, _ = await dispatch_with_retry(Intent.CODE_EXEC, message)
                     if code_result and not code_failed:
                         safe_output = _filter_code_output(code_result.content)
                         # Stream the raw output + a short LLM explanation
-                        _obs.emit(
-                            "tool_status", tool="code_exec", label="Running code", status="done"
-                        )
+                        _obs.emit("tool_status", tool="code_exec", label="Running code", status="done")
                         explanation_messages = prompt_messages + [
                             {
                                 "role": "user",
@@ -2049,15 +1985,18 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                             }
                         ]
                         full_response_chunks: list[str] = []
-                        async for chunk in active_adapter.chat(
-                            explanation_messages, intent="code_exec"
-                        ):
+                        async for chunk in active_adapter.chat(explanation_messages, intent="code_exec"):
+                            if chunk.error:
+                                yield StreamChunk(text="", done=True, error=chunk.error)
+                                return
                             safe = _filter_system_leaks(chunk.text)
                             full_response_chunks.append(safe)
                             yield StreamChunk(text=safe, done=chunk.done)
                         response_text = "".join(full_response_chunks)
                     else:
-                        response_text = f"Code execution failed: {code_result.content if code_result else 'unknown error'}"
+                        response_text = (
+                            f"Code execution failed: {code_result.content if code_result else 'unknown error'}"
+                        )
                         yield StreamChunk(text=response_text, done=False)
                         yield StreamChunk(text="", done=True)
                     self._persist_assistant_message(session_id, response_text)
@@ -2093,13 +2032,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     )
                     # dispatch_with_retry imported at module level — do NOT re-import here
                     mem_result, mem_failed, _ = await dispatch_with_retry(Intent.MEMORY_OP, message)
-                    _obs.emit(
-                        "tool_status", tool="memory_op", label="Checking memory", status="done"
-                    )
+                    _obs.emit("tool_status", tool="memory_op", label="Checking memory", status="done")
                     if mem_result and not mem_failed:
                         response_text = mem_result.content
                     else:
-                        response_text = f"Memory operation failed: {mem_result.content if mem_result else 'unknown error'}"
+                        response_text = (
+                            f"Memory operation failed: {mem_result.content if mem_result else 'unknown error'}"
+                        )
                     yield StreamChunk(text=response_text, done=False)
                     yield StreamChunk(text="", done=True)
                     self._persist_assistant_message(session_id, response_text)
@@ -2169,6 +2108,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # Emit thinking_start so the UI shows a thinking indicator, then stream.
             _obs.emit("thinking_start", intent=effective_intent.value)
             async for chunk in active_adapter.chat(prompt_messages, intent=effective_intent.value):
+                if chunk.error:
+                    yield StreamChunk(text="", done=True, error=chunk.error)
+                    return
                 safe_text = _filter_system_leaks(chunk.text)
                 full_response_chunks.append(safe_text)
                 yield StreamChunk(text=safe_text, done=chunk.done)
@@ -2257,9 +2199,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     # Secondary memory op — fire-and-forget, same as primary path
                     _safe_task(self._extract_and_store_facts(message, session_id, _obs))
                 case _:
-                    logger.debug(
-                        f"[engine] secondary intent {secondary_intent.value} — no handler, skipping"
-                    )
+                    logger.debug(f"[engine] secondary intent {secondary_intent.value} — no handler, skipping")
 
         # ── 9. Memory persistence ──────────────────────────────────────────
         # Both storage calls are fire-and-forget: they must not block the
@@ -2269,9 +2209,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             _safe_task(self._extract_and_store_facts(message, session_id, _obs))
 
         # Post-response memory: assistant's own answer can surface new facts.
-        _safe_task(
-            self._maybe_store_response_facts(response_text, session_id, _obs, user_message=message)
-        )
+        _safe_task(self._maybe_store_response_facts(response_text, session_id, _obs, user_message=message))
 
         # Post-response reflection: fire-and-forget self-critique for
         # fabrication-prone intents. Runs AFTER streaming is done.

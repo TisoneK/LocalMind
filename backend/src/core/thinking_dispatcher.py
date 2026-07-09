@@ -159,9 +159,7 @@ def _build_dispatch_steps(
             steps.append({"intent": "tools", "label": "Tools", "detail": tool_names})
         if profile.execution_mode not in (ExecutionMode.DIRECT, ExecutionMode.SINGLE_TOOL):
             mode_label = profile.execution_mode.value.replace("_", " ").title()
-            steps.append(
-                {"intent": "execution", "label": "Execution", "detail": f"{mode_label} workflow"}
-            )
+            steps.append({"intent": "execution", "label": "Execution", "detail": f"{mode_label} workflow"})
 
     msg_lower = message.lower().strip()
     if msg_lower in ("yes", "yeah", "yep", "sure", "ok", "okay", "go ahead", "proceed", "continue"):
@@ -352,8 +350,7 @@ class ThinkingDispatcher:
                 yield StreamChunk(text="", thinking="start")
                 yield StreamChunk(
                     text="",
-                    thinking=followup_plan.profile.acknowledgement
-                    or "Following up on your previous request.",
+                    thinking=followup_plan.profile.acknowledgement or "Following up on your previous request.",
                 )
                 yield StreamChunk(text="", thinking="end")
                 yield followup_plan
@@ -400,6 +397,16 @@ class ThinkingDispatcher:
                         temperature=DISPATCHER_TEMPERATURE,
                         intent="chat",
                     ):
+                        # If the adapter returned an error, stop collecting —
+                        # the dispatcher will fall back to a minimal plan, and
+                        # the subsequent chat-phase call will surface the error
+                        # to the user via the SSE bridge.
+                        if chunk.error:
+                            logger.warning(
+                                "[dispatcher] adapter error during capability inference: %s",
+                                chunk.error[:120],
+                            )
+                            break
                         text = _filter_system_leaks(chunk.text)
                         if not text:
                             continue
@@ -748,9 +755,7 @@ class ThinkingDispatcher:
 
     # ── Follow-up Detection ─────────────────────────────────────────────
 
-    def _try_followup_plan(
-        self, message: str, history: list, obs: ObsCollector
-    ) -> Optional[OrchestrationPlan]:
+    def _try_followup_plan(self, message: str, history: list, obs: ObsCollector) -> Optional[OrchestrationPlan]:
         """Follow-up detection that returns OrchestrationPlan."""
         from core.agent.constants import FOLLOWUP_HISTORY_DEPTH
 
@@ -946,9 +951,7 @@ class ThinkingDispatcher:
 
     # ── LLM Output Parsing ──────────────────────────────────────────────
 
-    def _parse_llm_output(
-        self, data: dict, message: str, has_attachment: bool, history: list
-    ) -> OrchestrationPlan:
+    def _parse_llm_output(self, data: dict, message: str, has_attachment: bool, history: list) -> OrchestrationPlan:
         """Parse the LLM's JSON output into an OrchestrationPlan."""
         # Parse capabilities
         capabilities = []
@@ -1004,9 +1007,7 @@ class ThinkingDispatcher:
             capabilities.insert(0, Capability.WEB_SEARCH)
             profile.capabilities = capabilities
             profile.auto_correct()
-            logger.info(
-                "[dispatcher] adding WEB_SEARCH: realtime_sensitive=True but no web_search capability"
-            )
+            logger.info("[dispatcher] adding WEB_SEARCH: realtime_sensitive=True but no web_search capability")
 
         # Derive execution mode if not already set correctly
         if profile.is_chat_only() and profile.execution_mode != ExecutionMode.DIRECT:
@@ -1035,9 +1036,7 @@ class ThinkingDispatcher:
             dispatch_steps.append({"intent": cap_name, "detail": label})
 
         if not dispatch_steps:
-            dispatch_steps = _build_dispatch_steps(
-                profile.primary_intent(), message, profile.reformulated, profile
-            )
+            dispatch_steps = _build_dispatch_steps(profile.primary_intent(), message, profile.reformulated, profile)
 
         return OrchestrationPlan(
             profile=profile,
@@ -1049,9 +1048,7 @@ class ThinkingDispatcher:
 
     # ── Fallback ────────────────────────────────────────────────────────
 
-    def _fallback_plan(
-        self, message: str, has_attachment: bool, history: list
-    ) -> OrchestrationPlan:
+    def _fallback_plan(self, message: str, has_attachment: bool, history: list) -> OrchestrationPlan:
         """Fallback on timeout/error. Returns a minimal CHAT TaskProfile."""
         return OrchestrationPlan(
             profile=TaskProfile(

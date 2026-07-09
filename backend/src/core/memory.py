@@ -122,9 +122,7 @@ class MemoryComposer:
             access_count = int(metadata.get("access_count", 0))
             usage_freq = min(access_count / 10.0, 1.0)
 
-            score = (
-                similarity_score * 0.6 + recency_score * 0.2 + importance * 0.1 + usage_freq * 0.1
-            )
+            score = similarity_score * 0.6 + recency_score * 0.2 + importance * 0.1 + usage_freq * 0.1
             ranked.append((score, fact, metadata))
 
         ranked.sort(key=lambda x: x[0], reverse=True)
@@ -323,6 +321,9 @@ class MemoryComposer:
 
             chunks = []
             async for chunk in adapter.chat(extraction_messages, temperature=0.0):
+                if hasattr(chunk, "error") and chunk.error:
+                    logger.warning("[memory] adapter error during extraction: %s", chunk.error[:120])
+                    break
                 chunks.append(chunk.text if hasattr(chunk, "text") else str(chunk))
 
             raw = "".join(chunks).strip()

@@ -427,9 +427,7 @@ TOOL_DEFINITIONS = [
             "description": "Get current system info: time, date, hardware specs, installed programs",
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "What system info to retrieve"}
-                },
+                "properties": {"query": {"type": "string", "description": "What system info to retrieve"}},
                 "required": ["query"],
             },
         },
@@ -463,34 +461,22 @@ _TOOL_TALK_PATTERNS = [
     re.compile(r"please provide (me with |the )?tool results?", re.IGNORECASE),
     re.compile(r"i need (you to |the )?tool results?", re.IGNORECASE),
     re.compile(r"provide (me with |the )?results? of (the )?tool", re.IGNORECASE),
-    re.compile(
-        r"i (will|would|need to|am going to) (use|call|invoke|run) (the )?(\w+) tool", re.IGNORECASE
-    ),
+    re.compile(r"i (will|would|need to|am going to) (use|call|invoke|run) (the )?(\w+) tool", re.IGNORECASE),
     re.compile(r"let me (use|call|invoke|run) (the )?(\w+) tool", re.IGNORECASE),
-    re.compile(
-        r"i('ll| will) (need to |try to )?(search|look up|execute|run|query)", re.IGNORECASE
-    ),
+    re.compile(r"i('ll| will) (need to |try to )?(search|look up|execute|run|query)", re.IGNORECASE),
     re.compile(r"to answer (this|your) (question|request),? i (will|would|need to)", re.IGNORECASE),
     re.compile(r"<tool>|<action>|<function>", re.IGNORECASE),
     re.compile(r"tool_call|function_call|invoke_tool", re.IGNORECASE),
     # MiniMax-style: "I will call the web_search tool" followed by XML
-    re.compile(
-        r"i('ll| will) (now |then )?(call|use|invoke) (the )?\w+ (tool|function)", re.IGNORECASE
-    ),
+    re.compile(r"i('ll| will) (now |then )?(call|use|invoke) (the )?\w+ (tool|function)", re.IGNORECASE),
     # v0.7: Additional plain-text tool narration patterns — models like MiniMax M2.5
     # sometimes describe what they would do instead of actually doing it.
     # These catch "I'm searching for...", "Let me look that up...", "Searching..."
     # followed by fabricated results from training data.
-    re.compile(
-        r"(i'm|i am) (now )?(searching|looking up|fetching|checking|finding)", re.IGNORECASE
-    ),
-    re.compile(
-        r"(searching|fetching|looking up|checking).{0,30}(for|on|in|about)\b", re.IGNORECASE
-    ),
+    re.compile(r"(i'm|i am) (now )?(searching|looking up|fetching|checking|finding)", re.IGNORECASE),
+    re.compile(r"(searching|fetching|looking up|checking).{0,30}(for|on|in|about)\b", re.IGNORECASE),
     re.compile(r"let me (search|look|check|find|fetch|browse)", re.IGNORECASE),
-    re.compile(
-        r"i('ll| will) (search|look|check|find|fetch) (the |online |the web |on )?", re.IGNORECASE
-    ),
+    re.compile(r"i('ll| will) (search|look|check|find|fetch) (the |online |the web |on )?", re.IGNORECASE),
     re.compile(r"\[tool_call\]|\[search\]|\[tool\]", re.IGNORECASE),
     re.compile(r"\bsearching\.{3,}\b", re.IGNORECASE),  # "Searching..." theatrical animation
     re.compile(r"\bfetching\.{3,}\b", re.IGNORECASE),
@@ -646,12 +632,7 @@ class AgentLoop:
         # call here just adds 2-6s of latency for no value.
         plan_context = ""
         iteration_offset = 0  # how many iterations the planning phase consumed
-        if (
-            PLAN_ENABLED
-            and intent in AGENT_INTENTS
-            and not initial_tool_result
-            and not skip_planning
-        ):
+        if PLAN_ENABLED and intent in AGENT_INTENTS and not initial_tool_result and not skip_planning:
             # Stream the plan in real-time as thinking tokens so the user
             # sees the model's reasoning (UNDERSTANDING, STEPS, ARGS_PRECHECK)
             # as it happens — not after the full plan is generated.
@@ -804,13 +785,8 @@ class AgentLoop:
                 _OBS_LOG_TOTAL_CAP = OBS_LOG_MAX_CHARS * 2  # 1600 chars
                 trimmed_log = observation_log
                 if len(observation_log) > _OBS_LOG_TOTAL_CAP:
-                    trimmed_log = (
-                        "…[earlier observations truncated]\n"
-                        + observation_log[-_OBS_LOG_TOTAL_CAP:]
-                    )
-                context_content = (
-                    f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{MAX_ITERATIONS}. "
-                )
+                    trimmed_log = "…[earlier observations truncated]\n" + observation_log[-_OBS_LOG_TOTAL_CAP:]
+                context_content = f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{MAX_ITERATIONS}. "
                 iteration_messages.append({"role": "user", "content": context_content})
 
             # ── LLM call with tools ───────────────────────────────────
@@ -861,17 +837,13 @@ class AgentLoop:
                         logger.warning(f"[agent.loop] parallel: rejected tool {_name!r}")
                         continue
                     if not _inp or len(_inp.strip("?. \t")) < 3:
-                        logger.warning(
-                            f"[agent.loop] parallel: rejected degenerate input for {_name!r}"
-                        )
+                        logger.warning(f"[agent.loop] parallel: rejected degenerate input for {_name!r}")
                         continue
                     if _name == "file_write":
                         _p = _args.get("path", "").strip()
                         _c = _args.get("content", "").strip()
                         if not _p or not _c:
-                            logger.warning(
-                                "[agent.loop] parallel: file_write missing args, skipping"
-                            )
+                            logger.warning("[agent.loop] parallel: file_write missing args, skipping")
                             continue
 
                     valid_calls.append((call, _inp))
@@ -891,11 +863,7 @@ class AgentLoop:
                     try:
                         tc_intent = Intent(tc_name)
                         tc_result, tc_failed, _ = await dispatch_with_retry(tc_intent, tc_input)
-                        tc_obs = (
-                            tc_result.content
-                            if tc_result
-                            else f"[Tool {tc_name} returned no result]"
-                        )
+                        tc_obs = tc_result.content if tc_result else f"[Tool {tc_name} returned no result]"
                         tc_obs = _filter_tool_injection(tc_obs)
                         # Collect result for post-loop synthesis
                         if tc_result:
@@ -930,21 +898,15 @@ class AgentLoop:
                     _label_map = {
                         "file_write": f"Creating file: {_path[:80]}" if _path else "Creating file",
                         "edit_file": f"Editing file: {_path[:80]}" if _path else "Editing file",
-                        "code_exec": f"Executing: {_code_preview}..."
-                        if _code_preview
-                        else "Executing code",
-                        "web_search": f"Searching: {_query[:80]}"
-                        if _query
-                        else "Searching the web",
+                        "code_exec": f"Executing: {_code_preview}..." if _code_preview else "Executing code",
+                        "web_search": f"Searching: {_query[:80]}" if _query else "Searching the web",
                         "web_fetch": f"Fetching: {call.tool_args.get('url', '')[:80]}"
                         if call.tool_args.get("url")
                         else "Fetching web page",
                         "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
                         "shell": f"Running: {_command[:80]}" if _command else "Running command",
                         "memory_op": f"Memory: {call.tool_args.get('operation', '')} {call.tool_args.get('content', '')[:40]}".strip(),
-                        "sysinfo": f"System info: {_query[:60]}"
-                        if _query
-                        else "Getting system info",
+                        "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
                     }
                     _label = _label_map.get(call.tool_name, f"Running {call.tool_name}")
                     yield StreamChunk(text="", done=False, status=_label)
@@ -958,10 +920,7 @@ class AgentLoop:
                         )
 
                 # Run all dispatches concurrently
-                dispatch_tasks = [
-                    _dispatch_single(call.tool_name, inp, call.tool_args)
-                    for call, inp in valid_calls
-                ]
+                dispatch_tasks = [_dispatch_single(call.tool_name, inp, call.tool_args) for call, inp in valid_calls]
                 dispatch_results = await asyncio.gather(*dispatch_tasks)
 
                 # Process all results and add to conversation context
@@ -1047,9 +1006,7 @@ class AgentLoop:
                 tool_input = _extract_tool_input(tool_name, tool_args)
 
                 # Debug: log description from LLM
-                logger.info(
-                    f"[agent.loop] tool_args description: {tool_args.get('description', 'NONE')}"
-                )
+                logger.info(f"[agent.loop] tool_args description: {tool_args.get('description', 'NONE')}")
 
                 # FIX: Yield thinking content as proper SSE events so the
                 # frontend ThinkingBlock shows the model's reasoning in real-time.
@@ -1073,23 +1030,17 @@ class AgentLoop:
                         )
 
                 logger.info(
-                    f"[agent.loop] iter={iteration + 1} tool_call={tool_name} "
-                    f"args={json.dumps(tool_args)[:120]}"
+                    f"[agent.loop] iter={iteration + 1} tool_call={tool_name} args={json.dumps(tool_args)[:120]}"
                 )
 
                 # Guard: reject tool names not in the explicit allowlist
                 if tool_name not in AGENT_ALLOWED_TOOLS:
                     allowed_list = ", ".join(sorted(AGENT_ALLOWED_TOOLS))
-                    observation = (
-                        f"[Tool '{tool_name}' is not available. Available tools: {allowed_list}]"
-                    )
+                    observation = f"[Tool '{tool_name}' is not available. Available tools: {allowed_list}]"
                     logger.warning(f"[agent.loop] rejected tool name: {tool_name!r}")
                     last_tool_failed = True
                     consecutive_failures += 1
-                    observation_log += (
-                        f"\n[Tool: {tool_name} | Status: BLOCKED (not in allowlist)]\n"
-                        f"{observation}\n"
-                    )
+                    observation_log += f"\n[Tool: {tool_name} | Status: BLOCKED (not in allowlist)]\n{observation}\n"
                     trace.steps.append(
                         AgentStep(
                             iteration=iteration + 1,
@@ -1152,8 +1103,7 @@ class AgentLoop:
                         last_tool_failed = True
                         consecutive_failures += 1
                         observation_log += (
-                            f"\n[Tool: {tool_name} | Status: REJECTED (missing required args)]\n"
-                            f"{observation}\n"
+                            f"\n[Tool: {tool_name} | Status: REJECTED (missing required args)]\n{observation}\n"
                         )
                         trace.steps.append(
                             AgentStep(
@@ -1199,14 +1149,10 @@ class AgentLoop:
                         f"[Action rejected: input for '{tool_name}' is empty or too short. "
                         f"Provide a specific, meaningful input and try again.]"
                     )
-                    logger.warning(
-                        f"[agent.loop] rejected degenerate input for tool={tool_name!r}: {tool_input!r}"
-                    )
+                    logger.warning(f"[agent.loop] rejected degenerate input for tool={tool_name!r}: {tool_input!r}")
                     last_tool_failed = True
                     consecutive_failures += 1
-                    observation_log += (
-                        f"\n[Tool: {tool_name} | Status: REJECTED (bad input)]\n{observation}\n"
-                    )
+                    observation_log += f"\n[Tool: {tool_name} | Status: REJECTED (bad input)]\n{observation}\n"
                     trace.steps.append(
                         AgentStep(
                             iteration=iteration + 1,
@@ -1249,9 +1195,7 @@ class AgentLoop:
                 call_fingerprint = (tool_name, tool_input.lower().strip())
                 if call_fingerprint in _call_cache:
                     cached_obs = _call_cache[call_fingerprint]
-                    logger.info(
-                        f"[agent.loop] dedup hit for tool={tool_name!r} — returning cached result"
-                    )
+                    logger.info(f"[agent.loop] dedup hit for tool={tool_name!r} — returning cached result")
                     observation_log += (
                         f"\n[Tool: {tool_name} | Input: {tool_input[:60]} | Status: CACHED]\n"
                         f"{_truncate_observation(cached_obs)}\n"
@@ -1378,18 +1322,12 @@ class AgentLoop:
                     action_labels = {
                         "file_write": f"Creating file: {_path[:80]}" if _path else "Creating file",
                         "edit_file": f"Editing file: {_path[:80]}" if _path else "Editing file",
-                        "code_exec": f"Executing: {_code_preview}..."
-                        if _code_preview
-                        else "Executing code",
-                        "web_search": f"Searching: {_query[:80]}"
-                        if _query
-                        else "Searching the web",
+                        "code_exec": f"Executing: {_code_preview}..." if _code_preview else "Executing code",
+                        "web_search": f"Searching: {_query[:80]}" if _query else "Searching the web",
                         "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
                         "shell": f"Running: {_command[:80]}" if _command else "Running command",
                         "memory_op": f"Memory: {tool_args.get('operation', '')} {tool_args.get('content', '')[:40]}".strip(),
-                        "sysinfo": f"System info: {_query[:60]}"
-                        if _query
-                        else "Getting system info",
+                        "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
                     }
                     action_label = action_labels.get(tool_name, f"Running {tool_name}")
                 logger.info(
@@ -1444,8 +1382,7 @@ class AgentLoop:
                             last_tool_failed = True
                             consecutive_failures += 1
                             observation_log += (
-                                f"\n[Tool: {tool_name} | Status: REJECTED (content too short)]\n"
-                                f"{observation}\n"
+                                f"\n[Tool: {tool_name} | Status: REJECTED (content too short)]\n{observation}\n"
                             )
                             trace.steps.append(
                                 AgentStep(
@@ -1499,12 +1436,8 @@ class AgentLoop:
                             retry_count = 0
                         except KeyError:
                             # Contract not registered — fall back to legacy dispatch
-                            logger.warning(
-                                "[agent.loop] FileWriteContract not in registry, using legacy dispatch"
-                            )
-                            tool_result, tool_failed, retry_count = await dispatch_with_retry(
-                                tool_intent, tool_input
-                            )
+                            logger.warning("[agent.loop] FileWriteContract not in registry, using legacy dispatch")
+                            tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input)
 
                     elif tool_name == "edit_file":
                         # edit_file: use typed contract path (like file_write)
@@ -1518,21 +1451,13 @@ class AgentLoop:
                             retry_count = 0
                         except KeyError:
                             # Contract not registered — fall back to legacy dispatch
-                            logger.warning(
-                                "[agent.loop] EditFileContract not in registry, using legacy dispatch"
-                            )
-                            tool_result, tool_failed, retry_count = await dispatch_with_retry(
-                                tool_intent, tool_input
-                            )
+                            logger.warning("[agent.loop] EditFileContract not in registry, using legacy dispatch")
+                            tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input)
 
                         # Bridge diff metadata from edit_file tool results.
                         # Emit a file_diff obs event so the frontend DiffBlock can
                         # render green/red highlighted diffs — like Cursor/Claude.
-                        if (
-                            tool_result
-                            and tool_result.metadata
-                            and tool_result.source == "edit_file"
-                        ):
+                        if tool_result and tool_result.metadata and tool_result.source == "edit_file":
                             diff_hunks = tool_result.metadata.get("diff_hunks", [])
                             if diff_hunks and _obs:
                                 _obs.emit(
@@ -1545,9 +1470,7 @@ class AgentLoop:
                                 )
 
                     else:
-                        tool_result, tool_failed, retry_count = await dispatch_with_retry(
-                            tool_intent, tool_input
-                        )
+                        tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input)
 
                     latency_ms = round((time.monotonic() - t_tool) * 1000)
 
@@ -1560,8 +1483,7 @@ class AgentLoop:
                         # Prepend structured error context
                         if not tool_result.success and tool_result.error_type:
                             safe_obs = (
-                                f"[Tool '{tool_name}' returned error_type={tool_result.error_type!r}]\n"
-                                + safe_obs
+                                f"[Tool '{tool_name}' returned error_type={tool_result.error_type!r}]\n" + safe_obs
                             )
 
                         # Web-search: synthesize results into a user-facing answer.
@@ -1591,9 +1513,7 @@ class AgentLoop:
                                     latency_ms=latency_ms,
                                     iteration=iteration + 1,
                                 )
-                                _obs.emit(
-                                    "agent_loop_done", intent=intent.value, iterations=iteration + 1
-                                )
+                                _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
                             return  # web search is always terminal in agent loop
 
                         observation = safe_obs
@@ -1641,9 +1561,7 @@ class AgentLoop:
                                         max_retries=0,
                                     )
                                     _grounding_ok = (
-                                        not _grounding_failed
-                                        and _grounding_result
-                                        and _grounding_result.success
+                                        not _grounding_failed and _grounding_result and _grounding_result.success
                                     )
                                     _grounding_content_len = (
                                         len(_grounding_result.content)
@@ -1670,9 +1588,7 @@ class AgentLoop:
                                             f"path={_grounding_path!r}"
                                         )
                                 except Exception as _ge:
-                                    logger.warning(
-                                        f"[agent.loop] grounding check error (non-fatal): {_ge}"
-                                    )
+                                    logger.warning(f"[agent.loop] grounding check error (non-fatal): {_ge}")
 
                         # ── Terminal bridge: emit tool output to the terminal panel ──
                         # Forward ALL tool executions to the terminal panel so the user
@@ -1711,9 +1627,7 @@ class AgentLoop:
                             # Each successful tool execution advances the cursor
                             # so the Todos panel shows progress through the plan.
                             if _plan_steps and _plan_step_cursor < len(_plan_steps) and _obs:
-                                _obs.emit(
-                                    "todo_completed", id=f"plan-{_plan_step_cursor}", completed=True
-                                )
+                                _obs.emit("todo_completed", id=f"plan-{_plan_step_cursor}", completed=True)
                                 _plan_step_cursor += 1
 
                         if retry_count > 0:
@@ -1722,9 +1636,7 @@ class AgentLoop:
                                 done=False,
                             )
                     else:
-                        observation = (
-                            f"[Tool '{tool_name}' returned no result after {retry_count} retries]"
-                        )
+                        observation = f"[Tool '{tool_name}' returned no result after {retry_count} retries]"
                         tool_failed = True
                         latency_ms = round((time.monotonic() - t_tool) * 1000)
 
@@ -1880,9 +1792,7 @@ class AgentLoop:
                     if _has_minimax_tool_call(_minimax_buffer):
                         # Complete tool call found — stop buffering
                         break
-                    if _MINIMAX_PARTIAL_RE.search(_minimax_buffer) or _STANDALONE_PARTIAL_RE.search(
-                        _minimax_buffer
-                    ):
+                    if _MINIMAX_PARTIAL_RE.search(_minimax_buffer) or _STANDALONE_PARTIAL_RE.search(_minimax_buffer):
                         _minimax_partial_seen = True
                     if len(_minimax_buffer) >= _MINIMAX_CHECK_CHARS:
                         if _minimax_partial_seen:
@@ -1920,24 +1830,14 @@ class AgentLoop:
                         # Normalize MiniMax parameter names to match our tool definitions
                         # MiniMax uses <parameter name="text"> for the query argument
                         _normalized_args = dict(tc_args)
-                        if (
-                            tc_name == "web_search"
-                            and "text" in _normalized_args
-                            and "query" not in _normalized_args
-                        ):
+                        if tc_name == "web_search" and "text" in _normalized_args and "query" not in _normalized_args:
                             _normalized_args["query"] = _normalized_args.pop("text")
-                        if (
-                            tc_name == "web_fetch"
-                            and "text" in _normalized_args
-                            and "url" not in _normalized_args
-                        ):
+                        if tc_name == "web_fetch" and "text" in _normalized_args and "url" not in _normalized_args:
                             _normalized_args["url"] = _normalized_args.pop("text")
 
                         # Check allowlist
                         if tc_name not in AGENT_ALLOWED_TOOLS:
-                            logger.warning(
-                                f"[agent.loop] minimax intercept: rejected tool {tc_name!r}"
-                            )
+                            logger.warning(f"[agent.loop] minimax intercept: rejected tool {tc_name!r}")
                             allowed_list = ", ".join(sorted(AGENT_ALLOWED_TOOLS))
                             observation = f"[Tool '{tc_name}' is not available. Available tools: {allowed_list}]"
                             call_id = str(uuid.uuid4())
@@ -1988,17 +1888,13 @@ class AgentLoop:
                         _query = _normalized_args.get("query", "")
                         _url = _normalized_args.get("url", "")
                         _label_map = {
-                            "web_search": f"Searching: {_query[:80]}"
-                            if _query
-                            else "Searching the web",
+                            "web_search": f"Searching: {_query[:80]}" if _query else "Searching the web",
                             "web_fetch": f"Fetching: {_url[:80]}" if _url else "Fetching web page",
                             "shell": f"Running: {_command[:80]}" if _command else "Running command",
                             "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
                             "code_exec": "Executing code",
                             "memory_op": f"Memory: {_normalized_args.get('operation', '')} {_normalized_args.get('content', '')[:40]}".strip(),
-                            "sysinfo": f"System info: {_query[:60]}"
-                            if _query
-                            else "Getting system info",
+                            "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
                         }
                         action_label = _label_map.get(tc_name, f"Running {tc_name}")
 
@@ -2018,9 +1914,7 @@ class AgentLoop:
                         tool_failed = False
                         try:
                             tool_intent = Intent(tc_name)
-                            tool_result, tool_failed, retry_count = await dispatch_with_retry(
-                                tool_intent, tool_input
-                            )
+                            tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input)
                             latency_ms = round((time.monotonic() - t_tool) * 1000)
 
                             if tool_result:
@@ -2129,9 +2023,7 @@ class AgentLoop:
                                 last_tool_failed = True
                                 consecutive_failures += 1
                         except (ValueError, Exception) as exc:
-                            logger.warning(
-                                f"[agent.loop] minimax intercept: tool dispatch failed: {exc}"
-                            )
+                            logger.warning(f"[agent.loop] minimax intercept: tool dispatch failed: {exc}")
                             loop_messages.append(
                                 {
                                     "role": "assistant",
@@ -2220,9 +2112,7 @@ class AgentLoop:
                 ):
                     logger.warning(f"[agent.loop] iter={iteration + 1} — error in stream, aborting")
                     if _obs:
-                        _obs.emit(
-                            "agent_loop_error", error=initial_buffer[:120], iteration=iteration + 1
-                        )
+                        _obs.emit("agent_loop_error", error=initial_buffer[:120], iteration=iteration + 1)
                     yield StreamChunk(
                         text=(
                             "⚠️ The model ran into an issue. Please try again, "
@@ -2238,10 +2128,7 @@ class AgentLoop:
                     return
 
                 # Detect tool-talk in the initial buffer
-                if (
-                    _is_tool_talk(initial_buffer)
-                    and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES
-                ):
+                if _is_tool_talk(initial_buffer) and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES:
                     trace.tool_talk_recoveries += 1
                     logger.warning(
                         f"[agent.loop] iter={iteration + 1} — tool-talk detected "
@@ -2295,20 +2182,12 @@ class AgentLoop:
                         r"\b(played|vs|versus|against)\b.{0,30}\b(won|lost|drew|beat)\b",
                         re.IGNORECASE,
                     ),
-                    re.compile(
-                        r"\b(standings|table|rankings?)\b.{0,10}\b(1\.|1st|2nd|3rd)", re.IGNORECASE
-                    ),
-                    re.compile(
-                        r"\b(fixture|match|game)\b.{0,20}\b(vs|versus|against)\b", re.IGNORECASE
-                    ),
+                    re.compile(r"\b(standings|table|rankings?)\b.{0,10}\b(1\.|1st|2nd|3rd)", re.IGNORECASE),
+                    re.compile(r"\b(fixture|match|game)\b.{0,20}\b(vs|versus|against)\b", re.IGNORECASE),
                     re.compile(r"\b(price|value|rate)\b.{0,20}[\$€£₹]\d+", re.IGNORECASE),
-                    re.compile(
-                        r"\b(exchange rate|stock price|crypto|bitcoin|ethereum)\b", re.IGNORECASE
-                    ),
+                    re.compile(r"\b(exchange rate|stock price|crypto|bitcoin|ethereum)\b", re.IGNORECASE),
                 ]
-                _fabricated_data_detected = any(
-                    p.search(initial_buffer) for p in _FABRICATED_DATA_PATTERNS
-                )
+                _fabricated_data_detected = any(p.search(initial_buffer) for p in _FABRICATED_DATA_PATTERNS)
 
                 if (
                     _fabricated_data_detected
@@ -2374,9 +2253,7 @@ class AgentLoop:
                     # MiniMax XML appeared in the initial buffer but wasn't caught
                     # by the earlier _parse_minimax_tool_call check (e.g., partial XML
                     # that completed during buffering). Re-check now.
-                    logger.info(
-                        "[agent.loop] MiniMax XML detected in initial buffer during Phase 2 — re-checking"
-                    )
+                    logger.info("[agent.loop] MiniMax XML detected in initial buffer during Phase 2 — re-checking")
                     _late_calls = _parse_minimax_tool_call(initial_buffer)
                     if _late_calls and not has_error:
                         # Drain remaining chunks and process the intercepted calls
@@ -2393,17 +2270,9 @@ class AgentLoop:
                         # stream, we process inline here.
                         for _tc_name, _tc_args, _tc_raw_xml in _minimax_calls:
                             _norm_args = dict(_tc_args)
-                            if (
-                                _tc_name == "web_search"
-                                and "text" in _norm_args
-                                and "query" not in _norm_args
-                            ):
+                            if _tc_name == "web_search" and "text" in _norm_args and "query" not in _norm_args:
                                 _norm_args["query"] = _norm_args.pop("text")
-                            if (
-                                _tc_name == "web_fetch"
-                                and "text" in _norm_args
-                                and "url" not in _norm_args
-                            ):
+                            if _tc_name == "web_fetch" and "text" in _norm_args and "url" not in _norm_args:
                                 _norm_args["url"] = _norm_args.pop("text")
                             if _tc_name not in AGENT_ALLOWED_TOOLS:
                                 continue
@@ -2427,9 +2296,7 @@ class AgentLoop:
                                 )
                             t_late = time.monotonic()
                             try:
-                                _late_result, _late_failed, _ = await dispatch_with_retry(
-                                    Intent(_tc_name), _tc_input
-                                )
+                                _late_result, _late_failed, _ = await dispatch_with_retry(Intent(_tc_name), _tc_input)
                                 _late_lat = round((time.monotonic() - t_late) * 1000)
                                 if _late_result:
                                     _late_obs = _filter_tool_injection(_late_result.content)
@@ -2490,9 +2357,7 @@ class AgentLoop:
                                         }
                                     )
                             except Exception as _late_exc:
-                                logger.warning(
-                                    f"[agent.loop] late MiniMax intercept failed: {_late_exc}"
-                                )
+                                logger.warning(f"[agent.loop] late MiniMax intercept failed: {_late_exc}")
                             if _obs:
                                 _obs.emit(
                                     "tool_call",
@@ -2575,9 +2440,7 @@ class AgentLoop:
         trace.hit_limit = True
         logger.warning(f"[agent.loop] hit MAX_ITERATIONS={MAX_ITERATIONS} — {trace.summary()}")
         if _obs:
-            _obs.emit(
-                "agent_loop_done", intent=intent.value, iterations=MAX_ITERATIONS, hit_limit=True
-            )
+            _obs.emit("agent_loop_done", intent=intent.value, iterations=MAX_ITERATIONS, hit_limit=True)
         async for chunk in self._force_final_answer(
             loop_messages=loop_messages,
             observation_log=observation_log,
@@ -2616,9 +2479,7 @@ class AgentLoop:
         filename = f"search_results_{int(time.time())}.md"
 
         file_content = (
-            f"# Web Search Results: {query}\n\n"
-            f"*Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}*\n\n"
-            f"{safe_obs}"
+            f"# Web Search Results: {query}\n\n*Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}*\n\n{safe_obs}"
         )
 
         # Fire-and-forget: write the raw results file in the background.
@@ -2657,16 +2518,10 @@ class AgentLoop:
                     # Snippets are insufficient — fetch the top URL for actual data
                     followup_url = (synthesis.followup_args or {}).get("url", "")
                     if followup_url:
-                        logger.info(
-                            f"[agent.loop] synthesis requests web_fetch for: {followup_url[:80]}"
-                        )
+                        logger.info(f"[agent.loop] synthesis requests web_fetch for: {followup_url[:80]}")
                         # Emit a status chunk so the user knows we're fetching
-                        yield StreamChunk(
-                            text="", done=False, status=f"Reading page: {followup_url[:60]}"
-                        )
-                        fetch_result, fetch_failed, _ = await dispatch_with_retry(
-                            Intent.WEB_FETCH, followup_url
-                        )
+                        yield StreamChunk(text="", done=False, status=f"Reading page: {followup_url[:60]}")
+                        fetch_result, fetch_failed, _ = await dispatch_with_retry(Intent.WEB_FETCH, followup_url)
                         if fetch_result and not fetch_failed:
                             # Step 2: Use synthesize_combined() — this is the PRIMARY
                             # synthesis path for web queries. It uses a dedicated prompt
@@ -2781,6 +2636,9 @@ class AgentLoop:
                         temperature=0.1,
                         intent="chat",
                     ):
+                        if chunk.error:
+                            logger.warning("[agent.loop] plan stream adapter error: %s", chunk.error[:120])
+                            break
                         text = _filter_system_leaks(chunk.text)
                         if text:
                             await _plan_queue.put(text)
@@ -2866,6 +2724,9 @@ class AgentLoop:
                     temperature=0.1,
                     intent="chat",
                 ):
+                    if chunk.error:
+                        logger.warning("[agent.loop] plan collect adapter error: %s", chunk.error[:120])
+                        break
                     plan_chunks.append(chunk.text)
 
             await asyncio.wait_for(_collect_plan(), timeout=_plan_timeout)
@@ -2877,10 +2738,7 @@ class AgentLoop:
                 _PLAN_MAX_CHARS = 1500
                 if len(plan_text) > _PLAN_MAX_CHARS:
                     plan_text = plan_text[:_PLAN_MAX_CHARS] + "\n[... plan truncated]"
-                logger.info(
-                    f"[agent.loop] planning phase completed in {plan_ms}ms, "
-                    f"plan_len={len(plan_text)}"
-                )
+                logger.info(f"[agent.loop] planning phase completed in {plan_ms}ms, plan_len={len(plan_text)}")
                 return plan_text, PLAN_ITERATION_COST
             else:
                 logger.info("[agent.loop] planning phase returned empty plan — skipping")
@@ -2979,10 +2837,7 @@ class AgentLoop:
                 ]
                 found_errors = [e for e in error_indicators if e in observation]
                 if found_errors:
-                    return (
-                        f"Code execution produced errors: {', '.join(found_errors[:3])}. "
-                        f"Fix the code and try again."
-                    )
+                    return f"Code execution produced errors: {', '.join(found_errors[:3])}. Fix the code and try again."
                 return None
 
         except Exception as exc:
@@ -3016,11 +2871,7 @@ class AgentLoop:
                 content = msg.get("content", "")
                 if len(content) > 1500:
                     half = 750
-                    content = (
-                        content[:half]
-                        + f"\n…[{len(content) - 1500} chars omitted]…\n"
-                        + content[-half:]
-                    )
+                    content = content[:half] + f"\n…[{len(content) - 1500} chars omitted]…\n" + content[-half:]
                 clean_messages.append(
                     {
                         "role": "user",
@@ -3056,20 +2907,20 @@ class AgentLoop:
         try:
             t_final = time.monotonic()
             async for chunk in active_adapter.chat(force_msg, temperature=0.4):
+                if chunk.error:
+                    yield StreamChunk(text="", done=True, error=chunk.error)
+                    return
                 filtered = StreamChunk(
                     text=_filter_system_leaks(chunk.text),
                     done=chunk.done,
                 )
                 yield filtered
-            logger.info(
-                f"[agent.loop] final synthesis: {round((time.monotonic() - t_final) * 1000)}ms"
-            )
+            logger.info(f"[agent.loop] final synthesis: {round((time.monotonic() - t_final) * 1000)}ms")
         except Exception as exc:
             logger.warning(f"[agent.loop] final synthesis failed: {exc}")
             yield StreamChunk(
                 text=(
-                    "I've reached my iteration limit. Here are the key findings "
-                    "gathered so far:\n\n" + observation_log
+                    "I've reached my iteration limit. Here are the key findings gathered so far:\n\n" + observation_log
                 ),
                 done=True,
             )

@@ -130,12 +130,17 @@ async def refine_title_async(session_id: str, message: str) -> None:
         try:
             async with asyncio.timeout(_TITLE_TIMEOUT):
                 async for chunk in adapter.chat(prompt_messages, temperature=0.3, intent="chat"):
+                    if chunk.error:
+                        logger.warning(
+                            "[title] adapter error for %s: %s",
+                            session_id[:8],
+                            chunk.error[:120],
+                        )
+                        return
                     if chunk.text:
                         chunks.append(chunk.text)
         except asyncio.TimeoutError:
-            logger.warning(
-                f"[title] LLM title generation timed out after {_TITLE_TIMEOUT}s for {session_id[:8]}"
-            )
+            logger.warning(f"[title] LLM title generation timed out after {_TITLE_TIMEOUT}s for {session_id[:8]}")
             return
 
         raw = "".join(chunks).strip()

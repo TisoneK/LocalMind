@@ -86,15 +86,13 @@ class _ReflectionMixin:
                     )
             if _error_patterns:
                 _recent_errors = "; ".join(
-                    f"'{e['query'][:40]}' was routed to {e['routed_to']} "
-                    f"but should have been {e['should_have_been']}"
+                    f"'{e['query'][:40]}' was routed to {e['routed_to']} but should have been {e['should_have_been']}"
                     for e in _error_patterns
                     if e.get("should_have_been")
                 )
                 if _recent_errors:
                     _accuracy_section += (
-                        f"\n\nRecent routing errors: {_recent_errors}. "
-                        f"If this answer seems misrouted, flag it."
+                        f"\n\nRecent routing errors: {_recent_errors}. If this answer seems misrouted, flag it."
                     )
 
             reflect_messages = [
@@ -130,6 +128,9 @@ class _ReflectionMixin:
             adapter = get_adapter(settings.localmind_adapter)
             chunks = []
             async for chunk in adapter.chat(reflect_messages, temperature=0.0):
+                if chunk.error:
+                    logger.warning("[reflection] adapter error: %s", chunk.error[:120])
+                    break
                 chunks.append(chunk.text)
 
             review = "".join(chunks).strip()

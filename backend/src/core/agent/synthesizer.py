@@ -188,10 +188,7 @@ def _extract_relevant_section(content: str, user_question: str) -> str:
     keywords = set(re.findall(r"\b\w{3,}\b", question_lower))
 
     # For weather queries, try to find the current conditions section
-    if any(
-        kw in question_lower
-        for kw in ("weather", "temperature", "temp", "forecast", "rain", "sunny")
-    ):
+    if any(kw in question_lower for kw in ("weather", "temperature", "temp", "forecast", "rain", "sunny")):
         # Look for "Tonight" or "Today" or "Current" sections
         for marker in ["Tonight", "Today", "Current", "Now", "As of"]:
             idx = content.find(marker)
@@ -263,9 +260,7 @@ def _extract_web_search(content: str) -> ExtractedData:
     snippet_lines = [
         line
         for line in content.split("\n")
-        if line.strip()
-        and not line.strip().startswith("http")
-        and len(line.strip()) > 20  # Non-trivial text
+        if line.strip() and not line.strip().startswith("http") and len(line.strip()) > 20  # Non-trivial text
     ]
 
     return ExtractedData(
@@ -569,14 +564,11 @@ _COMBINED_SYNTHESIS_PROMPT = (
     "7. Cite the source URL if available"
 )
 
-_GAP_REPORT_TEMPLATE = (
-    "I wasn't able to find the specific information you asked for. {reason}\n\n{suggestion}"
-)
+_GAP_REPORT_TEMPLATE = "I wasn't able to find the specific information you asked for. {reason}\n\n{suggestion}"
 
 _GAP_SUGGESTIONS = {
     SufficiencyLevel.INSUFFICIENT: (
-        "You could try rephrasing your question, or I can search with "
-        "different terms if you'd like."
+        "You could try rephrasing your question, or I can search with different terms if you'd like."
     ),
     SufficiencyLevel.NEEDS_FOLLOWUP: (
         "I found some relevant results but need to read the actual page "
@@ -850,9 +842,7 @@ class AnswerSynthesizer:
                 is_synthesized=True,
             )
         except asyncio.TimeoutError:
-            logger.warning(
-                "[synthesizer] Combined synthesis timed out — retrying with shorter content"
-            )
+            logger.warning("[synthesizer] Combined synthesis timed out — retrying with shorter content")
             # Retry once with shorter content
             try:
                 shorter_page = page_content[:2000] if len(page_content) > 2000 else page_content
@@ -951,6 +941,9 @@ class AnswerSynthesizer:
                 temperature=0.3,
                 intent="chat",
             ):
+                if chunk.error:
+                    logger.warning("[synthesizer] adapter error: %s", chunk.error[:120])
+                    break
                 if chunk.text:
                     full_response.append(chunk.text)
 
@@ -958,9 +951,7 @@ class AnswerSynthesizer:
             await asyncio.wait_for(_collect(), timeout=self.timeout_secs)
         except asyncio.TimeoutError:
             # First attempt timed out — retry once with shorter data
-            logger.warning(
-                "[synthesizer] LLM synthesis timed out on first attempt, retrying with shorter data"
-            )
+            logger.warning("[synthesizer] LLM synthesis timed out on first attempt, retrying with shorter data")
             full_response.clear()
             shorter_data = raw_data[:3000]
             if len(raw_data) > 3000:
@@ -981,6 +972,9 @@ class AnswerSynthesizer:
                     temperature=0.3,
                     intent="chat",
                 ):
+                    if chunk.error:
+                        logger.warning("[synthesizer] adapter error (retry): %s", chunk.error[:120])
+                        break
                     if chunk.text:
                         full_response.append(chunk.text)
 
@@ -1030,6 +1024,9 @@ class AnswerSynthesizer:
                 temperature=0.3,
                 intent="chat",
             ):
+                if chunk.error:
+                    logger.warning("[synthesizer] adapter error: %s", chunk.error[:120])
+                    break
                 if chunk.text:
                     full_response.append(chunk.text)
 

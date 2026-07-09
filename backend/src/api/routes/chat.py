@@ -264,8 +264,12 @@ async def _event_stream(
                     file_name_written = chunk.metadata.get("filename")
 
             if chunk.error:
-                if chunk.text:
-                    yield _sse({"type": "token", "content": chunk.text})
+                # Adapters now yield text="" on errors, so there's no text to
+                # emit as a token. Previously this yielded chunk.text (which
+                # contained the error message) as a token event — that leaked
+                # error text into the chat content. The .error field is the
+                # sole authoritative signal; the frontend renders it via the
+                # 'error' event handler.
                 yield _sse({"type": "error", "error": chunk.error})
                 _last_sent_time = time.monotonic()
                 return

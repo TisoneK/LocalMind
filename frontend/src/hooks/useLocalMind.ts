@@ -612,13 +612,20 @@ export function useChat(
               }
 
               case 'error': {
+                const errorMsg = `⚠️ ${parsed.error || 'Failed to get a response.'}`;
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
-                  if (last && last.role === 'assistant' && !last.content) {
+                  if (last && last.role === 'assistant') {
+                    // Always surface errors. If partial content was already
+                    // streamed, append the error below it so the user can see
+                    // both the partial response AND the failure reason.
+                    // Previously the guard `!last.content` suppressed errors
+                    // when any token had been emitted — including when the
+                    // adapter erroneously put error text in the text field.
                     updated[updated.length - 1] = {
                       ...last,
-                      content: `⚠️ ${parsed.error || 'Failed to get a response.'}`,
+                      content: last.content ? `${last.content}\n\n${errorMsg}` : errorMsg,
                     };
                   }
                   return updated;

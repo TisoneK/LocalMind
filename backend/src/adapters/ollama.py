@@ -97,11 +97,7 @@ class MultiToolCallResult:
     @property
     def first(self) -> ToolCallResult:
         """Convenience: get the first tool call (backward compat)."""
-        return (
-            self.calls[0]
-            if self.calls
-            else ToolCallResult(tool_name="", tool_args={}, raw_content=self.raw_content)
-        )
+        return self.calls[0] if self.calls else ToolCallResult(tool_name="", tool_args={}, raw_content=self.raw_content)
 
     @property
     def is_parallel(self) -> bool:
@@ -193,9 +189,7 @@ class OllamaAdapter(BaseAdapter):
             except Exception:
                 available = []
 
-        model_exists = any(
-            m == self._model or m.split(":")[0] == self._model.split(":")[0] for m in available
-        )
+        model_exists = any(m == self._model or m.split(":")[0] == self._model.split(":")[0] for m in available)
         return model_exists, available
 
     # ------------------------------------------------------------------
@@ -289,7 +283,8 @@ class OllamaAdapter(BaseAdapter):
                         error_msg = f"Ollama returned {response.status_code}: {raw_error}"
 
                     logger.error(error_msg)
-                    yield StreamChunk(text=error_msg, done=True, error=error_msg)
+                    # text="" on error — see openai_compat.py for rationale.
+                    yield StreamChunk(text="", done=True, error=error_msg)
                     return
 
                 # Buffer for parsing Thinking... markers
@@ -337,20 +332,15 @@ class OllamaAdapter(BaseAdapter):
                                     _think_buf = ""
                                     break
                                 yield StreamChunk(text="", thinking=_think_buf[:end])
-                                _think_buf = _think_buf[
-                                    end + 16 :
-                                ]  # "...done thinking." is 16 chars
+                                _think_buf = _think_buf[end + 16 :]  # "...done thinking." is 16 chars
                                 _in_think = False
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
 
         except httpx.ConnectError:
-            msg = (
-                f"Cannot connect to Ollama at {self._base_url}. "
-                "Is Ollama running? Try: ollama serve"
-            )
+            msg = f"Cannot connect to Ollama at {self._base_url}. Is Ollama running? Try: ollama serve"
             logger.error(msg)
-            yield StreamChunk(text=msg, done=True, error=msg)
+            yield StreamChunk(text="", done=True, error=msg)
         except httpx.TimeoutException:
             msg = (
                 f"Ollama timed out after {timeout}s "
@@ -359,7 +349,7 @@ class OllamaAdapter(BaseAdapter):
                 "for the context window. Try a shorter message or restart Ollama."
             )
             logger.error(msg)
-            yield StreamChunk(text=msg, done=True, error=msg)
+            yield StreamChunk(text="", done=True, error=msg)
 
     # ------------------------------------------------------------------
     # Chat with native tool calling
@@ -420,9 +410,7 @@ class OllamaAdapter(BaseAdapter):
 
         async def _reader() -> None:
             try:
-                async with self._client.stream(
-                    "POST", url, json=payload, timeout=timeout
-                ) as response:
+                async with self._client.stream("POST", url, json=payload, timeout=timeout) as response:
                     if response.status_code != 200:
                         body = await response.aread()
                         raw_error = body.decode(errors="replace")[:200]
@@ -457,9 +445,7 @@ class OllamaAdapter(BaseAdapter):
                                     f"Try restarting Ollama or pulling the model again."
                                 )
                         else:
-                            state["error_msg"] = (
-                                f"Ollama returned {response.status_code}: {raw_error}"
-                            )
+                            state["error_msg"] = f"Ollama returned {response.status_code}: {raw_error}"
                         logger.error(state["error_msg"])
                         await queue.put(_STREAM_ERROR)
                         return
@@ -513,8 +499,7 @@ class OllamaAdapter(BaseAdapter):
 
             except httpx.ConnectError:
                 state["error_msg"] = (
-                    f"Cannot connect to Ollama at {self._base_url}. "
-                    "Is Ollama running? Try: ollama serve"
+                    f"Cannot connect to Ollama at {self._base_url}. Is Ollama running? Try: ollama serve"
                 )
                 logger.error(state["error_msg"])
                 await queue.put(_STREAM_ERROR)
@@ -576,9 +561,7 @@ class OllamaAdapter(BaseAdapter):
                     ToolCallResult(
                         tool_name=buf["name"],
                         tool_args=tool_args,
-                        raw_content=raw_content_text
-                        if idx == sorted(state["tool_call_buffers"].keys())[0]
-                        else "",
+                        raw_content=raw_content_text if idx == sorted(state["tool_call_buffers"].keys())[0] else "",
                     )
                 )
 
@@ -587,9 +570,7 @@ class OllamaAdapter(BaseAdapter):
                 return all_calls[0]
 
             # Multiple tool calls — return MultiToolCallResult for parallel dispatch
-            logger.info(
-                "[adapter] %d tool calls detected — returning MultiToolCallResult", len(all_calls)
-            )
+            logger.info("[adapter] %d tool calls detected — returning MultiToolCallResult", len(all_calls))
             return MultiToolCallResult(
                 calls=all_calls,
                 raw_content=raw_content_text,
@@ -599,7 +580,7 @@ class OllamaAdapter(BaseAdapter):
         if stream_error:
 
             async def _error_iter():
-                yield StreamChunk(text=state["error_msg"], done=True, error=state["error_msg"])
+                yield StreamChunk(text="", done=True, error=state["error_msg"])
 
             return _error_iter()
 

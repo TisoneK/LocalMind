@@ -208,16 +208,12 @@ class OpenAICompatAdapter(BaseAdapter):
 
         cfg = PROVIDER_CONFIGS.get(provider)
         if not cfg:
-            raise ValueError(
-                f"Unknown provider: {provider}. Available: {list(PROVIDER_CONFIGS.keys())}"
-            )
+            raise ValueError(f"Unknown provider: {provider}. Available: {list(PROVIDER_CONFIGS.keys())}")
 
         # Try runtime API key first, then fall back to env var
         api_key = settings.get_api_key(provider) or cfg.api_key
         if not api_key:
-            raise ValueError(
-                f"API key not set for provider '{provider}'. Set it in settings or .env."
-            )
+            raise ValueError(f"API key not set for provider '{provider}'. Set it in settings or .env.")
 
         self._provider_name = cfg.name
         self._base_url = cfg.base_url.rstrip("/")
@@ -345,8 +341,7 @@ class OpenAICompatAdapter(BaseAdapter):
             params = func.get("parameters", {})
             required = params.get("required", [])
             param_desc = ", ".join(
-                f"{p}: {params.get('properties', {}).get(p, {}).get('description', p)}"
-                for p in required
+                f"{p}: {params.get('properties', {}).get(p, {}).get('description', p)}" for p in required
             )
             tool_descriptions.append(f"- {name}({param_desc}): {desc}")
 
@@ -419,11 +414,16 @@ class OpenAICompatAdapter(BaseAdapter):
             if response.status_code != 200:
                 body = await response.aread()
                 await response.aclose()
-                error_msg = f"{self._provider_name} returned {response.status_code}: {body.decode(errors='replace')[:200]}"
+                error_msg = (
+                    f"{self._provider_name} returned {response.status_code}: {body.decode(errors='replace')[:200]}"
+                )
                 logger.error(error_msg)
 
                 async def _error_iter():
-                    yield StreamChunk(text=error_msg, done=True, error=error_msg)
+                    # text="" on error so consumers that only read .text don't
+                    # leak the error message as chat content. The .error field
+                    # is the authoritative signal.
+                    yield StreamChunk(text="", done=True, error=error_msg)
 
                 return _error_iter()
 
@@ -506,9 +506,7 @@ class OpenAICompatAdapter(BaseAdapter):
                     if _mm_full_check:
                         # Full MiniMax tool call pattern detected — don't break,
                         # continue reading to get the complete call
-                        logger.info(
-                            "[adapter] MiniMax tool_call pattern detected in Phase 1 text — continuing to read"
-                        )
+                        logger.info("[adapter] MiniMax tool_call pattern detected in Phase 1 text — continuing to read")
                     elif _mm_prefix_check:
                         # Partial "minimax:tool_call" prefix detected — the full
                         # <invoke> tag hasn't arrived yet. Keep reading.
@@ -545,9 +543,7 @@ class OpenAICompatAdapter(BaseAdapter):
                                     if tc.get("function", {}).get("name"):
                                         tool_call_buffers[idx]["name"] = tc["function"]["name"]
                                     if tc.get("function", {}).get("arguments"):
-                                        tool_call_buffers[idx]["arguments"] += tc["function"][
-                                            "arguments"
-                                        ]
+                                        tool_call_buffers[idx]["arguments"] += tc["function"]["arguments"]
                             text = delta.get("content", "")
                             if text:
                                 raw_content_parts.append(text)
@@ -573,8 +569,7 @@ class OpenAICompatAdapter(BaseAdapter):
                         # and pass them through so the agent loop can
                         # detect the malformed args and retry.
                         logger.warning(
-                            "[adapter] tool args not valid JSON (possibly truncated). "
-                            "Raw args (%d chars): %s",
+                            "[adapter] tool args not valid JSON (possibly truncated). Raw args (%d chars): %s",
                             len(raw_args),
                             raw_args[:300],
                         )
@@ -592,10 +587,7 @@ class OpenAICompatAdapter(BaseAdapter):
                                 tool_args[_key] = _m.group(1)
 
                     if len(tool_call_buffers) > 1:
-                        extra = [
-                            tool_call_buffers[i]["name"]
-                            for i in sorted(tool_call_buffers.keys())[1:]
-                        ]
+                        extra = [tool_call_buffers[i]["name"] for i in sorted(tool_call_buffers.keys())[1:]]
                         logger.warning(
                             "[adapter] %d tool calls; using first (%s), extra: %s",
                             len(tool_call_buffers),
@@ -780,9 +772,7 @@ class OpenAICompatAdapter(BaseAdapter):
                                             try:
                                                 tool_json = json.loads(json_match.group(1))
                                                 tn = tool_json.get("tool", "")
-                                                if tn and tn in {
-                                                    t["function"]["name"] for t in tools
-                                                }:
+                                                if tn and tn in {t["function"]["name"] for t in tools}:
                                                     # Found a JSON tool call —
                                                     # can't un-send text, but log it
                                                     logger.info(
@@ -807,7 +797,7 @@ class OpenAICompatAdapter(BaseAdapter):
             logger.error(msg)
 
             async def _error_iter():
-                yield StreamChunk(text=msg, done=True, error=msg)
+                yield StreamChunk(text="", done=True, error=msg)
 
             return _error_iter()
 
@@ -816,7 +806,7 @@ class OpenAICompatAdapter(BaseAdapter):
             logger.error(msg)
 
             async def _error_iter():
-                yield StreamChunk(text=msg, done=True, error=msg)
+                yield StreamChunk(text="", done=True, error=msg)
 
             return _error_iter()
 
@@ -825,7 +815,7 @@ class OpenAICompatAdapter(BaseAdapter):
             logger.error(msg)
 
             async def _error_iter():
-                yield StreamChunk(text=msg, done=True, error=msg)
+                yield StreamChunk(text="", done=True, error=msg)
 
             return _error_iter()
 
@@ -850,9 +840,11 @@ class OpenAICompatAdapter(BaseAdapter):
             ) as response:
                 if response.status_code != 200:
                     body = await response.aread()
-                    error_msg = f"{self._provider_name} returned {response.status_code}: {body.decode(errors='replace')[:200]}"
+                    error_msg = (
+                        f"{self._provider_name} returned {response.status_code}: {body.decode(errors='replace')[:200]}"
+                    )
                     logger.error(error_msg)
-                    yield StreamChunk(text=error_msg, done=True, error=error_msg)
+                    yield StreamChunk(text="", done=True, error=error_msg)
                     return
 
                 async for line in response.aiter_lines():
@@ -875,15 +867,15 @@ class OpenAICompatAdapter(BaseAdapter):
         except httpx.ConnectError:
             msg = f"Cannot connect to {self._provider_name} at {self._base_url}. Check your network and API endpoint."
             logger.error(msg)
-            yield StreamChunk(text=msg, done=True, error=msg)
+            yield StreamChunk(text="", done=True, error=msg)
         except httpx.TimeoutException:
             msg = f"{self._provider_name} timed out after {timeout}s. The request may be too large for the context window."
             logger.error(msg)
-            yield StreamChunk(text=msg, done=True, error=msg)
+            yield StreamChunk(text="", done=True, error=msg)
         except Exception as e:
             msg = f"Unexpected error calling {self._provider_name}: {e}"
             logger.error(msg)
-            yield StreamChunk(text=msg, done=True, error=msg)
+            yield StreamChunk(text="", done=True, error=msg)
 
     async def _chat_anthropic(
         self,
@@ -932,7 +924,7 @@ class OpenAICompatAdapter(BaseAdapter):
                     body = await response.aread()
                     error_msg = f"Anthropic returned {response.status_code}: {body.decode(errors='replace')[:200]}"
                     logger.error(error_msg)
-                    yield StreamChunk(text=error_msg, done=True, error=error_msg)
+                    yield StreamChunk(text="", done=True, error=error_msg)
                     return
 
                 async for line in response.aiter_lines():
@@ -958,15 +950,15 @@ class OpenAICompatAdapter(BaseAdapter):
         except httpx.ConnectError:
             msg = f"Cannot connect to Anthropic at {self._base_url}. Check your network."
             logger.error(msg)
-            yield StreamChunk(text=msg, done=True, error=msg)
+            yield StreamChunk(text="", done=True, error=msg)
         except httpx.TimeoutException:
             msg = f"Anthropic timed out after {timeout}s."
             logger.error(msg)
-            yield StreamChunk(text=msg, done=True, error=msg)
+            yield StreamChunk(text="", done=True, error=msg)
         except Exception as e:
             msg = f"Unexpected error calling Anthropic: {e}"
             logger.error(msg)
-            yield StreamChunk(text=msg, done=True, error=msg)
+            yield StreamChunk(text="", done=True, error=msg)
 
     # ─────────────────────────────────────────────────────────────────────
     # Model management

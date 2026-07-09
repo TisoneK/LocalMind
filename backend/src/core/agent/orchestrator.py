@@ -189,9 +189,7 @@ def _build_result_from_dict(data: dict, raw_text: str) -> OrchestrationResult:
             f"Confidence: {confidence:.0%} ({'HIGH' if confidence >= ORCHESTRATOR_CONFIDENCE_HIGH else 'MEDIUM' if confidence >= ORCHESTRATOR_CONFIDENCE_MEDIUM else 'LOW'})"
         )
     else:
-        context_parts.append(
-            "[Orchestrator: no structured steps produced — execution agent should plan independently]"
-        )
+        context_parts.append("[Orchestrator: no structured steps produced — execution agent should plan independently]")
 
     orchestrator_context = "\n".join(context_parts)
 
@@ -297,6 +295,9 @@ class AgentOrchestrator:
                     temperature=0.2,  # Low temperature for structured planning
                     intent="chat",  # No tools — pure planning call
                 ):
+                    if chunk.error:
+                        logger.warning("[orchestrator] adapter error: %s", chunk.error[:120])
+                        break
                     if chunk.text:
                         full_response.append(chunk.text)
 
@@ -337,9 +338,7 @@ class AgentOrchestrator:
             return result
 
         except asyncio.TimeoutError:
-            logger.warning(
-                "[orchestrator] planning timed out — falling through with medium confidence"
-            )
+            logger.warning("[orchestrator] planning timed out — falling through with medium confidence")
             if obs:
                 obs.emit("orchestrator_timeout", timeout=ORCHESTRATOR_TIMEOUT_SECS)
             return OrchestrationResult(
@@ -389,9 +388,7 @@ class AgentOrchestrator:
 
         active_adapter = adapter or self._adapter
         if not active_adapter:
-            logger.warning(
-                "[orchestrator] replan: no adapter available — returning low-confidence result"
-            )
+            logger.warning("[orchestrator] replan: no adapter available — returning low-confidence result")
             return OrchestrationResult(
                 steps=[],
                 confidence=0.3,
@@ -448,6 +445,9 @@ class AgentOrchestrator:
                     temperature=0.2,
                     intent="chat",
                 ):
+                    if chunk.error:
+                        logger.warning("[orchestrator] adapter error: %s", chunk.error[:120])
+                        break
                     if chunk.text:
                         full_response.append(chunk.text)
 
@@ -456,9 +456,7 @@ class AgentOrchestrator:
             raw_plan = "".join(full_response).strip()
 
             if not raw_plan:
-                logger.warning(
-                    "[orchestrator] replan produced no output — returning low-confidence fallback"
-                )
+                logger.warning("[orchestrator] replan produced no output — returning low-confidence fallback")
                 return OrchestrationResult(
                     steps=[],
                     confidence=0.3,
