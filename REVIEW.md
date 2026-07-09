@@ -145,7 +145,7 @@
 - **Description:** Once the test suite could collect and run (C4 fix), 15 pre-existing failures surfaced: 5 in `tests/api/test_chat.py` (assertion failures — likely need a mocked Ollama adapter or testing against a changed SSE event format) and 10 in `tests/core/test_empty_agent_fix.py` (testing for `base.md`, skill files, sub-agent registry, and constants that were refactored away — e.g. `test_sub_agent_registry_has_four_agents` checks for 4 agents, `test_base_md_exists_and_has_substance` checks for a file that may not exist).
 - **Impact:** These tests were silently broken (masked by the C4 collection errors). They test functionality that has since been refactored. They give false signal if someone runs `pytest` expecting green.
 - **Recommendation:** Separate effort — audit each failing test, either update to match current source or remove if testing removed features. The `test_empty_agent_fix.py` suite in particular looks like it was written for an earlier architecture (v0.x personality/skill system) that has since been replaced by the v4.0 ThinkingDispatcher architecture.
-- **Status:** Open (follow-up)
+- **Status:** ✅ Fixed
 
 #### C5: No CI — broken tests and lint go undetected
 - **Description:** There is no `.github/workflows/` directory. No automated checks run on push or PR. The baseline shows 862 lint errors, a broken test suite, and 10 runtime bugs — none of which were caught before they reached `main`.
@@ -211,8 +211,8 @@
 - **Description:** `docs/ARCHITECTURE.md` mentions ChromaDB (the project now uses sqlite-vec — see `localmind.md` and `backend/src/storage/vector.py`), references a `storage/migrations/` directory that doesn't exist, and lists only 5 tools when the actual `backend/src/tools/` has 13+ tool modules (browser_agent, code_exec, edit_file, file_reader, file_writer, installed_programs, memory_tool, shell, sysinfo, web_fetch, web_search, etc.). The directory structure diagram shows `ui/` but the actual frontend is at `frontend/`.
 - **Impact:** New contributors and agents reading the architecture doc get a wrong mental model. The doc has drifted from the code.
 - **Recommendation:** Update ARCHITECTURE.md: replace ChromaDB with sqlite-vec, remove migrations reference, update tool list to match `backend/src/tools/`, fix directory structure to match actual layout, update the adapter list (now includes `openai_compat.py`).
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Fixed
+- **Related commit:** `docs: update ARCHITECTURE.md to match v4.0 codebase`
 
 #### M2: 7 bare-except (E722) errors in `installed_programs.py`
 - **Description:** `src/tools/installed_programs.py` lines 45, 47, 50, 51 use bare `except:` which catches everything including `KeyboardInterrupt`, `SystemExit`, and `GeneratorExit`.
@@ -232,15 +232,15 @@
 - **Description:** No `CHANGELOG.md` exists. The kickoff template emphasizes changelog/devlog conventions. `docs/worklog-2025-01-empty-agent-fix.md` is the only devlog-style entry.
 - **Impact:** Users and contributors cannot see what changed between versions. Release notes don't exist. The 45-commit history is the only record, and commit messages are informal.
 - **Recommendation:** Create `CHANGELOG.md` using Keep a Changelog format. Backfill entries from git log for v0.1–v0.5. Add a `[Unreleased]` section. Commit a changelog entry with every behavior-changing commit going forward.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Fixed
+- **Related commit:** `docs: add CHANGELOG.md with backfilled v0.1–v0.5 entries`
 
 #### M5: CONTRIBUTING.md convention mismatch — says branch, commits are direct-to-main
 - **Description:** CONTRIBUTING.md says "Fork the repo and create a branch: `feat/my-tool-name`" and "Open a PR." But all 45 commits are direct to `main` — no branches, no PRs.
 - **Impact:** Contributors following the doc will create branches/PRs that don't match the actual workflow. The doc and practice diverge.
 - **Recommendation:** Either (a) update CONTRIBUTING.md to reflect the direct-to-main workflow with conventional commits, or (b) adopt the branch+PR workflow the doc describes. Given single-contributor size, (a) is more honest.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Fixed
+- **Related commit:** `docs: update CONTRIBUTING.md to reflect actual direct-to-main workflow`
 
 #### M6: 63 unused imports (F401) — dead code
 - **Description:** 63 instances of imports that are never used in their module. All auto-fixable.
@@ -253,8 +253,8 @@
 - **Description:** `backend/src/core/models.py:447` uses Pydantic V1-style `class Config:` inside a `BaseModel` (deprecated since Pydantic 2.0, removed in 3.0). `fastapi/testclient.py` triggers a Starlette deprecation warning about httpx.
 - **Impact:** Will break when Pydantic 3.0 ships. Currently only warnings, but they're noise in test output.
 - **Recommendation:** Replace `class Config:` with `model_config = ConfigDict(...)`. For the Starlette warning, install `httpx2` or suppress the warning in pytest config.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(core): replace Pydantic V1 class Config with V2 model_config = ConfigDict`
 
 ### Low
 
@@ -289,6 +289,38 @@
 - **Status:** Open
 
 ---
+
+## Security Findings
+
+### Dependabot Alerts (47 vulnerabilities)
+
+GitHub reported 47 security vulnerabilities on the default branch at the start of this review:
+- **1 critical**, **16 high**, **22 moderate**, **8 low**
+
+Source: https://github.com/TisoneK/LocalMind/security/dependabot
+
+### NPM Audit (15 vulnerabilities — build-time only)
+
+`npm audit` found 15 vulnerabilities (2 critical, 12 high, 1 moderate). All are in **electron-builder and its transitive dependencies** (tar, tmp, cacache, make-fetch-happen, node-gyp, app-builder-lib, dmg-builder, electron-builder-squirrel-windows).
+
+**Impact:** These are **build-time** vulnerabilities in the Electron packaging toolchain, not runtime vulnerabilities. They affect the developer who runs `npm run build` to produce the Electron installer, not the end user running the app. The vulnerable code paths (tar extraction, temp file handling) are exercised during installer creation, not during app execution.
+
+**Recommendation:**
+1. **Short-term:** Run `npm audit fix` to auto-update what can be safely updated. The `tmp` package (high severity — path traversal) has a fix available.
+2. **Medium-term:** Upgrade `electron-builder` to v25+ which uses updated dependencies. Check for breaking changes.
+3. **Long-term:** Consider switching to `@electron/fuses` + `electron-forge` if electron-builder's dependency tree remains a concern.
+
+### Python Dependencies (0 vulnerabilities)
+
+`pip-audit` found **no known vulnerabilities** in the Python backend dependencies. The backend dependency tree is clean.
+
+### Code-Level Security Observations
+
+- **No authentication:** LocalMind is a local-only app (runs on `localhost:8000`). No auth is intentional — the app is single-user, local-only. If the app is ever exposed to a network, auth must be added.
+- **SSRF protection:** Already present in `web_fetch` tool (added in v0.2.0 — see `tests/tools/test_web_fetch_ssrf.py`).
+- **Settings file permissions:** Already restricted (added in v0.2.0).
+- **Code execution is not sandboxed:** The Python code exec tool runs with the user's full permissions. This is documented in `localmind.md` as a known limitation: "Code execution is not sandboxed — trusted-user only."
+- **Shell tool:** Runs system commands with the user's permissions. 20-second timeout. Intentional for a local AI tool, but should be noted in security review.
 
 ## Next Steps
 
