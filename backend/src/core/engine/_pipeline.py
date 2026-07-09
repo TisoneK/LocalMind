@@ -1928,6 +1928,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                       label=_TOOL_LABELS[effective_intent], status="done")
 
         # ── 8. Secondary intent ────────────────────────────────────────────
+        # _task_profile is assigned earlier in the pipeline (layer 2). Its
+        # secondary_intent() method returns the second-derived Intent from the
+        # capability profile, or None if there is no secondary capability.
+        secondary_intent = _task_profile.secondary_intent()
         if secondary_intent:
             match secondary_intent:
                 case Intent.FILE_WRITE if tool_result:
