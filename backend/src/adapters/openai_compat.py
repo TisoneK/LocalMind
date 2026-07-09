@@ -21,6 +21,7 @@ v8 changes:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -318,6 +319,84 @@ class OpenAICompatAdapter(BaseAdapter):
         # provider-specific params that ARE supported by the compat layer.
         return payload
 
+    async def _send_streaming_with_retry(
+        self,
+        url: str,
+        payload: dict,
+        headers: dict | None = None,
+        timeout: float | int | None = None,
+    ):
+        """
+        Send a streaming POST request with automatic retry on HTTP 429.
+
+        429 (Too Many Requests) is typically a per-minute burst limit, not a
+        daily quota — a short wait + retry succeeds. This is transparent to
+        callers: they receive the first successful response stream.
+
+        Retry strategy:
+          - Max 2 retries (3 total attempts)
+          - Respect the Retry-After response header if present
+          - Otherwise use exponential backoff: 2s, then 4s
+          - Log each retry so it's visible in the server terminal
+
+        Only retries on 429. Other errors (400/401/402/403/404/500) are
+        permanent — retrying would just waste time. The caller gets the
+        final response object (whatever status code) and is responsible
+        for handling non-200s.
+        """
+        req_headers = headers or self._headers
+        req_timeout = timeout if timeout is not None else 120.0
+
+        for attempt in range(3):  # 0, 1, 2 = 3 total attempts
+            request = self._client.build_request(
+                "POST",
+                url,
+                json=payload,
+                headers=req_headers,
+                timeout=req_timeout,
+            )
+            response = await self._client.send(request, stream=True)
+
+            if response.status_code != 429:
+                return response  # success (200) or non-retryable error
+
+            # Got 429 — read the body for logging, then close and retry
+            await response.aread()
+            await response.aclose()
+
+            if attempt < 2:  # don't sleep after the last attempt
+                # Respect Retry-After header if the provider sent one
+                retry_after = response.headers.get("retry-after")
+                if retry_after:
+                    try:
+                        wait_secs = float(retry_after)
+                    except ValueError:
+                        # Could be an HTTP-date format — fall back to backoff
+                        wait_secs = 2.0 * (2**attempt)
+                else:
+                    wait_secs = 2.0 * (2**attempt)  # 2s, then 4s
+
+                logger.warning(
+                    "[adapter] 429 from %s (attempt %d/3), retrying in %.1fs",
+                    self._provider_name,
+                    attempt + 1,
+                    wait_secs,
+                )
+                await asyncio.sleep(wait_secs)
+
+        # All 3 attempts returned 429 — return the last response so the
+        # caller's status-code check surfaces the error normally.
+        logger.warning("[adapter] 429 from %s after 3 attempts — giving up", self._provider_name)
+        # Re-send to get a fresh response object (the previous one was closed)
+        request = self._client.build_request(
+            "POST",
+            url,
+            json=payload,
+            headers=req_headers,
+            timeout=req_timeout,
+        )
+        return await self._client.send(request, stream=True)
+
     # ─────────────────────────────────────────────────────────────────────
     # Properties
     # ─────────────────────────────────────────────────────────────────────
@@ -467,14 +546,9 @@ class OpenAICompatAdapter(BaseAdapter):
 
             # Open the streaming response WITHOUT async-with so we can hand
             # the open stream to the returned generator. The generator is
-            # responsible for closing it.
-            request = self._client.build_request(
-                "POST",
-                url,
-                json=payload,
-                headers=self._headers,
-            )
-            response = await self._client.send(request, stream=True)
+            # responsible for closing it. Uses _send_streaming_with_retry
+            # to transparently retry on 429 (per-minute burst limits).
+            response = await self._send_streaming_with_retry(url, payload, headers=self._headers)
 
             if response.status_code != 200:
                 body = await response.aread()
@@ -954,9 +1028,8 @@ class OpenAICompatAdapter(BaseAdapter):
         self._add_provider_params(payload)
 
         try:
-            async with self._client.stream(
-                "POST", url, json=payload, headers=self._headers, timeout=timeout
-            ) as response:
+            response = await self._send_streaming_with_retry(url, payload, headers=self._headers, timeout=timeout)
+            try:
                 if response.status_code != 200:
                     body = await response.aread()
                     error_msg = (
@@ -1004,6 +1077,8 @@ class OpenAICompatAdapter(BaseAdapter):
                             return
                     except (json.JSONDecodeError, IndexError, KeyError):
                         continue
+            finally:
+                await response.aclose()
 
         except httpx.ConnectError:
             msg = f"Cannot connect to {self._provider_name} at {self._base_url}. Check your network and API endpoint."
@@ -1058,9 +1133,8 @@ class OpenAICompatAdapter(BaseAdapter):
             payload["system"] = system_content
 
         try:
-            async with self._client.stream(
-                "POST", url, json=payload, headers=self._headers, timeout=timeout
-            ) as response:
+            response = await self._send_streaming_with_retry(url, payload, headers=self._headers, timeout=timeout)
+            try:
                 if response.status_code != 200:
                     body = await response.aread()
                     error_msg = f"Anthropic returned {response.status_code}: {body.decode(errors='replace')[:200]}"
@@ -1087,6 +1161,8 @@ class OpenAICompatAdapter(BaseAdapter):
                                     yield StreamChunk(text=text, done=False)
                     except (json.JSONDecodeError, KeyError):
                         continue
+            finally:
+                await response.aclose()
 
         except httpx.ConnectError:
             msg = f"Cannot connect to Anthropic at {self._base_url}. Check your network."
