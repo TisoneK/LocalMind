@@ -247,37 +247,46 @@ class Settings(BaseSettings):
 
     def _secure_write_json(self, path: Path, data: dict) -> None:
         """
-        Write JSON to a file with restricted permissions (0600).
+        Write JSON to a file atomically with restricted permissions (0600).
+
+        Uses a temp-file + rename pattern so the original file is NEVER
+        partially written or truncated. If the write fails for any reason,
+        the original file is left intact.
 
         The settings file contains cloud-provider API keys, so it must not
-        be world-readable. On Unix, os.open with mode 0o600 creates the file
-        owner-only. On Windows, the file ACL inherits from the parent dir
-        (typically user-only in the home directory).
-
-        If the file already exists with broader permissions, they are tightened.
+        be world-readable.
         """
         import json
+        import tempfile
         path.parent.mkdir(parents=True, exist_ok=True)
         content = json.dumps(data, indent=2)
-        # O_WRONLY | O_CREAT | O_TRUNC, mode 0600 (owner read/write only)
-        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+
+        # Write to a temp file in the SAME directory (so rename is atomic)
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=str(path.parent),
+            prefix=".settings_",
+            suffix=".tmp",
+        )
         try:
-            with os.fdopen(fd, "w") as f:
+            with os.fdopen(tmp_fd, "w") as f:
                 f.write(content)
-        except Exception:
-            # If fdopen fails, os.open already created/truncated the file.
-            # The fd is still open — close it to avoid leaking the descriptor.
+                f.flush()
+                os.fsync(f.fileno())
+            # Set permissions on the temp file
             try:
-                os.close(fd)
+                os.chmod(tmp_path, 0o600)
+            except OSError:
+                pass
+            # Atomic rename — replaces the original file in one operation
+            # On Windows, os.replace() handles the case where the target exists
+            os.replace(tmp_path, str(path))
+        except Exception:
+            # Clean up the temp file on failure — original is untouched
+            try:
+                os.unlink(tmp_path)
             except OSError:
                 pass
             raise
-        # Also tighten permissions on an existing file (in case it was
-        # created with broader perms by a previous version of LocalMind)
-        try:
-            os.chmod(str(path), 0o600)
-        except OSError:
-            pass  # Non-fatal: some filesystems don't support chmod
 
     def _load_json_file(self, path: Path) -> dict:
         """Load JSON from a file, returning {} on any error."""
