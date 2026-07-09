@@ -38,5 +38,34 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    // Split the 1.1MB bundle into smaller chunks for faster initial load.
+    // Vendor libs are separated so they can be cached independently of
+    // application code. Radix UI alone is ~300KB and rarely changes.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom'],
+          'radix-vendor': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-popover',
+            '@radix-ui/react-select',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-tooltip',
+            '@radix-ui/react-scroll-area',
+            '@radix-ui/react-accordion',
+            '@radix-ui/react-checkbox',
+            '@radix-ui/react-switch',
+            '@radix-ui/react-slider',
+            '@radix-ui/react-progress',
+          ],
+          'markdown-vendor': ['react-markdown', 'remark-gfm', 'react-syntax-highlighter'],
+          'chart-vendor': ['recharts'],
+          'motion-vendor': ['framer-motion'],
+          'dnd-vendor': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
   },
 })
