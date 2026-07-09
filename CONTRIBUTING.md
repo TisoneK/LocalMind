@@ -99,11 +99,26 @@ The engine has no knowledge of how the response is rendered.
 
 ## Pull request process
 
-1. Fork the repo and create a branch: `feat/my-tool-name`
+LocalMind currently uses a **direct-to-main** workflow with conventional commits. There is no PR review gate — all 45+ commits in the history were pushed directly to `main`.
+
+If you prefer a branch-based workflow for your contribution:
+
+1. Create a branch: `feat/my-tool-name` or `fix/my-bugfix`
 2. Write the code and tests
-3. Run `pytest` — all tests must pass
-4. Open a PR with a clear description of what the tool/adapter/surface does
-5. Keep PRs focused — one thing per PR
+3. Run `pytest` — all tests must pass (194 tests)
+4. Run `ruff check .` — no new lint errors
+5. Open a PR with a clear description of what the tool/adapter/surface does
+6. Keep PRs focused — one thing per PR
+
+For direct-to-main commits, follow the conventional commit style seen in `git log --oneline`:
+- `feat(scope): description` — new feature
+- `fix(scope): description` — bug fix
+- `docs: description` — documentation only
+- `test: description` — test-only changes
+- `style: description` — formatting/lint fixes
+- `ci: description` — CI config changes
+
+Common scopes: `core`, `adapters`, `tools`, `api`, `frontend`, `scripts`, `context`, `thinking`, `workflow`.
 
 ## Questions
 
