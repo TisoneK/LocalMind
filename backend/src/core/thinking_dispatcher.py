@@ -457,10 +457,39 @@ class ThinkingDispatcher:
         msg = message.strip()
         msg_lower = msg.lower()
 
-        # URL detection → WEB_FETCH
+        # URL detection → WEB_FETCH (or BROWSE if interactive keywords present)
         url_match = _URL_PATTERN.search(msg)
         if url_match:
             url = url_match.group(0)
+            # Check if the user wants to interact with the page (not just read it)
+            _interactive_keywords = any(kw in msg_lower for kw in [
+                "click", "fill", "type", "login", "sign in", "submit",
+                "form", "button", "scroll", "screenshot", "interact",
+            ])
+            if _interactive_keywords:
+                # Interactive browsing → use the browser agent
+                profile = TaskProfile(
+                    capabilities=[Capability.BROWSE, Capability.SYNTHESIS],
+                    requires_grounding=True,
+                    requires_tools=True,
+                    execution_mode=ExecutionMode.AGENT_LOOP,
+                    safety_level=SafetyLevel.MEDIUM,
+                    confidence=0.85,
+                    primary_domain="browse",
+                    reformulated=f"Open {url} in the browser and interact with it",
+                    acknowledgement=f"Opening {url} in the browser...",
+                )
+                return OrchestrationPlan(
+                    profile=profile,
+                    graph=build_graph_from_plan_steps([{
+                        "id": "browse_url", "capability": "browse",
+                        "tool": "browse", "args": {"action": "open", "url": url},
+                        "depends_on": [], "label": f"Opening: {url[:60]}",
+                    }]),
+                    dispatch_steps=[{"intent": "browse", "detail": f"Browse: {url[:50]}"}],
+                    fast_path=True,
+                )
+            # Static fetch → web_fetch
             profile = TaskProfile(
                 capabilities=[Capability.WEB_FETCH, Capability.SYNTHESIS],
                 requires_grounding=True,

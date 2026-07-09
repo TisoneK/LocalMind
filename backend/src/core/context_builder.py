@@ -67,6 +67,7 @@ def _intent_fragment_name(intent: Intent) -> str:
         Intent.SHELL: "shell",
         Intent.WEB_SEARCH: "research",
         Intent.WEB_FETCH: "research",
+        Intent.BROWSE: "browse",
         Intent.SYSINFO: "shell",
         Intent.MEMORY_OP: "memory_op",
     }

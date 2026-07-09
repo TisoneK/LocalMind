@@ -86,11 +86,13 @@ AGENT_INTENTS: frozenset[Intent] = frozenset({
     Intent.SHELL,
     Intent.WEB_SEARCH,
     Intent.WEB_FETCH,
+    Intent.BROWSE,
 })
 
 AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset({
     "web_search",
     "web_fetch",
+    "browse",
     "code_exec",
     "file_write",
     "edit_file",

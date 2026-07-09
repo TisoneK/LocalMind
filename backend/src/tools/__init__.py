@@ -149,3 +149,4 @@ from tools import sysinfo       # noqa: E402, F401 -- registers SYSINFO (offline
 from tools import memory_tool   # noqa: E402, F401 -- registers MEMORY_OP
 from tools import file_writer   # noqa: E402, F401 -- FILE_WRITE (secondary intent)
 from tools import edit_file     # noqa: E402, F401 -- FILE_EDIT (in-place file editing)
+from tools import browser_agent # noqa: E402, F401 -- BROWSE (real browser interaction)

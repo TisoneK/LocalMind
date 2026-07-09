@@ -89,6 +89,13 @@ Chunked at 1500 tokens with 200-token overlap. Max size: 50 MB.
 **Backend:** sqlite-vec + nomic-embed-text embeddings.
 **Passive retrieval:** relevant facts auto-injected into every turn.
 
+### 8. BROWSE (real browser interaction)
+**Registered intent:** `browse`
+**Capabilities:** navigate, click, fill forms, scroll, screenshot, execute JS
+**Backend:** agent-browser CLI (headless Chromium)
+**Usage:** Open URLs, interact with web pages, fill forms, read dynamic content
+**Note:** Requires `npm install -g agent-browser && agent-browser install`
+
 ## Files You Can Modify
 
 | File | Purpose |

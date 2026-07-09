@@ -44,6 +44,7 @@ class Intent(str, Enum):
     MEMORY_OP = "memory_op"
     FILE_WRITE = "file_write"
     FILE_EDIT = "file_edit"
+    BROWSE = "browse"  # Real browser interaction (click, fill, scroll, screenshot)
     CHAT = "chat"
 
 
@@ -68,6 +69,7 @@ class Capability(str, Enum):
     # ── Data acquisition ──
     WEB_SEARCH = "web_search"
     WEB_FETCH = "web_fetch"
+    BROWSE = "browse"  # Real browser interaction (click, fill, scroll, screenshot)
 
     # ── Execution ──
     CODE_EXEC = "code_exec"
@@ -99,6 +101,7 @@ CAPABILITY_TO_INTENT: dict[Capability, Intent] = {
     Capability.SYSINFO: Intent.SYSINFO,
     Capability.WEB_SEARCH: Intent.WEB_SEARCH,
     Capability.WEB_FETCH: Intent.WEB_FETCH,
+    Capability.BROWSE: Intent.BROWSE,
     Capability.CODE_EXEC: Intent.CODE_EXEC,
     Capability.SHELL: Intent.SHELL,
     Capability.FILE_WRITE: Intent.FILE_WRITE,
@@ -109,7 +112,7 @@ CAPABILITY_TO_INTENT: dict[Capability, Intent] = {
 }
 
 TOOL_CAPABILITIES: set[Capability] = {
-    Capability.WEB_SEARCH, Capability.WEB_FETCH,
+    Capability.WEB_SEARCH, Capability.WEB_FETCH, Capability.BROWSE,
     Capability.CODE_EXEC, Capability.SHELL,
     Capability.FILE_READ, Capability.FILE_WRITE, Capability.FILE_EDIT,
     Capability.MEMORY_STORE, Capability.MEMORY_RETRIEVE,
