@@ -529,6 +529,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # Get the per-session working directory so shell commands execute
         # in the correct directory. Set the context variable so the shell
         # tool can pick it up via _session_cwd_var.
+        # Also sync from the terminal session in case the user ran `cd`
+        # manually in the terminal UI.
+        from api.routes.terminal import _terminal_sessions
+        _term_session = _terminal_sessions.get(session_id)
+        if _term_session and _term_session.get("cwd"):
+            self._session_ctx.sync_from_terminal(_term_session["cwd"])
         session_cwd = self._session_ctx.get_cwd(session_id)
         from tools.shell import set_session_cwd as _set_shell_cwd
         _set_shell_cwd(session_cwd)
@@ -736,6 +742,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 tool_result=None,
                 file_attachment=None,
                 memory_facts=memory_facts,
+                session_cwd=self._session_ctx.get_valid_cwd(),
             )
             active_adapter = self._adapter_for(effective_intent)
             prompt_messages = context_builder.build(ctx, active_adapter.effective_context_window)
@@ -1511,6 +1518,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             tool_result=tool_result,
             file_attachment=file_attachment,
             memory_facts=memory_facts,
+            session_cwd=self._session_ctx.get_valid_cwd(),
         )
 
         active_adapter = self._adapter_for(effective_intent)
@@ -1549,6 +1557,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 tool_result=None,
                 file_attachment=file_attachment,
                 memory_facts=memory_facts,
+                session_cwd=self._session_ctx.get_valid_cwd(),
             )
             sm_adapter = self._adapter_for(Intent.CHAT)
             sm_messages = context_builder.build(ctx_sm, sm_adapter.effective_context_window)

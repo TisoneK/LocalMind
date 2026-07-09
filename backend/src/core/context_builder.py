@@ -86,8 +86,11 @@ def _build_environment_context(session_cwd: str | None = None) -> str:
     os_info = f"OS: {system} {release} ({version}) - {machine}"
 
     # Current working directory — use session CWD when available so the
-    # agent knows which directory the user is working in, not the server's CWD.
-    cwd = session_cwd or os.getcwd()
+    # agent knows which directory the user is working in.
+    # When no session CWD is set, default to the user's home directory (~),
+    # NOT os.getcwd() — the server process runs in backend/ which is an
+    # implementation detail, not the user's working directory.
+    cwd = session_cwd or os.path.expanduser("~")
 
     # User home directory for reference
     home = os.path.expanduser("~")
@@ -111,7 +114,7 @@ def _build_environment_context(session_cwd: str | None = None) -> str:
     return context
 
 
-def build_system_prompt(intent: Intent, model_context_window: int) -> str:
+def build_system_prompt(intent: Intent, model_context_window: int, session_cwd: str = "") -> str:
     """
     Assemble the system prompt for this turn:
       base.md + <intent>.md   (file-based, preferred)
@@ -120,8 +123,9 @@ def build_system_prompt(intent: Intent, model_context_window: int) -> str:
     base = _load_fragment("base")
     intent_frag = _load_fragment(_intent_fragment_name(intent))
 
-    # Get environment context
-    env_context = _build_environment_context()
+    # Get environment context — pass session_cwd so the model knows the
+    # user's actual working directory, not the server's CWD.
+    env_context = _build_environment_context(session_cwd or None)
 
     if base:
         if intent_frag:
@@ -452,7 +456,7 @@ def build(context: EngineContext, model_context_window: int = 8192) -> list[dict
     # Build intent-aware system prompt from fragment files.
     # base.md is always loaded; <intent>.md adds only the rules for the active
     # tool.  Falls back to in-code constants if fragment files are missing.
-    active_system_prompt = build_system_prompt(context.intent, model_context_window)
+    active_system_prompt = build_system_prompt(context.intent, model_context_window, context.session_cwd)
 
     # Knowledge doc (localmind.md) is only injected when the context window is
     # large enough to absorb it without crowding out history and tool results.

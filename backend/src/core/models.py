@@ -475,3 +475,4 @@ class EngineContext(BaseModel):
     tool_result: Optional[ToolResult] = None
     file_attachment: Optional[FileAttachment] = None
     memory_facts: list[str] = Field(default_factory=list)
+    session_cwd: str = ""
