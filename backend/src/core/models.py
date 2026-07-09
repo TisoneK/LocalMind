@@ -17,11 +17,12 @@ Canonical types defined here:
   - ValidationResult — Layer 5 quality/fabrication assessment
 """
 from __future__ import annotations
+
+import time
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, Field
-import time
 
+from pydantic import BaseModel, Field
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Role & Intent — foundational enums

@@ -9,13 +9,15 @@ v0.3 additions:
 - Negative budget guard: drops knowledge doc if system prompt alone exceeds window.
 """
 from __future__ import annotations
+
 import logging
 import re
 import sys
 import threading
 from pathlib import Path
-from core.models import EngineContext, Message, Role, Intent
+
 from core.config import settings
+from core.models import EngineContext, Intent, Role
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +79,9 @@ def _intent_fragment_name(intent: Intent) -> str:
 
 def _build_environment_context(session_cwd: str | None = None) -> str:
     """Build environment context for the agent — system info, date/time, hardware, tools."""
-    import platform
-    import os
     import datetime
+    import os
+    import platform
 
     # ── OS Info ──
     system = platform.system()

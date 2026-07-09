@@ -22,10 +22,11 @@ Scoring formula (per audit):
     score = similarity * 0.6 + recency * 0.2 + importance * 0.1 + usage_frequency * 0.1
 """
 from __future__ import annotations
+
 import logging
 import time
-# Use built-in generics with from __future__ import annotations
 
+# Use built-in generics with from __future__ import annotations
 from core.models import Intent
 from storage.vector import VectorStore
 
@@ -181,7 +182,7 @@ class MemoryComposer:
         except Exception as e:
             logger.warning("Memory search failed: %s", e)
             return []
-        
+
         # Create objects with content attribute
         results = []
         for fact, distance, metadata in raw:
@@ -190,7 +191,7 @@ class MemoryComposer:
                 def __init__(self, content: str):
                     self.content = content
             results.append(FactResult(fact))
-        
+
         return results
 
     async def list_all_with_metadata(self) -> list[dict]:

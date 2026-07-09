@@ -1,12 +1,14 @@
 """Health check endpoint."""
 from __future__ import annotations
+
+import time as _time
+
 from fastapi import APIRouter
 from pydantic import BaseModel
+
 from adapters import get_adapter
 from core.config import settings
 from tools import available_tools
-
-import time as _time
 
 router = APIRouter()
 

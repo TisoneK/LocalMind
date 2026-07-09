@@ -35,12 +35,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import re
 import shutil
-from pathlib import Path
 
-from core.models import Intent, ToolResult, RiskLevel
+from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
 logger = logging.getLogger(__name__)

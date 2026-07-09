@@ -8,10 +8,11 @@ NOTE: Backend source lives in src/ — add it to sys.path so that
       server.py from the backend/ directory.
 """
 import logging
-import socket
-import sys
 import os
 import signal
+import socket
+import sys
+
 import uvicorn
 
 # Ensure src/ is on the import path when running from backend/

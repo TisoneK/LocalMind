@@ -2,14 +2,15 @@
 Settings endpoints for adapter and provider configuration.
 """
 from __future__ import annotations
+
 import os
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from core.config import settings
 from adapters import clear_adapter_cache
+from core.config import settings
 
 router = APIRouter()
 

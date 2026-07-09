@@ -18,59 +18,60 @@ Architecture (v4.0 — No backward compat):
     correctly, including EPL-style queries and SYSINFO detection
 """
 from __future__ import annotations
+
 import asyncio
 import logging
 import re
 import time
-import uuid
 from typing import AsyncIterator, Optional
 
-from core.models import (
-    Intent, Message, Role, EngineContext, StreamChunk,
-    FileAttachment, ToolResult, RiskLevel,
-    TaskProfile, ExecutionMode, SafetyLevel, Capability,
-    OrchestrationPlan, UnderstandingResult, ValidationResult,
-    CAPABILITY_TO_INTENT, TOOL_CAPABILITIES,
-)
-from core.config import settings
+from adapters.ollama import _is_small_model
 from core import context_builder
-from core.summarizer import maybe_compress_history
+from core.agent import AGENT_INTENTS, AgentLoop
+from core.agent.constants import (
+    REFLECT_ENABLED,
+    REFLECT_INTENTS,
+)
+from core.agent.orchestrator import AgentOrchestrator, OrchestrationResult
+from core.agent.tool_dispatch import dispatch_with_retry
+from core.config import settings
+from core.filters import _filter_code_output, _filter_system_leaks, _filter_tool_injection
+
 # v4.0: No regex classifier exists. ThinkingDispatcher is the sole router.
 from core.flywheel import FlywheelLogger
 from core.memory import MemoryComposer
-from core.agent import AgentLoop, AGENT_INTENTS
-from core.agent.orchestrator import AgentOrchestrator, OrchestrationResult
-from core.workspace.orchestrator import WorkspaceOrchestrator, _should_use_orchestrator
-from core.tool_scorer import best_tool, score_tools, load_reliability_from_db, record_tool_outcome
-from core.obs import ObsCollector
 from core.metrics import MetricsStore  # NEW: aggregated p50/p95 per intent + tool success rates
-from core.filters import _filter_system_leaks, _filter_tool_injection, _filter_code_output
 from core.model_router import best_model_for, update_pulled_models
-from core.agent.constants import (
-    REFLECT_ENABLED, REFLECT_INTENTS, REFLECT_MAX_TOKENS,
-    CAPABILITY_ORCHESTRATION_ENABLED,
+from core.models import (
+    CAPABILITY_TO_INTENT,
+    EngineContext,
+    ExecutionMode,
+    Intent,
+    OrchestrationPlan,
+    StreamChunk,
+    TaskProfile,
+    ToolResult,
 )
-from core.thinking_dispatcher import ThinkingDispatcher
-from storage.db import SessionStore
-from adapters.ollama import _is_small_model
-from tools import dispatch, available_tools
-from core.agent.tool_dispatch import dispatch_with_retry
+from core.obs import ObsCollector
 from core.safety_gate import check as safety_check
 from core.session_context import SessionContextManager
+from core.summarizer import maybe_compress_history
+from core.thinking_dispatcher import ThinkingDispatcher
+from core.tool_scorer import load_reliability_from_db, record_tool_outcome
+from core.workspace.orchestrator import WorkspaceOrchestrator, _should_use_orchestrator
+from storage.db import SessionStore
+from tools import available_tools, dispatch
 
 # Import extracted helpers and mixins (step 2 of engine split)
 from ._helpers import (
-    _safe_task,
-    _LRUCache,
+    INTENT_HISTORY_MAX_SESSIONS,
+    INTENT_HISTORY_WINDOW,
+    DuplicateFilter,
+    _approx_tokens,
     _chat_agent_cache,
     _get_chat_agent_cache_key,
     _parse_chat_agent_output,
-    _resolve_intent,
-    _approx_tokens,
-    DuplicateFilter,
-    INTENT_HISTORY_WINDOW,
-    INTENT_HISTORY_MAX_SESSIONS,
-    MEMORY_DEDUP_THRESHOLD,
+    _safe_task,
 )
 from ._memory_mixin import _MemoryMixin
 from ._persistence_mixin import _PersistenceMixin
@@ -234,9 +235,12 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         If the phase fails, returns (original_message, "").
         """
         import re
+
         from core.agent.constants import (
-            CHAT_AGENT_ENABLED, CHAT_AGENT_MIN_COMPLEXITY, CHAT_AGENT_MAX_TOKENS,
-            CHAT_AGENT_TIMEOUT_SECS, CHAT_AGENT_SKIP_PATTERNS,
+            CHAT_AGENT_ENABLED,
+            CHAT_AGENT_MIN_COMPLEXITY,
+            CHAT_AGENT_SKIP_PATTERNS,
+            CHAT_AGENT_TIMEOUT_SECS,
         )
         from core.agent.prompts import build_chat_agent_prompt
         from core.context_builder import _build_environment_context
@@ -320,10 +324,10 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 #   acknowledgement = Part 1 (friendly confirmation for the user)
                 #   reformulated_message = Part 2 (structured instruction for Execution Agent)
                 acknowledgement, reformulated_instruction = _parse_chat_agent_output(reformulated)
-                
+
                 # v0.11 PERFORMANCE: Cache successful responses
                 _chat_agent_cache.set(_cache_key, (reformulated_instruction, acknowledgement))
-                
+
                 return reformulated_instruction, acknowledgement
             else:
                 return message, ""
@@ -402,7 +406,6 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         Returns the reformulated instruction string.
         """
         from core.agent.constants import CHAT_AGENT_TIMEOUT_SECS
-        from core.agent.prompts import build_chat_agent_prompt
         from core.context_builder import _build_environment_context
 
         env_context = _build_environment_context()
@@ -982,7 +985,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             if _msg_lower in _confirm_words or _msg_lower.startswith("yes") or _msg_lower.startswith("save"):
                 # Execute the stored write immediately
                 from pathlib import Path
-                from tools.file_writer import _do_write, _safe_output_path
+
+                from tools.file_writer import _do_write
                 del self._pending_writes[session_id]
                 _obs.emit("workspace_orchestrator_start", intent="file_write")
                 _obs.emit("workspace_tool_start", task_id="t1", tool="file_write")
@@ -1166,7 +1170,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             t_tool = time.monotonic()
             try:
                 tool_result = await dispatch(effective_intent, message)
-                
+
                 # ── CWD Detection from Tool Output ────────────────────────
                 # After dispatching a shell command, check if the output
                 # reveals a CWD change (e.g., "cd Documents/Code") and
@@ -1184,7 +1188,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         logger.info(
                             f"[engine] CWD updated for session {session_id[:8]}: {new_cwd}"
                         )
-                
+
                 # Filter injection from tool output
                 # FIX: preserve all ToolResult fields when reconstructing —
                 # previously success/error_type/error_message were silently dropped,
@@ -1201,7 +1205,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         error_type=tool_result.error_type,
                         error_message=tool_result.error_message,
                     )
-                
+
                 tool_latency = round((time.monotonic() - t_tool) * 1000)
                 _obs.emit("tool_dispatched", tool=effective_intent.value, success=bool(tool_result), latency_ms=tool_latency)
                 record_tool_outcome(self._store, effective_intent.value, success=bool(tool_result), latency_ms=tool_latency)
@@ -1248,7 +1252,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # Structural feedback: tool dispatch failure.
                 self._flywheel.mark_tool_failure(session_id)
                 tool_result = None
-        
+
         # ── FILE_TASK fast-path for uploaded files ────────────────────────
         # The file already read in ~0ms. The only remaining work is the LLM
         # call that processes the content. On small models (gemma3:1b etc.)
@@ -1373,13 +1377,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 Intent.SHELL: "Let me run that command...",
                 Intent.MEMORY_OP: "Let me check my memory...",
             }
-            _status_msg = _STATUS_MESSAGES.get(effective_intent, f"Working on that...")
+            _status_msg = _STATUS_MESSAGES.get(effective_intent, "Working on that...")
             yield StreamChunk(text="", done=False, status=_status_msg)
 
             # v0.10: Yield status for Chat Agent phase
             yield StreamChunk(
                 text="", done=False,
-                status=f"Understanding your request...",
+                status="Understanding your request...",
             )
             # ThinkingDispatcher already reformulated and acknowledged?
             # Skip the Chat Agent phase — the dispatcher already did this work.
@@ -1423,12 +1427,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     _dispatcher_confidence >= 0.8 and
                     len(message.strip()) < 100
                 )
-                
+
                 if _is_trivial and _dispatcher_reformulated:
                     # Dispatcher already handled it — skip Chat Agent entirely
                     reformulated = _dispatcher_reformulated
                     acknowledgement = ""
-                    logger.info(f"[engine] Fast path: trivial CHAT, skipping Chat Agent")
+                    logger.info("[engine] Fast path: trivial CHAT, skipping Chat Agent")
                 else:
                     # Fast-path or dispatcher didn't reformulate — run Chat Agent as fallback
                     reformulated, acknowledgement = await self._chat_agent_phase(
@@ -1598,9 +1602,16 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             _FENCE_RE_SM = re.compile(r'```(?P<lang>\w+)?\s*\n(?P<code>[\s\S]+?)\n```', re.IGNORECASE)
             sm_blocks = _FENCE_RE_SM.findall(response_text)
             if sm_blocks:
-                from tools.file_writer import _infer_filename, _extract_requested_dir, _do_write, resolve_write_path, PathUnresolvableError
                 import os as _os
+
                 from core.config import settings as _s
+                from tools.file_writer import (
+                    PathUnresolvableError,
+                    _do_write,
+                    _extract_requested_dir,
+                    _infer_filename,
+                    resolve_write_path,
+                )
 
                 _lang, _code = sm_blocks[-1]
                 _filename = _infer_filename(message, _lang)
@@ -1675,8 +1686,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # agent loop. This gives each sub-task a focused persona and
             # restricted tool set, reducing hallucination and improving quality.
             from core.agent.sub_agent import (
-                should_use_sub_agents, decompose_task, execute_sub_tasks,
                 SubAgentRegistry,
+                decompose_task,
+                execute_sub_tasks,
+                should_use_sub_agents,
             )
             if should_use_sub_agents(message, effective_intent, confidence):
                 _obs.emit("sub_agent_delegation", intent=effective_intent.value)

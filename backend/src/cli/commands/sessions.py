@@ -1,5 +1,6 @@
 """localmind sessions — list and manage conversation sessions."""
 from __future__ import annotations
+
 import asyncio
 from datetime import datetime
 from typing import Optional
@@ -21,8 +22,8 @@ def command(
 
 
 async def _run(delete: Optional[str], clear_all: bool):
-    from storage.db import SessionStore
     from core.config import settings
+    from storage.db import SessionStore
 
     store = SessionStore(settings.localmind_db_path)
 

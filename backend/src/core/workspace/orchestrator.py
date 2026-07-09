@@ -56,11 +56,11 @@ from typing import Any, AsyncIterator, Dict, Optional
 
 from core.models import Intent, StreamChunk, ToolResult
 from core.workspace.manager import WorkspaceManager
-from tools import dispatch, available_tools
+from tools import available_tools
 from tools.contracts import (
+    TOOL_SCHEMAS,
     ContractViolationError,
     ToolRegistry,
-    TOOL_SCHEMAS,
 )
 
 logger = logging.getLogger(__name__)

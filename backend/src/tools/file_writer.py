@@ -10,13 +10,14 @@ Rules:
 - Returns full absolute path so UI can render a clickable link
 """
 from __future__ import annotations
+
 import logging
 import os
 import re
 import time
 from pathlib import Path
 
-from core.models import Intent, ToolResult, RiskLevel
+from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
 # ── Document format registry ─────────────────────────────────────────────────
@@ -431,8 +432,9 @@ def _cleanup_cache() -> None:
       - The uploads/ subdirectory
       - Anything that raises a permission or OS error (log and continue)
     """
-    from core.config import settings
     import shutil
+
+    from core.config import settings
 
     home = Path(os.path.expandvars(settings.localmind_home)).expanduser().resolve()
     if not home.exists():
@@ -564,7 +566,7 @@ async def write_file(message: str) -> ToolResult:
         # A non-trivial path was provided — resolve it to a final destination
         try:
             final_dest = resolve_write_path(raw_path, fallback_filename=filename)
-        except PathUnresolvableError as exc:
+        except PathUnresolvableError:
             # Last resort: resolve against home and auto-create directory
             logger.warning(
                 "[file_writer] PathUnresolvableError for %r — resolving against home", raw_path,

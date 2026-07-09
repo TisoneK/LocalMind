@@ -13,8 +13,8 @@ from __future__ import annotations
 import logging
 import re
 
-from core.models import Intent
 from core.obs import ObsCollector
+
 from ._helpers import MEMORY_DEDUP_THRESHOLD
 
 logger = logging.getLogger(__name__)

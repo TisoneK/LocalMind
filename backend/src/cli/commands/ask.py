@@ -4,6 +4,7 @@ Supports file attachment via --file flag.
 Supports stdin piping: cat file.txt | localmind ask "summarise this"
 """
 from __future__ import annotations
+
 import asyncio
 import sys
 import uuid
@@ -29,8 +30,8 @@ def command(
 
 
 async def _run(message: str, file: Optional[Path], session: Optional[str], model: Optional[str], raw: bool):
-    from core.engine import Engine
     from core.config import settings
+    from core.engine import Engine
 
     # Handle stdin piping
     stdin_content = None

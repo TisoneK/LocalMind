@@ -10,8 +10,8 @@ import asyncio
 import logging
 from typing import Optional
 
-from core.models import Intent, ToolResult
 from core.agent.constants import TOOL_MAX_RETRIES, TOOL_RETRY_BASE_DELAY
+from core.models import Intent, ToolResult
 from tools import dispatch
 
 logger = logging.getLogger(__name__)

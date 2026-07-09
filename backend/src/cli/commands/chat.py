@@ -4,6 +4,7 @@ Maintains session history across turns.
 Commands: /exit /clear /file <path> /session /help
 """
 from __future__ import annotations
+
 import asyncio
 import uuid
 from pathlib import Path
@@ -27,8 +28,8 @@ def command(
 
 
 async def _repl(session: Optional[str], model: Optional[str]):
-    from core.engine import Engine
     from core.config import settings
+    from core.engine import Engine
 
     if model:
         settings.ollama_model = model

@@ -5,8 +5,9 @@ All settings validated by Pydantic at startup.
 import os
 import sys
 from pathlib import Path
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _default_home() -> str:

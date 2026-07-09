@@ -1,11 +1,13 @@
 """Session management endpoints."""
 from __future__ import annotations
+
 from datetime import datetime
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from storage.db import SessionStore, get_shared_store
 from core.config import settings
+from storage.db import get_shared_store
 
 router = APIRouter()
 
@@ -27,11 +29,11 @@ def resolve_title(session: dict) -> str:
     """Generate fallback title if session has no title."""
     if session.get("title"):
         return session["title"]
-    
+
     # Try to get first message as fallback
     if session.get("first_message"):
         return session["first_message"][:40] + ("..." if len(session["first_message"]) > 40 else "")
-    
+
     return "New Chat"
 
 
@@ -96,7 +98,7 @@ async def get_history(session_id: str):
             "content": m.content,
             "timestamp": m.timestamp,
         }
-        
+
         # Add tool calls if present
         if m.tool_name:
             message["toolCalls"] = [{
@@ -114,9 +116,9 @@ async def get_history(session_id: str):
                 "size": m.file_size or 0,
                 "type": m.file_type or "unknown"
             }]
-        
+
         history.append(message)
-    
+
     return {"history": history}
 
 

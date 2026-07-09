@@ -226,11 +226,15 @@ class FileWriteContract(_LegacyBridgeContract):
         import os
         import time as _time
         from pathlib import Path
-        from tools.file_writer import (
-            _do_write, resolve_write_path, PathUnresolvableError,
-            _is_document, _timestamped_name,
-        )
+
         from core.config import settings
+        from tools.file_writer import (
+            PathUnresolvableError,
+            _do_write,
+            _is_document,
+            _timestamped_name,
+            resolve_write_path,
+        )
         # RiskLevel imported at module level — no inner re-import
 
         # ── Path resolution ───────────────────────────────────────────────────
@@ -268,7 +272,7 @@ class FileWriteContract(_LegacyBridgeContract):
         # ── Resolve user's final destination ─────────────────────────────────
         try:
             final_dest = resolve_write_path(raw_path)
-        except PathUnresolvableError as exc:
+        except PathUnresolvableError:
             # Instead of asking the user, resolve the path against home
             # and auto-create the directory.  This ensures file_write
             # always writes to the user's requested location.

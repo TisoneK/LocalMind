@@ -1,11 +1,13 @@
 """Actions endpoint - tool call history for left panel ActionHistory."""
 from __future__ import annotations
-from typing import Optional, List
+
+from typing import List, Optional
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from storage.db import SessionStore
 from core.config import settings
+from storage.db import SessionStore
 
 router = APIRouter()
 _store = SessionStore(settings.localmind_db_path)
@@ -49,7 +51,7 @@ async def create_action(request: CreateActionRequest):
     # Placeholder implementation
     import time
     import uuid
-    
+
     action = ActionItem(
         id=str(uuid.uuid4()),
         session_id=request.session_id,
@@ -58,7 +60,7 @@ async def create_action(request: CreateActionRequest):
         input=request.input,
         timestamp=time.time()
     )
-    
+
     # In full implementation, this would save to database
     return action
 

@@ -1,6 +1,8 @@
 """localmind models — list available Ollama models with human-readable profiles."""
 from __future__ import annotations
+
 import asyncio
+
 import typer
 from rich.console import Console
 from rich.table import Table

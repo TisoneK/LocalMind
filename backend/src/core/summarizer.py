@@ -12,6 +12,7 @@ Usage:
     messages = maybe_compress_history(messages, adapter, token_budget)
 """
 from __future__ import annotations
+
 import logging
 from typing import TYPE_CHECKING
 

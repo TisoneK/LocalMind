@@ -8,11 +8,10 @@ Two-stage approach:
 Stage 2 fires as a background asyncio task so it never blocks the response stream.
 """
 from __future__ import annotations
+
 import asyncio
 import logging
 import re
-from datetime import datetime
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -96,8 +95,8 @@ async def refine_title_async(session_id: str, message: str) -> None:
     Called as a fire-and-forget background task after the first turn completes.
     Uses the same adapter as the main engine — respects LOCALMIND_ADAPTER setting.
     """
-    from core.config import settings
     from adapters import get_adapter
+    from core.config import settings
 
     try:
         prompt_messages = [

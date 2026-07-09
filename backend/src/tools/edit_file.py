@@ -25,8 +25,8 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict
 
-from core.models import Intent, ToolResult, RiskLevel
 from core.config import settings
+from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
 logger = logging.getLogger(__name__)
@@ -222,12 +222,12 @@ def _do_replace(content: str, search: str, replace: str, replace_all: bool = Fal
         count = content.count(search)
         result = content.replace(search, replace)
         if count == 0:
-            raise ValueError(f"Search text not found in file")
+            raise ValueError("Search text not found in file")
         return result
     else:
         idx = content.find(search)
         if idx == -1:
-            raise ValueError(f"Search text not found in file")
+            raise ValueError("Search text not found in file")
         return content.replace(search, replace, 1)
 
 
@@ -241,7 +241,7 @@ def _do_regex_replace(content: str, pattern: str, replace: str, replace_all: boo
     count = 0 if replace_all else 1
     result, n_subs = compiled.subn(replace, content, count=count)
     if n_subs == 0:
-        raise ValueError(f"Regex pattern not found in file")
+        raise ValueError("Regex pattern not found in file")
     return result
 
 

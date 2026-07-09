@@ -19,6 +19,7 @@ v2 changes:
 Registered as Intent.CODE_EXEC in the tool registry.
 """
 from __future__ import annotations
+
 import asyncio
 import logging
 import os
@@ -27,7 +28,7 @@ import sys
 import tempfile
 import textwrap
 
-from core.models import Intent, ToolResult, RiskLevel
+from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
 logger = logging.getLogger(__name__)
@@ -218,4 +219,5 @@ def _validate_code_exec(message: str) -> str | None:
 
 
 from tools import register_validator  # noqa: E402
+
 register_validator(Intent.CODE_EXEC, _validate_code_exec)

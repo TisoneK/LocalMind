@@ -11,10 +11,11 @@ Security model:
 v0.2 hardening: add seccomp/AppArmor profile on Linux, sandbox on macOS.
 """
 from __future__ import annotations
+
 import asyncio
+import logging
 import sys
 import textwrap
-import logging
 from dataclasses import dataclass
 
 from core.config import settings
@@ -110,7 +111,7 @@ async def _run_subprocess(cmd: list[str], timeout: int) -> SandboxResult:
                 exit_code=-1,
                 timed_out=True,
             )
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         runtime = cmd[0]
         return SandboxResult(
             stdout="",

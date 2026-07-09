@@ -28,12 +28,11 @@ The router checks which models are actually pulled and picks the best
 available one — never fails, always falls back to the main model.
 """
 from __future__ import annotations
-import logging
-from functools import lru_cache
-from typing import Optional
 
-from core.models import Intent
+import logging
+
 from core.config import settings
+from core.models import Intent
 
 logger = logging.getLogger(__name__)
 

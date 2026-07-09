@@ -47,10 +47,9 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Optional, AsyncIterator
+from typing import Optional
 
-from core.models import Intent, StreamChunk
-from core.agent.prompts import build_agent_system_prompt
+from core.models import Intent
 
 # Lazy imports to avoid circular dependency — these are imported inside
 # functions that need them rather than at module level.
@@ -258,7 +257,7 @@ class SubAgent:
         Returns:
             SubAgentResult with the output or error.
         """
-        from adapters.ollama import ToolCallResult, MultiToolCallResult
+        from adapters.ollama import MultiToolCallResult, ToolCallResult
         from tools import dispatch
 
         t0 = time.monotonic()

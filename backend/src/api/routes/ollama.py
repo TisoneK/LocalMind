@@ -16,11 +16,12 @@ DELETE /api/ollama/url     — reset to the default local URL
 NOTE: GET /api/models and POST /api/models/select live in api/routes/models.py.
 """
 from __future__ import annotations
+
 import asyncio
 import json
+import logging
 import shutil
 import subprocess
-import logging
 from typing import Optional
 
 import httpx

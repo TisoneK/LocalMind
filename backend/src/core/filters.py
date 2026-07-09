@@ -8,6 +8,7 @@ Two filters:
                               before they re-enter the LLM context
 """
 from __future__ import annotations
+
 import re
 
 # ── System leak filter ────────────────────────────────────────────────────────
@@ -152,4 +153,3 @@ def _filter_code_output(text: str) -> str:
     _filter_tool_injection() for stdout/stderr from code execution.
     """
     return _filter_tool_injection(text, is_code_output=True)
-    

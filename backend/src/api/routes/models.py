@@ -1,9 +1,10 @@
 """Model listing and selection endpoints."""
 from __future__ import annotations
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from adapters import get_adapter, clear_adapter_cache
+from adapters import clear_adapter_cache, get_adapter
 from core.config import settings
 
 router = APIRouter()
@@ -51,7 +52,7 @@ async def list_models():
         available = await adapter.list_models()
         if adapter_name == "ollama":
             available = set(available)
-    except Exception as e:
+    except Exception:
         available = []
 
     model_options = []

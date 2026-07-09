@@ -2,8 +2,10 @@
 Base adapter interface. All runtime adapters must implement this.
 """
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import AsyncIterator
+
 from core.models import StreamChunk
 
 

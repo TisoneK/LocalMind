@@ -8,6 +8,7 @@ This converts the tool registry from a static lookup into a capability-aware
 selection system. The engine queries this before dispatching any tool.
 """
 from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
 
@@ -89,7 +90,7 @@ def score_tools(
     # CHAT intent should never use tools - handle directly by LLM
     if primary_intent == Intent.CHAT:
         return []
-        
+
     scored = []
     for tool in available:
         tool_intent_str = tool["intent"]

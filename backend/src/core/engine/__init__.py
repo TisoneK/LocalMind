@@ -30,6 +30,7 @@ from __future__ import annotations
 # Re-export the public API so `from core.engine import Engine` still works.
 # Also re-export get_adapter because tests patch `core.engine.get_adapter`.
 from adapters import get_adapter
+
 from ._pipeline import Engine
 
 __all__ = ["Engine", "get_adapter"]

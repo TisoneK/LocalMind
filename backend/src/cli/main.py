@@ -14,7 +14,8 @@ Usage:
     localmind sessions           # List conversation sessions
 """
 import typer
-from cli.commands import ask, chat, start, models, health, sessions
+
+from cli.commands import ask, chat, health, models, sessions, start
 
 app = typer.Typer(
     name="localmind",

@@ -50,31 +50,29 @@ import time
 import uuid
 from typing import AsyncIterator, Optional
 
-from adapters.ollama import ToolCallResult, MultiToolCallResult
-from core.models import Intent, StreamChunk, ToolResult
-from core.agent.constants import (
-    MAX_ITERATIONS,
-    PLAN_ITERATION_COST,
-    CLARIFICATION_THRESHOLD,
-    OBS_LOG_MAX_CHARS,
-    AGENT_INTENTS,
-    AGENT_ALLOWED_TOOLS,
-    PLAN_ENABLED,
-    PLAN_MAX_TOKENS,
-    PLAN_TIMEOUT_SECS,
-    VERIFY_ENABLED,
-    VERIFY_FILE_WRITE,
-    VERIFY_CODE_EXEC,
-    SYNTHESIS_ENABLED,
-    SYNTHESIS_TIMEOUT_SECS,
-    SYNTHESIS_INTENTS,
-)
-from core.agent.models import AgentStep, AgentTrace
+from adapters.ollama import MultiToolCallResult, ToolCallResult
 from core.agent.agent_filters import (
+    _filter_code_output,
     _filter_system_leaks,
     _filter_tool_injection,
-    _filter_code_output,
 )
+from core.agent.constants import (
+    AGENT_ALLOWED_TOOLS,
+    AGENT_INTENTS,
+    CLARIFICATION_THRESHOLD,
+    MAX_ITERATIONS,
+    OBS_LOG_MAX_CHARS,
+    PLAN_ENABLED,
+    PLAN_ITERATION_COST,
+    PLAN_TIMEOUT_SECS,
+    SYNTHESIS_ENABLED,
+    SYNTHESIS_TIMEOUT_SECS,
+    VERIFY_CODE_EXEC,
+    VERIFY_ENABLED,
+    VERIFY_FILE_WRITE,
+)
+from core.agent.models import AgentStep, AgentTrace
+from core.models import Intent, StreamChunk, ToolResult
 
 
 def _parse_plan_steps(plan_text: str) -> list[str]:
@@ -209,10 +207,9 @@ def _has_minimax_tool_call(text: str) -> bool:
     return bool(_MINIMAX_TOOL_CALL_RE.search(text) or _STANDALONE_INVOKE_RE.search(text))
 
 
-from core.agent.search import truncate_web_search_results, create_extractive_summary
+from core.agent.prompts import build_agent_system_prompt, build_planning_prompt
+from core.agent.synthesizer import AnswerSynthesizer
 from core.agent.tool_dispatch import dispatch_with_retry
-from core.agent.prompts import build_planning_prompt, build_agent_system_prompt
-from core.agent.synthesizer import AnswerSynthesizer, SynthesisResult
 from core.context_builder import _build_environment_context
 
 logger = logging.getLogger(__name__)
@@ -655,7 +652,7 @@ class AgentLoop:
             tool_call_id = str(uuid.uuid4())
             loop_messages.append({
                 "role": "assistant",
-                "content": f"I've already performed an initial action. Let me analyze the result.",
+                "content": "I've already performed an initial action. Let me analyze the result.",
                 "tool_calls": [{
                     "id": tool_call_id,
                     "type": "function",
@@ -767,7 +764,7 @@ class AgentLoop:
                         _p = _args.get("path", "").strip()
                         _c = _args.get("content", "").strip()
                         if not _p or not _c:
-                            logger.warning(f"[agent.loop] parallel: file_write missing args, skipping")
+                            logger.warning("[agent.loop] parallel: file_write missing args, skipping")
                             continue
 
                     valid_calls.append((call, _inp))
@@ -1987,7 +1984,7 @@ class AgentLoop:
                             "from your training knowledge — this data is STALE and likely WRONG. "
                             "You MUST call the web_search tool NOW to get real, current data. "
                             "Do NOT answer from your training data for time-sensitive queries. "
-                            f"Call web_search with a specific query for the user's request."
+                            "Call web_search with a specific query for the user's request."
                         ),
                     })
                     fabrication_risk += 2  # Heavy penalty for fabricated data
@@ -2221,7 +2218,8 @@ class AgentLoop:
         if self._synthesizer.enabled:
             try:
                 # Create a ToolResult from the search output for the synthesizer
-                from core.models import ToolResult as TR, RiskLevel as RL
+                from core.models import RiskLevel as RL
+                from core.models import ToolResult as TR
                 search_result = TR(
                     content=safe_obs,
                     risk=RL.LOW,

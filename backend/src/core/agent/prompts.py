@@ -27,8 +27,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from core.models import Intent
 from core.agent.constants import MAX_ITERATIONS
+from core.models import Intent
 
 
 def build_planning_prompt(
@@ -152,7 +152,7 @@ WEB_FETCH WORKFLOW — follow this template:
     template = intent_templates.get(intent, "")
 
     # Inject intent-specific skill expertise (condensed — planner must be brief)
-    from core.context_builder import _load_fragment, _intent_fragment_name
+    from core.context_builder import _intent_fragment_name, _load_fragment
     skill_fragment = _load_fragment(_intent_fragment_name(intent))
     skill_hint = ""
     if skill_fragment:
@@ -317,7 +317,11 @@ def build_orchestrator_prompt(
 
     Output is structured JSON — no tools, no narration.
     """
-    from core.agent.constants import AGENT_ALLOWED_TOOLS, ORCHESTRATOR_CONFIDENCE_HIGH, ORCHESTRATOR_CONFIDENCE_MEDIUM
+    from core.agent.constants import (
+        AGENT_ALLOWED_TOOLS,
+        ORCHESTRATOR_CONFIDENCE_HIGH,
+        ORCHESTRATOR_CONFIDENCE_MEDIUM,
+    )
     _tool_descriptions = {
         "file_write": "Create/overwrite a file (requires path AND content)",
         "edit_file": "Edit an existing file in-place (must read file first)",
@@ -555,7 +559,7 @@ Do NOT re-plan or re-think — just call the tools as described in the plan.
     # This gives the agent domain-specific knowledge (coding practices,
     # research methodology, shell safety, etc.) without bloating base.md.
     skill_section = ""
-    from core.context_builder import _load_fragment, _intent_fragment_name
+    from core.context_builder import _intent_fragment_name, _load_fragment
     skill_fragment = _load_fragment(_intent_fragment_name(intent))
     if skill_fragment:
         skill_section = f"\n## Intent-specific expertise\n{skill_fragment}\n"

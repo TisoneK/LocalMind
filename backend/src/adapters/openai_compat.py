@@ -25,7 +25,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from typing import AsyncIterator, TYPE_CHECKING
+from typing import TYPE_CHECKING, AsyncIterator
 
 import httpx
 
@@ -776,7 +776,7 @@ class OpenAICompatAdapter(BaseAdapter):
 
             return _stream_from_http()
 
-        except httpx.ConnectError as e:
+        except httpx.ConnectError:
             msg = f"Cannot connect to {self._provider_name} at {self._base_url}. Check your network and API endpoint."
             logger.error(msg)
 
@@ -843,7 +843,7 @@ class OpenAICompatAdapter(BaseAdapter):
                     except (json.JSONDecodeError, IndexError, KeyError):
                         continue
 
-        except httpx.ConnectError as e:
+        except httpx.ConnectError:
             msg = f"Cannot connect to {self._provider_name} at {self._base_url}. Check your network and API endpoint."
             logger.error(msg)
             yield StreamChunk(text=msg, done=True, error=msg)
@@ -924,7 +924,7 @@ class OpenAICompatAdapter(BaseAdapter):
                     except (json.JSONDecodeError, KeyError):
                         continue
 
-        except httpx.ConnectError as e:
+        except httpx.ConnectError:
             msg = f"Cannot connect to Anthropic at {self._base_url}. Check your network."
             logger.error(msg)
             yield StreamChunk(text=msg, done=True, error=msg)

@@ -7,6 +7,7 @@ POST /api/open-folder — open a folder in the OS file manager (explicit action 
 POST /api/confirm-write — confirm a pending permission-gated file write
 """
 from __future__ import annotations
+
 import os
 import subprocess
 import sys

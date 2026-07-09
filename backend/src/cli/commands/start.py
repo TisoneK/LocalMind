@@ -9,11 +9,12 @@ Boot order (A1 / B4):
   5. On Ctrl+C: shut down cleanly
 """
 from __future__ import annotations
+
 import asyncio
 import shutil
 import subprocess
-import time
 import threading
+import time
 import webbrowser
 from typing import Optional
 
@@ -85,6 +86,7 @@ def command(
 ):
     """Launch the LocalMind web UI and API server."""
     import uvicorn
+
     from core.config import settings
 
     # B4: Run Ollama lifecycle check before starting server

@@ -3,6 +3,7 @@ Language detector — extracts code blocks and identifies the runtime.
 Handles markdown fenced code blocks and bare code snippets.
 """
 from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 from typing import Optional

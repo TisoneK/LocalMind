@@ -12,10 +12,11 @@ This tool handles explicit user-initiated memory operations.
 Registered as Intent.MEMORY_OP in the tool registry.
 """
 from __future__ import annotations
+
 import logging
 import re
 
-from core.models import Intent, ToolResult, RiskLevel
+from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
 logger = logging.getLogger(__name__)

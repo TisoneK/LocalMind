@@ -11,13 +11,14 @@ Handles queries that should NEVER go to web search:
 Registered as Intent.SYSINFO. Fast: no model call, no network, <100ms.
 """
 from __future__ import annotations
+
 import datetime
 import logging
 import os
 import platform
 import sys
 
-from core.models import Intent, ToolResult, RiskLevel
+from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
 logger = logging.getLogger(__name__)

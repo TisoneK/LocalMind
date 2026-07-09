@@ -14,14 +14,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from dataclasses import dataclass, field
-from typing import AsyncIterator, Union
+from dataclasses import dataclass
+from typing import AsyncIterator
 
 import httpx
 
 from adapters.base import BaseAdapter
 from core.config import settings
-from core.models import StreamChunk, Intent
+from core.models import StreamChunk
+
 
 # Per-intent timeout overrides (seconds).
 # CHAT is fast; tool-heavy intents need more time.
@@ -255,8 +256,8 @@ class OllamaAdapter(BaseAdapter):
                         model_exists, available = await self._check_model_exists()
                         if not self._model:
                             error_msg = (
-                                f"Model not specified. No default model is configured. "
-                                f"Please set OLLAMA_MODEL in your .env or select a model in Settings."
+                                "Model not specified. No default model is configured. "
+                                "Please set OLLAMA_MODEL in your .env or select a model in Settings."
                             )
                         elif not model_exists and available:
                             # Suggest the first available model as an alternative
@@ -292,7 +293,7 @@ class OllamaAdapter(BaseAdapter):
                 # Buffer for parsing Thinking... markers
                 _think_buf = ""
                 _in_think = False
-                
+
                 async for line in response.aiter_lines():
                     if not line or not line.startswith("data: "):
                         continue
@@ -427,8 +428,8 @@ class OllamaAdapter(BaseAdapter):
                             model_exists, available = await self._check_model_exists()
                             if not self._model:
                                 state["error_msg"] = (
-                                    f"Model not specified. No default model is configured. "
-                                    f"Please set OLLAMA_MODEL in your .env or select a model in Settings."
+                                    "Model not specified. No default model is configured. "
+                                    "Please set OLLAMA_MODEL in your .env or select a model in Settings."
                                 )
                             elif not model_exists and available:
                                 suggestion = available[0]

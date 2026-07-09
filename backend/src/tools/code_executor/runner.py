@@ -5,13 +5,14 @@ Detects language, runs in sandbox, returns formatted result.
 Disabled if LOCALMIND_CODE_EXEC_ENABLED=false in .env.
 """
 from __future__ import annotations
+
 import logging
 
 from core.config import settings
 from core.models import RiskLevel
 from tools.base import ToolResult
 from tools.code_executor.detector import detect
-from tools.code_executor.sandbox import run_python, run_javascript
+from tools.code_executor.sandbox import run_javascript, run_python
 
 logger = logging.getLogger(__name__)
 

@@ -22,20 +22,21 @@ SSE payload types:
     {"obs_event": {"type": "turn_complete", "data": {...}}}
 """
 from __future__ import annotations
+
 import asyncio
 import json
-import uuid
 import logging
 import time
+import uuid
 from pathlib import Path
-
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
-from fastapi.responses import StreamingResponse
 from typing import Optional
 
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import StreamingResponse
+
+from core.config import settings
 from core.engine import Engine
 from core.obs import ObsCollector
-from core.config import settings
 from core.title_generator import generate_title_smart, refine_title_async
 
 router = APIRouter()
@@ -445,7 +446,7 @@ async def chat(
     # This allows the server to skip the dispatcher LLM call for trivial messages
     client_intent = request.headers.get("X-LocalMind-Intent")
     client_confidence = float(request.headers.get("X-Intent-Confidence", "0.0"))
-    
+
     return StreamingResponse(
         _event_stream(
             message, sid, is_first,

@@ -10,9 +10,9 @@ import re
 
 # Re-export core filters so callers only need one import
 from core.filters import (
+    _filter_code_output,
     _filter_system_leaks,
     _filter_tool_injection,
-    _filter_code_output,
 )
 
 # Strip structured XML agent tags from raw thought before displaying to user.

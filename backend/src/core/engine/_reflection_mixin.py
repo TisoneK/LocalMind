@@ -12,10 +12,10 @@ from __future__ import annotations
 import logging
 import re
 
+from core.agent.constants import REFLECT_ENABLED, REFLECT_INTENTS
 from core.config import settings
 from core.models import Intent
 from core.obs import ObsCollector
-from core.agent.constants import REFLECT_ENABLED, REFLECT_INTENTS
 
 logger = logging.getLogger(__name__)
 

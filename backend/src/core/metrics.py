@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import logging
 import math
-import time
 import threading
+import time
 from collections import deque
 from dataclasses import dataclass
 

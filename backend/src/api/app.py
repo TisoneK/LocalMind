@@ -4,9 +4,11 @@ FastAPI application factory — v0.3
 Serves the single-file UI from ui/index.html directly (no build step needed).
 """
 from __future__ import annotations
+
 import asyncio
 import logging
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Load .env file into os.environ so all routes can access env vars via os.getenv()
@@ -16,8 +18,22 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from api.routes import (
+    actions,
+    chat,
+    config,
+    filesystem,
+    health,
+    memory,
+    metrics,
+    models,
+    observability,
+    ollama,
+    sessions,
+    terminal,
+    todos,
+)
 from core.config import settings
-from api.routes import chat, sessions, health, models, ollama, memory, filesystem, actions, todos, metrics, observability, terminal, config
 
 logger = logging.getLogger(__name__)
 

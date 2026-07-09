@@ -8,6 +8,7 @@ or interacts with any program.
 Called from tools/sysinfo.py when query mentions "installed" / "programs" / "apps".
 """
 from __future__ import annotations
+
 import logging
 import sys
 import time
@@ -15,7 +16,6 @@ import time
 logger = logging.getLogger(__name__)
 
 
-import time
 
 _WINDOWS_CACHE: tuple[list[dict], float] | tuple[None, float] = (None, 0.0)
 _WINDOWS_CACHE_TTL = 300  # 5 minutes — picks up mid-session installs

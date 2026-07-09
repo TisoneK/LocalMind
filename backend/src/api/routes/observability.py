@@ -1,7 +1,9 @@
 """Observability endpoint - intent, confidence, tool timeline for right panel."""
 from __future__ import annotations
+
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException
+
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 router = APIRouter()

@@ -37,14 +37,17 @@ import re
 import time
 from typing import AsyncIterator, Optional, Union
 
-from core.models import (
-    Intent, StreamChunk,
-    TaskProfile, ExecutionMode, SafetyLevel, Capability,
-    OrchestrationPlan, UnderstandingResult, ValidationResult,
-    CAPABILITY_TO_INTENT, TOOL_CAPABILITIES, COGNITIVE_CAPABILITIES,
-)
 from core.execution_graph import ExecutionGraph, build_graph_from_plan_steps
 from core.filters import _filter_system_leaks
+from core.models import (
+    Capability,
+    ExecutionMode,
+    Intent,
+    OrchestrationPlan,
+    SafetyLevel,
+    StreamChunk,
+    TaskProfile,
+)
 from core.obs import ObsCollector
 
 logger = logging.getLogger(__name__)
@@ -235,8 +238,8 @@ class ThinkingDispatcher:
         self._base_adapter = base_adapter
         self._adapter = None
         try:
-            from core.config import settings
             from adapters import get_adapter
+            from core.config import settings
             fast_model = getattr(settings, "ollama_model_fast", "") or ""
             if fast_model and fast_model != settings.ollama_model:
                 self._adapter = get_adapter(settings.localmind_adapter, model_override=fast_model)

@@ -21,14 +21,15 @@ Performance notes:
   mounts or corrupt files are killed cleanly.
 """
 from __future__ import annotations
+
 import asyncio
 import logging
 from pathlib import Path
 
-from core.models import Intent, FileAttachment, ToolResult, RiskLevel
-from tools import register_tool
-from core.config import settings
 from core.agent.constants import FILE_OP_TIMEOUT_SECONDS, FILE_READ_MAX_BYTES
+from core.config import settings
+from core.models import FileAttachment, Intent, RiskLevel, ToolResult
+from tools import register_tool
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,7 @@ async def _parse_docx(data: bytes) -> str:
     def _do_parse() -> str:
         try:
             import io
+
             from docx import Document
             doc = Document(io.BytesIO(data))
             return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
@@ -106,6 +108,7 @@ async def _parse_image(data: bytes, filename: str) -> str:
     """Parse image using OCR. Returns extracted text and basic metadata."""
     try:
         import io
+
         from PIL import Image
 
         image = Image.open(io.BytesIO(data))
@@ -137,8 +140,8 @@ async def _parse_csv_xlsx(data: bytes, filename: str) -> str:
     def _do_parse() -> str:
         try:
             import io
+
             import pandas as pd
-            import openpyxl
 
             if filename.endswith(".xlsx"):
                 df = pd.read_excel(io.BytesIO(data), engine="openpyxl")

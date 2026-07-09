@@ -6,14 +6,13 @@ DELETE /api/memory/{fact_id}   — delete a specific fact by ID
 POST   /api/memory              — manually store a new fact
 """
 from __future__ import annotations
+
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from storage.vector import VectorStore
-from core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -27,7 +26,7 @@ _store = VectorStore()
 async def list_memory():
     """Return all stored facts in frontend-compatible format."""
     facts = await _store.list_all_with_metadata()
-    
+
     # Convert to frontend MemoryFact format
     memory_facts = []
     for fact in facts:
@@ -36,7 +35,7 @@ async def list_memory():
         # fact.get("text", "") which always returned empty string.
         # Now we try "fact" first, then "content" as fallback.
         content = fact.get("fact") or fact.get("content") or fact.get("text") or ""
-        
+
         # FIX: Relevance score guard — prevent NaN from reaching the frontend.
         # When there are no facts in the store, or the score is missing/None,
         # default to 0.8 (arbitrary "moderate relevance" default) so the
@@ -49,14 +48,14 @@ async def list_memory():
                 relevance = 0.8
         else:
             relevance = 0.8  # default when no score available
-        
+
         # FIX: Timestamp guard — ensure valid numeric timestamp for formatDate()
         raw_ts = fact.get("created_at", 0)
         try:
             timestamp = float(raw_ts) if raw_ts else 0
         except (ValueError, TypeError):
             timestamp = 0
-        
+
         memory_facts.append({
             "id": fact.get("id", ""),
             "content": content,
@@ -64,7 +63,7 @@ async def list_memory():
             "relevance": relevance,
             "timestamp": timestamp,
         })
-    
+
     return {"facts": memory_facts}
 
 

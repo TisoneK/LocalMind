@@ -15,9 +15,11 @@ This eliminates a class of confusing tool errors (e.g. "no code found") before
 they reach real I/O.
 """
 from __future__ import annotations
+
 import asyncio
 from typing import Callable
-from core.models import Intent, ToolResult, RiskLevel
+
+from core.models import Intent, RiskLevel, ToolResult
 
 _REGISTRY: dict[Intent, dict] = {}
 _VALIDATORS: dict[Intent, Callable[[str], str | None]] = {}
@@ -140,13 +142,15 @@ def available_tools() -> list[dict]:
 
 # -- Auto-register all built-in tools -----------------------------------------
 # Import order matters: file_reader must be before engine uses parse_file
-from tools import file_reader   # noqa: E402, F401 -- registers FILE_TASK
-from tools import web_search    # noqa: E402, F401 -- registers WEB_SEARCH
-from tools import web_fetch     # noqa: E402, F401 -- registers WEB_FETCH (follow-up URL fetching)
-from tools import code_exec     # noqa: E402, F401 -- registers CODE_EXEC
-from tools import shell         # noqa: E402, F401 -- registers SHELL
-from tools import sysinfo       # noqa: E402, F401 -- registers SYSINFO (offline: time, date, specs)
-from tools import memory_tool   # noqa: E402, F401 -- registers MEMORY_OP
-from tools import file_writer   # noqa: E402, F401 -- FILE_WRITE (secondary intent)
-from tools import edit_file     # noqa: E402, F401 -- FILE_EDIT (in-place file editing)
-from tools import browser_agent # noqa: E402, F401 -- BROWSE (real browser interaction)
+from tools import (
+    browser_agent,  # noqa: E402, F401 -- BROWSE (real browser interaction)
+    code_exec,  # noqa: E402, F401 -- registers CODE_EXEC
+    edit_file,  # noqa: E402, F401 -- FILE_EDIT (in-place file editing)
+    file_reader,  # noqa: E402, F401 -- registers FILE_TASK
+    file_writer,  # noqa: E402, F401 -- FILE_WRITE (secondary intent)
+    memory_tool,  # noqa: E402, F401 -- registers MEMORY_OP
+    shell,  # noqa: E402, F401 -- registers SHELL
+    sysinfo,  # noqa: E402, F401 -- registers SYSINFO (offline: time, date, specs)
+    web_fetch,  # noqa: E402, F401 -- registers WEB_FETCH (follow-up URL fetching)
+    web_search,  # noqa: E402, F401 -- registers WEB_SEARCH
+)

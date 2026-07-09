@@ -14,8 +14,9 @@ useful -- "crack a walnut", "drug policy", "kill the process" would all be
 blocked by a broad blocklist. Keep the hard-block layer extremely tight.
 """
 from __future__ import annotations
+
 import re
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 # ── Layer 1: Hard blocks ─────────────────────────────────────────────────────
 # Only patterns that are harmful in every possible context.

@@ -19,15 +19,13 @@ Architecture:
 """
 from __future__ import annotations
 
-import asyncio
 import ipaddress
 import logging
 import re
 import socket
-from typing import Optional
 from urllib.parse import urlparse
 
-from core.models import Intent, ToolResult, RiskLevel
+from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
 logger = logging.getLogger(__name__)

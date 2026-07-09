@@ -8,8 +8,8 @@ Design: a simple per-request list. No background threads, no global state.
 The Engine receives an optional ObsSubscription at process() call time.
 """
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Optional
+
+from dataclasses import dataclass
 
 
 @dataclass

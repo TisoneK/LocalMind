@@ -46,15 +46,13 @@ This gives the Janitor pre-labeled data without needing any user interaction.
 from __future__ import annotations
 
 import collections
-import hashlib
 import json
 import logging
 import sqlite3
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Optional
 
 logger = logging.getLogger(__name__)

@@ -23,6 +23,7 @@ Example DAGs:
     Wave 2: [compare]
 """
 from __future__ import annotations
+
 import asyncio
 import logging
 from enum import Enum
@@ -31,8 +32,11 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from core.models import (
-    Capability, CAPABILITY_TO_INTENT, TOOL_CAPABILITIES,
-    ExecutionConstraints, Intent, ToolResult,
+    CAPABILITY_TO_INTENT,
+    Capability,
+    ExecutionConstraints,
+    Intent,
+    ToolResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -245,7 +249,6 @@ async def execute_graph(
     Returns:
         The same graph with nodes updated with results
     """
-    from tools import dispatch
 
     for wave in graph.parallel_groups():
         if constraints.allow_parallel and len(wave) > 1:

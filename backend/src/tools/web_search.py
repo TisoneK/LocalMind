@@ -23,9 +23,11 @@ v8 changes vs v7:
   for the LLM to synthesize from.
 """
 from __future__ import annotations
+
 import asyncio
 import logging
-from core.models import Intent, ToolResult, RiskLevel
+
+from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
 logger = logging.getLogger(__name__)
@@ -112,8 +114,8 @@ async def _search_searxng(query: str, searxng_url: str = "https://searx.be") -> 
             return results, "", ""
 
     except asyncio.TimeoutError:
-        logger.warning(f"[web_search] SearXNG timed out after 15s")
-        return [], "timeout", f"SearXNG search timed out after 15 seconds"
+        logger.warning("[web_search] SearXNG timed out after 15s")
+        return [], "timeout", "SearXNG search timed out after 15 seconds"
     except httpx.ConnectError as e:
         logger.warning(f"[web_search] SearXNG connection failed: {e}")
         return [], "network", f"SearXNG instance unreachable at {searxng_url} - check internet connection"
@@ -131,7 +133,7 @@ async def _search_searxng(query: str, searxng_url: str = "https://searx.be") -> 
         if "timeout" in error_str.lower():
             return [], "timeout", "SearXNG search timed out"
         elif "json" in error_str.lower():
-            return [], "network", f"SearXNG returned invalid JSON - instance may be misconfigured"
+            return [], "network", "SearXNG returned invalid JSON - instance may be misconfigured"
         else:
             return [], "network", f"SearXNG search error: {error_str}"
 
@@ -162,7 +164,7 @@ async def _search_brave(query: str, api_key: str) -> tuple[list[dict], str, str]
         return [], "timeout", "Brave Search API timed out after 10 seconds"
     except httpx.ConnectError as e:
         logger.warning(f"[web_search] Brave connection failed: {e}")
-        return [], "network", f"Brave Search API unreachable - check internet connection"
+        return [], "network", "Brave Search API unreachable - check internet connection"
     except httpx.HTTPStatusError as e:
         logger.warning(f"[web_search] Brave HTTP error: {e.response.status_code}")
         if e.response.status_code == 422:

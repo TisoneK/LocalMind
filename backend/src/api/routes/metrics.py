@@ -1,6 +1,8 @@
 """Metrics endpoint - performance metrics for bottom bar."""
 from __future__ import annotations
+
 import time
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 

@@ -10,12 +10,13 @@ No ORM — plain sqlite3 for zero extra dependencies and maximum transparency.
 Migrations live in storage/migrations/ for forward compatibility.
 """
 from __future__ import annotations
-import sqlite3
-import time
+
 import logging
+import sqlite3
 import threading
-from pathlib import Path
+import time
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Generator
 
 from core.models import Message, Role
@@ -58,17 +59,18 @@ CREATE TABLE IF NOT EXISTS migration_history (
 # ── Connection pool ─────────────────────────────────────────────────────────
 # v0.11 PERFORMANCE: Reuse SQLite connections instead of opening/closing
 # on every operation. This saves 5-15ms per append and 10-30ms per get_history.
-from queue import Queue, Empty
+from queue import Empty, Queue
+
 
 class _ConnectionPool:
     """Lightweight connection pool for SQLite — reuses connections."""
-    
+
     def __init__(self, db_path: str, max_connections: int = 4):
         self._db_path = db_path
         self._max_connections = max_connections
         self._pool: Queue[sqlite3.Connection] = Queue(max_connections)
         self._lock = threading.Lock()
-    
+
     def _create_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
         conn.row_factory = sqlite3.Row
@@ -76,7 +78,7 @@ class _ConnectionPool:
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = NORMAL")
         return conn
-    
+
     def get_conn(self) -> sqlite3.Connection:
         """Get a connection from the pool, creating if needed."""
         try:
@@ -87,7 +89,7 @@ class _ConnectionPool:
                     return self._create_connection()
                 # Pool exhausted, wait for a returned connection
                 return self._pool.get(timeout=5.0)
-    
+
     def return_conn(self, conn: sqlite3.Connection) -> None:
         """Return connection to the pool."""
         try:
@@ -160,10 +162,10 @@ class SessionStore:
     def _apply_migrations(self, conn):
         """Apply any pending migrations from the migrations directory."""
         # Path imported at module level — no inner re-import
-        
+
         migrations_dir = Path(__file__).parent / "migrations"
         migration_files = sorted(f for f in migrations_dir.glob("*.sql"))
-        
+
         for migration_file in migration_files:
             migration_name = migration_file.name
             with open(migration_file, 'r') as f:
@@ -172,7 +174,7 @@ class SessionStore:
                 cursor = conn.execute("SELECT name FROM migration_history")
                 migration_rows = cursor.fetchall()
                 existing_migrations = {row[0] for row in migration_rows} if migration_rows else set()
-                
+
                 if migration_name not in existing_migrations:
                     logger.info(f"Applying migration: {migration_name}")
                     conn.executescript(migration_sql)

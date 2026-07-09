@@ -233,23 +233,23 @@ async def _embed_async(text: str, base_url: str) -> list[float] | None:
     cached = _embed_cached(norm_text, base_url)
     if cached:
         return list(cached)
-    
+
     # Check persistent cache (sync)
     persistent = _get_persistent_cache(norm_text, base_url)
     if persistent:
         return persistent
-    
+
     # True async HTTP — no thread pool
     _stats.active_workers += 1
     try:
         client = await _get_async_client()
         embed_model = _get_embed_model()
-        
+
         response = await client.post(
             f"{base_url.rstrip('/')}/api/embeddings",
             json={"model": embed_model, "prompt": norm_text}
         )
-        
+
         if response.status_code == 200:
             embedding = response.json().get("embedding")
             if embedding:
@@ -266,7 +266,7 @@ async def _embed_async(text: str, base_url: str) -> list[float] | None:
         logger.warning(f"[embed] Failed: {e}")
     finally:
         _stats.active_workers -= 1
-    
+
     return None
 
 
@@ -307,7 +307,7 @@ async def _safe_persist_async(norm_text: str, base_url: str, vec: tuple[float, .
         key = hashlib.sha256(norm_text.encode()).hexdigest()[:32]
         db_path = settings.localmind_db_path or "./localmind.db"
         packed = struct.pack(f"{len(vec)}f", *vec)
-        
+
         def _write():
             try:
                 conn = sqlite3.connect(db_path, timeout=1.0)
@@ -320,7 +320,7 @@ async def _safe_persist_async(norm_text: str, base_url: str, vec: tuple[float, .
                 conn.close()
             except Exception as e:
                 logger.debug(f"[embed] persistent cache write failed: {e}")
-        
+
         # Run in executor to not block the event loop
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _write)
