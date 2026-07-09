@@ -5,7 +5,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
-[![CI](https://github.com/TisoneK/LocalMind/actions/workflows/ci.yml/badge.svg)](https://github.com/TisoneK/LocalMind/actions/workflows/ci.yml)
 
 ---
 
