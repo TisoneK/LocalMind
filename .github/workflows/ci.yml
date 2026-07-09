@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   backend:
@@ -30,13 +32,10 @@ jobs:
 
       - name: Ruff lint
         run: .venv/bin/ruff check .
-        # TODO: make blocking once ruff errors are resolved (H1 follow-up).
-        # Currently 116 errors remain (all E501 — long strings/prompts).
         continue-on-error: true
 
       - name: Pytest
         run: .venv/bin/pytest ../tests -q
-        # All 194 tests pass after C7 fix. Blocking.
 
       - name: Mypy type check
         run: .venv/bin/mypy src
@@ -65,8 +64,6 @@ jobs:
       - name: ESLint
         run: npx eslint .
         working-directory: frontend
-        # 0 errors, 48 warnings (intentional — any types, react-hooks patterns).
-        # Warnings don't fail the build; errors would.
 
       - name: Vite build
         run: npx vite build
