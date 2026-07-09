@@ -301,7 +301,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
             <p className="mb-3 text-xs text-[#8ab08a]">
               Choose between local Ollama or a cloud provider. Cloud providers require an API key below.
             </p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
               <button
                 onClick={() => handleAdapterSwitch('ollama')}
                 className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
@@ -312,7 +312,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               >
                 Ollama (Local)
               </button>
-              {PROVIDERS.slice(0, 8).map((p) => (
+              {PROVIDERS.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => handleAdapterSwitch(p.id)}
@@ -326,20 +326,6 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                 </button>
               ))}
             </div>
-            {PROVIDERS.length > 8 && (
-              <select
-                value={adapter.startsWith('ollama') ? '' : adapter}
-                onChange={(e) => e.target.value && handleAdapterSwitch(e.target.value)}
-                className="mt-2 w-full rounded-lg border border-[#1a2a1a] bg-[#0a0f0a] px-3 py-2 text-sm text-[#d4e8d4] focus:border-[#39d353] outline-none"
-              >
-                <option value="">More providers...</option>
-                {PROVIDERS.slice(8).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            )}
             {adapter !== 'ollama' && (
               <p className="mt-2 text-xs text-[#8ab08a]">
                 Current model: <span className="font-mono text-[#d4e8d4]">{model || 'default'}</span>
