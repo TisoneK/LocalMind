@@ -351,7 +351,9 @@ export function useChat(
 
               case 'thinking_start': {
                 thinkingContent = '';
-                thinkStartTime = Date.now();
+                // Don't reset thinkStartTime if already set by a status_update
+                // that arrived before thinking_start.
+                if (!thinkStartTime) thinkStartTime = Date.now();
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
@@ -680,14 +682,14 @@ export function useChat(
               }
 
               case 'status_update': {
-                // v0.10: Real-time progress feedback during tool execution.
-                // The backend emits status_update SSE events during long-running
-                // operations (e.g., "Searching the web...", "Planning steps...",
-                // "Fetching weather data for Cheptais..."). We show these as
-                // real-time status text in the message's thinking area so the
-                // user isn't staring at a blank "Thinking..." indicator.
+                // Real-time progress feedback during tool execution.
+                // Show as status text in the thinking area.
                 const statusText = parsed.status || '';
                 if (statusText) {
+                  // Set thinkStartTime if not already set — status_update
+                  // may arrive before thinking_start (e.g., from the
+                  // dispatcher's planning phase).
+                  if (!thinkStartTime) thinkStartTime = Date.now();
                   const statusMs = thinkStartTime ? Date.now() - thinkStartTime : 0;
                   setMessages((prev) => {
                     const updated = [...prev];

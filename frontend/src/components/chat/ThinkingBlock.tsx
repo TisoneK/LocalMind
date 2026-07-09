@@ -87,9 +87,9 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
         <span className={`text-[10px] uppercase tracking-wider font-medium ${stepColor || 'text-[#8ab08a]'}`}>
           {stepLabel || 'Thinking'}
         </span>
-        {duration && (
+        {duration !== undefined && duration > 0 && (
           <span className="text-[9px] text-[#e8a420] ml-auto">
-            {Math.round(duration / 1000)}s
+            {duration >= 1000 ? `${(duration / 1000).toFixed(1)}s` : `${duration}ms`}
           </span>
         )}
       </button>
