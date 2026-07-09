@@ -673,6 +673,19 @@ export function useChat(
                 break;
               }
 
+              case 'todo_created': {
+                // The agent created a todo from its execution plan.
+                // Dispatch a custom event so the useTodos hook (or any
+                // other listener) can add it to the todos panel.
+                const todo = parsed.todo || {};
+                if (todo.text) {
+                  window.dispatchEvent(new CustomEvent('localmind:todo-created', {
+                    detail: todo,
+                  }));
+                }
+                break;
+              }
+
               default:
                 if (parsed.content && !_isPromptLeak(parsed.content)) {
                   currentContent += parsed.content;
@@ -981,6 +994,31 @@ export function useTodos(sessionId: string | null) {
     loadTodos();
     return () => { mounted = false; };
   }, [sessionId]);
+
+  // Listen for agent-created todos from the SSE stream.
+  // When the agent plans, it parses its STEPS into todos and emits
+  // todo_created events. This listener adds them to the local state
+  // immediately for instant UI feedback.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.text) {
+        setTodos((prev) => {
+          // Don't add duplicates
+          if (prev.some((t) => t.id === detail.id || t.text === detail.text)) {
+            return prev;
+          }
+          return [...prev, {
+            id: detail.id || `todo-${Date.now()}`,
+            text: detail.text,
+            completed: detail.completed || false,
+          }];
+        });
+      }
+    };
+    window.addEventListener('localmind:todo-created', handler);
+    return () => window.removeEventListener('localmind:todo-created', handler);
+  }, []);
 
   const addTodo = useCallback(async (text: string) => {
     if (!sessionId) return;

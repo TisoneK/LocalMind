@@ -179,6 +179,19 @@ async def _event_stream(
                 if evt.type == "thinking_done":
                     yield _sse({"type": "thinking_end"})
 
+                # Bridge todo_created obs events to SSE so the frontend's
+                # Todos panel shows the agent's execution plan in real-time.
+                # The agent loop emits these after parsing the plan steps.
+                if evt.type == "todo_created":
+                    yield _sse({
+                        "type": "todo_created",
+                        "todo": {
+                            "id": evt.data.get("id", ""),
+                            "text": evt.data.get("text", ""),
+                            "completed": evt.data.get("completed", False),
+                        },
+                    })
+
                 # Bridge terminal_output obs events to SSE terminal_event.
                 # When the agent loop executes a shell or code_exec tool,
                 # it emits a terminal_output obs event containing the command

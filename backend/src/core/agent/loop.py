@@ -76,6 +76,36 @@ from core.agent.agent_filters import (
     _filter_code_output,
 )
 
+
+def _parse_plan_steps(plan_text: str) -> list[str]:
+    """Parse the UNDERSTANDING/STEPS/ARGS_PRECHECK plan format into todo items.
+
+    The planning prompt asks the model to respond with:
+        UNDERSTANDING: [what the user wants]
+        STEPS:
+        1. [step description]
+        2. [next step]
+        ARGS_PRECHECK: [verification]
+
+    This extracts the numbered steps so they can be shown as todos.
+    """
+    steps: list[str] = []
+    in_steps = False
+    for line in plan_text.split('\n'):
+        stripped = line.strip()
+        if stripped.upper().startswith('STEPS'):
+            in_steps = True
+            continue
+        if stripped.upper().startswith('ARGS_PRECHECK'):
+            in_steps = False
+            continue
+        if in_steps and stripped:
+            # Match numbered steps: "1. Do something" or "1) Do something"
+            match = re.match(r'^\d+[\.\)]\s*(.+)', stripped)
+            if match:
+                steps.append(match.group(1).strip())
+    return steps
+
 # ── Text-level tool call interception (MiniMax XML) ───────────────────────────
 # MiniMax M2.5 and similar models sometimes generate tool calls as inline XML
 # in the text content instead of using the structured tool_calls API format.
@@ -533,23 +563,52 @@ class AgentLoop:
         plan_context = ""
         iteration_offset = 0  # how many iterations the planning phase consumed
         if PLAN_ENABLED and intent in AGENT_INTENTS and not initial_tool_result and not skip_planning:
-            # Yield a status update so the user knows we're planning
-            # v0.10: Use status field instead of text so it shows in thinking area
-            yield StreamChunk(text="", done=False, status="Planning steps...")
+            # Stream the plan in real-time as thinking tokens so the user
+            # sees the model's reasoning (UNDERSTANDING, STEPS, ARGS_PRECHECK)
+            # as it happens — not after the full plan is generated.
+            yield StreamChunk(text="", done=False, thinking="start")
             if _obs:
                 _obs.emit("agent_planning_start", intent=intent.value)
-            plan_context, iteration_offset = await self._plan(
+
+            # Collect plan while streaming thinking tokens to the user
+            plan_chunks: list[str] = []
+            async for plan_chunk in self._plan_stream(
                 active_adapter=active_adapter,
                 intent=intent,
-                loop_messages=messages,  # use original messages, not modified ones
+                loop_messages=messages,
                 available_tools=available_tools,
                 env_context=env_context,
                 intent_history=intent_history,
-            )
+            ):
+                if plan_chunk:
+                    plan_chunks.append(plan_chunk)
+                    # Stream as thinking token — the frontend shows this in
+                    # the thinking block in real-time
+                    yield StreamChunk(text="", done=False, thinking=plan_chunk)
+
+            yield StreamChunk(text="", done=False, thinking="end")
+            plan_context = "".join(plan_chunks).strip()
+
+            # Truncate plan to prevent context bloat
+            _PLAN_MAX_CHARS = 1500
+            if len(plan_context) > _PLAN_MAX_CHARS:
+                plan_context = plan_context[:_PLAN_MAX_CHARS] + "\n[... plan truncated]"
+
+            iteration_offset = 1  # PLAN_ITERATION_COST
             trace.plan_text = plan_context
             if _obs:
                 _obs.emit("agent_planning_done", intent=intent.value,
                           plan_len=len(plan_context), iterations_cost=iteration_offset)
+
+            # Parse plan steps and emit as todo items via obs
+            # so the frontend's Todos panel shows the execution plan
+            _steps = _parse_plan_steps(plan_context)
+            if _steps and _obs:
+                for i, step in enumerate(_steps):
+                    _obs.emit("todo_created",
+                              id=f"plan-{i}",
+                              text=step,
+                              completed=False)
 
         # ── Inject agent system prompt (with plan context) ──────────────
         loop_messages = list(messages)
@@ -2232,6 +2291,74 @@ class AgentLoop:
     # ------------------------------------------------------------------
     # Planning phase
     # ------------------------------------------------------------------
+
+    async def _plan_stream(
+        self,
+        active_adapter,
+        intent: Intent,
+        loop_messages: list[dict],
+        available_tools: list[dict],
+        env_context: str,
+        intent_history: Optional[list[str]] = None,
+    ):
+        """
+        Streaming version of _plan — yields plan tokens as they arrive.
+
+        This lets the user see the model's planning reasoning (UNDERSTANDING,
+        STEPS, ARGS_PRECHECK) in real-time in the thinking block, instead of
+        waiting 5-15s for the full plan to be generated before showing anything.
+        """
+        # Find the user message
+        user_message = ""
+        for msg in reversed(loop_messages):
+            if msg.get("role") == "user":
+                user_message = msg.get("content", "")
+                break
+        if not user_message:
+            return
+
+        planning_prompt = build_planning_prompt(
+            intent=intent,
+            user_message=user_message,
+            available_tools=available_tools,
+            env_context=env_context,
+            intent_history=intent_history,
+        )
+
+        planning_messages = [
+            {"role": "system", "content": planning_prompt},
+            {"role": "user", "content": user_message},
+        ]
+
+        try:
+            _plan_timeout = PLAN_TIMEOUT_SECS
+            async def _stream_plan():
+                async for chunk in active_adapter.chat(
+                    planning_messages,
+                    temperature=0.1,
+                    intent="chat",
+                ):
+                    text = _filter_system_leaks(chunk.text)
+                    if text:
+                        yield text
+
+            # Use wait_for with a wrapper that collects the async generator
+            collected = []
+            async def _collect():
+                async for token in _stream_plan():
+                    collected.append(token)
+                    yield token
+
+            try:
+                async for token in asyncio.wait_for(_collect().__aiter__(), timeout=_plan_timeout):
+                    yield token
+            except asyncio.TimeoutError:
+                logger.warning(f"[agent.loop] planning stream timed out ({_plan_timeout}s)")
+                if collected:
+                    yield "".join(collected)
+
+        except Exception as exc:
+            logger.warning(f"[agent.loop] planning stream failed (non-fatal): {exc}")
 
     async def _plan(
         self,
