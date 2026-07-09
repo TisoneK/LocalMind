@@ -11,6 +11,7 @@ This tool handles explicit user-initiated memory operations.
 
 Registered as Intent.MEMORY_OP in the tool registry.
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,6 +35,7 @@ _STORE_PAT = re.compile(
 
 async def memory_op(message: str) -> ToolResult:
     from storage.vector import VectorStore
+
     store = VectorStore()
 
     # ── List all facts ────────────────────────────────────────────────────
@@ -51,8 +53,12 @@ async def memory_op(message: str) -> ToolResult:
             imp = float(f.get("importance", 0.5))
             lines.append(f"- [{mtype} | importance={imp:.1f}] {f['fact']}")
         content = f"**Stored memory ({len(facts)} facts):**\n" + "\n".join(lines)
-        return ToolResult(content=content, risk=RiskLevel.LOW, source="memory",
-                          metadata={"fact_count": len(facts)})
+        return ToolResult(
+            content=content,
+            risk=RiskLevel.LOW,
+            source="memory",
+            metadata={"fact_count": len(facts)},
+        )
 
     # ── Forget a fact ─────────────────────────────────────────────────────
     if _FORGET_PAT.search(message):
@@ -82,7 +88,11 @@ async def memory_op(message: str) -> ToolResult:
         )
 
     # Infer importance from wording
-    importance = 0.8 if any(w in message.lower() for w in ["always", "never", "prefer", "important", "critical"]) else 0.5
+    importance = (
+        0.8
+        if any(w in message.lower() for w in ["always", "never", "prefer", "important", "critical"])
+        else 0.5
+    )
 
     # Use the canonical session_id so facts are retrievable in the same session scope.
     # Falls back to a named bucket for CLI/direct tool calls without a session.
@@ -91,7 +101,11 @@ async def memory_op(message: str) -> ToolResult:
         fact=fact,
         session_id=effective_session_id,
         source="user",
-        extra_metadata={"memory_type": "semantic", "importance": str(importance), "access_count": "0"},
+        extra_metadata={
+            "memory_type": "semantic",
+            "importance": str(importance),
+            "access_count": "0",
+        },
     )
 
     if success:

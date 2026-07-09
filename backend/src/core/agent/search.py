@@ -7,6 +7,7 @@ Two responsibilities:
   2. Create an immediate extractive summary so the user gets fast feedback
      even when the full result file is large.
 """
+
 from __future__ import annotations
 
 import time
@@ -100,5 +101,5 @@ def create_extractive_summary(search_content: str, query: str) -> str:
         return header + "\n".join(summary_points[:5])
 
     # Fallback: first ten non-empty lines
-    fallback_lines = [l for l in lines if l.strip()][:10]
+    fallback_lines = [line for line in lines if line.strip()][:10]
     return header + "Key findings from search results:\n" + "\n".join(fallback_lines)

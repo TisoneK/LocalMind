@@ -7,6 +7,7 @@ subscribes via ObsSubscription to forward events as SSE JSON chunks.
 Design: a simple per-request list. No background threads, no global state.
 The Engine receives an optional ObsSubscription at process() call time.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,6 +28,7 @@ class ObsCollector:
     The engine holds a reference and emits into it.
     The chat route drains it between SSE chunks.
     """
+
     def __init__(self):
         self._events: list[ObsEvent] = []
 

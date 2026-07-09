@@ -4,6 +4,7 @@ Code Executor — tool entry point.
 Detects language, runs in sandbox, returns formatted result.
 Disabled if LOCALMIND_CODE_EXEC_ENABLED=false in .env.
 """
+
 from __future__ import annotations
 
 import logging

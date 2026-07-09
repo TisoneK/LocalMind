@@ -11,6 +11,7 @@ Usage:
 
     messages = maybe_compress_history(messages, adapter, token_budget)
 """
+
 from __future__ import annotations
 
 import logging
@@ -80,10 +81,7 @@ async def maybe_compress_history(
     to_keep = conv_msgs[n_to_compress:]
 
     # Build a text excerpt for the summariser
-    excerpt = "\n".join(
-        f"{m['role'].upper()}: {m.get('content', '')[:500]}"
-        for m in to_compress
-    )
+    excerpt = "\n".join(f"{m['role'].upper()}: {m.get('content', '')[:500]}" for m in to_compress)
 
     try:
         summary_chunks = []

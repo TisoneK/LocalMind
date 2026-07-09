@@ -1,6 +1,7 @@
 """
 Settings endpoints for adapter and provider configuration.
 """
+
 from __future__ import annotations
 
 import os
@@ -183,12 +184,25 @@ async def set_adapter(req: AdapterConfig):
     """
     Switch to a different adapter (ollama, openai, anthropic, etc.).
     """
-    valid_adapters = ["ollama", "openai", "anthropic", "openrouter", "deepseek", "lite-llm", "zen", "groq", "together", "fireworks", "deepinfra", "mistral", "cohere", "vercel", "cloudflare"]
+    valid_adapters = [
+        "ollama",
+        "openai",
+        "anthropic",
+        "openrouter",
+        "deepseek",
+        "lite-llm",
+        "zen",
+        "groq",
+        "together",
+        "fireworks",
+        "deepinfra",
+        "mistral",
+        "cohere",
+        "vercel",
+        "cloudflare",
+    ]
     if req.adapter not in valid_adapters:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid adapter. Valid: {valid_adapters}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid adapter. Valid: {valid_adapters}")
 
     # For cloud providers, check if an API key is available.
     # Check both runtime-stored keys (settings.json) and env vars.
@@ -200,7 +214,7 @@ async def set_adapter(req: AdapterConfig):
             if not (runtime_key or env_key):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"API key not set for {info['name']}. Set it via the Settings UI or {info['key_env']} in .env."
+                    detail=f"API key not set for {info['name']}. Set it via the Settings UI or {info['key_env']} in .env.",
                 )
 
     settings.localmind_adapter = req.adapter
@@ -248,7 +262,7 @@ async def set_adapter(req: AdapterConfig):
     return {
         "adapter": settings.localmind_adapter,
         "model": resolved_model or "default",
-        "message": f"Switched to {req.adapter}"
+        "message": f"Switched to {req.adapter}",
     }
 
 
@@ -260,8 +274,7 @@ async def set_provider_key(req: ProviderKeyRequest):
     """
     if req.provider not in PROVIDER_INFO:
         raise HTTPException(
-            status_code=400,
-            detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}"
+            status_code=400, detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}"
         )
 
     info = PROVIDER_INFO[req.provider]
@@ -273,7 +286,7 @@ async def set_provider_key(req: ProviderKeyRequest):
         "provider": req.provider,
         "name": info["name"],
         "validated": True,
-        "message": f"API key saved for {info['name']}"
+        "message": f"API key saved for {info['name']}",
     }
 
 
@@ -292,8 +305,7 @@ async def delete_provider_key(req: DeleteProviderKeyRequest):
     """
     if req.provider not in PROVIDER_INFO:
         raise HTTPException(
-            status_code=400,
-            detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}"
+            status_code=400, detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}"
         )
 
     info = PROVIDER_INFO[req.provider]
@@ -303,6 +315,7 @@ async def delete_provider_key(req: DeleteProviderKeyRequest):
         "provider": req.provider,
         "name": info["name"],
         "deleted": removed,
-        "message": f"API key removed for {info['name']}" if removed
-                   else f"No API key was stored for {info['name']}",
+        "message": f"API key removed for {info['name']}"
+        if removed
+        else f"No API key was stored for {info['name']}",
     }

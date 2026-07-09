@@ -3,6 +3,7 @@ localmind chat — interactive REPL session.
 Maintains session history across turns.
 Commands: /exit /clear /file <path> /session /help
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -20,7 +21,9 @@ console = Console()
 
 
 def command(
-    session: Optional[str] = typer.Option(None, "--session", "-s", help="Resume an existing session"),
+    session: Optional[str] = typer.Option(
+        None, "--session", "-s", help="Resume an existing session"
+    ),
     model: Optional[str] = typer.Option(None, "--model", "-m", help="Model to use"),
 ):
     """Start an interactive chat session."""
@@ -37,13 +40,15 @@ async def _repl(session: Optional[str], model: Optional[str]):
     session_id = session or str(uuid.uuid4())
     engine = Engine()
 
-    console.print(Panel(
-        f"[bold cyan]LocalMind[/bold cyan] interactive chat\n"
-        f"Session: [dim]{session_id}[/dim]\n"
-        f"Model:   [dim]{settings.ollama_model}[/dim]\n\n"
-        f"Commands: [bold]/file <path>[/bold]  [bold]/clear[/bold]  [bold]/session[/bold]  [bold]/exit[/bold]",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold cyan]LocalMind[/bold cyan] interactive chat\n"
+            f"Session: [dim]{session_id}[/dim]\n"
+            f"Model:   [dim]{settings.ollama_model}[/dim]\n\n"
+            f"Commands: [bold]/file <path>[/bold]  [bold]/clear[/bold]  [bold]/session[/bold]  [bold]/exit[/bold]",
+            border_style="cyan",
+        )
+    )
 
     pending_file: Optional[Path] = None
 
@@ -88,7 +93,9 @@ async def _repl(session: Optional[str], model: Optional[str]):
                 console.print(f"[red]File not found:[/red] {file_path}")
             else:
                 pending_file = file_path
-                console.print(f"[dim]File attached: {file_path.name} ({file_path.stat().st_size:,} bytes)[/dim]")
+                console.print(
+                    f"[dim]File attached: {file_path.name} ({file_path.stat().st_size:,} bytes)[/dim]"
+                )
             continue
 
         # ── Process message ─────────────────────────────────────────────
@@ -100,6 +107,7 @@ async def _repl(session: Optional[str], model: Optional[str]):
             file_bytes = pending_file.read_bytes()
             filename = pending_file.name
             import mimetypes
+
             content_type, _ = mimetypes.guess_type(str(pending_file))
             content_type = content_type or "application/octet-stream"
             pending_file = None

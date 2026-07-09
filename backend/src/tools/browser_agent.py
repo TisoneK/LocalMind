@@ -30,6 +30,7 @@ Usage from the agent loop:
 The tool parses the action, runs the corresponding agent-browser command,
 and returns the output as a ToolResult.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -54,10 +55,16 @@ _BROWSER_TIMEOUT = 30
 _MAX_OUTPUT = 8000
 
 
-async def _run_browser_cmd(args: list[str], timeout: int = _BROWSER_TIMEOUT) -> tuple[int, str, str]:
+async def _run_browser_cmd(
+    args: list[str], timeout: int = _BROWSER_TIMEOUT
+) -> tuple[int, str, str]:
     """Run an agent-browser command and return (exit_code, stdout, stderr)."""
     if not BROWSER_AVAILABLE:
-        return 1, "", "agent-browser is not installed. Run: npm install -g agent-browser && agent-browser install"
+        return (
+            1,
+            "",
+            "agent-browser is not installed. Run: npm install -g agent-browser && agent-browser install",
+        )
 
     cmd = [_AGENT_BROWSER_BIN] + args
     logger.info("[browser_agent] running: %s", " ".join(cmd[:5]))
@@ -115,12 +122,14 @@ def _parse_action(message: str) -> dict | None:
     msg_lower = message.lower()
 
     # URL by itself → open
-    url_match = re.search(r'https?://\S+', message)
-    if url_match and not msg_lower.startswith(("click", "fill", "scroll", "snapshot", "screenshot", "close", "back", "forward", "eval")):
+    url_match = re.search(r"https?://\S+", message)
+    if url_match and not msg_lower.startswith(
+        ("click", "fill", "scroll", "snapshot", "screenshot", "close", "back", "forward", "eval")
+    ):
         return {"action": "open", "url": url_match.group(0)}
 
     # "open <url>"
-    open_match = re.match(r'open\s+(https?://\S+)', msg_lower)
+    open_match = re.match(r"open\s+(https?://\S+)", msg_lower)
     if open_match:
         return {"action": "open", "url": open_match.group(1)}
 
@@ -131,12 +140,14 @@ def _parse_action(message: str) -> dict | None:
         return {"action": "screenshot"}
 
     # "click @e1"
-    click_match = re.search(r'click\s+(@\w+)', msg_lower)
+    click_match = re.search(r"click\s+(@\w+)", msg_lower)
     if click_match:
         return {"action": "click", "ref": click_match.group(1)}
 
     # "fill @e1 with text"
-    fill_match = re.search(r'fill\s+(@\w+)\s+(?:with\s+)?["\']?(.+?)["\']?\s*$', message, re.IGNORECASE)
+    fill_match = re.search(
+        r'fill\s+(@\w+)\s+(?:with\s+)?["\']?(.+?)["\']?\s*$', message, re.IGNORECASE
+    )
     if fill_match:
         return {"action": "fill", "ref": fill_match.group(1), "value": fill_match.group(2)}
 
@@ -207,8 +218,13 @@ async def browser_agent(message: str) -> ToolResult:
     if act == "open":
         url = action.get("url", "")
         if not url:
-            return ToolResult(content="No URL provided for 'open' action.", risk=RiskLevel.LOW,
-                            source="browser_agent", success=False, error_type="missing_url")
+            return ToolResult(
+                content="No URL provided for 'open' action.",
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="missing_url",
+            )
         args = ["open", url]
         risk = RiskLevel.MEDIUM  # Navigating to a URL is medium risk
 
@@ -221,8 +237,13 @@ async def browser_agent(message: str) -> ToolResult:
     elif act == "click":
         ref = action.get("ref", "")
         if not ref:
-            return ToolResult(content="No ref provided for 'click' action.", risk=RiskLevel.LOW,
-                            source="browser_agent", success=False, error_type="missing_ref")
+            return ToolResult(
+                content="No ref provided for 'click' action.",
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="missing_ref",
+            )
         args = ["click", ref]
         risk = RiskLevel.MEDIUM
 
@@ -230,8 +251,13 @@ async def browser_agent(message: str) -> ToolResult:
         ref = action.get("ref", "")
         value = action.get("value", "")
         if not ref:
-            return ToolResult(content="No ref provided for 'fill' action.", risk=RiskLevel.LOW,
-                            source="browser_agent", success=False, error_type="missing_ref")
+            return ToolResult(
+                content="No ref provided for 'fill' action.",
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="missing_ref",
+            )
         args = ["fill", ref, value]
         risk = RiskLevel.MEDIUM
 
@@ -239,15 +265,25 @@ async def browser_agent(message: str) -> ToolResult:
         ref = action.get("ref", "")
         value = action.get("value", "")
         if not ref:
-            return ToolResult(content="No ref provided for 'type' action.", risk=RiskLevel.LOW,
-                            source="browser_agent", success=False, error_type="missing_ref")
+            return ToolResult(
+                content="No ref provided for 'type' action.",
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="missing_ref",
+            )
         args = ["type", ref, value]
 
     elif act == "press":
         key = action.get("key", action.get("value", ""))
         if not key:
-            return ToolResult(content="No key provided for 'press' action.", risk=RiskLevel.LOW,
-                            source="browser_agent", success=False, error_type="missing_key")
+            return ToolResult(
+                content="No key provided for 'press' action.",
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="missing_key",
+            )
         args = ["press", key]
 
     elif act == "scroll":
@@ -258,8 +294,13 @@ async def browser_agent(message: str) -> ToolResult:
     elif act == "scrollintoview":
         ref = action.get("ref", "")
         if not ref:
-            return ToolResult(content="No ref provided.", risk=RiskLevel.LOW,
-                            source="browser_agent", success=False, error_type="missing_ref")
+            return ToolResult(
+                content="No ref provided.",
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="missing_ref",
+            )
         args = ["scrollintoview", ref]
 
     elif act == "screenshot":
@@ -274,8 +315,13 @@ async def browser_agent(message: str) -> ToolResult:
     elif act == "text":
         ref = action.get("ref", "")
         if not ref:
-            return ToolResult(content="No ref provided for 'text' action.", risk=RiskLevel.LOW,
-                            source="browser_agent", success=False, error_type="missing_ref")
+            return ToolResult(
+                content="No ref provided for 'text' action.",
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="missing_ref",
+            )
         args = ["get", "text", ref]
 
     elif act == "url":
@@ -287,8 +333,13 @@ async def browser_agent(message: str) -> ToolResult:
     elif act == "eval":
         script = action.get("script", action.get("value", ""))
         if not script:
-            return ToolResult(content="No script provided for 'eval' action.", risk=RiskLevel.LOW,
-                            source="browser_agent", success=False, error_type="missing_script")
+            return ToolResult(
+                content="No script provided for 'eval' action.",
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="missing_script",
+            )
         args = ["eval", script]
         risk = RiskLevel.HIGH  # JavaScript execution is high risk
 
@@ -307,8 +358,13 @@ async def browser_agent(message: str) -> ToolResult:
     elif act == "wait":
         target = action.get("target", action.get("value", ""))
         if not target:
-            return ToolResult(content="No wait target provided.", risk=RiskLevel.LOW,
-                            source="browser_agent", success=False, error_type="missing_target")
+            return ToolResult(
+                content="No wait target provided.",
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="missing_target",
+            )
         args = ["wait", target]
 
     else:
@@ -336,7 +392,9 @@ async def browser_agent(message: str) -> ToolResult:
         output = f"Error: {stderr.strip()}\n\n{output}"
 
     return ToolResult(
-        content=f"Browser action: {act}\n\n{output}" if output else f"Browser action: {act} (no output)",
+        content=f"Browser action: {act}\n\n{output}"
+        if output
+        else f"Browser action: {act} (no output)",
         risk=risk,
         source="browser_agent",
         success=success,

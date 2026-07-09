@@ -16,6 +16,7 @@ v0.2 fixes vs v0.1:
 - typing imports replaced with built-in generics (PEP 585)
 - logger.debug uses lazy % formatting
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,9 +34,11 @@ MAX_SAMPLES_PER_KEY = 1000
 
 # ── Data types ────────────────────────────────────────────────────────────────
 
+
 @dataclass(slots=True)
 class MetricSample:
     """Single timing and outcome sample."""
+
     timestamp: float
     latency_ms: int
     success: bool
@@ -44,6 +47,7 @@ class MetricSample:
 @dataclass(frozen=True)
 class AggregatedMetrics:
     """Snapshot of computed metrics for one intent/tool."""
+
     total_requests: int
     success_count: int
     p50_ms: int
@@ -59,6 +63,7 @@ class AggregatedMetrics:
 
 
 # ── Percentile helper ─────────────────────────────────────────────────────────
+
 
 def _percentile(sorted_samples: list[int], p: float) -> int:
     """
@@ -90,8 +95,11 @@ def _compute(samples: deque[MetricSample]) -> AggregatedMetrics:
     """Compute aggregated metrics from a raw sample deque."""
     if not samples:
         return AggregatedMetrics(
-            total_requests=0, success_count=0,
-            p50_ms=0, p95_ms=0, p99_ms=0,
+            total_requests=0,
+            success_count=0,
+            p50_ms=0,
+            p95_ms=0,
+            p99_ms=0,
         )
 
     total = len(samples)
@@ -108,6 +116,7 @@ def _compute(samples: deque[MetricSample]) -> AggregatedMetrics:
 
 
 # ── MetricsStore ──────────────────────────────────────────────────────────────
+
 
 class MetricsStore:
     """
@@ -192,8 +201,11 @@ class MetricsStore:
             samples = self._samples.get(key)
             if not samples:
                 return AggregatedMetrics(
-                    total_requests=0, success_count=0,
-                    p50_ms=0, p95_ms=0, p99_ms=0,
+                    total_requests=0,
+                    success_count=0,
+                    p50_ms=0,
+                    p95_ms=0,
+                    p99_ms=0,
                 )
             return _compute(samples)
 
@@ -230,7 +242,7 @@ class MetricsStore:
                 agg = _compute(samples)
                 result[key] = {
                     "total_requests": agg.total_requests,
-                    "success_rate":   agg.success_rate,
+                    "success_rate": agg.success_rate,
                     "p50_latency_ms": agg.p50_ms,
                     "p95_latency_ms": agg.p95_ms,
                     "p99_latency_ms": agg.p99_ms,
@@ -305,9 +317,7 @@ class MetricsStore:
             )
             dropped = before - len(live)
             if dropped:
-                logger.debug(
-                    "[metrics] evicted %d old samples for '%s'", dropped, key
-                )
+                logger.debug("[metrics] evicted %d old samples for '%s'", dropped, key)
             if live:
                 self._samples[key] = live
             else:

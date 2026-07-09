@@ -7,6 +7,7 @@ Two filters:
   _filter_tool_injection()  — neutralizes prompt injection patterns in tool outputs
                               before they re-enter the LLM context
 """
+
 from __future__ import annotations
 
 import re

@@ -23,6 +23,7 @@ v0.8 changes:
   requires both 'path' AND 'content', shell commands must match the
   current OS, etc.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -51,6 +52,7 @@ def build_planning_prompt(
     system prompt so the model knows exactly what to do.
     """
     from core.agent.constants import AGENT_ALLOWED_TOOLS
+
     agent_tool_list = "\n".join(
         f"  - {t['intent']}: {t['description']}"
         for t in available_tools
@@ -153,6 +155,7 @@ WEB_FETCH WORKFLOW — follow this template:
 
     # Inject intent-specific skill expertise (condensed — planner must be brief)
     from core.context_builder import _intent_fragment_name, _load_fragment
+
     skill_fragment = _load_fragment(_intent_fragment_name(intent))
     skill_hint = ""
     if skill_fragment:
@@ -186,7 +189,7 @@ REASONING DEPTH (CRITICAL — don't just state your next action, REASON):
 - What could go wrong with the source data? (stale pages, placeholder content, future dates presented as current)
 - How will I verify the results are correct before reporting them?
 - Example BAD thinking: "I'll search the web for today's World Cup fixtures"
-- Example GOOD thinking: "User wants today's World Cup games. Today is {env_context.split('Current date: ')[1].split(chr(10))[0] if 'Current date: ' in env_context else 'unknown'}. I'll search for fixtures on that specific date. After getting results, I'll check if the source's date matches today — if a page shows a future date or placeholder teams, that's not today's data."
+- Example GOOD thinking: "User wants today's World Cup games. Today is {env_context.split("Current date: ")[1].split(chr(10))[0] if "Current date: " in env_context else "unknown"}. I'll search for fixtures on that specific date. After getting results, I'll check if the source's date matches today — if a page shows a future date or placeholder teams, that's not today's data."
 
 Respond with a concise plan in this format:
 
@@ -223,6 +226,7 @@ def build_chat_agent_prompt(
     The reformulated instruction is then passed to the Execution Agent.
     """
     from core.agent.constants import AGENT_ALLOWED_TOOLS
+
     _tool_descriptions = {
         "file_write": "Create/overwrite a file with specified content (requires path AND content)",
         "edit_file": "Edit an existing file in-place (must read file first)",
@@ -234,7 +238,11 @@ def build_chat_agent_prompt(
         "memory_op": "Store, recall, or delete persistent facts",
         "sysinfo": "Get current system info (time, date, hardware)",
     }
-    tool_list = "\n".join(f"  - {name}: {desc}" for name, desc in _tool_descriptions.items() if name in AGENT_ALLOWED_TOOLS)
+    tool_list = "\n".join(
+        f"  - {name}: {desc}"
+        for name, desc in _tool_descriptions.items()
+        if name in AGENT_ALLOWED_TOOLS
+    )
 
     intent_ctx = ""
     if intent_history:
@@ -243,12 +251,10 @@ def build_chat_agent_prompt(
     memory_section = ""
     if memory_facts:
         memory_section = (
-            "\nWhat you know about this user:\n"
-            + "\n".join(f"- {f}" for f in memory_facts)
-            + "\n"
+            "\nWhat you know about this user:\n" + "\n".join(f"- {f}" for f in memory_facts) + "\n"
         )
 
-    intent_label = intent.value.replace('_', ' ').title()
+    intent_label = intent.value.replace("_", " ").title()
 
     return f"""You are LocalMind's Chat Agent. Your job is to ACKNOWLEDGE the user's request and REFORMULATE it into a precise, structured instruction for the Execution Agent.
 
@@ -322,6 +328,7 @@ def build_orchestrator_prompt(
         ORCHESTRATOR_CONFIDENCE_HIGH,
         ORCHESTRATOR_CONFIDENCE_MEDIUM,
     )
+
     _tool_descriptions = {
         "file_write": "Create/overwrite a file (requires path AND content)",
         "edit_file": "Edit an existing file in-place (must read file first)",
@@ -333,7 +340,11 @@ def build_orchestrator_prompt(
         "memory_op": "Store, recall, or delete persistent facts",
         "sysinfo": "Get current system info (time, date, hardware)",
     }
-    tool_list = "\n".join(f"  - {name}: {desc}" for name, desc in _tool_descriptions.items() if name in AGENT_ALLOWED_TOOLS)
+    tool_list = "\n".join(
+        f"  - {name}: {desc}"
+        for name, desc in _tool_descriptions.items()
+        if name in AGENT_ALLOWED_TOOLS
+    )
 
     intent_ctx = ""
     if intent_history:
@@ -342,12 +353,10 @@ def build_orchestrator_prompt(
     memory_section = ""
     if memory_facts:
         memory_section = (
-            "\nWhat you know about this user:\n"
-            + "\n".join(f"- {f}" for f in memory_facts)
-            + "\n"
+            "\nWhat you know about this user:\n" + "\n".join(f"- {f}" for f in memory_facts) + "\n"
         )
 
-    intent_label = intent.value.replace('_', ' ').title()
+    intent_label = intent.value.replace("_", " ").title()
 
     return f"""You are LocalMind's Orchestrator. Your job is to analyze the Chat Agent's reformulated instruction and create a structured execution plan with a confidence assessment.
 
@@ -416,6 +425,7 @@ def build_agent_system_prompt(
     # Inject environment context (OS, shell, CWD) so the model knows
     # what platform it's on — prevents mkdir -p on Windows, etc.
     from core.context_builder import _build_environment_context
+
     env_context = _build_environment_context()
 
     intent_ctx = ""
@@ -444,6 +454,7 @@ SHELL TOOL GUIDANCE — ANTI-FABRICATION:
     # Build tool list restricted to only agent-allowed tools, so the LLM
     # cannot hallucinate calls to direct-dispatch tools (sysinfo, file_task, shell).
     from core.agent.constants import AGENT_ALLOWED_TOOLS
+
     agent_tool_list = "\n".join(
         f"  - {t['intent']}: {t['description']}"
         for t in available_tools
@@ -560,6 +571,7 @@ Do NOT re-plan or re-think — just call the tools as described in the plan.
     # research methodology, shell safety, etc.) without bloating base.md.
     skill_section = ""
     from core.context_builder import _intent_fragment_name, _load_fragment
+
     skill_fragment = _load_fragment(_intent_fragment_name(intent))
     if skill_fragment:
         skill_section = f"\n## Intent-specific expertise\n{skill_fragment}\n"

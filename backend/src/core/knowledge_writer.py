@@ -16,6 +16,7 @@ Idempotent: safe to call multiple times. Writes only when values change.
 Fails silently — a missing or unwritable localmind.md is logged but does
 not prevent the server from starting.
 """
+
 from __future__ import annotations
 
 import logging

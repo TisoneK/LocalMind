@@ -4,6 +4,7 @@ Agent-level output filters.
 Thin wrappers / additions on top of core.filters so that loop.py has a
 single import point for all sanitization needs.
 """
+
 from __future__ import annotations
 
 import re

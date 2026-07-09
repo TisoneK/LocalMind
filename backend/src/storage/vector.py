@@ -38,6 +38,7 @@ New additions (fully backwards-compatible):
   clear_embed_cache()             — evict LRU tier (e.g. after model switch)
   embed_cache_info() -> str       — human-readable cache stats
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -66,9 +67,11 @@ logger = logging.getLogger(__name__)
 
 _EMBED_TIMEOUT = 30
 
+
 def _get_embed_model() -> str:
     """Read embed model from settings at call time (supports hot-swap in tests)."""
     return settings.ollama_embed_model
+
 
 # ── Bounded thread pool ────────────────────────────────────────────────────────
 # Shared across all VectorStore instances.  Sized to CPU count — beyond that,
@@ -87,44 +90,47 @@ _CPU_COUNT: int = os.cpu_count() or 4
 # _WRITE_BUFFER_FLUSH_SECS seconds, whichever comes first.
 # This turns N individual INSERTs (each with its own fsync) into one batch
 # commit — 5–20× fewer disk syncs under ingestion load.
-_WRITE_BUFFER_FLUSH_EVERY: int   = 20     # items
-_WRITE_BUFFER_FLUSH_SECS:  float = 2.0    # seconds
+_WRITE_BUFFER_FLUSH_EVERY: int = 20  # items
+_WRITE_BUFFER_FLUSH_SECS: float = 2.0  # seconds
 
 
 # ── Observability ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class VectorMetrics:
     """Snapshot of all observable counters.  Returned by VectorStore.metrics()."""
-    lru_hits:          int   = 0
-    lru_misses:        int   = 0
-    lru_size:          int   = 0
-    persistent_hits:   int   = 0
-    persistent_misses: int   = 0
-    embed_count:       int   = 0
-    embed_p50_ms:      float = 0.0
-    embed_p95_ms:      float = 0.0
-    sem_wait_p50_ms:   float = 0.0
-    sem_wait_p95_ms:   float = 0.0
-    db_write_count:    int   = 0
-    db_write_p50_ms:   float = 0.0
-    db_write_p95_ms:   float = 0.0
-    active_workers:    int   = 0
+
+    lru_hits: int = 0
+    lru_misses: int = 0
+    lru_size: int = 0
+    persistent_hits: int = 0
+    persistent_misses: int = 0
+    embed_count: int = 0
+    embed_p50_ms: float = 0.0
+    embed_p95_ms: float = 0.0
+    sem_wait_p50_ms: float = 0.0
+    sem_wait_p95_ms: float = 0.0
+    db_write_count: int = 0
+    db_write_p50_ms: float = 0.0
+    db_write_p95_ms: float = 0.0
+    active_workers: int = 0
 
 
 class _Stats:
     """Rolling window of latency samples (last 1 000 per dimension)."""
+
     _WINDOW = 1000
 
     def __init__(self) -> None:
-        self._lock      = threading.Lock()
-        self._embed:    collections.deque = collections.deque(maxlen=self._WINDOW)
+        self._lock = threading.Lock()
+        self._embed: collections.deque = collections.deque(maxlen=self._WINDOW)
         self._sem_wait: collections.deque = collections.deque(maxlen=self._WINDOW)
         self._db_write: collections.deque = collections.deque(maxlen=self._WINDOW)
-        self.persistent_hits   = 0
+        self.persistent_hits = 0
         self.persistent_misses = 0
-        self.active_workers    = 0
-        self.db_write_count    = 0
+        self.active_workers = 0
+        self.db_write_count = 0
 
     def record_embed(self, ms: float) -> None:
         with self._lock:
@@ -149,20 +155,20 @@ class _Stats:
         with self._lock:
             info = _embed_cached.cache_info()
             return dict(
-                lru_hits          = info.hits,
-                lru_misses        = info.misses,
-                lru_size          = info.currsize,
-                persistent_hits   = self.persistent_hits,
-                persistent_misses = self.persistent_misses,
-                embed_count       = len(self._embed),
-                embed_p50_ms      = self._pct(self._embed, 50),
-                embed_p95_ms      = self._pct(self._embed, 95),
-                sem_wait_p50_ms   = self._pct(self._sem_wait, 50),
-                sem_wait_p95_ms   = self._pct(self._sem_wait, 95),
-                db_write_count    = self.db_write_count,
-                db_write_p50_ms   = self._pct(self._db_write, 50),
-                db_write_p95_ms   = self._pct(self._db_write, 95),
-                active_workers    = self.active_workers,
+                lru_hits=info.hits,
+                lru_misses=info.misses,
+                lru_size=info.currsize,
+                persistent_hits=self.persistent_hits,
+                persistent_misses=self.persistent_misses,
+                embed_count=len(self._embed),
+                embed_p50_ms=self._pct(self._embed, 50),
+                embed_p95_ms=self._pct(self._embed, 95),
+                sem_wait_p50_ms=self._pct(self._sem_wait, 50),
+                sem_wait_p95_ms=self._pct(self._sem_wait, 95),
+                db_write_count=self.db_write_count,
+                db_write_p50_ms=self._pct(self._db_write, 50),
+                db_write_p95_ms=self._pct(self._db_write, 95),
+                active_workers=self.active_workers,
             )
 
 
@@ -170,6 +176,7 @@ _stats = _Stats()  # module-level singleton shared by all VectorStore instances
 
 
 # ── Embedding cache — Tier 1: LRU ─────────────────────────────────────────────
+
 
 def _normalise_text(text: str) -> str:
     """Stable cache key: strip, collapse whitespace, lowercase."""
@@ -183,16 +190,20 @@ def _embed_cached(norm_text: str, base_url: str) -> tuple:
     Records Ollama latency into _stats.
     Do NOT call directly — use _embed_async() which handles text normalisation.
     """
-    t0  = time.monotonic()
+    t0 = time.monotonic()
     url = f"{base_url.rstrip('/')}/api/embeddings"
     embed_model = _get_embed_model()
     result = None
     try:
-        resp = httpx.post(url, json={"model": embed_model, "prompt": norm_text},
-                          timeout=_EMBED_TIMEOUT)
+        resp = httpx.post(
+            url, json={"model": embed_model, "prompt": norm_text}, timeout=_EMBED_TIMEOUT
+        )
         if resp.status_code != 200:
-            resp = httpx.post(url, json={"model": settings.ollama_model, "prompt": norm_text},
-                              timeout=_EMBED_TIMEOUT)
+            resp = httpx.post(
+                url,
+                json={"model": settings.ollama_model, "prompt": norm_text},
+                timeout=_EMBED_TIMEOUT,
+            )
         data = resp.json().get("embedding")
         result = tuple(data) if data else None
     except Exception as exc:
@@ -209,6 +220,7 @@ def _embed_cached(norm_text: str, base_url: str) -> tuple:
 
 _async_client: httpx.AsyncClient | None = None
 
+
 async def _get_async_client() -> httpx.AsyncClient:
     """Get or create a shared async HTTP client."""
     global _async_client
@@ -220,12 +232,12 @@ async def _get_async_client() -> httpx.AsyncClient:
 async def _embed_async(text: str, base_url: str) -> list[float] | None:
     """
     True async embedding via httpx.AsyncClient — no thread pool needed.
-    
+
     v0.11 PERFORMANCE IMPROVEMENT:
     - Eliminates ThreadPoolExecutor context-switching overhead
     - Allows unlimited concurrent embeddings (no CPU-count limit)
     - Uses asyncio.Semaphore for bounded concurrency control instead
-    
+
     Falls back to LRU cache first, then persistent cache, then async HTTP.
     """
     # Check LRU cache first (sync, fast)
@@ -247,7 +259,7 @@ async def _embed_async(text: str, base_url: str) -> list[float] | None:
 
         response = await client.post(
             f"{base_url.rstrip('/')}/api/embeddings",
-            json={"model": embed_model, "prompt": norm_text}
+            json={"model": embed_model, "prompt": norm_text},
         )
 
         if response.status_code == 200:
@@ -272,6 +284,7 @@ async def _embed_async(text: str, base_url: str) -> list[float] | None:
 
 # ── Persistent cache helpers for async embedding ───────────────────────────────
 
+
 def _get_persistent_cache(norm_text: str, base_url: str) -> list[float] | None:
     """
     Check the Tier-2 SQLite embed_cache for a pre-computed embedding.
@@ -283,9 +296,7 @@ def _get_persistent_cache(norm_text: str, base_url: str) -> list[float] | None:
         conn = sqlite3.connect(db_path, timeout=1.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode = WAL")
-        row = conn.execute(
-            "SELECT vec FROM embed_cache WHERE key = ?", (key,)
-        ).fetchone()
+        row = conn.execute("SELECT vec FROM embed_cache WHERE key = ?", (key,)).fetchone()
         conn.close()
         if row:
             _stats.persistent_hits += 1
@@ -313,8 +324,7 @@ async def _safe_persist_async(norm_text: str, base_url: str, vec: tuple[float, .
                 conn = sqlite3.connect(db_path, timeout=1.0)
                 conn.execute("PRAGMA journal_mode = WAL")
                 conn.execute(
-                    "INSERT OR IGNORE INTO embed_cache(key, vec) VALUES (?, ?)",
-                    (key, packed)
+                    "INSERT OR IGNORE INTO embed_cache(key, vec) VALUES (?, ?)", (key, packed)
                 )
                 conn.commit()
                 conn.close()
@@ -330,6 +340,7 @@ async def _safe_persist_async(norm_text: str, base_url: str, vec: tuple[float, .
 
 # ── Backward compatibility shim ────────────────────────────────────────────────
 # Keep the old run_in_executor path for any legacy code that needs it.
+
 
 async def _embed_async_legacy(text: str, base_url: str) -> list[float] | None:
     """
@@ -348,6 +359,7 @@ async def _embed_async_legacy(text: str, base_url: str) -> list[float] | None:
 
 
 # ── Vector math ────────────────────────────────────────────────────────────────
+
 
 def _l2_norm(vec: list[float]) -> float:
     return math.sqrt(sum(x * x for x in vec))
@@ -388,6 +400,7 @@ def _get_connection(db_path: str) -> sqlite3.Connection:
             conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("PRAGMA cache_size = -8000")
             import sqlite_vec
+
             conn.enable_load_extension(True)
             sqlite_vec.load(conn)
             conn.enable_load_extension(False)
@@ -397,12 +410,13 @@ def _get_connection(db_path: str) -> sqlite3.Connection:
 
 # ── VectorStore ────────────────────────────────────────────────────────────────
 
+
 class VectorStore:
     def __init__(self, db_path: str = None):
-        self._db_path  = db_path or settings.localmind_db_path or "./localmind.db"
+        self._db_path = db_path or settings.localmind_db_path or "./localmind.db"
         self._base_url = settings.ollama_base_url
         self._dim: int | None = None
-        self._ready    = False
+        self._ready = False
 
         # Soft concurrency guard for single-embed calls (_embed).
         # Prevents executor queue runaway when many coroutines all call _embed
@@ -416,7 +430,7 @@ class VectorStore:
         # Pairs are queued here and flushed as a single transaction, turning
         # N individual fsyncs into one — critical for ingestion throughput.
         self._write_buf: list[tuple[str, bytes]] = []
-        self._write_buf_lock   = threading.Lock()
+        self._write_buf_lock = threading.Lock()
         self._write_buf_last_flush: float = time.monotonic()
 
         self._dim_mismatch: tuple[int, int] | None = None  # (stored_dim, actual_dim)
@@ -476,9 +490,7 @@ class VectorStore:
                 )
             """)
             conn.commit()
-            row = conn.execute(
-                "SELECT value FROM vector_meta WHERE key = 'dim'"
-            ).fetchone()
+            row = conn.execute("SELECT value FROM vector_meta WHERE key = 'dim'").fetchone()
             if row:
                 stored_dim = int(row["value"])
                 # Probe actual embed dim synchronously (one cheap blocking call at startup)
@@ -487,7 +499,9 @@ class VectorStore:
                     logger.error(
                         "[vector] DIM MISMATCH — DB has dim=%d but %s now returns dim=%d. "
                         "Run: python scripts/reset_vector_db.py --yes",
-                        stored_dim, settings.ollama_embed_model, actual_dim,
+                        stored_dim,
+                        settings.ollama_embed_model,
+                        actual_dim,
                     )
                     self._dim_mismatch = (stored_dim, actual_dim)
                     # Leave self._ready = False so callers get empty results,
@@ -531,13 +545,15 @@ class VectorStore:
 
     def _read_persistent(self, norm_text: str) -> list[float] | None:
         try:
-            row = self._connect().execute(
-                "SELECT vec FROM embed_cache WHERE key = ?", (self._pkey(norm_text),)
-            ).fetchone()
+            row = (
+                self._connect()
+                .execute("SELECT vec FROM embed_cache WHERE key = ?", (self._pkey(norm_text),))
+                .fetchone()
+            )
             if row:
                 blob: bytes = row["vec"]
                 _stats.persistent_hits += 1
-                return list(struct.unpack(f"{len(blob)//4}f", blob))
+                return list(struct.unpack(f"{len(blob) // 4}f", blob))
             _stats.persistent_misses += 1
             return None
         except Exception:
@@ -551,7 +567,7 @@ class VectorStore:
         Flushes the buffer synchronously when either threshold is hit so the
         caller's thread does the work rather than scheduling yet another task.
         """
-        key  = self._pkey(norm_text)
+        key = self._pkey(norm_text)
         blob = _pack(vec)
 
         with self._write_buf_lock:
@@ -575,9 +591,7 @@ class VectorStore:
         try:
             conn = self._connect()
             conn.execute("BEGIN")
-            conn.executemany(
-                "INSERT OR IGNORE INTO embed_cache(key, vec) VALUES (?, ?)", batch
-            )
+            conn.executemany("INSERT OR IGNORE INTO embed_cache(key, vec) VALUES (?, ?)", batch)
             conn.execute("COMMIT")
             _stats.record_db_write((time.monotonic() - self._write_buf_last_flush) * 1000)
         except Exception as exc:
@@ -641,9 +655,7 @@ class VectorStore:
         vec = _normalise(vec_raw)
 
         # Write-back to persistent tier (fire-and-forget, never blocks caller)
-        asyncio.get_running_loop().run_in_executor(
-            None, self._write_persistent, norm, vec
-        )
+        asyncio.get_running_loop().run_in_executor(None, self._write_persistent, norm, vec)
         return vec
 
     # ── Public API ─────────────────────────────────────────────────────────
@@ -743,8 +755,8 @@ class VectorStore:
 
         meta_base = {
             "session_id": session_id,
-            "timestamp":  str(time.time()),
-            "source":     source,
+            "timestamp": str(time.time()),
+            "source": source,
             "memory_type": "semantic",
         }
         if extra_metadata:
@@ -759,7 +771,7 @@ class VectorStore:
 
             conn.execute("BEGIN")
             for fact, vec in pairs:
-                blob      = _pack(vec)
+                blob = _pack(vec)
                 target_id = self._fact_id(fact)
 
                 # Deduplication — reuses already-computed vec (no extra embed call)
@@ -862,9 +874,7 @@ class VectorStore:
     async def forget_by_id(self, fact_id: str) -> bool:
         try:
             conn = self._connect()
-            row = conn.execute(
-                "SELECT rowid FROM vector_facts WHERE id = ?", (fact_id,)
-            ).fetchone()
+            row = conn.execute("SELECT rowid FROM vector_facts WHERE id = ?", (fact_id,)).fetchone()
             if row:
                 conn.execute("DELETE FROM vector_embeddings WHERE rowid = ?", (row["rowid"],))
                 conn.execute("DELETE FROM vector_facts WHERE id = ?", (fact_id,))
@@ -876,30 +886,31 @@ class VectorStore:
 
     async def list_all(self) -> list[str]:
         try:
-            rows = self._connect().execute(
-                "SELECT content FROM vector_facts ORDER BY created_at"
-            ).fetchall()
+            rows = (
+                self._connect()
+                .execute("SELECT content FROM vector_facts ORDER BY created_at")
+                .fetchall()
+            )
             return [r["content"] for r in rows]
         except Exception:
             return []
 
     async def list_all_with_metadata(self) -> list[dict]:
         try:
-            rows = self._connect().execute(
-                "SELECT id, content, metadata FROM vector_facts ORDER BY created_at"
-            ).fetchall()
+            rows = (
+                self._connect()
+                .execute("SELECT id, content, metadata FROM vector_facts ORDER BY created_at")
+                .fetchall()
+            )
             return [
-                {"id": r["id"], "fact": r["content"], **json.loads(r["metadata"])}
-                for r in rows
+                {"id": r["id"], "fact": r["content"], **json.loads(r["metadata"])} for r in rows
             ]
         except Exception:
             return []
 
     async def count(self) -> int:
         try:
-            return self._connect().execute(
-                "SELECT COUNT(*) FROM vector_facts"
-            ).fetchone()[0]
+            return self._connect().execute("SELECT COUNT(*) FROM vector_facts").fetchone()[0]
         except Exception:
             return 0
 

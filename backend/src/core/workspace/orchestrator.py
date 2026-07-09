@@ -45,6 +45,7 @@ Planner output format (v2.0 — structured input)
   Old (v1):  {"id": "t1", "tool": "web_search", "goal": "find prices", "depends_on": []}
   New (v2):  {"id": "t1", "tool": "web_search", "input": {"query": "DDR5 32GB prices 2025"}, "depends_on": []}
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -67,36 +68,43 @@ logger = logging.getLogger(__name__)
 
 # ── Intent → tool name mapping ────────────────────────────────────────────────
 _TOOL_NAME_TO_INTENT: dict[str, Intent] = {
-    "sysinfo":    Intent.SYSINFO,
+    "sysinfo": Intent.SYSINFO,
     "web_search": Intent.WEB_SEARCH,
-    "web_fetch":  Intent.WEB_FETCH,
-    "file_task":  Intent.FILE_TASK,
+    "web_fetch": Intent.WEB_FETCH,
+    "file_task": Intent.FILE_TASK,
     "file_write": Intent.FILE_WRITE,
-    "code_exec":  Intent.CODE_EXEC,
-    "shell":      Intent.SHELL,
-    "memory_op":  Intent.MEMORY_OP,
+    "code_exec": Intent.CODE_EXEC,
+    "shell": Intent.SHELL,
+    "memory_op": Intent.MEMORY_OP,
 }
 
 # ── Context needs — which CONTEXT.md sections each tool may see ───────────────
 TOOL_CONTEXT_NEEDS: dict[str, list[str]] = {
     "web_search": [],
-    "web_fetch":  [],
-    "file_write": ["sysinfo", "web_search", "web_fetch", "code_exec", "shell", "memory_op", "file_task"],
-    "code_exec":  ["sysinfo", "file_task"],
-    "shell":      ["sysinfo"],
-    "memory_op":  [],
-    "sysinfo":    [],
-    "file_task":  [],
+    "web_fetch": [],
+    "file_write": [
+        "sysinfo",
+        "web_search",
+        "web_fetch",
+        "code_exec",
+        "shell",
+        "memory_op",
+        "file_task",
+    ],
+    "code_exec": ["sysinfo", "file_task"],
+    "shell": ["sysinfo"],
+    "memory_op": [],
+    "sysinfo": [],
+    "file_task": [],
 }
+
 
 # ── Schema reference block injected into the planner prompt ───────────────────
 # Built from TOOL_SCHEMAS so the planner sees exactly what each tool expects.
 def _build_schema_reference() -> str:
     lines = ["Input schemas (planner MUST match these exactly):"]
     for tool, schema in TOOL_SCHEMAS.items():
-        field_list = ", ".join(
-            f'"{k}": {v.__name__}' for k, v in schema.items()
-        )
+        field_list = ", ".join(f'"{k}": {v.__name__}' for k, v in schema.items())
         lines.append(f"  {tool}: {{{field_list}}}")
     return "\n".join(lines)
 
@@ -149,10 +157,11 @@ Rules:
 - If the tool results show 3 items, report 3 items — never add items that "seem typical"."""
 
 _MAX_CONTEXT_TOKENS = 2000
-_MAX_SECTION_CHARS  = 2000
+_MAX_SECTION_CHARS = 2000
 
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
+
 
 class WorkspaceOrchestrator:
     """
@@ -195,9 +204,23 @@ class WorkspaceOrchestrator:
                 # the LLM to fabricate answers from training data.
                 # Instead, inform the user that the tool couldn't be used.
                 _TOOL_INTENTS = {"shell", "file_task", "web_search", "sysinfo"}
-                if any(t in message.lower() for t in ["file", "folder", "directory", "list", "show", "dir", "ls", "disk", "system", "search"]):
+                if any(
+                    t in message.lower()
+                    for t in [
+                        "file",
+                        "folder",
+                        "directory",
+                        "list",
+                        "show",
+                        "dir",
+                        "ls",
+                        "disk",
+                        "system",
+                        "search",
+                    ]
+                ):
                     yield StreamChunk(
-                        text="I wasn't able to execute that command. Could you try rephrasing your request? For example: \"Run dir Documents\" or \"List files in my Code folder\".",
+                        text='I wasn\'t able to execute that command. Could you try rephrasing your request? For example: "Run dir Documents" or "List files in my Code folder".',
                         done=False,
                     )
                     yield StreamChunk(text="", done=True)
@@ -209,7 +232,8 @@ class WorkspaceOrchestrator:
             ws.write_todo(tasks)
             logger.info(
                 "[orch] planned %d tasks: %s",
-                len(tasks), [t["tool"] for t in tasks],
+                len(tasks),
+                [t["tool"] for t in tasks],
             )
             obs.emit(
                 "workspace_tasks_planned",
@@ -237,7 +261,8 @@ class WorkspaceOrchestrator:
                     )
                 yield StreamChunk(text=confirmation_text, done=False)
                 yield StreamChunk(
-                    text="", done=True,
+                    text="",
+                    done=True,
                     metadata={"pending_write": pending},
                 )
                 return
@@ -263,9 +288,7 @@ class WorkspaceOrchestrator:
     async def _plan(self, message: str, ws: WorkspaceManager) -> list[dict]:
         """Ask the LLM to produce a structured task list with typed input dicts."""
         tools = available_tools()
-        tool_list = "\n".join(
-            f"- {t['intent']}: {t['description']}" for t in tools
-        )
+        tool_list = "\n".join(f"- {t['intent']}: {t['description']}" for t in tools)
         schema_reference = _build_schema_reference()
 
         messages = [
@@ -315,26 +338,24 @@ class WorkspaceOrchestrator:
                         "Update planner prompt or model.",
                         tool,
                     )
-                    raw_input = {}   # will fail contract validation → clean rejection
+                    raw_input = {}  # will fail contract validation → clean rejection
 
                 if not isinstance(raw_input, dict):
-                    logger.warning(
-                        "[orch] task input for '%s' is not a dict: %r", tool, raw_input
-                    )
+                    logger.warning("[orch] task input for '%s' is not a dict: %r", tool, raw_input)
                     raw_input = {}
 
-                tasks.append({
-                    "id":         item.get("id", f"t{len(tasks)+1}"),
-                    "tool":       tool,
-                    "input":      raw_input,
-                    "depends_on": item.get("depends_on", []),
-                })
+                tasks.append(
+                    {
+                        "id": item.get("id", f"t{len(tasks) + 1}"),
+                        "tool": tool,
+                        "input": raw_input,
+                        "depends_on": item.get("depends_on", []),
+                    }
+                )
             ws.write_thinking(f"Plan:\n{json.dumps(tasks, indent=2)}")
             return tasks
         except (json.JSONDecodeError, ValueError) as exc:
-            logger.warning(
-                "[orch] planner JSON parse failed: %s — raw: %s", exc, raw[:200]
-            )
+            logger.warning("[orch] planner JSON parse failed: %s — raw: %s", exc, raw[:200])
             return []
 
     # ── Dispatch loop ─────────────────────────────────────────────────────────
@@ -351,9 +372,9 @@ class WorkspaceOrchestrator:
         while remaining or in_flight:
             completed = ws.completed_task_ids()
             runnable = [
-                t for tid, t in remaining.items()
-                if tid not in in_flight
-                and all(dep in completed for dep in t["depends_on"])
+                t
+                for tid, t in remaining.items()
+                if tid not in in_flight and all(dep in completed for dep in t["depends_on"])
             ]
 
             if not runnable and not in_flight:
@@ -413,14 +434,12 @@ class WorkspaceOrchestrator:
             # No contract registered — this should not happen after T2 ships.
             # Treat as a hard reject to prevent unvalidated execution.
             err = (
-                f"[{tool_name}] no contract registered. "
-                "Register a ToolContract before dispatching."
+                f"[{tool_name}] no contract registered. Register a ToolContract before dispatching."
             )
             logger.error("[orch] %s", err)
             ws.write_outbox(tool_name, f"[ContractError] {err}")
             ws.write_context(tool_name, f"Schema error: {err}")
-            obs.emit("workspace_tool_error",
-                     task_id=task["id"], tool=tool_name, error=err[:80])
+            obs.emit("workspace_tool_error", task_id=task["id"], tool=tool_name, error=err[:80])
             return
 
         contract_cls = ToolRegistry.get(tool_name)
@@ -434,17 +453,17 @@ class WorkspaceOrchestrator:
                 f"[ContractViolation] {exc}\n"
                 f"Payload received: {json.dumps(payload, ensure_ascii=False)}\n"
                 f"Expected schema: {{\n"
-                + "".join(
-                    f'  "{k}": {v.__name__}\n'
-                    for k, v in contract_cls.schema.items()
-                )
+                + "".join(f'  "{k}": {v.__name__}\n' for k, v in contract_cls.schema.items())
                 + "}"
             )
             ws.write_outbox(tool_name, rejection)
             ws.write_context(tool_name, rejection[:_MAX_SECTION_CHARS])
-            obs.emit("workspace_tool_contract_violation",
-                     task_id=task["id"], tool=tool_name,
-                     error=str(exc)[:120])
+            obs.emit(
+                "workspace_tool_contract_violation",
+                task_id=task["id"],
+                tool=tool_name,
+                error=str(exc)[:120],
+            )
             return
 
         # ── Step 3: Execute via contract ──────────────────────────────────────
@@ -459,15 +478,15 @@ class WorkspaceOrchestrator:
                 # persist it in _pending_writes and resume on the next "yes" turn.
                 meta = result.metadata or {}
                 ws.pending_confirmation = {
-                    "path":     meta.get("pending_path", payload.get("path", "")),
-                    "content":  meta.get("pending_content", payload.get("content", "")),
+                    "path": meta.get("pending_path", payload.get("path", "")),
+                    "content": meta.get("pending_content", payload.get("content", "")),
                     "filename": meta.get("filename", ""),
                 }
-                obs.emit("workspace_tool_confirmation_required",
-                         task_id=task["id"], tool=tool_name)
+                obs.emit("workspace_tool_confirmation_required", task_id=task["id"], tool=tool_name)
                 logger.info(
                     "[orch] task %s [%s] requires confirmation",
-                    task["id"], tool_name,
+                    task["id"],
+                    tool_name,
                 )
                 return
 
@@ -475,12 +494,19 @@ class WorkspaceOrchestrator:
             ws.write_outbox(tool_name, content)
             ws.write_context(tool_name, content[:_MAX_SECTION_CHARS])
 
-            obs.emit("workspace_tool_done",
-                     task_id=task["id"], tool=tool_name,
-                     latency_ms=latency, chars=len(content))
+            obs.emit(
+                "workspace_tool_done",
+                task_id=task["id"],
+                tool=tool_name,
+                latency_ms=latency,
+                chars=len(content),
+            )
             logger.info(
                 "[orch] task %s [%s] done in %dms (%d chars)",
-                task["id"], tool_name, latency, len(content),
+                task["id"],
+                tool_name,
+                latency,
+                len(content),
             )
 
         except ContractViolationError:
@@ -488,8 +514,9 @@ class WorkspaceOrchestrator:
         except Exception as exc:
             ws.write_outbox(tool_name, f"[Error: {exc}]")
             ws.write_context(tool_name, f"Tool error: {exc}")
-            obs.emit("workspace_tool_error",
-                     task_id=task["id"], tool=tool_name, error=str(exc)[:80])
+            obs.emit(
+                "workspace_tool_error", task_id=task["id"], tool=tool_name, error=str(exc)[:80]
+            )
             raise
 
     # ── Synthesis ─────────────────────────────────────────────────────────────
@@ -512,7 +539,7 @@ class WorkspaceOrchestrator:
 
         messages = [
             {"role": "system", "content": _SYNTHESIS_SYSTEM + context_block},
-            {"role": "user",   "content": message},
+            {"role": "user", "content": message},
         ]
 
         async for chunk in self._adapter.chat(messages):
@@ -520,6 +547,7 @@ class WorkspaceOrchestrator:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _trim_context(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
@@ -549,4 +577,5 @@ def _should_use_orchestrator(message: str, intent: Intent) -> bool:
     SYSINFO, WEB_SEARCH, FILE_TASK → direct dispatch in engine.py.
     """
     from core.agent.constants import AGENT_INTENTS
+
     return intent not in {Intent.CHAT} and intent not in AGENT_INTENTS

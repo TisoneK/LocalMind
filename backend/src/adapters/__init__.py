@@ -2,6 +2,7 @@
 Adapter registry. Maps adapter names to classes.
 Set LOCALMIND_ADAPTER in .env to switch runtimes.
 """
+
 from adapters.base import BaseAdapter
 
 # FIX: cache adapter instances to avoid creating a new httpx.AsyncClient
@@ -14,12 +15,33 @@ def get_adapter(name: str, model_override: str = "") -> BaseAdapter:
     if cache_key not in _adapter_cache:
         if name == "ollama":
             from adapters.ollama import OllamaAdapter
+
             _adapter_cache[cache_key] = OllamaAdapter(model_override=model_override)
-        elif name in ("openai", "anthropic", "openrouter", "deepseek", "lite-llm", "zen", "groq", "together", "fireworks", "deepinfra", "mistral", "cohere", "vercel", "cloudflare"):
+        elif name in (
+            "openai",
+            "anthropic",
+            "openrouter",
+            "deepseek",
+            "lite-llm",
+            "zen",
+            "groq",
+            "together",
+            "fireworks",
+            "deepinfra",
+            "mistral",
+            "cohere",
+            "vercel",
+            "cloudflare",
+        ):
             from adapters.openai_compat import OpenAICompatAdapter
-            _adapter_cache[cache_key] = OpenAICompatAdapter(provider=name, model_override=model_override)
+
+            _adapter_cache[cache_key] = OpenAICompatAdapter(
+                provider=name, model_override=model_override
+            )
         else:
-            raise ValueError(f"Unknown adapter: '{name}'. Available: ollama, openai, anthropic, openrouter, deepseek, lite-llm, zen, groq, together, fireworks, deepinfra, mistral, cohere, vercel, cloudflare")
+            raise ValueError(
+                f"Unknown adapter: '{name}'. Available: ollama, openai, anthropic, openrouter, deepseek, lite-llm, zen, groq, together, fireworks, deepinfra, mistral, cohere, vercel, cloudflare"
+            )
     return _adapter_cache[cache_key]
 
 

@@ -6,6 +6,7 @@ don't honor this setting reliably. This conftest is a belt-and-suspenders
 fallback that inserts src/ at import time so test modules can do
 `from tools.file_reader import ...` without a ModuleNotFoundError.
 """
+
 import sys
 from pathlib import Path
 

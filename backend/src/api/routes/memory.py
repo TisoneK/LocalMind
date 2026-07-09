@@ -5,6 +5,7 @@ GET    /api/memory              — list all stored facts with metadata
 DELETE /api/memory/{fact_id}   — delete a specific fact by ID
 POST   /api/memory              — manually store a new fact
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,6 +22,7 @@ _store = VectorStore()
 
 
 # ── GET /api/memory ───────────────────────────────────────────────────────
+
 
 @router.get("/memory")
 async def list_memory():
@@ -56,18 +58,21 @@ async def list_memory():
         except (ValueError, TypeError):
             timestamp = 0
 
-        memory_facts.append({
-            "id": fact.get("id", ""),
-            "content": content,
-            "source": fact.get("source", "unknown"),
-            "relevance": relevance,
-            "timestamp": timestamp,
-        })
+        memory_facts.append(
+            {
+                "id": fact.get("id", ""),
+                "content": content,
+                "source": fact.get("source", "unknown"),
+                "relevance": relevance,
+                "timestamp": timestamp,
+            }
+        )
 
     return {"facts": memory_facts}
 
 
 # ── DELETE /api/memory/{fact_id} ──────────────────────────────────────────
+
 
 class DeleteResponse(BaseModel):
     deleted: bool
@@ -79,11 +84,14 @@ async def delete_memory(fact_id: str):
     """Delete a specific fact by its ID."""
     ok = await _store.forget_by_id(fact_id)
     if not ok:
-        raise HTTPException(status_code=404, detail=f"Fact '{fact_id}' not found or could not be deleted.")
+        raise HTTPException(
+            status_code=404, detail=f"Fact '{fact_id}' not found or could not be deleted."
+        )
     return DeleteResponse(deleted=True, fact_id=fact_id)
 
 
 # ── POST /api/memory ──────────────────────────────────────────────────────
+
 
 class StoreMemoryRequest(BaseModel):
     fact: str

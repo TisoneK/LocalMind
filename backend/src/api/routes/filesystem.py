@@ -6,6 +6,7 @@ POST /api/open-file   — open a file with the OS default application
 POST /api/open-folder — open a folder in the OS file manager (explicit action only)
 POST /api/confirm-write — confirm a pending permission-gated file write
 """
+
 from __future__ import annotations
 
 import os
@@ -117,16 +118,21 @@ async def list_files(path: str = ""):
             try:
                 stat = entry.stat()
                 import datetime
-                entries.append({
-                    "name": entry.name,
-                    "type": "folder" if entry.is_dir() else "file",
-                    "path": entry.path,
-                    "size": stat.st_size if entry.is_file() else 0,
-                    "modified": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                    "created": datetime.datetime.fromtimestamp(stat.st_ctime).isoformat(),
-                    "extension": Path(entry.name).suffix.lower().lstrip(".") if entry.is_file() else "",
-                    "is_symlink": entry.is_symlink(),
-                })
+
+                entries.append(
+                    {
+                        "name": entry.name,
+                        "type": "folder" if entry.is_dir() else "file",
+                        "path": entry.path,
+                        "size": stat.st_size if entry.is_file() else 0,
+                        "modified": datetime.datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        "created": datetime.datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                        "extension": Path(entry.name).suffix.lower().lstrip(".")
+                        if entry.is_file()
+                        else "",
+                        "is_symlink": entry.is_symlink(),
+                    }
+                )
             except PermissionError:
                 continue
 
@@ -183,6 +189,7 @@ def _human_size(n: int) -> str:
 async def confirm_write(req: ConfirmWriteRequest):
     """Execute a previously permission-gated file write."""
     from tools.file_writer import _do_write
+
     path = Path(req.path).resolve()
 
     if not settings.is_path_allowed(path):

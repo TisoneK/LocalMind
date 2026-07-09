@@ -1,4 +1,5 @@
 """Observability endpoint - intent, confidence, tool timeline for right panel."""
+
 from __future__ import annotations
 
 from typing import List, Optional
@@ -30,6 +31,7 @@ class ObservabilityData(BaseModel):
 def _get_engine():
     """Get the engine singleton from the chat route module."""
     from api.routes.chat import _engine
+
     return _engine
 
 

@@ -13,6 +13,7 @@ Vocabulary-level keyword matching produces too many false positives to be
 useful -- "crack a walnut", "drug policy", "kill the process" would all be
 blocked by a broad blocklist. Keep the hard-block layer extremely tight.
 """
+
 from __future__ import annotations
 
 import re

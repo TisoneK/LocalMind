@@ -1,4 +1,5 @@
 """Metrics endpoint - performance metrics for bottom bar."""
+
 from __future__ import annotations
 
 import time
@@ -23,6 +24,7 @@ class MetricsResponse(BaseModel):
 def _get_engine():
     """Get the engine singleton from the chat route module."""
     from api.routes.chat import _engine
+
     return _engine
 
 

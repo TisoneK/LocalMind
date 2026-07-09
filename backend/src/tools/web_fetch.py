@@ -17,6 +17,7 @@ Architecture:
 - Respects robots.txt via a simple check
 - Returns structured metadata (title, url, content_length)
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -56,8 +57,8 @@ WEB_FETCH_MAX_CONTENT_LENGTH = 2 * 1024 * 1024  # 2 MB -- don't fetch huge files
 
 # Cloud metadata endpoints that must never be fetched
 _METADATA_HOSTS = {
-    "169.254.169.254",   # AWS / Azure / GCP instance metadata
-    "fd00:ec2::254",     # AWS IPv6 metadata
+    "169.254.169.254",  # AWS / Azure / GCP instance metadata
+    "fd00:ec2::254",  # AWS IPv6 metadata
     "metadata.google.internal",  # GCP metadata (also resolves to 169.254.169.254)
 }
 
@@ -65,12 +66,12 @@ _METADATA_HOSTS = {
 def _is_ip_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Return True if an IP address is in a blocked (private/internal) range."""
     return (
-        ip.is_private           # RFC 1918: 10/8, 172.16/12, 192.168/16
-        or ip.is_loopback       # 127/8, ::1
-        or ip.is_link_local     # 169.254/16 (includes cloud metadata)
-        or ip.is_multicast      # 224/4, ff00::/8
-        or ip.is_reserved       # various reserved ranges
-        or ip.is_unspecified    # 0/8, ::/128
+        ip.is_private  # RFC 1918: 10/8, 172.16/12, 192.168/16
+        or ip.is_loopback  # 127/8, ::1
+        or ip.is_link_local  # 169.254/16 (includes cloud metadata)
+        or ip.is_multicast  # 224/4, ff00::/8
+        or ip.is_reserved  # various reserved ranges
+        or ip.is_unspecified  # 0/8, ::/128
     )
 
 
@@ -162,54 +163,77 @@ def _extract_readable_content(html: str) -> str:
     6. Collapse excessive whitespace
     """
     # Remove non-content sections (with their content)
-    html = re.sub(r'<script[^>]*>[\s\S]*?</script>', '', html, flags=re.IGNORECASE)
-    html = re.sub(r'<style[^>]*>[\s\S]*?</style>', '', html, flags=re.IGNORECASE)
-    html = re.sub(r'<nav[^>]*>[\s\S]*?</nav>', '', html, flags=re.IGNORECASE)
-    html = re.sub(r'<footer[^>]*>[\s\S]*?</footer>', '', html, flags=re.IGNORECASE)
-    html = re.sub(r'<header[^>]*>[\s\S]*?</header>', '', html, flags=re.IGNORECASE)
-    html = re.sub(r'<aside[^>]*>[\s\S]*?</aside>', '', html, flags=re.IGNORECASE)
-    html = re.sub(r'<noscript[^>]*>[\s\S]*?</noscript>', '', html, flags=re.IGNORECASE)
-    html = re.sub(r'<form[^>]*>[\s\S]*?</form>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r"<script[^>]*>[\s\S]*?</script>", "", html, flags=re.IGNORECASE)
+    html = re.sub(r"<style[^>]*>[\s\S]*?</style>", "", html, flags=re.IGNORECASE)
+    html = re.sub(r"<nav[^>]*>[\s\S]*?</nav>", "", html, flags=re.IGNORECASE)
+    html = re.sub(r"<footer[^>]*>[\s\S]*?</footer>", "", html, flags=re.IGNORECASE)
+    html = re.sub(r"<header[^>]*>[\s\S]*?</header>", "", html, flags=re.IGNORECASE)
+    html = re.sub(r"<aside[^>]*>[\s\S]*?</aside>", "", html, flags=re.IGNORECASE)
+    html = re.sub(r"<noscript[^>]*>[\s\S]*?</noscript>", "", html, flags=re.IGNORECASE)
+    html = re.sub(r"<form[^>]*>[\s\S]*?</form>", "", html, flags=re.IGNORECASE)
 
     # Remove HTML comments
-    html = re.sub(r'<!--[\s\S]*?-->', '', html)
+    html = re.sub(r"<!--[\s\S]*?-->", "", html)
 
     # Convert block elements to newlines for readability
-    for tag in ['p', 'div', 'br', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-                'tr', 'hr', 'blockquote', 'article', 'section']:
-        html = re.sub(rf'</?{tag}[^>]*>', '\n', html, flags=re.IGNORECASE)
+    for tag in [
+        "p",
+        "div",
+        "br",
+        "li",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "tr",
+        "hr",
+        "blockquote",
+        "article",
+        "section",
+    ]:
+        html = re.sub(rf"</?{tag}[^>]*>", "\n", html, flags=re.IGNORECASE)
 
     # Strip all remaining HTML tags
-    html = re.sub(r'<[^>]+>', '', html)
+    html = re.sub(r"<[^>]+>", "", html)
 
     # Decode common HTML entities
     entities = {
-        '&amp;': '&', '&lt;': '<', '&gt;': '>',
-        '&quot;': '"', '&#39;': "'", '&apos;': "'",
-        '&nbsp;': ' ', '&mdash;': '—', '&ndash;': '–',
-        '&hellip;': '…', '&copy;': '©', '&reg;': '®',
+        "&amp;": "&",
+        "&lt;": "<",
+        "&gt;": ">",
+        "&quot;": '"',
+        "&#39;": "'",
+        "&apos;": "'",
+        "&nbsp;": " ",
+        "&mdash;": "—",
+        "&ndash;": "–",
+        "&hellip;": "…",
+        "&copy;": "©",
+        "&reg;": "®",
     }
     for entity, char in entities.items():
         html = html.replace(entity, char)
     # Numeric entities
-    html = re.sub(r'&#(\d+);', lambda m: chr(int(m.group(1))), html)
-    html = re.sub(r'&#x([0-9a-fA-F]+);', lambda m: chr(int(m.group(1), 16)), html)
+    html = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), html)
+    html = re.sub(r"&#x([0-9a-fA-F]+);", lambda m: chr(int(m.group(1), 16)), html)
 
     # Collapse whitespace
-    html = re.sub(r'[ \t]+', ' ', html)
-    html = re.sub(r'\n\s*\n', '\n\n', html)
+    html = re.sub(r"[ \t]+", " ", html)
+    html = re.sub(r"\n\s*\n", "\n\n", html)
 
     return html.strip()
 
 
 def _extract_title(html: str) -> str:
     """Extract the page title from HTML."""
-    match = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE | re.DOTALL)
+    match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
     if match:
         title = match.group(1).strip()
         # Clean up title
-        title = re.sub(r'<[^>]+>', '', title)
-        title = re.sub(r'\s+', ' ', title)
+        title = re.sub(r"<[^>]+>", "", title)
+        title = re.sub(r"\s+", " ", title)
         return title[:200]
     return ""
 
@@ -217,8 +241,13 @@ def _extract_title(html: str) -> str:
 def _is_binary_content_type(content_type: str) -> bool:
     """Check if the content type suggests binary data we can't read."""
     binary_types = [
-        'image/', 'video/', 'audio/', 'application/pdf',
-        'application/zip', 'application/x-', 'application/octet-stream',
+        "image/",
+        "video/",
+        "audio/",
+        "application/pdf",
+        "application/zip",
+        "application/x-",
+        "application/octet-stream",
     ]
     return any(bt in content_type.lower() for bt in binary_types)
 
@@ -246,8 +275,8 @@ async def web_fetch(url: str) -> ToolResult:
         )
 
     # Add protocol if missing
-    if not url.startswith(('http://', 'https://')):
-        url = 'https://' + url
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
 
     # SSRF protection: reject URLs pointing to private/internal/metadata IPs.
     # This prevents the agent from being coerced into fetching cloud metadata
@@ -277,16 +306,16 @@ async def web_fetch(url: str) -> ToolResult:
             follow_redirects=True,
             max_redirects=5,
             headers={
-                'User-Agent': 'Mozilla/5.0 (compatible; LocalMind/1.0; +https://localmind.ai)',
-                'Accept': 'text/html,application/xhtml+xml,text/plain;q=0.9',
-                'Accept-Language': 'en-US,en;q=0.5',
+                "User-Agent": "Mozilla/5.0 (compatible; LocalMind/1.0; +https://localmind.ai)",
+                "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9",
+                "Accept-Language": "en-US,en;q=0.5",
             },
         ) as client:
             # First, do a HEAD request to check content type and size
             try:
                 head_resp = await client.head(url)
-                content_type = head_resp.headers.get('content-type', '')
-                content_length = int(head_resp.headers.get('content-length', '0'))
+                content_type = head_resp.headers.get("content-type", "")
+                content_length = int(head_resp.headers.get("content-length", "0"))
 
                 if _is_binary_content_type(content_type):
                     return ToolResult(
@@ -318,7 +347,7 @@ async def web_fetch(url: str) -> ToolResult:
             response.raise_for_status()
 
             # Check content type from actual response
-            content_type = response.headers.get('content-type', '')
+            content_type = response.headers.get("content-type", "")
             if _is_binary_content_type(content_type):
                 return ToolResult(
                     content=f"The URL points to a binary file ({content_type}). LocalMind can only read text-based web pages.",

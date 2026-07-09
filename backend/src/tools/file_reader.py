@@ -20,6 +20,7 @@ Performance notes:
 - A FILE_OP_TIMEOUT_SECONDS deadline wraps each parse call; stalls on network
   mounts or corrupt files are killed cleanly.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -33,9 +34,33 @@ from tools import register_tool
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_EXTS = {".pdf", ".docx", ".txt", ".md", ".csv", ".xlsx", ".py", ".js", ".ts",
-                  ".json", ".yaml", ".yml", ".toml", ".html", ".xml", ".sh", ".rs", ".go",
-                  ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff"}
+SUPPORTED_EXTS = {
+    ".pdf",
+    ".docx",
+    ".txt",
+    ".md",
+    ".csv",
+    ".xlsx",
+    ".py",
+    ".js",
+    ".ts",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".html",
+    ".xml",
+    ".sh",
+    ".rs",
+    ".go",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".bmp",
+    ".webp",
+    ".tiff",
+}
 
 
 def _chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
@@ -64,6 +89,7 @@ async def _parse_pdf(data: bytes) -> str:
     def _do_parse() -> str:
         try:
             import fitz  # PyMuPDF
+
             doc = fitz.open(stream=data, filetype="pdf")
             pages = [page.get_text() for page in doc]
             text = "\n\n".join(pages)
@@ -89,6 +115,7 @@ async def _parse_docx(data: bytes) -> str:
             import io
 
             from docx import Document
+
             doc = Document(io.BytesIO(data))
             return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
         except Exception as e:
@@ -118,6 +145,7 @@ async def _parse_image(data: bytes, filename: str) -> str:
         ocr_text = ""
         try:
             import pytesseract
+
             ocr_text = pytesseract.image_to_string(image).strip()
         except Exception as ocr_error:
             logger.debug(f"[file_reader] OCR unavailable: {ocr_error}")
@@ -128,7 +156,9 @@ async def _parse_image(data: bytes, filename: str) -> str:
         else:
             result += "\n\nNo text could be extracted (pytesseract not installed or image has no readable text)."
 
-        logger.info(f"[file_reader] image parsed: {filename} ({width}x{height}) — {len(ocr_text)} OCR chars")
+        logger.info(
+            f"[file_reader] image parsed: {filename} ({width}x{height}) — {len(ocr_text)} OCR chars"
+        )
         return result
 
     except Exception as e:
@@ -186,7 +216,9 @@ async def parse_file(
 
     ext = Path(filename).suffix.lower()
     overlap = getattr(settings, "localmind_chunk_overlap_tokens", 200)
-    logger.info(f"[file_reader] Processing file: {filename}, ext: {ext}, content_type: {content_type}, size: {len(data)} bytes")
+    logger.info(
+        f"[file_reader] Processing file: {filename}, ext: {ext}, content_type: {content_type}, size: {len(data)} bytes"
+    )
 
     text = ""
     try:
@@ -263,8 +295,8 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
     # Extract file paths / names from the message
     # Matches: "quoted/path.ext", 'quoted', bare/path.ext, ~/path, ./path
     path_patterns = [
-        r'''["']([^"'\s]+\.[a-zA-Z0-9]{1,6})["']''',
-        r'((?:~/|\.{0,2}/)?[\w.\-/]+\.(?:py|js|ts|txt|md|csv|pdf|docx|xlsx|json|yaml|yml|toml|html|sh|rs|go|log|cfg|ini|env))',
+        r"""["']([^"'\s]+\.[a-zA-Z0-9]{1,6})["']""",
+        r"((?:~/|\.{0,2}/)?[\w.\-/]+\.(?:py|js|ts|txt|md|csv|pdf|docx|xlsx|json|yaml|yml|toml|html|sh|rs|go|log|cfg|ini|env))",
     ]
     for pat in path_patterns:
         for m in _re.finditer(pat, message):
@@ -307,7 +339,7 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                 # Return first chunk as tool result; engine injects full attachment separately
                 preview = attachment.chunks[0] if attachment.chunks else "[empty file]"
                 if len(attachment.chunks) > 1:
-                    preview += f"\n\n[... {len(attachment.chunks)-1} more chunks available]"
+                    preview += f"\n\n[... {len(attachment.chunks) - 1} more chunks available]"
                 logger.info("[file_task] read file from disk: %s (%d bytes)", p, len(data))
                 return ToolResult(
                     content=f"File: {p}\nSize: {len(data):,} bytes\n\n{preview}",
@@ -330,7 +362,7 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
         content=(
             "No file found. To read a file:\n"
             "- Attach it with the paperclip button in the chat\n"
-            "- Or mention the full path, e.g. \"read ~/Documents/notes.txt\""
+            '- Or mention the full path, e.g. "read ~/Documents/notes.txt"'
         ),
         risk=RiskLevel.LOW,
         source="file_reader",
@@ -345,8 +377,8 @@ register_tool(
     Intent.FILE_TASK,
     file_task,
     description="Read the TEXT CONTENTS of a single FILE (code, text, PDF, DOCX, CSV, XLSX). "
-                "Do NOT use for directories or folder listings — use shell list_files for that. "
-                "Requires a specific file path and a goal (read, summarise, count lines, extract tables).",
+    "Do NOT use for directories or folder listings — use shell list_files for that. "
+    "Requires a specific file path and a goal (read, summarise, count lines, extract tables).",
     cost=0.01,
     latency_ms=300,
 )

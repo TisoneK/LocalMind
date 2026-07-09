@@ -2,6 +2,7 @@
 LocalMind configuration — loaded from environment / .env file.
 All settings validated by Pydantic at startup.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -45,14 +46,34 @@ def _allowed_user_folders() -> list[str]:
 
     # Standard shell folders present on both Windows and *nix home dirs
     standard = [
-        "Downloads", "Documents", "Pictures", "Videos",
-        "Music", "Desktop", "Contacts", "Favorites",
+        "Downloads",
+        "Documents",
+        "Pictures",
+        "Videos",
+        "Music",
+        "Desktop",
+        "Contacts",
+        "Favorites",
     ]
     # User-created top-level folders observed in C:\\Users\\tison
     user_created = [
-        "LocalMind", "Dev", "Scripts", "docs", "shared",
-        "workflows", "examples", "factory", "config", "data", "OneDrive",
-        "Code", "Projects", "src", "repos", "builds", "workspace",
+        "LocalMind",
+        "Dev",
+        "Scripts",
+        "docs",
+        "shared",
+        "workflows",
+        "examples",
+        "factory",
+        "config",
+        "data",
+        "OneDrive",
+        "Code",
+        "Projects",
+        "src",
+        "repos",
+        "builds",
+        "workspace",
     ]
     folders.extend(str(base / folder) for folder in standard + user_created)
     return folders
@@ -64,7 +85,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
-        frozen=False,   # allow hot-swap of ollama_model at runtime
+        frozen=False,  # allow hot-swap of ollama_model at runtime
     )
 
     # Runtime API keys (loaded from settings.json, not env)
@@ -80,7 +101,7 @@ class Settings(BaseSettings):
     ollama_ready: bool = False
     ollama_embed_model: str = "nomic-embed-text"  # pin via OLLAMA_EMBED_MODEL in .env
     ollama_timeout: int = 120
-    ollama_keep_alive: str = "-1"   # -1 = keep model loaded forever; e.g. "5m", "1h"
+    ollama_keep_alive: str = "-1"  # -1 = keep model loaded forever; e.g. "5m", "1h"
 
     # Adapter
     localmind_adapter: str = "ollama"
@@ -108,7 +129,7 @@ class Settings(BaseSettings):
 
     # Storage — default to ~/LocalMind/
     localmind_home: str = Field(default="")
-    localmind_db_path: str = ""          # resolved at startup if empty
+    localmind_db_path: str = ""  # resolved at startup if empty
     localmind_uploads_path: str = Field(default_factory=_default_uploads)
 
     # Cache — ~/LocalMind/ scratch space
@@ -214,6 +235,7 @@ class Settings(BaseSettings):
     def load_runtime_settings(self) -> None:
         """Load runtime settings from JSON file (if exists)."""
         import logging
+
         logger = logging.getLogger(__name__)
         path = self._runtime_settings_path()
         if not path.exists():
@@ -225,6 +247,7 @@ class Settings(BaseSettings):
         # corrupted API keys. Fail loudly on decode errors instead.
         try:
             import json
+
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
             if not content.strip():
@@ -264,6 +287,7 @@ class Settings(BaseSettings):
         """
         import json
         import tempfile
+
         path.parent.mkdir(parents=True, exist_ok=True)
         content = json.dumps(data, indent=2)
 
@@ -297,6 +321,7 @@ class Settings(BaseSettings):
     def _load_json_file(self, path: Path) -> dict:
         """Load JSON from a file, returning {} on any error."""
         import json
+
         if not path.exists():
             return {}
         try:

@@ -27,6 +27,7 @@ Free models that work on 4-8GB RAM, ordered by quality:
 The router checks which models are actually pulled and picks the best
 available one — never fails, always falls back to the main model.
 """
+
 from __future__ import annotations
 
 import logging
@@ -170,10 +171,13 @@ def best_model_for(intent: Intent, fallback: str) -> str:
             return model
         # No model configured — get the adapter's default from PROVIDER_CONFIGS
         from adapters.openai_compat import PROVIDER_CONFIGS
+
         if adapter_name in PROVIDER_CONFIGS:
             return PROVIDER_CONFIGS[adapter_name].default_model
         # Fallback shouldn't happen, but guard against misconfiguration
-        logger.warning(f"[model_router] no default model for adapter '{adapter_name}', using Ollama fallback")
+        logger.warning(
+            f"[model_router] no default model for adapter '{adapter_name}', using Ollama fallback"
+        )
         # Don't fall through to Ollama logic — return a safe default
         return fallback
 
@@ -184,7 +188,9 @@ def best_model_for(intent: Intent, fallback: str) -> str:
         if _is_available(candidate):
             resolved = _resolve(candidate)
             if resolved != fallback:
-                logger.debug(f"[model_router] {intent.value} → {resolved} (preferred over {fallback})")
+                logger.debug(
+                    f"[model_router] {intent.value} → {resolved} (preferred over {fallback})"
+                )
             return resolved
 
     # Nothing preferred is pulled — use the main model
@@ -194,7 +200,4 @@ def best_model_for(intent: Intent, fallback: str) -> str:
 
 def routing_report(fallback: str) -> dict[str, str]:
     """Return a dict of intent → resolved model for display/debugging."""
-    return {
-        intent.value: best_model_for(intent, fallback)
-        for intent in Intent
-    }
+    return {intent.value: best_model_for(intent, fallback) for intent in Intent}

@@ -17,6 +17,7 @@ Architecture (v4.0 — No backward compat):
   - The ThinkingDispatcher's LLM capability inference handles all routing
     correctly, including EPL-style queries and SYSINFO detection
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -90,6 +91,7 @@ def get_adapter(*args, **kwargs):
     that the patch cannot reach.
     """
     from core.engine import get_adapter as _real
+
     return _real(*args, **kwargs)
 
 
@@ -99,7 +101,9 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # Don't cache adapter at init - get fresh one each time to respect setting changes
         self._memory = MemoryComposer()
         self._agent_loop = AgentLoop(adapter=None)  # Set adapter dynamically
-        self._agent_orchestrator = AgentOrchestrator(adapter=None)  # Three-layer pipeline orchestrator
+        self._agent_orchestrator = AgentOrchestrator(
+            adapter=None
+        )  # Three-layer pipeline orchestrator
         self._orchestrator = WorkspaceOrchestrator(adapter=None)
         self._metrics = MetricsStore()
         self._flywheel = FlywheelLogger()
@@ -169,7 +173,9 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     logger.warning(f"[engine] vector store warmup failed (non-fatal): {e}")
                     self._warmed_up = True  # Don't retry on every request
             else:
-                logger.info("[engine] skipping embedding warmup — cloud adapter active (Ollama not needed)")
+                logger.info(
+                    "[engine] skipping embedding warmup — cloud adapter active (Ollama not needed)"
+                )
                 self._warmed_up = True  # Don't retry on every request
 
         # P11: Run memory consolidation on startup to merge near-duplicate
@@ -186,7 +192,9 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         """Track a rolling window of intent values per session."""
         # Prune old sessions to prevent unbounded memory growth
         if len(self._intent_history) > INTENT_HISTORY_MAX_SESSIONS:
-            oldest = sorted(self._intent_history.keys())[:len(self._intent_history) - INTENT_HISTORY_MAX_SESSIONS]
+            oldest = sorted(self._intent_history.keys())[
+                : len(self._intent_history) - INTENT_HISTORY_MAX_SESSIONS
+            ]
             for sid in oldest:
                 del self._intent_history[sid]
         history = self._intent_history.setdefault(session_id, [])
@@ -204,7 +212,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         """
         # Prune old sessions to prevent unbounded memory growth
         if len(self._last_observation) > 200:
-            oldest = sorted(self._last_observation.keys())[:len(self._last_observation) - 100]
+            oldest = sorted(self._last_observation.keys())[: len(self._last_observation) - 100]
             for sid in oldest:
                 del self._last_observation[sid]
         # Merge with existing data so fields from earlier events
@@ -286,6 +294,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
             # Collect the full response with timeout
             full_response: list[str] = []
+
             async def _collect():
                 async for chunk in adapter.chat(
                     chat_messages,
@@ -315,7 +324,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             ]
             for prefix in _UNCERTAINTY_PREFIXES:
                 if reformulated.startswith(prefix):
-                    reformulated = reformulated[len(prefix):].strip()
+                    reformulated = reformulated[len(prefix) :].strip()
 
             obs.emit("chat_agent_done", intent=intent.value, response_len=len(reformulated))
 
@@ -435,7 +444,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
         messages = [
             {"role": "system", "content": clarification_prompt},
-            {"role": "user", "content": f"Original: {original_request}\nClarification: {clarification_question}\nAnswer: {user_answer}"},
+            {
+                "role": "user",
+                "content": f"Original: {original_request}\nClarification: {clarification_question}\nAnswer: {user_answer}",
+            },
         ]
 
         try:
@@ -443,6 +455,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             obs.emit("chat_agent_clarification_start", session_id=session_id[:8])
 
             full_response: list[str] = []
+
             async def _collect():
                 async for chunk in adapter.chat(
                     messages,
@@ -469,18 +482,20 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 )
 
         except asyncio.TimeoutError:
-            logger.warning("[engine] Chat Agent clarification reformulation timed out — using fallback")
+            logger.warning(
+                "[engine] Chat Agent clarification reformulation timed out — using fallback"
+            )
             obs.emit("chat_agent_clarification_timeout", timeout=CHAT_AGENT_TIMEOUT_SECS)
             return (
-                f"{original_request}\n\n"
-                f"[Clarification: {clarification_question} → {user_answer}]"
+                f"{original_request}\n\n[Clarification: {clarification_question} → {user_answer}]"
             )
         except Exception as e:
-            logger.warning(f"[engine] Chat Agent clarification reformulation failed (non-fatal): {e}")
+            logger.warning(
+                f"[engine] Chat Agent clarification reformulation failed (non-fatal): {e}"
+            )
             obs.emit("chat_agent_clarification_failed", error=str(e)[:80])
             return (
-                f"{original_request}\n\n"
-                f"[Clarification: {clarification_question} → {user_answer}]"
+                f"{original_request}\n\n[Clarification: {clarification_question} → {user_answer}]"
             )
 
     async def process(
@@ -539,11 +554,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # Also sync from the terminal session in case the user ran `cd`
         # manually in the terminal UI.
         from api.routes.terminal import _terminal_sessions
+
         _term_session = _terminal_sessions.get(session_id)
         if _term_session and _term_session.get("cwd"):
             self._session_ctx.sync_from_terminal(_term_session["cwd"])
         session_cwd = self._session_ctx.get_cwd(session_id)
         from tools.shell import set_session_cwd as _set_shell_cwd
+
         _set_shell_cwd(session_cwd)
 
         # ── 1a. Attachment flag ──────────────────────────────────────────────
@@ -569,7 +586,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # requires_grounding=True, realtime_sensitive=True, web_search.
         # v4.0: ThinkingDispatcher is the sole Layer 2 implementation
         adapter = get_adapter(settings.localmind_adapter)
-        logger.info("[engine] using adapter: %s (model=%s)", settings.localmind_adapter, getattr(adapter, '_model', '?'))
+        logger.info(
+            "[engine] using adapter: %s (model=%s)",
+            settings.localmind_adapter,
+            getattr(adapter, "_model", "?"),
+        )
         _orchestration_plan: OrchestrationPlan | None = None
         _task_profile: TaskProfile | None = None
         _client_intent: Intent | None = None
@@ -581,10 +602,14 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 _client_intent = Intent(client_intent)
                 _client_requires_tools = _client_intent != Intent.CHAT
                 _client_requires_grounding = _client_intent in (
-                    Intent.WEB_SEARCH, Intent.WEB_FETCH, Intent.FILE_TASK, Intent.SYSINFO
+                    Intent.WEB_SEARCH,
+                    Intent.WEB_FETCH,
+                    Intent.FILE_TASK,
+                    Intent.SYSINFO,
                 )
                 _client_mode = (
-                    ExecutionMode.DIRECT if _client_intent == Intent.CHAT
+                    ExecutionMode.DIRECT
+                    if _client_intent == Intent.CHAT
                     else ExecutionMode.SINGLE_TOOL
                 )
                 # Map client intent to capabilities
@@ -611,7 +636,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     f"[engine] Client pre-classified: {client_intent} "
                     f"(confidence={client_confidence}) — skipping dispatcher"
                 )
-                _obs.emit("client_preclassified", intent=client_intent, confidence=client_confidence)
+                _obs.emit(
+                    "client_preclassified", intent=client_intent, confidence=client_confidence
+                )
             except ValueError:
                 _client_intent = None
 
@@ -714,10 +741,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     session_id=session_id,
                     max_facts=3,
                 )
-                _obs.emit("memory_retrieved",
-                          facts=len(memory_facts),
-                          latency_ms=round((time.monotonic() - t_warm) * 1000),
-                          warm_start=True)
+                _obs.emit(
+                    "memory_retrieved",
+                    facts=len(memory_facts),
+                    latency_ms=round((time.monotonic() - t_warm) * 1000),
+                    warm_start=True,
+                )
             else:
                 t_mem = time.monotonic()
                 memory_facts = await self._memory.compose(
@@ -740,9 +769,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         if wf.lower().strip() not in existing:
                             memory_facts.append(wf)
                             existing.add(wf.lower().strip())
-                _obs.emit("memory_retrieved",
-                          facts=len(memory_facts),
-                          latency_ms=round((time.monotonic() - t_mem) * 1000))
+                _obs.emit(
+                    "memory_retrieved",
+                    facts=len(memory_facts),
+                    latency_ms=round((time.monotonic() - t_mem) * 1000),
+                )
 
             # Build context via context_builder (consistent prompt for all CHAT)
             ctx = EngineContext(
@@ -803,30 +834,58 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # weather, prices) — when the model answers from training data
             # instead of saying "I need to search the web".
             _FABRICATION_PATTERNS = [
-                re.compile(r'Volume Serial Number', re.IGNORECASE),
-                re.compile(r'Directory of\s+[A-Za-z]:', re.IGNORECASE),
-                re.compile(r'\d+ File\(s\)\s+\d+ bytes', re.IGNORECASE),
-                re.compile(r'\d+ Dir\(s\)\s+\d+ bytes', re.IGNORECASE),
-                re.compile(r'drwx[rxw-]{9}\s+\d+', re.IGNORECASE),  # Unix ls -la output
-                re.compile(r'total \d+\s*\n', re.IGNORECASE),        # Unix ls output header
-                re.compile(r'\bI (ran|executed|called|used|invoked)\b.{0,30}\b(command|tool|shell|dir|ls)\b', re.IGNORECASE),
-                re.compile(r'\btool:\s*shell\b', re.IGNORECASE),
-                re.compile(r'\brunning now\.\.\.\b', re.IGNORECASE),
-                re.compile(r'\bactually executing\.\.\.\b', re.IGNORECASE),
-                re.compile(r'\bI (just |already )?(ran|checked|listed|read)\b.{0,30}\b(the |your |this )?(directory|folder|file|command)\b', re.IGNORECASE),
+                re.compile(r"Volume Serial Number", re.IGNORECASE),
+                re.compile(r"Directory of\s+[A-Za-z]:", re.IGNORECASE),
+                re.compile(r"\d+ File\(s\)\s+\d+ bytes", re.IGNORECASE),
+                re.compile(r"\d+ Dir\(s\)\s+\d+ bytes", re.IGNORECASE),
+                re.compile(r"drwx[rxw-]{9}\s+\d+", re.IGNORECASE),  # Unix ls -la output
+                re.compile(r"total \d+\s*\n", re.IGNORECASE),  # Unix ls output header
+                re.compile(
+                    r"\bI (ran|executed|called|used|invoked)\b.{0,30}\b(command|tool|shell|dir|ls)\b",
+                    re.IGNORECASE,
+                ),
+                re.compile(r"\btool:\s*shell\b", re.IGNORECASE),
+                re.compile(r"\brunning now\.\.\.\b", re.IGNORECASE),
+                re.compile(r"\bactually executing\.\.\.\b", re.IGNORECASE),
+                re.compile(
+                    r"\bI (just |already )?(ran|checked|listed|read)\b.{0,30}\b(the |your |this )?(directory|folder|file|command)\b",
+                    re.IGNORECASE,
+                ),
                 # v0.7: Fabricated time-sensitive data patterns
                 # These catch when the model answers from training data for
                 # time-sensitive queries (weather, sports, prices, news)
-                re.compile(r'\b(current temperature|temperature (is|was|of))\b.{0,20}\d+°', re.IGNORECASE),
-                re.compile(r'\b(forecast|weather)\b.{0,30}\d+°(C|F)', re.IGNORECASE),
-                re.compile(r'\b(score|result)\b.{0,15}\d+\s*[-–]\s*\d+', re.IGNORECASE),  # "score 2-1"
-                re.compile(r'\b(played|vs|versus|against)\b.{0,30}\b(score|won|lost|drew)\b', re.IGNORECASE),
-                re.compile(r'\b(table|standings|rankings?)\b.{0,10}\b(1\.|1st|2nd|3rd)', re.IGNORECASE),  # Fabricated league tables
-                re.compile(r'\b(fixture|match|game)\b.{0,20}\b(vs|versus|against)\b.{0,30}\b(today|tomorrow|this week|saturday|sunday|monday)', re.IGNORECASE),
-                re.compile(r'\b(price|value|rate)\b.{0,20}\$\d+|\€\d+|\£\d+|KES\s*\d+|\₹\d+', re.IGNORECASE),  # Fabricated prices
-                re.compile(r'\bas of (my|the) (last|current|latest)\b.{0,15}\b(update|knowledge|information|training)\b', re.IGNORECASE),  # "As of my last update..."
-                re.compile(r'\bbased on (my|the) (training|knowledge|available information)\b', re.IGNORECASE),
-                re.compile(r'\bI (believe|think|recall|remember)\b.{0,30}\b(the (current|latest|recent))\b', re.IGNORECASE),
+                re.compile(
+                    r"\b(current temperature|temperature (is|was|of))\b.{0,20}\d+°", re.IGNORECASE
+                ),
+                re.compile(r"\b(forecast|weather)\b.{0,30}\d+°(C|F)", re.IGNORECASE),
+                re.compile(
+                    r"\b(score|result)\b.{0,15}\d+\s*[-–]\s*\d+", re.IGNORECASE
+                ),  # "score 2-1"
+                re.compile(
+                    r"\b(played|vs|versus|against)\b.{0,30}\b(score|won|lost|drew)\b", re.IGNORECASE
+                ),
+                re.compile(
+                    r"\b(table|standings|rankings?)\b.{0,10}\b(1\.|1st|2nd|3rd)", re.IGNORECASE
+                ),  # Fabricated league tables
+                re.compile(
+                    r"\b(fixture|match|game)\b.{0,20}\b(vs|versus|against)\b.{0,30}\b(today|tomorrow|this week|saturday|sunday|monday)",
+                    re.IGNORECASE,
+                ),
+                re.compile(
+                    r"\b(price|value|rate)\b.{0,20}\$\d+|\€\d+|\£\d+|KES\s*\d+|\₹\d+", re.IGNORECASE
+                ),  # Fabricated prices
+                re.compile(
+                    r"\bas of (my|the) (last|current|latest)\b.{0,15}\b(update|knowledge|information|training)\b",
+                    re.IGNORECASE,
+                ),  # "As of my last update..."
+                re.compile(
+                    r"\bbased on (my|the) (training|knowledge|available information)\b",
+                    re.IGNORECASE,
+                ),
+                re.compile(
+                    r"\bI (believe|think|recall|remember)\b.{0,30}\b(the (current|latest|recent))\b",
+                    re.IGNORECASE,
+                ),
             ]
             _fabrication_detected = any(p.search(response_text) for p in _FABRICATION_PATTERNS)
             if _fabrication_detected:
@@ -835,10 +894,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     f"CHAT response contains fabricated tool output. "
                     f"Message: {message[:60]!r}, Response preview: {response_text[:100]!r}"
                 )
-                _obs.emit("fabrication_detected",
-                          intent="chat",
-                          message_preview=message[:60],
-                          response_preview=response_text[:100])
+                _obs.emit(
+                    "fabrication_detected",
+                    intent="chat",
+                    message_preview=message[:60],
+                    response_preview=response_text[:100],
+                )
                 # Note: We cannot retroactively re-run the tool after streaming the
                 # fabricated output to the user. The detection serves two purposes:
                 # 1. Observability: the event is logged and visible in the UI
@@ -847,7 +908,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # happening in the first place by re-routing before the CHAT path.
 
             # Capture code blocks for FILE_WRITE recovery
-            _FENCE_RE = re.compile(r'```(?P<lang>\w+)?\s*\n(?P<code>[\s\S]+?)\n```', re.IGNORECASE)
+            _FENCE_RE = re.compile(r"```(?P<lang>\w+)?\s*\n(?P<code>[\s\S]+?)\n```", re.IGNORECASE)
             _code_blocks = _FENCE_RE.findall(response_text)
             if _code_blocks:
                 _lang, _code = _code_blocks[-1]
@@ -862,18 +923,36 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
             total_ms = round((time.monotonic() - t0) * 1000)
             self._metrics.record("chat", latency_ms=total_ms, success=True)
-            _prompt_tok = _approx_tokens("".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict)))
-            _obs.emit("turn_complete", intent="chat", confidence=round(confidence, 2),
-                      tokens_approx=_approx_tokens(response_text),
-                      prompt_tokens_approx=_prompt_tok,
-                      total_latency_ms=total_ms, memory_facts=len(memory_facts), agent_mode=False)
-            self._store_observation(session_id, _obs,
-                intent="chat", confidence=round(confidence, 2),
-                tools_used="", memory_hits=len(memory_facts),
-                context_tokens=_prompt_tok, latency_ms=total_ms)
+            _prompt_tok = _approx_tokens(
+                "".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict))
+            )
+            _obs.emit(
+                "turn_complete",
+                intent="chat",
+                confidence=round(confidence, 2),
+                tokens_approx=_approx_tokens(response_text),
+                prompt_tokens_approx=_prompt_tok,
+                total_latency_ms=total_ms,
+                memory_facts=len(memory_facts),
+                agent_mode=False,
+            )
+            self._store_observation(
+                session_id,
+                _obs,
+                intent="chat",
+                confidence=round(confidence, 2),
+                tools_used="",
+                memory_hits=len(memory_facts),
+                context_tokens=_prompt_tok,
+                latency_ms=total_ms,
+            )
 
             # Post-response memory (pass user message for user-initiated fact extraction)
-            _safe_task(self._maybe_store_response_facts(response_text, session_id, _obs, user_message=message))
+            _safe_task(
+                self._maybe_store_response_facts(
+                    response_text, session_id, _obs, user_message=message
+                )
+            )
 
             # Explicitly yield a done chunk so the SSE bridge sends {"type":"done"}
             # to the frontend. Without this, the frontend relies on the stream
@@ -893,9 +972,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # 0.5-3s of sequential waiting.
         _file_attach_coro = None
         if file and filename:
+
             async def _parse_attachment():
                 try:
                     from tools.file_reader import parse_file
+
                     return await parse_file(
                         data=file,
                         filename=filename,
@@ -929,21 +1010,22 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         if _file_attach_coro:
             t_parallel = time.monotonic()
             file_attachment, memory_facts = await asyncio.gather(
-                _file_attach_coro, _memory_coro,
+                _file_attach_coro,
+                _memory_coro,
             )
             parallel_ms = round((time.monotonic() - t_parallel) * 1000)
             if file_attachment:
                 logger.info(f"[engine] File parsed successfully: {filename}, {len(file)} bytes")
-            _obs.emit("memory_retrieved",
-                      facts=len(memory_facts),
-                      latency_ms=parallel_ms)
+            _obs.emit("memory_retrieved", facts=len(memory_facts), latency_ms=parallel_ms)
         else:
             file_attachment = None
             t_mem = time.monotonic()
             memory_facts = await _memory_coro
-            _obs.emit("memory_retrieved",
-                      facts=len(memory_facts),
-                      latency_ms=round((time.monotonic() - t_mem) * 1000))
+            _obs.emit(
+                "memory_retrieved",
+                facts=len(memory_facts),
+                latency_ms=round((time.monotonic() - t_mem) * 1000),
+            )
 
         # Warm-start supplement: if compose() returned very few facts for
         # agent intents, add warm-start facts so the agent still has basic
@@ -979,38 +1061,79 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # Any other message cancels the pending write and falls through normally.
         _pending = self._pending_writes.get(session_id)
         if _pending:
-            _confirm_words = {"yes", "ok", "okay", "sure", "confirm", "do it",
-                              "go ahead", "save", "save it", "write it", "proceed"}
+            _confirm_words = {
+                "yes",
+                "ok",
+                "okay",
+                "sure",
+                "confirm",
+                "do it",
+                "go ahead",
+                "save",
+                "save it",
+                "write it",
+                "proceed",
+            }
             _msg_lower = message.strip().lower().rstrip("!.")
-            if _msg_lower in _confirm_words or _msg_lower.startswith("yes") or _msg_lower.startswith("save"):
+            if (
+                _msg_lower in _confirm_words
+                or _msg_lower.startswith("yes")
+                or _msg_lower.startswith("save")
+            ):
                 # Execute the stored write immediately
                 from pathlib import Path
 
                 from tools.file_writer import _do_write
+
                 del self._pending_writes[session_id]
                 _obs.emit("workspace_orchestrator_start", intent="file_write")
                 _obs.emit("workspace_tool_start", task_id="t1", tool="file_write")
                 _filepath = Path(_pending["path"])
                 _result = await _do_write(_filepath, _pending["content"])
-                _obs.emit("workspace_tool_done", task_id="t1", tool="file_write",
-                          latency_ms=0, chars=len(_result.content))
+                _obs.emit(
+                    "workspace_tool_done",
+                    task_id="t1",
+                    tool="file_write",
+                    latency_ms=0,
+                    chars=len(_result.content),
+                )
                 _text = _result.content
                 self._persist_assistant_message(session_id, _text)
                 total_ms = round((time.monotonic() - t0) * 1000)
                 self._metrics.record("file_write", latency_ms=total_ms, success=_result.success)
-                _obs.emit("turn_complete", intent="file_write", confidence=1.0,
-                          tokens_approx=_approx_tokens(_text),
-                          total_latency_ms=total_ms, memory_facts=0, agent_mode=False)
-                self._store_observation(session_id, _obs,
-                    intent="file_write", confidence=1.0,
-                    tools_used="file_write", memory_hits=0,
-                    context_tokens=0, latency_ms=total_ms)
-                yield StreamChunk(text=_text, done=False,
-                                  metadata={"path": str(_filepath),
-                                            "filename": _filepath.name} if _result.success else {})
-                yield StreamChunk(text="", done=True,
-                                  metadata={"path": str(_filepath),
-                                            "filename": _filepath.name} if _result.success else {})
+                _obs.emit(
+                    "turn_complete",
+                    intent="file_write",
+                    confidence=1.0,
+                    tokens_approx=_approx_tokens(_text),
+                    total_latency_ms=total_ms,
+                    memory_facts=0,
+                    agent_mode=False,
+                )
+                self._store_observation(
+                    session_id,
+                    _obs,
+                    intent="file_write",
+                    confidence=1.0,
+                    tools_used="file_write",
+                    memory_hits=0,
+                    context_tokens=0,
+                    latency_ms=total_ms,
+                )
+                yield StreamChunk(
+                    text=_text,
+                    done=False,
+                    metadata={"path": str(_filepath), "filename": _filepath.name}
+                    if _result.success
+                    else {},
+                )
+                yield StreamChunk(
+                    text="",
+                    done=True,
+                    metadata={"path": str(_filepath), "filename": _filepath.name}
+                    if _result.success
+                    else {},
+                )
                 return
             else:
                 # User said something other than yes — cancel the pending write
@@ -1053,9 +1176,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     f"Reformulated instruction: {reformulated_clarification}\n"
                 )
                 logger.info(
-                    "[engine] clarification answered for session %s — "
-                    "reformulated (%d chars)",
-                    session_id[:8], len(reformulated_clarification),
+                    "[engine] clarification answered for session %s — reformulated (%d chars)",
+                    session_id[:8],
+                    len(reformulated_clarification),
                 )
             except Exception as e:
                 logger.warning(f"[engine] clarification reformulation failed (non-fatal): {e}")
@@ -1071,21 +1194,26 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             and not _fence_present
         ):
             _cached = self._last_code.pop(session_id)
-            _lang   = _cached.get("lang", "")
-            _code   = _cached.get("code", "")
-            _orig   = _cached.get("original_message", "")[:80]
+            _lang = _cached.get("lang", "")
+            _code = _cached.get("code", "")
+            _orig = _cached.get("original_message", "")[:80]
             if _code:
                 message = (
                     message + "\n\n"
-                    "[Content generated from earlier request: \"" + _orig + "\"]\n"
+                    '[Content generated from earlier request: "' + _orig + '"]\n'
                     "```" + _lang + "\n" + _code + "\n```"
                 )
                 logger.info(
                     "[engine] FILE_WRITE recovery: injected cached code (%d chars, lang=%s)",
-                    len(_code), _lang,
+                    len(_code),
+                    _lang,
                 )
 
-        if _should_use_orchestrator(message, effective_intent) and not _file_task_with_attachment and effective_intent not in (Intent.WEB_SEARCH, Intent.WEB_FETCH):
+        if (
+            _should_use_orchestrator(message, effective_intent)
+            and not _file_task_with_attachment
+            and effective_intent not in (Intent.WEB_SEARCH, Intent.WEB_FETCH)
+        ):
             _obs.emit("workspace_orchestrator_start", intent=effective_intent.value)
             full_response_chunks: list[str] = []
             # Get fresh adapter for orchestrator
@@ -1105,7 +1233,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     self._pending_writes[session_id] = chunk.metadata["pending_write"]
                     logger.info(
                         "[engine] pending write stored for session %s → %s",
-                        session_id, chunk.metadata["pending_write"].get("path"),
+                        session_id,
+                        chunk.metadata["pending_write"].get("path"),
                     )
                 yield StreamChunk(text=safe, done=chunk.done, metadata=chunk.metadata)
 
@@ -1113,17 +1242,33 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             self._persist_assistant_message(session_id, response_text)
             total_ms = round((time.monotonic() - t0) * 1000)
             self._metrics.record(effective_intent.value, latency_ms=total_ms, success=True)
-            _pt = _approx_tokens("".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict) and m.get("content")))
-            _obs.emit("turn_complete", intent=effective_intent.value,
-                      confidence=round(confidence, 2),
-                      tokens_approx=_approx_tokens(response_text),
-                      prompt_tokens_approx=_pt,
-                      total_latency_ms=total_ms, memory_facts=len(memory_facts),
-                      agent_mode=True)
-            self._store_observation(session_id, _obs,
-                intent=effective_intent.value, confidence=round(confidence, 2),
-                tools_used=effective_intent.value, memory_hits=len(memory_facts),
-                context_tokens=_pt, latency_ms=total_ms)
+            _pt = _approx_tokens(
+                "".join(
+                    m.get("content", "")
+                    for m in prompt_messages
+                    if isinstance(m, dict) and m.get("content")
+                )
+            )
+            _obs.emit(
+                "turn_complete",
+                intent=effective_intent.value,
+                confidence=round(confidence, 2),
+                tokens_approx=_approx_tokens(response_text),
+                prompt_tokens_approx=_pt,
+                total_latency_ms=total_ms,
+                memory_facts=len(memory_facts),
+                agent_mode=True,
+            )
+            self._store_observation(
+                session_id,
+                _obs,
+                intent=effective_intent.value,
+                confidence=round(confidence, 2),
+                tools_used=effective_intent.value,
+                memory_hits=len(memory_facts),
+                context_tokens=_pt,
+                latency_ms=total_ms,
+            )
             yield StreamChunk(text="", done=True)
             return
 
@@ -1145,13 +1290,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # web_search → web_fetch, and use proper native tool calling.
         _TOOL_LABELS = {
             Intent.WEB_SEARCH: "Searching the web",
-            Intent.FILE_TASK:  "Reading file",
+            Intent.FILE_TASK: "Reading file",
             Intent.FILE_WRITE: "Writing file",
-            Intent.CODE_EXEC:  "Running code",
-            Intent.SHELL:      "Running command",
-            Intent.SYSINFO:    "Getting system info",
-            Intent.WEB_FETCH:  "Fetching web page",
-            Intent.MEMORY_OP:  "Checking memory",
+            Intent.CODE_EXEC: "Running code",
+            Intent.SHELL: "Running command",
+            Intent.SYSINFO: "Getting system info",
+            Intent.WEB_FETCH: "Fetching web page",
+            Intent.MEMORY_OP: "Checking memory",
         }
 
         if effective_intent == Intent.SYSINFO:
@@ -1185,9 +1330,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         self._session_ctx.update_cwd(session_id, new_cwd)
                         session_cwd = new_cwd
                         _set_shell_cwd(session_cwd)
-                        logger.info(
-                            f"[engine] CWD updated for session {session_id[:8]}: {new_cwd}"
-                        )
+                        logger.info(f"[engine] CWD updated for session {session_id[:8]}: {new_cwd}")
 
                 # Filter injection from tool output
                 # FIX: preserve all ToolResult fields when reconstructing —
@@ -1207,23 +1350,40 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     )
 
                 tool_latency = round((time.monotonic() - t_tool) * 1000)
-                _obs.emit("tool_dispatched", tool=effective_intent.value, success=bool(tool_result), latency_ms=tool_latency)
-                record_tool_outcome(self._store, effective_intent.value, success=bool(tool_result), latency_ms=tool_latency)
-                self._metrics.record(effective_intent.value, latency_ms=tool_latency, success=bool(tool_result))
+                _obs.emit(
+                    "tool_dispatched",
+                    tool=effective_intent.value,
+                    success=bool(tool_result),
+                    latency_ms=tool_latency,
+                )
+                record_tool_outcome(
+                    self._store,
+                    effective_intent.value,
+                    success=bool(tool_result),
+                    latency_ms=tool_latency,
+                )
+                self._metrics.record(
+                    effective_intent.value, latency_ms=tool_latency, success=bool(tool_result)
+                )
 
                 # Bridge diff metadata from edit_file tool results.
                 # When edit_file produces structured diff hunks, emit a
                 # file_diff obs event so the frontend DiffBlock can render
                 # green/red highlighted diffs — like Cursor/Claude.
-                if (tool_result and tool_result.metadata
+                if (
+                    tool_result
+                    and tool_result.metadata
                     and tool_result.source == "edit_file"
-                    and tool_result.metadata.get("diff_hunks")):
-                    _obs.emit("file_diff",
-                              diff_hunks=tool_result.metadata.get("diff_hunks", []),
-                              diff_language=tool_result.metadata.get("diff_language", ""),
-                              path=tool_result.metadata.get("path", ""),
-                              diff_additions=tool_result.metadata.get("diff_additions", 0),
-                              diff_deletions=tool_result.metadata.get("diff_deletions", 0))
+                    and tool_result.metadata.get("diff_hunks")
+                ):
+                    _obs.emit(
+                        "file_diff",
+                        diff_hunks=tool_result.metadata.get("diff_hunks", []),
+                        diff_language=tool_result.metadata.get("diff_language", ""),
+                        path=tool_result.metadata.get("path", ""),
+                        diff_additions=tool_result.metadata.get("diff_additions", 0),
+                        diff_deletions=tool_result.metadata.get("diff_deletions", 0),
+                    )
 
                 # SYSINFO: stream the raw result directly — no LLM reformatting.
                 # The data is factual and structured; passing it through the LLM
@@ -1231,17 +1391,31 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # injected result and answers from its training data instead).
                 if effective_intent == Intent.SYSINFO and tool_result and tool_result.content:
                     result_text = tool_result.content.strip()
-                    _obs.emit("tool_status", tool="sysinfo", label="Getting system info", status="done")
+                    _obs.emit(
+                        "tool_status", tool="sysinfo", label="Getting system info", status="done"
+                    )
                     self._persist_assistant_message(session_id, result_text)
                     total_ms = round((time.monotonic() - t0) * 1000)
                     self._metrics.record("sysinfo", latency_ms=total_ms, success=True)
-                    _obs.emit("turn_complete", intent="sysinfo", confidence=round(confidence, 2),
-                              tokens_approx=_approx_tokens(result_text), total_latency_ms=total_ms,
-                              memory_facts=0, agent_mode=False)
-                    self._store_observation(session_id, _obs,
-                        intent="sysinfo", confidence=round(confidence, 2),
-                        tools_used="sysinfo", memory_hits=0,
-                        context_tokens=0, latency_ms=total_ms)
+                    _obs.emit(
+                        "turn_complete",
+                        intent="sysinfo",
+                        confidence=round(confidence, 2),
+                        tokens_approx=_approx_tokens(result_text),
+                        total_latency_ms=total_ms,
+                        memory_facts=0,
+                        agent_mode=False,
+                    )
+                    self._store_observation(
+                        session_id,
+                        _obs,
+                        intent="sysinfo",
+                        confidence=round(confidence, 2),
+                        tools_used="sysinfo",
+                        memory_hits=0,
+                        context_tokens=0,
+                        latency_ms=total_ms,
+                    )
                     yield StreamChunk(text=result_text, done=False)
                     yield StreamChunk(text="", done=True)
                     return
@@ -1278,21 +1452,31 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             file_char_budget = min(round(cw * 0.40) * 4, MAX_FILE_TOKENS * 4)
             all_chunks = "\n\n---\n\n".join(file_attachment.chunks)
             if len(all_chunks) > file_char_budget:
-                all_chunks = all_chunks[:file_char_budget] + "\n\n[... content truncated for performance]"
+                all_chunks = (
+                    all_chunks[:file_char_budget] + "\n\n[... content truncated for performance]"
+                )
 
             # Response contract: structured output for summarize/general queries;
             # direct answer for specific questions. The contract ensures consistent,
             # scannable output regardless of model size.
-            _file_ext = file_attachment.filename.rsplit(".", 1)[-1].lower() if "." in file_attachment.filename else ""
+            _file_ext = (
+                file_attachment.filename.rsplit(".", 1)[-1].lower()
+                if "." in file_attachment.filename
+                else ""
+            )
             _is_doc = _file_ext in ("pdf", "docx", "doc", "txt", "md")
             _contract = (
-                "\n\nWhen asked to summarize or describe the file, respond using this structure:\n"
-                "**Document type:** <type>\n"
-                "**Key entities:** <names, organisations, dates, amounts — comma separated>\n"
-                "**Summary:** <3–5 sentence overview>\n"
-                "**Important clauses / details:** <bullet list of notable items, or 'None' if not applicable>\n\n"
-                "For specific questions, answer directly without this structure."
-            ) if _is_doc else ""
+                (
+                    "\n\nWhen asked to summarize or describe the file, respond using this structure:\n"
+                    "**Document type:** <type>\n"
+                    "**Key entities:** <names, organisations, dates, amounts — comma separated>\n"
+                    "**Summary:** <3–5 sentence overview>\n"
+                    "**Important clauses / details:** <bullet list of notable items, or 'None' if not applicable>\n\n"
+                    "For specific questions, answer directly without this structure."
+                )
+                if _is_doc
+                else ""
+            )
 
             _file_system = (
                 "You are LocalMind. A file has been uploaded. Read it carefully and respond to the user's request.\n"
@@ -1313,7 +1497,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # Without intent=, the adapter falls back to the default 120s client timeout.
             full_response: list[str] = []
             self._metrics.start_request()
-            async for chunk in active_adapter.chat(_file_messages, temperature=0.0, intent="file_task"):
+            async for chunk in active_adapter.chat(
+                _file_messages, temperature=0.0, intent="file_task"
+            ):
                 safe = _filter_system_leaks(chunk.text)
                 full_response.append(safe)
                 yield StreamChunk(text=safe, done=chunk.done)
@@ -1333,15 +1519,29 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             self._persist_assistant_message(session_id, response_text)
             total_ms = round((time.monotonic() - t0) * 1000)
             self._metrics.record("file_task", latency_ms=total_ms, success=True)
-            _ft_prompt_tok = _approx_tokens("".join(m.get("content", "") for m in _file_messages if isinstance(m, dict)))
-            _obs.emit("turn_complete", intent="file_task", confidence=round(confidence, 2),
-                      tokens_approx=_approx_tokens(response_text), prompt_tokens_approx=_ft_prompt_tok,
-                      total_latency_ms=total_ms,
-                      memory_facts=len(memory_facts), agent_mode=False)
-            self._store_observation(session_id, _obs,
-                intent="file_task", confidence=round(confidence, 2),
-                tools_used="file_task", memory_hits=len(memory_facts),
-                context_tokens=_ft_prompt_tok, latency_ms=total_ms)
+            _ft_prompt_tok = _approx_tokens(
+                "".join(m.get("content", "") for m in _file_messages if isinstance(m, dict))
+            )
+            _obs.emit(
+                "turn_complete",
+                intent="file_task",
+                confidence=round(confidence, 2),
+                tokens_approx=_approx_tokens(response_text),
+                prompt_tokens_approx=_ft_prompt_tok,
+                total_latency_ms=total_ms,
+                memory_facts=len(memory_facts),
+                agent_mode=False,
+            )
+            self._store_observation(
+                session_id,
+                _obs,
+                intent="file_task",
+                confidence=round(confidence, 2),
+                tools_used="file_task",
+                memory_hits=len(memory_facts),
+                context_tokens=_ft_prompt_tok,
+                latency_ms=total_ms,
+            )
             yield StreamChunk(text="", done=True)
             return
         # Agent intents (CODE_EXEC, FILE_WRITE, FILE_EDIT, FILE_TASK, MEMORY_OP, SHELL) get tool result in agent loop
@@ -1359,7 +1559,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         agent_message = message  # Default: use original message
         orchestrator_context = ""  # Will be set by orchestrator if enabled
         _skip_orchestrator = False  # v0.11: skip orchestrator when dispatcher has high confidence
-        _skip_planning = False      # v0.11: skip agent planning when dispatcher has high confidence
+        _skip_planning = False  # v0.11: skip agent planning when dispatcher has high confidence
         if effective_intent in AGENT_INTENTS:
             # Yield a status update so the user knows what's happening
             # (previously: the user saw "Thinking..." with no indication of progress)
@@ -1382,7 +1582,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
             # v0.10: Yield status for Chat Agent phase
             yield StreamChunk(
-                text="", done=False,
+                text="",
+                done=False,
                 status="Understanding your request...",
             )
             # ThinkingDispatcher already reformulated and acknowledged?
@@ -1409,9 +1610,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 if _dispatcher_confidence >= 0.7:
                     _skip_orchestrator = True
                     _skip_planning = True
-                    _obs.emit("dispatcher_high_confidence_skip",
-                              confidence=round(_dispatcher_confidence, 2),
-                              skipped=["orchestrator", "planning"])
+                    _obs.emit(
+                        "dispatcher_high_confidence_skip",
+                        confidence=round(_dispatcher_confidence, 2),
+                        skipped=["orchestrator", "planning"],
+                    )
                     logger.info(
                         "[engine] dispatcher confidence %.2f ≥ 0.7 — "
                         "skipping orchestrator + planning (saves ~5-16s)",
@@ -1423,9 +1626,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # The dispatcher already reformulated for simple intents.
                 # This saves 2-5s for ~15-20% of requests.
                 _is_trivial = (
-                    effective_intent == Intent.CHAT and
-                    _dispatcher_confidence >= 0.8 and
-                    len(message.strip()) < 100
+                    effective_intent == Intent.CHAT
+                    and _dispatcher_confidence >= 0.8
+                    and len(message.strip()) < 100
                 )
 
                 if _is_trivial and _dispatcher_reformulated:
@@ -1462,10 +1665,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # confidence assessment. Running the orchestrator on top just
             # burns 3-10s for no additional value.
             from core.agent.constants import ORCHESTRATOR_ENABLED
+
             if ORCHESTRATOR_ENABLED and not _skip_orchestrator:
                 # Yield a planning status update so the user isn't in the dark
                 yield StreamChunk(
-                    text="", done=False,
+                    text="",
+                    done=False,
                     status="Planning the best approach...",
                 )
 
@@ -1488,17 +1693,26 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     self._persist_assistant_message(session_id, question)
                     total_ms = round((time.monotonic() - t0) * 1000)
                     self._metrics.record(effective_intent.value, latency_ms=total_ms, success=True)
-                    _obs.emit("turn_complete", intent=effective_intent.value,
-                              confidence=round(orch_result.confidence, 2),
-                              tokens_approx=_approx_tokens(question),
-                              total_latency_ms=total_ms,
-                              memory_facts=len(memory_facts),
-                              agent_mode=False,
-                              orchestrator_escalated=True)
-                    self._store_observation(session_id, _obs,
-                        intent=effective_intent.value, confidence=round(orch_result.confidence, 2),
-                        tools_used="", memory_hits=len(memory_facts),
-                        context_tokens=0, latency_ms=total_ms)
+                    _obs.emit(
+                        "turn_complete",
+                        intent=effective_intent.value,
+                        confidence=round(orch_result.confidence, 2),
+                        tokens_approx=_approx_tokens(question),
+                        total_latency_ms=total_ms,
+                        memory_facts=len(memory_facts),
+                        agent_mode=False,
+                        orchestrator_escalated=True,
+                    )
+                    self._store_observation(
+                        session_id,
+                        _obs,
+                        intent=effective_intent.value,
+                        confidence=round(orch_result.confidence, 2),
+                        tools_used="",
+                        memory_hits=len(memory_facts),
+                        context_tokens=0,
+                        latency_ms=total_ms,
+                    )
                     yield StreamChunk(text=question, done=False)
                     yield StreamChunk(text="", done=True)
                     return
@@ -1524,7 +1738,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         # inline text, so it appears in the thinking area and
                         # doesn't get mixed with the final answer.
                         yield StreamChunk(
-                            text="", done=False,
+                            text="",
+                            done=False,
                             status=f"Quick question: {clarification}",
                         )
 
@@ -1568,7 +1783,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         if effective_intent == Intent.FILE_WRITE and _is_small_model(active_adapter._model):
             logger.info(
                 "[engine] FILE_WRITE small-model fast-path for %s (model=%s)",
-                session_id[:8], active_adapter._model,
+                session_id[:8],
+                active_adapter._model,
             )
             _obs.emit("tool_status", tool="file_write", label="Writing file", status="running")
 
@@ -1599,7 +1815,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             response_text = "".join(full_response_chunks)
 
             # Extract last code block and write it to disk
-            _FENCE_RE_SM = re.compile(r'```(?P<lang>\w+)?\s*\n(?P<code>[\s\S]+?)\n```', re.IGNORECASE)
+            _FENCE_RE_SM = re.compile(
+                r"```(?P<lang>\w+)?\s*\n(?P<code>[\s\S]+?)\n```", re.IGNORECASE
+            )
             sm_blocks = _FENCE_RE_SM.findall(response_text)
             if sm_blocks:
                 import os as _os
@@ -1638,7 +1856,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         done=False,
                         metadata={"path": _written_path, "filename": _written_name},
                     )
-                    self._last_code[session_id] = {"code": _code, "lang": _lang or "", "original_message": message}
+                    self._last_code[session_id] = {
+                        "code": _code,
+                        "lang": _lang or "",
+                        "original_message": message,
+                    }
                     _obs.emit("tool_status", tool="file_write", label="Writing file", status="done")
 
             response_text = "".join(full_response_chunks)
@@ -1648,14 +1870,30 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
             total_ms = round((time.monotonic() - t0) * 1000)
             self._metrics.record("file_write", latency_ms=total_ms, success=True)
-            _obs.emit("turn_complete", intent="file_write", confidence=round(confidence, 2),
-                      tokens_approx=_approx_tokens(response_text),
-                      total_latency_ms=total_ms, memory_facts=len(memory_facts), agent_mode=False)
-            self._store_observation(session_id, _obs,
-                intent="file_write", confidence=round(confidence, 2),
-                tools_used="file_write", memory_hits=len(memory_facts),
-                context_tokens=0, latency_ms=total_ms)
-            _safe_task(self._maybe_store_response_facts(response_text, session_id, _obs, user_message=message))
+            _obs.emit(
+                "turn_complete",
+                intent="file_write",
+                confidence=round(confidence, 2),
+                tokens_approx=_approx_tokens(response_text),
+                total_latency_ms=total_ms,
+                memory_facts=len(memory_facts),
+                agent_mode=False,
+            )
+            self._store_observation(
+                session_id,
+                _obs,
+                intent="file_write",
+                confidence=round(confidence, 2),
+                tools_used="file_write",
+                memory_hits=len(memory_facts),
+                context_tokens=0,
+                latency_ms=total_ms,
+            )
+            _safe_task(
+                self._maybe_store_response_facts(
+                    response_text, session_id, _obs, user_message=message
+                )
+            )
             yield StreamChunk(text="", done=True)
             return
 
@@ -1691,11 +1929,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 execute_sub_tasks,
                 should_use_sub_agents,
             )
+
             if should_use_sub_agents(message, effective_intent, confidence):
                 _obs.emit("sub_agent_delegation", intent=effective_intent.value)
                 logger.info(
                     "[engine] sub-agent delegation for session=%s intent=%s",
-                    session_id[:8], effective_intent.value,
+                    session_id[:8],
+                    effective_intent.value,
                 )
                 try:
                     _registry = SubAgentRegistry()
@@ -1727,7 +1967,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                                 intent=effective_intent.value,
                                 confidence=round(confidence, 2),
                                 tokens_approx=_approx_tokens(response_text),
-                                prompt_tokens_approx=_approx_tokens("".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict) and m.get("content"))),
+                                prompt_tokens_approx=_approx_tokens(
+                                    "".join(
+                                        m.get("content", "")
+                                        for m in prompt_messages
+                                        if isinstance(m, dict) and m.get("content")
+                                    )
+                                ),
                                 total_latency_ms=total_ms,
                                 memory_facts=len(memory_facts),
                                 agent_mode=True,
@@ -1737,7 +1983,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                             # Post-response memory
                             _safe_task(
                                 self._maybe_store_response_facts(
-                                    response_text, session_id, _obs,
+                                    response_text,
+                                    session_id,
+                                    _obs,
                                     user_message=message,
                                 )
                             )
@@ -1748,8 +1996,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                             if REFLECT_ENABLED and effective_intent in REFLECT_INTENTS:
                                 _safe_task(
                                     self._reflect_on_answer(
-                                        response_text, effective_intent,
-                                        message, session_id, _obs,
+                                        response_text,
+                                        effective_intent,
+                                        message,
+                                        session_id,
+                                        _obs,
                                     )
                                 )
                             return
@@ -1765,8 +2016,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     # fall through to standard agent loop.
                 except Exception as e:
                     logger.warning(
-                        "[engine] sub-agent delegation error: %s — "
-                        "falling back to agent loop", e,
+                        "[engine] sub-agent delegation error: %s — falling back to agent loop",
+                        e,
                     )
 
             # ── Small-model fast-paths for CODE_EXEC and MEMORY_OP ────────────
@@ -1778,20 +2029,29 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     # Extract code from message and dispatch directly — no LLM tool-calling
                     logger.info(
                         "[engine] CODE_EXEC small-model fast-path for %s (model=%s)",
-                        session_id[:8], active_adapter._model,
+                        session_id[:8],
+                        active_adapter._model,
                     )
                     # dispatch_with_retry imported at module level — do NOT re-import here
-                    code_result, code_failed, _ = await dispatch_with_retry(Intent.CODE_EXEC, message)
+                    code_result, code_failed, _ = await dispatch_with_retry(
+                        Intent.CODE_EXEC, message
+                    )
                     if code_result and not code_failed:
                         safe_output = _filter_code_output(code_result.content)
                         # Stream the raw output + a short LLM explanation
-                        _obs.emit("tool_status", tool="code_exec", label="Running code", status="done")
-                        explanation_messages = prompt_messages + [{
-                            "role": "user",
-                            "content": f"Code output:\n```\n{safe_output[:2000]}\n```\nBriefly explain what happened.",
-                        }]
+                        _obs.emit(
+                            "tool_status", tool="code_exec", label="Running code", status="done"
+                        )
+                        explanation_messages = prompt_messages + [
+                            {
+                                "role": "user",
+                                "content": f"Code output:\n```\n{safe_output[:2000]}\n```\nBriefly explain what happened.",
+                            }
+                        ]
                         full_response_chunks: list[str] = []
-                        async for chunk in active_adapter.chat(explanation_messages, intent="code_exec"):
+                        async for chunk in active_adapter.chat(
+                            explanation_messages, intent="code_exec"
+                        ):
                             safe = _filter_system_leaks(chunk.text)
                             full_response_chunks.append(safe)
                             yield StreamChunk(text=safe, done=chunk.done)
@@ -1803,24 +2063,39 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     self._persist_assistant_message(session_id, response_text)
                     total_ms = round((time.monotonic() - t0) * 1000)
                     self._metrics.record("code_exec", latency_ms=total_ms, success=not code_failed)
-                    _obs.emit("turn_complete", intent="code_exec", confidence=round(confidence, 2),
-                              tokens_approx=_approx_tokens(response_text),
-                              total_latency_ms=total_ms, memory_facts=len(memory_facts), agent_mode=False)
-                    self._store_observation(session_id, _obs,
-                        intent="code_exec", confidence=round(confidence, 2),
-                        tools_used="code_exec", memory_hits=len(memory_facts),
-                        context_tokens=0, latency_ms=total_ms)
+                    _obs.emit(
+                        "turn_complete",
+                        intent="code_exec",
+                        confidence=round(confidence, 2),
+                        tokens_approx=_approx_tokens(response_text),
+                        total_latency_ms=total_ms,
+                        memory_facts=len(memory_facts),
+                        agent_mode=False,
+                    )
+                    self._store_observation(
+                        session_id,
+                        _obs,
+                        intent="code_exec",
+                        confidence=round(confidence, 2),
+                        tools_used="code_exec",
+                        memory_hits=len(memory_facts),
+                        context_tokens=0,
+                        latency_ms=total_ms,
+                    )
                     return
 
                 elif effective_intent == Intent.MEMORY_OP:
                     # Dispatch memory op directly — no LLM needed for store/recall
                     logger.info(
                         "[engine] MEMORY_OP small-model fast-path for %s (model=%s)",
-                        session_id[:8], active_adapter._model,
+                        session_id[:8],
+                        active_adapter._model,
                     )
                     # dispatch_with_retry imported at module level — do NOT re-import here
                     mem_result, mem_failed, _ = await dispatch_with_retry(Intent.MEMORY_OP, message)
-                    _obs.emit("tool_status", tool="memory_op", label="Checking memory", status="done")
+                    _obs.emit(
+                        "tool_status", tool="memory_op", label="Checking memory", status="done"
+                    )
                     if mem_result and not mem_failed:
                         response_text = mem_result.content
                     else:
@@ -1830,19 +2105,35 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     self._persist_assistant_message(session_id, response_text)
                     total_ms = round((time.monotonic() - t0) * 1000)
                     self._metrics.record("memory_op", latency_ms=total_ms, success=not mem_failed)
-                    _obs.emit("turn_complete", intent="memory_op", confidence=round(confidence, 2),
-                              tokens_approx=_approx_tokens(response_text),
-                              total_latency_ms=total_ms, memory_facts=len(memory_facts), agent_mode=False)
-                    self._store_observation(session_id, _obs,
-                        intent="memory_op", confidence=round(confidence, 2),
-                        tools_used="memory_op", memory_hits=len(memory_facts),
-                        context_tokens=0, latency_ms=total_ms)
+                    _obs.emit(
+                        "turn_complete",
+                        intent="memory_op",
+                        confidence=round(confidence, 2),
+                        tokens_approx=_approx_tokens(response_text),
+                        total_latency_ms=total_ms,
+                        memory_facts=len(memory_facts),
+                        agent_mode=False,
+                    )
+                    self._store_observation(
+                        session_id,
+                        _obs,
+                        intent="memory_op",
+                        confidence=round(confidence, 2),
+                        tools_used="memory_op",
+                        memory_hits=len(memory_facts),
+                        context_tokens=0,
+                        latency_ms=total_ms,
+                    )
                     return
 
             # Get fresh adapter for agent loop
             agent_adapter = get_adapter(settings.localmind_adapter)
-            logger.info("[engine] agent loop adapter: %s type=%s model=%s",
-                       settings.localmind_adapter, type(agent_adapter).__name__, getattr(agent_adapter, '_model', '?'))
+            logger.info(
+                "[engine] agent loop adapter: %s type=%s model=%s",
+                settings.localmind_adapter,
+                type(agent_adapter).__name__,
+                getattr(agent_adapter, "_model", "?"),
+            )
             self._agent_loop._adapter = agent_adapter
             # Track metrics for agent-mode intents (SHELL, CODE_EXEC, etc.)
             # Without this, the status bar shows 0 tok/s and 0ms latency because
@@ -1900,7 +2191,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         ]
         for prefix in _UNCERTAINTY_PREFIXES_FINAL:
             if response_text.startswith(prefix):
-                response_text = response_text[len(prefix):].strip()
+                response_text = response_text[len(prefix) :].strip()
 
         # ── 7b-metrics. Record streaming completion for agent-mode paths ───────
         # CHAT and FILE_TASK call record_streaming_complete() inside their own
@@ -1923,7 +2214,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # If the model streamed fenced code (common when intent is CHAT but user
         # asked for code), cache it so a follow-up "save it" / "update the file"
         # can write the actual file instead of showing code in chat again.
-        _FENCE_RE = re.compile(r'```(?P<lang>\w+)?\s*\n(?P<code>[\s\S]+?)\n```', re.IGNORECASE)
+        _FENCE_RE = re.compile(r"```(?P<lang>\w+)?\s*\n(?P<code>[\s\S]+?)\n```", re.IGNORECASE)
         _code_blocks = _FENCE_RE.findall(response_text)
         if _code_blocks:
             _lang, _code = _code_blocks[-1]  # use last (most likely the updated version)
@@ -1932,13 +2223,21 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 "lang": _lang or "",
                 "original_message": message,
             }
-            logger.debug("[engine] cached last code block for session %s (%s, %d chars)",
-                         session_id, _lang, len(_code))
+            logger.debug(
+                "[engine] cached last code block for session %s (%s, %d chars)",
+                session_id,
+                _lang,
+                len(_code),
+            )
 
         # Collapse the running tool status indicator now that we have a response
         if effective_intent in _TOOL_LABELS:
-            _obs.emit("tool_status", tool=effective_intent.value,
-                      label=_TOOL_LABELS[effective_intent], status="done")
+            _obs.emit(
+                "tool_status",
+                tool=effective_intent.value,
+                label=_TOOL_LABELS[effective_intent],
+                status="done",
+            )
 
         # ── 8. Secondary intent ────────────────────────────────────────────
         # _task_profile is assigned earlier in the pipeline (layer 2). Its
@@ -1950,14 +2249,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 case Intent.FILE_WRITE if tool_result:
                     try:
                         from tools.file_writer import write_response
+
                         await write_response(message=message, content=response_text)
                     except Exception as e:
                         logger.warning(f"Secondary FILE_WRITE failed: {e}")
                 case Intent.MEMORY_OP:
                     # Secondary memory op — fire-and-forget, same as primary path
-                    _safe_task(
-                        self._extract_and_store_facts(message, session_id, _obs)
-                    )
+                    _safe_task(self._extract_and_store_facts(message, session_id, _obs))
                 case _:
                     logger.debug(
                         f"[engine] secondary intent {secondary_intent.value} — no handler, skipping"
@@ -1968,9 +2266,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # caller (client is waiting for stream close / next request).
         # _safe_task logs any exceptions — no silent data loss.
         if effective_intent == Intent.MEMORY_OP:
-            _safe_task(
-                self._extract_and_store_facts(message, session_id, _obs)
-            )
+            _safe_task(self._extract_and_store_facts(message, session_id, _obs))
 
         # Post-response memory: assistant's own answer can surface new facts.
         _safe_task(
@@ -1982,7 +2278,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         if REFLECT_ENABLED and effective_intent in REFLECT_INTENTS:
             _safe_task(
                 self._reflect_on_answer(
-                    response_text, effective_intent, message, session_id, _obs,
+                    response_text,
+                    effective_intent,
+                    message,
+                    session_id,
+                    _obs,
                 )
             )
 
@@ -1991,19 +2291,29 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
         total_ms = round((time.monotonic() - t0) * 1000)
         self._metrics.record(effective_intent.value, latency_ms=total_ms, success=True)
-        _final_prompt_tok = _approx_tokens("".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict)))
-        _obs.emit("turn_complete",
-                  intent=effective_intent.value,
-                  confidence=round(confidence, 2),
-                  tokens_approx=_approx_tokens(response_text),
-                  prompt_tokens_approx=_final_prompt_tok,
-                  total_latency_ms=total_ms,
-                  memory_facts=len(memory_facts),
-                  agent_mode=effective_intent in AGENT_INTENTS)
-        self._store_observation(session_id, _obs,
-            intent=effective_intent.value, confidence=round(confidence, 2),
-            tools_used=effective_intent.value, memory_hits=len(memory_facts),
-            context_tokens=_final_prompt_tok, latency_ms=total_ms)
+        _final_prompt_tok = _approx_tokens(
+            "".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict))
+        )
+        _obs.emit(
+            "turn_complete",
+            intent=effective_intent.value,
+            confidence=round(confidence, 2),
+            tokens_approx=_approx_tokens(response_text),
+            prompt_tokens_approx=_final_prompt_tok,
+            total_latency_ms=total_ms,
+            memory_facts=len(memory_facts),
+            agent_mode=effective_intent in AGENT_INTENTS,
+        )
+        self._store_observation(
+            session_id,
+            _obs,
+            intent=effective_intent.value,
+            confidence=round(confidence, 2),
+            tools_used=effective_intent.value,
+            memory_hits=len(memory_facts),
+            context_tokens=_final_prompt_tok,
+            latency_ms=total_ms,
+        )
 
         # Explicitly yield done so the frontend resets isStreaming immediately.
         yield StreamChunk(text="", done=True)

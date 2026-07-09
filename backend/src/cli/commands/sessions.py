@@ -1,4 +1,5 @@
 """localmind sessions — list and manage conversation sessions."""
+
 from __future__ import annotations
 
 import asyncio
@@ -55,7 +56,11 @@ async def _run(delete: Optional[str], clear_all: bool):
     table.add_column("Created")
 
     for s in sessions:
-        last_active = datetime.fromtimestamp(s["last_active"]).strftime("%Y-%m-%d %H:%M") if s["last_active"] else "—"
+        last_active = (
+            datetime.fromtimestamp(s["last_active"]).strftime("%Y-%m-%d %H:%M")
+            if s["last_active"]
+            else "—"
+        )
         created = datetime.fromtimestamp(s["created_at"]).strftime("%Y-%m-%d %H:%M")
         table.add_row(
             f"[dim]{s['id'][:16]}...[/dim]",
@@ -66,4 +71,6 @@ async def _run(delete: Optional[str], clear_all: bool):
 
     console.print()
     console.print(table)
-    console.print(f"\n[dim]{len(sessions)} session(s). Delete with: localmind sessions --delete <id>[/dim]")
+    console.print(
+        f"\n[dim]{len(sessions)} session(s). Delete with: localmind sessions --delete <id>[/dim]"
+    )

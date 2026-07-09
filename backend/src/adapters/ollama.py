@@ -9,6 +9,7 @@ the OpenAI chat completions format. This adapter handles:
 - Model context window detection (with smart per-tier defaults)
 - Health checking (is Ollama running?)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,15 +30,16 @@ from core.models import StreamChunk
 def _build_intent_timeouts() -> dict[str, int]:
     """Read per-intent timeouts from settings so .env changes take effect on restart."""
     return {
-        "chat":       settings.ollama_timeout_chat,
+        "chat": settings.ollama_timeout_chat,
         "web_search": settings.ollama_timeout_web_search,
-        "file_task":  settings.ollama_timeout_file_task,
+        "file_task": settings.ollama_timeout_file_task,
         "file_write": settings.ollama_timeout_file_write,
-        "shell":      settings.ollama_timeout_shell,
-        "code_exec":  settings.ollama_timeout_code_exec,
-        "sysinfo":    settings.ollama_timeout_sysinfo,
-        "memory_op":  settings.ollama_timeout_memory_op,
+        "shell": settings.ollama_timeout_shell,
+        "code_exec": settings.ollama_timeout_code_exec,
+        "sysinfo": settings.ollama_timeout_sysinfo,
+        "memory_op": settings.ollama_timeout_memory_op,
     }
+
 
 _INTENT_TIMEOUTS: dict[str, int] = _build_intent_timeouts()
 _DEFAULT_TIMEOUT: int = settings.ollama_timeout_default
@@ -56,12 +58,12 @@ _MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "mixtral:8x7b": 32768,
     "phi3:mini": 4096,
     "gemma2:9b": 8192,
-    "gemma3:1b":  131072,
-    "gemma3:4b":  131072,
+    "gemma3:1b": 131072,
+    "gemma3:4b": 131072,
     "gemma3:12b": 131072,
     "gemma3:27b": 131072,
     "qwen3.5:9b": 131072,
-    "qwen3:9b":   131072,
+    "qwen3:9b": 131072,
 }
 
 # Context window tiers for models not in the lookup table.
@@ -72,6 +74,7 @@ _MEDIUM_MODEL_TAGS = (":7b", ":8b", ":9b", ":14b", ":12b")
 @dataclass
 class ToolCallResult:
     """Returned by ``chat_with_tools`` when the model invokes a tool."""
+
     tool_name: str
     tool_args: dict
     raw_content: str = ""  # any text content emitted before the tool call
@@ -87,14 +90,17 @@ class MultiToolCallResult:
     that don't handle MultiToolCallResult can treat it as a single
     ToolCallResult by accessing .first.
     """
+
     calls: list[ToolCallResult]  # ordered as the model returned them
     raw_content: str = ""
 
     @property
     def first(self) -> ToolCallResult:
         """Convenience: get the first tool call (backward compat)."""
-        return self.calls[0] if self.calls else ToolCallResult(
-            tool_name="", tool_args={}, raw_content=self.raw_content
+        return (
+            self.calls[0]
+            if self.calls
+            else ToolCallResult(tool_name="", tool_args={}, raw_content=self.raw_content)
         )
 
     @property
@@ -167,6 +173,7 @@ class OllamaAdapter(BaseAdapter):
         request.
         """
         import time as _time
+
         now = _time.monotonic()
         if now - OllamaAdapter._models_cache_ts < OllamaAdapter._MODELS_CACHE_TTL:
             available = OllamaAdapter._cached_models
@@ -187,8 +194,7 @@ class OllamaAdapter(BaseAdapter):
                 available = []
 
         model_exists = any(
-            m == self._model or m.split(":")[0] == self._model.split(":")[0]
-            for m in available
+            m == self._model or m.split(":")[0] == self._model.split(":")[0] for m in available
         )
         return model_exists, available
 
@@ -243,12 +249,10 @@ class OllamaAdapter(BaseAdapter):
         }
 
         try:
-            async with self._client.stream(
-                "POST", url, json=payload, timeout=timeout
-            ) as response:
+            async with self._client.stream("POST", url, json=payload, timeout=timeout) as response:
                 if response.status_code != 200:
                     body = await response.aread()
-                    raw_error = body.decode(errors='replace')[:200]
+                    raw_error = body.decode(errors="replace")[:200]
 
                     # Build a user-friendly error message with actionable advice
                     if response.status_code == 404:
@@ -282,9 +286,7 @@ class OllamaAdapter(BaseAdapter):
                                 f"Try restarting Ollama or pulling the model again."
                             )
                     else:
-                        error_msg = (
-                            f"Ollama returned {response.status_code}: {raw_error}"
-                        )
+                        error_msg = f"Ollama returned {response.status_code}: {raw_error}"
 
                     logger.error(error_msg)
                     yield StreamChunk(text=error_msg, done=True, error=error_msg)
@@ -326,7 +328,7 @@ class OllamaAdapter(BaseAdapter):
                                 # emit text before Thinking...
                                 if start > 0:
                                     yield StreamChunk(text=_think_buf[:start])
-                                _think_buf = _think_buf[start + 10:]  # "Thinking..." is 10 chars
+                                _think_buf = _think_buf[start + 10 :]  # "Thinking..." is 10 chars
                                 _in_think = True
                             else:
                                 end = _think_buf.find("...done thinking.")
@@ -335,7 +337,9 @@ class OllamaAdapter(BaseAdapter):
                                     _think_buf = ""
                                     break
                                 yield StreamChunk(text="", thinking=_think_buf[:end])
-                                _think_buf = _think_buf[end + 16:]  # "...done thinking." is 16 chars
+                                _think_buf = _think_buf[
+                                    end + 16 :
+                                ]  # "...done thinking." is 16 chars
                                 _in_think = False
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
@@ -400,17 +404,17 @@ class OllamaAdapter(BaseAdapter):
             payload["tool_choice"] = tool_choice
 
         # Sentinel objects placed in the queue by the background reader task.
-        _TOOL_CALL_DETECTED = object()   # model started a tool call
-        _STREAM_DONE = object()          # stream ended with no tool call
-        _STREAM_ERROR = object()         # connection/timeout error
+        _TOOL_CALL_DETECTED = object()  # model started a tool call
+        _STREAM_DONE = object()  # stream ended with no tool call
+        _STREAM_ERROR = object()  # connection/timeout error
 
         queue: asyncio.Queue = asyncio.Queue()
 
         # Shared mutable state written by the background reader.
         state: dict = {
-            "tool_call_buffers": {},   # index -> {id, name, arguments}
-            "raw_content_parts": [],   # text emitted before/during tool call
-            "text_chunks": [],         # StreamChunks already put on the queue
+            "tool_call_buffers": {},  # index -> {id, name, arguments}
+            "raw_content_parts": [],  # text emitted before/during tool call
+            "text_chunks": [],  # StreamChunks already put on the queue
             "error_msg": "",
         }
 
@@ -421,7 +425,7 @@ class OllamaAdapter(BaseAdapter):
                 ) as response:
                     if response.status_code != 200:
                         body = await response.aread()
-                        raw_error = body.decode(errors='replace')[:200]
+                        raw_error = body.decode(errors="replace")[:200]
 
                         # Build a user-friendly error message with actionable advice
                         if response.status_code == 404:
@@ -568,19 +572,24 @@ class OllamaAdapter(BaseAdapter):
                 except json.JSONDecodeError:
                     logger.warning("[adapter] tool args not valid JSON: %s", raw_args[:200])
                     tool_args = {"_raw_arguments": raw_args}
-                all_calls.append(ToolCallResult(
-                    tool_name=buf["name"],
-                    tool_args=tool_args,
-                    raw_content=raw_content_text if idx == sorted(state["tool_call_buffers"].keys())[0] else "",
-                ))
+                all_calls.append(
+                    ToolCallResult(
+                        tool_name=buf["name"],
+                        tool_args=tool_args,
+                        raw_content=raw_content_text
+                        if idx == sorted(state["tool_call_buffers"].keys())[0]
+                        else "",
+                    )
+                )
 
             # Single tool call — return simple ToolCallResult (backward compat)
             if len(all_calls) == 1:
                 return all_calls[0]
 
             # Multiple tool calls — return MultiToolCallResult for parallel dispatch
-            logger.info("[adapter] %d tool calls detected — returning MultiToolCallResult",
-                        len(all_calls))
+            logger.info(
+                "[adapter] %d tool calls detected — returning MultiToolCallResult", len(all_calls)
+            )
             return MultiToolCallResult(
                 calls=all_calls,
                 raw_content=raw_content_text,
@@ -588,8 +597,10 @@ class OllamaAdapter(BaseAdapter):
 
         # ── Streaming text path ───────────────────────────────────────────
         if stream_error:
+
             async def _error_iter():
                 yield StreamChunk(text=state["error_msg"], done=True, error=state["error_msg"])
+
             return _error_iter()
 
         # Replay buffered chunks (loop.py buffers them for tool-talk detection
@@ -639,7 +650,8 @@ class OllamaAdapter(BaseAdapter):
         except Exception as exc:
             logger.info(
                 "[adapter] /api/generate warmup failed for model '%s': %s — trying /api/chat",
-                self._model, exc,
+                self._model,
+                exc,
             )
 
         # Attempt 2: /api/chat with minimal prompt (generates 1 token)
@@ -670,16 +682,15 @@ class OllamaAdapter(BaseAdapter):
         except Exception as exc:
             logger.warning(
                 "[adapter] warmup failed for model '%s' via both endpoints: %s",
-                self._model, exc,
+                self._model,
+                exc,
             )
             return False
 
     async def health_check(self) -> bool:
         """Return True if Ollama is reachable and responding."""
         try:
-            response = await self._client.get(
-                f"{self._base_url}/api/tags", timeout=5
-            )
+            response = await self._client.get(f"{self._base_url}/api/tags", timeout=5)
             return response.status_code == 200
         except Exception:
             return False
@@ -687,9 +698,7 @@ class OllamaAdapter(BaseAdapter):
     async def list_models(self) -> list[str]:
         """Return names of locally available Ollama chat/generation models."""
         try:
-            response = await self._client.get(
-                f"{self._base_url}/api/tags", timeout=5
-            )
+            response = await self._client.get(f"{self._base_url}/api/tags", timeout=5)
             data = response.json()
             # Filter out embedding models (they have separate /api/embeddings endpoint)
             all_models = [m["name"] for m in data.get("models", [])]

@@ -24,6 +24,7 @@ Migration status (Phase 3 progress):
 When a tool moves to ✅, replace its LegacyBridgeContract subclass with a
 full ToolContract and remove the legacy fn call from execute().
 """
+
 from __future__ import annotations
 
 import json
@@ -47,14 +48,12 @@ TOOL_SCHEMAS: Dict[str, Dict[str, type]] = {
     "sysinfo": {
         "goal": str,
     },
-
     # ── web_search ────────────────────────────────────────────────────────────
     # query: the exact search string — not a goal sentence, not NL instructions.
     # The planner must emit a clean query, not "search for X".
     "web_search": {
         "query": str,
     },
-
     # ── file_task ─────────────────────────────────────────────────────────────
     # path: absolute or home-relative path to a single FILE to read.
     #       Do NOT use for directories — use shell list_files for folder listings.
@@ -63,7 +62,6 @@ TOOL_SCHEMAS: Dict[str, Dict[str, type]] = {
         "path": str,
         "goal": str,
     },
-
     # ── file_write ────────────────────────────────────────────────────────────
     # path: destination path (absolute or ~/…). Defaults to ~/LocalMind/.
     # content: the exact text/code to write. No fences, no NL wrappers.
@@ -71,7 +69,6 @@ TOOL_SCHEMAS: Dict[str, Dict[str, type]] = {
         "path": str,
         "content": str,
     },
-
     # ── edit_file ─────────────────────────────────────────────────────────────
     # path: file path to edit (absolute or ~/…).
     # action: one of "replace", "regex_replace", "insert", "delete", "append", "prepend".
@@ -81,7 +78,6 @@ TOOL_SCHEMAS: Dict[str, Dict[str, type]] = {
         "path": str,
         "action": str,
     },
-
     # ── code_exec ─────────────────────────────────────────────────────────────
     # code: the code to execute — verbatim, no fences.
     # language: "python" | "javascript" | "bash" (determines the runner).
@@ -90,7 +86,6 @@ TOOL_SCHEMAS: Dict[str, Dict[str, type]] = {
     "code_exec": {
         "code": str,
     },
-
     # ── shell ─────────────────────────────────────────────────────────────────
     # action: one of the canonical action keys (see ShellContract.ACTIONS).
     # Additional action-specific fields are validated inside ShellContract.execute().
@@ -110,7 +105,6 @@ TOOL_SCHEMAS: Dict[str, Dict[str, type]] = {
     "shell": {
         "action": str,
     },
-
     # ── memory_op ─────────────────────────────────────────────────────────────
     # operation: "store" | "retrieve" | "delete"
     # content:   for store → the text to remember.
@@ -130,6 +124,7 @@ TOOL_SCHEMAS: Dict[str, Dict[str, type]] = {
 # When a tool is fully migrated, delete its LegacyBridgeContract and replace
 # with a proper ToolContract.
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class _LegacyBridgeContract(ToolContract):
     """
@@ -183,6 +178,7 @@ class _LegacyBridgeContract(ToolContract):
 # ─────────────────────────────────────────────────────────────────────────────
 # Stub contracts — Phase 3 migration queue
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class SysinfoContract(_LegacyBridgeContract):
     name = "sysinfo"
@@ -282,6 +278,7 @@ class FileWriteContract(_LegacyBridgeContract):
             )
             # Try to resolve: strip drive letter if present, then anchor to home
             from tools.file_writer import _cross_os_parts
+
             parts = _cross_os_parts(raw_path)
             # Filter out Windows drive letter (e.g. "C:")
             filtered = [p for p in parts if not (len(p) == 2 and p[1] == ":")]
@@ -289,8 +286,22 @@ class FileWriteContract(_LegacyBridgeContract):
                 filename_from_path = ""
                 last = filtered[-1]
                 if "." in last and last.rsplit(".", 1)[-1].lower() in (
-                    "py", "js", "ts", "txt", "md", "csv", "json", "html", "css",
-                    "sh", "yaml", "yml", "toml", "sql", "rs", "go",
+                    "py",
+                    "js",
+                    "ts",
+                    "txt",
+                    "md",
+                    "csv",
+                    "json",
+                    "html",
+                    "css",
+                    "sh",
+                    "yaml",
+                    "yml",
+                    "toml",
+                    "sql",
+                    "rs",
+                    "go",
                 ):
                     filename_from_path = last
                     filtered = filtered[:-1]
@@ -365,6 +376,7 @@ class EditFileContract(ToolContract):
       - append:        insert_text
       - prepend:       insert_text
     """
+
     name = "edit_file"
     schema = TOOL_SCHEMAS["edit_file"]
 
@@ -391,6 +403,7 @@ class EditFileContract(ToolContract):
 
         # Delegate to the edit_file module's payload handler
         from tools.edit_file import _edit_from_payload
+
         return await _edit_from_payload(payload)
 
 

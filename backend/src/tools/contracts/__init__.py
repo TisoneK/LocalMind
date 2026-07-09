@@ -15,6 +15,7 @@ Contracts are registered at import time:
 Import this package early in the application bootstrap (before the orchestrator
 starts) to ensure all contracts are in the registry before any task dispatches.
 """
+
 from tools.contracts.base import (
     ContractViolationError,
     ToolContract,

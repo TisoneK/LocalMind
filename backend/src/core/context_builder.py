@@ -8,6 +8,7 @@ v0.3 additions:
 - Compact prompt auto-selected for models with context_window <= 4096.
 - Negative budget guard: drops knowledge doc if system prompt alone exceeds window.
 """
+
 from __future__ import annotations
 
 import logging
@@ -46,7 +47,9 @@ def _load_fragment(name: str) -> str:
             try:
                 text = path.read_text(encoding="utf-8").strip()
                 _fragment_cache[name] = text
-                logger.debug("[context_builder] loaded prompt fragment: %s (%d chars)", name, len(text))
+                logger.debug(
+                    "[context_builder] loaded prompt fragment: %s (%d chars)", name, len(text)
+                )
                 return text
             except FileNotFoundError:
                 continue
@@ -108,7 +111,9 @@ def _build_environment_context(session_cwd: str | None = None) -> str:
 
     # ── OS-specific guidance ──
     if system == "Windows":
-        os_guidance = "Windows: use backslash `\\\\` for paths, `.bat`/`.cmd` for scripts, not `.sh`"
+        os_guidance = (
+            "Windows: use backslash `\\\\` for paths, `.bat`/`.cmd` for scripts, not `.sh`"
+        )
         common_cmds = "Common commands: `dir`, `type`, `copy`, `move`, `mkdir`, `del`"
         shell_name = "PowerShell"
     else:
@@ -126,6 +131,7 @@ def _build_environment_context(session_cwd: str | None = None) -> str:
     # ── Available tools summary ──
     # List the tools the model has access to so it doesn't need to guess
     from tools import available_tools
+
     tool_list = available_tools()
     tool_summary = ", ".join(t["intent"] for t in tool_list)
 
@@ -133,9 +139,11 @@ def _build_environment_context(session_cwd: str | None = None) -> str:
     memory_count = 0
     try:
         from storage.vector import VectorStore
+
         vs = VectorStore()
         if vs._ready:
             import asyncio
+
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 # Can't await in sync context — skip
@@ -204,6 +212,7 @@ def build_system_prompt(intent: Intent, model_context_window: int, session_cwd: 
         return SYSTEM_PROMPT_COMPACT
     return SYSTEM_PROMPT
 
+
 # ── Knowledge doc loader ───────────────────────────────────────────────────────
 # localmind.md lives next to the source tree root (one level above core/).
 # It is loaded once at import time and injected into every system prompt.
@@ -221,20 +230,23 @@ def _load_knowledge_doc() -> str:
         if _KNOWLEDGE_DOC:
             return _KNOWLEDGE_DOC
         candidates = [
-            Path(__file__).parent.parent / "localmind.md",   # running from source
-            Path.cwd() / "localmind.md",                      # running from project root
+            Path(__file__).parent.parent / "localmind.md",  # running from source
+            Path.cwd() / "localmind.md",  # running from project root
         ]
         for path in candidates:
             try:
                 text = path.read_text(encoding="utf-8")
                 if text.strip():
                     _KNOWLEDGE_DOC = text
-                    logger.info("[context_builder] loaded knowledge doc from %s (%d chars)", path, len(text))
+                    logger.info(
+                        "[context_builder] loaded knowledge doc from %s (%d chars)", path, len(text)
+                    )
                     return _KNOWLEDGE_DOC
             except OSError:
                 continue
         logger.debug("[context_builder] localmind.md not found — skipping knowledge injection")
         return ""
+
 
 # ── Encoder setup ─────────────────────────────────────────────────────────────
 
@@ -250,6 +262,7 @@ def _get_encoder():
         if _ENCODER is None:
             try:
                 import tiktoken
+
                 _ENCODER = tiktoken.get_encoding("cl100k_base")
                 logger.debug("[context_builder] using tiktoken cl100k_base encoder")
             except Exception:
@@ -262,8 +275,11 @@ def _get_encoder():
                         # Divide by 4 (Latin baseline); script-aware correction applied
                         # in _count_tokens() on top of this.
                         return list(range(len(text.encode("utf-8")) // 4))
+
                 _ENCODER = _FallbackEncoder()
-                logger.warning("[context_builder] tiktoken unavailable — using UTF-8 fallback encoder")
+                logger.warning(
+                    "[context_builder] tiktoken unavailable — using UTF-8 fallback encoder"
+                )
     return _ENCODER
 
 
@@ -279,15 +295,15 @@ def _count_tokens(text: str) -> int:
     # Detect non-Latin script proportion for fallback correction
     try:
         import tiktoken  # noqa: F401
+
         return raw  # tiktoken is accurate; no correction needed
     except ImportError:
         pass
 
     cjk_arabic = sum(
-        1 for c in text
-        if '\u4e00' <= c <= '\u9fff'
-        or '\u0600' <= c <= '\u06ff'
-        or '\uac00' <= c <= '\ud7a3'
+        1
+        for c in text
+        if "\u4e00" <= c <= "\u9fff" or "\u0600" <= c <= "\u06ff" or "\uac00" <= c <= "\ud7a3"
     )
     if len(text) > 0 and cjk_arabic / len(text) > 0.2:
         # CJK/Arabic: ~1.5 chars/token → multiply raw (byte//4) up by ~2.7
@@ -313,6 +329,7 @@ FILE_CONTENT_BUDGET_FRACTION = 0.40
 
 # ── Truncation helpers ────────────────────────────────────────────────────────
 
+
 def _truncate_to_token_budget(text: str, max_tokens: int, label: str = "") -> str:
     """
     Truncate text to fit within max_tokens, breaking at a sentence boundary
@@ -322,7 +339,7 @@ def _truncate_to_token_budget(text: str, max_tokens: int, label: str = "") -> st
         return text
 
     # Try to find a clean sentence break
-    sentences = re.split(r'(?<=[.!?])\s+', text)
+    sentences = re.split(r"(?<=[.!?])\s+", text)
     kept: list[str] = []
     used = 0
     notice_tokens = _count_tokens("\n\n[... content truncated to fit context window ...]")
@@ -343,7 +360,7 @@ def _truncate_to_token_budget(text: str, max_tokens: int, label: str = "") -> st
                 kept = [candidate]
                 break
 
-    truncated = " ".join(kept) if kept else text[:max_tokens * 3]
+    truncated = " ".join(kept) if kept else text[: max_tokens * 3]
     label_str = f" ({label})" if label else ""
     logger.debug(
         f"[context_builder] truncated{label_str}: "
@@ -499,6 +516,7 @@ _COMPACT_PROMPT_THRESHOLD = 4096
 
 # ── Main builder ──────────────────────────────────────────────────────────────
 
+
 def build(context: EngineContext, model_context_window: int = 8192) -> list[dict]:
     """
     Assemble the list of messages to send to the model.
@@ -523,7 +541,9 @@ def build(context: EngineContext, model_context_window: int = 8192) -> list[dict
     # Build intent-aware system prompt from fragment files.
     # base.md is always loaded; <intent>.md adds only the rules for the active
     # tool.  Falls back to in-code constants if fragment files are missing.
-    active_system_prompt = build_system_prompt(context.intent, model_context_window, context.session_cwd)
+    active_system_prompt = build_system_prompt(
+        context.intent, model_context_window, context.session_cwd
+    )
 
     # Knowledge doc (localmind.md) is only injected when the context window is
     # large enough to absorb it without crowding out history and tool results.
@@ -535,6 +555,7 @@ def build(context: EngineContext, model_context_window: int = 8192) -> list[dict
     # rather than relying on the declared context window size alone.
     # Detect small model from settings at build time.
     from core.config import settings as _cfg
+
     _active_model = _cfg.ollama_model
     _is_small_model = any(tag in _active_model for tag in (":1b", ":3b", "phi3:mini", "phi3.5"))
     # Small models: skip knowledge doc entirely — base.md + chat.md is sufficient.
@@ -564,16 +585,13 @@ def build(context: EngineContext, model_context_window: int = 8192) -> list[dict
         round(model_context_window * 0.40),
     )
     total_available = max(
-        model_context_window
-        - effective_reserve
-        - base_system_tokens
-        - 16,
+        model_context_window - effective_reserve - base_system_tokens - 16,
         64,  # hard floor — always fit at least the current message
     )
 
     # Per-component budgets
-    tool_budget    = round(total_available * TOOL_RESULT_BUDGET_FRACTION)
-    file_budget    = round(total_available * FILE_CONTENT_BUDGET_FRACTION)
+    tool_budget = round(total_available * TOOL_RESULT_BUDGET_FRACTION)
+    file_budget = round(total_available * FILE_CONTENT_BUDGET_FRACTION)
     history_budget = total_available - tool_budget - file_budget
 
     messages: list[dict] = []
@@ -623,15 +641,24 @@ def build(context: EngineContext, model_context_window: int = 8192) -> list[dict
         # 1. Synthetic assistant message with tool_calls
         # 2. Tool result message with tool_call_id
         import uuid as _uuid
+
         _tc_id = f"call_{_uuid.uuid4().hex[:8]}"
-        messages.append({"role": "assistant", "content": "", "tool_calls": [{
-            "id": _tc_id,
-            "type": "function",
-            "function": {
-                "name": source,
-                "arguments": "{}",
-            },
-        }]})
+        messages.append(
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": _tc_id,
+                        "type": "function",
+                        "function": {
+                            "name": source,
+                            "arguments": "{}",
+                        },
+                    }
+                ],
+            }
+        )
         messages.append({"role": "tool", "tool_call_id": _tc_id, "content": tool_msg_content})
         logger.debug(
             f"[context_builder] tool result: "

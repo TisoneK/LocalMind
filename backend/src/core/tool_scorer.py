@@ -7,6 +7,7 @@ Scoring formula (per audit feedback):
 This converts the tool registry from a static lookup into a capability-aware
 selection system. The engine queries this before dispatching any tool.
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,11 +21,11 @@ logger = logging.getLogger(__name__)
 # Seeded with reasonable defaults; overridden at startup by DB stats (A4).
 _RELIABILITY: dict[str, float] = {
     "web_search": 0.85,
-    "code_exec":  0.90,
-    "file_task":  0.95,
+    "code_exec": 0.90,
+    "file_task": 0.95,
     "file_write": 0.95,
-    "memory_op":  0.99,
-    "chat":       1.00,
+    "memory_op": 0.99,
+    "chat": 1.00,
 }
 
 
@@ -55,6 +56,7 @@ def record_tool_outcome(store, tool_name: str, success: bool, latency_ms: int = 
             _RELIABILITY[tool_name] = round(updated[tool_name], 4)
     except Exception as e:
         logger.debug(f"[tool scorer] reliability update skipped: {e}")
+
 
 # Normalization ranges for latency (ms) and cost
 _MAX_LATENCY_MS = 5000.0
@@ -123,14 +125,16 @@ def score_tools(
             + reliability * 0.1
         )
 
-        scored.append(ScoredTool(
-            intent=tool_intent,
-            score=round(score, 4),
-            description=tool.get("description", ""),
-            cost=cost,
-            latency_ms=latency_ms,
-            reliability=reliability,
-        ))
+        scored.append(
+            ScoredTool(
+                intent=tool_intent,
+                score=round(score, 4),
+                description=tool.get("description", ""),
+                cost=cost,
+                latency_ms=latency_ms,
+                reliability=reliability,
+            )
+        )
 
     scored.sort(key=lambda t: t.score, reverse=True)
 

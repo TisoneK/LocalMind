@@ -22,6 +22,7 @@ v8 changes vs v7:
 - MAX_RESULTS raised from 5 to 8 — more results means better coverage
   for the LLM to synthesize from.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -49,6 +50,7 @@ async def _search_ddg(query: str) -> tuple[list[dict], str, str]:
     for attempt in range(max_attempts):
         try:
             from ddgs import DDGS
+
             safe_query = query.encode("utf-8", errors="replace").decode("utf-8")
 
             def _run_sync():
@@ -65,22 +67,30 @@ async def _search_ddg(query: str) -> tuple[list[dict], str, str]:
                 return results, "", ""
             # Empty results (anti-bot challenge page) -- retry if we have attempts left
             if attempt < max_attempts - 1:
-                logger.info(f"[web_search] DDG returned 0 results (attempt {attempt + 1}), retrying after {base_delay}s...")
+                logger.info(
+                    f"[web_search] DDG returned 0 results (attempt {attempt + 1}), retrying after {base_delay}s..."
+                )
                 await asyncio.sleep(base_delay)
                 base_delay *= 1.5  # exponential backoff
                 continue
-            return [], "network", "DuckDuckGo returned no results after retry (possible anti-bot block)"
+            return (
+                [],
+                "network",
+                "DuckDuckGo returned no results after retry (possible anti-bot block)",
+            )
         except asyncio.TimeoutError:
             logger.warning("[web_search] DDG timed out after 12s")
             return [], "timeout", "DuckDuckGo search timed out after 12 seconds"
         except Exception as e:
-            error_msg = str(e).encode('utf-8', errors='ignore').decode('utf-8')
+            error_msg = str(e).encode("utf-8", errors="ignore").decode("utf-8")
             logger.warning(f"[web_search] DDG failed: {error_msg}")
             return [], "network", f"DuckDuckGo search failed: {error_msg}"
     return [], "network", "DuckDuckGo search returned no results after all attempts"
 
 
-async def _search_searxng(query: str, searxng_url: str = "https://searx.be") -> tuple[list[dict], str, str]:
+async def _search_searxng(
+    query: str, searxng_url: str = "https://searx.be"
+) -> tuple[list[dict], str, str]:
     """Search using SearXNG instance with proper error handling."""
     try:
         import httpx
@@ -96,7 +106,7 @@ async def _search_searxng(query: str, searxng_url: str = "https://searx.be") -> 
                 "engines": "google,duckduckgo,bing,startpage",
                 "language": "en",
                 "safesearch": "moderate",
-                "results": MAX_RESULTS
+                "results": MAX_RESULTS,
             }
             r = await client.get(f"{searxng_url}/search", params=params)
             r.raise_for_status()
@@ -105,11 +115,13 @@ async def _search_searxng(query: str, searxng_url: str = "https://searx.be") -> 
             # Extract results from SearXNG response
             results = []
             for item in data.get("results", [])[:MAX_RESULTS]:
-                results.append({
-                    "title": item.get("title", ""),
-                    "href": item.get("url", ""),
-                    "body": item.get("content", "")
-                })
+                results.append(
+                    {
+                        "title": item.get("title", ""),
+                        "href": item.get("url", ""),
+                        "body": item.get("content", ""),
+                    }
+                )
 
             return results, "", ""
 
@@ -118,7 +130,11 @@ async def _search_searxng(query: str, searxng_url: str = "https://searx.be") -> 
         return [], "timeout", "SearXNG search timed out after 15 seconds"
     except httpx.ConnectError as e:
         logger.warning(f"[web_search] SearXNG connection failed: {e}")
-        return [], "network", f"SearXNG instance unreachable at {searxng_url} - check internet connection"
+        return (
+            [],
+            "network",
+            f"SearXNG instance unreachable at {searxng_url} - check internet connection",
+        )
     except httpx.HTTPStatusError as e:
         logger.warning(f"[web_search] SearXNG HTTP error: {e.response.status_code}")
         if e.response.status_code == 404:
@@ -155,7 +171,11 @@ async def _search_brave(query: str, api_key: str) -> tuple[list[dict], str, str]
             r.raise_for_status()
             data = r.json()
             results = [
-                {"title": w.get("title", ""), "href": w.get("url", ""), "body": w.get("description", "")}
+                {
+                    "title": w.get("title", ""),
+                    "href": w.get("url", ""),
+                    "body": w.get("description", ""),
+                }
                 for w in data.get("web", {}).get("results", [])
             ]
             return results, "", ""
@@ -198,14 +218,15 @@ def _format_results(results: list[dict]) -> str:
         if len(body) > SNIPPET_MAX:
             body = body[:SNIPPET_MAX] + "..."
         # Ensure proper Unicode handling
-        title = title.encode('utf-8', errors='ignore').decode('utf-8')
-        url = url.encode('utf-8', errors='ignore').decode('utf-8')
-        body = body.encode('utf-8', errors='ignore').decode('utf-8')
+        title = title.encode("utf-8", errors="ignore").decode("utf-8")
+        url = url.encode("utf-8", errors="ignore").decode("utf-8")
+        body = body.encode("utf-8", errors="ignore").decode("utf-8")
         lines.append(f"{i}. **{title}**\n   {url}\n   {body}")
     return "\n\n".join(lines)
 
 
 # -- Available tools discovery -------------------------------------------------
+
 
 def list_available_tools() -> list[dict]:
     """
@@ -331,7 +352,9 @@ async def web_search(query: str) -> ToolResult:
     if not results:
         logger.warning(f"[web_search] All tiers failed. Final error: {error_message}")
         return ToolResult(
-            content=f"All search providers failed. Last error: {error_message}" if error_message else "No results found from any provider.",
+            content=f"All search providers failed. Last error: {error_message}"
+            if error_message
+            else "No results found from any provider.",
             risk=RiskLevel.LOW,
             source="web_search",
             success=False,
@@ -342,12 +365,20 @@ async def web_search(query: str) -> ToolResult:
                 "result_count": 0,
                 "sources": [],
                 "successful_provider": "",
-                "attempted_providers": ["duckduckgo", "searxng", "brave" if getattr(settings, "brave_search_api_key", "") else "duckduckgo,searxng"]
+                "attempted_providers": [
+                    "duckduckgo",
+                    "searxng",
+                    "brave"
+                    if getattr(settings, "brave_search_api_key", "")
+                    else "duckduckgo,searxng",
+                ],
             },
         )
 
     content = _format_results(results)
-    source_urls = [r.get("href", r.get("url", "")) for r in results if r.get("href") or r.get("url")]
+    source_urls = [
+        r.get("href", r.get("url", "")) for r in results if r.get("href") or r.get("url")
+    ]
 
     logger.info(f"[web_search] Success via {successful_provider}: {len(results)} results")
     return ToolResult(
@@ -362,7 +393,11 @@ async def web_search(query: str) -> ToolResult:
             "result_count": len(results),
             "sources": source_urls[:8],
             "successful_provider": successful_provider,
-            "attempted_providers": ["duckduckgo", "searxng", "brave" if getattr(settings, "brave_search_api_key", "") else "duckduckgo,searxng"]
+            "attempted_providers": [
+                "duckduckgo",
+                "searxng",
+                "brave" if getattr(settings, "brave_search_api_key", "") else "duckduckgo,searxng",
+            ],
         },
     )
 

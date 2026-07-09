@@ -8,6 +8,7 @@ Extracted from the original engine.py. These methods handle:
   - Deduplicating against existing memory
   - Storing valid facts with importance scoring
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,14 +31,19 @@ class _MemoryMixin:
     ) -> None:
         fact = re.sub(
             r"^\s*(remember|note|store|keep in mind)\s*(that\s*)?",
-            "", message, flags=re.IGNORECASE,
+            "",
+            message,
+            flags=re.IGNORECASE,
         ).strip()
         if not fact:
             return
         await self._store_fact_if_valid(fact, session_id, obs, source="user", message=message)
 
     async def _maybe_store_response_facts(
-        self, response_text: str, session_id: str, obs: ObsCollector,
+        self,
+        response_text: str,
+        session_id: str,
+        obs: ObsCollector,
         user_message: str = "",
     ) -> None:
         """
@@ -90,22 +96,44 @@ class _MemoryMixin:
                     if sentence_start > 0:
                         candidate = candidate.split(None, 1)[-1] if " " in candidate else candidate
                     if len(candidate) > 20:
-                        await self._store_fact_if_valid(candidate, session_id, obs, source="user", message=user_message)
+                        await self._store_fact_if_valid(
+                            candidate, session_id, obs, source="user", message=user_message
+                        )
                     break  # one fact per user message max
 
         # ── Path 2: Response-confirmed fact extraction ───────────────────
         # Markers that indicate a confirmed, durable user fact.
         # Expanded to catch more natural response patterns.
         _FACT_MARKERS = [
-            "you prefer", "you always", "your name is", "you like", "you hate",
-            "you work", "your project", "your codebase", "your setup",
-            "you're using", "you are using", "your environment",
-            "you mentioned you", "you told me you",
-            "since you're", "given you're", "as a",
-            "your stack", "your workflow", "your preferred",
-            "you normally", "you typically", "you usually",
-            "your team", "your company", "your org",
-            "you're learning", "you're new to", "you're building",
+            "you prefer",
+            "you always",
+            "your name is",
+            "you like",
+            "you hate",
+            "you work",
+            "your project",
+            "your codebase",
+            "your setup",
+            "you're using",
+            "you are using",
+            "your environment",
+            "you mentioned you",
+            "you told me you",
+            "since you're",
+            "given you're",
+            "as a",
+            "your stack",
+            "your workflow",
+            "your preferred",
+            "you normally",
+            "you typically",
+            "you usually",
+            "your team",
+            "your company",
+            "your org",
+            "you're learning",
+            "you're new to",
+            "you're building",
         ]
         response_lower = response_text.lower()
 
@@ -117,12 +145,14 @@ class _MemoryMixin:
             return
 
         # Extract the sentence containing the marker as a candidate fact
-        sentences = re.split(r'(?<=[.!?])\s+', response_text)
+        sentences = re.split(r"(?<=[.!?])\s+", response_text)
         _regex_found = False
         for sentence in sentences:
             s_lower = sentence.lower()
             if any(marker in s_lower for marker in _FACT_MARKERS) and len(sentence) > 30:
-                await self._store_fact_if_valid(sentence.strip(), session_id, obs, source="assistant")
+                await self._store_fact_if_valid(
+                    sentence.strip(), session_id, obs, source="assistant"
+                )
                 _regex_found = True
                 break  # one fact per response max — avoid over-storing
 
@@ -142,7 +172,9 @@ class _MemoryMixin:
                         session_id=session_id,
                     )
                     for fact in _llm_facts:
-                        await self._store_fact_if_valid(fact, session_id, obs, source="llm_extracted", message=user_message)
+                        await self._store_fact_if_valid(
+                            fact, session_id, obs, source="llm_extracted", message=user_message
+                        )
                         obs.emit("memory_llm_extracted", fact_preview=fact[:60])
                 except Exception as e:
                     logger.debug("[memory] LLM extraction fallback failed (non-critical): %s", e)
@@ -184,17 +216,25 @@ class _MemoryMixin:
         for existing in existing_facts:
             similarity = self._simple_similarity(fact, existing.content)
             if similarity >= MEMORY_DEDUP_THRESHOLD:
-                logger.debug(f"[memory dedup] skipped near-duplicate fact (sim={similarity:.2f}): {fact[:60]}")
+                logger.debug(
+                    f"[memory dedup] skipped near-duplicate fact (sim={similarity:.2f}): {fact[:60]}"
+                )
                 obs.emit("memory_deduped", similarity=round(similarity, 2), preview=fact[:60])
                 return
 
         importance = (
-            0.8 if any(w in (message or fact).lower() for w in ["prefer", "always", "never", "important"])
+            0.8
+            if any(
+                w in (message or fact).lower() for w in ["prefer", "always", "never", "important"]
+            )
             else 0.5
         )
         stored = await self._memory.store(
-            fact=fact, session_id=session_id,
-            memory_type="semantic", source=source, importance=importance,
+            fact=fact,
+            session_id=session_id,
+            memory_type="semantic",
+            source=source,
+            importance=importance,
         )
         if stored:
             obs.emit("memory_stored", fact_preview=fact[:60], importance=importance, source=source)

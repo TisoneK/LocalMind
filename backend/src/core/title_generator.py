@@ -7,6 +7,7 @@ Two-stage approach:
 
 Stage 2 fires as a background asyncio task so it never blocks the response stream.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── Stage 1: instant heuristic placeholder ────────────────────────────────────
+
 
 def generate_title_smart(message: str, intent: str | None = None) -> str:
     """
@@ -68,7 +70,9 @@ def generate_title_smart(message: str, intent: str | None = None) -> str:
     clean = re.sub(
         r"^(please|kindly|help me|can you|could you|would you|i need|i want to"
         r"|i'd like|tell me|show me|write me|give me|create a?|generate a?|make a?)\s+",
-        "", clean, flags=re.IGNORECASE
+        "",
+        clean,
+        flags=re.IGNORECASE,
     ).strip()
 
     # Strip leading articles
@@ -88,6 +92,7 @@ def generate_title_smart(message: str, intent: str | None = None) -> str:
 # Title generation should be fast — cap at 30s to avoid clogging the Ollama
 # instance with a long-running background request that blocks real user queries.
 _TITLE_TIMEOUT = 30
+
 
 async def refine_title_async(session_id: str, message: str) -> None:
     """
@@ -128,7 +133,9 @@ async def refine_title_async(session_id: str, message: str) -> None:
                     if chunk.text:
                         chunks.append(chunk.text)
         except asyncio.TimeoutError:
-            logger.warning(f"[title] LLM title generation timed out after {_TITLE_TIMEOUT}s for {session_id[:8]}")
+            logger.warning(
+                f"[title] LLM title generation timed out after {_TITLE_TIMEOUT}s for {session_id[:8]}"
+            )
             return
 
         raw = "".join(chunks).strip()
@@ -136,7 +143,7 @@ async def refine_title_async(session_id: str, message: str) -> None:
         # Sanitize: strip quotes, trailing punctuation, limit length
         # re imported at module level — no inner re-import
         raw = re.sub(r'^["\']|["\']$', "", raw).strip()
-        raw = re.sub(r'[.!?]+$', "", raw).strip()
+        raw = re.sub(r"[.!?]+$", "", raw).strip()
         if len(raw) > 50:
             raw = raw[:47] + "…"
 
@@ -162,6 +169,7 @@ async def refine_title_async(session_id: str, message: str) -> None:
 
         # Reuse the engine's SessionStore instead of creating a new one per call
         from api.routes.chat import _engine as _chat_engine
+
         _chat_engine._store.update_session_title(session_id, raw)
         logger.info(f"[title] LLM title for {session_id[:8]}: '{raw}'")
 

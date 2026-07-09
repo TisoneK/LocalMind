@@ -1,4 +1,5 @@
 """localmind models — list available Ollama models with human-readable profiles."""
+
 from __future__ import annotations
 
 import asyncio
@@ -36,12 +37,12 @@ async def _list():
     table.add_column("Status")
 
     for name, profile in MODEL_PROFILES.items():
-        is_available = name in available or any(
-            a.startswith(name.split(":")[0]) for a in available
-        )
+        is_available = name in available or any(a.startswith(name.split(":")[0]) for a in available)
         is_active = name == settings.ollama_model
-        status = "[green]✓ active[/green]" if is_active else (
-            "[dim]pulled[/dim]" if is_available else "[dim]not pulled[/dim]"
+        status = (
+            "[green]✓ active[/green]"
+            if is_active
+            else ("[dim]pulled[/dim]" if is_available else "[dim]not pulled[/dim]")
         )
         table.add_row(
             f"[cyan]{name}[/cyan]" if is_available else f"[dim]{name}[/dim]",

@@ -10,6 +10,7 @@ Security model:
 
 v0.2 hardening: add seccomp/AppArmor profile on Linux, sandbox on macOS.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -55,7 +56,7 @@ async def run_python(code: str) -> SandboxResult:
     wrapped = textwrap.dedent(f"""
 import sys
 try:
-{textwrap.indent(code, '    ')}
+{textwrap.indent(code, "    ")}
 except Exception as e:
     print(f"Error: {{type(e).__name__}}: {{e}}", file=sys.stderr)
     sys.exit(1)
@@ -93,9 +94,7 @@ async def _run_subprocess(cmd: list[str], timeout: int) -> SandboxResult:
             stdin=asyncio.subprocess.DEVNULL,
         )
         try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
-            )
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             return SandboxResult(
                 stdout=stdout_bytes.decode("utf-8", errors="replace"),
                 stderr=stderr_bytes.decode("utf-8", errors="replace"),

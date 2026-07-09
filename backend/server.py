@@ -7,6 +7,7 @@ NOTE: Backend source lives in src/ — add it to sys.path so that
       `from api.app import ...` resolves correctly when running
       server.py from the backend/ directory.
 """
+
 import logging
 import os
 import signal
@@ -16,22 +17,22 @@ import sys
 import uvicorn
 
 # Ensure src/ is on the import path when running from backend/
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from api.app import create_app
 from core.config import settings
 
 logging.basicConfig(
     level=getattr(logging, settings.localmind_log_level.upper(), logging.INFO),
-    format='%(asctime)s %(levelname)s %(name)s — %(message)s',
-    datefmt='%H:%M:%S',
+    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+    datefmt="%H:%M:%S",
 )
 
 # Configure httpx to log requests in the same format
 httpx_logger = logging.getLogger("httpx")
 httpx_logger.setLevel(logging.INFO)
 # Use same format as basicConfig
-formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s — %(message)s', '%H:%M:%S')
+formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s — %(message)s", "%H:%M:%S")
 # Add custom handler with same format
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
@@ -41,6 +42,7 @@ httpx_logger.propagate = False
 
 app = create_app()
 
+
 def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
     """Check if a TCP port is already bound by another process."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -48,10 +50,10 @@ def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
             s.bind((host, port))
             return False  # Port is free
         except OSError:
-            return True   # Port is already in use
+            return True  # Port is already in use
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Pre-check: fail fast if port is already in use by another LocalMind instance.
     # This prevents the infinite restart loop in Electron when the user
     # manually runs `python server.py` before launching the Electron app.
@@ -61,8 +63,10 @@ if __name__ == '__main__':
             "[startup] Port %s:%s is already in use — another instance may be running. "
             "Use `netstat -ano | findstr :%s` (Windows) or `lsof -i :%s` (macOS/Linux) "
             "to find and kill the process, then try again.",
-            settings.localmind_host, settings.localmind_port,
-            settings.localmind_port, settings.localmind_port,
+            settings.localmind_host,
+            settings.localmind_port,
+            settings.localmind_port,
+            settings.localmind_port,
         )
         sys.exit(42)  # Exit code 42 = port in use (convention shared with Electron)
 
@@ -73,7 +77,7 @@ if __name__ == '__main__':
     # shutdown: it drains active connections, runs the FastAPI shutdown event,
     # then exits cleanly — no ugly CancelledError / SystemExit traceback.
     config = uvicorn.Config(
-        'server:app',
+        "server:app",
         host=settings.localmind_host,
         port=settings.localmind_port,
         reload=False,

@@ -5,6 +5,7 @@ Extracted from the original engine.py. These methods handle writing
 messages to the SessionStore with error handling and deduplication,
 including the guaranteed-persist safety net for interrupted generators.
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,14 +41,17 @@ class _PersistenceMixin:
         guaranteeing it's saved even if the generator crashes mid-stream.
         """
         try:
-            self._store.append(session_id, Message(
-                role=Role.USER,
-                content=message,
-                file_name=filename,
-                file_path=original_path,
-                file_size=len(file) if file else None,
-                file_type=content_type,
-            ))
+            self._store.append(
+                session_id,
+                Message(
+                    role=Role.USER,
+                    content=message,
+                    file_name=filename,
+                    file_path=original_path,
+                    file_size=len(file) if file else None,
+                    file_type=content_type,
+                ),
+            )
         except Exception as e:
             logger.error(
                 f"[engine] FAILED to persist user message for session "
@@ -66,10 +70,13 @@ class _PersistenceMixin:
         the generator or silently loses history without logging.
         """
         try:
-            self._store.append(session_id, Message(
-                role=Role.ASSISTANT,
-                content=response_text,
-            ))
+            self._store.append(
+                session_id,
+                Message(
+                    role=Role.ASSISTANT,
+                    content=response_text,
+                ),
+            )
         except Exception as e:
             logger.error(
                 f"[engine] FAILED to persist assistant message for session "
@@ -100,17 +107,17 @@ class _PersistenceMixin:
                 if msg.role == Role.ASSISTANT and msg.content.strip() == response_text:
                     return  # Already persisted — skip
 
-            self._store.append(session_id, Message(
-                role=Role.ASSISTANT,
-                content=response_text,
-            ))
+            self._store.append(
+                session_id,
+                Message(
+                    role=Role.ASSISTANT,
+                    content=response_text,
+                ),
+            )
             logger.info(
                 f"[engine] GUARANTEED persist assistant message for session "
                 f"{session_id[:8]} ({len(response_text)} chars — generator "
                 f"was interrupted before normal persist)"
             )
         except Exception as e:
-            logger.error(
-                f"[engine] FAILED guaranteed persist for session "
-                f"{session_id[:8]}: {e}"
-            )
+            logger.error(f"[engine] FAILED guaranteed persist for session {session_id[:8]}: {e}")

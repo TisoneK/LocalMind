@@ -18,6 +18,7 @@ v2 changes:
 
 Registered as Intent.CODE_EXEC in the tool registry.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -60,9 +61,25 @@ def _extract_code(message: str) -> str:
     # start of lines, treat it as code. This avoids executing random
     # natural language that the LLM might send.
     _PYTHON_INDICATORS = [
-        "import ", "from ", "def ", "class ", "if ", "for ", "while ",
-        "print(", "return ", "with ", "try:", "else:", "elif ",
-        "#", "__", "assert ", "raise ", "lambda ", "global ",
+        "import ",
+        "from ",
+        "def ",
+        "class ",
+        "if ",
+        "for ",
+        "while ",
+        "print(",
+        "return ",
+        "with ",
+        "try:",
+        "else:",
+        "elif ",
+        "#",
+        "__",
+        "assert ",
+        "raise ",
+        "lambda ",
+        "global ",
     ]
     lines = message.strip().split("\n")
     if lines:
@@ -71,7 +88,10 @@ def _extract_code(message: str) -> str:
         # is short enough to be code, treat it as code
         has_indicator = any(first_line.startswith(ind) for ind in _PYTHON_INDICATORS)
         # Also check if it's a simple expression (e.g., "2 + 2" or "psutil.cpu_count()")
-        looks_like_expr = bool(re.match(r'^[\w\s\.\(\)\[\]\+\-\*/%=<>!,":]+$', first_line)) and len(first_line) < 200
+        looks_like_expr = (
+            bool(re.match(r'^[\w\s\.\(\)\[\]\+\-\*/%=<>!,":]+$', first_line))
+            and len(first_line) < 200
+        )
         if has_indicator or looks_like_expr:
             return message.strip()
 
@@ -128,7 +148,8 @@ async def code_exec(message: str) -> ToolResult:
         tmp_fd = None  # closed by os.fdopen context manager
 
         proc = await asyncio.create_subprocess_exec(
-            sys.executable, tmp_path,
+            sys.executable,
+            tmp_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -207,6 +228,7 @@ register_tool(
 # -- Pre-dispatch validator ----------------------------------------------------
 # Registered after the tool so _CODE_FENCE is already in scope.
 # This surfaces a clear user-facing message before any subprocess is spawned.
+
 
 def _validate_code_exec(message: str) -> str | None:
     """Reject early if no code fence is present -- avoids a confusing tool error."""

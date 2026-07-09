@@ -1,4 +1,5 @@
 """Todos endpoint - task management for left panel TodoList."""
+
 from __future__ import annotations
 
 from typing import List, Optional
@@ -54,7 +55,7 @@ async def create_todo(request: CreateTodoRequest):
         session_id=request.session_id,
         content=request.content,
         priority=request.priority,
-        timestamp=time.time()
+        timestamp=time.time(),
     )
 
     # In full implementation, this would save to database

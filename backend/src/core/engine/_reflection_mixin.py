@@ -7,6 +7,7 @@ or incompleteness. When issues are found, a correction is stored in
 the conversation history and fed back to the flywheel for routing
 improvement.
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 def get_adapter(*args, **kwargs):
     """Deferred-lookup wrapper — see _pipeline.py for rationale."""
     from core.engine import get_adapter as _real
+
     return _real(*args, **kwargs)
 
 
@@ -75,9 +77,7 @@ class _ReflectionMixin:
             _error_patterns = self._flywheel.get_recent_error_patterns(limit=3)
             _accuracy_section = ""
             if _accuracy:
-                _weak_intents = [
-                    f"{k} ({v:.0%} accurate)" for k, v in _accuracy.items() if v < 0.8
-                ]
+                _weak_intents = [f"{k} ({v:.0%} accurate)" for k, v in _accuracy.items() if v < 0.8]
                 if _weak_intents:
                     _accuracy_section = (
                         f"\n\nHistorical accuracy warnings — the system has been wrong "
@@ -136,12 +136,12 @@ class _ReflectionMixin:
 
             # P10: Parse structured output for quality metrics
             _score = 0
-            _score_match = re.search(r'SCORE:\s*(\d+)', review)
+            _score_match = re.search(r"SCORE:\s*(\d+)", review)
             if _score_match:
                 _score = int(_score_match.group(1))
 
             _confidence = "medium"
-            _conf_match = re.search(r'CONFIDENCE:\s*(high|medium|low)', review, re.IGNORECASE)
+            _conf_match = re.search(r"CONFIDENCE:\s*(high|medium|low)", review, re.IGNORECASE)
             if _conf_match:
                 _confidence = _conf_match.group(1).lower()
 
@@ -159,18 +159,26 @@ class _ReflectionMixin:
 
             if _is_issue:
                 issue_text = ""
-                _issue_match = re.search(r'ISSUE:\s*(.+?)(?:\n(?:CORRECTION|SCORE|CONFIDENCE|VERDICT)|$)', review, re.IGNORECASE | re.DOTALL)
+                _issue_match = re.search(
+                    r"ISSUE:\s*(.+?)(?:\n(?:CORRECTION|SCORE|CONFIDENCE|VERDICT)|$)",
+                    review,
+                    re.IGNORECASE | re.DOTALL,
+                )
                 if _issue_match:
                     issue_text = _issue_match.group(1).strip()
                 else:
                     # Fallback: grab text after ISSUE:
-                    _issue_fallback = re.search(r'ISSUE:\s*(.+)', review, re.IGNORECASE)
+                    _issue_fallback = re.search(r"ISSUE:\s*(.+)", review, re.IGNORECASE)
                     if _issue_fallback:
                         issue_text = _issue_fallback.group(1).strip()
 
                 logger.info(
                     "[reflect] self-critique caught issue: %s (intent=%s, session=%s, score=%d, confidence=%s)",
-                    issue_text[:100], intent.value, session_id[:8], _score, _confidence,
+                    issue_text[:100],
+                    intent.value,
+                    session_id[:8],
+                    _score,
+                    _confidence,
                 )
                 obs.emit(
                     "reflection_issue",
@@ -202,14 +210,20 @@ class _ReflectionMixin:
                             conn.close()
                         logger.debug(
                             "[reflect] fed back to flywheel: marked %s/%s as wrong (score=%d)",
-                            session_id[:8], intent.value, _score,
+                            session_id[:8],
+                            intent.value,
+                            _score,
                         )
                     except Exception:
                         pass  # Non-critical — flywheel feedback is best-effort
 
                 # Extract correction if provided
                 _correction = ""
-                _corr_match = re.search(r'CORRECTION:\s*(.+?)(?:\n(?:SCORE|CONFIDENCE|VERDICT|ISSUE)|$)', review, re.IGNORECASE | re.DOTALL)
+                _corr_match = re.search(
+                    r"CORRECTION:\s*(.+?)(?:\n(?:SCORE|CONFIDENCE|VERDICT|ISSUE)|$)",
+                    review,
+                    re.IGNORECASE | re.DOTALL,
+                )
                 if _corr_match:
                     _correction = _corr_match.group(1).strip()
 
@@ -218,9 +232,7 @@ class _ReflectionMixin:
                 # reflection isn't just logging — it actively improves
                 # the conversation by surfacing the fix.
                 if _correction and len(_correction) > 10:
-                    _correction_msg = (
-                        f"⚠️ **Self-correction:** {_correction}"
-                    )
+                    _correction_msg = f"⚠️ **Self-correction:** {_correction}"
                     # Append correction as an assistant message in history
                     # so it's visible in the conversation and informs future turns.
                     self._persist_assistant_message(session_id, _correction_msg)
@@ -231,10 +243,15 @@ class _ReflectionMixin:
                     )
                     logger.info(
                         "[reflect] stored correction in history (session=%s): %s",
-                        session_id[:8], _correction[:80],
+                        session_id[:8],
+                        _correction[:80],
                     )
             else:
-                logger.debug("[reflect] answer passed self-critique (intent=%s, score=%d)", intent.value, _score)
+                logger.debug(
+                    "[reflect] answer passed self-critique (intent=%s, score=%d)",
+                    intent.value,
+                    _score,
+                )
 
         except Exception as e:
             logger.debug("[reflect] reflection failed (non-critical): %s", e)

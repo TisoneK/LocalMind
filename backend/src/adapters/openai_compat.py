@@ -18,6 +18,7 @@ v8 changes:
   If args JSON is still invalid after draining, logs a clear warning with
   the raw args preview instead of silently passing malformed data.
 """
+
 from __future__ import annotations
 
 import json
@@ -89,11 +90,12 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 # Provider configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ProviderConfig:
-    name: str           # "openai", "anthropic", "openrouter", etc.
-    base_url: str       # e.g. "https://api.openai.com/v1"
-    api_key: str        # from env var
+    name: str  # "openai", "anthropic", "openrouter", etc.
+    base_url: str  # e.g. "https://api.openai.com/v1"
+    api_key: str  # from env var
     default_model: str  # fallback if none specified
     headers: dict = None  # optional extra headers
     supports_streaming: bool = True
@@ -206,12 +208,16 @@ class OpenAICompatAdapter(BaseAdapter):
 
         cfg = PROVIDER_CONFIGS.get(provider)
         if not cfg:
-            raise ValueError(f"Unknown provider: {provider}. Available: {list(PROVIDER_CONFIGS.keys())}")
+            raise ValueError(
+                f"Unknown provider: {provider}. Available: {list(PROVIDER_CONFIGS.keys())}"
+            )
 
         # Try runtime API key first, then fall back to env var
         api_key = settings.get_api_key(provider) or cfg.api_key
         if not api_key:
-            raise ValueError(f"API key not set for provider '{provider}'. Set it in settings or .env.")
+            raise ValueError(
+                f"API key not set for provider '{provider}'. Set it in settings or .env."
+            )
 
         self._provider_name = cfg.name
         self._base_url = cfg.base_url.rstrip("/")
@@ -314,9 +320,11 @@ class OpenAICompatAdapter(BaseAdapter):
         # Anthropic has a different tool calling format — fall back to plain chat
         # TODO: implement Anthropic native tool calling
         if self._provider_name == "anthropic":
+
             async def _anthropic_fallback() -> AsyncIterator[StreamChunk]:
                 async for chunk in self.chat(messages, temperature, intent):
                     yield chunk
+
             return _anthropic_fallback()
 
         # OpenAI-style providers: send tools and parse tool_call responses
@@ -401,7 +409,10 @@ class OpenAICompatAdapter(BaseAdapter):
             # the open stream to the returned generator. The generator is
             # responsible for closing it.
             request = self._client.build_request(
-                "POST", url, json=payload, headers=self._headers,
+                "POST",
+                url,
+                json=payload,
+                headers=self._headers,
             )
             response = await self._client.send(request, stream=True)
 
@@ -413,6 +424,7 @@ class OpenAICompatAdapter(BaseAdapter):
 
                 async def _error_iter():
                     yield StreamChunk(text=error_msg, done=True, error=error_msg)
+
                 return _error_iter()
 
             # ── Phase 1: Detect tool_call vs text ──────────────────────────
@@ -494,11 +506,15 @@ class OpenAICompatAdapter(BaseAdapter):
                     if _mm_full_check:
                         # Full MiniMax tool call pattern detected — don't break,
                         # continue reading to get the complete call
-                        logger.info("[adapter] MiniMax tool_call pattern detected in Phase 1 text — continuing to read")
+                        logger.info(
+                            "[adapter] MiniMax tool_call pattern detected in Phase 1 text — continuing to read"
+                        )
                     elif _mm_prefix_check:
                         # Partial "minimax:tool_call" prefix detected — the full
                         # <invoke> tag hasn't arrived yet. Keep reading.
-                        logger.info("[adapter] MiniMax tool_call prefix detected in Phase 1 — continuing to read for full pattern")
+                        logger.info(
+                            "[adapter] MiniMax tool_call prefix detected in Phase 1 — continuing to read for full pattern"
+                        )
                     elif chunks_read >= 15:
                         # Read enough chunks with no tool call sign — this is text
                         phase1_done = True
@@ -529,7 +545,9 @@ class OpenAICompatAdapter(BaseAdapter):
                                     if tc.get("function", {}).get("name"):
                                         tool_call_buffers[idx]["name"] = tc["function"]["name"]
                                     if tc.get("function", {}).get("arguments"):
-                                        tool_call_buffers[idx]["arguments"] += tc["function"]["arguments"]
+                                        tool_call_buffers[idx]["arguments"] += tc["function"][
+                                            "arguments"
+                                        ]
                             text = delta.get("content", "")
                             if text:
                                 raw_content_parts.append(text)
@@ -557,7 +575,8 @@ class OpenAICompatAdapter(BaseAdapter):
                         logger.warning(
                             "[adapter] tool args not valid JSON (possibly truncated). "
                             "Raw args (%d chars): %s",
-                            len(raw_args), raw_args[:300],
+                            len(raw_args),
+                            raw_args[:300],
                         )
                         # Try to extract partial args using a lenient parser
                         # Some providers emit valid key-value pairs but with
@@ -566,22 +585,26 @@ class OpenAICompatAdapter(BaseAdapter):
                         tool_args = {"_raw_arguments": raw_args}
                         # Attempt a simple key-value extraction for common params
                         import re as _re
+
                         for _key in ("path", "command", "query", "code", "content", "description"):
-                            _m = _re.search(
-                                rf'"{_key}"\s*:\s*"([^"]*)', raw_args
-                            )
+                            _m = _re.search(rf'"{_key}"\s*:\s*"([^"]*)', raw_args)
                             if _m:
                                 tool_args[_key] = _m.group(1)
 
                     if len(tool_call_buffers) > 1:
-                        extra = [tool_call_buffers[i]["name"]
-                                 for i in sorted(tool_call_buffers.keys())[1:]]
+                        extra = [
+                            tool_call_buffers[i]["name"]
+                            for i in sorted(tool_call_buffers.keys())[1:]
+                        ]
                         logger.warning(
                             "[adapter] %d tool calls; using first (%s), extra: %s",
-                            len(tool_call_buffers), buf["name"], extra,
+                            len(tool_call_buffers),
+                            buf["name"],
+                            extra,
                         )
 
                     from adapters.ollama import ToolCallResult
+
                     return ToolCallResult(
                         tool_name=buf["name"],
                         tool_args=tool_args,
@@ -620,10 +643,12 @@ class OpenAICompatAdapter(BaseAdapter):
                     _mm_args[_pm.group(1)] = _pm.group(2).strip()
                 logger.info(
                     "[adapter] MiniMax proprietary tool_call detected: %s args=%s",
-                    _mm_tool_name, list(_mm_args.keys()),
+                    _mm_tool_name,
+                    list(_mm_args.keys()),
                 )
                 await response.aclose()
                 from adapters.ollama import ToolCallResult
+
                 return ToolCallResult(
                     tool_name=_mm_tool_name,
                     tool_args=_mm_args,
@@ -667,12 +692,12 @@ class OpenAICompatAdapter(BaseAdapter):
                     re.DOTALL | re.IGNORECASE,
                 )
                 _mm_prefix_pattern = re.compile(
-                    r'minimax:tool_call\s*<invoke[^>]*>.*?</invoke>',
+                    r"minimax:tool_call\s*<invoke[^>]*>.*?</invoke>",
                     re.DOTALL | re.IGNORECASE,
                 )
                 # Also match just the opening "minimax:tool_call" tag as a prefix
                 _mm_tag_prefix = re.compile(
-                    r'minimax:tool_call\b',
+                    r"minimax:tool_call\b",
                     re.IGNORECASE,
                 )
 
@@ -755,8 +780,9 @@ class OpenAICompatAdapter(BaseAdapter):
                                             try:
                                                 tool_json = json.loads(json_match.group(1))
                                                 tn = tool_json.get("tool", "")
-                                                ta = tool_json.get("args", {})
-                                                if tn and tn in {t["function"]["name"] for t in tools}:
+                                                if tn and tn in {
+                                                    t["function"]["name"] for t in tools
+                                                }:
                                                     # Found a JSON tool call —
                                                     # can't un-send text, but log it
                                                     logger.info(
@@ -782,6 +808,7 @@ class OpenAICompatAdapter(BaseAdapter):
 
             async def _error_iter():
                 yield StreamChunk(text=msg, done=True, error=msg)
+
             return _error_iter()
 
         except httpx.TimeoutException:
@@ -790,6 +817,7 @@ class OpenAICompatAdapter(BaseAdapter):
 
             async def _error_iter():
                 yield StreamChunk(text=msg, done=True, error=msg)
+
             return _error_iter()
 
         except Exception as e:
@@ -798,6 +826,7 @@ class OpenAICompatAdapter(BaseAdapter):
 
             async def _error_iter():
                 yield StreamChunk(text=msg, done=True, error=msg)
+
             return _error_iter()
 
     async def _chat_openai_style(
@@ -878,10 +907,12 @@ class OpenAICompatAdapter(BaseAdapter):
         anthropic_messages = []
         for m in non_system_messages:
             role = "assistant" if m.get("role") == "assistant" else "user"
-            anthropic_messages.append({
-                "role": role,
-                "content": m.get("content", ""),
-            })
+            anthropic_messages.append(
+                {
+                    "role": role,
+                    "content": m.get("content", ""),
+                }
+            )
 
         payload = {
             "model": self._model,
@@ -957,7 +988,10 @@ class OpenAICompatAdapter(BaseAdapter):
                     headers=self._headers,
                     timeout=10,
                 )
-                return response.status_code in (200, 400)  # 400 means auth worked but invalid request
+                return response.status_code in (
+                    200,
+                    400,
+                )  # 400 means auth worked but invalid request
             else:
                 response = await self._client.get(
                     f"{self._base_url}/models",

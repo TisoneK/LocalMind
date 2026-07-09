@@ -39,6 +39,7 @@ Design decisions:
       Simple requests (single intent, short message) always use the standard
       agent loop path. This avoids unnecessary LLM calls for decomposition.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -79,9 +80,11 @@ Short messages are almost always single-intent and don't need decomposition."""
 
 # ── Sub-Agent Types ─────────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class SubAgentType:
     """Definition of a specialized sub-agent."""
+
     name: str
     description: str
     persona: str
@@ -102,8 +105,12 @@ CODER_AGENT = SubAgentType(
         "your approach — you just write the code, test it, and report the result. "
         "If the code fails, you fix it and try again. You don't give up."
     ),
-    allowed_intents=frozenset({Intent.CODE_EXEC, Intent.FILE_WRITE, Intent.FILE_EDIT, Intent.FILE_TASK, Intent.SHELL}),
-    allowed_tools=frozenset({"code_exec", "file_write", "edit_file", "file_task", "shell", "sysinfo"}),
+    allowed_intents=frozenset(
+        {Intent.CODE_EXEC, Intent.FILE_WRITE, Intent.FILE_EDIT, Intent.FILE_TASK, Intent.SHELL}
+    ),
+    allowed_tools=frozenset(
+        {"code_exec", "file_write", "edit_file", "file_task", "shell", "sysinfo"}
+    ),
 )
 
 RESEARCHER_AGENT = SubAgentType(
@@ -163,6 +170,7 @@ ANALYST_AGENT = SubAgentType(
 
 # ── Registry ────────────────────────────────────────────────────────────────
 
+
 class SubAgentRegistry:
     """Registry of available sub-agent types."""
 
@@ -191,9 +199,11 @@ class SubAgentRegistry:
 
 # ── Sub-Agent Instance ──────────────────────────────────────────────────────
 
+
 @dataclass
 class SubAgentResult:
     """Result from a sub-agent execution."""
+
     agent_name: str
     success: bool
     output: str
@@ -221,6 +231,7 @@ class SubAgent:
     def _load_skill_for_agent(self) -> str:
         """Load the skill .md file matching this sub-agent's primary intent."""
         from pathlib import Path
+
         _SKILL_MAP = {
             "coder": "coding",
             "researcher": "research",
@@ -318,20 +329,29 @@ class SubAgent:
                             _obs_text = await _dispatch_sub_agent_tool(
                                 tc.tool_name, tc.tool_args, dispatch
                             )
-                            messages.append({
-                                "role": "assistant",
-                                "content": result.raw_content or "",
-                                "tool_calls": [{
-                                    "id": f"sa_{iteration}_{tc.tool_name}",
-                                    "type": "function",
-                                    "function": {"name": tc.tool_name, "arguments": json.dumps(tc.tool_args)},
-                                }],
-                            })
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": f"sa_{iteration}_{tc.tool_name}",
-                                "content": _obs_text[:3000],
-                            })
+                            messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": result.raw_content or "",
+                                    "tool_calls": [
+                                        {
+                                            "id": f"sa_{iteration}_{tc.tool_name}",
+                                            "type": "function",
+                                            "function": {
+                                                "name": tc.tool_name,
+                                                "arguments": json.dumps(tc.tool_args),
+                                            },
+                                        }
+                                    ],
+                                }
+                            )
+                            messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": f"sa_{iteration}_{tc.tool_name}",
+                                    "content": _obs_text[:3000],
+                                }
+                            )
                         # Continue to next iteration for the model to process results
                         continue
 
@@ -342,7 +362,12 @@ class SubAgent:
 
                         # Validate tool is in allowed set
                         if tc_name not in self._type.allowed_tools:
-                            messages.append({"role": "user", "content": f"Tool '{tc_name}' not available. Respond with your best answer without tools."})
+                            messages.append(
+                                {
+                                    "role": "user",
+                                    "content": f"Tool '{tc_name}' not available. Respond with your best answer without tools.",
+                                }
+                            )
                             continue
 
                         obs_text = await _dispatch_sub_agent_tool(tc_name, tc_args, dispatch)
@@ -352,20 +377,29 @@ class SubAgent:
                             full_text += result.raw_content
 
                         # Add tool result to messages
-                        messages.append({
-                            "role": "assistant",
-                            "content": result.raw_content or "",
-                            "tool_calls": [{
-                                "id": f"sa_{iteration}_{tc_name}",
-                                "type": "function",
-                                "function": {"name": tc_name, "arguments": json.dumps(tc_args)},
-                            }],
-                        })
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": f"sa_{iteration}_{tc_name}",
-                            "content": obs_text[:3000],
-                        })
+                        messages.append(
+                            {
+                                "role": "assistant",
+                                "content": result.raw_content or "",
+                                "tool_calls": [
+                                    {
+                                        "id": f"sa_{iteration}_{tc_name}",
+                                        "type": "function",
+                                        "function": {
+                                            "name": tc_name,
+                                            "arguments": json.dumps(tc_args),
+                                        },
+                                    }
+                                ],
+                            }
+                        )
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": f"sa_{iteration}_{tc_name}",
+                                "content": obs_text[:3000],
+                            }
+                        )
                         continue
 
                 except (AttributeError, TypeError):
@@ -375,7 +409,7 @@ class SubAgent:
                 # No tool call (or fallback) — stream the final text answer
                 chunks = []
                 async for chunk in self._adapter.chat(messages, temperature=0.2):
-                    chunks.append(chunk.text if hasattr(chunk, 'text') else str(chunk))
+                    chunks.append(chunk.text if hasattr(chunk, "text") else str(chunk))
                 full_text += "".join(chunks)
                 break
 
@@ -400,9 +434,11 @@ class SubAgent:
 
 # ── Task Decomposer ─────────────────────────────────────────────────────────
 
+
 @dataclass
 class SubTask:
     """A decomposed sub-task with an assigned agent type."""
+
     id: int
     agent_name: str
     prompt: str
@@ -455,10 +491,7 @@ async def decompose_task(
     If the decomposition returns only one sub-task, sub-agent overhead is
     unnecessary — the caller should fall back to the standard agent loop.
     """
-    agent_list = "\n".join(
-        f"- {a.name}: {a.description}"
-        for a in registry.list_agents()
-    )
+    agent_list = "\n".join(f"- {a.name}: {a.description}" for a in registry.list_agents())
 
     messages = [
         {
@@ -475,7 +508,7 @@ async def decompose_task(
     try:
         chunks = []
         async for chunk in adapter.chat(messages, temperature=0.0):
-            chunks.append(chunk.text if hasattr(chunk, 'text') else str(chunk))
+            chunks.append(chunk.text if hasattr(chunk, "text") else str(chunk))
 
         raw = "".join(chunks).strip()
 
@@ -489,12 +522,14 @@ async def decompose_task(
             sub_tasks = []
             for item in parsed[:SUB_AGENT_MAX_SUBTASKS]:
                 agent_name = item.get("agent", "coder")
-                sub_tasks.append(SubTask(
-                    id=item.get("id", len(sub_tasks) + 1),
-                    agent_name=agent_name,
-                    prompt=item.get("prompt", ""),
-                    depends_on=item.get("depends_on", []),
-                ))
+                sub_tasks.append(
+                    SubTask(
+                        id=item.get("id", len(sub_tasks) + 1),
+                        agent_name=agent_name,
+                        prompt=item.get("prompt", ""),
+                        depends_on=item.get("depends_on", []),
+                    )
+                )
 
             # Validate: if all sub-tasks use the same agent, this isn't
             # really multi-domain — fall back to single agent loop
@@ -522,25 +557,52 @@ async def decompose_task(
 # tool domains (code + writing, search + code, system + writing, etc.)
 _MULTI_DOMAIN_PATTERNS = [
     # Build + document
-    re.compile(r"\b(?:build|create|make|develop|implement|write|set up)\s+.*\b(?:and|then|also|plus|with)\s+.*\b(?:readme|doc|documentation|guide|tutorial)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:build|create|make|develop|implement|write|set up)\s+.*\b(?:and|then|also|plus|with)\s+.*\b(?:readme|doc|documentation|guide|tutorial)\b",
+        re.IGNORECASE,
+    ),
     # Search + code
-    re.compile(r"\b(?:search|find|look up|research)\s+.*\b(?:and|then)\s+.*\b(?:code|script|program|implement|write|build)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:search|find|look up|research)\s+.*\b(?:and|then)\s+.*\b(?:code|script|program|implement|write|build)\b",
+        re.IGNORECASE,
+    ),
     # Code + test
-    re.compile(r"\b(?:write|create|build|implement)\s+.*\b(?:and|then)\s+.*\b(?:test|run|verify|check)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:write|create|build|implement)\s+.*\b(?:and|then)\s+.*\b(?:test|run|verify|check)\b",
+        re.IGNORECASE,
+    ),
     # Setup project (implies multiple domains)
-    re.compile(r"\b(?:set up|setup|initialize|scaffold|bootstrap)\s+(?:a\s+)?(?:project|app|application|workspace|environment)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:set up|setup|initialize|scaffold|bootstrap)\s+(?:a\s+)?(?:project|app|application|workspace|environment)\b",
+        re.IGNORECASE,
+    ),
     # Full-stack patterns
     re.compile(r"\b(?:full.?stack|front.?end.*back.?end|client.*server|api.*ui)\b", re.IGNORECASE),
     # Multi-file operations
-    re.compile(r"\b(?:create|write|update)\s+(?:multiple|several|these)\s+(?:files|scripts|configs)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:create|write|update)\s+(?:multiple|several|these)\s+(?:files|scripts|configs)\b",
+        re.IGNORECASE,
+    ),
     # Research + write
-    re.compile(r"\b(?:research|investigate|analyze)\s+.*\b(?:and|then)\s+.*\b(?:write|create|document|report)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:research|investigate|analyze)\s+.*\b(?:and|then)\s+.*\b(?:write|create|document|report)\b",
+        re.IGNORECASE,
+    ),
     # Deploy patterns
-    re.compile(r"\b(?:deploy|publish|release)\s+.*\b(?:and|then)\s+.*\b(?:test|verify|check|monitor)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:deploy|publish|release)\s+.*\b(?:and|then)\s+.*\b(?:test|verify|check|monitor)\b",
+        re.IGNORECASE,
+    ),
     # Data analysis + report
-    re.compile(r"\b(?:analyze|analyse|compute|calculate|process)\s+.*\b(?:and|then)\s+.*\b(?:report|document|visualize|chart|graph|summary)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:analyze|analyse|compute|calculate|process)\s+.*\b(?:and|then)\s+.*\b(?:report|document|visualize|chart|graph|summary)\b",
+        re.IGNORECASE,
+    ),
     # Code + analysis
-    re.compile(r"\b(?:write|create|build)\s+.*\b(?:and|then)\s+.*\b(?:analyze|analyse|compute|process|test|benchmark)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(?:write|create|build)\s+.*\b(?:and|then)\s+.*\b(?:analyze|analyse|compute|process|test|benchmark)\b",
+        re.IGNORECASE,
+    ),
 ]
 
 # Exclusion patterns: things that LOOK multi-domain but are actually single-intent
@@ -612,9 +674,11 @@ def should_use_sub_agents(
 
 # ── Sub-Task Orchestrator ────────────────────────────────────────────────────
 
+
 @dataclass
 class SubAgentExecution:
     """Result of a complete sub-agent execution pipeline."""
+
     success: bool
     sub_results: list[SubAgentResult]
     final_output: str
@@ -669,9 +733,7 @@ async def synthesize_sub_agent_results(
 
     try:
         results_text = "\n\n---\n\n".join(
-            f"[{r.agent_name} agent]:\n{r.output}"
-            for r in results
-            if r.success and r.output
+            f"[{r.agent_name} agent]:\n{r.output}" for r in results if r.success and r.output
         )
 
         if not results_text:
@@ -690,7 +752,7 @@ async def synthesize_sub_agent_results(
 
         chunks = []
         async for chunk in adapter.chat(messages, temperature=0.2):
-            chunks.append(chunk.text if hasattr(chunk, 'text') else str(chunk))
+            chunks.append(chunk.text if hasattr(chunk, "text") else str(chunk))
 
         synthesized = "".join(chunks).strip()
         return synthesized if len(synthesized) > 50 else results_text
@@ -733,9 +795,6 @@ async def execute_sub_tasks(
     completed: dict[int, SubAgentResult] = {}
     failed_tasks: set[int] = set()
 
-    # Build a task lookup
-    task_by_id: dict[int, SubTask] = {st.id: st for st in sub_tasks}
-
     # Execute in waves: each wave contains tasks whose dependencies are all met
     remaining = list(sub_tasks)
 
@@ -749,9 +808,7 @@ async def execute_sub_tasks(
             if deps_failed:
                 # Dependency failed — this task can't proceed
                 failed_tasks.add(task.id)
-                logger.warning(
-                    "[sub_agent] task %d skipped — dependency failed", task.id
-                )
+                logger.warning("[sub_agent] task %d skipped — dependency failed", task.id)
             elif deps_met:
                 ready.append(task)
             else:
@@ -771,8 +828,7 @@ async def execute_sub_tasks(
                 dep_result = completed.get(dep_id)
                 if dep_result:
                     dep_contexts.append(
-                        f"[Result from {dep_result.agent_name} agent]:\n"
-                        f"{dep_result.output[:1500]}"
+                        f"[Result from {dep_result.agent_name} agent]:\n{dep_result.output[:1500]}"
                     )
             context = "\n\n".join(dep_contexts) if dep_contexts else ""
 
@@ -856,8 +912,7 @@ async def execute_sub_tasks(
     # If nothing succeeded, we still want some output
     if not final_output and failed_tasks:
         final_output = (
-            "I wasn't able to complete this multi-step task. "
-            "Let me try a different approach."
+            "I wasn't able to complete this multi-step task. Let me try a different approach."
         )
 
     total_ms = round((time.monotonic() - t0) * 1000)
@@ -872,6 +927,7 @@ async def execute_sub_tasks(
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 async def _dispatch_sub_agent_tool(
     tool_name: str,
@@ -973,7 +1029,10 @@ def _build_tool_defs(allowed_tools: frozenset[str]) -> list[dict]:
                     "type": "object",
                     "properties": {
                         "path": {"type": "string", "description": "Path to the file to edit"},
-                        "action": {"type": "string", "description": "Edit action (replace, insert, append, etc.)"},
+                        "action": {
+                            "type": "string",
+                            "description": "Edit action (replace, insert, append, etc.)",
+                        },
                         "search": {"type": "string", "description": "Text to search for"},
                         "replace": {"type": "string", "description": "Replacement text"},
                     },
@@ -1003,7 +1062,10 @@ def _build_tool_defs(allowed_tools: frozenset[str]) -> list[dict]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "command": {"type": "string", "description": "Shell command to execute (NOT for reading files — use file_task)"},
+                        "command": {
+                            "type": "string",
+                            "description": "Shell command to execute (NOT for reading files — use file_task)",
+                        },
                     },
                     "required": ["command"],
                 },

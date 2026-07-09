@@ -26,6 +26,7 @@ Bidirectional communication:
 The orchestrator is OPTIONAL — controlled by ORCHESTRATOR_ENABLED in constants.py.
 When disabled, the engine falls back to the current Chat Agent → AgentLoop path.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -50,9 +51,11 @@ logger = logging.getLogger(__name__)
 
 # ── Result dataclass ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class OrchestrationStep:
     """A single step in the orchestration plan."""
+
     tool: str
     args: dict
     reason: str
@@ -61,6 +64,7 @@ class OrchestrationStep:
 @dataclass
 class OrchestrationResult:
     """Structured result from the orchestrator's planning phase."""
+
     steps: list[OrchestrationStep] = field(default_factory=list)
     confidence: float = 0.0
     needs_clarification: bool = False
@@ -99,6 +103,7 @@ class OrchestrationResult:
 
 # ── JSON parsing helpers ──────────────────────────────────────────────────────
 
+
 def _parse_orchestrator_json(text: str) -> OrchestrationResult:
     """
     Parse the orchestrator LLM's JSON output into an OrchestrationResult.
@@ -118,7 +123,7 @@ def _parse_orchestrator_json(text: str) -> OrchestrationResult:
     json_text = text.strip()
 
     # Strip markdown code fences if present
-    fence_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
     if fence_match:
         json_text = fence_match.group(1).strip()
 
@@ -130,7 +135,7 @@ def _parse_orchestrator_json(text: str) -> OrchestrationResult:
         pass
 
     # Try to find JSON object in the text
-    brace_match = re.search(r'\{[\s\S]*\}', text)
+    brace_match = re.search(r"\{[\s\S]*\}", text)
     if brace_match:
         try:
             data = json.loads(brace_match.group(0))
@@ -158,11 +163,13 @@ def _build_result_from_dict(data: dict, raw_text: str) -> OrchestrationResult:
             tool_name = step_data.get("tool", "")
             # Only include steps with tools in the allowed list
             if tool_name and tool_name in AGENT_ALLOWED_TOOLS:
-                steps.append(OrchestrationStep(
-                    tool=tool_name,
-                    args=step_data.get("args", {}),
-                    reason=step_data.get("reason", ""),
-                ))
+                steps.append(
+                    OrchestrationStep(
+                        tool=tool_name,
+                        args=step_data.get("args", {}),
+                        reason=step_data.get("reason", ""),
+                    )
+                )
 
     confidence = float(data.get("confidence", 0.5))
     # Clamp to [0, 1]
@@ -178,9 +185,13 @@ def _build_result_from_dict(data: dict, raw_text: str) -> OrchestrationResult:
         for i, step in enumerate(steps, 1):
             args_str = ", ".join(f"{k}={v!r}" for k, v in step.args.items()) if step.args else ""
             context_parts.append(f"  {i}. {step.tool}({args_str}) — {step.reason}")
-        context_parts.append(f"Confidence: {confidence:.0%} ({'HIGH' if confidence >= ORCHESTRATOR_CONFIDENCE_HIGH else 'MEDIUM' if confidence >= ORCHESTRATOR_CONFIDENCE_MEDIUM else 'LOW'})")
+        context_parts.append(
+            f"Confidence: {confidence:.0%} ({'HIGH' if confidence >= ORCHESTRATOR_CONFIDENCE_HIGH else 'MEDIUM' if confidence >= ORCHESTRATOR_CONFIDENCE_MEDIUM else 'LOW'})"
+        )
     else:
-        context_parts.append("[Orchestrator: no structured steps produced — execution agent should plan independently]")
+        context_parts.append(
+            "[Orchestrator: no structured steps produced — execution agent should plan independently]"
+        )
 
     orchestrator_context = "\n".join(context_parts)
 
@@ -195,6 +206,7 @@ def _build_result_from_dict(data: dict, raw_text: str) -> OrchestrationResult:
 
 
 # ── AgentOrchestrator ────────────────────────────────────────────────────────
+
 
 class AgentOrchestrator:
     """
@@ -259,6 +271,7 @@ class AgentOrchestrator:
 
         # Build the orchestrator prompt
         from core.context_builder import _build_environment_context
+
         env_context = _build_environment_context()
 
         orchestrator_prompt = build_orchestrator_prompt(
@@ -324,7 +337,9 @@ class AgentOrchestrator:
             return result
 
         except asyncio.TimeoutError:
-            logger.warning("[orchestrator] planning timed out — falling through with medium confidence")
+            logger.warning(
+                "[orchestrator] planning timed out — falling through with medium confidence"
+            )
             if obs:
                 obs.emit("orchestrator_timeout", timeout=ORCHESTRATOR_TIMEOUT_SECS)
             return OrchestrationResult(
@@ -374,7 +389,9 @@ class AgentOrchestrator:
 
         active_adapter = adapter or self._adapter
         if not active_adapter:
-            logger.warning("[orchestrator] replan: no adapter available — returning low-confidence result")
+            logger.warning(
+                "[orchestrator] replan: no adapter available — returning low-confidence result"
+            )
             return OrchestrationResult(
                 steps=[],
                 confidence=0.3,
@@ -394,6 +411,7 @@ class AgentOrchestrator:
         # Build the replanning prompt — includes failure context so the
         # Orchestrator can adjust the plan to work around the failure.
         from core.context_builder import _build_environment_context
+
         env_context = _build_environment_context()
 
         replan_prompt = build_orchestrator_prompt(
@@ -438,7 +456,9 @@ class AgentOrchestrator:
             raw_plan = "".join(full_response).strip()
 
             if not raw_plan:
-                logger.warning("[orchestrator] replan produced no output — returning low-confidence fallback")
+                logger.warning(
+                    "[orchestrator] replan produced no output — returning low-confidence fallback"
+                )
                 return OrchestrationResult(
                     steps=[],
                     confidence=0.3,

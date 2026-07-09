@@ -4,6 +4,7 @@ Tool dispatch with exponential-backoff retries and per-tool timeouts.
 Extracted from the monolithic agent.py so that retry logic can be tested
 and adjusted independently of the main loop.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -19,11 +20,14 @@ logger = logging.getLogger(__name__)
 # Error types where retrying the identical input is guaranteed to produce
 # the same failure.  On these we return immediately rather than burning
 # the full retry budget on pointless attempts.
-_NON_RETRIABLE: frozenset[str] = frozenset({
-    "invalid_input",   # bad/missing code fence, malformed path, etc.
-    "permission",      # tool disabled — won't change between retries
-    "not_found",       # file doesn't exist — won't appear by retrying
-})
+_NON_RETRIABLE: frozenset[str] = frozenset(
+    {
+        "invalid_input",  # bad/missing code fence, malformed path, etc.
+        "permission",  # tool disabled — won't change between retries
+        "not_found",  # file doesn't exist — won't appear by retrying
+    }
+)
+
 
 # Per-tool hard timeout in seconds.  Sourced from settings so operators can
 # tune them via .env without touching code.  Falls back to a safe default so
@@ -32,14 +36,15 @@ def _tool_timeout(intent: Intent) -> float:
     """Return the configured timeout for this tool intent, in seconds."""
     try:
         from core.config import settings
+
         mapping = {
-            Intent.WEB_SEARCH:  settings.ollama_timeout_web_search,
-            Intent.CODE_EXEC:   settings.localmind_code_exec_timeout,
-            Intent.FILE_WRITE:  settings.ollama_timeout_file_write,
-            Intent.FILE_TASK:   settings.ollama_timeout_file_task,
-            Intent.SHELL:       settings.ollama_timeout_shell,
-            Intent.SYSINFO:     settings.ollama_timeout_sysinfo,
-            Intent.MEMORY_OP:   settings.ollama_timeout_memory_op,
+            Intent.WEB_SEARCH: settings.ollama_timeout_web_search,
+            Intent.CODE_EXEC: settings.localmind_code_exec_timeout,
+            Intent.FILE_WRITE: settings.ollama_timeout_file_write,
+            Intent.FILE_TASK: settings.ollama_timeout_file_task,
+            Intent.SHELL: settings.ollama_timeout_shell,
+            Intent.SYSINFO: settings.ollama_timeout_sysinfo,
+            Intent.MEMORY_OP: settings.ollama_timeout_memory_op,
         }
         return float(mapping.get(intent, settings.ollama_timeout_default))
     except Exception:
@@ -91,7 +96,7 @@ async def dispatch_with_retry(
         except Exception as exc:
             last_error = exc
             if attempt < max_retries:
-                delay = base_delay * (2 ** attempt)
+                delay = base_delay * (2**attempt)
                 logger.warning(
                     f"[agent.dispatch] tool={tool_intent.value} attempt={attempt + 1} "
                     f"failed: {exc} — retrying in {delay:.1f}s"

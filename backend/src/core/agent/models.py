@@ -4,6 +4,7 @@ Agent data models — pure dataclasses, no business logic.
 Kept separate so that engine.py, tests, and UI serialization layers
 can import AgentStep / AgentTrace without pulling in the full loop.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

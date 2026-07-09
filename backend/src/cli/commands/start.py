@@ -8,6 +8,7 @@ Boot order (A1 / B4):
   4. Open browser
   5. On Ctrl+C: shut down cleanly
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,6 +30,7 @@ async def _ollama_reachable(timeout: float = 2.0) -> bool:
     """Return True if Ollama's API is responding."""
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=timeout) as client:
             r = await client.get("http://localhost:11434/api/tags")
             return r.status_code == 200
@@ -100,20 +102,24 @@ def command(
     url = f"http://{host}:{port}"
     model_line = f"  Model:  [bold cyan]{model}[/bold cyan]\n" if model else ""
 
-    console.print(Panel(
-        f"[bold cyan]LocalMind[/bold cyan] is ready\n\n"
-        f"{model_line}"
-        f"  UI:   [link={url}]{url}[/link]\n"
-        f"  API:  [link={url}/api/docs]{url}/api/docs[/link]\n\n"
-        f"  Press [bold]Ctrl+C[/bold] to stop",
-        title="[bold]LocalMind[/bold]",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold cyan]LocalMind[/bold cyan] is ready\n\n"
+            f"{model_line}"
+            f"  UI:   [link={url}]{url}[/link]\n"
+            f"  API:  [link={url}/api/docs]{url}/api/docs[/link]\n\n"
+            f"  Press [bold]Ctrl+C[/bold] to stop",
+            title="[bold]LocalMind[/bold]",
+            border_style="cyan",
+        )
+    )
 
     if not no_browser:
+
         def _open():
             time.sleep(1.5)
             webbrowser.open(url)
+
         threading.Thread(target=_open, daemon=True).start()
 
     uvicorn.run(

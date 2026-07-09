@@ -1,4 +1,5 @@
 """Actions endpoint - tool call history for left panel ActionHistory."""
+
 from __future__ import annotations
 
 from typing import List, Optional
@@ -58,7 +59,7 @@ async def create_action(request: CreateActionRequest):
         tool_name=request.tool_name,
         status=request.status,
         input=request.input,
-        timestamp=time.time()
+        timestamp=time.time(),
     )
 
     # In full implementation, this would save to database

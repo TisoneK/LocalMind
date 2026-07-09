@@ -22,6 +22,7 @@ Example DAGs:
     Wave 1: [sysinfo_query, search_reqs]  (parallel)
     Wave 2: [compare]
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -44,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 # ── Node Status ──────────────────────────────────────────────────────
 
+
 class NodeStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -53,6 +55,7 @@ class NodeStatus(str, Enum):
 
 
 # ── Execution Node ───────────────────────────────────────────────────
+
 
 class ExecutionNode(BaseModel):
     """A single node in the execution DAG.
@@ -65,23 +68,25 @@ class ExecutionNode(BaseModel):
     node fails, downstream nodes can still run (they should handle
     missing results gracefully).
     """
-    id: str                                    # Unique node identifier
-    capability: Capability                     # What this node does
-    intent: Intent                             # Derived Intent for tool dispatch
-    tool_name: str = ""                        # Tool function name (e.g., "web_search")
+
+    id: str  # Unique node identifier
+    capability: Capability  # What this node does
+    intent: Intent  # Derived Intent for tool dispatch
+    tool_name: str = ""  # Tool function name (e.g., "web_search")
     tool_args: dict = Field(default_factory=dict)
     depends_on: list[str] = Field(default_factory=list)
     status: NodeStatus = NodeStatus.PENDING
     result: Optional[ToolResult] = None
     retry_count: int = 0
     max_retries: int = 1
-    label: str = ""                            # Human-readable label for UI
-    optional: bool = False                     # Failure doesn't block downstream
+    label: str = ""  # Human-readable label for UI
+    optional: bool = False  # Failure doesn't block downstream
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 # ── Execution Graph ──────────────────────────────────────────────────
+
 
 class ExecutionGraph(BaseModel):
     """DAG of execution nodes with dependency tracking.
@@ -92,6 +97,7 @@ class ExecutionGraph(BaseModel):
     - Status tracking (pending, running, completed, failed, skipped)
     - Cycle detection (via topological order length check)
     """
+
     nodes: list[ExecutionNode] = Field(default_factory=list)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -107,13 +113,11 @@ class ExecutionGraph(BaseModel):
 
     def ready_nodes(self) -> list[ExecutionNode]:
         """Return nodes whose dependencies are all completed."""
-        completed_ids = {
-            n.id for n in self.nodes if n.status == NodeStatus.COMPLETED
-        }
+        completed_ids = {n.id for n in self.nodes if n.status == NodeStatus.COMPLETED}
         return [
-            n for n in self.nodes
-            if n.status == NodeStatus.PENDING
-            and all(dep in completed_ids for dep in n.depends_on)
+            n
+            for n in self.nodes
+            if n.status == NodeStatus.PENDING and all(dep in completed_ids for dep in n.depends_on)
         ]
 
     def is_complete(self) -> bool:
@@ -126,11 +130,7 @@ class ExecutionGraph(BaseModel):
 
     def has_failed_required(self) -> bool:
         """True when any required (non-optional) node has failed."""
-        return any(
-            n.status == NodeStatus.FAILED
-            for n in self.nodes
-            if not n.optional
-        )
+        return any(n.status == NodeStatus.FAILED for n in self.nodes if not n.optional)
 
     def completed_results(self) -> dict[str, ToolResult]:
         """Map of node_id -> ToolResult for completed nodes."""
@@ -143,7 +143,6 @@ class ExecutionGraph(BaseModel):
     def has_cycle(self) -> bool:
         """Detect cycles via topological sort (Kahn's algorithm)."""
         in_degree = {n.id: len(n.depends_on) for n in self.nodes}
-        node_ids = {n.id for n in self.nodes}
         queue = [nid for nid, deg in in_degree.items() if deg == 0]
         visited = 0
 
@@ -189,9 +188,9 @@ class ExecutionGraph(BaseModel):
 
         while remaining:
             ready = [
-                n for n in self.nodes
-                if n.id in remaining
-                and all(dep in completed_ids for dep in n.depends_on)
+                n
+                for n in self.nodes
+                if n.id in remaining and all(dep in completed_ids for dep in n.depends_on)
             ]
             if not ready:
                 break  # cycle or error
@@ -229,6 +228,7 @@ class ExecutionGraph(BaseModel):
 
 # ── Graph Execution Engine ───────────────────────────────────────────
 
+
 async def execute_graph(
     graph: ExecutionGraph,
     constraints: ExecutionConstraints,
@@ -251,10 +251,7 @@ async def execute_graph(
     for wave in graph.parallel_groups():
         if constraints.allow_parallel and len(wave) > 1:
             # Execute wave in parallel
-            tasks = [
-                _execute_node(node, constraints, obs)
-                for node in wave
-            ]
+            tasks = [_execute_node(node, constraints, obs) for node in wave]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for node, result in zip(wave, results):
                 if isinstance(result, Exception):
@@ -280,15 +277,9 @@ async def execute_graph(
 
         # Emit observability for wave completion
         if obs:
-            completed_in_wave = [
-                n.id for n in wave if n.status == NodeStatus.COMPLETED
-            ]
-            failed_in_wave = [
-                n.id for n in wave if n.status == NodeStatus.FAILED
-            ]
-            obs.emit("graph_wave_complete",
-                     completed=completed_in_wave,
-                     failed=failed_in_wave)
+            completed_in_wave = [n.id for n in wave if n.status == NodeStatus.COMPLETED]
+            failed_in_wave = [n.id for n in wave if n.status == NodeStatus.FAILED]
+            obs.emit("graph_wave_complete", completed=completed_in_wave, failed=failed_in_wave)
 
         # Check if we should continue
         if graph.has_failed_required():
@@ -317,8 +308,11 @@ async def _execute_node(
 
     # Cognitive nodes don't dispatch to tools
     if node.capability in {
-        Capability.REASONING, Capability.COMPARISON,
-        Capability.SYNTHESIS, Capability.PLANNING, Capability.PREDICTION,
+        Capability.REASONING,
+        Capability.COMPARISON,
+        Capability.SYNTHESIS,
+        Capability.PLANNING,
+        Capability.PREDICTION,
     }:
         node.status = NodeStatus.COMPLETED
         node.result = ToolResult(
@@ -348,31 +342,32 @@ async def _execute_node(
             node.retry_count = attempt
 
             if obs:
-                obs.emit("node_completed",
-                         node_id=node.id,
-                         capability=node.capability.value,
-                         attempt=attempt)
+                obs.emit(
+                    "node_completed",
+                    node_id=node.id,
+                    capability=node.capability.value,
+                    attempt=attempt,
+                )
 
             return node
 
         except asyncio.TimeoutError:
             logger.warning(f"[graph] node {node.id} timed out (attempt {attempt + 1})")
             if obs:
-                obs.emit("node_timeout",
-                         node_id=node.id,
-                         attempt=attempt,
-                         timeout=constraints.timeout_per_tool_secs)
+                obs.emit(
+                    "node_timeout",
+                    node_id=node.id,
+                    attempt=attempt,
+                    timeout=constraints.timeout_per_tool_secs,
+                )
 
         except Exception as e:
             logger.warning(f"[graph] node {node.id} failed: {e} (attempt {attempt + 1})")
             if obs:
-                obs.emit("node_failed",
-                         node_id=node.id,
-                         error=str(e)[:80],
-                         attempt=attempt)
+                obs.emit("node_failed", node_id=node.id, error=str(e)[:80], attempt=attempt)
 
         if attempt < node.max_retries:
-            delay = constraints.tool_retry_base_delay * (2 ** attempt)
+            delay = constraints.tool_retry_base_delay * (2**attempt)
             await asyncio.sleep(delay)
 
     # All retries exhausted
@@ -387,6 +382,7 @@ async def _execute_node(
 
 
 # ── Helper Functions ─────────────────────────────────────────────────
+
 
 def _capability_to_tool_name(cap: Capability) -> str:
     """Map a Capability to its tool dispatch name."""
@@ -421,6 +417,7 @@ def _serialize_tool_args(node: ExecutionNode) -> str:
             return str(node.tool_args[key])
     # Fallback: JSON-serialize the whole dict
     import json
+
     return json.dumps(node.tool_args)
 
 

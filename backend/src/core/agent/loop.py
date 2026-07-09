@@ -40,6 +40,7 @@ v0.6 changes vs v0.5 (JSON-parsing loop):
 - MAX_ITERATIONS raised to 5 (from 3)
 - Deduplication and allowlist validation preserved
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -91,20 +92,21 @@ def _parse_plan_steps(plan_text: str) -> list[str]:
     """
     steps: list[str] = []
     in_steps = False
-    for line in plan_text.split('\n'):
+    for line in plan_text.split("\n"):
         stripped = line.strip()
-        if stripped.upper().startswith('STEPS'):
+        if stripped.upper().startswith("STEPS"):
             in_steps = True
             continue
-        if stripped.upper().startswith('ARGS_PRECHECK'):
+        if stripped.upper().startswith("ARGS_PRECHECK"):
             in_steps = False
             continue
         if in_steps and stripped:
             # Match numbered steps: "1. Do something" or "1) Do something"
-            match = re.match(r'^\d+[\.\)]\s*(.+)', stripped)
+            match = re.match(r"^\d+[\.\)]\s*(.+)", stripped)
             if match:
                 steps.append(match.group(1).strip())
     return steps
+
 
 # ── Text-level tool call interception (MiniMax XML) ───────────────────────────
 # MiniMax M2.5 and similar models sometimes generate tool calls as inline XML
@@ -226,11 +228,14 @@ TOOL_DEFINITIONS = [
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "The search query"},
-                    "description": {"type": "string", "description": "Brief description of task (e.g., 'Finding Python async tutorials')"}
+                    "description": {
+                        "type": "string",
+                        "description": "Brief description of task (e.g., 'Finding Python async tutorials')",
+                    },
                 },
-                "required": ["query"]
-            }
-        }
+                "required": ["query"],
+            },
+        },
     },
     {
         "type": "function",
@@ -240,12 +245,18 @@ TOOL_DEFINITIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "url": {"type": "string", "description": "The URL to fetch and read (from a web_search result)"},
-                    "description": {"type": "string", "description": "Brief description of what you're looking for on this page (e.g., 'Current weather conditions for Cheptais')"}
+                    "url": {
+                        "type": "string",
+                        "description": "The URL to fetch and read (from a web_search result)",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Brief description of what you're looking for on this page (e.g., 'Current weather conditions for Cheptais')",
+                    },
                 },
-                "required": ["url"]
-            }
-        }
+                "required": ["url"],
+            },
+        },
     },
     {
         "type": "function",
@@ -255,12 +266,18 @@ TOOL_DEFINITIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "code": {"type": "string", "description": "Python code to execute (must be in a ```python``` block)"},
-                    "description": {"type": "string", "description": "Brief description of task (e.g., 'Testing sorting algorithm')"}
+                    "code": {
+                        "type": "string",
+                        "description": "Python code to execute (must be in a ```python``` block)",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Brief description of task (e.g., 'Testing sorting algorithm')",
+                    },
                 },
-                "required": ["code"]
-            }
-        }
+                "required": ["code"],
+            },
+        },
     },
     {
         "type": "function",
@@ -270,13 +287,19 @@ TOOL_DEFINITIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "File path to write to (directories are auto-created)"},
+                    "path": {
+                        "type": "string",
+                        "description": "File path to write to (directories are auto-created)",
+                    },
                     "content": {"type": "string", "description": "Content to write"},
-                    "description": {"type": "string", "description": "Brief description of task (e.g., 'Creating hello world script')"}
+                    "description": {
+                        "type": "string",
+                        "description": "Brief description of task (e.g., 'Creating hello world script')",
+                    },
                 },
-                "required": ["path", "content"]
-            }
-        }
+                "required": ["path", "content"],
+            },
+        },
     },
     {
         "type": "function",
@@ -287,19 +310,54 @@ TOOL_DEFINITIONS = [
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Path to the file to edit"},
-                    "action": {"type": "string", "enum": ["replace", "regex_replace", "insert", "delete", "append", "prepend"], "description": "The edit action to perform"},
-                    "search": {"type": "string", "description": "Text to search for (for replace/regex_replace/delete actions)"},
-                    "replace": {"type": "string", "description": "Replacement text (for replace/regex_replace actions)"},
-                    "insert_text": {"type": "string", "description": "Text to insert (for insert/append/prepend actions)"},
-                    "line": {"type": "integer", "description": "Line number for insert action (1-based)"},
-                    "start_line": {"type": "integer", "description": "Start line for delete action (1-based, inclusive)"},
-                    "end_line": {"type": "integer", "description": "End line for delete action (1-based, inclusive)"},
-                    "pattern": {"type": "string", "description": "Regex pattern for regex_replace action"},
-                    "all": {"type": "boolean", "description": "If true, replace all occurrences (default: false, replace first only)"}
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "replace",
+                            "regex_replace",
+                            "insert",
+                            "delete",
+                            "append",
+                            "prepend",
+                        ],
+                        "description": "The edit action to perform",
+                    },
+                    "search": {
+                        "type": "string",
+                        "description": "Text to search for (for replace/regex_replace/delete actions)",
+                    },
+                    "replace": {
+                        "type": "string",
+                        "description": "Replacement text (for replace/regex_replace actions)",
+                    },
+                    "insert_text": {
+                        "type": "string",
+                        "description": "Text to insert (for insert/append/prepend actions)",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "Line number for insert action (1-based)",
+                    },
+                    "start_line": {
+                        "type": "integer",
+                        "description": "Start line for delete action (1-based, inclusive)",
+                    },
+                    "end_line": {
+                        "type": "integer",
+                        "description": "End line for delete action (1-based, inclusive)",
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "Regex pattern for regex_replace action",
+                    },
+                    "all": {
+                        "type": "boolean",
+                        "description": "If true, replace all occurrences (default: false, replace first only)",
+                    },
                 },
-                "required": ["path", "action"]
-            }
-        }
+                "required": ["path", "action"],
+            },
+        },
     },
     {
         "type": "function",
@@ -309,12 +367,18 @@ TOOL_DEFINITIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Path to a single FILE to read (NOT a directory)"},
-                    "description": {"type": "string", "description": "Brief description of task (e.g., 'Reading PDF document')"}
+                    "path": {
+                        "type": "string",
+                        "description": "Path to a single FILE to read (NOT a directory)",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Brief description of task (e.g., 'Reading PDF document')",
+                    },
                 },
-                "required": ["path"]
-            }
-        }
+                "required": ["path"],
+            },
+        },
     },
     {
         "type": "function",
@@ -324,12 +388,18 @@ TOOL_DEFINITIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "Shell command to execute. For directory listings use 'dir <path>' (Windows) or 'ls <path>' (Unix). DO NOT use 'type' or 'cat' to read files — use file_task instead."},
-                    "description": {"type": "string", "description": "Brief description of task (e.g., 'Listing project files')"}
+                    "command": {
+                        "type": "string",
+                        "description": "Shell command to execute. For directory listings use 'dir <path>' (Windows) or 'ls <path>' (Unix). DO NOT use 'type' or 'cat' to read files — use file_task instead.",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Brief description of task (e.g., 'Listing project files')",
+                    },
                 },
-                "required": ["command"]
-            }
-        }
+                "required": ["command"],
+            },
+        },
     },
     {
         "type": "function",
@@ -339,12 +409,16 @@ TOOL_DEFINITIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "operation": {"type": "string", "enum": ["store", "recall", "forget", "list"], "description": "The memory operation"},
-                    "content": {"type": "string", "description": "The fact or query"}
+                    "operation": {
+                        "type": "string",
+                        "enum": ["store", "recall", "forget", "list"],
+                        "description": "The memory operation",
+                    },
+                    "content": {"type": "string", "description": "The fact or query"},
                 },
-                "required": ["operation", "content"]
-            }
-        }
+                "required": ["operation", "content"],
+            },
+        },
     },
     {
         "type": "function",
@@ -356,14 +430,15 @@ TOOL_DEFINITIONS = [
                 "properties": {
                     "query": {"type": "string", "description": "What system info to retrieve"}
                 },
-                "required": ["query"]
-            }
-        }
+                "required": ["query"],
+            },
+        },
     },
 ]
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _truncate_observation(obs: str, max_chars: int = OBS_LOG_MAX_CHARS) -> str:
     """Trim a single observation entry for the running context log."""
@@ -376,10 +451,7 @@ def _truncate_observation(obs: str, max_chars: int = OBS_LOG_MAX_CHARS) -> str:
 def _filtered_tool_defs() -> list[dict]:
     """Return TOOL_DEFINITIONS filtered to only AGENT_ALLOWED_TOOLS."""
     allowed_names = AGENT_ALLOWED_TOOLS
-    return [
-        td for td in TOOL_DEFINITIONS
-        if td["function"]["name"] in allowed_names
-    ]
+    return [td for td in TOOL_DEFINITIONS if td["function"]["name"] in allowed_names]
 
 
 # ── Tool-talk detection ────────────────────────────────────────────────────────
@@ -391,22 +463,34 @@ _TOOL_TALK_PATTERNS = [
     re.compile(r"please provide (me with |the )?tool results?", re.IGNORECASE),
     re.compile(r"i need (you to |the )?tool results?", re.IGNORECASE),
     re.compile(r"provide (me with |the )?results? of (the )?tool", re.IGNORECASE),
-    re.compile(r"i (will|would|need to|am going to) (use|call|invoke|run) (the )?(\w+) tool", re.IGNORECASE),
+    re.compile(
+        r"i (will|would|need to|am going to) (use|call|invoke|run) (the )?(\w+) tool", re.IGNORECASE
+    ),
     re.compile(r"let me (use|call|invoke|run) (the )?(\w+) tool", re.IGNORECASE),
-    re.compile(r"i('ll| will) (need to |try to )?(search|look up|execute|run|query)", re.IGNORECASE),
+    re.compile(
+        r"i('ll| will) (need to |try to )?(search|look up|execute|run|query)", re.IGNORECASE
+    ),
     re.compile(r"to answer (this|your) (question|request),? i (will|would|need to)", re.IGNORECASE),
     re.compile(r"<tool>|<action>|<function>", re.IGNORECASE),
     re.compile(r"tool_call|function_call|invoke_tool", re.IGNORECASE),
     # MiniMax-style: "I will call the web_search tool" followed by XML
-    re.compile(r"i('ll| will) (now |then )?(call|use|invoke) (the )?\w+ (tool|function)", re.IGNORECASE),
+    re.compile(
+        r"i('ll| will) (now |then )?(call|use|invoke) (the )?\w+ (tool|function)", re.IGNORECASE
+    ),
     # v0.7: Additional plain-text tool narration patterns — models like MiniMax M2.5
     # sometimes describe what they would do instead of actually doing it.
     # These catch "I'm searching for...", "Let me look that up...", "Searching..."
     # followed by fabricated results from training data.
-    re.compile(r"(i'm|i am) (now )?(searching|looking up|fetching|checking|finding)", re.IGNORECASE),
-    re.compile(r"(searching|fetching|looking up|checking).{0,30}(for|on|in|about)\b", re.IGNORECASE),
+    re.compile(
+        r"(i'm|i am) (now )?(searching|looking up|fetching|checking|finding)", re.IGNORECASE
+    ),
+    re.compile(
+        r"(searching|fetching|looking up|checking).{0,30}(for|on|in|about)\b", re.IGNORECASE
+    ),
     re.compile(r"let me (search|look|check|find|fetch|browse)", re.IGNORECASE),
-    re.compile(r"i('ll| will) (search|look|check|find|fetch) (the |online |the web |on )?", re.IGNORECASE),
+    re.compile(
+        r"i('ll| will) (search|look|check|find|fetch) (the |online |the web |on )?", re.IGNORECASE
+    ),
     re.compile(r"\[tool_call\]|\[search\]|\[tool\]", re.IGNORECASE),
     re.compile(r"\bsearching\.{3,}\b", re.IGNORECASE),  # "Searching..." theatrical animation
     re.compile(r"\bfetching\.{3,}\b", re.IGNORECASE),
@@ -465,6 +549,7 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
 
 
 # ── AgentLoop ──────────────────────────────────────────────────────────────────
+
 
 class AgentLoop:
     """
@@ -561,7 +646,12 @@ class AgentLoop:
         # call here just adds 2-6s of latency for no value.
         plan_context = ""
         iteration_offset = 0  # how many iterations the planning phase consumed
-        if PLAN_ENABLED and intent in AGENT_INTENTS and not initial_tool_result and not skip_planning:
+        if (
+            PLAN_ENABLED
+            and intent in AGENT_INTENTS
+            and not initial_tool_result
+            and not skip_planning
+        ):
             # Stream the plan in real-time as thinking tokens so the user
             # sees the model's reasoning (UNDERSTANDING, STEPS, ARGS_PRECHECK)
             # as it happens — not after the full plan is generated.
@@ -596,18 +686,19 @@ class AgentLoop:
             iteration_offset = 1  # PLAN_ITERATION_COST
             trace.plan_text = plan_context
             if _obs:
-                _obs.emit("agent_planning_done", intent=intent.value,
-                          plan_len=len(plan_context), iterations_cost=iteration_offset)
+                _obs.emit(
+                    "agent_planning_done",
+                    intent=intent.value,
+                    plan_len=len(plan_context),
+                    iterations_cost=iteration_offset,
+                )
 
             # Parse plan steps and emit as todo items via obs
             # so the frontend's Todos panel shows the execution plan
             _plan_steps = _parse_plan_steps(plan_context)
             if _plan_steps and _obs:
                 for i, step in enumerate(_plan_steps):
-                    _obs.emit("todo_created",
-                              id=f"plan-{i}",
-                              text=step,
-                              completed=False)
+                    _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
         else:
             _plan_steps = []
 
@@ -650,23 +741,29 @@ class AgentLoop:
             # Do NOT also add to observation_log: the tool messages ARE the observation.
             # Adding to observation_log AND injecting as tool messages triples the context cost.
             tool_call_id = str(uuid.uuid4())
-            loop_messages.append({
-                "role": "assistant",
-                "content": "I've already performed an initial action. Let me analyze the result.",
-                "tool_calls": [{
-                    "id": tool_call_id,
-                    "type": "function",
-                    "function": {
-                        "name": initial_tool_result.source,
-                        "arguments": "{}",
-                    },
-                }],
-            })
-            loop_messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "content": _truncate_observation(safe_initial),
-            })
+            loop_messages.append(
+                {
+                    "role": "assistant",
+                    "content": "I've already performed an initial action. Let me analyze the result.",
+                    "tool_calls": [
+                        {
+                            "id": tool_call_id,
+                            "type": "function",
+                            "function": {
+                                "name": initial_tool_result.source,
+                                "arguments": "{}",
+                            },
+                        }
+                    ],
+                }
+            )
+            loop_messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": _truncate_observation(safe_initial),
+                }
+            )
 
         # Per-turn tool call cache: (tool_name, normalised_input) → observation text.
         _call_cache: dict[tuple[str, str], str] = {}
@@ -707,10 +804,12 @@ class AgentLoop:
                 _OBS_LOG_TOTAL_CAP = OBS_LOG_MAX_CHARS * 2  # 1600 chars
                 trimmed_log = observation_log
                 if len(observation_log) > _OBS_LOG_TOTAL_CAP:
-                    trimmed_log = "…[earlier observations truncated]\n" + observation_log[-_OBS_LOG_TOTAL_CAP:]
+                    trimmed_log = (
+                        "…[earlier observations truncated]\n"
+                        + observation_log[-_OBS_LOG_TOTAL_CAP:]
+                    )
                 context_content = (
-                    f"{trimmed_log}{failure_hint}\n"
-                    f"Iteration {iteration + 1}/{MAX_ITERATIONS}. "
+                    f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{MAX_ITERATIONS}. "
                 )
                 iteration_messages.append({"role": "user", "content": context_content})
 
@@ -739,7 +838,11 @@ class AgentLoop:
                         yield StreamChunk(text="", done=False, thinking=_filtered_thinking)
                         yield StreamChunk(text="", done=False, thinking="end")
                     if _obs:
-                        _obs.emit("thinking", text=_filter_system_leaks(result.raw_content[:500]), iteration=iteration + 1)
+                        _obs.emit(
+                            "thinking",
+                            text=_filter_system_leaks(result.raw_content[:500]),
+                            iteration=iteration + 1,
+                        )
 
                 logger.info(
                     f"[agent.loop] iter={iteration + 1} multi_tool_call: "
@@ -758,13 +861,17 @@ class AgentLoop:
                         logger.warning(f"[agent.loop] parallel: rejected tool {_name!r}")
                         continue
                     if not _inp or len(_inp.strip("?. \t")) < 3:
-                        logger.warning(f"[agent.loop] parallel: rejected degenerate input for {_name!r}")
+                        logger.warning(
+                            f"[agent.loop] parallel: rejected degenerate input for {_name!r}"
+                        )
                         continue
                     if _name == "file_write":
                         _p = _args.get("path", "").strip()
                         _c = _args.get("content", "").strip()
                         if not _p or not _c:
-                            logger.warning("[agent.loop] parallel: file_write missing args, skipping")
+                            logger.warning(
+                                "[agent.loop] parallel: file_write missing args, skipping"
+                            )
                             continue
 
                     valid_calls.append((call, _inp))
@@ -784,7 +891,11 @@ class AgentLoop:
                     try:
                         tc_intent = Intent(tc_name)
                         tc_result, tc_failed, _ = await dispatch_with_retry(tc_intent, tc_input)
-                        tc_obs = tc_result.content if tc_result else f"[Tool {tc_name} returned no result]"
+                        tc_obs = (
+                            tc_result.content
+                            if tc_result
+                            else f"[Tool {tc_name} returned no result]"
+                        )
                         tc_obs = _filter_tool_injection(tc_obs)
                         # Collect result for post-loop synthesis
                         if tc_result:
@@ -796,12 +907,14 @@ class AgentLoop:
                         if tc_result and tc_result.metadata and tc_result.source == "edit_file":
                             diff_hunks = tc_result.metadata.get("diff_hunks", [])
                             if diff_hunks and _obs:
-                                _obs.emit("file_diff",
-                                          diff_hunks=diff_hunks,
-                                          diff_language=tc_result.metadata.get("diff_language", ""),
-                                          path=tc_result.metadata.get("path", ""),
-                                          diff_additions=tc_result.metadata.get("diff_additions", 0),
-                                          diff_deletions=tc_result.metadata.get("diff_deletions", 0))
+                                _obs.emit(
+                                    "file_diff",
+                                    diff_hunks=diff_hunks,
+                                    diff_language=tc_result.metadata.get("diff_language", ""),
+                                    path=tc_result.metadata.get("path", ""),
+                                    diff_additions=tc_result.metadata.get("diff_additions", 0),
+                                    diff_deletions=tc_result.metadata.get("diff_deletions", 0),
+                                )
                     except Exception as e:
                         tc_obs = f"[Tool {tc_name} error: {e}]"
                         tc_failed = True
@@ -816,20 +929,33 @@ class AgentLoop:
                     _code_preview = call.tool_args.get("code", "")[:40]
                     _label_map = {
                         "file_write": f"Creating file: {_path[:80]}" if _path else "Creating file",
-                        "edit_file":  f"Editing file: {_path[:80]}" if _path else "Editing file",
-                        "code_exec":  f"Executing: {_code_preview}..." if _code_preview else "Executing code",
-                        "web_search": f"Searching: {_query[:80]}" if _query else "Searching the web",
-                        "web_fetch":  f"Fetching: {call.tool_args.get('url', '')[:80]}" if call.tool_args.get('url') else "Fetching web page",
-                        "file_task":  f"Reading: {_path[:80]}" if _path else "Reading file",
-                        "shell":      f"Running: {_command[:80]}" if _command else "Running command",
-                        "memory_op":  f"Memory: {call.tool_args.get('operation', '')} {call.tool_args.get('content', '')[:40]}".strip(),
-                        "sysinfo":    f"System info: {_query[:60]}" if _query else "Getting system info",
+                        "edit_file": f"Editing file: {_path[:80]}" if _path else "Editing file",
+                        "code_exec": f"Executing: {_code_preview}..."
+                        if _code_preview
+                        else "Executing code",
+                        "web_search": f"Searching: {_query[:80]}"
+                        if _query
+                        else "Searching the web",
+                        "web_fetch": f"Fetching: {call.tool_args.get('url', '')[:80]}"
+                        if call.tool_args.get("url")
+                        else "Fetching web page",
+                        "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
+                        "shell": f"Running: {_command[:80]}" if _command else "Running command",
+                        "memory_op": f"Memory: {call.tool_args.get('operation', '')} {call.tool_args.get('content', '')[:40]}".strip(),
+                        "sysinfo": f"System info: {_query[:60]}"
+                        if _query
+                        else "Getting system info",
                     }
                     _label = _label_map.get(call.tool_name, f"Running {call.tool_name}")
                     yield StreamChunk(text="", done=False, status=_label)
                     if _obs:
-                        _obs.emit("tool_call", tool=call.tool_name, label=_label,
-                                  status="started", iteration=iteration + 1)
+                        _obs.emit(
+                            "tool_call",
+                            tool=call.tool_name,
+                            label=_label,
+                            status="started",
+                            iteration=iteration + 1,
+                        )
 
                 # Run all dispatches concurrently
                 dispatch_tasks = [
@@ -846,41 +972,54 @@ class AgentLoop:
                         f"\n[Tool: {tc_name} | Status: {'FAILED' if tc_failed else 'OK'} | Latency: {tc_lat}ms]\n"
                         f"{_truncate_observation(tc_obs)}\n"
                     )
-                    trace.steps.append(AgentStep(
-                        iteration=iteration + 1,
-                        thought=result.raw_content or "",
-                        tool_name=tc_name,
-                        tool_input="",  # individual inputs not tracked in parallel
-                        observation=_truncate_observation(tc_obs),
-                        tool_failed=tc_failed,
-                        retry_count=0,
-                        latency_ms=tc_lat,
-                    ))
+                    trace.steps.append(
+                        AgentStep(
+                            iteration=iteration + 1,
+                            thought=result.raw_content or "",
+                            tool_name=tc_name,
+                            tool_input="",  # individual inputs not tracked in parallel
+                            observation=_truncate_observation(tc_obs),
+                            tool_failed=tc_failed,
+                            retry_count=0,
+                            latency_ms=tc_lat,
+                        )
+                    )
                     if _obs:
-                        _obs.emit("tool_call", tool=tc_name, label="", status="done",
-                                  iteration=iteration + 1)
+                        _obs.emit(
+                            "tool_call",
+                            tool=tc_name,
+                            label="",
+                            status="done",
+                            iteration=iteration + 1,
+                        )
                     if tc_failed:
                         any_failed = True
 
                     # Add tool result to context as proper tool messages
                     call_id = str(uuid.uuid4())
-                    tool_messages.append({
-                        "role": "assistant",
-                        "content": "",
-                        "tool_calls": [{
-                            "id": call_id,
-                            "type": "function",
-                            "function": {
-                                "name": tc_name,
-                                "arguments": "{}",
-                            },
-                        }],
-                    })
-                    tool_messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": _truncate_observation(tc_obs),
-                    })
+                    tool_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": call_id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc_name,
+                                        "arguments": "{}",
+                                    },
+                                }
+                            ],
+                        }
+                    )
+                    tool_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": _truncate_observation(tc_obs),
+                        }
+                    )
 
                 loop_messages.extend(tool_messages)
 
@@ -889,7 +1028,12 @@ class AgentLoop:
                     consecutive_failures += 1
                     fabrication_risk += 1  # Parallel tool failures increase fabrication risk
                     if _obs:
-                        _obs.emit("fabrication_risk", risk=fabrication_risk, tool="multi", iteration=iteration + 1)
+                        _obs.emit(
+                            "fabrication_risk",
+                            risk=fabrication_risk,
+                            tool="multi",
+                            iteration=iteration + 1,
+                        )
                 else:
                     last_tool_failed = False
                     consecutive_failures = 0
@@ -903,7 +1047,9 @@ class AgentLoop:
                 tool_input = _extract_tool_input(tool_name, tool_args)
 
                 # Debug: log description from LLM
-                logger.info(f"[agent.loop] tool_args description: {tool_args.get('description', 'NONE')}")
+                logger.info(
+                    f"[agent.loop] tool_args description: {tool_args.get('description', 'NONE')}"
+                )
 
                 # FIX: Yield thinking content as proper SSE events so the
                 # frontend ThinkingBlock shows the model's reasoning in real-time.
@@ -920,7 +1066,11 @@ class AgentLoop:
                         yield StreamChunk(text="", done=False, thinking=_filtered_thinking)
                         yield StreamChunk(text="", done=False, thinking="end")
                     if _obs:
-                        _obs.emit("thinking", text=_filter_system_leaks(result.raw_content[:500]), iteration=iteration + 1)
+                        _obs.emit(
+                            "thinking",
+                            text=_filter_system_leaks(result.raw_content[:500]),
+                            iteration=iteration + 1,
+                        )
 
                 logger.info(
                     f"[agent.loop] iter={iteration + 1} tool_call={tool_name} "
@@ -931,8 +1081,7 @@ class AgentLoop:
                 if tool_name not in AGENT_ALLOWED_TOOLS:
                     allowed_list = ", ".join(sorted(AGENT_ALLOWED_TOOLS))
                     observation = (
-                        f"[Tool '{tool_name}' is not available. "
-                        f"Available tools: {allowed_list}]"
+                        f"[Tool '{tool_name}' is not available. Available tools: {allowed_list}]"
                     )
                     logger.warning(f"[agent.loop] rejected tool name: {tool_name!r}")
                     last_tool_failed = True
@@ -941,36 +1090,44 @@ class AgentLoop:
                         f"\n[Tool: {tool_name} | Status: BLOCKED (not in allowlist)]\n"
                         f"{observation}\n"
                     )
-                    trace.steps.append(AgentStep(
-                        iteration=iteration + 1,
-                        thought=result.raw_content or "",
-                        tool_name=tool_name,
-                        tool_input=tool_input,
-                        observation=observation,
-                        tool_failed=True,
-                        retry_count=0,
-                        latency_ms=llm_ms,
-                    ))
+                    trace.steps.append(
+                        AgentStep(
+                            iteration=iteration + 1,
+                            thought=result.raw_content or "",
+                            tool_name=tool_name,
+                            tool_input=tool_input,
+                            observation=observation,
+                            tool_failed=True,
+                            retry_count=0,
+                            latency_ms=llm_ms,
+                        )
+                    )
                     # Add the failed tool call + result to conversation context
                     # so the model can see its mistake and correct itself.
                     call_id = str(uuid.uuid4())
-                    loop_messages.append({
-                        "role": "assistant",
-                        "content": result.raw_content or "",
-                        "tool_calls": [{
-                            "id": call_id,
-                            "type": "function",
-                            "function": {
-                                "name": tool_name,
-                                "arguments": json.dumps(tool_args),
-                            },
-                        }],
-                    })
-                    loop_messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": observation,
-                    })
+                    loop_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": result.raw_content or "",
+                            "tool_calls": [
+                                {
+                                    "id": call_id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool_name,
+                                        "arguments": json.dumps(tool_args),
+                                    },
+                                }
+                            ],
+                        }
+                    )
+                    loop_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": observation,
+                        }
+                    )
                     continue
 
                 # ── Validate required args before dispatch ──────────────────
@@ -998,34 +1155,42 @@ class AgentLoop:
                             f"\n[Tool: {tool_name} | Status: REJECTED (missing required args)]\n"
                             f"{observation}\n"
                         )
-                        trace.steps.append(AgentStep(
-                            iteration=iteration + 1,
-                            thought=result.raw_content or "",
-                            tool_name=tool_name,
-                            tool_input=tool_input,
-                            observation=observation,
-                            tool_failed=True,
-                            retry_count=0,
-                            latency_ms=llm_ms,
-                        ))
+                        trace.steps.append(
+                            AgentStep(
+                                iteration=iteration + 1,
+                                thought=result.raw_content or "",
+                                tool_name=tool_name,
+                                tool_input=tool_input,
+                                observation=observation,
+                                tool_failed=True,
+                                retry_count=0,
+                                latency_ms=llm_ms,
+                            )
+                        )
                         call_id = str(uuid.uuid4())
-                        loop_messages.append({
-                            "role": "assistant",
-                            "content": result.raw_content or "",
-                            "tool_calls": [{
-                                "id": call_id,
-                                "type": "function",
-                                "function": {
-                                    "name": tool_name,
-                                    "arguments": json.dumps(tool_args),
-                                },
-                            }],
-                        })
-                        loop_messages.append({
-                            "role": "tool",
-                            "tool_call_id": call_id,
-                            "content": observation,
-                        })
+                        loop_messages.append(
+                            {
+                                "role": "assistant",
+                                "content": result.raw_content or "",
+                                "tool_calls": [
+                                    {
+                                        "id": call_id,
+                                        "type": "function",
+                                        "function": {
+                                            "name": tool_name,
+                                            "arguments": json.dumps(tool_args),
+                                        },
+                                    }
+                                ],
+                            }
+                        )
+                        loop_messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": call_id,
+                                "content": observation,
+                            }
+                        )
                         continue
 
                 # Semantic validation: reject empty or degenerate inputs
@@ -1040,37 +1205,44 @@ class AgentLoop:
                     last_tool_failed = True
                     consecutive_failures += 1
                     observation_log += (
-                        f"\n[Tool: {tool_name} | Status: REJECTED (bad input)]\n"
-                        f"{observation}\n"
+                        f"\n[Tool: {tool_name} | Status: REJECTED (bad input)]\n{observation}\n"
                     )
-                    trace.steps.append(AgentStep(
-                        iteration=iteration + 1,
-                        thought=result.raw_content or "",
-                        tool_name=tool_name,
-                        tool_input=tool_input,
-                        observation=observation,
-                        tool_failed=True,
-                        retry_count=0,
-                        latency_ms=llm_ms,
-                    ))
+                    trace.steps.append(
+                        AgentStep(
+                            iteration=iteration + 1,
+                            thought=result.raw_content or "",
+                            tool_name=tool_name,
+                            tool_input=tool_input,
+                            observation=observation,
+                            tool_failed=True,
+                            retry_count=0,
+                            latency_ms=llm_ms,
+                        )
+                    )
                     call_id = str(uuid.uuid4())
-                    loop_messages.append({
-                        "role": "assistant",
-                        "content": result.raw_content or "",
-                        "tool_calls": [{
-                            "id": call_id,
-                            "type": "function",
-                            "function": {
-                                "name": tool_name,
-                                "arguments": json.dumps(tool_args),
-                            },
-                        }],
-                    })
-                    loop_messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": observation,
-                    })
+                    loop_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": result.raw_content or "",
+                            "tool_calls": [
+                                {
+                                    "id": call_id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool_name,
+                                        "arguments": json.dumps(tool_args),
+                                    },
+                                }
+                            ],
+                        }
+                    )
+                    loop_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": observation,
+                        }
+                    )
                     continue
 
                 # Deduplication: skip a tool call we've already made this turn
@@ -1084,35 +1256,43 @@ class AgentLoop:
                         f"\n[Tool: {tool_name} | Input: {tool_input[:60]} | Status: CACHED]\n"
                         f"{_truncate_observation(cached_obs)}\n"
                     )
-                    trace.steps.append(AgentStep(
-                        iteration=iteration + 1,
-                        thought=result.raw_content or "",
-                        tool_name=tool_name,
-                        tool_input=tool_input,
-                        observation=f"[cached] {cached_obs[:200]}",
-                        tool_failed=False,
-                        retry_count=0,
-                        latency_ms=llm_ms,
-                    ))
+                    trace.steps.append(
+                        AgentStep(
+                            iteration=iteration + 1,
+                            thought=result.raw_content or "",
+                            tool_name=tool_name,
+                            tool_input=tool_input,
+                            observation=f"[cached] {cached_obs[:200]}",
+                            tool_failed=False,
+                            retry_count=0,
+                            latency_ms=llm_ms,
+                        )
+                    )
                     # Add cached result as tool message
                     call_id = str(uuid.uuid4())
-                    loop_messages.append({
-                        "role": "assistant",
-                        "content": result.raw_content or "",
-                        "tool_calls": [{
-                            "id": call_id,
-                            "type": "function",
-                            "function": {
-                                "name": tool_name,
-                                "arguments": json.dumps(tool_args),
-                            },
-                        }],
-                    })
-                    loop_messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": cached_obs,
-                    })
+                    loop_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": result.raw_content or "",
+                            "tool_calls": [
+                                {
+                                    "id": call_id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool_name,
+                                        "arguments": json.dumps(tool_args),
+                                    },
+                                }
+                            ],
+                        }
+                    )
+                    loop_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": cached_obs,
+                        }
+                    )
                     continue
 
                 # ── Bug B fix: name-level dedup for file_write ──────────
@@ -1134,40 +1314,48 @@ class AgentLoop:
                         cached_write_obs = _call_cache.get(
                             _path_key,
                             f"[file_write already executed for '{tool_args.get('path', '')}' "
-                            f"in this turn. Do not write the same file again.]"
+                            f"in this turn. Do not write the same file again.]",
                         )
                         observation_log += (
                             f"\n[Tool: {tool_name} | Path: {_write_path} | Status: CACHED (name-level dedup)]\n"
                             f"{_truncate_observation(cached_write_obs)}\n"
                         )
-                        trace.steps.append(AgentStep(
-                            iteration=iteration + 1,
-                            thought=result.raw_content or "",
-                            tool_name=tool_name,
-                            tool_input=tool_input,
-                            observation=f"[name-dedup] {cached_write_obs[:200]}",
-                            tool_failed=False,
-                            retry_count=0,
-                            latency_ms=llm_ms,
-                        ))
+                        trace.steps.append(
+                            AgentStep(
+                                iteration=iteration + 1,
+                                thought=result.raw_content or "",
+                                tool_name=tool_name,
+                                tool_input=tool_input,
+                                observation=f"[name-dedup] {cached_write_obs[:200]}",
+                                tool_failed=False,
+                                retry_count=0,
+                                latency_ms=llm_ms,
+                            )
+                        )
                         call_id = str(uuid.uuid4())
-                        loop_messages.append({
-                            "role": "assistant",
-                            "content": result.raw_content or "",
-                            "tool_calls": [{
-                                "id": call_id,
-                                "type": "function",
-                                "function": {
-                                    "name": tool_name,
-                                    "arguments": json.dumps(tool_args),
-                                },
-                            }],
-                        })
-                        loop_messages.append({
-                            "role": "tool",
-                            "tool_call_id": call_id,
-                            "content": cached_write_obs,
-                        })
+                        loop_messages.append(
+                            {
+                                "role": "assistant",
+                                "content": result.raw_content or "",
+                                "tool_calls": [
+                                    {
+                                        "id": call_id,
+                                        "type": "function",
+                                        "function": {
+                                            "name": tool_name,
+                                            "arguments": json.dumps(tool_args),
+                                        },
+                                    }
+                                ],
+                            }
+                        )
+                        loop_messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": call_id,
+                                "content": cached_write_obs,
+                            }
+                        )
                         continue
 
                 # ── Dispatch the tool ──────────────────────────────────
@@ -1189,19 +1377,32 @@ class AgentLoop:
                     _code_preview = tool_args.get("code", "")[:40]
                     action_labels = {
                         "file_write": f"Creating file: {_path[:80]}" if _path else "Creating file",
-                        "edit_file":  f"Editing file: {_path[:80]}" if _path else "Editing file",
-                        "code_exec":  f"Executing: {_code_preview}..." if _code_preview else "Executing code",
-                        "web_search": f"Searching: {_query[:80]}" if _query else "Searching the web",
-                        "file_task":  f"Reading: {_path[:80]}" if _path else "Reading file",
-                        "shell":      f"Running: {_command[:80]}" if _command else "Running command",
-                        "memory_op":  f"Memory: {tool_args.get('operation', '')} {tool_args.get('content', '')[:40]}".strip(),
-                        "sysinfo":    f"System info: {_query[:60]}" if _query else "Getting system info",
+                        "edit_file": f"Editing file: {_path[:80]}" if _path else "Editing file",
+                        "code_exec": f"Executing: {_code_preview}..."
+                        if _code_preview
+                        else "Executing code",
+                        "web_search": f"Searching: {_query[:80]}"
+                        if _query
+                        else "Searching the web",
+                        "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
+                        "shell": f"Running: {_command[:80]}" if _command else "Running command",
+                        "memory_op": f"Memory: {tool_args.get('operation', '')} {tool_args.get('content', '')[:40]}".strip(),
+                        "sysinfo": f"System info: {_query[:60]}"
+                        if _query
+                        else "Getting system info",
                     }
                     action_label = action_labels.get(tool_name, f"Running {tool_name}")
-                logger.info(f"[agent.loop] iter={iteration + 1} tool={tool_name} input={tool_input[:80]} — {action_label}")
+                logger.info(
+                    f"[agent.loop] iter={iteration + 1} tool={tool_name} input={tool_input[:80]} — {action_label}"
+                )
                 if _obs:
-                    _obs.emit("tool_call", tool=tool_name, label=action_label, status="started",
-                              iteration=iteration + 1)
+                    _obs.emit(
+                        "tool_call",
+                        tool=tool_name,
+                        label=action_label,
+                        status="started",
+                        iteration=iteration + 1,
+                    )
 
                 # ── Yield intermediate status to the user so they see real-time ──
                 # feedback during tool execution. Without this, the user sees only
@@ -1246,39 +1447,48 @@ class AgentLoop:
                                 f"\n[Tool: {tool_name} | Status: REJECTED (content too short)]\n"
                                 f"{observation}\n"
                             )
-                            trace.steps.append(AgentStep(
-                                iteration=iteration + 1,
-                                thought=result.raw_content or "",
-                                tool_name=tool_name,
-                                tool_input=tool_input,
-                                observation=observation,
-                                tool_failed=True,
-                                retry_count=0,
-                                latency_ms=llm_ms,
-                            ))
+                            trace.steps.append(
+                                AgentStep(
+                                    iteration=iteration + 1,
+                                    thought=result.raw_content or "",
+                                    tool_name=tool_name,
+                                    tool_input=tool_input,
+                                    observation=observation,
+                                    tool_failed=True,
+                                    retry_count=0,
+                                    latency_ms=llm_ms,
+                                )
+                            )
                             call_id = str(uuid.uuid4())
-                            loop_messages.append({
-                                "role": "assistant",
-                                "content": result.raw_content or "",
-                                "tool_calls": [{
-                                    "id": call_id,
-                                    "type": "function",
-                                    "function": {
-                                        "name": tool_name,
-                                        "arguments": json.dumps(tool_args),
-                                    },
-                                }],
-                            })
-                            loop_messages.append({
-                                "role": "tool",
-                                "tool_call_id": call_id,
-                                "content": observation,
-                            })
+                            loop_messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": result.raw_content or "",
+                                    "tool_calls": [
+                                        {
+                                            "id": call_id,
+                                            "type": "function",
+                                            "function": {
+                                                "name": tool_name,
+                                                "arguments": json.dumps(tool_args),
+                                            },
+                                        }
+                                    ],
+                                }
+                            )
+                            loop_messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": call_id,
+                                    "content": observation,
+                                }
+                            )
                             continue
 
                     if tool_name == "file_write":
                         try:
                             from tools.contracts.base import ToolRegistry
+
                             contract_cls = ToolRegistry.get("file_write")
                             file_payload = {
                                 "path": tool_args.get("path", ""),
@@ -1289,7 +1499,9 @@ class AgentLoop:
                             retry_count = 0
                         except KeyError:
                             # Contract not registered — fall back to legacy dispatch
-                            logger.warning("[agent.loop] FileWriteContract not in registry, using legacy dispatch")
+                            logger.warning(
+                                "[agent.loop] FileWriteContract not in registry, using legacy dispatch"
+                            )
                             tool_result, tool_failed, retry_count = await dispatch_with_retry(
                                 tool_intent, tool_input
                             )
@@ -1298,6 +1510,7 @@ class AgentLoop:
                         # edit_file: use typed contract path (like file_write)
                         try:
                             from tools.contracts.base import ToolRegistry
+
                             contract_cls = ToolRegistry.get("edit_file")
                             edit_payload = dict(tool_args)  # pass all args as payload
                             tool_result = await contract_cls().execute(edit_payload)
@@ -1305,7 +1518,9 @@ class AgentLoop:
                             retry_count = 0
                         except KeyError:
                             # Contract not registered — fall back to legacy dispatch
-                            logger.warning("[agent.loop] EditFileContract not in registry, using legacy dispatch")
+                            logger.warning(
+                                "[agent.loop] EditFileContract not in registry, using legacy dispatch"
+                            )
                             tool_result, tool_failed, retry_count = await dispatch_with_retry(
                                 tool_intent, tool_input
                             )
@@ -1313,15 +1528,21 @@ class AgentLoop:
                         # Bridge diff metadata from edit_file tool results.
                         # Emit a file_diff obs event so the frontend DiffBlock can
                         # render green/red highlighted diffs — like Cursor/Claude.
-                        if tool_result and tool_result.metadata and tool_result.source == "edit_file":
+                        if (
+                            tool_result
+                            and tool_result.metadata
+                            and tool_result.source == "edit_file"
+                        ):
                             diff_hunks = tool_result.metadata.get("diff_hunks", [])
                             if diff_hunks and _obs:
-                                _obs.emit("file_diff",
-                                          diff_hunks=diff_hunks,
-                                          diff_language=tool_result.metadata.get("diff_language", ""),
-                                          path=tool_result.metadata.get("path", ""),
-                                          diff_additions=tool_result.metadata.get("diff_additions", 0),
-                                          diff_deletions=tool_result.metadata.get("diff_deletions", 0))
+                                _obs.emit(
+                                    "file_diff",
+                                    diff_hunks=diff_hunks,
+                                    diff_language=tool_result.metadata.get("diff_language", ""),
+                                    path=tool_result.metadata.get("path", ""),
+                                    diff_additions=tool_result.metadata.get("diff_additions", 0),
+                                    diff_deletions=tool_result.metadata.get("diff_deletions", 0),
+                                )
 
                     else:
                         tool_result, tool_failed, retry_count = await dispatch_with_retry(
@@ -1362,9 +1583,17 @@ class AgentLoop:
                             ):
                                 yield chunk
                             if _obs:
-                                _obs.emit("tool_call", tool=tool_name, label=action_label,
-                                          status="done", latency_ms=latency_ms, iteration=iteration + 1)
-                                _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
+                                _obs.emit(
+                                    "tool_call",
+                                    tool=tool_name,
+                                    label=action_label,
+                                    status="done",
+                                    latency_ms=latency_ms,
+                                    iteration=iteration + 1,
+                                )
+                                _obs.emit(
+                                    "agent_loop_done", intent=intent.value, iterations=iteration + 1
+                                )
                             return  # web search is always terminal in agent loop
 
                         observation = safe_obs
@@ -1402,7 +1631,11 @@ class AgentLoop:
                                     # Do NOT re-import it here — that would shadow the module-level
                                     # binding and cause UnboundLocalError in closures like
                                     # _dispatch_single() and _write_files().
-                                    _grounding_result, _grounding_failed, _ = await dispatch_with_retry(
+                                    (
+                                        _grounding_result,
+                                        _grounding_failed,
+                                        _,
+                                    ) = await dispatch_with_retry(
                                         Intent.FILE_TASK,
                                         _grounding_path,
                                         max_retries=0,
@@ -1413,7 +1646,9 @@ class AgentLoop:
                                         and _grounding_result.success
                                     )
                                     _grounding_content_len = (
-                                        len(_grounding_result.content) if _grounding_result and _grounding_result.content else 0
+                                        len(_grounding_result.content)
+                                        if _grounding_result and _grounding_result.content
+                                        else 0
                                     )
                                     _obs.emit(
                                         "grounding_check",
@@ -1435,7 +1670,9 @@ class AgentLoop:
                                             f"path={_grounding_path!r}"
                                         )
                                 except Exception as _ge:
-                                    logger.warning(f"[agent.loop] grounding check error (non-fatal): {_ge}")
+                                    logger.warning(
+                                        f"[agent.loop] grounding check error (non-fatal): {_ge}"
+                                    )
 
                         # ── Terminal bridge: emit tool output to the terminal panel ──
                         # Forward ALL tool executions to the terminal panel so the user
@@ -1464,15 +1701,19 @@ class AgentLoop:
 
                         # Yield completion status so user sees the tool finished
                         if not tool_failed:
-                            yield StreamChunk(text="", done=False, status=f"Done — {action_label} ({latency_ms}ms)")
+                            yield StreamChunk(
+                                text="",
+                                done=False,
+                                status=f"Done — {action_label} ({latency_ms}ms)",
+                            )
 
                             # Mark the corresponding plan todo as complete.
                             # Each successful tool execution advances the cursor
                             # so the Todos panel shows progress through the plan.
                             if _plan_steps and _plan_step_cursor < len(_plan_steps) and _obs:
-                                _obs.emit("todo_completed",
-                                          id=f"plan-{_plan_step_cursor}",
-                                          completed=True)
+                                _obs.emit(
+                                    "todo_completed", id=f"plan-{_plan_step_cursor}", completed=True
+                                )
                                 _plan_step_cursor += 1
 
                         if retry_count > 0:
@@ -1481,7 +1722,9 @@ class AgentLoop:
                                 done=False,
                             )
                     else:
-                        observation = f"[Tool '{tool_name}' returned no result after {retry_count} retries]"
+                        observation = (
+                            f"[Tool '{tool_name}' returned no result after {retry_count} retries]"
+                        )
                         tool_failed = True
                         latency_ms = round((time.monotonic() - t_tool) * 1000)
 
@@ -1496,24 +1739,43 @@ class AgentLoop:
                     consecutive_failures += 1
                     fabrication_risk += 1  # Tool errors increase fabrication risk
                     if _obs:
-                        _obs.emit("tool_call", tool=tool_name, label=action_label,
-                                  status="failed", latency_ms=latency_ms, iteration=iteration + 1)
-                        _obs.emit("fabrication_risk", risk=fabrication_risk, tool=tool_name, iteration=iteration + 1)
+                        _obs.emit(
+                            "tool_call",
+                            tool=tool_name,
+                            label=action_label,
+                            status="failed",
+                            latency_ms=latency_ms,
+                            iteration=iteration + 1,
+                        )
+                        _obs.emit(
+                            "fabrication_risk",
+                            risk=fabrication_risk,
+                            tool=tool_name,
+                            iteration=iteration + 1,
+                        )
                 else:
                     if _obs:
-                        _obs.emit("tool_call", tool=tool_name, label=action_label,
-                                  status="done", latency_ms=latency_ms, iteration=iteration + 1)
+                        _obs.emit(
+                            "tool_call",
+                            tool=tool_name,
+                            label=action_label,
+                            status="done",
+                            latency_ms=latency_ms,
+                            iteration=iteration + 1,
+                        )
 
-                trace.steps.append(AgentStep(
-                    iteration=iteration + 1,
-                    thought=result.raw_content or "",
-                    tool_name=tool_name,
-                    tool_input=tool_input,
-                    observation=observation[:500],
-                    tool_failed=tool_failed,
-                    retry_count=retry_count,
-                    latency_ms=latency_ms,
-                ))
+                trace.steps.append(
+                    AgentStep(
+                        iteration=iteration + 1,
+                        thought=result.raw_content or "",
+                        tool_name=tool_name,
+                        tool_input=tool_input,
+                        observation=observation[:500],
+                        tool_failed=tool_failed,
+                        retry_count=retry_count,
+                        latency_ms=latency_ms,
+                    )
+                )
                 # ANTI-FABRICATION: Only append to observation_log for FAILED
                 # tool calls. For successful calls, the tool messages below
                 # ARE the observation — adding to observation_log too causes
@@ -1533,18 +1795,22 @@ class AgentLoop:
                 # ANTI-FABRICATION: Prepend a strong instruction to the tool
                 # result telling the model to use ONLY the actual output.
                 call_id = str(uuid.uuid4())
-                loop_messages.append({
-                    "role": "assistant",
-                    "content": result.raw_content or "",
-                    "tool_calls": [{
-                        "id": call_id,
-                        "type": "function",
-                        "function": {
-                            "name": tool_name,
-                            "arguments": json.dumps(tool_args),
-                        },
-                    }],
-                })
+                loop_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": result.raw_content or "",
+                        "tool_calls": [
+                            {
+                                "id": call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": tool_name,
+                                    "arguments": json.dumps(tool_args),
+                                },
+                            }
+                        ],
+                    }
+                )
                 # Anti-fabrication wrapper: the model MUST base its response
                 # on the actual tool output. Without this, models (especially
                 # smaller ones like MiniMax M2.5) sometimes ignore the tool
@@ -1557,11 +1823,13 @@ class AgentLoop:
                     )
                 else:
                     safe_observation = observation
-                loop_messages.append({
-                    "role": "tool",
-                    "tool_call_id": call_id,
-                    "content": safe_observation,
-                })
+                loop_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "content": safe_observation,
+                    }
+                )
 
                 # Continue the loop — the model will see the tool result
                 # and decide whether to use another tool or answer directly.
@@ -1612,7 +1880,9 @@ class AgentLoop:
                     if _has_minimax_tool_call(_minimax_buffer):
                         # Complete tool call found — stop buffering
                         break
-                    if _MINIMAX_PARTIAL_RE.search(_minimax_buffer) or _STANDALONE_PARTIAL_RE.search(_minimax_buffer):
+                    if _MINIMAX_PARTIAL_RE.search(_minimax_buffer) or _STANDALONE_PARTIAL_RE.search(
+                        _minimax_buffer
+                    ):
                         _minimax_partial_seen = True
                     if len(_minimax_buffer) >= _MINIMAX_CHECK_CHARS:
                         if _minimax_partial_seen:
@@ -1650,28 +1920,42 @@ class AgentLoop:
                         # Normalize MiniMax parameter names to match our tool definitions
                         # MiniMax uses <parameter name="text"> for the query argument
                         _normalized_args = dict(tc_args)
-                        if tc_name == "web_search" and "text" in _normalized_args and "query" not in _normalized_args:
+                        if (
+                            tc_name == "web_search"
+                            and "text" in _normalized_args
+                            and "query" not in _normalized_args
+                        ):
                             _normalized_args["query"] = _normalized_args.pop("text")
-                        if tc_name == "web_fetch" and "text" in _normalized_args and "url" not in _normalized_args:
+                        if (
+                            tc_name == "web_fetch"
+                            and "text" in _normalized_args
+                            and "url" not in _normalized_args
+                        ):
                             _normalized_args["url"] = _normalized_args.pop("text")
 
                         # Check allowlist
                         if tc_name not in AGENT_ALLOWED_TOOLS:
-                            logger.warning(f"[agent.loop] minimax intercept: rejected tool {tc_name!r}")
+                            logger.warning(
+                                f"[agent.loop] minimax intercept: rejected tool {tc_name!r}"
+                            )
                             allowed_list = ", ".join(sorted(AGENT_ALLOWED_TOOLS))
                             observation = f"[Tool '{tc_name}' is not available. Available tools: {allowed_list}]"
                             call_id = str(uuid.uuid4())
-                            loop_messages.append({
-                                "role": "assistant",
-                                "content": _strip_minimax_tool_calls(_minimax_buffer),
-                            })
-                            loop_messages.append({
-                                "role": "user",
-                                "content": (
-                                    f"You tried to call tool '{tc_name}' but it's not available. "
-                                    f"Available tools: {allowed_list}. Try a different approach."
-                                ),
-                            })
+                            loop_messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": _strip_minimax_tool_calls(_minimax_buffer),
+                                }
+                            )
+                            loop_messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        f"You tried to call tool '{tc_name}' but it's not available. "
+                                        f"Available tools: {allowed_list}. Try a different approach."
+                                    ),
+                                }
+                            )
                             continue
 
                         # Extract tool input from normalized args
@@ -1681,17 +1965,21 @@ class AgentLoop:
                             logger.warning(
                                 f"[agent.loop] minimax intercept: degenerate input for {tc_name!r}: {tool_input!r}"
                             )
-                            loop_messages.append({
-                                "role": "assistant",
-                                "content": _strip_minimax_tool_calls(_minimax_buffer),
-                            })
-                            loop_messages.append({
-                                "role": "user",
-                                "content": (
-                                    f"Your tool call for '{tc_name}' had empty or too-short input. "
-                                    f"Call it again with a specific, meaningful input."
-                                ),
-                            })
+                            loop_messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": _strip_minimax_tool_calls(_minimax_buffer),
+                                }
+                            )
+                            loop_messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        f"Your tool call for '{tc_name}' had empty or too-short input. "
+                                        f"Call it again with a specific, meaningful input."
+                                    ),
+                                }
+                            )
                             continue
 
                         # Build action label for user feedback
@@ -1700,21 +1988,30 @@ class AgentLoop:
                         _query = _normalized_args.get("query", "")
                         _url = _normalized_args.get("url", "")
                         _label_map = {
-                            "web_search": f"Searching: {_query[:80]}" if _query else "Searching the web",
+                            "web_search": f"Searching: {_query[:80]}"
+                            if _query
+                            else "Searching the web",
                             "web_fetch": f"Fetching: {_url[:80]}" if _url else "Fetching web page",
                             "shell": f"Running: {_command[:80]}" if _command else "Running command",
                             "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
                             "code_exec": "Executing code",
                             "memory_op": f"Memory: {_normalized_args.get('operation', '')} {_normalized_args.get('content', '')[:40]}".strip(),
-                            "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
+                            "sysinfo": f"System info: {_query[:60]}"
+                            if _query
+                            else "Getting system info",
                         }
                         action_label = _label_map.get(tc_name, f"Running {tc_name}")
 
                         # Emit status to user — v0.10: use status field
                         yield StreamChunk(text="", done=False, status=action_label)
                         if _obs:
-                            _obs.emit("tool_call", tool=tc_name, label=action_label,
-                                      status="started", iteration=iteration + 1)
+                            _obs.emit(
+                                "tool_call",
+                                tool=tc_name,
+                                label=action_label,
+                                status="started",
+                                iteration=iteration + 1,
+                            )
 
                         # Dispatch the tool
                         t_tool = time.monotonic()
@@ -1757,15 +2054,25 @@ class AgentLoop:
                                     ):
                                         yield chunk
                                     if _obs:
-                                        _obs.emit("tool_call", tool=tc_name, label=action_label,
-                                                  status="done", latency_ms=latency_ms, iteration=iteration + 1)
+                                        _obs.emit(
+                                            "tool_call",
+                                            tool=tc_name,
+                                            label=action_label,
+                                            status="done",
+                                            latency_ms=latency_ms,
+                                            iteration=iteration + 1,
+                                        )
                                     return  # web search is terminal
 
                                 observation = safe_obs
 
                                 # Yield completion status
                                 if not tool_failed:
-                                    yield StreamChunk(text="", done=False, status=f"Done — {action_label} ({latency_ms}ms)")
+                                    yield StreamChunk(
+                                        text="",
+                                        done=False,
+                                        status=f"Done — {action_label} ({latency_ms}ms)",
+                                    )
 
                                 # Anti-fabrication wrapper
                                 if not tool_failed and observation:
@@ -1779,67 +2086,89 @@ class AgentLoop:
 
                                 # Add tool call + result to conversation context
                                 call_id = str(uuid.uuid4())
-                                loop_messages.append({
-                                    "role": "assistant",
-                                    "content": _strip_minimax_tool_calls(_minimax_buffer),
-                                    "tool_calls": [{
-                                        "id": call_id,
-                                        "type": "function",
-                                        "function": {
-                                            "name": tc_name,
-                                            "arguments": json.dumps(_normalized_args),
-                                        },
-                                    }],
-                                })
-                                loop_messages.append({
-                                    "role": "tool",
-                                    "tool_call_id": call_id,
-                                    "content": safe_observation,
-                                })
+                                loop_messages.append(
+                                    {
+                                        "role": "assistant",
+                                        "content": _strip_minimax_tool_calls(_minimax_buffer),
+                                        "tool_calls": [
+                                            {
+                                                "id": call_id,
+                                                "type": "function",
+                                                "function": {
+                                                    "name": tc_name,
+                                                    "arguments": json.dumps(_normalized_args),
+                                                },
+                                            }
+                                        ],
+                                    }
+                                )
+                                loop_messages.append(
+                                    {
+                                        "role": "tool",
+                                        "tool_call_id": call_id,
+                                        "content": safe_observation,
+                                    }
+                                )
                                 last_tool_failed = False
                                 consecutive_failures = 0
                             else:
                                 observation = f"[Tool '{tc_name}' returned no result]"
                                 tool_failed = True
-                                loop_messages.append({
-                                    "role": "assistant",
-                                    "content": _strip_minimax_tool_calls(_minimax_buffer),
-                                })
-                                loop_messages.append({
-                                    "role": "user",
-                                    "content": f"Tool '{tc_name}' returned no result. Try a different approach.",
-                                })
+                                loop_messages.append(
+                                    {
+                                        "role": "assistant",
+                                        "content": _strip_minimax_tool_calls(_minimax_buffer),
+                                    }
+                                )
+                                loop_messages.append(
+                                    {
+                                        "role": "user",
+                                        "content": f"Tool '{tc_name}' returned no result. Try a different approach.",
+                                    }
+                                )
                                 last_tool_failed = True
                                 consecutive_failures += 1
                         except (ValueError, Exception) as exc:
-                            logger.warning(f"[agent.loop] minimax intercept: tool dispatch failed: {exc}")
-                            loop_messages.append({
-                                "role": "assistant",
-                                "content": _strip_minimax_tool_calls(_minimax_buffer),
-                            })
-                            loop_messages.append({
-                                "role": "user",
-                                "content": f"Tool '{tc_name}' failed: {exc}. Try a different approach.",
-                            })
+                            logger.warning(
+                                f"[agent.loop] minimax intercept: tool dispatch failed: {exc}"
+                            )
+                            loop_messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": _strip_minimax_tool_calls(_minimax_buffer),
+                                }
+                            )
+                            loop_messages.append(
+                                {
+                                    "role": "user",
+                                    "content": f"Tool '{tc_name}' failed: {exc}. Try a different approach.",
+                                }
+                            )
                             last_tool_failed = True
                             consecutive_failures += 1
 
                         if _obs:
-                            _obs.emit("tool_call", tool=tc_name, label=action_label,
-                                      status="done" if not tool_failed else "failed",
-                                      latency_ms=latency_ms if 'latency_ms' in dir() else 0,
-                                      iteration=iteration + 1)
+                            _obs.emit(
+                                "tool_call",
+                                tool=tc_name,
+                                label=action_label,
+                                status="done" if not tool_failed else "failed",
+                                latency_ms=latency_ms if "latency_ms" in dir() else 0,
+                                iteration=iteration + 1,
+                            )
 
-                        trace.steps.append(AgentStep(
-                            iteration=iteration + 1,
-                            thought=_strip_minimax_tool_calls(_minimax_buffer),
-                            tool_name=tc_name,
-                            tool_input=tool_input[:200],
-                            observation=observation[:500] if 'observation' in dir() else "",
-                            tool_failed=tool_failed if 'tool_failed' in dir() else True,
-                            retry_count=0,
-                            latency_ms=latency_ms if 'latency_ms' in dir() else 0,
-                        ))
+                        trace.steps.append(
+                            AgentStep(
+                                iteration=iteration + 1,
+                                thought=_strip_minimax_tool_calls(_minimax_buffer),
+                                tool_name=tc_name,
+                                tool_input=tool_input[:200],
+                                observation=observation[:500] if "observation" in dir() else "",
+                                tool_failed=tool_failed if "tool_failed" in dir() else True,
+                                retry_count=0,
+                                latency_ms=latency_ms if "latency_ms" in dir() else 0,
+                            )
+                        )
 
                     # After processing all intercepted tool calls, continue the loop
                     # so the model can reason about the results and produce a final answer
@@ -1848,7 +2177,6 @@ class AgentLoop:
                 # ── No MiniMax tool calls found — proceed with normal text handling ──
                 # Re-use the buffered chunks as the initial_buffer for tool-talk detection
                 initial_buffer = _minimax_buffer
-                initial_chunks = _minimax_chunks
                 has_error = _minimax_error
                 stream_ended_early = _minimax_stream_ended
 
@@ -1877,15 +2205,24 @@ class AgentLoop:
                 #  MiniMax detection phase above — no need to re-buffer here)
 
                 # Detect errors in the initial buffer
-                if has_error or (initial_buffer and any(
-                    marker in initial_buffer for marker in [
-                        "Ollama returned 5", "Ollama timed out", "Cannot connect to Ollama",
-                        "returned 5", "timed out after",
-                    ]
-                )):
+                if has_error or (
+                    initial_buffer
+                    and any(
+                        marker in initial_buffer
+                        for marker in [
+                            "Ollama returned 5",
+                            "Ollama timed out",
+                            "Cannot connect to Ollama",
+                            "returned 5",
+                            "timed out after",
+                        ]
+                    )
+                ):
                     logger.warning(f"[agent.loop] iter={iteration + 1} — error in stream, aborting")
                     if _obs:
-                        _obs.emit("agent_loop_error", error=initial_buffer[:120], iteration=iteration + 1)
+                        _obs.emit(
+                            "agent_loop_error", error=initial_buffer[:120], iteration=iteration + 1
+                        )
                     yield StreamChunk(
                         text=(
                             "⚠️ The model ran into an issue. Please try again, "
@@ -1901,7 +2238,10 @@ class AgentLoop:
                     return
 
                 # Detect tool-talk in the initial buffer
-                if _is_tool_talk(initial_buffer) and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES:
+                if (
+                    _is_tool_talk(initial_buffer)
+                    and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES
+                ):
                     trace.tool_talk_recoveries += 1
                     logger.warning(
                         f"[agent.loop] iter={iteration + 1} — tool-talk detected "
@@ -1909,25 +2249,33 @@ class AgentLoop:
                         f"{initial_buffer[:120]!r}"
                     )
                     if _obs:
-                        _obs.emit("tool_talk_recovery", iteration=iteration + 1,
-                                  recovery_num=trace.tool_talk_recoveries, preview=initial_buffer[:80])
+                        _obs.emit(
+                            "tool_talk_recovery",
+                            iteration=iteration + 1,
+                            recovery_num=trace.tool_talk_recoveries,
+                            preview=initial_buffer[:80],
+                        )
                     # Drain remaining chunks from the stream
                     if not stream_ended_early:
                         async for _ in result:
                             pass
                     # Inject corrective hint and continue without streaming the bad text
-                    loop_messages.append({
-                        "role": "assistant",
-                        "content": initial_buffer,
-                    })
-                    loop_messages.append({
-                        "role": "user",
-                        "content": (
-                            "You described wanting to use a tool but did not call it. "
-                            "You MUST use the tool-calling API directly — do NOT narrate or describe "
-                            "your intent. Call the tool now using the function-calling format."
-                        ),
-                    })
+                    loop_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": initial_buffer,
+                        }
+                    )
+                    loop_messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "You described wanting to use a tool but did not call it. "
+                                "You MUST use the tool-calling API directly — do NOT narrate or describe "
+                                "your intent. Call the tool now using the function-calling format."
+                            ),
+                        }
+                    )
                     continue  # retry this iteration with the corrective hint
 
                 # ── v0.7: Fabricated data detection (no tool call, no narration) ──
@@ -1940,18 +2288,33 @@ class AgentLoop:
                 # Pattern: "The current temperature in Cheptais is 22°C..." — no
                 # tool was called, this is fabricated.
                 _FABRICATED_DATA_PATTERNS = [
-                    re.compile(r'\b(temperature|temp)\b.{0,20}\d+°(C|F)', re.IGNORECASE),
-                    re.compile(r'\bweather\b.{0,30}\d+°(C|F)', re.IGNORECASE),
-                    re.compile(r'\b(score|result)\b.{0,15}\d+\s*[-–]\s*\d+', re.IGNORECASE),
-                    re.compile(r'\b(played|vs|versus|against)\b.{0,30}\b(won|lost|drew|beat)\b', re.IGNORECASE),
-                    re.compile(r'\b(standings|table|rankings?)\b.{0,10}\b(1\.|1st|2nd|3rd)', re.IGNORECASE),
-                    re.compile(r'\b(fixture|match|game)\b.{0,20}\b(vs|versus|against)\b', re.IGNORECASE),
-                    re.compile(r'\b(price|value|rate)\b.{0,20}[\$€£₹]\d+', re.IGNORECASE),
-                    re.compile(r'\b(exchange rate|stock price|crypto|bitcoin|ethereum)\b', re.IGNORECASE),
+                    re.compile(r"\b(temperature|temp)\b.{0,20}\d+°(C|F)", re.IGNORECASE),
+                    re.compile(r"\bweather\b.{0,30}\d+°(C|F)", re.IGNORECASE),
+                    re.compile(r"\b(score|result)\b.{0,15}\d+\s*[-–]\s*\d+", re.IGNORECASE),
+                    re.compile(
+                        r"\b(played|vs|versus|against)\b.{0,30}\b(won|lost|drew|beat)\b",
+                        re.IGNORECASE,
+                    ),
+                    re.compile(
+                        r"\b(standings|table|rankings?)\b.{0,10}\b(1\.|1st|2nd|3rd)", re.IGNORECASE
+                    ),
+                    re.compile(
+                        r"\b(fixture|match|game)\b.{0,20}\b(vs|versus|against)\b", re.IGNORECASE
+                    ),
+                    re.compile(r"\b(price|value|rate)\b.{0,20}[\$€£₹]\d+", re.IGNORECASE),
+                    re.compile(
+                        r"\b(exchange rate|stock price|crypto|bitcoin|ethereum)\b", re.IGNORECASE
+                    ),
                 ]
-                _fabricated_data_detected = any(p.search(initial_buffer) for p in _FABRICATED_DATA_PATTERNS)
+                _fabricated_data_detected = any(
+                    p.search(initial_buffer) for p in _FABRICATED_DATA_PATTERNS
+                )
 
-                if _fabricated_data_detected and intent in (Intent.WEB_SEARCH, Intent.WEB_FETCH) and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES + 1:
+                if (
+                    _fabricated_data_detected
+                    and intent in (Intent.WEB_SEARCH, Intent.WEB_FETCH)
+                    and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES + 1
+                ):
                     # The model fabricated time-sensitive data from training — this is
                     # the most dangerous hallucination because it looks plausible.
                     # CRITICAL: Drain the stream and force a tool call instead.
@@ -1973,20 +2336,24 @@ class AgentLoop:
                         async for _ in result:
                             pass
                     # Inject corrective hint forcing the model to use the actual tool
-                    loop_messages.append({
-                        "role": "assistant",
-                        "content": initial_buffer,
-                    })
-                    loop_messages.append({
-                        "role": "user",
-                        "content": (
-                            "CRITICAL: You just output time-sensitive data (weather, scores, prices, etc.) "
-                            "from your training knowledge — this data is STALE and likely WRONG. "
-                            "You MUST call the web_search tool NOW to get real, current data. "
-                            "Do NOT answer from your training data for time-sensitive queries. "
-                            "Call web_search with a specific query for the user's request."
-                        ),
-                    })
+                    loop_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": initial_buffer,
+                        }
+                    )
+                    loop_messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "CRITICAL: You just output time-sensitive data (weather, scores, prices, etc.) "
+                                "from your training knowledge — this data is STALE and likely WRONG. "
+                                "You MUST call the web_search tool NOW to get real, current data. "
+                                "Do NOT answer from your training data for time-sensitive queries. "
+                                "Call web_search with a specific query for the user's request."
+                            ),
+                        }
+                    )
                     fabrication_risk += 2  # Heavy penalty for fabricated data
                     continue  # retry with forced tool call
 
@@ -2007,7 +2374,9 @@ class AgentLoop:
                     # MiniMax XML appeared in the initial buffer but wasn't caught
                     # by the earlier _parse_minimax_tool_call check (e.g., partial XML
                     # that completed during buffering). Re-check now.
-                    logger.info("[agent.loop] MiniMax XML detected in initial buffer during Phase 2 — re-checking")
+                    logger.info(
+                        "[agent.loop] MiniMax XML detected in initial buffer during Phase 2 — re-checking"
+                    )
                     _late_calls = _parse_minimax_tool_call(initial_buffer)
                     if _late_calls and not has_error:
                         # Drain remaining chunks and process the intercepted calls
@@ -2024,9 +2393,17 @@ class AgentLoop:
                         # stream, we process inline here.
                         for _tc_name, _tc_args, _tc_raw_xml in _minimax_calls:
                             _norm_args = dict(_tc_args)
-                            if _tc_name == "web_search" and "text" in _norm_args and "query" not in _norm_args:
+                            if (
+                                _tc_name == "web_search"
+                                and "text" in _norm_args
+                                and "query" not in _norm_args
+                            ):
                                 _norm_args["query"] = _norm_args.pop("text")
-                            if _tc_name == "web_fetch" and "text" in _norm_args and "url" not in _norm_args:
+                            if (
+                                _tc_name == "web_fetch"
+                                and "text" in _norm_args
+                                and "url" not in _norm_args
+                            ):
                                 _norm_args["url"] = _norm_args.pop("text")
                             if _tc_name not in AGENT_ALLOWED_TOOLS:
                                 continue
@@ -2041,8 +2418,13 @@ class AgentLoop:
                             _tc_label = _tc_label_parts.get(_tc_name, f"Running {_tc_name}")
                             yield StreamChunk(text="", done=False, status=_tc_label)
                             if _obs:
-                                _obs.emit("tool_call", tool=_tc_name, label=_tc_label,
-                                          status="started", iteration=iteration + 1)
+                                _obs.emit(
+                                    "tool_call",
+                                    tool=_tc_name,
+                                    label=_tc_label,
+                                    status="started",
+                                    iteration=iteration + 1,
+                                )
                             t_late = time.monotonic()
                             try:
                                 _late_result, _late_failed, _ = await dispatch_with_retry(
@@ -2058,35 +2440,68 @@ class AgentLoop:
                                                 _user_q = m.get("content", "")
                                                 break
                                         async for chunk in self._handle_web_search_result(
-                                            safe_obs=_late_obs, query=_tc_input,
+                                            safe_obs=_late_obs,
+                                            query=_tc_input,
                                             thought=_strip_minimax_tool_calls(_minimax_buffer),
-                                            iteration=iteration, trace=trace,
+                                            iteration=iteration,
+                                            trace=trace,
                                             user_question=_user_q,
                                             adapter=active_adapter,
                                         ):
                                             yield chunk
                                         return
                                     if not _late_failed:
-                                        yield StreamChunk(text="", done=False, status=f"Done — {_tc_label} ({_late_lat}ms)")
+                                        yield StreamChunk(
+                                            text="",
+                                            done=False,
+                                            status=f"Done — {_tc_label} ({_late_lat}ms)",
+                                        )
                                     call_id = str(uuid.uuid4())
                                     safe_late_obs = (
-                                        f"[ACTUAL TOOL OUTPUT — use ONLY this data in your response]\n"
-                                        f"{_late_obs}\n"
-                                        f"[END TOOL OUTPUT — do NOT invent or add items not shown above]"
-                                    ) if not _late_failed and _late_obs else _late_obs
-                                    loop_messages.append({
-                                        "role": "assistant",
-                                        "content": _strip_minimax_tool_calls(_minimax_buffer),
-                                        "tool_calls": [{"id": call_id, "type": "function",
-                                                        "function": {"name": _tc_name, "arguments": json.dumps(_norm_args)}}],
-                                    })
-                                    loop_messages.append({"role": "tool", "tool_call_id": call_id, "content": safe_late_obs})
+                                        (
+                                            f"[ACTUAL TOOL OUTPUT — use ONLY this data in your response]\n"
+                                            f"{_late_obs}\n"
+                                            f"[END TOOL OUTPUT — do NOT invent or add items not shown above]"
+                                        )
+                                        if not _late_failed and _late_obs
+                                        else _late_obs
+                                    )
+                                    loop_messages.append(
+                                        {
+                                            "role": "assistant",
+                                            "content": _strip_minimax_tool_calls(_minimax_buffer),
+                                            "tool_calls": [
+                                                {
+                                                    "id": call_id,
+                                                    "type": "function",
+                                                    "function": {
+                                                        "name": _tc_name,
+                                                        "arguments": json.dumps(_norm_args),
+                                                    },
+                                                }
+                                            ],
+                                        }
+                                    )
+                                    loop_messages.append(
+                                        {
+                                            "role": "tool",
+                                            "tool_call_id": call_id,
+                                            "content": safe_late_obs,
+                                        }
+                                    )
                             except Exception as _late_exc:
-                                logger.warning(f"[agent.loop] late MiniMax intercept failed: {_late_exc}")
+                                logger.warning(
+                                    f"[agent.loop] late MiniMax intercept failed: {_late_exc}"
+                                )
                             if _obs:
-                                _obs.emit("tool_call", tool=_tc_name, label=_tc_label,
-                                          status="done", latency_ms=_late_lat if '_late_lat' in dir() else 0,
-                                          iteration=iteration + 1)
+                                _obs.emit(
+                                    "tool_call",
+                                    tool=_tc_name,
+                                    label=_tc_label,
+                                    status="done",
+                                    latency_ms=_late_lat if "_late_lat" in dir() else 0,
+                                    iteration=iteration + 1,
+                                )
                         continue  # continue the loop so the model can produce a final answer
 
                 # Yield the clean initial buffer
@@ -2096,13 +2511,15 @@ class AgentLoop:
                 # If the stream already ended (short response), we're done
                 if stream_ended_early:
                     trace.final_response = full_text
-                    trace.steps.append(AgentStep(
-                        iteration=iteration + 1,
-                        thought=full_text[:500],
-                        tool_name=None,
-                        tool_input=None,
-                        observation=None,
-                    ))
+                    trace.steps.append(
+                        AgentStep(
+                            iteration=iteration + 1,
+                            thought=full_text[:500],
+                            tool_name=None,
+                            tool_input=None,
+                            observation=None,
+                        )
+                    )
                     logger.info(f"[agent.loop] finished iter={iteration + 1} — {trace.summary()}")
                     if _obs:
                         _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
@@ -2140,13 +2557,15 @@ class AgentLoop:
                         yield StreamChunk(text="", done=True)
 
                 trace.final_response = full_text
-                trace.steps.append(AgentStep(
-                    iteration=iteration + 1,
-                    thought=full_text[:500],
-                    tool_name=None,
-                    tool_input=None,
-                    observation=None,
-                ))
+                trace.steps.append(
+                    AgentStep(
+                        iteration=iteration + 1,
+                        thought=full_text[:500],
+                        tool_name=None,
+                        tool_input=None,
+                        observation=None,
+                    )
+                )
                 logger.info(f"[agent.loop] finished iter={iteration + 1} — {trace.summary()}")
                 if _obs:
                     _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
@@ -2156,7 +2575,9 @@ class AgentLoop:
         trace.hit_limit = True
         logger.warning(f"[agent.loop] hit MAX_ITERATIONS={MAX_ITERATIONS} — {trace.summary()}")
         if _obs:
-            _obs.emit("agent_loop_done", intent=intent.value, iterations=MAX_ITERATIONS, hit_limit=True)
+            _obs.emit(
+                "agent_loop_done", intent=intent.value, iterations=MAX_ITERATIONS, hit_limit=True
+            )
         async for chunk in self._force_final_answer(
             loop_messages=loop_messages,
             observation_log=observation_log,
@@ -2203,9 +2624,7 @@ class AgentLoop:
         # Fire-and-forget: write the raw results file in the background.
         async def _write_file() -> None:
             try:
-                await dispatch_with_retry(
-                    Intent.FILE_WRITE, f"{filename}:\n\n{file_content}"
-                )
+                await dispatch_with_retry(Intent.FILE_WRITE, f"{filename}:\n\n{file_content}")
                 logger.info(f"[agent.loop] web search results written to {filename}")
             except Exception as exc:
                 logger.warning(f"[agent.loop] search result file write failed: {exc}")
@@ -2218,11 +2637,11 @@ class AgentLoop:
         if self._synthesizer.enabled:
             try:
                 # Create a ToolResult from the search output for the synthesizer
-                from core.models import RiskLevel as RL
-                from core.models import ToolResult as TR
-                search_result = TR(
+                from core.models import RiskLevel, ToolResult
+
+                search_result = ToolResult(
                     content=safe_obs,
-                    risk=RL.LOW,
+                    risk=RiskLevel.LOW,
                     source="web_search",
                 )
 
@@ -2243,8 +2662,7 @@ class AgentLoop:
                         )
                         # Emit a status chunk so the user knows we're fetching
                         yield StreamChunk(
-                            text="", done=False,
-                            status=f"Reading page: {followup_url[:60]}"
+                            text="", done=False, status=f"Reading page: {followup_url[:60]}"
                         )
                         fetch_result, fetch_failed, _ = await dispatch_with_retry(
                             Intent.WEB_FETCH, followup_url
@@ -2284,21 +2702,25 @@ class AgentLoop:
                 logger.warning(f"[agent.loop] synthesis failed: {e}")
                 # Use smart extraction instead of dumping raw content
                 from core.agent.synthesizer import _smart_extract_key_data
+
                 synthesis_answer = _smart_extract_key_data(safe_obs, user_question or query)
 
         # Fallback: if synthesis didn't produce an answer, use smart extraction
         if not synthesis_answer:
             from core.agent.synthesizer import _smart_extract_key_data
+
             synthesis_answer = _smart_extract_key_data(safe_obs, user_question or query)
 
         trace.final_response = synthesis_answer
-        trace.steps.append(AgentStep(
-            iteration=iteration + 1,
-            thought=thought,
-            tool_name="web_search",
-            tool_input=query,
-            observation=f"Results → {filename}, synthesized answer provided",
-        ))
+        trace.steps.append(
+            AgentStep(
+                iteration=iteration + 1,
+                thought=thought,
+                tool_name="web_search",
+                tool_input=query,
+                observation=f"Results → {filename}, synthesized answer provided",
+            )
+        )
 
         yield StreamChunk(text=synthesis_answer, done=False)
         yield StreamChunk(text="", done=True)
@@ -2437,6 +2859,7 @@ class AgentLoop:
             # v0.11: Add timeout to planning phase (previously unbounded).
             # On slow models or API providers, planning could take 30+ seconds.
             _plan_timeout = PLAN_TIMEOUT_SECS
+
             async def _collect_plan():
                 async for chunk in active_adapter.chat(
                     planning_messages,
@@ -2593,33 +3016,43 @@ class AgentLoop:
                 content = msg.get("content", "")
                 if len(content) > 1500:
                     half = 750
-                    content = content[:half] + f"\n…[{len(content) - 1500} chars omitted]…\n" + content[-half:]
-                clean_messages.append({
-                    "role": "user",
-                    "content": f"[Tool result]: {content}",
-                })
+                    content = (
+                        content[:half]
+                        + f"\n…[{len(content) - 1500} chars omitted]…\n"
+                        + content[-half:]
+                    )
+                clean_messages.append(
+                    {
+                        "role": "user",
+                        "content": f"[Tool result]: {content}",
+                    }
+                )
             elif msg.get("role") == "assistant" and msg.get("tool_calls"):
                 # Keep text content, drop tool_calls — model sees it as its own prior turn
-                clean_messages.append({
-                    "role": "assistant",
-                    "content": msg.get("content", "") or "I was gathering information.",
-                })
+                clean_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": msg.get("content", "") or "I was gathering information.",
+                    }
+                )
             else:
                 clean_messages.append(msg)
 
-        force_msg = clean_messages + [{
-            "role": "user",
-            "content": (
-                f"{observation_log}\n"
-                "Maximum iterations reached. Provide your best answer now "
-                "based on everything gathered so far. Do not call any tools — "
-                "just answer directly.\n\n"
-                "ANTI-FABRICATION: Your answer MUST be based EXACTLY on the tool "
-                "results shown above. Do NOT invent file names, folder contents, "
-                "or any data that was not in the tool output. If a tool showed "
-                "3 items, report 3 items — never add items that 'seem typical'."
-            ),
-        }]
+        force_msg = clean_messages + [
+            {
+                "role": "user",
+                "content": (
+                    f"{observation_log}\n"
+                    "Maximum iterations reached. Provide your best answer now "
+                    "based on everything gathered so far. Do not call any tools — "
+                    "just answer directly.\n\n"
+                    "ANTI-FABRICATION: Your answer MUST be based EXACTLY on the tool "
+                    "results shown above. Do NOT invent file names, folder contents, "
+                    "or any data that was not in the tool output. If a tool showed "
+                    "3 items, report 3 items — never add items that 'seem typical'."
+                ),
+            }
+        ]
         try:
             t_final = time.monotonic()
             async for chunk in active_adapter.chat(force_msg, temperature=0.4):

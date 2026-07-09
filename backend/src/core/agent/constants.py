@@ -6,6 +6,7 @@ v3.0: Updated for Dynamic Capability Orchestration architecture.
 - Removed all DEPRECATED legacy switches
 - Capability-aware constants only
 """
+
 from core.models import Intent
 
 # ── Iteration budget ──────────────────────────────────────────────────────────
@@ -58,14 +59,16 @@ VERIFY_CODE_EXEC: bool = True
 REFLECT_ENABLED: bool = True
 REFLECT_MAX_TOKENS: int = 256
 
-REFLECT_INTENTS: frozenset = frozenset({
-    Intent.SHELL,
-    Intent.FILE_TASK,
-    Intent.FILE_WRITE,
-    Intent.CODE_EXEC,
-    Intent.WEB_SEARCH,
-    Intent.WEB_FETCH,
-})
+REFLECT_INTENTS: frozenset = frozenset(
+    {
+        Intent.SHELL,
+        Intent.FILE_TASK,
+        Intent.FILE_WRITE,
+        Intent.CODE_EXEC,
+        Intent.WEB_SEARCH,
+        Intent.WEB_FETCH,
+    }
+)
 
 # ── Capability Orchestration (v3.0) ───────────────────────────────────────────
 
@@ -77,40 +80,46 @@ ORCHESTRATOR_TEMPERATURE: float = 0.2
 
 # ── Intent routing ────────────────────────────────────────────────────────────
 
-AGENT_INTENTS: frozenset[Intent] = frozenset({
-    Intent.CODE_EXEC,
-    Intent.FILE_WRITE,
-    Intent.FILE_EDIT,
-    Intent.FILE_TASK,
-    Intent.MEMORY_OP,
-    Intent.SHELL,
-    Intent.WEB_SEARCH,
-    Intent.WEB_FETCH,
-    Intent.BROWSE,
-})
+AGENT_INTENTS: frozenset[Intent] = frozenset(
+    {
+        Intent.CODE_EXEC,
+        Intent.FILE_WRITE,
+        Intent.FILE_EDIT,
+        Intent.FILE_TASK,
+        Intent.MEMORY_OP,
+        Intent.SHELL,
+        Intent.WEB_SEARCH,
+        Intent.WEB_FETCH,
+        Intent.BROWSE,
+    }
+)
 
-AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset({
-    "web_search",
-    "web_fetch",
-    "browse",
-    "code_exec",
-    "file_write",
-    "edit_file",
-    "file_task",
-    "shell",
-    "memory_op",
-    "sysinfo",
-})
+AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
+    {
+        "web_search",
+        "web_fetch",
+        "browse",
+        "code_exec",
+        "file_write",
+        "edit_file",
+        "file_task",
+        "shell",
+        "memory_op",
+        "sysinfo",
+    }
+)
 
 # ── Answer Synthesis ────────────────────────────────────────────────────────
 
 SYNTHESIS_ENABLED: bool = True
 SYNTHESIS_TIMEOUT_SECS: int = 30
 
-SYNTHESIS_INTENTS: frozenset[Intent] = frozenset({
-    Intent.WEB_SEARCH,
-    Intent.WEB_FETCH,
-})
+SYNTHESIS_INTENTS: frozenset[Intent] = frozenset(
+    {
+        Intent.WEB_SEARCH,
+        Intent.WEB_FETCH,
+    }
+)
 
 SYNTHESIS_TEMPLATE_FALLBACK: bool = True
 
@@ -127,10 +136,10 @@ CHAT_AGENT_MIN_COMPLEXITY: float = 0.4
 CHAT_AGENT_MAX_TOKENS: int = 300
 CHAT_AGENT_TIMEOUT_SECS: float = 8.0
 CHAT_AGENT_SKIP_PATTERNS: list[str] = [
-    r'^(hi|hello|hey|howdy|greetings)\s*$',
-    r'^(thanks?|thank you|thx)\s*$',
-    r'^(ok|okay|yes|no|sure|alright|yep|nope)\s*$',
-    r'^[\s\W]{0,15}$',
+    r"^(hi|hello|hey|howdy|greetings)\s*$",
+    r"^(thanks?|thank you|thx)\s*$",
+    r"^(ok|okay|yes|no|sure|alright|yep|nope)\s*$",
+    r"^[\s\W]{0,15}$",
 ]
 
 ORCHESTRATOR_ENABLED: bool = True

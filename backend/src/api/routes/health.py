@@ -1,4 +1,5 @@
 """Health check endpoint."""
+
 from __future__ import annotations
 
 import time as _time
@@ -42,6 +43,7 @@ class HealthResponse(BaseModel):
 
 # Set to True by app.py once engine.startup() completes.
 _engine_ready: bool = False
+
 
 def set_engine_ready() -> None:
     global _engine_ready
@@ -96,5 +98,5 @@ async def health():
         model=current_model,
         adapter=adapter_name,
         tools=available_tools(),
-        uptime=uptime
+        uptime=uptime,
     )

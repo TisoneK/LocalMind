@@ -22,6 +22,7 @@ Integration Points:
   - core/context_builder.py _build_environment_context(session_cwd=...)
   - core/engine.py _detect_cwd_change() after each tool dispatch
 """
+
 from __future__ import annotations
 
 import logging
@@ -80,10 +81,7 @@ class SessionContext:
                     )
                 return True
             else:
-                logger.debug(
-                    f"[session_context] CWD update rejected — "
-                    f"not a directory: {resolved}"
-                )
+                logger.debug(f"[session_context] CWD update rejected — not a directory: {resolved}")
                 return False
         except Exception as e:
             logger.warning(f"[session_context] CWD update error: {e}")
@@ -113,8 +111,7 @@ class SessionContext:
         # No valid recent path — fall back to home
         home = str(Path.home())
         logger.warning(
-            f"[session_context] CWD {self.cwd} no longer exists, "
-            f"falling back to home: {home}"
+            f"[session_context] CWD {self.cwd} no longer exists, falling back to home: {home}"
         )
         self.cwd = home
         return self.cwd
@@ -183,14 +180,10 @@ class SessionContextManager:
 
     def _prune_sessions(self) -> None:
         """Remove the oldest session contexts to prevent unbounded growth."""
-        oldest = sorted(self._contexts.keys())[
-            : len(self._contexts) - MAX_SESSIONS // 2
-        ]
+        oldest = sorted(self._contexts.keys())[: len(self._contexts) - MAX_SESSIONS // 2]
         for sid in oldest:
             del self._contexts[sid]
-        logger.debug(
-            f"[session_context] Pruned {len(oldest)} old sessions"
-        )
+        logger.debug(f"[session_context] Pruned {len(oldest)} old sessions")
 
     # ── CWD Detection from Tool Output ────────────────────────────
     #
@@ -225,9 +218,7 @@ class SessionContextManager:
 
         # ── Case 1: Explicit cd command ────────────────────────────
         if command:
-            cd_match = re.match(
-                r"^cd\s+(.+)", command.strip(), re.IGNORECASE
-            )
+            cd_match = re.match(r"^cd\s+(.+)", command.strip(), re.IGNORECASE)
             if cd_match:
                 target = cd_match.group(1).strip().strip('"').strip("'")
                 resolved = _resolve_path(target, session_cwd)
@@ -235,9 +226,7 @@ class SessionContextManager:
                     return str(resolved)
 
             # pushd command
-            pushd_match = re.match(
-                r"^pushd\s+(.+)", command.strip(), re.IGNORECASE
-            )
+            pushd_match = re.match(r"^pushd\s+(.+)", command.strip(), re.IGNORECASE)
             if pushd_match:
                 target = pushd_match.group(1).strip().strip('"').strip("'")
                 resolved = _resolve_path(target, session_cwd)

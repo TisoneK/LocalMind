@@ -29,6 +29,7 @@ Key design decisions
 - WorkspaceManager is NOT async — all ops are synchronous local disk I/O
   which completes in <1ms. No need for async overhead.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -49,6 +50,7 @@ def _root() -> Path:
         with _ROOT_LOCK:
             if _WORKSPACE_ROOT is None:
                 from core.config import settings
+
                 _WORKSPACE_ROOT = Path(
                     getattr(settings, "localmind_workspace_path", None)
                     or Path.home() / ".localmind" / "workspace"
@@ -113,6 +115,7 @@ class WorkspaceManager:
             task_input = t.get("input")
             if task_input is not None:
                 import json as _json
+
                 label = _json.dumps(task_input, ensure_ascii=False)
             else:
                 label = t.get("goal", "(no goal)")
@@ -147,19 +150,21 @@ class WorkspaceManager:
                 if remainder.startswith("["):
                     end = remainder.index("]")
                     tool = remainder[1:end]
-                    remainder = remainder[end + 2:]
+                    remainder = remainder[end + 2 :]
                 goal = remainder
                 depends_on = []
                 if "(needs:" in goal:
                     goal, dep_part = goal.split("(needs:", 1)
                     depends_on = [d.strip().rstrip(")") for d in dep_part.split(",")]
                     goal = goal.strip()
-                tasks.append({
-                    "id": task_id,
-                    "tool": tool,
-                    "goal": goal.strip(),
-                    "depends_on": depends_on,
-                })
+                tasks.append(
+                    {
+                        "id": task_id,
+                        "tool": tool,
+                        "goal": goal.strip(),
+                        "depends_on": depends_on,
+                    }
+                )
         return tasks
 
     def completed_task_ids(self) -> set[str]:

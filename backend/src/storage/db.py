@@ -9,6 +9,7 @@ Schema:
 No ORM — plain sqlite3 for zero extra dependencies and maximum transparency.
 Migrations live in storage/migrations/ for forward compatibility.
 """
+
 from __future__ import annotations
 
 import logging
@@ -97,9 +98,11 @@ class _ConnectionPool:
         except Exception:
             conn.close()  # Pool full, close it
 
+
 # Module-level pool registry
 _db_pools: dict[str, _ConnectionPool] = {}
 _pools_lock = threading.Lock()
+
 
 def _get_pool(db_path: str) -> _ConnectionPool:
     with _pools_lock:
@@ -168,17 +171,21 @@ class SessionStore:
 
         for migration_file in migration_files:
             migration_name = migration_file.name
-            with open(migration_file, 'r') as f:
+            with open(migration_file, "r") as f:
                 migration_sql = f.read()
                 # Check if migration already applied
                 cursor = conn.execute("SELECT name FROM migration_history")
                 migration_rows = cursor.fetchall()
-                existing_migrations = {row[0] for row in migration_rows} if migration_rows else set()
+                existing_migrations = (
+                    {row[0] for row in migration_rows} if migration_rows else set()
+                )
 
                 if migration_name not in existing_migrations:
                     logger.info(f"Applying migration: {migration_name}")
                     conn.executescript(migration_sql)
-                    conn.execute("INSERT INTO migration_history (name) VALUES (?)", (migration_name,))
+                    conn.execute(
+                        "INSERT INTO migration_history (name) VALUES (?)", (migration_name,)
+                    )
                     conn.commit()
                     logger.info(f"Migration {migration_name} applied successfully")
 
@@ -286,10 +293,7 @@ class SessionStore:
     def get_session_title(self, session_id: str) -> str | None:
         """Get current session title."""
         with self._conn() as conn:
-            row = conn.execute(
-                "SELECT title FROM sessions WHERE id = ?",
-                (session_id,)
-            ).fetchone()
+            row = conn.execute("SELECT title FROM sessions WHERE id = ?", (session_id,)).fetchone()
             return row["title"] if row else None
 
     def update_session_title(self, session_id: str, title: str) -> None:
@@ -299,16 +303,11 @@ class SessionStore:
         # rows and the title was silently lost.
         self.ensure_session(session_id)
         with self._conn() as conn:
-            conn.execute(
-                "UPDATE sessions SET title = ? WHERE id = ?",
-                (title, session_id)
-            )
+            conn.execute("UPDATE sessions SET title = ? WHERE id = ?", (title, session_id))
 
     def delete_session(self, session_id: str) -> bool:
         with self._conn() as conn:
-            result = conn.execute(
-                "DELETE FROM sessions WHERE id = ?", (session_id,)
-            )
+            result = conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
         return result.rowcount > 0
 
     def clear_all(self) -> None:

@@ -3,6 +3,7 @@ localmind ask "..." — one-shot question from the terminal.
 Supports file attachment via --file flag.
 Supports stdin piping: cat file.txt | localmind ask "summarise this"
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,15 +22,21 @@ console = Console()
 def command(
     message: str = typer.Argument(..., help="Your question or instruction"),
     file: Optional[Path] = typer.Option(None, "--file", "-f", help="File to attach"),
-    session: Optional[str] = typer.Option(None, "--session", "-s", help="Session ID (auto-generated if omitted)"),
-    model: Optional[str] = typer.Option(None, "--model", "-m", help="Override model for this request"),
+    session: Optional[str] = typer.Option(
+        None, "--session", "-s", help="Session ID (auto-generated if omitted)"
+    ),
+    model: Optional[str] = typer.Option(
+        None, "--model", "-m", help="Override model for this request"
+    ),
     raw: bool = typer.Option(False, "--raw", help="Print raw text without markdown rendering"),
 ):
     """Ask a one-shot question. Optionally attach a file."""
     asyncio.run(_run(message, file, session, model, raw))
 
 
-async def _run(message: str, file: Optional[Path], session: Optional[str], model: Optional[str], raw: bool):
+async def _run(
+    message: str, file: Optional[Path], session: Optional[str], model: Optional[str], raw: bool
+):
     from core.config import settings
     from core.engine import Engine
 
@@ -99,10 +106,7 @@ async def _run(message: str, file: Optional[Path], session: Optional[str], model
     if not raw and sys.stdout.isatty():
         # Clear the raw-streamed text and reprint as rendered markdown
         # Only do this if the response contains markdown signals
-        has_markdown = any(
-            marker in response_text
-            for marker in ("```", "**", "##", "- ", "| ")
-        )
+        has_markdown = any(marker in response_text for marker in ("```", "**", "##", "- ", "| "))
         if has_markdown:
             # Move cursor up to overwrite the streamed plain text with rendered version
             # This is best-effort — terminal support varies. Fall back to just printing.
@@ -118,5 +122,6 @@ async def _run(message: str, file: Optional[Path], session: Optional[str], model
 
 def _guess_mime(path: Path) -> str:
     import mimetypes
+
     mime, _ = mimetypes.guess_type(str(path))
     return mime or "application/octet-stream"

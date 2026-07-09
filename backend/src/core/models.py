@@ -16,6 +16,7 @@ Canonical types defined here:
   - UnderstandingResult — Layer 1 structured input parsing
   - ValidationResult — Layer 5 quality/fabrication assessment
 """
+
 from __future__ import annotations
 
 import time
@@ -27,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 # ═══════════════════════════════════════════════════════════════════════════════
 # Role & Intent — foundational enums
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class Role(str, Enum):
     USER = "user"
@@ -53,6 +55,7 @@ class Intent(str, Enum):
 # Capability — composable capability enum (replaces single-label Intent routing)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class Capability(str, Enum):
     """Fine-grained capability that a message may require.
 
@@ -67,6 +70,7 @@ class Capability(str, Enum):
       System: SYSINFO
       Cognitive: REASONING, COMPARISON, SYNTHESIS, PLANNING, PREDICTION
     """
+
     # ── Data acquisition ──
     WEB_SEARCH = "web_search"
     WEB_FETCH = "web_fetch"
@@ -113,10 +117,16 @@ CAPABILITY_TO_INTENT: dict[Capability, Intent] = {
 }
 
 TOOL_CAPABILITIES: set[Capability] = {
-    Capability.WEB_SEARCH, Capability.WEB_FETCH, Capability.BROWSE,
-    Capability.CODE_EXEC, Capability.SHELL,
-    Capability.FILE_READ, Capability.FILE_WRITE, Capability.FILE_EDIT,
-    Capability.MEMORY_STORE, Capability.MEMORY_RETRIEVE,
+    Capability.WEB_SEARCH,
+    Capability.WEB_FETCH,
+    Capability.BROWSE,
+    Capability.CODE_EXEC,
+    Capability.SHELL,
+    Capability.FILE_READ,
+    Capability.FILE_WRITE,
+    Capability.FILE_EDIT,
+    Capability.MEMORY_STORE,
+    Capability.MEMORY_RETRIEVE,
     Capability.SYSINFO,
 }
 
@@ -132,6 +142,7 @@ COGNITIVE_CAPABILITIES: set[Capability] = {
 # ═══════════════════════════════════════════════════════════════════════════════
 # Execution & Safety enums (unified)
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class RiskLevel(str, Enum):
     LOW = "low"
@@ -151,6 +162,7 @@ class ExecutionMode(str, Enum):
     AGENT_LOOP     → Plan→Execute→Verify workflow. Full agent loop.
     MULTI_PHASE    → Complex: multi-phase planning with dependencies.
     """
+
     DIRECT = "direct"
     SINGLE_TOOL = "single_tool"
     MULTI_TOOL = "multi_tool"
@@ -160,6 +172,7 @@ class ExecutionMode(str, Enum):
 
 class SafetyLevel(str, Enum):
     """Safety constraint level for execution."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -168,6 +181,7 @@ class SafetyLevel(str, Enum):
 # ═══════════════════════════════════════════════════════════════════════════════
 # Core message models
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class Message(BaseModel):
     role: Role
@@ -225,6 +239,7 @@ class ToolResult(BaseModel):
 # Execution Constraints
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class ExecutionConstraints(BaseModel):
     """Bounded execution parameters for the orchestration plan.
 
@@ -233,6 +248,7 @@ class ExecutionConstraints(BaseModel):
     - Layer 4 (Execution): uses per-tool timeout and retry limits
     - Layer 5 (Validation): uses max_fabrication_risk to force stops
     """
+
     max_retries: int = 1
     max_iterations: int = 5
     timeout_total_secs: float = 120.0
@@ -248,6 +264,7 @@ class ExecutionConstraints(BaseModel):
 # ═══════════════════════════════════════════════════════════════════════════════
 # TaskProfile — the central routing object (v3.0 unified)
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TaskProfile(BaseModel):
     """Multi-dimensional capability profile replacing single Intent label.
@@ -277,6 +294,7 @@ class TaskProfile(BaseModel):
         capabilities=[],
         execution_mode=DIRECT
     """
+
     # ── Capability flags (derived from capabilities list, but also settable) ──
     requires_grounding: bool = False
     requires_tools: bool = False
@@ -405,12 +423,14 @@ class TaskProfile(BaseModel):
 # Layer 1: Understanding Result
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class UnderstandingResult(BaseModel):
     """Structured output of Layer 1: Understanding.
 
     No classification, no regex — just structured extraction
     of everything the downstream layers need from the raw input.
     """
+
     message: str
     session_id: str
     has_attachment: bool = False
@@ -427,12 +447,14 @@ class UnderstandingResult(BaseModel):
 # Layer 5: Validation Result
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class ValidationResult(BaseModel):
     """Layer 5 output: quality and fabrication assessment.
 
     Used to decide whether to re-execute, synthesize, or
     deliver the result to the user.
     """
+
     satisfied: bool = True
     fabrication_risk: int = 0
     needs_synthesis: bool = False
@@ -445,6 +467,7 @@ class ValidationResult(BaseModel):
 # OrchestrationPlan — complete output of ThinkingDispatcher (Layer 2)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class OrchestrationPlan(BaseModel):
     """Complete output of the ThinkingDispatcher (Layer 2).
 
@@ -452,6 +475,7 @@ class OrchestrationPlan(BaseModel):
     metadata needed for the 6-layer pipeline. The ExecutionGraph
     is imported lazily to avoid circular references.
     """
+
     profile: TaskProfile
     graph: object = None  # ExecutionGraph, set lazily
     reasoning: str = ""
@@ -469,8 +493,10 @@ class OrchestrationPlan(BaseModel):
 # EngineContext — prompt assembly input
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class EngineContext(BaseModel):
     """Everything the context builder needs to assemble a prompt."""
+
     session_id: str
     message: str
     intent: Intent

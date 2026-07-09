@@ -88,11 +88,29 @@ Issues = "https://github.com/TisoneK/localmind/issues"
 packages = ["src/core", "src/tools", "src/adapters", "src/api", "src/storage", "src/cli"]
 
 [tool.ruff]
-line-length = 100
+# 120 chars: the codebase was written with ~120-char lines in mind.
+# The original 100-char setting was aspirational (301 violations).
+# 120 reduces to 116 (all genuinely long strings/prompts that can't be wrapped).
+line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
+# N806: Function-scoped constants use _UPPER_CASE (sentinels, compiled regexes).
+#       This is standard Python convention; ruff's N806 is too strict for it.
+# N815: Pydantic API response models use camelCase to match frontend JSON field
+#       names (tokensPerSecond, totalTokens). Renaming would break the API contract.
+ignore = ["N806", "N815"]
+
+[tool.ruff.lint.per-file-ignores]
+# app.py: load_dotenv() must run before config imports (settings reads env at import time).
+# loop.py: Late imports avoid circular dependencies in the agent package.
+# db.py: Connection pool import placed near the perf comment that explains it.
+# tools/__init__.py: Tool imports trigger registration side effects — order matters.
+"src/api/app.py" = ["E402"]
+"src/core/agent/loop.py" = ["E402"]
+"src/storage/db.py" = ["E402"]
+"src/tools/__init__.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.10"

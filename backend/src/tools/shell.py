@@ -29,6 +29,7 @@ Integration contract (unchanged from pre-T5):
   • Registered as ShellContract via ToolRegistry.register()
   • Async wrapper around sync handlers
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -51,101 +52,107 @@ logger = logging.getLogger(__name__)
 
 # ── Platform — resolved once, never guessed ───────────────────────────────────
 SYSTEM = platform.system()
-HOME   = Path.home()
+HOME = Path.home()
 IS_WIN = SYSTEM == "Windows"
 IS_MAC = SYSTEM == "Darwin"
 
 # ── App map ───────────────────────────────────────────────────────────────────
 APP_MAP_WINDOWS: dict[str, str] = {
-    "chrome":        "start chrome",
-    "firefox":       "start firefox",
-    "edge":          "start msedge",
-    "word":          "start winword",
-    "excel":         "start excel",
-    "powerpoint":    "start powerpnt",
-    "notepad":       "start notepad",
-    "calculator":    "start calc",
-    "outlook":       "start outlook",
-    "explorer":      "start explorer",
-    "files":         "start explorer",
-    "paint":         "start mspaint",
-    "vlc":           "start vlc",
-    "spotify":       "start spotify",
-    "teams":         "start teams",
-    "zoom":          "start zoom",
-    "settings":      "start ms-settings:",
+    "chrome": "start chrome",
+    "firefox": "start firefox",
+    "edge": "start msedge",
+    "word": "start winword",
+    "excel": "start excel",
+    "powerpoint": "start powerpnt",
+    "notepad": "start notepad",
+    "calculator": "start calc",
+    "outlook": "start outlook",
+    "explorer": "start explorer",
+    "files": "start explorer",
+    "paint": "start mspaint",
+    "vlc": "start vlc",
+    "spotify": "start spotify",
+    "teams": "start teams",
+    "zoom": "start zoom",
+    "settings": "start ms-settings:",
     "control panel": "control",
-    "task manager":  "taskmgr",
+    "task manager": "taskmgr",
 }
 
 APP_MAP_MAC: dict[str, str] = {
-    "chrome":      "open -a 'Google Chrome'",
-    "firefox":     "open -a Firefox",
-    "safari":      "open -a Safari",
-    "word":        "open -a 'Microsoft Word'",
-    "excel":       "open -a 'Microsoft Excel'",
-    "powerpoint":  "open -a 'Microsoft PowerPoint'",
-    "calculator":  "open -a Calculator",
-    "outlook":     "open -a 'Microsoft Outlook'",
-    "finder":      "open .",
-    "files":       "open .",
-    "spotify":     "open -a Spotify",
-    "vlc":         "open -a VLC",
-    "teams":       "open -a 'Microsoft Teams'",
-    "zoom":        "open -a zoom.us",
-    "settings":    "open 'x-apple.systempreferences:'",
-    "mail":        "open -a Mail",
-    "notes":       "open -a Notes",
+    "chrome": "open -a 'Google Chrome'",
+    "firefox": "open -a Firefox",
+    "safari": "open -a Safari",
+    "word": "open -a 'Microsoft Word'",
+    "excel": "open -a 'Microsoft Excel'",
+    "powerpoint": "open -a 'Microsoft PowerPoint'",
+    "calculator": "open -a Calculator",
+    "outlook": "open -a 'Microsoft Outlook'",
+    "finder": "open .",
+    "files": "open .",
+    "spotify": "open -a Spotify",
+    "vlc": "open -a VLC",
+    "teams": "open -a 'Microsoft Teams'",
+    "zoom": "open -a zoom.us",
+    "settings": "open 'x-apple.systempreferences:'",
+    "mail": "open -a Mail",
+    "notes": "open -a Notes",
 }
 
 APP_MAP_LINUX: dict[str, str] = {
-    "chrome":      "xdg-open https://google.com",
-    "firefox":     "firefox &",
-    "calculator":  "gnome-calculator &",
-    "files":       "nautilus &",
-    "spotify":     "spotify &",
-    "vlc":         "vlc &",
-    "settings":    "gnome-control-center &",
+    "chrome": "xdg-open https://google.com",
+    "firefox": "firefox &",
+    "calculator": "gnome-calculator &",
+    "files": "nautilus &",
+    "spotify": "spotify &",
+    "vlc": "vlc &",
+    "settings": "gnome-control-center &",
 }
 
-APP_MAP = (
-    APP_MAP_WINDOWS if IS_WIN else
-    APP_MAP_MAC     if IS_MAC else
-    APP_MAP_LINUX
-)
+APP_MAP = APP_MAP_WINDOWS if IS_WIN else APP_MAP_MAC if IS_MAC else APP_MAP_LINUX
 
 KNOWN_SITES: dict[str, str] = {
-    "google":    "https://google.com",
-    "amazon":    "https://amazon.com",
-    "youtube":   "https://youtube.com",
-    "facebook":  "https://facebook.com",
-    "gmail":     "https://mail.google.com",
-    "outlook":   "https://outlook.com",
-    "netflix":   "https://netflix.com",
+    "google": "https://google.com",
+    "amazon": "https://amazon.com",
+    "youtube": "https://youtube.com",
+    "facebook": "https://facebook.com",
+    "gmail": "https://mail.google.com",
+    "outlook": "https://outlook.com",
+    "netflix": "https://netflix.com",
     "wikipedia": "https://wikipedia.org",
 }
 
 BLOCKED_COMMANDS = [
-    "format", "del /f", "rm -rf /", "rmdir /s /q c:\\",
-    "shutdown", "reboot", ":(){:|:&};:", "dd if=", "mkfs",
-    "reg delete", "net user", "net localgroup",
+    "format",
+    "del /f",
+    "rm -rf /",
+    "rmdir /s /q c:\\",
+    "shutdown",
+    "reboot",
+    ":(){:|:&};:",
+    "dd if=",
+    "mkfs",
+    "reg delete",
+    "net user",
+    "net localgroup",
 ]
 
 FILE_TYPE_EXTENSIONS: dict[str, list[str]] = {
-    "photo":       ["jpg", "jpeg", "png", "heic", "raw"],
-    "photos":      ["jpg", "jpeg", "png", "heic", "raw"],
-    "picture":     ["jpg", "jpeg", "png", "heic", "raw"],
-    "image":       ["jpg", "jpeg", "png", "heic", "raw", "gif", "webp"],
-    "video":       ["mp4", "mov", "avi", "mkv", "wmv"],
-    "music":       ["mp3", "wav", "flac", "aac", "m4a"],
-    "document":    ["docx", "doc", "pdf", "odt", "rtf"],
-    "pdf":         ["pdf"],
+    "photo": ["jpg", "jpeg", "png", "heic", "raw"],
+    "photos": ["jpg", "jpeg", "png", "heic", "raw"],
+    "picture": ["jpg", "jpeg", "png", "heic", "raw"],
+    "image": ["jpg", "jpeg", "png", "heic", "raw", "gif", "webp"],
+    "video": ["mp4", "mov", "avi", "mkv", "wmv"],
+    "music": ["mp3", "wav", "flac", "aac", "m4a"],
+    "document": ["docx", "doc", "pdf", "odt", "rtf"],
+    "pdf": ["pdf"],
     "spreadsheet": ["xlsx", "xls", "csv", "ods"],
-    "tax":         ["pdf", "xlsx", "docx"],
-    "receipt":     ["pdf", "jpg", "jpeg", "png"],
+    "tax": ["pdf", "xlsx", "docx"],
+    "receipt": ["pdf", "jpg", "jpeg", "png"],
 }
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
+
 
 def _ok(message: str) -> dict:
     return {"success": True, "message": message}
@@ -181,7 +188,9 @@ def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
     effective_cwd = cwd or _session_cwd_var.get(None)
     # Validate that the CWD directory still exists before passing it
     if effective_cwd and not Path(effective_cwd).is_dir():
-        logger.warning(f"[shell] Session CWD {effective_cwd} no longer exists, falling back to default")
+        logger.warning(
+            f"[shell] Session CWD {effective_cwd} no longer exists, falling back to default"
+        )
         effective_cwd = None
     try:
         result = subprocess.run(
@@ -193,7 +202,9 @@ def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
             cwd=effective_cwd,
         )
         output = (result.stdout + result.stderr).strip()
-        return _ok(output) if result.returncode == 0 else _err(output or "Command failed (no output)")
+        return (
+            _ok(output) if result.returncode == 0 else _err(output or "Command failed (no output)")
+        )
     except subprocess.TimeoutExpired:
         return _err(f"Command timed out after {timeout}s")
     except FileNotFoundError as exc:
@@ -231,7 +242,7 @@ def _show_files(path: Path) -> tuple[str, RiskLevel]:
             return f"The {path.name} folder is empty.", RiskLevel.LOW
 
         lines = [f"📁  {path}\n"]
-        dirs  = [e for e in entries if e.is_dir()]
+        dirs = [e for e in entries if e.is_dir()]
         files = [e for e in entries if e.is_file()]
 
         if dirs:
@@ -247,6 +258,7 @@ def _show_files(path: Path) -> tuple[str, RiskLevel]:
                 stat = f.stat()
                 size = _human_size(stat.st_size)
                 import datetime as _dt
+
                 mod_date = _dt.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
                 lines.append(f"  📄  {f.name}  ({size}, modified {mod_date})")
             if len(files) > 30:
@@ -306,8 +318,7 @@ def _open_app(name: str) -> tuple[str, RiskLevel]:
         return f"Couldn't open {name.title()}. It may not be installed.", RiskLevel.MEDIUM
 
     return (
-        f"Unknown app '{name}'.\n"
-        f"Known apps: {', '.join(sorted(APP_MAP))}",
+        f"Unknown app '{name}'.\nKnown apps: {', '.join(sorted(APP_MAP))}",
         RiskLevel.LOW,
     )
 
@@ -342,6 +353,7 @@ def _open_website(url: str) -> tuple[str, RiskLevel]:
     # Reject file://, gopher://, javascript:, data:, etc. which could be
     # abused for local file access or script execution.
     from urllib.parse import urlparse
+
     parsed = urlparse(resolved)
     if parsed.scheme not in ("http", "https"):
         return f"Refused to open URL with unsafe scheme: {parsed.scheme}", RiskLevel.MEDIUM
@@ -359,8 +371,8 @@ def _open_website(url: str) -> tuple[str, RiskLevel]:
 def _check_disk_space() -> tuple[str, RiskLevel]:
     try:
         usage = shutil.disk_usage(HOME)
-        pct   = (usage.used / usage.total) * 100
-        bar   = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
+        pct = (usage.used / usage.total) * 100
+        bar = "█" * int(pct / 5) + "░" * (20 - int(pct / 5))
         msg = (
             f"💾  Disk Space\n\n"
             f"  [{bar}] {pct:.0f}% used\n\n"
@@ -368,7 +380,7 @@ def _check_disk_space() -> tuple[str, RiskLevel]:
             f"  Free:  {_human_size(usage.free)}\n"
             f"  Total: {_human_size(usage.total)}"
         )
-        if usage.free < 5 * (1024 ** 3):
+        if usage.free < 5 * (1024**3):
             msg += "\n\n⚠️  Low disk space! Consider deleting large files."
         return msg, RiskLevel.LOW
     except Exception as exc:
@@ -379,8 +391,7 @@ def _check_internet() -> tuple[str, RiskLevel]:
     cmd = ["ping", "-n", "2", "8.8.8.8"] if IS_WIN else ["ping", "-c", "2", "8.8.8.8"]
     result = _run(cmd, timeout=10)
     return (
-        "✅  Internet is working." if result["success"]
-        else "❌  No internet connection detected.",
+        "✅  Internet is working." if result["success"] else "❌  No internet connection detected.",
         RiskLevel.LOW,
     )
 
@@ -396,8 +407,7 @@ def _get_ip_address() -> tuple[str, RiskLevel]:
         and not m.group(1).startswith(("127.", "255."))
     ]
     return (
-        f"🌐  Your IP address: {ips[0]}" if ips
-        else "Couldn't determine IP address.",
+        f"🌐  Your IP address: {ips[0]}" if ips else "Couldn't determine IP address.",
         RiskLevel.LOW,
     )
 
@@ -413,6 +423,7 @@ def _get_system_info() -> tuple[str, RiskLevel]:
     ]
     try:
         import psutil
+
         lines.append(
             f"  RAM:      {_human_size(psutil.virtual_memory().available)} free "
             f"of {_human_size(psutil.virtual_memory().total)}"
@@ -423,6 +434,7 @@ def _get_system_info() -> tuple[str, RiskLevel]:
 
 
 # ── ShellContract — Phase 3 full contract ─────────────────────────────────────
+
 
 class ShellContract(ToolContract):
     """
@@ -439,21 +451,23 @@ class ShellContract(ToolContract):
     """
 
     name = "shell"
-    schema = {"action": str}   # T2 schema — action is the only universal field
+    schema = {"action": str}  # T2 schema — action is the only universal field
 
     # Canonical action set — the planner MUST use one of these.
-    ACTIONS = frozenset({
-        "list_files",
-        "find_files",
-        "run_command",
-        "open_app",
-        "open_file",
-        "open_website",
-        "check_disk",
-        "check_internet",
-        "get_ip",
-        "get_sysinfo",
-    })
+    ACTIONS = frozenset(
+        {
+            "list_files",
+            "find_files",
+            "run_command",
+            "open_app",
+            "open_file",
+            "open_website",
+            "check_disk",
+            "check_internet",
+            "get_ip",
+            "get_sysinfo",
+        }
+    )
 
     async def execute(self, payload: Dict[str, Any]) -> ToolResult:
         """
@@ -492,7 +506,7 @@ class ShellContract(ToolContract):
                 return _show_files(path)
 
             if action == "find_files":
-                path      = _require_path(payload, "path", action)
+                path = _require_path(payload, "path", action)
                 file_type = _require_str(payload, "file_type", action)
                 return _find_files(path, file_type)
 
@@ -554,6 +568,7 @@ class ShellContract(ToolContract):
 # ── Field extraction helpers ───────────────────────────────────────────────────
 # Used inside ShellContract.execute() to extract action-specific fields cleanly.
 
+
 class _FieldError(ValueError):
     """Raised when an action-required field is missing from the payload."""
 
@@ -576,6 +591,7 @@ def _require_path(payload: Dict[str, Any], field: str, action: str) -> Path:
 
 
 # ── Legacy entry point — kept for backward compat during Phase 3 migration ────
+
 
 async def shell_exec(message: str) -> ToolResult:
     """
@@ -605,11 +621,37 @@ async def shell_exec(message: str) -> ToolResult:
 
     # Case 2 — raw shell command (deterministic gate, no heuristics)
     _RAW_CMD_TOKENS = {
-        "&&", "||", ">>", ">", ";", "|",
-        "echo", "mkdir", "touch", "cp", "mv", "rm", "cat",
-        "type", "copy", "move", "del", "md", "rd", "cd",
-        "ls", "dir", "pwd", "chmod", "chown",
-        "python", "python3", "node", "npm", "git", "pip",
+        "&&",
+        "||",
+        ">>",
+        ">",
+        ";",
+        "|",
+        "echo",
+        "mkdir",
+        "touch",
+        "cp",
+        "mv",
+        "rm",
+        "cat",
+        "type",
+        "copy",
+        "move",
+        "del",
+        "md",
+        "rd",
+        "cd",
+        "ls",
+        "dir",
+        "pwd",
+        "chmod",
+        "chown",
+        "python",
+        "python3",
+        "node",
+        "npm",
+        "git",
+        "pip",
     }
     first_token = message.strip().split()[0].lower() if message.strip() else ""
     has_operator = any(op in message for op in {"&&", "||", ">>", ">", ";", "|"})
@@ -623,11 +665,14 @@ async def shell_exec(message: str) -> ToolResult:
     # Documents/Code/" that arrive via the direct dispatch path.
     _PATH_PATTERNS = [
         # "Show me projects in Documents/Code/" → extract path
-        re.compile(r'(?:in|from|at|inside|under)\s+["\']?([A-Za-z]:[\\/][^\s"\']+|~?/?[A-Za-z][\w./\\-]*)', re.IGNORECASE),
+        re.compile(
+            r'(?:in|from|at|inside|under)\s+["\']?([A-Za-z]:[\\/][^\s"\']+|~?/?[A-Za-z][\w./\\-]*)',
+            re.IGNORECASE,
+        ),
         # "List C:\Users\tison\Documents" → extract path
         re.compile(r'["\']([A-Za-z]:[\\/][^\s"\']+)["\']'),
         # "Documents/Code" or "~/Documents" as standalone path
-        re.compile(r'^[~./\\\w][\w./\\-]*$', re.IGNORECASE),
+        re.compile(r"^[~./\\\w][\w./\\-]*$", re.IGNORECASE),
     ]
     for pattern in _PATH_PATTERNS:
         m = pattern.search(message.strip())
@@ -635,8 +680,12 @@ async def shell_exec(message: str) -> ToolResult:
             raw_path = m.group(1) if m.lastindex else m.group(0)
             resolved = Path(raw_path).expanduser().resolve()
             if resolved.exists() and resolved.is_dir():
-                logger.info(f"[shell] NL fallback: extracted path={resolved}, routing to list_files")
-                return await ShellContract().execute({"action": "list_files", "path": str(resolved)})
+                logger.info(
+                    f"[shell] NL fallback: extracted path={resolved}, routing to list_files"
+                )
+                return await ShellContract().execute(
+                    {"action": "list_files", "path": str(resolved)}
+                )
 
     return ToolResult(
         content=(
@@ -659,12 +708,12 @@ register_tool(
     Intent.SHELL,
     shell_exec,
     description="Execute shell commands and filesystem operations: list directory contents, "
-                "find files, run commands, open apps/files/websites, check disk/internet/IP. "
-                "Use shell list_files for directory/folder listings — NOT file_task. "
-                "Commands must match the current OS (Windows: dir, type | Unix: ls, cat).",
+    "find files, run commands, open apps/files/websites, check disk/internet/IP. "
+    "Use shell list_files for directory/folder listings — NOT file_task. "
+    "Commands must match the current OS (Windows: dir, type | Unix: ls, cat).",
     cost=0.3,
     latency_ms=800,
-    parallelizable=False,   # stateful OS calls — keep sequential
+    parallelizable=False,  # stateful OS calls — keep sequential
 )
 
 # Register with the ToolRegistry (contract enforcement layer — T3)

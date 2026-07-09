@@ -43,6 +43,7 @@ previous event's outcome as "wrong".
 
 This gives the Janitor pre-labeled data without needing any user interaction.
 """
+
 from __future__ import annotations
 
 import collections
@@ -93,6 +94,7 @@ class FlywheelLogger:
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
             from core.config import settings
+
             db_path = settings.localmind_db_path
         self._db_path = db_path
         self._lock = threading.Lock()
@@ -171,7 +173,8 @@ class FlywheelLogger:
         try:
             with self._lock:
                 conn = self._connect()
-                rows = conn.execute("""
+                rows = conn.execute(
+                    """
                     SELECT final_intent,
                            COUNT(*) as total,
                            SUM(CASE WHEN outcome = 'correct' THEN 1 ELSE 0 END) as correct
@@ -179,7 +182,9 @@ class FlywheelLogger:
                     WHERE outcome IS NOT NULL
                     GROUP BY final_intent
                     HAVING COUNT(*) >= ?
-                """, (min_samples,)).fetchall()
+                """,
+                    (min_samples,),
+                ).fetchall()
                 conn.close()
 
             accuracy = {}
@@ -206,12 +211,15 @@ class FlywheelLogger:
         try:
             with self._lock:
                 conn = self._connect()
-                row = conn.execute("""
+                row = conn.execute(
+                    """
                     SELECT COUNT(*) as total,
                            SUM(CASE WHEN outcome = 'wrong' THEN 1 ELSE 0 END) as wrong
                     FROM flywheel_events
                     WHERE zone = ? AND outcome IS NOT NULL
-                """, (zone,)).fetchone()
+                """,
+                    (zone,),
+                ).fetchone()
                 conn.close()
 
             if row and row["total"] >= min_samples:
@@ -257,11 +265,17 @@ class FlywheelLogger:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        event_id, ts, session_id, query,
+                        event_id,
+                        ts,
+                        session_id,
+                        query,
                         json.dumps(rule_scores),
-                        final_intent, final_conf,
-                        zone, path,
-                        llm_result, llm_conf,
+                        final_intent,
+                        final_conf,
+                        zone,
+                        path,
+                        llm_result,
+                        llm_conf,
                     ),
                 )
                 conn.commit()
@@ -289,7 +303,9 @@ class FlywheelLogger:
                     conn.commit()
                     logger.info(
                         "[flywheel] rephrase detected: prev=%s sim=%.2f Δ=%.1fs → prev labeled 'wrong'",
-                        prev_id[:8], similarity, delta,
+                        prev_id[:8],
+                        similarity,
+                        delta,
                     )
 
                 conn.close()
@@ -298,9 +314,7 @@ class FlywheelLogger:
                 buf = self._session_buf.setdefault(
                     session_id, collections.deque(maxlen=_SESSION_BUFFER_SIZE)
                 )
-                buf.append(_RecentEvent(
-                    event_id=event_id, ts=ts, intent=final_intent, query=query
-                ))
+                buf.append(_RecentEvent(event_id=event_id, ts=ts, intent=final_intent, query=query))
 
         except Exception as exc:
             logger.debug("[flywheel] write failed (non-critical): %s", exc)
@@ -358,13 +372,16 @@ class FlywheelLogger:
         try:
             with self._lock:
                 conn = self._connect()
-                rows = conn.execute("""
+                rows = conn.execute(
+                    """
                     SELECT query, final_intent, zone, target_label
                     FROM flywheel_events
                     WHERE outcome = 'wrong'
                     ORDER BY ts DESC
                     LIMIT ?
-                """, (limit,)).fetchall()
+                """,
+                    (limit,),
+                ).fetchall()
                 conn.close()
 
             return [
@@ -422,6 +439,7 @@ class FlywheelLogger:
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
+
 
 def _jaccard(a: set[str], b: set[str]) -> float:
     if not a or not b:

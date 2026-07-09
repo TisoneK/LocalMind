@@ -24,6 +24,7 @@ Integration Points:
   - core/agent/prompts.py: Synthesis prompt templates
   - core/agent/constants.py: SYNTHESIS_ENABLED, SYNTHESIS_TIMEOUT
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -43,27 +44,30 @@ logger = logging.getLogger(__name__)
 
 class SufficiencyLevel(Enum):
     """How sufficient the extracted data is for answering the question."""
-    SUFFICIENT = "sufficient"          # Data contains the answer
-    PARTIALLY_SUFFICIENT = "partial"   # Data has some relevant info
-    INSUFFICIENT = "insufficient"      # Data doesn't address the question
+
+    SUFFICIENT = "sufficient"  # Data contains the answer
+    PARTIALLY_SUFFICIENT = "partial"  # Data has some relevant info
+    INSUFFICIENT = "insufficient"  # Data doesn't address the question
     NEEDS_FOLLOWUP = "needs_followup"  # Need more tool calls (e.g., web_fetch)
 
 
 @dataclass
 class ExtractedData:
     """Structured data extracted from raw tool output."""
+
     intent: Intent
     raw_content: str
     fields: Dict[str, Any] = field(default_factory=dict)
     source_urls: List[str] = field(default_factory=list)
     has_specific_values: bool = False  # Whether concrete data was found
-    is_error: bool = False             # Whether the tool returned an error
-    is_empty: bool = False             # Whether the tool returned nothing
+    is_error: bool = False  # Whether the tool returned an error
+    is_empty: bool = False  # Whether the tool returned nothing
 
 
 @dataclass
 class SufficiencyResult:
     """Result of the sufficiency check."""
+
     level: SufficiencyLevel
     reason: str = ""
     followup_tool: Optional[str] = None  # e.g., "web_fetch"
@@ -73,9 +77,10 @@ class SufficiencyResult:
 @dataclass
 class SynthesisResult:
     """Final result of the synthesis pipeline."""
+
     answer: str
-    is_synthesized: bool = True   # Whether the answer was synthesized (vs raw)
-    is_gap_report: bool = False   # Whether this is an honest gap report
+    is_synthesized: bool = True  # Whether the answer was synthesized (vs raw)
+    is_gap_report: bool = False  # Whether this is an honest gap report
     needs_followup: bool = False  # Whether more tool calls are needed
     followup_tool: Optional[str] = None
     followup_args: Optional[Dict[str, str]] = None
@@ -103,40 +108,40 @@ def _preprocess_web_content(content: str, user_question: str = "") -> str:
     if not content or len(content) < 50:
         return content
 
-    lines = content.split('\n')
+    lines = content.split("\n")
     cleaned_lines = []
 
     # Patterns for noise that should be removed entirely
     _NOISE_PATTERNS = [
-        re.compile(r'^\s*Advertisement\s*$', re.IGNORECASE),
-        re.compile(r'^\s*Ad\s*$', re.IGNORECASE),
-        re.compile(r'^\s*Sponsored\s*$', re.IGNORECASE),
-        re.compile(r'^\s*Cookie', re.IGNORECASE),
-        re.compile(r'^\s*Sign\s*(in|up)', re.IGNORECASE),
-        re.compile(r'^\s*Log\s*(in|out)', re.IGNORECASE),
-        re.compile(r'^\s*Subscribe', re.IGNORECASE),
-        re.compile(r'^\s*Newsletter', re.IGNORECASE),
-        re.compile(r'^\s*Accept\s+(all\s+)?cookies', re.IGNORECASE),
-        re.compile(r'^\s*Manage\s+(privacy|cookie|consent)', re.IGNORECASE),
-        re.compile(r'^\s*Privacy\s+Policy', re.IGNORECASE),
-        re.compile(r'^\s*Terms\s+of\s+(Service|Use)', re.IGNORECASE),
-        re.compile(r'^\s*All\s+Rights\s+Reserved', re.IGNORECASE),
-        re.compile(r'^\s*Copyright\s*\d', re.IGNORECASE),
-        re.compile(r'^\s*Source:\s*https?://', re.IGNORECASE),
-        re.compile(r'^\s*Play\s*$', re.IGNORECASE),
-        re.compile(r'^\s*Video\s*$', re.IGNORECASE),
-        re.compile(r'^\s*Heads-up\s*$', re.IGNORECASE),
-        re.compile(r'^\s*Moon\s+(Phase|Rise|Set)', re.IGNORECASE),
-        re.compile(r'^\s*UV\s+Index', re.IGNORECASE),
-        re.compile(r'^\s*Humidity\s*$', re.IGNORECASE),
-        re.compile(r'^\s*Add\s*$', re.IGNORECASE),
-        re.compile(r'^\s*alertLevel\d', re.IGNORECASE),
-        re.compile(r'^\s*Subtract\s*$', re.IGNORECASE),
-        re.compile(r'^\s*Waning\s+Crescent', re.IGNORECASE),
-        re.compile(r'^\s*Sunrise\s*$', re.IGNORECASE),
-        re.compile(r'^\s*Sunset\s*$', re.IGNORECASE),
-        re.compile(r'^\s*Moonrise\s*$', re.IGNORECASE),
-        re.compile(r'^\s*Moonset\s*$', re.IGNORECASE),
+        re.compile(r"^\s*Advertisement\s*$", re.IGNORECASE),
+        re.compile(r"^\s*Ad\s*$", re.IGNORECASE),
+        re.compile(r"^\s*Sponsored\s*$", re.IGNORECASE),
+        re.compile(r"^\s*Cookie", re.IGNORECASE),
+        re.compile(r"^\s*Sign\s*(in|up)", re.IGNORECASE),
+        re.compile(r"^\s*Log\s*(in|out)", re.IGNORECASE),
+        re.compile(r"^\s*Subscribe", re.IGNORECASE),
+        re.compile(r"^\s*Newsletter", re.IGNORECASE),
+        re.compile(r"^\s*Accept\s+(all\s+)?cookies", re.IGNORECASE),
+        re.compile(r"^\s*Manage\s+(privacy|cookie|consent)", re.IGNORECASE),
+        re.compile(r"^\s*Privacy\s+Policy", re.IGNORECASE),
+        re.compile(r"^\s*Terms\s+of\s+(Service|Use)", re.IGNORECASE),
+        re.compile(r"^\s*All\s+Rights\s+Reserved", re.IGNORECASE),
+        re.compile(r"^\s*Copyright\s*\d", re.IGNORECASE),
+        re.compile(r"^\s*Source:\s*https?://", re.IGNORECASE),
+        re.compile(r"^\s*Play\s*$", re.IGNORECASE),
+        re.compile(r"^\s*Video\s*$", re.IGNORECASE),
+        re.compile(r"^\s*Heads-up\s*$", re.IGNORECASE),
+        re.compile(r"^\s*Moon\s+(Phase|Rise|Set)", re.IGNORECASE),
+        re.compile(r"^\s*UV\s+Index", re.IGNORECASE),
+        re.compile(r"^\s*Humidity\s*$", re.IGNORECASE),
+        re.compile(r"^\s*Add\s*$", re.IGNORECASE),
+        re.compile(r"^\s*alertLevel\d", re.IGNORECASE),
+        re.compile(r"^\s*Subtract\s*$", re.IGNORECASE),
+        re.compile(r"^\s*Waning\s+Crescent", re.IGNORECASE),
+        re.compile(r"^\s*Sunrise\s*$", re.IGNORECASE),
+        re.compile(r"^\s*Sunset\s*$", re.IGNORECASE),
+        re.compile(r"^\s*Moonrise\s*$", re.IGNORECASE),
+        re.compile(r"^\s*Moonset\s*$", re.IGNORECASE),
     ]
 
     seen_headings = set()
@@ -144,7 +149,7 @@ def _preprocess_web_content(content: str, user_question: str = "") -> str:
     for line in lines:
         stripped = line.strip()
         if not stripped:
-            cleaned_lines.append('')
+            cleaned_lines.append("")
             continue
 
         # Skip noise lines
@@ -152,7 +157,7 @@ def _preprocess_web_content(content: str, user_question: str = "") -> str:
             continue
 
         # Skip duplicate headings (weather.com repeats them)
-        heading_key = stripped.lower().strip('.:')
+        heading_key = stripped.lower().strip(".:")
         if heading_key in seen_headings and len(stripped) < 80:
             continue
         if len(stripped) < 80:
@@ -160,10 +165,10 @@ def _preprocess_web_content(content: str, user_question: str = "") -> str:
 
         cleaned_lines.append(stripped)
 
-    result = '\n'.join(cleaned_lines)
+    result = "\n".join(cleaned_lines)
 
     # Collapse 3+ consecutive blank lines into 2
-    result = re.sub(r'\n{3,}', '\n\n', result)
+    result = re.sub(r"\n{3,}", "\n\n", result)
 
     return result.strip()
 
@@ -180,12 +185,15 @@ def _extract_relevant_section(content: str, user_question: str) -> str:
         return content
 
     question_lower = user_question.lower()
-    keywords = set(re.findall(r'\b\w{3,}\b', question_lower))
+    keywords = set(re.findall(r"\b\w{3,}\b", question_lower))
 
     # For weather queries, try to find the current conditions section
-    if any(kw in question_lower for kw in ('weather', 'temperature', 'temp', 'forecast', 'rain', 'sunny')):
+    if any(
+        kw in question_lower
+        for kw in ("weather", "temperature", "temp", "forecast", "rain", "sunny")
+    ):
         # Look for "Tonight" or "Today" or "Current" sections
-        for marker in ['Tonight', 'Today', 'Current', 'Now', 'As of']:
+        for marker in ["Tonight", "Today", "Current", "Now", "As of"]:
             idx = content.find(marker)
             if idx > 0:
                 # Take a generous window around the marker
@@ -196,7 +204,7 @@ def _extract_relevant_section(content: str, user_question: str) -> str:
                     return section + "\n\n[... additional forecast data available ...]"
 
     # Generic: split into paragraphs and score by keyword overlap
-    paragraphs = re.split(r'\n{2,}', content)
+    paragraphs = re.split(r"\n{2,}", content)
     if len(paragraphs) <= 3:
         return content
 
@@ -224,7 +232,7 @@ def _extract_relevant_section(content: str, user_question: str) -> str:
     selected.sort(key=lambda x: x[0])
 
     if selected:
-        result = '\n\n'.join(para for _, para in selected)
+        result = "\n\n".join(para for _, para in selected)
         if len(result) < len(content):
             result += "\n\n[... additional content available ...]"
         return result
@@ -242,21 +250,21 @@ def _extract_web_search(content: str) -> ExtractedData:
     Searches for URL patterns, snippet text, and titles in the
     formatted search results.
     """
-    urls = re.findall(
-        r'https?://[^\s<>"\')\]]+', content
-    )
+    urls = re.findall(r'https?://[^\s<>"\')\]]+', content)
     # Check for specific values (temperatures, prices, dates, etc.)
     has_values = bool(
-        re.search(r'\d+\.?\d*\s*°[CF]', content)  # Temperature
-        or re.search(r'\$\d+[\d,.]*', content)      # Price
-        or re.search(r'\d{1,2}:\d{2}\s*(AM|PM)', content, re.IGNORECASE)  # Time
-        or re.search(r'\d{1,2}\s+(vs|v\.?)\s+\d{1,2}', content)  # Score
+        re.search(r"\d+\.?\d*\s*°[CF]", content)  # Temperature
+        or re.search(r"\$\d+[\d,.]*", content)  # Price
+        or re.search(r"\d{1,2}:\d{2}\s*(AM|PM)", content, re.IGNORECASE)  # Time
+        or re.search(r"\d{1,2}\s+(vs|v\.?)\s+\d{1,2}", content)  # Score
     )
 
     # Check if results are link-only (URLs without substantive content)
     snippet_lines = [
-        line for line in content.split('\n')
-        if line.strip() and not line.strip().startswith('http')
+        line
+        for line in content.split("\n")
+        if line.strip()
+        and not line.strip().startswith("http")
         and len(line.strip()) > 20  # Non-trivial text
     ]
 
@@ -279,9 +287,9 @@ def _extract_web_fetch(content: str) -> ExtractedData:
     """Extract structured data from web fetch output."""
     word_count = len(content.split())
     has_values = bool(
-        re.search(r'\d+\.?\d*\s*°[CF]', content)
-        or re.search(r'\$\d+[\d,.]*', content)
-        or re.search(r'\d{1,2}:\d{2}', content)
+        re.search(r"\d+\.?\d*\s*°[CF]", content)
+        or re.search(r"\$\d+[\d,.]*", content)
+        or re.search(r"\d{1,2}:\d{2}", content)
     )
 
     return ExtractedData(
@@ -306,9 +314,7 @@ def _extract_shell(content: str) -> ExtractedData:
         or "permission denied" in content.lower()
     )
 
-    file_names = re.findall(
-        r'(?:\S+\s+)?([\w.\-]+)', content
-    )
+    file_names = re.findall(r"(?:\S+\s+)?([\w.\-]+)", content)
 
     return ExtractedData(
         intent=Intent.SHELL,
@@ -409,10 +415,11 @@ def _check_sufficiency(
             # Check if the question is about time-sensitive data
             is_time_sensitive = bool(
                 re.search(
-                    r'\b(weather|temperature|price|score|result|fixture|'
-                    r'schedule|news|today|yesterday|current|forecast|rain|'
-                    r'sunny|snow|wind|humidity|air\s+quality)\b',
-                    user_question, re.IGNORECASE
+                    r"\b(weather|temperature|price|score|result|fixture|"
+                    r"schedule|news|today|yesterday|current|forecast|rain|"
+                    r"sunny|snow|wind|humidity|air\s+quality)\b",
+                    user_question,
+                    re.IGNORECASE,
                 )
             )
             if is_time_sensitive and not extracted.has_specific_values:
@@ -563,9 +570,7 @@ _COMBINED_SYNTHESIS_PROMPT = (
 )
 
 _GAP_REPORT_TEMPLATE = (
-    "I wasn't able to find the specific information you asked for. "
-    "{reason}\n\n"
-    "{suggestion}"
+    "I wasn't able to find the specific information you asked for. {reason}\n\n{suggestion}"
 )
 
 _GAP_SUGGESTIONS = {
@@ -597,36 +602,36 @@ def _smart_extract_key_data(content: str, user_question: str) -> str:
     findings = []
 
     # Extract temperatures
-    temps = re.findall(r'(-?\d+\.?\d*)\s*°\s*([CF])', content)
+    temps = re.findall(r"(-?\d+\.?\d*)\s*°\s*([CF])", content)
     if temps:
         temp_strs = [f"{t}°{u}" for t, u in temps[:10]]
         findings.append(f"Temperatures: {', '.join(temp_strs)}")
 
     # Extract percentages (humidity, chance of rain, etc.)
-    percentages = re.findall(r'(\d+)%', content)
+    percentages = re.findall(r"(\d+)%", content)
     if percentages:
         findings.append(f"Percentages found: {', '.join(percentages[:5])}%")
 
     # Extract prices
-    prices = re.findall(r'\$\d+[\d,.]*', content)
+    prices = re.findall(r"\$\d+[\d,.]*", content)
     if prices:
         findings.append(f"Prices: {', '.join(prices[:5])}")
 
     # Extract times
-    times = re.findall(r'\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?', content)
+    times = re.findall(r"\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?", content)
     if times:
         findings.append(f"Times: {', '.join(times[:5])}")
 
     # Extract dates
     dates = re.findall(
-        r'(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\w*\s+\d{1,2}|\d{1,2}/\d{1,2}/\d{2,4}|\w+ \d{1,2},? \d{4}',
-        content
+        r"(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\w*\s+\d{1,2}|\d{1,2}/\d{1,2}/\d{2,4}|\w+ \d{1,2},? \d{4}",
+        content,
     )
     if dates:
         findings.append(f"Dates: {', '.join(dates[:5])}")
 
     # Extract wind speeds
-    winds = re.findall(r'(\w{1,3}\s+)?(\d+)\s*mph', content, re.IGNORECASE)
+    winds = re.findall(r"(\w{1,3}\s+)?(\d+)\s*mph", content, re.IGNORECASE)
     if winds:
         wind_strs = [f"{d}{s}mph" for d, s in winds[:5]]
         findings.append(f"Wind: {', '.join(wind_strs)}")
@@ -634,12 +639,13 @@ def _smart_extract_key_data(content: str, user_question: str) -> str:
     # Extract key phrases from the first ~1000 chars (headings, summary text)
     first_section = content[:1000]
     meaningful_lines = [
-        line.strip() for line in first_section.split('\n')
+        line.strip()
+        for line in first_section.split("\n")
         if line.strip()
         and len(line.strip()) > 15
         and len(line.strip()) < 120
-        and not line.strip().startswith('http')
-        and not line.strip().startswith('Advertisement')
+        and not line.strip().startswith("http")
+        and not line.strip().startswith("Advertisement")
     ]
     if meaningful_lines:
         findings.append(f"Key details: {meaningful_lines[0]}")
@@ -742,9 +748,7 @@ class AnswerSynthesizer:
 
             # ── Phase 3: LLM Synthesis (PRIMARY PATH) ────────────
             if adapter:
-                answer = await self._llm_synthesize(
-                    extracted, user_question, intent, adapter
-                )
+                answer = await self._llm_synthesize(extracted, user_question, intent, adapter)
             else:
                 answer = self._template_synthesize(extracted, user_question, intent)
 
@@ -846,7 +850,9 @@ class AnswerSynthesizer:
                 is_synthesized=True,
             )
         except asyncio.TimeoutError:
-            logger.warning("[synthesizer] Combined synthesis timed out — retrying with shorter content")
+            logger.warning(
+                "[synthesizer] Combined synthesis timed out — retrying with shorter content"
+            )
             # Retry once with shorter content
             try:
                 shorter_page = page_content[:2000] if len(page_content) > 2000 else page_content
@@ -886,14 +892,10 @@ class AnswerSynthesizer:
                 is_synthesized=False,
             )
 
-    def _extract(
-        self, tool_results: list[ToolResult], intent: Intent
-    ) -> ExtractedData:
+    def _extract(self, tool_results: list[ToolResult], intent: Intent) -> ExtractedData:
         """Run extraction on the accumulated tool results."""
         # Combine all tool results into a single content string
-        combined_content = "\n\n".join(
-            r.content for r in tool_results if r.content
-        )
+        combined_content = "\n\n".join(r.content for r in tool_results if r.content)
 
         extractor = _EXTRACTORS.get(intent, _extract_generic)
         return extractor(combined_content)
@@ -956,7 +958,9 @@ class AnswerSynthesizer:
             await asyncio.wait_for(_collect(), timeout=self.timeout_secs)
         except asyncio.TimeoutError:
             # First attempt timed out — retry once with shorter data
-            logger.warning("[synthesizer] LLM synthesis timed out on first attempt, retrying with shorter data")
+            logger.warning(
+                "[synthesizer] LLM synthesis timed out on first attempt, retrying with shorter data"
+            )
             full_response.clear()
             shorter_data = raw_data[:3000]
             if len(raw_data) > 3000:
@@ -1080,7 +1084,7 @@ class AnswerSynthesizer:
         reason = sufficiency.reason
         suggestion = _GAP_SUGGESTIONS.get(
             sufficiency.level,
-            "You could try rephrasing your question or asking something different."
+            "You could try rephrasing your question or asking something different.",
         )
 
         answer = _GAP_REPORT_TEMPLATE.format(
@@ -1103,15 +1107,14 @@ class AnswerSynthesizer:
         instructions not to.
         """
         fabricated_patterns = [
-            re.compile(r'Volume Serial Number', re.IGNORECASE),
-            re.compile(r'Directory of\s+[A-Za-z]:', re.IGNORECASE),
-            re.compile(r'\d+ File\(s\)\s+\d+ bytes', re.IGNORECASE),
+            re.compile(r"Volume Serial Number", re.IGNORECASE),
+            re.compile(r"Directory of\s+[A-Za-z]:", re.IGNORECASE),
+            re.compile(r"\d+ File\(s\)\s+\d+ bytes", re.IGNORECASE),
         ]
         for pattern in fabricated_patterns:
             if pattern.search(text):
                 return (
-                    text[:500]
-                    + "\n\n[Note: Some content was filtered because it "
+                    text[:500] + "\n\n[Note: Some content was filtered because it "
                     "appeared to be fabricated rather than derived from "
                     "actual tool results.]"
                 )

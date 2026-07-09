@@ -2,6 +2,7 @@
 Language detector — extracts code blocks and identifies the runtime.
 Handles markdown fenced code blocks and bare code snippets.
 """
+
 from __future__ import annotations
 
 import re
@@ -11,9 +12,9 @@ from typing import Optional
 
 @dataclass
 class DetectedCode:
-    language: str          # "python" | "javascript" | "unknown"
+    language: str  # "python" | "javascript" | "unknown"
     code: str
-    from_fence: bool       # True if extracted from a markdown code fence
+    from_fence: bool  # True if extracted from a markdown code fence
 
 
 _FENCE_RE = re.compile(

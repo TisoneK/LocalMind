@@ -13,6 +13,7 @@ Usage:
     localmind health             # Check Ollama connectivity
     localmind sessions           # List conversation sessions
 """
+
 import typer
 
 from cli.commands import ask, chat, health, models, sessions, start

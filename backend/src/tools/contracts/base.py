@@ -11,6 +11,7 @@ Design rules (do not violate):
   - ToolRegistry is the single source of truth. No implicit loading.
   - No external dependencies. This file has zero imports outside stdlib.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -69,8 +70,8 @@ class ToolContract(ABC):
                 return await _do_search(payload["query"])
     """
 
-    name: str                        # must be set on every concrete subclass
-    schema: Dict[str, type] = {}     # required-field → expected type mapping
+    name: str  # must be set on every concrete subclass
+    schema: Dict[str, type] = {}  # required-field → expected type mapping
 
     @classmethod
     def validate(cls, payload: Dict[str, Any]) -> tuple[bool, str]:
@@ -163,9 +164,7 @@ class ToolRegistry:
             ValueError: if tool_cls.name is missing or empty.
         """
         if not (isinstance(tool_cls, type) and issubclass(tool_cls, ToolContract)):
-            raise TypeError(
-                f"register() expects a ToolContract subclass, got {tool_cls!r}"
-            )
+            raise TypeError(f"register() expects a ToolContract subclass, got {tool_cls!r}")
         if not getattr(tool_cls, "name", ""):
             raise ValueError(
                 f"ToolContract subclass {tool_cls.__name__} must define a non-empty 'name'"
@@ -182,8 +181,7 @@ class ToolRegistry:
         """
         if name not in cls._tools:
             raise KeyError(
-                f"No contract registered for tool '{name}'. "
-                f"Registered: {sorted(cls._tools)}"
+                f"No contract registered for tool '{name}'. Registered: {sorted(cls._tools)}"
             )
         return cls._tools[name]
 

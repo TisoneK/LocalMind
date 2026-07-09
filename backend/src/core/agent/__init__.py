@@ -18,9 +18,17 @@ Internals are split across sub-modules:
     orchestrator — AgentOrchestrator: the middle layer of the three-layer pipeline
                    (Chat Agent → Orchestrator → Execution Agent)
 """
+
 from core.agent.constants import AGENT_INTENTS
 from core.agent.loop import AgentLoop
 from core.agent.models import AgentStep, AgentTrace
 from core.agent.orchestrator import AgentOrchestrator, OrchestrationResult
 
-__all__ = ["AgentLoop", "AgentTrace", "AgentStep", "AGENT_INTENTS", "AgentOrchestrator", "OrchestrationResult"]
+__all__ = [
+    "AgentLoop",
+    "AgentTrace",
+    "AgentStep",
+    "AGENT_INTENTS",
+    "AgentOrchestrator",
+    "OrchestrationResult",
+]

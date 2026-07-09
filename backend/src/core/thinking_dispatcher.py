@@ -28,6 +28,7 @@ Architecture:
                                                                           ├── TaskProfile
                                                                           └── ExecutionGraph
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -63,21 +64,45 @@ MAX_HISTORY_FOR_PROMPT: int = 6
 # These produce TaskProfile objects without an LLM call, saving 2-5s.
 # IMPORTANT: Fast-paths do NOT route to CHAT.
 _SHELL_PREFIXES = (
-    "ls ", "ls\t", "dir ", "dir\t", "pwd", "cat ", "cat\t",
-    "echo ", "cd ", "mkdir ", "rm ", "cp ", "mv ",
-    "grep ", "find ", "chmod ", "chown ",
-    "pip install ", "npm install ", "git ",
-    "python ", "node ",
+    "ls ",
+    "ls\t",
+    "dir ",
+    "dir\t",
+    "pwd",
+    "cat ",
+    "cat\t",
+    "echo ",
+    "cd ",
+    "mkdir ",
+    "rm ",
+    "cp ",
+    "mv ",
+    "grep ",
+    "find ",
+    "chmod ",
+    "chown ",
+    "pip install ",
+    "npm install ",
+    "git ",
+    "python ",
+    "node ",
 )
 
 _EXACT_SYSINFO_PHRASES = {
-    "what time is it", "what's the time", "whats the time",
-    "what time is it now", "current time", "what's the date",
-    "whats the date", "what is the date", "what day is it",
-    "what's today's date", "whats todays date",
+    "what time is it",
+    "what's the time",
+    "whats the time",
+    "what time is it now",
+    "current time",
+    "what's the date",
+    "whats the date",
+    "what is the date",
+    "what day is it",
+    "what's today's date",
+    "whats todays date",
 }
 
-_URL_PATTERN = re.compile(r'https?://\S+', re.IGNORECASE)
+_URL_PATTERN = re.compile(r"https?://\S+", re.IGNORECASE)
 
 # Follow-up detection — short messages that inherit context
 _FOLLOW_UP_PATTERNS = re.compile(
@@ -105,6 +130,7 @@ _INTENT_STEP_LABELS: dict[str, str] = {
 
 # ── Helper: Build dispatch steps ─────────────────────────────────────────────
 
+
 def _build_dispatch_steps(
     intent: Intent,
     message: str,
@@ -120,26 +146,32 @@ def _build_dispatch_steps(
 
     if profile is not None:
         if profile.realtime_sensitive:
-            steps.append({
-                "intent": "capability",
-                "label": "Live Data",
-                "detail": "Requires current data — will not use cached/training data",
-            })
+            steps.append(
+                {
+                    "intent": "capability",
+                    "label": "Live Data",
+                    "detail": "Requires current data — will not use cached/training data",
+                }
+            )
         tools = profile.required_tools()
         if tools:
             tool_names = ", ".join(t.replace("_", " ").title() for t in tools)
             steps.append({"intent": "tools", "label": "Tools", "detail": tool_names})
         if profile.execution_mode not in (ExecutionMode.DIRECT, ExecutionMode.SINGLE_TOOL):
             mode_label = profile.execution_mode.value.replace("_", " ").title()
-            steps.append({"intent": "execution", "label": "Execution", "detail": f"{mode_label} workflow"})
+            steps.append(
+                {"intent": "execution", "label": "Execution", "detail": f"{mode_label} workflow"}
+            )
 
     msg_lower = message.lower().strip()
     if msg_lower in ("yes", "yeah", "yep", "sure", "ok", "okay", "go ahead", "proceed", "continue"):
-        steps.append({
-            "intent": "followup",
-            "label": "Follow-up",
-            "detail": f"Continuing previous request: {reformulated[:80]}",
-        })
+        steps.append(
+            {
+                "intent": "followup",
+                "label": "Follow-up",
+                "detail": f"Continuing previous request: {reformulated[:80]}",
+            }
+        )
 
     return steps
 
@@ -214,6 +246,7 @@ Reply with ONLY valid JSON:
 
 # ── ThinkingDispatcher ────────────────────────────────────────────────────────
 
+
 class ThinkingDispatcher:
     """
     Capability-based orchestrating dispatcher — the sole Layer 2 implementation.
@@ -240,6 +273,7 @@ class ThinkingDispatcher:
         try:
             from adapters import get_adapter
             from core.config import settings
+
             fast_model = getattr(settings, "ollama_model_fast", "") or ""
             if fast_model and fast_model != settings.ollama_model:
                 self._adapter = get_adapter(settings.localmind_adapter, model_override=fast_model)
@@ -279,17 +313,24 @@ class ThinkingDispatcher:
         # ── 1. Signal detection for truly unambiguous signals ────────────
         signal_plan = self._try_signal_detection(message, has_attachment, attachment_filename)
         if signal_plan:
-            obs.emit("dispatcher_signal_detected",
-                     intent=signal_plan.profile.primary_intent().value,
-                     execution_mode=signal_plan.profile.execution_mode.value,
-                     message_preview=message[:60])
-            logger.info("[dispatcher] signal: %s/%s for %r",
-                        signal_plan.profile.primary_intent().value,
-                        signal_plan.profile.execution_mode.value,
-                        message[:40])
+            obs.emit(
+                "dispatcher_signal_detected",
+                intent=signal_plan.profile.primary_intent().value,
+                execution_mode=signal_plan.profile.execution_mode.value,
+                message_preview=message[:60],
+            )
+            logger.info(
+                "[dispatcher] signal: %s/%s for %r",
+                signal_plan.profile.primary_intent().value,
+                signal_plan.profile.execution_mode.value,
+                message[:40],
+            )
             if signal_plan.profile.acknowledgement:
-                yield StreamChunk(text="", status=signal_plan.profile.acknowledgement,
-                                  dispatch_steps=signal_plan.dispatch_steps)
+                yield StreamChunk(
+                    text="",
+                    status=signal_plan.profile.acknowledgement,
+                    dispatch_steps=signal_plan.dispatch_steps,
+                )
             yield signal_plan
             return
 
@@ -297,14 +338,23 @@ class ThinkingDispatcher:
         if _FOLLOW_UP_PATTERNS.match(message.strip()) and history:
             followup_plan = self._try_followup_plan(message, history, obs)
             if followup_plan:
-                obs.emit("dispatcher_followup",
-                         intent=followup_plan.profile.primary_intent().value,
-                         message_preview=message[:60],
-                         inherited_from="previous_turn")
-                logger.info("[dispatcher] follow-up: %s for %r",
-                            followup_plan.profile.primary_intent().value, message[:40])
+                obs.emit(
+                    "dispatcher_followup",
+                    intent=followup_plan.profile.primary_intent().value,
+                    message_preview=message[:60],
+                    inherited_from="previous_turn",
+                )
+                logger.info(
+                    "[dispatcher] follow-up: %s for %r",
+                    followup_plan.profile.primary_intent().value,
+                    message[:40],
+                )
                 yield StreamChunk(text="", thinking="start")
-                yield StreamChunk(text="", thinking=followup_plan.profile.acknowledgement or "Following up on your previous request.")
+                yield StreamChunk(
+                    text="",
+                    thinking=followup_plan.profile.acknowledgement
+                    or "Following up on your previous request.",
+                )
                 yield StreamChunk(text="", thinking="end")
                 yield followup_plan
                 return
@@ -322,7 +372,7 @@ class ThinkingDispatcher:
 
         messages = [
             {"role": "system", "content": _CAPABILITY_INFERENCE_SYSTEM},
-            {"role": "user",   "content": user_content},
+            {"role": "user", "content": user_content},
         ]
 
         # ── 3. Stream from LLM — emit thinking in real-time ─────────────
@@ -355,7 +405,7 @@ class ThinkingDispatcher:
                             continue
                         raw_chunks.append(text)
                         if not _in_json:
-                            brace_idx = text.find('{')
+                            brace_idx = text.find("{")
                             if brace_idx >= 0:
                                 pre_brace = text[:brace_idx]
                                 if pre_brace.strip():
@@ -363,20 +413,24 @@ class ThinkingDispatcher:
                                     await _thinking_queue.put(pre_brace)
                                 _in_json = True
                                 _brace_depth = 1
-                                json_part = text[brace_idx + 1:]
+                                json_part = text[brace_idx + 1 :]
                                 if json_part:
                                     _json_buffer.append(json_part)
                                 for ch in json_part:
-                                    if ch == '{': _brace_depth += 1
-                                    elif ch == '}': _brace_depth -= 1
+                                    if ch == "{":
+                                        _brace_depth += 1
+                                    elif ch == "}":
+                                        _brace_depth -= 1
                             else:
                                 _thinking_buffer.append(text)
                                 await _thinking_queue.put(text)
                         else:
                             _json_buffer.append(text)
                             for ch in text:
-                                if ch == '{': _brace_depth += 1
-                                elif ch == '}': _brace_depth -= 1
+                                if ch == "{":
+                                    _brace_depth += 1
+                                elif ch == "}":
+                                    _brace_depth -= 1
                 finally:
                     await _thinking_queue.put(_SENTINEL)
 
@@ -433,7 +487,7 @@ class ThinkingDispatcher:
             clean = re.sub(r"\s*```$", "", clean)
             data = json.loads(clean)
         except json.JSONDecodeError:
-            match = re.search(r'\{[\s\S]+\}', raw)
+            match = re.search(r"\{[\s\S]+\}", raw)
             if match:
                 try:
                     data = json.loads(match.group(0))
@@ -455,7 +509,11 @@ class ThinkingDispatcher:
         yield StreamChunk(text="", thinking="end")
         yield StreamChunk(text="", thinking="start", dispatch_steps=[])
         for step in plan.dispatch_steps:
-            yield StreamChunk(text="", thinking=f"[{step.get('label', step.get('intent', ''))}] {step.get('detail', '')}", dispatch_steps=[])
+            yield StreamChunk(
+                text="",
+                thinking=f"[{step.get('label', step.get('intent', ''))}] {step.get('detail', '')}",
+                dispatch_steps=[],
+            )
         yield StreamChunk(text="", thinking="end", dispatch_steps=[])
         obs.emit("thinking_done", intent="dispatch")
 
@@ -463,23 +521,27 @@ class ThinkingDispatcher:
         # Emit intent_classified so the SSE bridge sends an 'intent' event
         # to the frontend — this populates the Observe tab's intent display
         # and confidence bar in real-time, BEFORE the response is generated.
-        obs.emit("intent_classified",
-                 primary=plan.profile.primary_intent().value,
-                 confidence=round(plan.profile.confidence, 2))
-        obs.emit("dispatcher_complete",
-                 intent=plan.profile.primary_intent().value,
-                 execution_mode=plan.profile.execution_mode.value,
-                 confidence=round(plan.profile.confidence, 2),
-                 latency_ms=latency_ms,
-                 capabilities=[c.value for c in plan.profile.capabilities],
-                 session_id=session_id[:8] if session_id else "")
+        obs.emit(
+            "intent_classified",
+            primary=plan.profile.primary_intent().value,
+            confidence=round(plan.profile.confidence, 2),
+        )
+        obs.emit(
+            "dispatcher_complete",
+            intent=plan.profile.primary_intent().value,
+            execution_mode=plan.profile.execution_mode.value,
+            confidence=round(plan.profile.confidence, 2),
+            latency_ms=latency_ms,
+            capabilities=[c.value for c in plan.profile.capabilities],
+            session_id=session_id[:8] if session_id else "",
+        )
 
         logger.info(
-            "[dispatcher] intent=%s mode=%s conf=%.2f latency=%dms "
-            "capabilities=%s reformulated=%r",
+            "[dispatcher] intent=%s mode=%s conf=%.2f latency=%dms capabilities=%s reformulated=%r",
             plan.profile.primary_intent().value,
             plan.profile.execution_mode.value,
-            plan.profile.confidence, latency_ms,
+            plan.profile.confidence,
+            latency_ms,
             [c.value for c in plan.profile.capabilities],
             plan.profile.reformulated[:60],
         )
@@ -489,7 +551,10 @@ class ThinkingDispatcher:
     # ── Signal Detection (structural only, no semantic regex) ────────────
 
     def _try_signal_detection(
-        self, message: str, has_attachment: bool, attachment_filename: Optional[str] = None,
+        self,
+        message: str,
+        has_attachment: bool,
+        attachment_filename: Optional[str] = None,
     ) -> Optional[OrchestrationPlan]:
         """Detect unambiguous structural signals.
 
@@ -510,10 +575,22 @@ class ThinkingDispatcher:
         if url_match:
             url = url_match.group(0)
             # Check if the user wants to interact with the page (not just read it)
-            _interactive_keywords = any(kw in msg_lower for kw in [
-                "click", "fill", "type", "login", "sign in", "submit",
-                "form", "button", "scroll", "screenshot", "interact",
-            ])
+            _interactive_keywords = any(
+                kw in msg_lower
+                for kw in [
+                    "click",
+                    "fill",
+                    "type",
+                    "login",
+                    "sign in",
+                    "submit",
+                    "form",
+                    "button",
+                    "scroll",
+                    "screenshot",
+                    "interact",
+                ]
+            )
             if _interactive_keywords:
                 # Interactive browsing → use the browser agent
                 profile = TaskProfile(
@@ -529,11 +606,18 @@ class ThinkingDispatcher:
                 )
                 return OrchestrationPlan(
                     profile=profile,
-                    graph=build_graph_from_plan_steps([{
-                        "id": "browse_url", "capability": "browse",
-                        "tool": "browse", "args": {"action": "open", "url": url},
-                        "depends_on": [], "label": f"Opening: {url[:60]}",
-                    }]),
+                    graph=build_graph_from_plan_steps(
+                        [
+                            {
+                                "id": "browse_url",
+                                "capability": "browse",
+                                "tool": "browse",
+                                "args": {"action": "open", "url": url},
+                                "depends_on": [],
+                                "label": f"Opening: {url[:60]}",
+                            }
+                        ]
+                    ),
                     dispatch_steps=[{"intent": "browse", "detail": f"Browse: {url[:50]}"}],
                     fast_path=True,
                 )
@@ -551,11 +635,18 @@ class ThinkingDispatcher:
             )
             return OrchestrationPlan(
                 profile=profile,
-                graph=build_graph_from_plan_steps([{
-                    "id": "fetch_url", "capability": "web_fetch",
-                    "tool": "web_fetch", "args": {"url": url},
-                    "depends_on": [], "label": f"Fetching: {url[:60]}",
-                }]),
+                graph=build_graph_from_plan_steps(
+                    [
+                        {
+                            "id": "fetch_url",
+                            "capability": "web_fetch",
+                            "tool": "web_fetch",
+                            "args": {"url": url},
+                            "depends_on": [],
+                            "label": f"Fetching: {url[:60]}",
+                        }
+                    ]
+                ),
                 dispatch_steps=[{"intent": "web_fetch", "detail": f"Fetch: {url[:50]}"}],
                 fast_path=True,
             )
@@ -576,11 +667,18 @@ class ThinkingDispatcher:
             )
             return OrchestrationPlan(
                 profile=profile,
-                graph=build_graph_from_plan_steps([{
-                    "id": "read_file", "capability": "file_read",
-                    "tool": "file_reader", "args": {"path": filename},
-                    "depends_on": [], "label": f"Reading: {filename}",
-                }]),
+                graph=build_graph_from_plan_steps(
+                    [
+                        {
+                            "id": "read_file",
+                            "capability": "file_read",
+                            "tool": "file_reader",
+                            "args": {"path": filename},
+                            "depends_on": [],
+                            "label": f"Reading: {filename}",
+                        }
+                    ]
+                ),
                 dispatch_steps=[{"intent": "file_task", "detail": f"Read: {filename}"}],
                 fast_path=True,
             )
@@ -599,11 +697,18 @@ class ThinkingDispatcher:
             )
             return OrchestrationPlan(
                 profile=profile,
-                graph=build_graph_from_plan_steps([{
-                    "id": "sysinfo", "capability": "sysinfo",
-                    "tool": "sysinfo", "args": {"goal": msg},
-                    "depends_on": [], "label": "Getting system info",
-                }]),
+                graph=build_graph_from_plan_steps(
+                    [
+                        {
+                            "id": "sysinfo",
+                            "capability": "sysinfo",
+                            "tool": "sysinfo",
+                            "args": {"goal": msg},
+                            "depends_on": [],
+                            "label": "Getting system info",
+                        }
+                    ]
+                ),
                 dispatch_steps=[{"intent": "sysinfo", "detail": "System info query"}],
                 fast_path=True,
             )
@@ -623,11 +728,18 @@ class ThinkingDispatcher:
             )
             return OrchestrationPlan(
                 profile=profile,
-                graph=build_graph_from_plan_steps([{
-                    "id": "shell_cmd", "capability": "shell",
-                    "tool": "shell", "args": {"action": msg},
-                    "depends_on": [], "label": f"Shell: {msg[:50]}",
-                }]),
+                graph=build_graph_from_plan_steps(
+                    [
+                        {
+                            "id": "shell_cmd",
+                            "capability": "shell",
+                            "tool": "shell",
+                            "args": {"action": msg},
+                            "depends_on": [],
+                            "label": f"Shell: {msg[:50]}",
+                        }
+                    ]
+                ),
                 dispatch_steps=[{"intent": "shell", "detail": f"Shell: {msg[:50]}"}],
                 fast_path=True,
             )
@@ -667,9 +779,9 @@ class ThinkingDispatcher:
 
         # Detect prior SHELL context
         _SHELL_KEYWORDS = re.compile(
-            r'\b(run|execute|install|start|launch|open|command|terminal|shell|cmd|'
-            r'browse|directory|folder|list files|find|locate|search for|look for|'
-            r'documents|downloads|desktop|projects?)\b',
+            r"\b(run|execute|install|start|launch|open|command|terminal|shell|cmd|"
+            r"browse|directory|folder|list files|find|locate|search for|look for|"
+            r"documents|downloads|desktop|projects?)\b",
             re.IGNORECASE,
         )
 
@@ -679,9 +791,22 @@ class ThinkingDispatcher:
 
         if has_prior_shell_context:
             _CONFIRM_WORDS = {
-                "yes", "yeah", "yep", "ok", "okay", "go ahead",
-                "do it", "please", "proceed", "confirm", "continue",
-                "sure", "try again", "retry", "again", "run it",
+                "yes",
+                "yeah",
+                "yep",
+                "ok",
+                "okay",
+                "go ahead",
+                "do it",
+                "please",
+                "proceed",
+                "confirm",
+                "continue",
+                "sure",
+                "try again",
+                "retry",
+                "again",
+                "run it",
             }
             if msg_lower in _CONFIRM_WORDS:
                 reformulated = (
@@ -701,22 +826,33 @@ class ThinkingDispatcher:
                 )
                 return OrchestrationPlan(
                     profile=profile,
-                    graph=build_graph_from_plan_steps([{
-                        "id": "shell_followup", "capability": "shell",
-                        "tool": "shell", "args": {"action": reformulated},
-                        "depends_on": [], "label": "Rerunning previous command",
-                    }]),
+                    graph=build_graph_from_plan_steps(
+                        [
+                            {
+                                "id": "shell_followup",
+                                "capability": "shell",
+                                "tool": "shell",
+                                "args": {"action": reformulated},
+                                "depends_on": [],
+                                "label": "Rerunning previous command",
+                            }
+                        ]
+                    ),
                     dispatch_steps=_build_dispatch_steps(Intent.SHELL, message, reformulated),
                     fast_path=False,
                 )
 
         # Detect file-related follow-ups
         _FILE_SIGNALS_PATTERNS = [
-            re.compile(r'\b(read|open|view|show|check|fetch)\b.*\b(file|cv|resume|document|pdf|doc)\b', re.IGNORECASE),
-            re.compile(r'\.(pdf|docx?|txt|csv|xlsx?|md)\b', re.IGNORECASE),
+            re.compile(
+                r"\b(read|open|view|show|check|fetch)\b.*\b(file|cv|resume|document|pdf|doc)\b",
+                re.IGNORECASE,
+            ),
+            re.compile(r"\.(pdf|docx?|txt|csv|xlsx?|md)\b", re.IGNORECASE),
         ]
         _file_signal_count = sum(
-            1 for p in _FILE_SIGNALS_PATTERNS
+            1
+            for p in _FILE_SIGNALS_PATTERNS
             for text in [last_asst, last_user, prior_user, prior_asst]
             if p.search(text)
         )
@@ -740,19 +876,36 @@ class ThinkingDispatcher:
             )
             return OrchestrationPlan(
                 profile=profile,
-                graph=build_graph_from_plan_steps([{
-                    "id": "file_followup", "capability": "file_read",
-                    "tool": "file_task", "args": {},
-                    "depends_on": [], "label": "Reading file",
-                }]),
+                graph=build_graph_from_plan_steps(
+                    [
+                        {
+                            "id": "file_followup",
+                            "capability": "file_read",
+                            "tool": "file_task",
+                            "args": {},
+                            "depends_on": [],
+                            "label": "Reading file",
+                        }
+                    ]
+                ),
                 dispatch_steps=_build_dispatch_steps(Intent.FILE_TASK, message, reformulated),
                 fast_path=False,
             )
 
         # Generic confirmation
         _GENERIC_CONFIRM = {
-            "yes", "yeah", "yep", "ok", "okay", "go ahead",
-            "do it", "please", "proceed", "confirm", "continue", "sure",
+            "yes",
+            "yeah",
+            "yep",
+            "ok",
+            "okay",
+            "go ahead",
+            "do it",
+            "please",
+            "proceed",
+            "confirm",
+            "continue",
+            "sure",
         }
         if msg_lower in _GENERIC_CONFIRM:
             reformulated = (
@@ -773,11 +926,18 @@ class ThinkingDispatcher:
             )
             return OrchestrationPlan(
                 profile=profile,
-                graph=build_graph_from_plan_steps([{
-                    "id": "followup", "capability": "file_read",
-                    "tool": "file_task", "args": {},
-                    "depends_on": [], "label": "Following up",
-                }]),
+                graph=build_graph_from_plan_steps(
+                    [
+                        {
+                            "id": "followup",
+                            "capability": "file_read",
+                            "tool": "file_task",
+                            "args": {},
+                            "depends_on": [],
+                            "label": "Following up",
+                        }
+                    ]
+                ),
                 dispatch_steps=_build_dispatch_steps(Intent.FILE_TASK, message, reformulated),
                 fast_path=False,
             )
@@ -844,7 +1004,9 @@ class ThinkingDispatcher:
             capabilities.insert(0, Capability.WEB_SEARCH)
             profile.capabilities = capabilities
             profile.auto_correct()
-            logger.info("[dispatcher] adding WEB_SEARCH: realtime_sensitive=True but no web_search capability")
+            logger.info(
+                "[dispatcher] adding WEB_SEARCH: realtime_sensitive=True but no web_search capability"
+            )
 
         # Derive execution mode if not already set correctly
         if profile.is_chat_only() and profile.execution_mode != ExecutionMode.DIRECT:

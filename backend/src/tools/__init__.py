@@ -14,6 +14,7 @@ Validators run before dispatch and return a user-facing error string or None.
 This eliminates a class of confusing tool errors (e.g. "no code found") before
 they reach real I/O.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -32,7 +33,7 @@ def register_tool(
     description: str,
     cost: float = 0.1,
     latency_ms: int = 500,
-    parallelizable: bool = True,   # A3: safe to run concurrently by default
+    parallelizable: bool = True,  # A3: safe to run concurrently by default
 ):
     """Register a callable as the handler for an intent, with metadata."""
     _REGISTRY[intent] = {
@@ -80,7 +81,9 @@ async def dispatch(intent: Intent, message: str) -> ToolResult | None:
     return await entry["fn"](message)
 
 
-async def dispatch_parallel(intents_and_inputs: list[tuple[Intent, str]]) -> list[ToolResult | None]:
+async def dispatch_parallel(
+    intents_and_inputs: list[tuple[Intent, str]],
+) -> list[ToolResult | None]:
     """A3: Dispatch multiple independent tools concurrently via asyncio.gather.
 
     Tools flagged parallelizable=False (e.g. code_exec which is stateful) are

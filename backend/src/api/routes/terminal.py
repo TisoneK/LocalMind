@@ -9,6 +9,7 @@ Features:
 - Tool execution bridge: agent tool results are logged in terminal sessions
 - Shared session state: agent shell commands use terminal sessions for CWD continuity
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,9 +32,9 @@ logger = logging.getLogger(__name__)
 # and tool execution log (commands executed by the AI agent).
 _terminal_sessions: dict[str, dict] = {}
 
-MAX_HISTORY = 500          # max commands per session
-MAX_SESSIONS = 50          # cap concurrent sessions to prevent memory exhaustion
-DEFAULT_TIMEOUT = 30       # seconds
+MAX_HISTORY = 500  # max commands per session
+MAX_SESSIONS = 50  # cap concurrent sessions to prevent memory exhaustion
+DEFAULT_TIMEOUT = 30  # seconds
 MAX_OUTPUT_BYTES = 1_000_000  # 1 MB output cap to prevent memory exhaustion
 
 # Track PIDs of processes spawned by LocalMind terminal sessions.
@@ -55,7 +56,8 @@ def _get_session(session_id: str) -> dict:
             )
             logger.warning(
                 "[terminal] session cap reached (%d), evicting oldest: %s",
-                MAX_SESSIONS, oldest_id,
+                MAX_SESSIONS,
+                oldest_id,
             )
             del _terminal_sessions[oldest_id]
         _terminal_sessions[session_id] = {
@@ -71,6 +73,7 @@ def _get_session(session_id: str) -> dict:
 
 
 # ─── Session Bridge for Agent Tool Execution ───────────────────────────
+
 
 class TerminalSessionBridge:
     """Bridge between the agent's tool system and terminal sessions.
@@ -207,16 +210,20 @@ def _log_tool_execution(
 
 # ─── Request / Response Models ─────────────────────────────────────────
 
+
 class TerminalRequest(BaseModel):
     command: str
     cwd: Optional[str] = None
     session_id: Optional[str] = "default"
-    timeout: Optional[int] = Field(default=DEFAULT_TIMEOUT, ge=1, le=300, description="Execution timeout in seconds")
+    timeout: Optional[int] = Field(
+        default=DEFAULT_TIMEOUT, ge=1, le=300, description="Execution timeout in seconds"
+    )
     env: Optional[dict[str, str]] = None
 
 
 class TerminalResponse(BaseModel):
     """Response uses camelCase aliases to match frontend TypeScript types."""
+
     exit_code: int = Field(alias="exitCode")
     stdout: str
     stderr: str
@@ -267,6 +274,7 @@ class ProcessKillResponse(BaseModel):
 
 class ToolExecutionLogEntry(BaseModel):
     """A single tool execution logged in the terminal session."""
+
     tool: str
     command: str
     source: str
@@ -288,6 +296,7 @@ class ToolExecutionLogResponse(BaseModel):
 
 class ToolEventRequest(BaseModel):
     """Request to log a tool execution event from the agent into a terminal session."""
+
     tool: str
     command: str
     output: str
@@ -308,6 +317,7 @@ class ToolEventResponse(BaseModel):
 
 
 # ─── Endpoints ─────────────────────────────────────────────────────────
+
 
 @router.post("/terminal/execute", response_model=TerminalResponse)
 async def execute_terminal_command(request: TerminalRequest):
@@ -370,9 +380,16 @@ async def execute_terminal_command(request: TerminalRequest):
                 command=request.command,
                 cwd=cwd,
             )
-            _log_tool_execution(session, "terminal", request.command, {
-                "exit_code": -1, "duration": duration,
-            }, source="user")
+            _log_tool_execution(
+                session,
+                "terminal",
+                request.command,
+                {
+                    "exit_code": -1,
+                    "duration": duration,
+                },
+                source="user",
+            )
             return result
 
         duration = time.time() - start_time
@@ -385,10 +402,16 @@ async def execute_terminal_command(request: TerminalRequest):
         _update_cwd_if_changed(session, request.command, cwd)
 
         # Log the execution
-        _log_tool_execution(session, "terminal", request.command, {
-            "exit_code": process.returncode or 0,
-            "duration": duration,
-        }, source="user")
+        _log_tool_execution(
+            session,
+            "terminal",
+            request.command,
+            {
+                "exit_code": process.returncode or 0,
+                "duration": duration,
+            },
+            source="user",
+        )
 
         return TerminalResponse(
             exit_code=process.returncode or 0,
@@ -409,7 +432,11 @@ async def get_command_history(session_id: str, limit: int = 50, offset: int = 0)
     """Retrieve command history for a session, newest first."""
     session = _get_session(session_id)
     history = session["history"]
-    sliced = history[-(offset + limit):][::-1] if offset == 0 else history[-(offset + limit):-offset][::-1]
+    sliced = (
+        history[-(offset + limit) :][::-1]
+        if offset == 0
+        else history[-(offset + limit) : -offset][::-1]
+    )
     return HistoryResponse(
         session_id=session_id,
         commands=sliced,
@@ -453,8 +480,7 @@ async def tab_complete(request: CompletionRequest):
         try:
             entries = os.listdir(base_dir)
             matches = [
-                e for e in sorted(entries)
-                if e.startswith(name_prefix) and not e.startswith(".")
+                e for e in sorted(entries) if e.startswith(name_prefix) and not e.startswith(".")
             ][:20]
             for m in matches:
                 full_path = os.path.join(base_dir, m)
@@ -466,14 +492,64 @@ async def tab_complete(request: CompletionRequest):
     # ── Command completion ──
     if " " not in partial:
         common_commands = [
-            "ls", "cd", "pwd", "cat", "echo", "mkdir", "rm", "cp", "mv",
-            "grep", "find", "head", "tail", "wc", "sort", "uniq", "diff",
-            "chmod", "chown", "curl", "wget", "tar", "gzip", "unzip",
-            "python3", "pip", "node", "npm", "git", "docker", "code",
-            "vim", "nano", "less", "more", "which", "env", "export",
-            "ps", "top", "htop", "kill", "df", "du", "free", "uname",
-            "date", "whoami", "hostname", "ip", "ping", "netstat",
-            "apt", "brew", "yum", "dnf", "systemctl", "journalctl",
+            "ls",
+            "cd",
+            "pwd",
+            "cat",
+            "echo",
+            "mkdir",
+            "rm",
+            "cp",
+            "mv",
+            "grep",
+            "find",
+            "head",
+            "tail",
+            "wc",
+            "sort",
+            "uniq",
+            "diff",
+            "chmod",
+            "chown",
+            "curl",
+            "wget",
+            "tar",
+            "gzip",
+            "unzip",
+            "python3",
+            "pip",
+            "node",
+            "npm",
+            "git",
+            "docker",
+            "code",
+            "vim",
+            "nano",
+            "less",
+            "more",
+            "which",
+            "env",
+            "export",
+            "ps",
+            "top",
+            "htop",
+            "kill",
+            "df",
+            "du",
+            "free",
+            "uname",
+            "date",
+            "whoami",
+            "hostname",
+            "ip",
+            "ping",
+            "netstat",
+            "apt",
+            "brew",
+            "yum",
+            "dnf",
+            "systemctl",
+            "journalctl",
         ]
         matches = [c for c in common_commands if c.startswith(partial)][:10]
         suggestions.extend(matches)
@@ -534,7 +610,9 @@ async def kill_process(request: ProcessKillRequest):
         _spawned_pids.discard(request.pid)
         return ProcessKillResponse(success=False, message=f"PID {request.pid} not found")
     except PermissionError:
-        return ProcessKillResponse(success=False, message=f"Permission denied for PID {request.pid}")
+        return ProcessKillResponse(
+            success=False, message=f"Permission denied for PID {request.pid}"
+        )
     except Exception as e:
         return ProcessKillResponse(success=False, message=str(e))
 
@@ -566,6 +644,7 @@ async def delete_session(session_id: str):
 
 
 # ─── Tool Execution Bridge Endpoints ──────────────────────────────────
+
 
 @router.post("/terminal/tool-event", response_model=ToolEventResponse)
 async def log_tool_event(request: ToolEventRequest):
@@ -628,7 +707,7 @@ async def get_tool_execution_log(session_id: str, limit: int = 50, offset: int =
     if offset == 0:
         sliced = tool_log[-limit:][::-1]
     else:
-        sliced = tool_log[-(offset + limit):-offset][::-1]
+        sliced = tool_log[-(offset + limit) : -offset][::-1]
 
     entries = [
         ToolExecutionLogEntry(
@@ -651,6 +730,7 @@ async def get_tool_execution_log(session_id: str, limit: int = 50, offset: int =
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────
+
 
 def _update_cwd_if_changed(session: dict, command: str, current_cwd: str) -> None:
     """If the command was a 'cd', update the session's working directory."""

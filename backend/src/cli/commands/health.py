@@ -1,4 +1,5 @@
 """localmind health — check Ollama connectivity and tool availability."""
+
 from __future__ import annotations
 
 import asyncio
@@ -27,14 +28,22 @@ async def _check():
     reachable = await adapter.health_check()
 
     if reachable:
-        console.print(f"  [green]✓[/green] Ollama reachable at [dim]{settings.ollama_base_url}[/dim]")
+        console.print(
+            f"  [green]✓[/green] Ollama reachable at [dim]{settings.ollama_base_url}[/dim]"
+        )
         models = await adapter.list_models()
         if models:
-            console.print(f"  [green]✓[/green] Models available: [dim]{', '.join(models[:5])}[/dim]")
+            console.print(
+                f"  [green]✓[/green] Models available: [dim]{', '.join(models[:5])}[/dim]"
+            )
         else:
-            console.print("  [yellow]![/yellow] No models pulled. Run: [bold]ollama pull llama3.1:8b[/bold]")
+            console.print(
+                "  [yellow]![/yellow] No models pulled. Run: [bold]ollama pull llama3.1:8b[/bold]"
+            )
     else:
-        console.print(f"  [red]✗[/red] Ollama not reachable at [dim]{settings.ollama_base_url}[/dim]")
+        console.print(
+            f"  [red]✗[/red] Ollama not reachable at [dim]{settings.ollama_base_url}[/dim]"
+        )
         console.print("    → Start Ollama: [bold]ollama serve[/bold]")
 
     # Active model
@@ -42,7 +51,9 @@ async def _check():
     if model_ok:
         console.print(f"  [green]✓[/green] Active model: [dim]{settings.ollama_model}[/dim]")
     else:
-        console.print(f"  [yellow]![/yellow] Active model [dim]{settings.ollama_model}[/dim] not pulled")
+        console.print(
+            f"  [yellow]![/yellow] Active model [dim]{settings.ollama_model}[/dim] not pulled"
+        )
         console.print(f"    → Run: [bold]ollama pull {settings.ollama_model}[/bold]")
 
     # Tools

@@ -21,6 +21,7 @@ SSE payload types:
     {"type": "done"}
     {"obs_event": {"type": "turn_complete", "data": {...}}}
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -129,11 +130,13 @@ async def _event_stream(
                 yield _sse(evt.to_sse_dict())
                 _last_sent_time = time.monotonic()
                 if evt.type == "intent_classified":
-                    yield _sse({
-                        "type": "intent",
-                        "intent": evt.data.get("primary"),
-                        "confidence": float(evt.data.get("confidence", 0.5)),
-                    })
+                    yield _sse(
+                        {
+                            "type": "intent",
+                            "intent": evt.data.get("primary"),
+                            "confidence": float(evt.data.get("confidence", 0.5)),
+                        }
+                    )
                 # Bridge obs tool_call/tool_status events to proper SSE
                 # tool_call events so the frontend's ToolSteps component
                 # can show tool progress. Previously these obs events were
@@ -156,19 +159,22 @@ async def _event_stream(
                     _args_str = evt.data.get("tool_args", "")
                     if _args_str:
                         import hashlib
+
                         _args_hash = "-" + hashlib.md5(_args_str.encode()).hexdigest()[:6]
                     _tc_id = f"tc-{_tool}-iter{_iteration}{_args_hash}"
-                    yield _sse({
-                        "type": "tool_call",
-                        "tool_call": {
-                            "id": _tc_id,
-                            "name": _tool,
-                            "label": _label,
-                            "status": _status,
-                            "iteration": _iteration,
-                            "latency_ms": _latency_ms,
-                        },
-                    })
+                    yield _sse(
+                        {
+                            "type": "tool_call",
+                            "tool_call": {
+                                "id": _tc_id,
+                                "name": _tool,
+                                "label": _label,
+                                "status": _status,
+                                "iteration": _iteration,
+                                "latency_ms": _latency_ms,
+                            },
+                        }
+                    )
 
                 # Bridge thinking_start/thinking_done obs events to proper SSE
                 # thinking_start/thinking_end events. The frontend handles these
@@ -184,25 +190,29 @@ async def _event_stream(
                 # Todos panel shows the agent's execution plan in real-time.
                 # The agent loop emits these after parsing the plan steps.
                 if evt.type == "todo_created":
-                    yield _sse({
-                        "type": "todo_created",
-                        "todo": {
-                            "id": evt.data.get("id", ""),
-                            "text": evt.data.get("text", ""),
-                            "completed": evt.data.get("completed", False),
-                        },
-                    })
+                    yield _sse(
+                        {
+                            "type": "todo_created",
+                            "todo": {
+                                "id": evt.data.get("id", ""),
+                                "text": evt.data.get("text", ""),
+                                "completed": evt.data.get("completed", False),
+                            },
+                        }
+                    )
 
                 # Bridge todo_completed obs events — when a tool finishes,
                 # the corresponding plan todo is marked complete.
                 if evt.type == "todo_completed":
-                    yield _sse({
-                        "type": "todo_completed",
-                        "todo": {
-                            "id": evt.data.get("id", ""),
-                            "completed": evt.data.get("completed", True),
-                        },
-                    })
+                    yield _sse(
+                        {
+                            "type": "todo_completed",
+                            "todo": {
+                                "id": evt.data.get("id", ""),
+                                "completed": evt.data.get("completed", True),
+                            },
+                        }
+                    )
 
                 # Bridge terminal_output obs events to SSE terminal_event.
                 # When the agent loop executes a shell or code_exec tool,
@@ -210,18 +220,20 @@ async def _event_stream(
                 # and its output. We forward this as a terminal_event so the
                 # frontend terminal panel can display it in real-time.
                 if evt.type == "terminal_output":
-                    yield _sse({
-                        "type": "terminal_event",
-                        "terminal_event": {
-                            "tool": evt.data.get("tool", "unknown"),
-                            "command": evt.data.get("command", ""),
-                            "output": evt.data.get("output", ""),
-                            "success": evt.data.get("success", "True") == "True",
-                            "latencyMs": int(evt.data.get("latency_ms", "0")),
-                            "label": evt.data.get("label", ""),
-                            "toolArgs": evt.data.get("tool_args", ""),
-                        },
-                    })
+                    yield _sse(
+                        {
+                            "type": "terminal_event",
+                            "terminal_event": {
+                                "tool": evt.data.get("tool", "unknown"),
+                                "command": evt.data.get("command", ""),
+                                "output": evt.data.get("output", ""),
+                                "success": evt.data.get("success", "True") == "True",
+                                "latencyMs": int(evt.data.get("latency_ms", "0")),
+                                "label": evt.data.get("label", ""),
+                                "toolArgs": evt.data.get("tool_args", ""),
+                            },
+                        }
+                    )
 
                 # Bridge diff events from edit_file tool results.
                 # When the agent loop edits a file, the edit_file tool produces
@@ -229,16 +241,18 @@ async def _event_stream(
                 # emits these as obs events so the frontend DiffBlock component
                 # can render green/red highlighted diffs — like Cursor/Claude.
                 if evt.type == "file_diff":
-                    yield _sse({
-                        "type": "diff",
-                        "diff": {
-                            "hunks": evt.data.get("diff_hunks", []),
-                            "language": evt.data.get("diff_language", ""),
-                            "filePath": evt.data.get("path", ""),
-                            "additions": evt.data.get("diff_additions", 0),
-                            "deletions": evt.data.get("diff_deletions", 0),
-                        },
-                    })
+                    yield _sse(
+                        {
+                            "type": "diff",
+                            "diff": {
+                                "hunks": evt.data.get("diff_hunks", []),
+                                "language": evt.data.get("diff_language", ""),
+                                "filePath": evt.data.get("path", ""),
+                                "additions": evt.data.get("diff_additions", 0),
+                                "deletions": evt.data.get("diff_deletions", 0),
+                            },
+                        }
+                    )
 
             if hasattr(chunk, "metadata") and chunk.metadata:
                 obs_evt = chunk.metadata.get("obs_event")
@@ -342,16 +356,18 @@ async def _event_stream(
             # Make sure turn_complete events include all metric fields
             if evt.type == "turn_complete":
                 # Re-emit as a dedicated metrics event for the frontend
-                yield _sse({
-                    "type": "metrics",
-                    "metrics": {
-                        "tokens_approx": evt.data.get("tokens_approx", 0),
-                        "prompt_tokens_approx": evt.data.get("prompt_tokens_approx", 0),
-                        "total_latency_ms": evt.data.get("total_latency_ms", 0),
-                        "memory_facts": evt.data.get("memory_facts", 0),
-                        "confidence": evt.data.get("confidence", 0),
+                yield _sse(
+                    {
+                        "type": "metrics",
+                        "metrics": {
+                            "tokens_approx": evt.data.get("tokens_approx", 0),
+                            "prompt_tokens_approx": evt.data.get("prompt_tokens_approx", 0),
+                            "total_latency_ms": evt.data.get("total_latency_ms", 0),
+                            "memory_facts": evt.data.get("memory_facts", 0),
+                            "confidence": evt.data.get("confidence", 0),
+                        },
                     }
-                })
+                )
 
     except Exception as exc:
         logger.error(f"[chat] stream error: {exc}", exc_info=True)
@@ -435,10 +451,13 @@ async def chat(
             # _err() generator below is iterated later by FastAPI — by
             # then `exc` would be gone and the f-string would raise NameError.
             _upload_error_msg = f"File upload failed: {exc}"
+
             async def _err():
                 yield _sse({"error": _upload_error_msg, "done": True})
+
             return StreamingResponse(
-                _err(), media_type="text/event-stream",
+                _err(),
+                media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             )
 
@@ -449,7 +468,9 @@ async def chat(
 
     return StreamingResponse(
         _event_stream(
-            message, sid, is_first,
+            message,
+            sid,
+            is_first,
             file_bytes=file_bytes,
             filename=filename,
             content_type=file_content_type,

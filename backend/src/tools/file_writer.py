@@ -9,6 +9,7 @@ Rules:
 - Extracts code from fenced blocks before writing
 - Returns full absolute path so UI can render a clickable link
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,16 +24,42 @@ from tools import register_tool
 # ── Document format registry ─────────────────────────────────────────────────
 # These extensions trigger timestamp-rename + version-control behaviour.
 # Everything else (code, data, markup) is written directly with no rename.
-_DOCUMENT_EXTS = frozenset([
-    # MS Office / Windows suite
-    "pdf", "docx", "doc", "xlsx", "xls", "pptx", "ppt", "pub", "accdb", "mdb",
-    # Images
-    "png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "tiff", "tif", "ico", "heic", "raw",
-    # LibreOffice / OpenDocument
-    "odt", "ods", "odp", "odg",
-    # Other document formats
-    "epub", "rtf",
-])
+_DOCUMENT_EXTS = frozenset(
+    [
+        # MS Office / Windows suite
+        "pdf",
+        "docx",
+        "doc",
+        "xlsx",
+        "xls",
+        "pptx",
+        "ppt",
+        "pub",
+        "accdb",
+        "mdb",
+        # Images
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "bmp",
+        "webp",
+        "svg",
+        "tiff",
+        "tif",
+        "ico",
+        "heic",
+        "raw",
+        # LibreOffice / OpenDocument
+        "odt",
+        "ods",
+        "odp",
+        "odg",
+        # Other document formats
+        "epub",
+        "rtf",
+    ]
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +73,11 @@ class PathUnresolvableError(Exception):
         raw_path:          The original string the user supplied.
         fuzzy_suggestion:  A candidate path found by scanning ~/  (may be None).
     """
+
     def __init__(self, raw_path: str, fuzzy_suggestion: "Path | None" = None) -> None:
         self.raw_path = raw_path
         self.fuzzy_suggestion = fuzzy_suggestion
-        hint = (
-            f" Did you mean `{fuzzy_suggestion}`?"
-            if fuzzy_suggestion else ""
-        )
+        hint = f" Did you mean `{fuzzy_suggestion}`?" if fuzzy_suggestion else ""
         super().__init__(
             f"Could not resolve path {raw_path!r} to a known folder.{hint} "
             "Please confirm the full path."
@@ -60,15 +85,26 @@ class PathUnresolvableError(Exception):
 
 
 _LANG_EXT = {
-    "python": ".py", "py": ".py",
-    "javascript": ".js", "js": ".js",
-    "typescript": ".ts", "ts": ".ts",
-    "bash": ".sh", "sh": ".sh", "shell": ".sh",
-    "html": ".html", "css": ".css",
-    "json": ".json", "yaml": ".yaml", "yml": ".yaml",
-    "toml": ".toml", "sql": ".sql",
-    "rust": ".rs", "go": ".go",
-    "markdown": ".md", "md": ".md",
+    "python": ".py",
+    "py": ".py",
+    "javascript": ".js",
+    "js": ".js",
+    "typescript": ".ts",
+    "ts": ".ts",
+    "bash": ".sh",
+    "sh": ".sh",
+    "shell": ".sh",
+    "html": ".html",
+    "css": ".css",
+    "json": ".json",
+    "yaml": ".yaml",
+    "yml": ".yaml",
+    "toml": ".toml",
+    "sql": ".sql",
+    "rust": ".rs",
+    "go": ".go",
+    "markdown": ".md",
+    "md": ".md",
 }
 
 _FENCE_RE = re.compile(r"```(?P<lang>\w+)?\s*\n(?P<code>[\s\S]+?)\n```", re.IGNORECASE)
@@ -84,46 +120,46 @@ _FILENAME_RE = re.compile(
 # Keys are lowercase; values are the canonical casing on disk.
 _NAMED_FOLDERS = {
     # Standard Windows shell folders
-    "downloads":   "Downloads",
-    "documents":   "Documents",
-    "desktop":     "Desktop",
-    "pictures":    "Pictures",
-    "videos":      "Videos",
-    "music":       "Music",
-    "contacts":    "Contacts",
-    "favorites":   "Favorites",
-    "links":       "Links",
-    "searches":    "Searches",
+    "downloads": "Downloads",
+    "documents": "Documents",
+    "desktop": "Desktop",
+    "pictures": "Pictures",
+    "videos": "Videos",
+    "music": "Music",
+    "contacts": "Contacts",
+    "favorites": "Favorites",
+    "links": "Links",
+    "searches": "Searches",
     "saved games": "Saved Games",
-    "savedgames":  "Saved Games",
+    "savedgames": "Saved Games",
     # User-created top-level folders observed in C:\Users\tison
-    "localmind":   "LocalMind",
-    "dev":         "Dev",
-    "scripts":     "Scripts",
-    "docs":        "docs",
-    "shared":      "shared",
-    "workflows":   "workflows",
-    "examples":    "examples",
-    "factory":     "factory",
-    "config":      "config",
-    "data":        "data",
-    "onedrive":    "OneDrive",
+    "localmind": "LocalMind",
+    "dev": "Dev",
+    "scripts": "Scripts",
+    "docs": "docs",
+    "shared": "shared",
+    "workflows": "workflows",
+    "examples": "examples",
+    "factory": "factory",
+    "config": "config",
+    "data": "data",
+    "onedrive": "OneDrive",
     # Common developer folder names
-    "code":        "Code",
-    "projects":    "Projects",
-    "src":         "src",
-    "repos":       "repos",
-    "builds":      "builds",
-    "workspace":   "workspace",
+    "code": "Code",
+    "projects": "Projects",
+    "src": "src",
+    "repos": "repos",
+    "builds": "builds",
+    "workspace": "workspace",
 }
 
 # Extracts the target path from phrases like:
 #   "in Downloads/"  "to C:/Users/tison/docs"  "save to ~/projects"  "into Documents/sub"
 _PATH_RE = re.compile(
     r"(?:to|in|at|into|save to|write to)"
-    r"\s+([A-Za-z]:[/\\][\w\s./\\-]+"    # Windows absolute: C:\...
-    r"|~/[\w\s./\\-]+"                    # Unix home-relative: ~/...
-    r"|[\w][\w\s./\\-]*)",                # Named or relative: Downloads/, foo/bar
+    r"\s+([A-Za-z]:[/\\][\w\s./\\-]+"  # Windows absolute: C:\...
+    r"|~/[\w\s./\\-]+"  # Unix home-relative: ~/...
+    r"|[\w][\w\s./\\-]*)",  # Named or relative: Downloads/, foo/bar
     re.IGNORECASE,
 )
 
@@ -148,7 +184,7 @@ def _infer_filename(message: str, lang: str = "") -> str:
 
 # Structured format from agent loop: "path:\n\ncontent"
 # Matches a path at the start of the message, followed by :\n\n
-_STRUCTURED_FMT_RE = re.compile(r'^([^\n]+?):\n\n')
+_STRUCTURED_FMT_RE = re.compile(r"^([^\n]+?):\n\n")
 
 
 def _extract_requested_dir(message: str) -> str:
@@ -220,24 +256,46 @@ def _extract_requested_dir(message: str) -> str:
     return str(Path.home() / raw)
 
 
-_CODE_EXTS = frozenset(
-    "py js ts txt md csv json html css sh yaml yml toml sql rs go".split()
-)
+_CODE_EXTS = frozenset("py js ts txt md csv json html css sh yaml yml toml sql rs go".split())
 
 # Named folder aliases matched case-insensitively against path components.
 # This is the scan set used by the cross-OS path resolver to find a known
 # anchor inside a full path (e.g. C:\Users\tison\Documents\Code\foo.py).
 # Must stay in sync with the keys of _NAMED_FOLDERS above (lowercased).
-_NAMED_FOLDER_COMPONENTS = frozenset([
-    # Standard Windows shell folders
-    "downloads", "documents", "desktop", "pictures", "videos", "music",
-    "contacts", "favorites", "links", "searches",
-    # User top-level folders from C:\Users\tison
-    "localmind", "dev", "scripts", "docs", "shared",
-    "workflows", "examples", "factory", "config", "data", "onedrive",
-    # Common developer folder names
-    "code", "projects", "src", "repos", "builds", "workspace",
-])
+_NAMED_FOLDER_COMPONENTS = frozenset(
+    [
+        # Standard Windows shell folders
+        "downloads",
+        "documents",
+        "desktop",
+        "pictures",
+        "videos",
+        "music",
+        "contacts",
+        "favorites",
+        "links",
+        "searches",
+        # User top-level folders from C:\Users\tison
+        "localmind",
+        "dev",
+        "scripts",
+        "docs",
+        "shared",
+        "workflows",
+        "examples",
+        "factory",
+        "config",
+        "data",
+        "onedrive",
+        # Common developer folder names
+        "code",
+        "projects",
+        "src",
+        "repos",
+        "builds",
+        "workspace",
+    ]
+)
 
 
 def _cross_os_parts(raw: str) -> list[str]:
@@ -363,11 +421,14 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
             # "docs" not "Docs").  Fall back to the raw part if somehow not in the map.
             canonical = _NAMED_FOLDERS.get(part.lower(), part)
             allowed_base = Path.home() / canonical
-            sub_parts = dir_parts[i + 1:]
+            sub_parts = dir_parts[i + 1 :]
             target_dir = (allowed_base / Path(*sub_parts)) if sub_parts else allowed_base
             logger.info(
                 "[file_writer] named-folder anchor (%r→%r) → %s / %s",
-                part, canonical, target_dir, filename,
+                part,
+                canonical,
+                target_dir,
+                filename,
             )
             return target_dir / filename
 
@@ -380,8 +441,9 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
     if dir_parts:
         target_dir = Path.home().joinpath(*dir_parts)
         logger.info(
-            "[file_writer] relative path (no named-folder anchor) resolved "
-            "against home: %s / %s", target_dir, filename,
+            "[file_writer] relative path (no named-folder anchor) resolved against home: %s / %s",
+            target_dir,
+            filename,
         )
         return target_dir / filename
 
@@ -443,9 +505,14 @@ def _cleanup_cache() -> None:
     max_age_seconds = settings.localmind_cache_max_age_days * 86_400
     now = time.time()
 
-    _SKIP_NAMES = frozenset([
-        "localmind.db", "localmind.db-shm", "localmind.db-wal", "uploads",
-    ])
+    _SKIP_NAMES = frozenset(
+        [
+            "localmind.db",
+            "localmind.db-shm",
+            "localmind.db-wal",
+            "uploads",
+        ]
+    )
 
     for entry in home.iterdir():
         if entry.name in _SKIP_NAMES:
@@ -482,6 +549,7 @@ async def _do_write(
     Lazy cache cleanup runs before every write.
     """
     import shutil
+
     _cleanup_cache()
     try:
         filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -540,7 +608,7 @@ async def write_file(message: str) -> ToolResult:
     structured = _STRUCTURED_FMT_RE.match(message)
     if structured:
         structured_path = structured.group(1).strip().rstrip(":")
-        content_to_write = message[structured.end():]  # Everything after "path:\n\n"
+        content_to_write = message[structured.end() :]  # Everything after "path:\n\n"
         filename = Path(structured_path).name if structured_path else _infer_filename(message)
         raw_path = structured_path if structured_path else filename
     else:
@@ -569,7 +637,8 @@ async def write_file(message: str) -> ToolResult:
         except PathUnresolvableError:
             # Last resort: resolve against home and auto-create directory
             logger.warning(
-                "[file_writer] PathUnresolvableError for %r — resolving against home", raw_path,
+                "[file_writer] PathUnresolvableError for %r — resolving against home",
+                raw_path,
             )
             parts = _cross_os_parts(raw_path)
             filtered = [p for p in parts if not (len(p) == 2 and p[1] == ":")]
@@ -591,9 +660,7 @@ async def write_file(message: str) -> ToolResult:
     if structured:
         user_named = bool(final_dest and final_dest.suffix)
     else:
-        user_named = bool(
-            final_dest and final_dest.suffix and final_dest.name != filename
-        )
+        user_named = bool(final_dest and final_dest.suffix and final_dest.name != filename)
 
     if settings.localmind_require_write_permission:
         display_dest = str(final_dest) if final_dest else str(scratch_path)
@@ -615,7 +682,9 @@ async def write_file(message: str) -> ToolResult:
             requires_confirmation=True,
         )
 
-    return await _do_write(scratch_path, content_to_write, final_dest=final_dest, user_named=user_named)
+    return await _do_write(
+        scratch_path, content_to_write, final_dest=final_dest, user_named=user_named
+    )
 
 
 register_tool(

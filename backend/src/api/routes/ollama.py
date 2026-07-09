@@ -15,6 +15,7 @@ DELETE /api/ollama/url     — reset to the default local URL
 
 NOTE: GET /api/models and POST /api/models/select live in api/routes/models.py.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -42,7 +43,7 @@ def _require_ollama():
     if settings.localmind_adapter != "ollama":
         raise HTTPException(
             status_code=501,
-            detail=f"Ollama routes are not available when using {settings.localmind_adapter} adapter"
+            detail=f"Ollama routes are not available when using {settings.localmind_adapter} adapter",
         )
 
 
@@ -52,6 +53,7 @@ def _ollama_base() -> str:
 
 
 # ── helpers ───────────────────────────────────────────────────────────────
+
 
 async def _ollama_get(path: str, base_url: str | None = None) -> Optional[dict]:
     url = (base_url or _ollama_base()) + path
@@ -65,6 +67,7 @@ async def _ollama_get(path: str, base_url: str | None = None) -> Optional[dict]:
 
 
 # ── /api/ollama/url ───────────────────────────────────────────────────────
+
 
 class UrlResponse(BaseModel):
     url: str
@@ -133,10 +136,12 @@ async def set_ollama_url(req: SetUrlRequest):
             async def _late_startup():
                 try:
                     from api.routes.chat import _engine as _chat_engine
+
                     await _chat_engine.startup()
                     logger.info("[ollama/url] late engine startup complete")
                 except Exception as exc:
                     logger.warning("[ollama/url] late engine startup failed: %s", exc)
+
             asyncio.create_task(_late_startup())
 
         return SetUrlResponse(
@@ -170,6 +175,7 @@ async def reset_ollama_url():
 
 # ── /api/ollama/start ─────────────────────────────────────────────────────
 
+
 class StartResponse(BaseModel):
     started: bool
     already_running: bool
@@ -189,7 +195,9 @@ async def ollama_start():
 
     status = await _ollama_get("/api/tags")
     if status is not None:
-        return StartResponse(started=False, already_running=True, message="Ollama is already running.")
+        return StartResponse(
+            started=False, already_running=True, message="Ollama is already running."
+        )
 
     subprocess.Popen(
         [ollama_bin, "serve"],
@@ -200,15 +208,19 @@ async def ollama_start():
     for _ in range(8):
         await asyncio.sleep(1)
         if await _ollama_get("/api/tags") is not None:
-            return StartResponse(started=True, already_running=False, message="Ollama started successfully.")
+            return StartResponse(
+                started=True, already_running=False, message="Ollama started successfully."
+            )
 
     return StartResponse(
-        started=False, already_running=False,
+        started=False,
+        already_running=False,
         message="Ollama is starting but taking longer than expected. Retry in a moment.",
     )
 
 
 # ── /api/ollama/status ────────────────────────────────────────────────────
+
 
 class OllamaStatusResponse(BaseModel):
     reachable: bool
@@ -233,6 +245,7 @@ async def ollama_status():
 
 # ── /api/ollama/pull ──────────────────────────────────────────────────────
 
+
 class PullRequest(BaseModel):
     model: str
 
@@ -247,7 +260,9 @@ async def ollama_pull(req: PullRequest):
 
     async def _stream():
         proc = await asyncio.create_subprocess_exec(
-            ollama_bin, "pull", req.model,
+            ollama_bin,
+            "pull",
+            req.model,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )

@@ -3,6 +3,7 @@ FastAPI application factory — v0.3
 
 Serves the single-file UI from ui/index.html directly (no build step needed).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -82,6 +83,7 @@ def create_app() -> FastAPI:
     async def model_routing():
         """Show which model handles each intent — useful for debugging and UI display."""
         from core.model_router import routing_report
+
         return {
             "main_model": settings.ollama_model,
             "routing": routing_report(settings.ollama_model),
@@ -90,6 +92,7 @@ def create_app() -> FastAPI:
 
     # Serve single-file UI — no build step required
     if UI_HTML.exists():
+
         @app.get("/", include_in_schema=False)
         @app.get("/{full_path:path}", include_in_schema=False)
         async def serve_ui(full_path: str = ""):
@@ -97,6 +100,7 @@ def create_app() -> FastAPI:
                 return {"error": "not found"}
             return FileResponse(str(UI_HTML))
     else:
+
         @app.get("/", include_in_schema=False)
         async def no_ui():
             return {"status": "LocalMind API running", "docs": "/api/docs"}
@@ -133,19 +137,25 @@ def create_app() -> FastAPI:
         # accurate self-knowledge. Runs before any LLM call so the first request
         # already sees the updated doc. Fails silently if the file is missing.
         from core.knowledge_writer import update_knowledge_doc
+
         update_knowledge_doc()
 
         from api.routes.health import set_engine_ready
+
         set_engine_ready()
 
         if settings.localmind_adapter != "ollama":
-            logger.info("[startup] Cloud adapter '%s' active — skipping Ollama warmup entirely.", settings.localmind_adapter)
+            logger.info(
+                "[startup] Cloud adapter '%s' active — skipping Ollama warmup entirely.",
+                settings.localmind_adapter,
+            )
             return
 
         # Single authoritative startup: warms LLM router, embed model,
         # RiskAwareRouter, and FlywheelLogger on the exact engine instance
         # that handles requests.
         from api.routes.chat import _engine as _chat_engine
+
         await _chat_engine.startup()
         logger.info("[startup] engine ready — accepting requests")
 
@@ -153,6 +163,7 @@ def create_app() -> FastAPI:
         async def warm_vector_store():
             try:
                 from storage.vector import VectorStore
+
                 logger.info("[startup] pre-warming VectorStore...")
                 vector_store = VectorStore()
                 if vector_store._ready:
@@ -217,7 +228,9 @@ def create_app() -> FastAPI:
             # Warm every model that is actually pulled locally
             async def _warm_one(model_name: str):
                 if pulled and model_name not in pulled:
-                    logger.info(f"[startup] skipping warmup for '{model_name}' — not pulled locally")
+                    logger.info(
+                        f"[startup] skipping warmup for '{model_name}' — not pulled locally"
+                    )
                     return
                 adapter = OllamaAdapter(model_override=model_name)
                 await adapter.warmup()
@@ -236,6 +249,7 @@ def create_app() -> FastAPI:
     async def shutdown():
         """Gracefully close all pooled adapter HTTP clients on server shutdown."""
         from adapters import close_all_adapters
+
         await close_all_adapters()
         logger.info("[shutdown] all adapter connections closed")
 

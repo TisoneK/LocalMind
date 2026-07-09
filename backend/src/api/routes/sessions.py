@@ -1,4 +1,5 @@
 """Session management endpoints."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -60,14 +61,16 @@ async def list_sessions():
             except (ValueError, OSError):
                 formatted_date = ""
 
-        frontend_sessions.append({
-            "id": session["id"],
-            "title": resolve_title(session),
-            "timestamp": raw_ts,
-            "formattedDate": formatted_date,
-            "messageCount": session.get("message_count", 0),
-            "last_message": (session.get("last_message") or "")[:120],
-        })
+        frontend_sessions.append(
+            {
+                "id": session["id"],
+                "title": resolve_title(session),
+                "timestamp": raw_ts,
+                "formattedDate": formatted_date,
+                "messageCount": session.get("message_count", 0),
+                "last_message": (session.get("last_message") or "")[:120],
+            }
+        )
 
     return {"sessions": frontend_sessions}
 
@@ -101,21 +104,25 @@ async def get_history(session_id: str):
 
         # Add tool calls if present
         if m.tool_name:
-            message["toolCalls"] = [{
-                "id": f"tool-{m.timestamp}-{idx}",
-                "name": m.tool_name,
-                "status": "completed" if m.content else "running"
-            }]
+            message["toolCalls"] = [
+                {
+                    "id": f"tool-{m.timestamp}-{idx}",
+                    "name": m.tool_name,
+                    "status": "completed" if m.content else "running",
+                }
+            ]
 
         # Add file results if present
         if m.file_path:
-            message["fileResults"] = [{
-                "id": f"file-{m.timestamp}-{idx}",
-                "path": m.file_path,
-                "name": m.file_name or m.file_path.split("/")[-1],
-                "size": m.file_size or 0,
-                "type": m.file_type or "unknown"
-            }]
+            message["fileResults"] = [
+                {
+                    "id": f"file-{m.timestamp}-{idx}",
+                    "path": m.file_path,
+                    "name": m.file_name or m.file_path.split("/")[-1],
+                    "size": m.file_size or 0,
+                    "type": m.file_type or "unknown",
+                }
+            ]
 
         history.append(message)
 

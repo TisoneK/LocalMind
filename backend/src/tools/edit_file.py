@@ -15,6 +15,7 @@ Actions:
   - append:        Append `insert_text` to end of file
   - prepend:       Prepend `insert_text` to beginning of file
 """
+
 from __future__ import annotations
 
 import json
@@ -40,6 +41,7 @@ _MAX_DIFF_LINES = 50  # maximum lines to show in the diff summary
 
 # ── Path resolution ───────────────────────────────────────────────────────────
 
+
 def _resolve_path(raw_path: str) -> Path:
     """
     Resolve a user-supplied path to an absolute Path.
@@ -58,6 +60,7 @@ def _resolve_path(raw_path: str) -> Path:
 
 
 # ── Backup ─────────────────────────────────────────────────────────────────────
+
 
 def _create_backup(filepath: Path) -> Path:
     """
@@ -79,6 +82,7 @@ def _create_backup(filepath: Path) -> Path:
 
 
 # ── Diff summary ───────────────────────────────────────────────────────────────
+
 
 def _diff_summary(original: str, modified: str, path: str) -> str:
     """
@@ -112,10 +116,7 @@ def _diff_summary(original: str, modified: str, path: str) -> str:
 
     orig_count = len(orig_lines)
     mod_count = len(mod_lines)
-    header = (
-        f"Edited: {path}\n"
-        f"Lines: {orig_count} → {mod_count} ({mod_count - orig_count:+d})\n"
-    )
+    header = f"Edited: {path}\nLines: {orig_count} → {mod_count} ({mod_count - orig_count:+d})\n"
     return header + "".join(diff_lines)
 
 
@@ -170,12 +171,14 @@ def _diff_hunks(original: str, modified: str, path: str) -> list[dict]:
                 "oldLines": old_count,
                 "newStart": new_start,
                 "newLines": new_count,
-                "lines": [{
-                    "type": "hunk_header",
-                    "content": line,
-                    "oldLine": old_start,
-                    "newLine": new_start,
-                }],
+                "lines": [
+                    {
+                        "type": "hunk_header",
+                        "content": line,
+                        "oldLine": old_start,
+                        "newLine": new_start,
+                    }
+                ],
             }
             old_line = old_start
             new_line = new_start
@@ -185,26 +188,32 @@ def _diff_hunks(original: str, modified: str, path: str) -> list[dict]:
             continue
 
         if line.startswith("+"):
-            current_hunk["lines"].append({
-                "type": "added",
-                "content": line[1:],
-                "newLine": new_line,
-            })
+            current_hunk["lines"].append(
+                {
+                    "type": "added",
+                    "content": line[1:],
+                    "newLine": new_line,
+                }
+            )
             new_line += 1
         elif line.startswith("-"):
-            current_hunk["lines"].append({
-                "type": "removed",
-                "content": line[1:],
-                "oldLine": old_line,
-            })
+            current_hunk["lines"].append(
+                {
+                    "type": "removed",
+                    "content": line[1:],
+                    "oldLine": old_line,
+                }
+            )
             old_line += 1
         elif line.startswith(" "):
-            current_hunk["lines"].append({
-                "type": "context",
-                "content": line[1:],
-                "oldLine": old_line,
-                "newLine": new_line,
-            })
+            current_hunk["lines"].append(
+                {
+                    "type": "context",
+                    "content": line[1:],
+                    "oldLine": old_line,
+                    "newLine": new_line,
+                }
+            )
             old_line += 1
             new_line += 1
 
@@ -215,6 +224,7 @@ def _diff_hunks(original: str, modified: str, path: str) -> list[dict]:
 
 
 # ── Edit operations ────────────────────────────────────────────────────────────
+
 
 def _do_replace(content: str, search: str, replace: str, replace_all: bool = False) -> str:
     """Replace occurrences of `search` with `replace`."""
@@ -266,7 +276,7 @@ def _do_delete(content: str, start_line: int, end_line: int) -> str:
     if start_line > end_line:
         raise ValueError(f"start_line ({start_line}) > end_line ({end_line})")
     # Convert to 0-based indices
-    del lines[start_line - 1:end_line]
+    del lines[start_line - 1 : end_line]
     return "\n".join(lines)
 
 
@@ -286,6 +296,7 @@ def _do_prepend(content: str, insert_text: str) -> str:
 
 
 # ── Core edit function ─────────────────────────────────────────────────────────
+
 
 def _apply_edit(
     content: str,
@@ -345,6 +356,7 @@ def _apply_edit(
 
 # ── Public entry point (legacy dispatch) ───────────────────────────────────────
 
+
 async def edit_file(message: str) -> ToolResult:
     """
     Legacy dispatch entry point for the edit_file tool.
@@ -366,8 +378,8 @@ async def edit_file(message: str) -> ToolResult:
         content=(
             "Could not parse edit_file instruction. Please provide a JSON payload "
             "with 'path', 'action', and the relevant parameters. "
-            "Example: {\"path\": \"file.py\", \"action\": \"replace\", "
-            "\"search\": \"old\", \"replace\": \"new\"}"
+            'Example: {"path": "file.py", "action": "replace", '
+            '"search": "old", "replace": "new"}'
         ),
         risk=RiskLevel.LOW,
         source="edit_file",
@@ -472,7 +484,7 @@ async def _edit_from_payload(payload: Dict[str, Any]) -> ToolResult:
     if file_size > _MAX_FILE_SIZE:
         return ToolResult(
             content=f"File too large to edit ({file_size} bytes, max {_MAX_FILE_SIZE}). "
-                    f"Use file_write to overwrite instead.",
+            f"Use file_write to overwrite instead.",
             risk=RiskLevel.MEDIUM,
             source="edit_file",
             success=False,
@@ -570,12 +582,8 @@ async def _edit_from_payload(payload: Dict[str, Any]) -> ToolResult:
     mod_lines = len(modified.splitlines())
 
     # Count additions/deletions from hunks
-    additions = sum(
-        1 for h in hunks for l in h.get("lines", []) if l.get("type") == "added"
-    )
-    deletions = sum(
-        1 for h in hunks for l in h.get("lines", []) if l.get("type") == "removed"
-    )
+    additions = sum(1 for h in hunks for line in h.get("lines", []) if line.get("type") == "added")
+    deletions = sum(1 for h in hunks for line in h.get("lines", []) if line.get("type") == "removed")
 
     return ToolResult(
         content=summary,
@@ -601,15 +609,40 @@ async def _edit_from_payload(payload: Dict[str, Any]) -> ToolResult:
 # ── Language inference for diff display ────────────────────────────────────────
 
 _LANG_EXT_MAP = {
-    ".py": "python", ".js": "javascript", ".ts": "typescript", ".tsx": "tsx",
-    ".jsx": "jsx", ".html": "html", ".css": "css", ".scss": "scss",
-    ".json": "json", ".yaml": "yaml", ".yml": "yaml", ".toml": "toml",
-    ".sql": "sql", ".sh": "bash", ".bash": "bash", ".go": "go",
-    ".rs": "rust", ".java": "java", ".rb": "ruby", ".php": "php",
-    ".md": "markdown", ".xml": "xml", ".c": "c", ".cpp": "cpp",
-    ".h": "c", ".hpp": "cpp", ".swift": "swift", ".kt": "kotlin",
-    ".dart": "dart", ".lua": "lua", ".r": "r", ".pl": "perl",
+    ".py": "python",
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".jsx": "jsx",
+    ".html": "html",
+    ".css": "css",
+    ".scss": "scss",
+    ".json": "json",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".toml": "toml",
+    ".sql": "sql",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".go": "go",
+    ".rs": "rust",
+    ".java": "java",
+    ".rb": "ruby",
+    ".php": "php",
+    ".md": "markdown",
+    ".xml": "xml",
+    ".c": "c",
+    ".cpp": "cpp",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".swift": "swift",
+    ".kt": "kotlin",
+    ".dart": "dart",
+    ".lua": "lua",
+    ".r": "r",
+    ".pl": "perl",
 }
+
 
 def _infer_language(filepath: str) -> str:
     """Infer the programming language from a file path for diff syntax highlighting."""

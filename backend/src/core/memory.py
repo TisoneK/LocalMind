@@ -21,6 +21,7 @@ v0.3 upgrades:
 Scoring formula (per audit):
     score = similarity * 0.6 + recency * 0.2 + importance * 0.1 + usage_frequency * 0.1
 """
+
 from __future__ import annotations
 
 import logging
@@ -48,11 +49,11 @@ _MEMORY_RELEVANT_INTENTS = {
 _MIN_QUERY_WORDS_FOR_MEMORY = 5
 
 _RELEVANCE_THRESHOLD = 0.45
-_LOOSE_THRESHOLD = 0.60     # used when memory store is small (< 10 facts)
+_LOOSE_THRESHOLD = 0.60  # used when memory store is small (< 10 facts)
 # NOTE: Higher threshold = less strict filtering (looser matching)
 _MAX_FACTS = 6
-_RECENCY_WINDOW_SECS = 3600 * 24 * 7   # 1 week
-_IMPORTANCE_DEFAULT = 0.5               # 0.0–1.0
+_RECENCY_WINDOW_SECS = 3600 * 24 * 7  # 1 week
+_IMPORTANCE_DEFAULT = 0.5  # 0.0–1.0
 
 
 class MemoryComposer:
@@ -122,10 +123,7 @@ class MemoryComposer:
             usage_freq = min(access_count / 10.0, 1.0)
 
             score = (
-                similarity_score * 0.6
-                + recency_score * 0.2
-                + importance * 0.1
-                + usage_freq * 0.1
+                similarity_score * 0.6 + recency_score * 0.2 + importance * 0.1 + usage_freq * 0.1
             )
             ranked.append((score, fact, metadata))
 
@@ -190,6 +188,7 @@ class MemoryComposer:
             class FactResult:
                 def __init__(self, content: str):
                     self.content = content
+
             results.append(FactResult(fact))
 
         return results
@@ -324,7 +323,7 @@ class MemoryComposer:
 
             chunks = []
             async for chunk in adapter.chat(extraction_messages, temperature=0.0):
-                chunks.append(chunk.text if hasattr(chunk, 'text') else str(chunk))
+                chunks.append(chunk.text if hasattr(chunk, "text") else str(chunk))
 
             raw = "".join(chunks).strip()
 
@@ -424,7 +423,8 @@ class MemoryComposer:
             if consolidated > 0:
                 logger.info(
                     "[memory] consolidated %d near-duplicate facts out of %d total",
-                    consolidated, len(fact_pairs),
+                    consolidated,
+                    len(fact_pairs),
                 )
 
             return consolidated
