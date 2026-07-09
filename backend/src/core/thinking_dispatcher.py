@@ -184,6 +184,10 @@ CRITICAL RULES:
 1. Follow-ups ("yes", "go ahead", "try again") refer to the previous message — use history.
 2. Live/current info (weather, sports, prices, news) → ALWAYS web_search + realtime_sensitive=true
    - "Today's", "latest", "current", "recent" are signals for live data
+   - INDIRECT requests count too: "Should I carry an umbrella?" → needs weather data → web_search
+   - "Is it a good day for a picnic?" → needs weather data → web_search
+   - "Will my flight be on time?" → needs flight data → web_search
+   - Interpret WHAT THE USER NEEDS, not just what they literally said
 3. Time/date queries → sysinfo only (NOT web_search)
    - "What time is it", "what's the date", "what day is it"
 4. System specification queries → sysinfo only
@@ -195,9 +199,13 @@ CRITICAL RULES:
    - "Summarize this PDF and fact-check it" → file_read + web_search + synthesis
 7. When unsure about a capability, INCLUDE it — the execution layer will skip it if unneeded.
 8. NEVER set execution_mode=direct when live/external data is needed.
+9. The reformulated_query should be the ACTUAL query to search/execute — NOT the user's
+   raw message. "Should I carry an umbrella in Kitengela?" → reformulated_query should be
+   "Kitengela weather today rain forecast" — the optimal query for getting the data the
+   user needs, not a literal copy of their question.
 
 Reply with ONLY valid JSON:
-{"capabilities":["cap1","cap2"],"flags":{"requires_grounding":false,"requires_tools":false,"requires_planning":false,"requires_memory":false,"requires_reasoning":false,"requires_execution":false,"requires_file_access":false,"realtime_sensitive":false},"execution_mode":"direct","safety_level":"low","confidence":0.85,"primary_domain":"","reformulated_query":"cleaned up version of the user's query","acknowledgement":"brief 1-sentence acknowledgement","execution_plan":{"steps":[{"id":"step_id","capability":"cap_name","tool":"tool_name","args":{},"depends_on":[],"label":"Human-readable step description"}]}}
+{"capabilities":["cap1","cap2"],"flags":{"requires_grounding":false,"requires_tools":false,"requires_planning":false,"requires_memory":false,"requires_reasoning":false,"requires_execution":false,"requires_file_access":false,"realtime_sensitive":false},"execution_mode":"direct","safety_level":"low","confidence":0.85,"primary_domain":"","reformulated_query":"the optimal query for getting the data the user needs — NOT their raw message","acknowledgement":"brief 1-sentence acknowledgement","execution_plan":{"steps":[{"id":"step_id","capability":"cap_name","tool":"tool_name","args":{},"depends_on":[],"label":"Human-readable step description"}]}}
 """
 
 

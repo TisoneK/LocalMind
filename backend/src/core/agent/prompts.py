@@ -182,13 +182,15 @@ CRITICAL RULES:
 
 Respond with a concise plan in this format:
 
-UNDERSTANDING: [what the user wants]
+UNDERSTANDING: [what the user ACTUALLY needs — interpret their intent, don't just repeat their words. "Should I carry an umbrella?" → "User needs to know if it will rain today in their location"]
 STEPS:
-1. [step description with tool name and key arguments]
+1. [step description with tool name and the ACTUAL query/args to use — not the user's raw message]
 2. [next step if needed, or "Done" if single step]
-ARGS_PRECHECK: [verify all required args are known — especially path and content for file_write]
+ARGS_PRECHECK: [verify all required args are known]
 
-Keep the plan brief — 3-10 lines max. No code blocks, no markdown, no explanations beyond the plan.
+Keep the plan brief — 3-10 lines max. No code blocks, no markdown.
+
+CRITICAL: The search query in your plan should be the OPTIMAL query for getting the data the user needs — NOT their literal question. "Should I carry an umbrella in Kitengela?" → search "Kitengela weather today rain", NOT "should I carry an umbrella in Kitengela".
 
 User request: {user_message}"""
 

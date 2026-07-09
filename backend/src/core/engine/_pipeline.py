@@ -1653,23 +1653,20 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             label = _TOOL_LABELS.get(effective_intent, effective_intent.value)
             _obs.emit("tool_status", tool=effective_intent.value, label=label, status="running")
 
-            # v0.10: Emit a detailed status_update right before the agent loop
-            # starts executing. This replaces the generic "Working on it" with
-            # a specific description of what's about to happen, extracted from
-            # the user's message context. The status text is shown in the
-            # thinking area of the frontend.
-            _EXECUTION_STATUS = {
-                Intent.WEB_SEARCH: f"Searching the web for: {message[:60]}...",
-                Intent.WEB_FETCH: f"Fetching web page content...",
-                Intent.CODE_EXEC: f"Preparing to execute code...",
-                Intent.FILE_WRITE: f"Preparing to create file...",
-                Intent.FILE_EDIT: f"Preparing to edit file...",
-                Intent.FILE_TASK: f"Preparing to read file...",
-                Intent.SHELL: f"Preparing to run command...",
-                Intent.MEMORY_OP: f"Searching memory...",
-            }
-            _exec_status = _EXECUTION_STATUS.get(effective_intent, f"Executing {effective_intent.value}...")
-            yield StreamChunk(text="", done=False, status=_exec_status)
+            # The agent loop and planning phase produce their own thinking
+            # tokens and status updates. We should NOT emit a hardcoded
+            # status here that uses the user's raw message — that reveals
+            # the system's mechanical interpretation instead of the model's
+            # actual reasoning. The model should interpret intent, decide
+            # the right query, and the thinking block should show that
+            # reasoning in real-time.
+            #
+            # Previously this emitted "Searching the web for: Should I carry
+            # an umbrella today in Kitengela?" — literally the user's raw
+            # message as the search query. Instead, the model should think
+            # "User is asking about rain probability in Kitengela → I need
+            # weather data → I'll search for 'Kitengela weather today'" and
+            # that reasoning should appear in the thinking block.
 
             # ── Sub-agent delegation for complex multi-domain tasks ────────────
             # When the request is complex enough to need multiple specialized
