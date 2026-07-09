@@ -11,6 +11,7 @@ v0.3 additions:
 from __future__ import annotations
 import logging
 import re
+import sys
 import threading
 from pathlib import Path
 from core.models import EngineContext, Message, Role, Intent
@@ -75,37 +76,19 @@ def _intent_fragment_name(intent: Intent) -> str:
 
 
 def _build_environment_context(session_cwd: str | None = None) -> str:
-    """Build environment context for the agent - OS info, CWD, recent terminal commands."""
+    """Build environment context for the agent — system info, date/time, hardware, tools."""
     import platform
     import os
+    import datetime
 
-    # OS Info
+    # ── OS Info ──
     system = platform.system()
     release = platform.release()
     version = platform.version()
     machine = platform.machine()
     os_info = f"OS: {system} {release} ({version}) - {machine}"
 
-    # Current working directory — use session CWD when available so the
-    # agent knows which directory the user is working in.
-    # When no session CWD is set, default to the user's home directory (~),
-    # NOT os.getcwd() — the server process runs in backend/ which is an
-    # implementation detail, not the user's working directory.
-    cwd = session_cwd or os.path.expanduser("~")
-
-    # User home directory for reference
-    home = os.path.expanduser("~")
-
-    # OS-specific guidance
-    if system == "Windows":
-        os_guidance = "Windows: use backslash `\\\\` for paths, `.bat`/`.cmd` for scripts, not `.sh`"
-        common_cmds = "Common commands: `dir`, `type`, `copy`, `move`, `mkdir`, `del`"
-    else:
-        os_guidance = "Unix/Linux: use forward slash `/` for paths, `.sh` for scripts"
-        common_cmds = "Common commands: `ls`, `cat`, `cp`, `mv`, `mkdir`, `rm`, `chmod`"
-
-    # Build context string
-    import datetime
+    # ── Date/Time ──
     now = datetime.datetime.now()
     date_str = now.strftime("%A, %B %d, %Y")
     time_str = now.strftime("%H:%M")
@@ -115,14 +98,83 @@ def _build_environment_context(session_cwd: str | None = None) -> str:
     else:
         tz_str = ""
 
+    # ── Paths ──
+    cwd = session_cwd or os.path.expanduser("~")
+    home = os.path.expanduser("~")
+    hostname = platform.node()
+    username = os.environ.get("USER") or os.environ.get("USERNAME") or "user"
+
+    # ── OS-specific guidance ──
+    if system == "Windows":
+        os_guidance = "Windows: use backslash `\\\\` for paths, `.bat`/`.cmd` for scripts, not `.sh`"
+        common_cmds = "Common commands: `dir`, `type`, `copy`, `move`, `mkdir`, `del`"
+        shell_name = "PowerShell"
+    else:
+        os_guidance = "Unix/Linux: use forward slash `/` for paths, `.sh` for scripts"
+        common_cmds = "Common commands: `ls`, `cat`, `cp`, `mv`, `mkdir`, `rm`, `chmod`"
+        shell_name = "bash"
+
+    # ── Hardware (lightweight — no psutil dependency) ──
+    cpu_count = os.cpu_count() or "unknown"
+    processor = platform.processor() or "unknown"
+
+    # ── Python version ──
+    py_version = sys.version.split()[0]
+
+    # ── Available tools summary ──
+    # List the tools the model has access to so it doesn't need to guess
+    from tools import available_tools
+    tool_list = available_tools()
+    tool_summary = ", ".join(t["intent"] for t in tool_list)
+
+    # ── Memory facts count (if available) ──
+    memory_count = 0
+    try:
+        from storage.vector import VectorStore
+        vs = VectorStore()
+        if vs._ready:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Can't await in sync context — skip
+                pass
+            else:
+                memory_count = loop.run_until_complete(vs.count())
+    except Exception:
+        pass
+
     context = f"""## Environment
 - {os_info}
+- Hostname: {hostname}
+- User: {username}
 - Current date: {date_str}
 - Current time: {time_str}{tz_str}
 - Working directory: {cwd}
 - Home: {home}
+- Shell: {shell_name}
+- CPU: {processor} ({cpu_count} cores)
+- Python: {py_version}
 - {os_guidance}
-- {common_cmds}"""
+- {common_cmds}
+
+## Available Tools
+You have access to these tools: {tool_summary}
+- web_search: Search the internet for current information
+- web_fetch: Fetch and read a specific URL
+- browse: Open a real browser, click buttons, fill forms, take screenshots
+- shell: Run system commands (list files, check disk, run scripts)
+- code_exec: Execute Python code and show the output
+- file_task: Read file contents (PDF, DOCX, CSV, code, images)
+- file_write: Create or overwrite files on disk
+- edit_file: Edit existing files with search/replace/insert operations
+- sysinfo: Get system specs (CPU, RAM, disk) — instant and offline
+- memory_op: Store and retrieve persistent facts across conversations
+
+## What You Know
+- Today is {date_str}. Use this to ground all time-sensitive queries.
+- You are running on {system} {release}. Use {shell_name}-compatible commands.
+- The user's home directory is {home}. Default file operations should be relative to here.
+- You have {memory_count} facts in memory about this user."""
 
     return context
 
