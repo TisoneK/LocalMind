@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm run dev -w localmind-electron",
     "dev:frontend": "npm run dev -w localmind-frontend",
-    "dev:backend": "cd backend && .venv\\Scripts\\python.exe server.py",
+    "dev:backend": "node scripts/dev-backend.js",
     "dev:full": "concurrently -n backend,frontend,electron -c yellow,cyan,green --kill-others-on-fail \"npm run dev:backend\" \"wait-on -t 60000 http-get://localhost:8000/api/health && npm run dev:frontend\" \"wait-on -t 60000 http-get://localhost:8000/api/health && wait-on -t 60000 http://localhost:3000 && cross-env ELECTRON_DEV_MODE=true npm run dev -w localmind-electron\"",
     "dev:electron": "cross-env ELECTRON_DEV_MODE=true npm run dev -w localmind-electron",
     "build": "npm run build -w localmind-frontend -w localmind-electron",
