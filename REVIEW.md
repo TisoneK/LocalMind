@@ -273,7 +273,7 @@
 - **Description:** 526 lines exceed the 100-char limit.
 - **Impact:** Readability. No runtime impact.
 - **Recommendation:** Run `ruff format .` to auto-wrap. Or run `ruff check . --select E501 --fix` (less aggressive).
-- **Status:** ✅ Fixed
+- **Status:** ⚠️ Partially fixed — reduced from 526 to 116 (78% reduction) as of 2026-07-09. E501 isn't safely auto-fixable in all cases, so the remaining 116 need a manual wrap pass or an accepted `ruff format .` run.
 
 #### L2: 93 unsorted-imports (I001)
 - **Description:** Import blocks not in ruff's canonical order.
@@ -364,7 +364,7 @@ The fix phase is complete. The baseline was unhealthy at the start:
 9. ✅ **M1–M7** — Medium fixes (ARCHITECTURE.md, bare-excepts, CHANGELOG, CONTRIBUTING, Pydantic, bundle splitting)
 10. ✅ **Security** — npm audit fix (2 critical + 2 high cleared)
 11. ⏳ **C5** — CI workflow file written but needs PAT `workflow` scope to push
-12. ⏳ **L1–L5** — Low-priority formatting (613 ruff errors remain, mostly E501 line-length)
+12. ⏳ **L1** — Low-priority formatting: 116 E501 (line-too-long) errors remain as of 2026-07-09, down from 526. L2–L5 (unsorted imports, blank-line whitespace, f-string placeholders, unused variables) are confirmed clear — `ruff check .` reports only E501 now.
 
 Each fix = one conventional commit, pushed to main, REVIEW.md updated with status + commit SHA.
 
