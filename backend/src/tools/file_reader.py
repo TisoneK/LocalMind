@@ -38,16 +38,24 @@ SUPPORTED_EXTS = {".pdf", ".docx", ".txt", ".md", ".csv", ".xlsx", ".py", ".js",
 
 
 def _chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
-    """Split text into overlapping token-approximate chunks."""
+    """Split text into overlapping token-approximate chunks.
+
+    Guards against infinite loops when overlap >= chunk_size by clamping
+    the step to at least 1. Without this guard, a caller passing a small
+    chunk_size with the default overlap (e.g. chunk_size=100,
+    overlap=200) would loop forever.
+    """
     words = text.split()
     if not words:
         return []
+    # Ensure forward progress: step must be >= 1 even when overlap >= chunk_size.
+    step = max(1, chunk_size - overlap)
     chunks = []
     i = 0
     while i < len(words):
         end = min(i + chunk_size, len(words))
         chunks.append(" ".join(words[i:end]))
-        i += chunk_size - overlap
+        i += step
     return chunks
 
 
