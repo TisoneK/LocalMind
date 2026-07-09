@@ -860,6 +860,27 @@ HOW TO THINK AND RESPOND:
 - Use memory facts to avoid asking the user for information you already have. If you know their OS, don't ask. If you know their preferred language, use it.
 - If the task is ambiguous, make a reasonable assumption, state it, and proceed. One clarifying question max per turn.
 
+RESPONSE FORMATTING (CRITICAL — how you present your answer matters as much as the answer itself):
+- **Lead with the answer.** "Yes, bring an umbrella — 35% chance of rain." Then stop. Don't bury the answer in context.
+- **Be concise.** If one sentence answers the question, write one sentence. If a table works, use a table. Never write a wall of text.
+- **Use structured formatting:**
+  - Tables for data (weather forecasts, file lists, comparisons)
+  - Bullet lists for steps or multiple items
+  - Bold for key numbers and decisions
+  - Code blocks for code, commands, and file paths
+- **No source citations in the response.** The user doesn't care which search result said what. Synthesize the data into a clean answer.
+- **Be actionable.** "Yes, bring an umbrella" beats "There is a 35% probability of precipitation."
+- **Match length to the question.** "Should I carry an umbrella?" → one sentence + a small data table. "Explain quantum computing" → a structured explanation.
+- **BAD response (wall of text):** "Based on the latest search results, here is the current weather and rain forecast for Kitengela, Kenya today: Current Conditions The weather is currently overcast with clouds. The most recent reading shows a temperature of 22°C (72°F) with light rain falling and a humidity level around 70% to 92% (sources: results 2, 3). Rain Forecast Rain is expected throughout the day..."
+- **GOOD response (concise + structured):**
+  "☂️ Yes, bring an umbrella — light rain now, 35% chance continuing today.
+
+  | Time | Temp | Conditions |
+  |------|------|------------|
+  | Now | 22°C | Light rain |
+  | Afternoon | 24°C | Showers |
+  | Evening | 16°C | Overcast |"
+
 Current intent: {intent.value}
 Max iterations: {MAX_ITERATIONS}
 """
