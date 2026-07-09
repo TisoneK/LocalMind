@@ -113,18 +113,18 @@
 - **Related commit:** _(none yet)_
 
 #### C2: `asyncio` not imported in `src/adapters/ollama.py` streaming code
-- **Description:** Lines 405, 529, 551, 552 reference `asyncio.Queue`, `asyncio.create_task`, `asyncio.wait_for`, `asyncio.TimeoutError` but `asyncio` is not imported in the module (or the import was removed during a refactor). Ruff reports 5× F821.
-- **Impact:** The streaming chat path — which is the primary chat mechanism — will raise `NameError: name 'asyncio' is not defined` the moment a user sends a message that triggers streaming. This is a runtime crash on the core code path.
-- **Recommendation:** Add `import asyncio` at the top of `src/adapters/ollama.py` (or restore it if removed). Verify with `ruff check src/adapters/ollama.py --select F821`. Add a smoke test that exercises the streaming path.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Description:** Lines 405, 529, 551, 552 reference `asyncio.Queue`, `asyncio.create_task`, `asyncio.wait_for`, `asyncio.TimeoutError` but `asyncio` was not imported in the module. Ruff reported 5× F821.
+- **Impact:** The streaming chat path — the primary chat mechanism — would raise `NameError: name 'asyncio' is not defined` the moment a user sends a streaming message.
+- **Recommendation:** Add `import asyncio` at the top of `src/adapters/ollama.py`.
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(adapters): import asyncio in ollama.py — fixes streaming NameError`
 
 #### C3: `secondary_intent` undefined in `src/core/engine/_pipeline.py`
-- **Description:** Lines 1931, 1932, 1946 reference `secondary_intent` in an `if`/`match` block, but the variable is never assigned anywhere in the function scope. Ruff reports 3× F821.
-- **Impact:** The "secondary intent" handling block (lines 1930–1947) is dead code that will crash with `NameError` if execution ever reaches it. Either the variable assignment was deleted during a refactor, or the block was left in by mistake. Either way, secondary intent routing (e.g. file-write follow-up) silently never executes.
-- **Recommendation:** Trace where `secondary_intent` was meant to come from (likely the intent router output). Either restore the assignment or remove the dead block. Check git history: `git log -p --all -S secondary_intent -- src/core/engine/`.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Description:** Lines 1931, 1932, 1946 referenced `secondary_intent` in an `if`/`match` block, but the variable was never assigned in scope. Ruff reported 3× F821. Root cause: `secondary_intent` is a *method* on `TaskProfile` (`_task_profile.secondary_intent()`), not a standalone variable — the call site was missing.
+- **Impact:** The "secondary intent" handling block (lines 1930–1947) would crash with `NameError` if execution reached it. Secondary intent routing (e.g. file-write follow-up after a chat response containing code) silently never executed.
+- **Recommendation:** Assign `secondary_intent = _task_profile.secondary_intent()` before the if block.
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(core): resolve undefined secondary_intent in engine pipeline — restores secondary intent routing`
 
 #### C4: Test suite is broken — stale imports
 - **Description:** `tests/tools/test_file_reader.py` imports `_extract_plain` from `tools.file_reader`, but that function no longer exists (the module exports `_parse_pdf`, `_parse_docx`, `_parse_csv_xlsx`, `_parse_image` instead). `tests/tools/test_web_search.py` imports `run` from `tools.web_search`, but the function was renamed to `web_search`. pytest cannot collect either file — the entire test suite is blocked.
@@ -178,18 +178,18 @@
 - **Related commit:** _(none yet)_
 
 #### H6: `ToolCallResult` undefined in `src/adapters/openai_compat.py`
-- **Description:** Line 290 uses `"AsyncIterator[StreamChunk] | ToolCallResult"` as a return type annotation, but `ToolCallResult` is not imported or defined in the module. Ruff reports 1× F821.
-- **Impact:** The annotation is string-quoted so it won't crash at runtime, but it's a type error. Anyone running `mypy` on this module will get an error. The return type is misleading — callers don't know what `ToolCallResult` is.
-- **Recommendation:** Either import `ToolCallResult` from wherever it's defined, or replace with the actual type (likely a `ToolResult` or a `dataclass` defined elsewhere). Search: `rg "class ToolCallResult" backend/src/`.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Description:** Line 290 used `"AsyncIterator[StreamChunk] | ToolCallResult"` as a return type annotation, but `ToolCallResult` was not imported at module level. Ruff reported 1× F821. `ToolCallResult` is defined in `adapters/ollama.py:71`; `openai_compat.py` was importing it locally inside functions (lines 578, 620) but never at module scope.
+- **Impact:** Type checkers (mypy) would error on the annotation. The string-quoted annotation meant no runtime crash, but the type was invisible to tooling.
+- **Recommendation:** Add `TYPE_CHECKING` guard import at module level (avoids circular import since `ollama.py` doesn't import `openai_compat.py`, but keeps the heavy `ollama` module out of `openai_compat`'s import-time path).
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(adapters): import ToolCallResult under TYPE_CHECKING in openai_compat.py`
 
 #### H7: `exc` referenced out of scope in `src/api/routes/chat.py`
-- **Description:** Line 431 has `logger.error(f"[chat] file upload error: {exc}", exc_info=True)` (presumably inside an `except Exception as exc:` block). Line 433 then defines an async generator `_err()` that references `exc` in an f-string: `yield _sse({"error": f"File upload failed: {exc}", "done": True})`. Ruff reports 1× F821 — `exc` may not be in scope when `_err()` is called later.
-- **Impact:** If `_err()` is called after the `except` block has exited, `exc` may be undefined, causing a `NameError` inside the error handler — the user gets no error message at all. This is a broken error-handling path.
-- **Recommendation:** Capture `exc` into a local variable before defining `_err()`, or pass it as a parameter. Verify the scoping by reading the full function.
-- **Status:** Open
-- **Related commit:** _(none yet)_
+- **Description:** Line 431 had `logger.error(f"[chat] file upload error: {exc}", ...)` inside `except Exception as exc:`. Line 433 defined an async generator `_err()` that referenced `exc` in an f-string. Ruff reported 1× F821. Per PEP 3110, Python unbinds `exc` when the `except` block exits — but `_err()` is iterated later by FastAPI, by which point `exc` is gone → `NameError` inside the error handler.
+- **Impact:** When a file upload failed, the user would receive no error message at all — the error handler itself would crash with `NameError: name 'exc' is not defined` when FastAPI tried to stream the error response.
+- **Recommendation:** Capture `exc` into a local string variable (`_upload_error_msg = f"File upload failed: {exc}"`) while still inside the except block, then have the generator reference the captured string.
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(api): capture file-upload error before except block exits — fixes NameError in error handler`
 
 ### Medium
 
