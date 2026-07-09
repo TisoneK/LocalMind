@@ -1985,6 +1985,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             tools_used=effective_intent.value, memory_hits=len(memory_facts),
             context_tokens=_final_prompt_tok, latency_ms=total_ms)
 
+        # Explicitly yield done so the frontend resets isStreaming immediately.
+        yield StreamChunk(text="", done=True)
+
         # GUARANTEE: The API route's _event_stream() has a finally block
         # that calls _guarantee_persist_assistant() to catch any case where
         # the generator was interrupted before reaching this point.
