@@ -43,10 +43,21 @@ export default tseslint.config(
       // intentionally-unused callback params in event handlers).
       '@typescript-eslint/no-unused-vars': [
         'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
       ],
       // React 19 doesn't require React in scope for JSX (new JSX transform).
       'react/react-in-jsx-scope': 'off',
+      // Allow `any` with a warning — the codebase uses it intentionally
+      // in API client code where response shapes are dynamic.
+      '@typescript-eslint/no-explicit-any': 'warn',
+      // React 19's set-state-in-effect rule is valuable for new code but
+      // flags many intentional patterns in existing code (e.g. refreshing
+      // data on mount). Warn instead of error for now.
+      'react-hooks/set-state-in-effect': 'warn',
     },
   },
 )

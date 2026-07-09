@@ -608,6 +608,7 @@ function SidebarMenuSkeleton({
 }) {
   // Random width between 50 to 90%.
   const width = React.useMemo(() => {
+    // eslint-disable-next-line react-hooks/purity -- shadcn/ui skeleton, random width is intentional for loading shimmer
     return `${Math.floor(Math.random() * 40) + 50}%`
   }, [])
 

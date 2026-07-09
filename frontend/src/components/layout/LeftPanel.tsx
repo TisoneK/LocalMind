@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Cpu, Trash2, Loader2, CheckCircle2, XCircle, Terminal, Globe, FileEdit, Brain, Clock } from 'lucide-react';
+import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Cpu, Trash2, Loader2, CheckCircle2, XCircle, Terminal, Globe, FileEdit, Brain } from 'lucide-react';
 import { Session, ActionItem, FileNode, TodoItem, ModelOption, ToolCall } from '@/types';
 import { ActionHistory } from '@/components/panels/ActionHistory';
 import { FileExplorer } from '@/components/panels/FileExplorer';

@@ -19,7 +19,6 @@ import type {
   ActionItem,
   TodoItem,
   FileNode,
-  TerminalLine,
   MemoryFact,
   PerformanceMetrics,
   ObservationData,
@@ -286,7 +285,7 @@ class LocalMindClient {
           }
           // Stream ended without [DONE] — treat as complete
           onDone();
-        } catch (err) {
+        } catch (_err) {
           // AbortError is expected when the user cancels
           if (controller.signal.aborted) {
             onDone();
@@ -295,7 +294,7 @@ class LocalMindClient {
           }
         }
       })
-      .catch((err) => {
+      .catch((_err) => {
         if (controller.signal.aborted) {
           onDone();
         } else {

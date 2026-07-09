@@ -7,12 +7,10 @@ import {
   X,
   Copy,
   Search,
-  ChevronDown,
   FolderOpen,
   RotateCcw,
   Maximize2,
   Minimize2,
-  Filter,
 } from 'lucide-react';
 
 // ─── Color Map ─────────────────────────────────────────────────────────
@@ -66,7 +64,7 @@ export function TerminalPanel({
   onClear,
   isRunning,
   cwd = '~',
-  sessionId = 'default',
+  sessionId: _sessionId = 'default',
   onTabComplete,
   history = [],
   onSessionChange,

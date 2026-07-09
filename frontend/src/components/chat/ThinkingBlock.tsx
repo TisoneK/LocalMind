@@ -6,12 +6,14 @@ import { ThinkingStep } from '@/types';
 
 // v0.13: Dispatch steps replace LLM-generated thinking prose.
 // Each step is formatted like: "[Web Search] Search: Nairobi weather"
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface DispatchStep {
   label: string;   // e.g. "Web Search"
   detail: string; // e.g. "Search: Nairobi weather"
   icon?: string;   // intent name for coloring
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function parseDispatchSteps(text: string): string {
   // If the thinking text is a structured step line, parse and render it.
   // Format: "[Label] Detail text"

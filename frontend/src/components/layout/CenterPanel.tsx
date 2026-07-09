@@ -76,7 +76,7 @@ export function CenterPanel({
     ? rawModelName
         .replace(/\s*-\s*zen$/i, '')
         .replace(/\s*-\s*local$/i, '')
-        .replace(/^ollama[:\/]/, '')
+        .replace(/^ollama[:/]/, '')
         .replace(/_/g, ' ')
         .replace(/^\w/, c => c.toUpperCase())
         .trim()

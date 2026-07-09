@@ -109,6 +109,7 @@ export function ObservabilityTab({ observation }: ObservabilityTabProps) {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function stepSuffix(status: string) {
     switch (status) {
       case 'done': return '\u2713';    // checkmark

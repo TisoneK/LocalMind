@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { LeftPanel } from './LeftPanel';
 import { CenterPanel } from './CenterPanel';
 import { RightPanel } from './RightPanel';
-import { ToolCall, ToolExecutionEvent, ActionItem } from '@/types';
+import { ToolExecutionEvent, ActionItem } from '@/types';
 import {
   useSessions,
   useChat,

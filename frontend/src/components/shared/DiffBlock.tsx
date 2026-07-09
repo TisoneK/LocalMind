@@ -4,9 +4,6 @@ import React, { useState, useCallback, useMemo } from 'react';
 import {
   Copy,
   Check,
-  FileCode2,
-  ChevronDown,
-  ChevronRight,
   Expand,
   Shrink,
   Plus,

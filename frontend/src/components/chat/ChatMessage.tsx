@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { User, Bot, Copy, Check, FileEdit, FilePlus, FileMinus } from 'lucide-react';
+import { User, Copy, Check, FileEdit, FilePlus, FileMinus } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -51,7 +51,7 @@ SyntaxHighlighter.registerLanguage('shell-session', shell);
 import { ChatMessage as ChatMessageType, FileResult, PendingWrite } from '@/types';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolSteps } from '@/components/chat/ToolSteps';
-import { DiffBlock, parseUnifiedDiff, type DiffHunk } from '@/components/shared/DiffBlock';
+import { DiffBlock, type DiffHunk } from '@/components/shared/DiffBlock';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -156,7 +156,7 @@ function CodeBlockComponent({ code, language, filename }: { code: string; langua
 // ── Markdown custom component renderers — themed green-black ─────────────
 
 /** Pre block wrapper — themed header bar with language label + copy button */
-function MarkdownPreBlock({ children, ...props }: React.ComponentPropsWithoutRef<'pre'> & { children?: React.ReactNode }) {
+function MarkdownPreBlock({ children, ..._props }: React.ComponentPropsWithoutRef<'pre'> & { children?: React.ReactNode }) {
   let lang = '';
   let codeText = '';
   let rawCode = '';
@@ -419,7 +419,7 @@ function MarkdownContent({ text }: { text: string }) {
         remarkPlugins={[remarkGfm]}
         components={{
           // Code handling: distinguish inline vs block
-          code: ({ node, inline, className, children, ...props }: any) => {
+          code: ({ node: _node, inline, className, children, ...props }: any) => {
             const match = /language-(\w+)/.exec(className || '');
             // If it has a language class or contains a newline, it's a block code
             if (!inline && (match || String(children).includes('\n'))) {
@@ -479,7 +479,7 @@ function PermissionGate({ pending, onResolved }: { pending: PendingWrite; onReso
       if (!res.ok) throw new Error(`API error ${res.status}`);
       setStatus('done');
       onResolved('confirmed');
-    } catch (err) {
+    } catch (_err) {
       setStatus('error');
     }
   };
@@ -618,7 +618,7 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
           {message.pendingWrite && (
             <PermissionGate
               pending={message.pendingWrite}
-              onResolved={(result) => {
+              onResolved={(_result) => {
                 // The gate is self-contained — no parent state update needed.
               }}
             />

@@ -29,7 +29,6 @@ import type {
   ObservationData,
   ModelOption,
   ToolCall,
-  ThinkingStep,
   CompletionSuggestion,
 } from '@/types';
 
@@ -942,9 +941,9 @@ function _buildToolLabel(toolName: string, args: any): string {
     const code = (args.code || '').slice(0, 30);
     const operation = args.operation || '';
     switch (toolName) {
-      case 'file_write': return path ? `Creating ${path.split(/[\/\\]/).pop()}` : 'Creating file';
-      case 'file_task': return path ? `Reading ${path.split(/[\/\\]/).pop()}` : 'Reading file';
-      case 'edit_file': return path ? `Editing ${path.split(/[\/\\]/).pop()}` : 'Editing file';
+      case 'file_write': return path ? `Creating ${path.split(/[\\/]/).pop()}` : 'Creating file';
+      case 'file_task': return path ? `Reading ${path.split(/[\\/]/).pop()}` : 'Reading file';
+      case 'edit_file': return path ? `Editing ${path.split(/[\\/]/).pop()}` : 'Editing file';
       case 'shell': return command ? `Running: ${command.slice(0, 60)}` : 'Executing command';
       case 'code_exec': return code ? `Executing: ${code}...` : 'Running code';
       case 'web_search': return query ? `Searching: ${query.slice(0, 60)}` : 'Searching the web';

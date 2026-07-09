@@ -88,8 +88,6 @@ function ToolStep({ toolCall }: { toolCall: ToolCall }) {
   // Check if this tool produced code that should be shown in a code block
   const isCodeTool = toolCall.name === 'code_exec';
   const isFileWrite = toolCall.name === 'file_write';
-  // Extract code from output for display in code blocks
-  const codeOutput = isCodeTool && toolCall.output ? toolCall.output : null;
   const filePath = isFileWrite ? toolCall.input : null;
 
   return (

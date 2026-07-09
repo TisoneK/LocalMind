@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Circle, Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { TodoItem } from '@/types';
 
 interface TodoListProps {
