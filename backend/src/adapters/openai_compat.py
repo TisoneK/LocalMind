@@ -25,12 +25,18 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from typing import AsyncIterator
+from typing import AsyncIterator, TYPE_CHECKING
 
 import httpx
 
 from adapters.base import BaseAdapter
 from core.models import StreamChunk
+
+if TYPE_CHECKING:
+    # ToolCallResult is defined in adapters.ollama. Imported only under
+    # TYPE_CHECKING to avoid a circular import at runtime (ollama.py is
+    # the heavier module). Runtime references use local imports.
+    from adapters.ollama import ToolCallResult
 
 logger = logging.getLogger(__name__)
 
