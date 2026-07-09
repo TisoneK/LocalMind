@@ -609,13 +609,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 _client_intent = None
 
         if _orchestration_plan is None:
-            # No client pre-classification — run the ThinkingDispatcher
+            # No client pre-classification — run the ThinkingDispatcher.
+            # The dispatcher streams REAL thinking tokens from the LLM
+            # (the model's pre-JSON reasoning) as they arrive — no need
+            # for generic "Analyzing..." status placeholders.
             self._dispatcher = ThinkingDispatcher(adapter)
-
-            # Emit a status update so the user sees progress during the
-            # 10-30s dispatcher LLM call. Without this, the UI shows a
-            # blank "Thinking..." with no indication of what's happening.
-            yield StreamChunk(text="", done=False, status="Analyzing your request...")
 
             # Start memory retrieval IN PARALLEL with the dispatcher.
             _memory_task = asyncio.create_task(
@@ -625,8 +623,6 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     session_id=session_id,
                 )
             )
-
-            yield StreamChunk(text="", done=False, status="Retrieving relevant memory...")
 
             async for output in self._dispatcher.dispatch(
                 message=message,

@@ -342,6 +342,10 @@ class ThinkingDispatcher:
                             pre_brace = text[:brace_idx]
                             if pre_brace.strip():
                                 _thinking_buffer.append(pre_brace)
+                                # Yield thinking tokens in real-time so the
+                                # user sees the model's reasoning as it happens,
+                                # not after the full JSON is parsed.
+                                yield StreamChunk(text="", thinking=pre_brace)
                             _in_json = True
                             _brace_depth = 1
                             json_part = text[brace_idx + 1:]
@@ -352,6 +356,8 @@ class ThinkingDispatcher:
                                 elif ch == '}': _brace_depth -= 1
                         else:
                             _thinking_buffer.append(text)
+                            # Yield thinking tokens in real-time
+                            yield StreamChunk(text="", thinking=text)
                     else:
                         _json_buffer.append(text)
                         for ch in text:
