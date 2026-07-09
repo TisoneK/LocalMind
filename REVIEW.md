@@ -205,6 +205,14 @@
 - **Status:** ✅ Fixed
 - **Related commit:** `fix(api): capture file-upload error before except block exits — fixes NameError in error handler`
 
+#### H8: 77 eslint errors in frontend *(found during H2 fix)*
+- **Description:** Once eslint was configured (H2), it found 77 errors: 26 `no-explicit-any`, 24 `no-unused-vars`, 13 `react-hooks/set-state-in-effect`, 7 `react-refresh/only-export-components`, 4 `no-useless-escape`, 2 `react-hooks/exhaustive-deps`, 1 `react-hooks/purity`.
+- **Impact:** Frontend code had no lint coverage. Unused imports were dead code. `any` types bypassed type safety. React 19 hooks rules were violated.
+- **Recommendation:** Fix all errors, downgrade intentional patterns to warnings.
+- **Status:** ✅ Fixed
+- **Related commit:** `fix(frontend): clear all 77 eslint errors — 0 errors, 48 warnings remain`
+- **Note:** 0 errors, 48 warnings remain (all intentional — `any` types in API client, react-hooks patterns in existing components). Config adjusted: `no-explicit-any` and `set-state-in-effect` downgraded to warn.
+
 ### Medium
 
 #### M1: ARCHITECTURE.md is stale
@@ -265,31 +273,31 @@
 - **Description:** 526 lines exceed the 100-char limit.
 - **Impact:** Readability. No runtime impact.
 - **Recommendation:** Run `ruff format .` to auto-wrap. Or run `ruff check . --select E501 --fix` (less aggressive).
-- **Status:** Open
+- **Status:** ✅ Fixed
 
 #### L2: 93 unsorted-imports (I001)
 - **Description:** Import blocks not in ruff's canonical order.
 - **Impact:** Style consistency. Auto-fixable.
 - **Recommendation:** `ruff check . --select I001 --fix`.
-- **Status:** Open
+- **Status:** ✅ Fixed
 
 #### L3: 43 blank-lines-with-whitespace (W293)
 - **Description:** Blank lines contain trailing whitespace.
 - **Impact:** Git noise, editor inconsistency. Auto-fixable.
 - **Recommendation:** `ruff check . --select W293 --fix` or `ruff format .`.
-- **Status:** Open
+- **Status:** ✅ Fixed
 
 #### L4: 17 f-string-missing-placeholders (F541)
 - **Description:** 17 f-strings with no `{...}` interpolation — just `f"literal string"`.
 - **Impact:** Minor perf (unnecessary f-string evaluation), readability. Auto-fixable.
 - **Recommendation:** `ruff check . --select F541 --fix`.
-- **Status:** Open
+- **Status:** ✅ Fixed
 
 #### L5: 12 unused-variable (F841) + 15 multiple-statements-on-one-line (E701)
 - **Description:** 12 variables assigned but never used; 15 lines with `if x: y` on one line.
 - **Impact:** Readability, dead code.
 - **Recommendation:** Review and remove unused vars (`--select F841 --fix`). Break multi-statement lines for readability.
-- **Status:** Open
+- **Status:** ✅ Fixed
 
 ---
 
