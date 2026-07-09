@@ -563,6 +563,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # requires_grounding=True, realtime_sensitive=True, web_search.
         # v4.0: ThinkingDispatcher is the sole Layer 2 implementation
         adapter = get_adapter(settings.localmind_adapter)
+        logger.info("[engine] using adapter: %s (model=%s)", settings.localmind_adapter, getattr(adapter, '_model', '?'))
         _orchestration_plan: OrchestrationPlan | None = None
         _task_profile: TaskProfile | None = None
         _client_intent: Intent | None = None
@@ -1827,6 +1828,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
             # Get fresh adapter for agent loop
             agent_adapter = get_adapter(settings.localmind_adapter)
+            logger.info("[engine] agent loop adapter: %s type=%s model=%s",
+                       settings.localmind_adapter, type(agent_adapter).__name__, getattr(agent_adapter, '_model', '?'))
             self._agent_loop._adapter = agent_adapter
             # Track metrics for agent-mode intents (SHELL, CODE_EXEC, etc.)
             # Without this, the status bar shows 0 tok/s and 0ms latency because
