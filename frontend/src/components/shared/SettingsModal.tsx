@@ -177,21 +177,12 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
     try {
       await localmindClient.setProviderKey(newKeyProvider, newKeyValue.trim(), newKeyModel || undefined);
       setProviderKeys((prev) => ({ ...prev, [newKeyProvider]: true }));
+      setNewKeyProvider('');  // close the inline form
       setNewKeyValue('');
       setNewKeyModel('');
       setStatus('success');
       setMessage(`API key saved for ${newKeyProvider}`);
       onSave();
-      // Re-fetch the live model list now that the key is saved — the
-      // provider's /models endpoint will return the full list instead of
-      // just the default. The useEffect on newKeyProvider won't re-fire
-      // (the provider didn't change), so we trigger it manually.
-      try {
-        const data = await localmindClient.getModels(newKeyProvider);
-        setProviderModels(data.models || []);
-      } catch {
-        /* non-fatal */
-      }
     } catch (err) {
       setStatus('error');
       setMessage(err instanceof Error ? err.message : 'Failed to save API key');
@@ -380,116 +371,142 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               </h3>
               <p className="mb-3 text-xs text-[#8ab08a]">
                 Keys are stored locally in <code className="text-[#d4e8d4]">~/LocalMind/settings.json</code> with
-                restricted file permissions. They never leave your machine.
+                restricted file permissions. They never leave your machine. Click "Add Key" or "Update" on any provider to enter its key inline.
               </p>
 
-              {/* Stored keys list */}
-              <div className="mb-4 space-y-1.5">
+              {/* Unified provider list — each row shows key status and an
+                  inline expand button. No separate dropdown needed. */}
+              <div className="space-y-1.5">
                 {PROVIDERS.map((p) => {
                   const hasKey = providerKeys[p.id];
+                  const isEditing = newKeyProvider === p.id;
                   return (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between rounded-lg border border-[#1a2a1a] px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-[#d4e8d4]">{p.name}</span>
-                        {hasKey ? (
-                          <span className="flex items-center gap-1 text-xs text-[#39d353]">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Key set
-                          </span>
-                        ) : (
-                          <span className="text-xs text-[#8ab08a]">No key</span>
-                        )}
+                    <div key={p.id} className="rounded-lg border border-[#1a2a1a] overflow-hidden">
+                      {/* Provider row */}
+                      <div className="flex items-center justify-between px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-[#d4e8d4]">{p.name}</span>
+                          {hasKey ? (
+                            <span className="flex items-center gap-1 text-xs text-[#39d353]">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Key set
+                            </span>
+                          ) : (
+                            <span className="text-xs text-[#8ab08a]">No key</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {hasKey && (
+                            <button
+                              onClick={() => {
+                                setNewKeyProvider(p.id);
+                                setNewKeyValue('');
+                                setNewKeyModel('');
+                              }}
+                              disabled={status === 'saving'}
+                              className="rounded px-2 py-1 text-xs text-[#8ab08a] hover:bg-[#1a2a1a] hover:text-[#d4e8d4] transition-colors disabled:opacity-50"
+                              title={`Update ${p.name} API key`}
+                            >
+                              Update
+                            </button>
+                          )}
+                          {hasKey && (
+                            <button
+                              onClick={() => handleDeleteKey(p.id)}
+                              disabled={status === 'saving'}
+                              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[#e05555] hover:bg-[#e05555]/10 transition-colors disabled:opacity-50"
+                              title={`Remove ${p.name} API key`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Remove
+                            </button>
+                          )}
+                          {!hasKey && !isEditing && (
+                            <button
+                              onClick={() => {
+                                setNewKeyProvider(p.id);
+                                setNewKeyValue('');
+                                setNewKeyModel('');
+                              }}
+                              disabled={status === 'saving'}
+                              className="rounded px-2 py-1 text-xs text-[#39d353] hover:bg-[#39d353]/10 transition-colors disabled:opacity-50"
+                            >
+                              + Add Key
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      {hasKey && (
-                        <button
-                          onClick={() => handleDeleteKey(p.id)}
-                          disabled={status === 'saving'}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[#e05555] hover:bg-[#e05555]/10 transition-colors disabled:opacity-50"
-                          title={`Remove ${p.name} API key`}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          Remove
-                        </button>
+
+                      {/* Inline key form — expands when this provider is selected */}
+                      {isEditing && (
+                        <div className="border-t border-[#1a2a1a] bg-[#0a0f0a] p-3 space-y-2">
+                          <input
+                            type="password"
+                            value={newKeyValue}
+                            onChange={(e) => setNewKeyValue(e.target.value)}
+                            placeholder="API key"
+                            className="w-full rounded-lg border border-[#1a2a1a] bg-[#0d140d] px-3 py-2 text-sm text-[#d4e8d4] font-mono focus:border-[#39d353] outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={newKeyModel}
+                            onChange={(e) => setNewKeyModel(e.target.value)}
+                            placeholder={`Model (optional, default: ${
+                              providerDefaults[p.id] || 'provider default'
+                            })`}
+                            className="w-full rounded-lg border border-[#1a2a1a] bg-[#0d140d] px-3 py-2 text-sm text-[#d4e8d4] focus:border-[#39d353] outline-none"
+                          />
+                          {/* Live model chips — populated from GET /api/models?provider=... */}
+                          {providerModels.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {providerModels.map((m) => (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  onClick={() => setNewKeyModel(m.id)}
+                                  className={`rounded px-2 py-1 text-[11px] font-mono transition-colors ${
+                                    newKeyModel === m.id
+                                      ? 'border border-[#39d353] bg-[#39d353]/10 text-[#39d353]'
+                                      : 'border border-[#1a2a1a] text-[#8ab08a] hover:border-[#39d353]/30 hover:text-[#d4e8d4]'
+                                  }`}
+                                  title={`Use ${m.id}`}
+                                >
+                                  {m.id}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {providerModelsLoading && (
+                            <div className="flex items-center gap-1.5 text-[11px] text-[#8ab08a]">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Loading models…
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleSaveKey}
+                              disabled={status === 'saving' || !newKeyValue.trim()}
+                              className="flex-1 rounded-lg border border-[#39d353]/30 bg-[#39d353]/10 px-4 py-2 text-sm font-medium text-[#39d353] hover:bg-[#39d353]/20 transition-colors disabled:opacity-50"
+                            >
+                              {status === 'saving' ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Save'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setNewKeyProvider('');
+                                setNewKeyValue('');
+                                setNewKeyModel('');
+                              }}
+                              disabled={status === 'saving'}
+                              className="rounded-lg border border-[#1a2a1a] px-4 py-2 text-sm text-[#8ab08a] hover:text-[#d4e8d4] hover:border-[#39d353]/30 transition-colors disabled:opacity-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </div>
                   );
                 })}
-              </div>
-
-              {/* Add new key */}
-              <div className="rounded-lg border border-[#1a2a1a] p-3">
-                <div className="mb-2 text-xs font-medium text-[#8ab08a]">Add or update a key:</div>
-                <div className="space-y-2">
-                  <select
-                    value={newKeyProvider}
-                    onChange={(e) => setNewKeyProvider(e.target.value)}
-                    className="w-full rounded-lg border border-[#1a2a1a] bg-[#0a0f0a] px-3 py-2 text-sm text-[#d4e8d4] focus:border-[#39d353] outline-none"
-                  >
-                    <option value="">Select provider...</option>
-                    {PROVIDERS.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="password"
-                    value={newKeyValue}
-                    onChange={(e) => setNewKeyValue(e.target.value)}
-                    placeholder="API key"
-                    className="w-full rounded-lg border border-[#1a2a1a] bg-[#0a0f0a] px-3 py-2 text-sm text-[#d4e8d4] font-mono focus:border-[#39d353] outline-none"
-                  />
-                  <input
-                    type="text"
-                    value={newKeyModel}
-                    onChange={(e) => setNewKeyModel(e.target.value)}
-                    placeholder={`Model (optional, default: ${
-                      providerDefaults[newKeyProvider] || 'provider default'
-                    })`}
-                    className="w-full rounded-lg border border-[#1a2a1a] bg-[#0a0f0a] px-3 py-2 text-sm text-[#d4e8d4] focus:border-[#39d353] outline-none"
-                  />
-                  {/* Live model dropdown — populated from GET /api/models?provider=...
-                      Replaces the old free-text-only input. When the provider has
-                      a saved key, this shows the full live model list from the
-                      provider's /models endpoint. Without a key, it shows just
-                      the backend's configured default. Clicking a model fills
-                      the input above so the user can still edit it if needed. */}
-                  {providerModels.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {providerModels.map((m) => (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => setNewKeyModel(m.id)}
-                          className={`rounded px-2 py-1 text-[11px] font-mono transition-colors ${
-                            newKeyModel === m.id
-                              ? 'border border-[#39d353] bg-[#39d353]/10 text-[#39d353]'
-                              : 'border border-[#1a2a1a] text-[#8ab08a] hover:border-[#39d353]/30 hover:text-[#d4e8d4]'
-                          }`}
-                          title={`Use ${m.id}`}
-                        >
-                          {m.id}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {providerModelsLoading && (
-                    <div className="flex items-center gap-1.5 text-[11px] text-[#8ab08a]">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Loading models…
-                    </div>
-                  )}
-                  <button
-                    onClick={handleSaveKey}
-                    disabled={status === 'saving' || !newKeyProvider || !newKeyValue.trim()}
-                    className="w-full rounded-lg border border-[#39d353]/30 bg-[#39d353]/10 px-4 py-2 text-sm font-medium text-[#39d353] hover:bg-[#39d353]/20 transition-colors disabled:opacity-50"
-                  >
-                    Save Key
-                  </button>
-                </div>
               </div>
             </section>
           )}

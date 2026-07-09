@@ -1,6 +1,6 @@
 {
   "name": "localmind-electron",
-  "version": "0.5.10",
+  "version": "0.5.11",
   "description": "LocalMind - Local AI with file reading, web search, memory, and tool use on top of Ollama",
   "main": "main.js",
   "private": true,
