@@ -1836,7 +1836,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 messages=prompt_messages,
                 intent=effective_intent,
                 initial_tool_result=tool_result,
-                available_tools=tools,
+                available_tools=available_tools(),
                 confidence=confidence,
                 adapter=active_adapter,
                 intent_history=intent_history,
