@@ -192,6 +192,17 @@ async def _event_stream(
                         },
                     })
 
+                # Bridge todo_completed obs events — when a tool finishes,
+                # the corresponding plan todo is marked complete.
+                if evt.type == "todo_completed":
+                    yield _sse({
+                        "type": "todo_completed",
+                        "todo": {
+                            "id": evt.data.get("id", ""),
+                            "completed": evt.data.get("completed", True),
+                        },
+                    })
+
                 # Bridge terminal_output obs events to SSE terminal_event.
                 # When the agent loop executes a shell or code_exec tool,
                 # it emits a terminal_output obs event containing the command

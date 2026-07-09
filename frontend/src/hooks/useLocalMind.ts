@@ -686,6 +686,17 @@ export function useChat(
                 break;
               }
 
+              case 'todo_completed': {
+                // A tool finished — mark the corresponding todo as complete.
+                const todo = parsed.todo || {};
+                if (todo.id) {
+                  window.dispatchEvent(new CustomEvent('localmind:todo-completed', {
+                    detail: todo,
+                  }));
+                }
+                break;
+              }
+
               default:
                 if (parsed.content && !_isPromptLeak(parsed.content)) {
                   currentContent += parsed.content;
@@ -1018,6 +1029,22 @@ export function useTodos(sessionId: string | null) {
     };
     window.addEventListener('localmind:todo-created', handler);
     return () => window.removeEventListener('localmind:todo-created', handler);
+  }, []);
+
+  // Listen for todo-completed events — when a tool finishes, the
+  // corresponding plan todo is marked complete. This gives the user
+  // real-time progress through the execution plan.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.id) {
+        setTodos((prev) => prev.map((t) =>
+          t.id === detail.id ? { ...t, completed: detail.completed ?? true } : t
+        ));
+      }
+    };
+    window.addEventListener('localmind:todo-completed', handler);
+    return () => window.removeEventListener('localmind:todo-completed', handler);
   }, []);
 
   const addTodo = useCallback(async (text: string) => {

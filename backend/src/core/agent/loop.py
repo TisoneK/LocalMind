@@ -602,13 +602,19 @@ class AgentLoop:
 
             # Parse plan steps and emit as todo items via obs
             # so the frontend's Todos panel shows the execution plan
-            _steps = _parse_plan_steps(plan_context)
-            if _steps and _obs:
-                for i, step in enumerate(_steps):
+            _plan_steps = _parse_plan_steps(plan_context)
+            if _plan_steps and _obs:
+                for i, step in enumerate(_plan_steps):
                     _obs.emit("todo_created",
                               id=f"plan-{i}",
                               text=step,
                               completed=False)
+        else:
+            _plan_steps = []
+
+        # Track which plan step we're currently executing so we can mark
+        # todos as complete when their corresponding tool finishes.
+        _plan_step_cursor = 0
 
         # ── Inject agent system prompt (with plan context) ──────────────
         loop_messages = list(messages)
@@ -1460,6 +1466,15 @@ class AgentLoop:
                         # Yield completion status so user sees the tool finished
                         if not tool_failed:
                             yield StreamChunk(text="", done=False, status=f"Done — {action_label} ({latency_ms}ms)")
+
+                            # Mark the corresponding plan todo as complete.
+                            # Each successful tool execution advances the cursor
+                            # so the Todos panel shows progress through the plan.
+                            if _plan_steps and _plan_step_cursor < len(_plan_steps) and _obs:
+                                _obs.emit("todo_completed",
+                                          id=f"plan-{_plan_step_cursor}",
+                                          completed=True)
+                                _plan_step_cursor += 1
 
                         if retry_count > 0:
                             yield StreamChunk(
