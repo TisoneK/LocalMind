@@ -985,9 +985,22 @@ class AnswerSynthesizer:
         # Post-synthesis fabrication check
         answer = self._filter_synthesis(answer)
 
-        if not answer:
-            # LLM returned empty — use smart extraction
-            return _smart_extract_key_data(extracted.raw_content, user_question)
+        # If the LLM returned empty or a near-empty response (less than 10
+        # chars — e.g. just a newline or a single word with no substance),
+        # fall back to smart extraction. This catches cases where Gemini's
+        # safety filter produces a 1-token response that technically isn't
+        # empty but has no useful content.
+        if not answer or len(answer) < 10:
+            logger.warning(
+                "[synthesizer] LLM returned %d chars — falling back to smart extraction",
+                len(answer),
+            )
+            _smart = _smart_extract_key_data(extracted.raw_content, user_question)
+            if _smart:
+                return _smart
+            # If smart extraction also fails, return whatever we got (even
+            # if it's empty) rather than nothing
+            return answer or "Unable to generate a response from the available data."
 
         return answer
 
@@ -1037,10 +1050,18 @@ class AnswerSynthesizer:
         # Post-synthesis fabrication check
         answer = self._filter_synthesis(answer)
 
-        if not answer:
-            # LLM returned empty — use smart extraction
+        # Same short-response fallback as _llm_synthesize — catches safety
+        # filter blocks that produce 1-token responses.
+        if not answer or len(answer) < 10:
+            logger.warning(
+                "[synthesizer] combined LLM returned %d chars — falling back to smart extraction",
+                len(answer),
+            )
             combined = f"{search_snippets}\n\n{page_content}"
-            return _smart_extract_key_data(combined, user_question)
+            _smart = _smart_extract_key_data(combined, user_question)
+            if _smart:
+                return _smart
+            return answer or "Unable to generate a response from the available data."
 
         return answer
 

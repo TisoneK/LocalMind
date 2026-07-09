@@ -263,6 +263,7 @@ class OpenAICompatAdapter(BaseAdapter):
             raise ValueError(f"API key not set for provider '{provider}'. Set it in settings or .env.")
 
         self._provider_name = cfg.name
+        self._provider_key = provider  # raw key like "gemini", "cerebras", etc.
         self._base_url = cfg.base_url.rstrip("/")
         # Read the model from settings (set by select_model or settings.json),
         # falling back to the provider default. Previously this only used
@@ -300,6 +301,28 @@ class OpenAICompatAdapter(BaseAdapter):
                 max_keepalive_connections=10,
             ),
         )
+
+    def _add_provider_params(self, payload: dict) -> dict:
+        """
+        Add provider-specific parameters to the API request payload.
+
+        Gemini: Gemini's safety filters are aggressive and can silently block
+        responses to normal queries (e.g. sports scores, news), returning an
+        empty content stream with finish_reason=SAFETY. This manifests as
+        the user seeing a blank response with no error. Setting all safety
+        categories to BLOCK_NONE via the OpenAI-compat endpoint's extra body
+        support prevents this. See:
+        https://ai.google.dev/gemini-api/docs/openai#extra_body
+        """
+        if self._provider_key == "gemini":
+            payload["safety_settings"] = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
+            ]
+        return payload
 
     # ─────────────────────────────────────────────────────────────────────
     # Properties
@@ -417,6 +440,7 @@ class OpenAICompatAdapter(BaseAdapter):
             "temperature": temperature,
             "stream": True,
         }
+        self._add_provider_params(payload)
 
         # Try sending with the tools parameter for providers that support it
         if tools:
@@ -483,6 +507,7 @@ class OpenAICompatAdapter(BaseAdapter):
             # aggressive, causing false text classification.
             _DETECTION_CHUNK_LIMIT = 10
             chunks_read = 0
+            _safety_error = None  # set if Gemini/other provider blocks via safety filter
 
             async for line in response.aiter_lines():
                 if not line or not line.startswith("data: "):
@@ -521,6 +546,26 @@ class OpenAICompatAdapter(BaseAdapter):
                     if finish_reason == "tool_calls":
                         tool_call_detected = True
                         phase1_done = True  # Tool call is complete, stop reading
+                        break
+
+                    # Check finish_reason for safety/content filter blocks
+                    # (same as _chat_openai_style — Gemini can silently block)
+                    if finish_reason and finish_reason.lower() in (
+                        "safety",
+                        "content_filter",
+                        "prohibited_content",
+                        "recitation",
+                    ):
+                        error_msg = (
+                            f"{self._provider_name} blocked the response "
+                            f"(finish_reason={finish_reason}). This is usually "
+                            f"a content filter — try rephrasing your message "
+                            f"or switching to a different provider."
+                        )
+                        logger.warning(error_msg)
+                        phase1_done = True
+                        # Store the error so _stream_from_http can yield it
+                        _safety_error = error_msg
                         break
 
                 except (json.JSONDecodeError, IndexError, KeyError):
@@ -565,6 +610,18 @@ class OpenAICompatAdapter(BaseAdapter):
                         phase1_done = True
                         break
                     # else: chunks_read < 15, keep reading to be sure
+
+            # ── Safety filter check ─────────────────────────────────────────
+            # If the provider blocked the response via a safety/content filter
+            # during Phase 1, yield the error immediately — don't proceed to
+            # Phase 2 (there's nothing to stream or collect).
+            if _safety_error:
+                await response.aclose()
+
+                async def _safety_error_iter():
+                    yield StreamChunk(text="", done=True, error=_safety_error)
+
+                return _safety_error_iter()
 
             # ── Phase 2a: Tool call detected ──────────────────────────────
             # Continue reading to collect full tool call arguments, then
@@ -763,16 +820,14 @@ class OpenAICompatAdapter(BaseAdapter):
 
                             try:
                                 obj = json.loads(data)
-                                delta = obj.get("choices", [{}])[0].get("delta", {})
+                                _choice = obj.get("choices", [{}])[0]
+                                delta = _choice.get("delta", {})
                                 text = delta.get("content", "")
                                 # Bug C fix: explicitly handle empty content deltas.
                                 # Some providers send delta.content="" as keepalives.
                                 # These are not errors — just skip and continue.
                                 if text:
                                     # v8.2: Filter MiniMax tool_call XML from streaming text.
-                                    # This prevents the proprietary format from being shown to
-                                    # the user. The model should use native tool calling, but
-                                    # when it falls back to text-format tool calls, we strip them.
                                     filtered_text = _mm_full_pattern.sub("", text)
                                     filtered_text = _mm_prefix_pattern.sub("", filtered_text)
                                     filtered_text = _mm_tag_prefix.sub("", filtered_text)
@@ -830,6 +885,28 @@ class OpenAICompatAdapter(BaseAdapter):
                                                 pass
                                 # else: empty content delta (keepalive) — skip, continue reading
 
+                                # Check finish_reason for safety/content filter
+                                # blocks. Gemini returns finish_reason="SAFETY"
+                                # when its content filter triggers, leaving content
+                                # empty. This check is OUTSIDE the `if text:` block
+                                # so it fires even when no content was yielded.
+                                _fr = _choice.get("finish_reason", "")
+                                if _fr and _fr.lower() in (
+                                    "safety",
+                                    "content_filter",
+                                    "prohibited_content",
+                                    "recitation",
+                                ):
+                                    _safety_msg = (
+                                        f"{self._provider_name} blocked the response "
+                                        f"(finish_reason={_fr}). This is usually "
+                                        f"a content filter — try rephrasing your "
+                                        f"message or switching providers."
+                                    )
+                                    logger.warning(_safety_msg)
+                                    yield StreamChunk(text="", done=True, error=_safety_msg)
+                                    return
+
                             except (json.JSONDecodeError, IndexError, KeyError):
                                 continue
 
@@ -880,6 +957,7 @@ class OpenAICompatAdapter(BaseAdapter):
             "temperature": temperature,
             "stream": True,
         }
+        self._add_provider_params(payload)
 
         try:
             async with self._client.stream(
@@ -904,10 +982,32 @@ class OpenAICompatAdapter(BaseAdapter):
 
                     try:
                         obj = json.loads(data)
-                        delta = obj.get("choices", [{}])[0].get("delta", {})
+                        choice = obj.get("choices", [{}])[0]
+                        delta = choice.get("delta", {})
                         text = delta.get("content", "")
                         if text:
                             yield StreamChunk(text=text, done=False)
+
+                        # Check finish_reason for safety/content filter blocks.
+                        # Gemini returns finish_reason="SAFETY" when its content
+                        # filter triggers, leaving content empty. Without this
+                        # check, the user sees a blank response with no error.
+                        finish_reason = choice.get("finish_reason", "")
+                        if finish_reason and finish_reason.lower() in (
+                            "safety",
+                            "content_filter",
+                            "prohibited_content",
+                            "recitation",
+                        ):
+                            error_msg = (
+                                f"{self._provider_name} blocked the response "
+                                f"(finish_reason={finish_reason}). This is usually "
+                                f"a content filter — try rephrasing your message "
+                                f"or switching to a different provider."
+                            )
+                            logger.warning(error_msg)
+                            yield StreamChunk(text="", done=True, error=error_msg)
+                            return
                     except (json.JSONDecodeError, IndexError, KeyError):
                         continue
 
