@@ -867,6 +867,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
             # Post-response memory (pass user message for user-initiated fact extraction)
             _safe_task(self._maybe_store_response_facts(response_text, session_id, _obs, user_message=message))
+
+            # Explicitly yield a done chunk so the SSE bridge sends {"type":"done"}
+            # to the frontend. Without this, the frontend relies on the stream
+            # closing to detect completion — which can be delayed by the final
+            # obs flush. The explicit done ensures isStreaming is reset immediately.
+            yield StreamChunk(text="", done=True)
             return
 
         # ── 4+5. File attachment + Memory retrieval (parallel) ─────────────
@@ -1110,6 +1116,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 intent=effective_intent.value, confidence=round(confidence, 2),
                 tools_used=effective_intent.value, memory_hits=len(memory_facts),
                 context_tokens=_pt, latency_ms=total_ms)
+            yield StreamChunk(text="", done=True)
             return
 
         # ── 6. Tool dispatch ───────────────────────────────────────────
@@ -1327,6 +1334,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 intent="file_task", confidence=round(confidence, 2),
                 tools_used="file_task", memory_hits=len(memory_facts),
                 context_tokens=_ft_prompt_tok, latency_ms=total_ms)
+            yield StreamChunk(text="", done=True)
             return
         # Agent intents (CODE_EXEC, FILE_WRITE, FILE_EDIT, FILE_TASK, MEMORY_OP, SHELL) get tool result in agent loop
         if effective_intent in AGENT_INTENTS:
@@ -1633,6 +1641,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 tools_used="file_write", memory_hits=len(memory_facts),
                 context_tokens=0, latency_ms=total_ms)
             _safe_task(self._maybe_store_response_facts(response_text, session_id, _obs, user_message=message))
+            yield StreamChunk(text="", done=True)
             return
 
         if effective_intent in AGENT_INTENTS:
