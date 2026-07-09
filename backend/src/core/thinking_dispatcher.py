@@ -457,6 +457,12 @@ class ThinkingDispatcher:
         obs.emit("thinking_done", intent="dispatch")
 
         latency_ms = round((time.monotonic() - t0) * 1000)
+        # Emit intent_classified so the SSE bridge sends an 'intent' event
+        # to the frontend — this populates the Observe tab's intent display
+        # and confidence bar in real-time, BEFORE the response is generated.
+        obs.emit("intent_classified",
+                 primary=plan.profile.primary_intent().value,
+                 confidence=round(plan.profile.confidence, 2))
         obs.emit("dispatcher_complete",
                  intent=plan.profile.primary_intent().value,
                  execution_mode=plan.profile.execution_mode.value,

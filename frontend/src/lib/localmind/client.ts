@@ -201,7 +201,11 @@ class LocalMindClient {
       id: m.id,
       role: m.role,
       content: m.content,
-      timestamp: m.timestamp,
+      // Backend stores timestamps as raw epoch floats (e.g. 1783586329.77).
+      // Format to HH:MM for display — same format as live messages.
+      timestamp: typeof m.timestamp === 'number'
+        ? new Date(m.timestamp * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+        : m.timestamp || '',
       toolCalls: m.toolCalls,
       fileResults: m.fileResults,
     }));
