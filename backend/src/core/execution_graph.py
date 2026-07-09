@@ -29,7 +29,7 @@ import logging
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from core.models import (
     CAPABILITY_TO_INTENT,
@@ -78,8 +78,7 @@ class ExecutionNode(BaseModel):
     label: str = ""                            # Human-readable label for UI
     optional: bool = False                     # Failure doesn't block downstream
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 # ── Execution Graph ──────────────────────────────────────────────────
@@ -95,8 +94,7 @@ class ExecutionGraph(BaseModel):
     """
     nodes: list[ExecutionNode] = Field(default_factory=list)
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def add_node(self, node: ExecutionNode) -> None:
         self.nodes.append(node)

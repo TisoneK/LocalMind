@@ -22,7 +22,7 @@ import time
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Role & Intent — foundational enums
@@ -458,8 +458,7 @@ class OrchestrationPlan(BaseModel):
     dispatch_steps: list[dict] = Field(default_factory=list)
     fast_path: bool = False
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def set_graph(self, graph: object) -> None:
         """Set the execution graph after lazy import."""
