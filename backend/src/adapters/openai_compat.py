@@ -323,16 +323,16 @@ class OpenAICompatAdapter(BaseAdapter):
         """
         Add provider-specific parameters to the API request payload.
 
-        Note: Gemini's safety_settings CANNOT be passed via the OpenAI-compat
-        endpoint — it rejects any unknown top-level field with HTTP 400
-        ("Unknown name 'safety_settings': Cannot find field"). This is a
-        known limitation of the compat layer (the field only works on the
-        native v1beta generateContent API). We handle Gemini safety blocks
-        via finish_reason detection in the streaming parsers instead —
-        surfacing a clear error message when the filter triggers.
+        Z.ai (GLM): GLM models default to thinking/reasoning mode, which
+        streams 1000+ reasoning tokens before the actual answer. This takes
+        20-30 seconds and breaks the ThinkingDispatcher's 10s timeout,
+        causing "Thinking... forever". Disabling thinking mode makes GLM
+        respond instantly (4 tokens for "Say PONG" vs 1200+ with thinking).
+        The reasoning_content field is still read by the streaming parsers
+        as a fallback in case thinking is ever re-enabled.
         """
-        # Currently a no-op — kept as an extension point for future
-        # provider-specific params that ARE supported by the compat layer.
+        if self._provider_key == "zai":
+            payload["thinking"] = {"type": "disabled"}
         return payload
 
     async def _send_streaming_with_retry(
