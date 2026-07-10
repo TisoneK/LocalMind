@@ -99,10 +99,18 @@ async def _list_models_for_provider(provider: str) -> dict:
     current_model = getattr(settings, _model_setting_attr(provider) or "", "") or ""
     model_options: list[dict] = []
 
-    # Always include the configured/default model so the dropdown is never empty
-    fallback_model = current_model or cfg.default_model
-    if fallback_model:
-        model_options.append({"id": fallback_model, "name": fallback_model, "provider": provider, "size": "Cloud"})
+    # Always include BOTH the provider's default model AND the currently
+    # saved model. Previously this was `current_model or default_model` —
+    # if the user had saved a non-default model (e.g. glm-4.5), the default
+    # (e.g. glm-4.5-flash, the free one) was never shown. This meant users
+    # couldn't switch back to the free default from the dropdown.
+    seen_ids: set[str] = set()
+    for model_id in (cfg.default_model, current_model):
+        if model_id and model_id not in seen_ids:
+            model_options.append(
+                {"id": model_id, "name": model_id, "provider": provider, "size": "Cloud"}
+            )
+            seen_ids.add(model_id)
 
     # Try to fetch the live model list. This requires a saved API key for the
     # provider — without one, the provider's /models endpoint will 401 and we
@@ -119,11 +127,10 @@ async def _list_models_for_provider(provider: str) -> dict:
         await adapter.close()
 
         # Merge: add any live models not already in the list
-        existing_ids = {m["id"] for m in model_options}
         for m in available:
-            if m and m not in existing_ids:
+            if m and m not in seen_ids:
                 model_options.append({"id": m, "name": m, "provider": provider, "size": "Cloud"})
-                existing_ids.add(m)
+                seen_ids.add(m)
     except Exception as exc:
         # No API key saved, or provider /models endpoint unreachable.
         # Non-fatal — the dropdown will just show the default model.
@@ -131,7 +138,7 @@ async def _list_models_for_provider(provider: str) -> dict:
 
     return {
         "models": model_options,
-        "current": current_model or fallback_model,
+        "current": current_model or cfg.default_model,
         "provider": provider,
     }
 

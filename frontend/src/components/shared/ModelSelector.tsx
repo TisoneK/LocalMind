@@ -30,9 +30,10 @@ export function ModelSelector({ selectedModel, onModelChange, models }: ModelSel
     size: '',
   };
 
-  // Group models: free vs paid
-  const freeModels = modelList.filter((m) => m.id.toLowerCase().includes('free'));
-  const paidModels = modelList.filter((m) => !m.id.toLowerCase().includes('free'));
+  // Show all models in a single list — the old free/paid split based on
+  // the word "free" in the model ID was unreliable (GLM's free models use
+  // "flash" not "free", Zen's free models use "-free" suffix, etc.).
+  // Showing all models without categorization is simpler and less misleading.
 
   return (
     <div className="relative">
@@ -51,67 +52,32 @@ export function ModelSelector({ selectedModel, onModelChange, models }: ModelSel
               Models
             </div>
 
-            {freeModels.length > 0 && (
-              <>
-                <div className="px-2 py-1 text-[9px] uppercase tracking-wider text-[#6a8a6a] font-medium mt-1">
-                  Free
-                </div>
-                {freeModels.map((model, idx) => (
-                  <button
-                    key={`${model.id}-${idx}`}
-                    onClick={() => {
-                      onModelChange(model.id);
-                      setOpen(false);
-                    }}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs hover:bg-[#1a2a1a] transition-colors"
-                  >
-                    <span className="w-3.5 flex items-center justify-center">
-                      {model.id === selectedModel && (
-                        <Check className="h-3 w-3 text-[#39d353]" />
-                      )}
-                    </span>
-                    <span className="flex-1 text-left text-[#d4e8d4] truncate">
-                      {model.name}
-                    </span>
-                    <span className="text-[#8ab08a] text-[10px]">{model.size}</span>
-                  </button>
-                ))}
-              </>
-            )}
-
             {modelList.length === 0 && (
               <div className="px-2 py-2 text-xs text-[#8ab08a]">
                 Loading models…
               </div>
             )}
 
-            {paidModels.length > 0 && (
-              <>
-                <div className="px-2 py-1 text-[9px] uppercase tracking-wider text-[#6a8a6a] font-medium mt-1">
-                  Paid
-                </div>
-                {paidModels.map((model, idx) => (
-                  <button
-                    key={`${model.id}-${idx}`}
-                    onClick={() => {
-                      onModelChange(model.id);
-                      setOpen(false);
-                    }}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs hover:bg-[#1a2a1a] transition-colors"
-                  >
-                    <span className="w-3.5 flex items-center justify-center">
-                      {model.id === selectedModel && (
-                        <Check className="h-3 w-3 text-[#39d353]" />
-                      )}
-                    </span>
-                    <span className="flex-1 text-left text-[#d4e8d4] truncate">
-                      {model.name}
-                    </span>
-                    <span className="text-[#8ab08a] text-[10px]">{model.size}</span>
-                  </button>
-                ))}
-              </>
-            )}
+            {modelList.map((model, idx) => (
+              <button
+                key={`${model.id}-${idx}`}
+                onClick={() => {
+                  onModelChange(model.id);
+                  setOpen(false);
+                }}
+                className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs hover:bg-[#1a2a1a] transition-colors"
+              >
+                <span className="w-3.5 flex items-center justify-center">
+                  {model.id === selectedModel && (
+                    <Check className="h-3 w-3 text-[#39d353]" />
+                  )}
+                </span>
+                <span className="flex-1 text-left text-[#d4e8d4] truncate">
+                  {model.name}
+                </span>
+                <span className="text-[#8ab08a] text-[10px]">{model.size}</span>
+              </button>
+            ))}
           </div>
           <div className="border-t border-[#1a2a1a] px-2 py-1.5">
             <div className="text-[10px] text-[#8ab08a]">
