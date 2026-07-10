@@ -251,6 +251,21 @@ async def list_models(provider: str | None = None):
         model_setting_map = _build_model_setting_map()
         current_model = model_setting_map.get(adapter_name, "")
 
+        # Always include the provider's default model in the dropdown — even
+        # when a different model is currently selected. Some providers' /models
+        # endpoints don't include the default (e.g. Z.ai doesn't list
+        # glm-4.5-flash, which is the free model). Without this, users can't
+        # switch back to the default from the dropdown.
+        from adapters.openai_compat import PROVIDER_CONFIGS
+
+        cfg = PROVIDER_CONFIGS.get(adapter_name)
+        seen_ids: set[str] = set()
+        if cfg and cfg.default_model:
+            model_options.append(
+                {"id": cfg.default_model, "name": cfg.default_model, "provider": adapter_name, "size": "Cloud"}
+            )
+            seen_ids.add(cfg.default_model)
+
         # Providers that expose a working OpenAI-compatible /models endpoint
         # can be queried live so the model selector shows the full current list.
         # Zen: opencode.ai/zen/v1/models
@@ -261,9 +276,12 @@ async def list_models(provider: str | None = None):
         if adapter_name in ("zen", "cerebras", "gemini", "chutes", "zai"):
             try:
                 available = await adapter.list_models()
-                model_options.extend(
-                    [{"id": m, "name": m, "provider": adapter_name, "size": "Cloud"} for m in available]
-                )
+                for m in available:
+                    if m and m not in seen_ids:
+                        model_options.append(
+                            {"id": m, "name": m, "provider": adapter_name, "size": "Cloud"}
+                        )
+                        seen_ids.add(m)
             except Exception as exc:
                 logger.warning("[models] failed to list models for %s: %s", adapter_name, exc)
 
