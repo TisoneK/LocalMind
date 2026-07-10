@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-DISPATCHER_TIMEOUT_SECS: float = 10.0
+DISPATCHER_TIMEOUT_SECS: float = 30.0  # was 10.0 — too short for GLM/Z.ai (18s typical)
 DISPATCHER_TEMPERATURE: float = 0.2
 MAX_HISTORY_FOR_PROMPT: int = 6
 
