@@ -619,8 +619,12 @@ class OpenAICompatAdapter(BaseAdapter):
                             if tc.get("function", {}).get("arguments"):
                                 tool_call_buffers[idx]["arguments"] += tc["function"]["arguments"]
 
-                    # Capture text content
-                    text = delta.get("content", "")
+                    # Capture text content. Z.ai/GLM models stream reasoning
+                    # tokens in delta.reasoning_content (thinking mode) and
+                    # the final answer in delta.content. We must read both —
+                    # if we only read content, thinking-mode models yield
+                    # nothing because content stays empty during reasoning.
+                    text = delta.get("content", "") or delta.get("reasoning_content", "")
                     if text:
                         raw_content_parts.append(text)
                         initial_text_chunks.append(StreamChunk(text=text, done=False))
@@ -732,7 +736,7 @@ class OpenAICompatAdapter(BaseAdapter):
                                         tool_call_buffers[idx]["name"] = tc["function"]["name"]
                                     if tc.get("function", {}).get("arguments"):
                                         tool_call_buffers[idx]["arguments"] += tc["function"]["arguments"]
-                            text = delta.get("content", "")
+                            text = delta.get("content", "") or delta.get("reasoning_content", "")
                             if text:
                                 raw_content_parts.append(text)
                             finish_reason = choice.get("finish_reason", "")
@@ -906,7 +910,7 @@ class OpenAICompatAdapter(BaseAdapter):
                                 obj = json.loads(data)
                                 _choice = obj.get("choices", [{}])[0]
                                 delta = _choice.get("delta", {})
-                                text = delta.get("content", "")
+                                text = delta.get("content", "") or delta.get("reasoning_content", "")
                                 # Bug C fix: explicitly handle empty content deltas.
                                 # Some providers send delta.content="" as keepalives.
                                 # These are not errors — just skip and continue.
@@ -1067,7 +1071,8 @@ class OpenAICompatAdapter(BaseAdapter):
                         obj = json.loads(data)
                         choice = obj.get("choices", [{}])[0]
                         delta = choice.get("delta", {})
-                        text = delta.get("content", "")
+                        # Read both content and reasoning_content (GLM thinking mode)
+                        text = delta.get("content", "") or delta.get("reasoning_content", "")
                         if text:
                             yield StreamChunk(text=text, done=False)
 
