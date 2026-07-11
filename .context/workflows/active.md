@@ -11,6 +11,7 @@ user changes the rules; note the change in your session entry.
 - **Since:** 2026-07-11
 - **Default role:** engineer — full-scope, unless a session says otherwise. Role overlays (reviewer, security-auditor, docs-agent) available in the `TisoneK/.context` package's `roles/` directory.
 - **Scope:** discovery + review + fix all safe issues
+- **Target:** general sweep
 - **Focus areas:** all — security, performance, UX, architecture, testing, docs
 - **Findings handling:** fix safe, flag architectural
 - **Push policy:** push to main directly after each commit
