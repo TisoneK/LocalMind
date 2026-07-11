@@ -107,7 +107,9 @@ ignore = ["N806", "N815"]
 # loop.py: Late imports avoid circular dependencies in the agent package.
 # db.py: Connection pool import placed near the perf comment that explains it.
 # tools/__init__.py: Tool imports trigger registration side effects — order matters.
+# routes/config.py: PROVIDER_CONFIGS import must come after the Pydantic models above it.
 "src/api/app.py" = ["E402"]
+"src/api/routes/config.py" = ["E402"]
 "src/core/agent/loop.py" = ["E402"]
 "src/storage/db.py" = ["E402"]
 "src/tools/__init__.py" = ["E402"]

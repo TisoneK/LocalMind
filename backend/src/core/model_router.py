@@ -145,28 +145,14 @@ def best_model_for(intent: Intent, fallback: str) -> str:
     """
     adapter_name = settings.localmind_adapter
 
-    # Cloud providers — use provider-specific model from settings
-    # If model is not configured, use the adapter's default model, not Ollama fallback
+    # Cloud providers — use provider-specific model from settings.
+    # The provider→settings-field map is derived from PROVIDER_CONFIGS
+    # (single source of truth). No hardcoded provider list to drift.
+    from adapters.openai_compat import PROVIDER_CONFIGS
+
     provider_model_map = {
-        "openai": settings.openai_model,
-        "anthropic": settings.anthropic_model,
-        "openrouter": settings.openrouter_model,
-        "deepseek": settings.deepseek_model,
-        "lite-llm": settings.litellm_model,
-        "zen": settings.zen_model,
-        "groq": settings.groq_model,
-        "together": settings.together_model,
-        "fireworks": settings.fireworks_model,
-        "deepinfra": settings.deepinfra_model,
-        "mistral": settings.mistral_model,
-        "cohere": settings.cohere_model,
-        "vercel": settings.vercel_model,
-        "cloudflare": settings.cloudflare_model,
-        "cerebras": settings.cerebras_model,
-        "sambanova": settings.sambanova_model,
-        "gemini": settings.gemini_model,
-        "chutes": settings.chutes_model,
-        "zai": settings.zai_model,
+        key: getattr(settings, cfg.settings_field, "")
+        for key, cfg in PROVIDER_CONFIGS.items()
     }
 
     if adapter_name in provider_model_map:
@@ -175,8 +161,6 @@ def best_model_for(intent: Intent, fallback: str) -> str:
         if model:
             return model
         # No model configured — get the adapter's default from PROVIDER_CONFIGS
-        from adapters.openai_compat import PROVIDER_CONFIGS
-
         if adapter_name in PROVIDER_CONFIGS:
             return PROVIDER_CONFIGS[adapter_name].default_model
         # Fallback shouldn't happen, but guard against misconfiguration

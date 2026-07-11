@@ -117,26 +117,48 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 
 @dataclass
 class ProviderConfig:
+    """Single source of truth for a provider's configuration.
+
+    All other places that need provider info (config.py routes, model_router,
+    adapters/__init__.py) derive from PROVIDER_CONFIGS rather than maintaining
+    their own hardcoded lists. Adding a new provider = one entry here.
+    """
     name: str  # "openai", "anthropic", "openrouter", etc.
     base_url: str  # e.g. "https://api.openai.com/v1"
-    api_key: str  # from env var
+    api_key: str  # from env var (resolved at import time)
     default_model: str  # fallback if none specified
+    key_env: str  # env var name for the API key (e.g. "OPENAI_API_KEY")
+    model_env: str  # env var name for the model override (e.g. "OPENAI_MODEL")
+    settings_field: str  # Settings attr for the model override (e.g. "openai_model")
+    display_name: str = ""  # human-friendly name for the Settings UI (defaults to name)
     headers: dict | None = None  # optional extra headers
     supports_streaming: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.display_name:
+            self.display_name = self.name
 
 
 PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
     "openai": ProviderConfig(
         name="openai",
+        display_name="OpenAI",
         base_url="https://api.openai.com/v1",
         api_key=os.getenv("OPENAI_API_KEY", ""),
         default_model="gpt-4o-mini",
+        key_env="OPENAI_API_KEY",
+        model_env="OPENAI_MODEL",
+        settings_field="openai_model",
     ),
     "anthropic": ProviderConfig(
         name="anthropic",
+        display_name="Anthropic",
         base_url="https://api.anthropic.com/v1",
         api_key=os.getenv("ANTHROPIC_API_KEY", ""),
         default_model="claude-3-5-sonnet-20241022",
+        key_env="ANTHROPIC_API_KEY",
+        model_env="ANTHROPIC_MODEL",
+        settings_field="anthropic_model",
         headers={
             "anthropic-version": "2023-06-01",
             "x-api-key": os.getenv("ANTHROPIC_API_KEY", ""),
@@ -144,119 +166,212 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
     ),
     "openrouter": ProviderConfig(
         name="openrouter",
+        display_name="OpenRouter",
         base_url="https://openrouter.ai/api/v1",
         api_key=os.getenv("OPENROUTER_API_KEY", ""),
         default_model="openrouter/auto",
+        key_env="OPENROUTER_API_KEY",
+        model_env="OPENROUTER_MODEL",
+        settings_field="openrouter_model",
     ),
     "deepseek": ProviderConfig(
         name="deepseek",
+        display_name="DeepSeek",
         base_url="https://api.deepseek.com/v1",
         api_key=os.getenv("DEEPSEEK_API_KEY", ""),
         default_model="deepseek-chat",
+        key_env="DEEPSEEK_API_KEY",
+        model_env="DEEPSEEK_MODEL",
+        settings_field="deepseek_model",
     ),
     "lite-llm": ProviderConfig(
         name="lite-llm",
+        display_name="LiteLLM",
         base_url=os.getenv("LITELLM_BASE_URL", "http://localhost:4000"),
         api_key=os.getenv("LITELLM_API_KEY", "dummy"),
         default_model=os.getenv("LITELLM_MODEL", "gpt-4"),
+        key_env="LITELLM_API_KEY",
+        model_env="LITELLM_MODEL",
+        settings_field="litellm_model",
     ),
     "zen": ProviderConfig(
-        name="Zen AI",
+        name="zen",
+        display_name="Zen AI",
         base_url="https://opencode.ai/zen/v1",
         api_key=os.getenv("ZEN_API_KEY", ""),
         default_model="minimax-m2.5-free",
+        key_env="ZEN_API_KEY",
+        model_env="ZEN_MODEL",
+        settings_field="zen_model",
     ),
     # High-performance / infra
     "groq": ProviderConfig(
         name="groq",
+        display_name="Groq",
         base_url="https://api.groq.com/openai/v1",
         api_key=os.getenv("GROQ_API_KEY", ""),
         default_model="llama-3.1-70b-versatile",
+        key_env="GROQ_API_KEY",
+        model_env="GROQ_MODEL",
+        settings_field="groq_model",
     ),
     "together": ProviderConfig(
         name="together",
+        display_name="Together AI",
         base_url="https://api.together.ai/v1",
         api_key=os.getenv("TOGETHER_API_KEY", ""),
         default_model="meta-llama/Llama-3.1-70B-Instruct-Turbo",
+        key_env="TOGETHER_API_KEY",
+        model_env="TOGETHER_MODEL",
+        settings_field="together_model",
     ),
     "fireworks": ProviderConfig(
         name="fireworks",
+        display_name="Fireworks AI",
         base_url="https://api.fireworks.ai/v1",
         api_key=os.getenv("FIREWORKS_API_KEY", ""),
         default_model="accounts/fireworks/models/llama-v3-70b-instruct",
+        key_env="FIREWORKS_API_KEY",
+        model_env="FIREWORKS_MODEL",
+        settings_field="fireworks_model",
     ),
     "deepinfra": ProviderConfig(
         name="deepinfra",
+        display_name="DeepInfra",
         base_url="https://api.deepinfra.com/v1",
         api_key=os.getenv("DEEPINFRA_API_KEY", ""),
         default_model="meta-llama/Llama-3.1-70B-Instruct",
+        key_env="DEEPINFRA_API_KEY",
+        model_env="DEEPINFRA_MODEL",
+        settings_field="deepinfra_model",
     ),
     # Model-specific providers
     "mistral": ProviderConfig(
         name="mistral",
+        display_name="Mistral AI",
         base_url="https://api.mistral.ai/v1",
         api_key=os.getenv("MISTRAL_API_KEY", ""),
         default_model="mistral-large-latest",
+        key_env="MISTRAL_API_KEY",
+        model_env="MISTRAL_MODEL",
+        settings_field="mistral_model",
     ),
     "cohere": ProviderConfig(
         name="cohere",
+        display_name="Cohere",
         base_url="https://api.cohere.ai/v1",
         api_key=os.getenv("COHERE_API_KEY", ""),
         default_model="command-r-plus",
+        key_env="COHERE_API_KEY",
+        model_env="COHERE_MODEL",
+        settings_field="cohere_model",
     ),
     # Gateways (use custom base URL)
     "vercel": ProviderConfig(
         name="vercel",
+        display_name="Vercel AI Gateway",
         base_url=os.getenv("VERCEL_AI_GATEWAY_URL", "https://gateway.ai.vercel.sh"),
         api_key=os.getenv("VERCEL_API_KEY", ""),
         default_model="gpt-4o-mini",
+        key_env="VERCEL_API_KEY",
+        model_env="VERCEL_MODEL",
+        settings_field="vercel_model",
     ),
     "cloudflare": ProviderConfig(
         name="cloudflare",
+        display_name="Cloudflare AI Gateway",
         base_url=os.getenv("CLOUDFLARE_GATEWAY_URL", "https://gateway.ai.cloudflare.com"),
         api_key=os.getenv("CLOUDFLARE_API_KEY", ""),
         default_model="@cf/meta/llama-3.1-70b-instruct",
+        key_env="CLOUDFLARE_API_KEY",
+        model_env="CLOUDFLARE_MODEL",
+        settings_field="cloudflare_model",
     ),
     # Free-tier-friendly providers with strong OpenAI compatibility
     "cerebras": ProviderConfig(
-        name="Cerebras",
+        name="cerebras",
+        display_name="Cerebras",
         base_url="https://api.cerebras.ai/v1",
         api_key=os.getenv("CEREBRAS_API_KEY", ""),
         # gpt-oss-120b is the current production model. llama-3.3-70b and
         # qwen-3-32b were deprecated — see inference-docs.cerebras.ai/support/deprecation
         default_model="gpt-oss-120b",
+        key_env="CEREBRAS_API_KEY",
+        model_env="CEREBRAS_MODEL",
+        settings_field="cerebras_model",
     ),
     "sambanova": ProviderConfig(
-        name="SambaNova",
+        name="sambanova",
+        display_name="SambaNova",
         base_url="https://api.sambanova.ai/v1",
         api_key=os.getenv("SAMBANOVA_API_KEY", ""),
         default_model="Meta-Llama-3.3-70B-Instruct",
+        key_env="SAMBANOVA_API_KEY",
+        model_env="SAMBANOVA_MODEL",
+        settings_field="sambanova_model",
     ),
     "gemini": ProviderConfig(
-        name="Google Gemini",
+        name="gemini",
+        display_name="Google Gemini",
         # Google's official OpenAI-compatible endpoint
         base_url="https://generativelanguage.googleapis.com/v1beta/openai",
         api_key=os.getenv("GEMINI_API_KEY", ""),
         default_model="gemini-2.5-flash",
+        key_env="GEMINI_API_KEY",
+        model_env="GEMINI_MODEL",
+        settings_field="gemini_model",
     ),
     "chutes": ProviderConfig(
-        name="Chutes AI",
+        name="chutes",
+        display_name="Chutes AI",
         # llm.chutes.ai is the inference host; api.chutes.ai is management only.
         # All current Chutes models are TEE-suffixed (e.g. deepseek-ai/DeepSeek-V3.2-TEE).
         # See https://llm.chutes.ai/v1/models for the live list.
         base_url="https://llm.chutes.ai/v1",
         api_key=os.getenv("CHUTES_API_KEY", ""),
         default_model="deepseek-ai/DeepSeek-V3.2-TEE",
+        key_env="CHUTES_API_KEY",
+        model_env="CHUTES_MODEL",
+        settings_field="chutes_model",
     ),
     "zai": ProviderConfig(
-        name="Z.ai (GLM)",
+        name="zai",
+        display_name="Z.ai (GLM)",
         # Z.ai's OpenAI-compatible endpoint. Free tier includes GLM-5.2,
         # GLM-5.1, GLM-5, GLM-5-Turbo, GLM-4.7 (limited-time free) and
         # GLM-4.5-Flash (always free). Get a key at z.ai/manage-apikey/billing
         base_url="https://api.z.ai/api/paas/v4",
         api_key=os.getenv("ZAI_API_KEY", ""),
         default_model="glm-4.5-flash",
+        key_env="ZAI_API_KEY",
+        model_env="ZAI_MODEL",
+        settings_field="zai_model",
     ),
+}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Derived registries — single source of truth is PROVIDER_CONFIGS above.
+# Adding a new provider = one ProviderConfig entry. Everything else updates
+# automatically. Do NOT add provider names to these derived structures.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Tuple of all valid cloud provider adapter names (used by adapters/__init__.py)
+CLOUD_PROVIDER_NAMES: tuple[str, ...] = tuple(PROVIDER_CONFIGS.keys())
+
+# Map: provider key → settings field name (used by config.py and model_router.py)
+PROVIDER_SETTINGS_FIELDS: dict[str, str] = {
+    key: cfg.settings_field for key, cfg in PROVIDER_CONFIGS.items()
+}
+
+# Map: provider key → env var name for the model override
+PROVIDER_MODEL_ENVS: dict[str, str] = {
+    key: cfg.model_env for key, cfg in PROVIDER_CONFIGS.items()
+}
+
+# Map: provider key → env var name for the API key
+PROVIDER_KEY_ENVS: dict[str, str] = {
+    key: cfg.key_env for key, cfg in PROVIDER_CONFIGS.items()
 }
 
 

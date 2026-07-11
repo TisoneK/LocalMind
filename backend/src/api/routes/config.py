@@ -34,136 +34,29 @@ class ProviderKeyRequest(BaseModel):
     model: Optional[str] = None
 
 
-PROVIDER_INFO = {
-    # Core providers
-    "openai": {
-        "name": "OpenAI",
-        "model_env": "OPENAI_MODEL",
-        "key_env": "OPENAI_API_KEY",
-        "default_model": "gpt-4o-mini",
-    },
-    "anthropic": {
-        "name": "Anthropic",
-        "model_env": "ANTHROPIC_MODEL",
-        "key_env": "ANTHROPIC_API_KEY",
-        "default_model": "claude-3-5-sonnet-20241022",
-    },
-    # Aggregators
-    "openrouter": {
-        "name": "OpenRouter",
-        "model_env": "OPENROUTER_MODEL",
-        "key_env": "OPENROUTER_API_KEY",
-        "default_model": "openrouter/auto",
-    },
-    "zen": {
-        "name": "Zen AI",
-        "model_env": "ZEN_MODEL",
-        "key_env": "ZEN_API_KEY",
-        "default_model": "gpt-4o-mini",
-    },
-    # High-performance / infra
-    "groq": {
-        "name": "Groq",
-        "model_env": "GROQ_MODEL",
-        "key_env": "GROQ_API_KEY",
-        "default_model": "llama-3.1-70b-versatile",
-    },
-    "together": {
-        "name": "Together AI",
-        "model_env": "TOGETHER_MODEL",
-        "key_env": "TOGETHER_API_KEY",
-        "default_model": "meta-llama/Llama-3.1-70B-Instruct-Turbo",
-    },
-    "fireworks": {
-        "name": "Fireworks AI",
-        "model_env": "FIREWORKS_MODEL",
-        "key_env": "FIREWORKS_API_KEY",
-        "default_model": "accounts/fireworks/models/llama-v3-70b-instruct",
-    },
-    "deepinfra": {
-        "name": "DeepInfra",
-        "model_env": "DEEPINFRA_MODEL",
-        "key_env": "DEEPINFRA_API_KEY",
-        "default_model": "meta-llama/Llama-3.1-70B-Instruct",
-    },
-    # Model-specific
-    "deepseek": {
-        "name": "DeepSeek",
-        "model_env": "DEEPSEEK_MODEL",
-        "key_env": "DEEPSEEK_API_KEY",
-        "default_model": "deepseek-chat",
-    },
-    "mistral": {
-        "name": "Mistral AI",
-        "model_env": "MISTRAL_MODEL",
-        "key_env": "MISTRAL_API_KEY",
-        "default_model": "mistral-large-latest",
-    },
-    "cohere": {
-        "name": "Cohere",
-        "model_env": "COHERE_MODEL",
-        "key_env": "COHERE_API_KEY",
-        "default_model": "command-r-plus",
-    },
-    # Gateways
-    "vercel": {
-        "name": "Vercel AI Gateway",
-        "model_env": "VERCEL_MODEL",
-        "key_env": "VERCEL_API_KEY",
-        "default_model": "gpt-4o-mini",
-    },
-    "cloudflare": {
-        "name": "Cloudflare AI Gateway",
-        "model_env": "CLOUDFLARE_MODEL",
-        "key_env": "CLOUDFLARE_API_KEY",
-        "default_model": "@cf/meta/llama-3.1-70b-instruct",
-    },
-    # Free-tier-friendly providers (OpenAI-compatible, generous free quotas)
-    "cerebras": {
-        "name": "Cerebras",
-        "model_env": "CEREBRAS_MODEL",
-        "key_env": "CEREBRAS_API_KEY",
-        # 1M tokens/day free, no credit card — most generous free tier.
-        # llama-3.3-70b and qwen-3-32b were deprecated; gpt-oss-120b is the
-        # current production model.
-        "default_model": "gpt-oss-120b",
-    },
-    "sambanova": {
-        "name": "SambaNova",
-        "model_env": "SAMBANOVA_MODEL",
-        "key_env": "SAMBANOVA_API_KEY",
-        "default_model": "Meta-Llama-3.3-70B-Instruct",
-    },
-    "gemini": {
-        "name": "Google Gemini",
-        "model_env": "GEMINI_MODEL",
-        "key_env": "GEMINI_API_KEY",
-        # Google AI Studio free tier — gemini-2.5-flash ~10 req/min
-        "default_model": "gemini-2.5-flash",
-    },
-    "chutes": {
-        "name": "Chutes AI",
-        "model_env": "CHUTES_MODEL",
-        "key_env": "CHUTES_API_KEY",
-        # All Chutes models are TEE-suffixed; deepseek-v3.2 is a solid default.
-        # See https://llm.chutes.ai/v1/models for the live list.
-        "default_model": "deepseek-ai/DeepSeek-V3.2-TEE",
-    },
-    "zai": {
-        "name": "Z.ai (GLM)",
-        "model_env": "ZAI_MODEL",
-        "key_env": "ZAI_API_KEY",
-        # Free tier: GLM-5.2, GLM-5.1, GLM-5, GLM-5-Turbo, GLM-4.7 (limited-time
-        # free) + GLM-4.5-Flash (always free). Get a key at z.ai/manage-apikey/billing
-        "default_model": "glm-4.5-flash",
-    },
-    # Local
-    "lite-llm": {
-        "name": "LiteLLM",
-        "model_env": "LITELLM_MODEL",
-        "key_env": "LITELLM_API_KEY",
-        "default_model": "gpt-4",
-    },
+# Provider info is derived from the single source of truth in
+# PROVIDER_CONFIGS (adapters/openai_compat.py). Adding a new provider
+# there automatically makes it available everywhere — no need to update
+# this file.
+from adapters.openai_compat import PROVIDER_CONFIGS
+
+PROVIDER_INFO: dict[str, dict] = {
+    key: {
+        "name": cfg.display_name,
+        "model_env": cfg.model_env,
+        "key_env": cfg.key_env,
+        "default_model": cfg.default_model,
+    }
+    for key, cfg in PROVIDER_CONFIGS.items()
+}
+
+# Valid adapter names for validation (ollama + all cloud providers)
+VALID_ADAPTERS: list[str] = ["ollama"] + list(PROVIDER_CONFIGS.keys())
+
+# Map: adapter key → settings field name (derived, not hardcoded)
+ADAPTER_MODEL_FIELDS: dict[str, str] = {
+    "ollama": "ollama_model",
+    **{key: cfg.settings_field for key, cfg in PROVIDER_CONFIGS.items()},
 }
 
 
@@ -174,27 +67,11 @@ async def get_settings():
     """
     adapter = settings.localmind_adapter
 
-    # Get current model based on adapter
+    # Derive the model-setting map from ADAPTER_MODEL_FIELDS (single source
+    # of truth in PROVIDER_CONFIGS). No hardcoded provider list.
     model_setting_map = {
-        "openai": settings.openai_model,
-        "anthropic": settings.anthropic_model,
-        "openrouter": settings.openrouter_model,
-        "deepseek": settings.deepseek_model,
-        "lite-llm": settings.litellm_model,
-        "zen": settings.zen_model,
-        "groq": settings.groq_model,
-        "together": settings.together_model,
-        "fireworks": settings.fireworks_model,
-        "deepinfra": settings.deepinfra_model,
-        "mistral": settings.mistral_model,
-        "cohere": settings.cohere_model,
-        "vercel": settings.vercel_model,
-        "cloudflare": settings.cloudflare_model,
-        "cerebras": settings.cerebras_model,
-        "sambanova": settings.sambanova_model,
-        "gemini": settings.gemini_model,
-        "chutes": settings.chutes_model,
-        "zai": settings.zai_model,
+        key: getattr(settings, field, "")
+        for key, field in ADAPTER_MODEL_FIELDS.items()
     }
     current_model = model_setting_map.get(adapter) or settings.ollama_model
     embed_model = settings.ollama_embed_model
@@ -228,28 +105,7 @@ async def set_adapter(req: AdapterConfig):
     """
     Switch to a different adapter (ollama, openai, anthropic, etc.).
     """
-    valid_adapters = [
-        "ollama",
-        "openai",
-        "anthropic",
-        "openrouter",
-        "deepseek",
-        "lite-llm",
-        "zen",
-        "groq",
-        "together",
-        "fireworks",
-        "deepinfra",
-        "mistral",
-        "cohere",
-        "vercel",
-        "cloudflare",
-        "cerebras",
-        "sambanova",
-        "gemini",
-        "chutes",
-        "zai",
-    ]
+    valid_adapters = VALID_ADAPTERS
     if req.adapter not in valid_adapters:
         raise HTTPException(status_code=400, detail=f"Invalid adapter. Valid: {valid_adapters}")
 
@@ -274,29 +130,8 @@ async def set_adapter(req: AdapterConfig):
     # back to the adapter's current model setting, or the provider default.
     # Previously, calling set_adapter without a model saved model="" to
     # settings.json, wiping any previously-saved model on restart.
-    model_field_map = {
-        "ollama": "ollama_model",
-        "openai": "openai_model",
-        "anthropic": "anthropic_model",
-        "openrouter": "openrouter_model",
-        "deepseek": "deepseek_model",
-        "lite-llm": "litellm_model",
-        "zen": "zen_model",
-        "groq": "groq_model",
-        "together": "together_model",
-        "fireworks": "fireworks_model",
-        "deepinfra": "deepinfra_model",
-        "mistral": "mistral_model",
-        "cohere": "cohere_model",
-        "vercel": "vercel_model",
-        "cloudflare": "cloudflare_model",
-        "cerebras": "cerebras_model",
-        "sambanova": "sambanova_model",
-        "gemini": "gemini_model",
-        "chutes": "chutes_model",
-        "zai": "zai_model",
-    }
-    model_field = model_field_map.get(req.adapter)
+    # model_field is derived from ADAPTER_MODEL_FIELDS (single source of truth).
+    model_field = ADAPTER_MODEL_FIELDS.get(req.adapter)
     if model_field:
         # Use provided model, or keep the existing model if no model given
         resolved_model = req.model or getattr(settings, model_field, "")

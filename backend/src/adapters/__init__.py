@@ -17,36 +17,20 @@ def get_adapter(name: str, model_override: str = "") -> BaseAdapter:
             from adapters.ollama import OllamaAdapter
 
             _adapter_cache[cache_key] = OllamaAdapter(model_override=model_override)
-        elif name in (
-            "openai",
-            "anthropic",
-            "openrouter",
-            "deepseek",
-            "lite-llm",
-            "zen",
-            "groq",
-            "together",
-            "fireworks",
-            "deepinfra",
-            "mistral",
-            "cohere",
-            "vercel",
-            "cloudflare",
-            "cerebras",
-            "sambanova",
-            "gemini",
-            "chutes",
-            "zai",
-        ):
-            from adapters.openai_compat import OpenAICompatAdapter
-
-            _adapter_cache[cache_key] = OpenAICompatAdapter(provider=name, model_override=model_override)
         else:
-            raise ValueError(
-                f"Unknown adapter: '{name}'. Available: ollama, openai, anthropic, openrouter, "
-                "deepseek, lite-llm, zen, groq, together, fireworks, deepinfra, mistral, "
-                "cohere, vercel, cloudflare, cerebras, sambanova, gemini, chutes, zai"
-            )
+            # All non-ollama adapters are OpenAI-compatible. The valid names
+            # are derived from PROVIDER_CONFIGS — no hardcoded list to drift.
+            from adapters.openai_compat import CLOUD_PROVIDER_NAMES
+
+            if name in CLOUD_PROVIDER_NAMES:
+                from adapters.openai_compat import OpenAICompatAdapter
+
+                _adapter_cache[cache_key] = OpenAICompatAdapter(provider=name, model_override=model_override)
+            else:
+                raise ValueError(
+                    f"Unknown adapter: '{name}'. Available: ollama, "
+                    + ", ".join(CLOUD_PROVIDER_NAMES)
+                )
     return _adapter_cache[cache_key]
 
 
