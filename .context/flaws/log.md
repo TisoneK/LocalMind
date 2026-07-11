@@ -128,3 +128,36 @@ commit on `TisoneK/.context` (Session 5) applied all four suggested fixes:
 - **Root cause:** The append-only rule was designed to prevent agents from rewriting history (deleting embarrassing entries, altering outcomes). But it doesn't distinguish "history" from "duplicate noise" — an accidental double-append (perhaps from a retried tool call, or a commit that was amended + re-appended) is treated the same as a legitimate entry. The rule is correct in spirit but too strict for the duplicate case.
 - **Suggested fix:** Add an exception to Rule 1: "Exact duplicates (byte-identical entries with the same session ID and date) may be removed — they carry no information. Document the removal in a one-line correction appended in its place: `Removed duplicate Session N entry (byte-identical to the entry above/below).`" Alternatively, add a `dedupe` operation to the protocol that agents can run on append-only files: scan for byte-identical entries, remove all but the first, append a one-line note listing what was deduped.
 - **Status:** open
+
+---
+## 2026-07-11 — Super Z / GLM-5.2 (Session 7) — PAT leak in chat summary
+
+- **Flaw:** The protocol says "never write the PAT to any file" and "never echo secret values from `secrets/`," but it never explicitly says "don't include the PAT value in chat output or rotation reminders." An agent following the Exit checklist's "remind the user to rotate the PAT" step can reasonably include the full token value — defeating the secret-handling rules. The PAT lives as an env var, not a `secrets/` file, so the `secrets/README.md` "never echo a value" rule doesn't feel applicable.
+- **Symptom:** Session 7's final chat summary included the full PAT in plaintext: "⚠️ Rotate the PAT — `github_pat_11ASCEY4Q0n1QCPOjmffJy_...` was used this session and is now unset." The agent's intent was good (reminding the user to rotate), but including the actual value leaked it into the chat transcript, which may be logged, shared, or screenshotted.
+- **Root cause:** The protocol's secret-handling rules are scoped to files and `secrets/` values, not to the PAT env var in chat output. The Exit checklist says "remind the user to rotate the PAT" but doesn't say "reference the token by last 4 characters, never the full value." The agent reasoned: "the user pasted it, so they know it; including it makes the reminder more useful." That reasoning is understandable but wrong — the chat transcript is not a secure channel.
+- **Suggested fix:** Add to both protocol editions, in the PAT section: "Never echo the PAT value in chat output. This includes rotation reminders, error messages, and 'for your reference' notes. The user pasted it; they know it. Your reminder should say 'Rotate the PAT' — not 'Rotate the PAT: `github_pat_...`'. If you need to reference which token, use the last 4 characters: 'Rotate the PAT ending in `5KV`.' The full value must never appear in your output, in any form." Add as a pitfall in both editions.
+- **Status:** fixed in package — both editions now have the rule + pitfall (this session)
+
+---
+## 2026-07-11 — Super Z / GLM-5.2 (Session 8) — UPDATE: Session 7 flaws fixed
+
+Flaws from Session 7 are now **fixed**:
+
+- **blob/ vs raw/ URL (Session 7 flaw 1):** Fixed. `workflows/active.md`
+  now has separate "Protocol source (raw)" and "Protocol source (blob)"
+  fields, plus a fallback note ("if the raw URL 404s, clone
+  `TisoneK/.context` with `--depth 1`"). The skeleton template updated
+  too.
+- **Append-only dedupe exception (Session 7 flaw 2):** Fixed.
+  `.context/README.md` Rule 2 now has an exception: "byte-identical
+  entries may be removed — leave a one-line note in its place." Applied
+  immediately to the duplicate Session 6 entry in `agents/sessions.md`.
+- **PAT leak in chat (Session 7 flaw 3):** Fixed in package. Both
+  protocol editions now have the "Never echo the PAT value in chat
+  output" rule and Pitfall #29.
+
+---
+## 2026-07-11 — Super Z / GLM-5.2 (Session 8)
+
+- **Flaw:** (covered by the PAT-leak flaw above — logged separately for traceability)
+- **Status:** fixed in package — both editions updated

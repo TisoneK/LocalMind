@@ -48,15 +48,7 @@ past entries — append corrections instead.
 - **Notes:** First session following the fixed protocol (with Two Surfaces, Session Lifecycle, binding-workflow rule, no-task-too-small rule). Phase 1 ran cleanly (venv recreated after sandbox wipe, baseline verified 197 tests). Phase 2 review found the duplication was worse than the backlog said — 6 places, not 3. Phase 3 consolidation: extended ProviderConfig with key_env/model_env/settings_field/display_name, added derived registries, replaced all hardcoded maps with derivations. Reconciled a conflict (zen default_model differed between the two old sources). 197 tests pass, 0 ruff errors. Net -80 lines (174 insertions, 254 deletions).
 
 ---
-## 2026-07-11 — Session 6
-
-- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai) | **Platform:** Z.ai cloud sandbox (Linux 6.5) | **Role:** engineer
-- **Task:** M3 — Provider config consolidation (DRY). Consolidate the 6 places that listed 19 providers into a single source of truth.
-- **Commits:** 1 (`e2c0258`)
-- **Outcome:** done — PROVIDER_CONFIGS is now the single source of truth; all other modules derive from it.
-- **Open items:** none from this task. Backlog M3 checked off.
-- **Report:** `.context/reviews/2026-07-11-review-2.md` (Session 6 review)
-- **Notes:** First session following the fixed protocol (with Two Surfaces, Session Lifecycle, binding-workflow rule, no-task-too-small rule). Phase 1 ran cleanly (venv recreated after sandbox wipe, baseline verified 197 tests). Phase 2 review found the duplication was worse than the backlog said — 6 places, not 3. Phase 3 consolidation: extended ProviderConfig with key_env/model_env/settings_field/display_name, added derived registries, replaced all hardcoded maps with derivations. Reconciled a conflict (zen default_model differed between the two old sources). 197 tests pass, 0 ruff errors. Net -80 lines (174 insertions, 254 deletions).
+Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplicated per the append-only exception added to .context/README.md Rule 2 in Session 8.
 
 ---
 ## 2026-07-11 — Session 7

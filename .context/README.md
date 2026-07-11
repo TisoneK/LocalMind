@@ -74,7 +74,11 @@ project's product, or am I editing the agent's memory of the project?"
 2. **Append-only logs are append-only.** `agents/sessions.md`,
    `inefficiencies/log.md`, `flaws/log.md`, `tasks/backlog.md`, and
    `plans/decisions.md` never lose entries. Corrections are appended,
-   never edited in.
+   never edited in. **Exception — exact duplicates:** byte-identical
+   entries (same session ID, same date, same content) may be removed to
+   deduplicate. When you remove a duplicate, leave a one-line note in
+   its place: `Removed duplicate Session N entry (byte-identical to the
+   entry above).` This keeps the log clean without erasing history.
 3. **Overwrite files are current-state only.** `tasks/current.md`,
    `workflows/active.md`, and the `system/` + `user/` files describe *now*;
    update them in place. History lives in the append-only logs.
