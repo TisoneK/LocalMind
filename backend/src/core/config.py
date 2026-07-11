@@ -28,12 +28,14 @@ def _allowed_user_folders() -> list[str]:
     """
     Folders the model is allowed to READ from (never OS/system folders).
 
-    Covers standard Windows shell folders plus the observed user top-level
-    folders from C:\\Users\\tison.  Keeping both platforms in sync ensures
-    is_path_allowed() works correctly regardless of where LocalMind runs.
+    Defaults to the user's home directory plus a set of common development
+    folders. The list can be overridden via the LOCALMIND_ALLOWED_FOLDERS
+    env var (comma-separated absolute or ~-relative paths) so users on
+    non-default layouts don't have to edit source code to expose their
+    project directories to the file explorer.
 
-    The home directory itself is included so the file explorer can list
-    its top-level contents (not just specific subdirectories).
+    The home directory itself is always included so the file explorer can
+    list its top-level contents (not just specific subdirectories).
     """
     if sys.platform == "win32":
         base = Path(os.environ.get("USERPROFILE", Path.home()))
@@ -44,7 +46,25 @@ def _allowed_user_folders() -> list[str]:
     # list its contents. Without this, GET /api/files?path=~ returns 403.
     folders = [str(base)]
 
-    # Standard shell folders present on both Windows and *nix home dirs
+    # If the user has explicitly configured an allowlist via env, use it
+    # as the authoritative set (beyond the home dir). This lets users on
+    # non-standard layouts (e.g. /srv/projects, D:\\Code) expose their
+    # actual work folders without editing source code.
+    env_folders = os.getenv("LOCALMIND_ALLOWED_FOLDERS", "")
+    if env_folders.strip():
+        for entry in env_folders.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            # Expand ~ and env vars, then normalize to absolute
+            expanded = Path(entry).expanduser()
+            folders.append(str(expanded if expanded.is_absolute() else (base / expanded)))
+        return folders
+
+    # Default: common standard + development folders. These are generic
+    # names that exist on most developer machines — not specific to one
+    # user's setup (the prior version hardcoded names like "factory",
+    # "repos", "builds" observed on one developer's machine).
     standard = [
         "Downloads",
         "Documents",
@@ -55,8 +75,7 @@ def _allowed_user_folders() -> list[str]:
         "Contacts",
         "Favorites",
     ]
-    # User-created top-level folders observed in C:\\Users\\tison
-    user_created = [
+    development = [
         "LocalMind",
         "Dev",
         "Scripts",
@@ -64,18 +83,15 @@ def _allowed_user_folders() -> list[str]:
         "shared",
         "workflows",
         "examples",
-        "factory",
         "config",
         "data",
-        "OneDrive",
         "Code",
         "Projects",
         "src",
         "repos",
-        "builds",
         "workspace",
     ]
-    folders.extend(str(base / folder) for folder in standard + user_created)
+    folders.extend(str(base / folder) for folder in standard + development)
     return folders
 
 
