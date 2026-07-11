@@ -56,3 +56,21 @@ if literally nothing slowed you down.
      entries. Project-level inefficiencies from Session 3 (if any) would
      appear below. -->
 
+
+---
+## 2026-07-11 — Super Z / GLM-5.2 (Session 7)
+
+- **Problem:** The `workflows/active.md` Protocol source field contains a `blob/` URL (`https://github.com/TisoneK/.context/blob/main/ai-engineering-protocol.md`), not a `raw/` URL. Fetching it via `curl https://raw.githubusercontent.com/...` (the raw equivalent) returned 404. Had to clone the entire `TisoneK/.context` package repo to get the 53KB protocol file.
+- **Cost:** One failed `curl` (404) + one `git clone --depth 1` of the package repo (~2s, 156KB). Minor — the clone worked fine and also gave me the `roles/` and `examples/` directories for reference.
+- **Cause:** The `blob/` URL is the HTML page on GitHub (rendered markdown with navigation chrome), not the raw file. The protocol's Step 3 says "fetch it from the URL in the `Protocol source` field" — an agent following literally would fetch HTML, not raw markdown. The `raw/` equivalent (`https://raw.githubusercontent.com/TisoneK/.context/main/ai-engineering-protocol.md`) should work but returned 404 this session (possibly a caching/timing issue, or the default branch isn't `main`).
+- **Workaround / fix:** Cloned `TisoneK/.context` fresh: `git clone --depth 1 "https://x-access-token:${GIT_TOKEN}@github.com/TisoneK/.context.git" _context_pkg`. Read `ai-engineering-protocol.md` from there. Stripped token from `_context_pkg/.git/config` after clone.
+- **Prevent next time:** Update `workflows/active.md` Protocol source field to give BOTH the `blob/` URL (for human browsing) AND the `raw/` URL (for agent fetch), OR instruct agents to clone the package repo as the reliable fallback. The protocol's Step 3 could say: "If the raw URL 404s, clone `TisoneK/.context` with `--depth 1` and read the file locally." Logged as a flaw too.
+
+---
+## 2026-07-11 — Super Z / GLM-5.2 (Session 7)
+
+- **Problem:** `npm install` emitted `allow-scripts` warnings for `electron@33.4.11` (postinstall: `node install.js`) and `esbuild@0.25.12` (postinstall: `node install.js`). The scripts were not run — npm 11's `allow-scripts` feature blocks postinstall scripts by default for security.
+- **Cost:** Zero — the frontend typecheck (`tsc -b`), lint (`eslint .`), and build (`vite build`) all work without these scripts. Electron's postinstall downloads the Electron binary (only needed for `npm run dev:electron` / `npm run build` of the desktop app). esbuild's postinstall downloads the platform-specific binary — but Vite brings its own esbuild binary, so this is redundant.
+- **Cause:** npm 11 (installed on this sandbox) enables `allow-scripts` by default. Older npm versions ran postinstall scripts automatically.
+- **Workaround / fix:** No workaround needed for review/lint/test work. If a future session needs to build the Electron app (`npm run build`), run `npm approve-scripts --allow-scripts-pending` first, or `npm approve-scripts electron esbuild` for just those two.
+- **Prevent next time:** Documented in `system/environments.md` Quirks section. Future sessions doing Electron builds: approve the scripts first.

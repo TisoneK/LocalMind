@@ -40,6 +40,8 @@ as GLM-5.2 (or whatever the user confirms in Pre-Flight).
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-11 | 5 |
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-11 | 7 |
 
 Observations above attributed to "GLM-4.5" were produced by GLM-5.2.
+
+- **Super Z / GLM-5.2:** Session 7 sweep review — found and fixed the last 2 DRY violations from Session 6's provider consolidation (`config.py` was still reconstructing settings field names via string manipulation instead of using the derived `ADAPTER_MODEL_FIELDS` map). Also caught a stale README "Known Issues" bullet referencing the pre-`.context/` legacy `REVIEW.md`. Did NOT re-confirm the model version with the user this session — relied on the Session 5 correction in this file. If the model has changed since Session 5, this session's entries are mislabeled. (2026-07-11)

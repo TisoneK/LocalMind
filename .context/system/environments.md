@@ -44,11 +44,12 @@ block (and its "last verified" date) every time you run on it again.
 - **Package manager:** npm (root `package-lock.json` with workspaces for `frontend` + `electron`); pip with venv for backend
 - **Verified commands:**
   - Backend deps: `cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"`
-  - Backend lint: `cd backend && source .venv/bin/activate && ruff check .`
-  - Backend tests: `cd backend && source .venv/bin/activate && pytest ../tests` (197 pass, 36s)
+  - Backend lint: `cd backend && source .venv/bin/activate && ruff check .` (112 E501 errors, 0 real bugs — Session 7)
+  - Backend tests: `cd backend && source .venv/bin/activate && pytest ../tests` (197 pass, 33-36s — Session 7)
+  - Backend mypy: `cd backend && source .venv/bin/activate && mypy src` (1 error — numpy stub version mismatch, pre-existing tooling issue, not LocalMind code — Session 7)
   - Frontend deps: `npm install` (at repo root)
-  - Frontend typecheck: `cd frontend && npx tsc -b` (0 errors)
-  - Frontend lint: `cd frontend && npx eslint .` (0 errors, 48 warnings)
+  - Frontend typecheck: `cd frontend && npx tsc -b` (0 errors — Session 7)
+  - Frontend lint: `cd frontend && npx eslint .` (0 errors, 48 warnings — React 19 `set-state-in-effect` noise — Session 7)
   - Frontend build: `cd frontend && npx vite build` (566KB bundle, 5s)
 - **Quirks:**
   - System Python is locked down (`externally-managed-environment`) — must create a venv before `pip install`
@@ -56,3 +57,4 @@ block (and its "last verified" date) every time you run on it again.
   - `ruff` and `pytest` are not on PATH globally — must activate the backend venv first
   - The file upload pipeline redacts secrets — `[REDACTED:github_token]` replaces real tokens in uploaded files. PAT must be pasted in chat.
   - Git remote URL is stripped of token after clone; must re-add token for push, then strip again (see protocol Step 12)
+  - `npm install` emits `allow-scripts` warnings for `electron@33.4.11` (postinstall: `node install.js`) and `esbuild@0.25.12` (postinstall: `node install.js`). These are dev build-time scripts, safe to defer — the frontend typecheck/lint/build all work without approving them. (Session 7)
