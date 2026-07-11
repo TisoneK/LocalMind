@@ -228,7 +228,6 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full guide. Summary:
 
 ## Known Issues
 
-- **`npm run dev:backend` uses a Windows-only venv path** (`.venv\Scripts\python.exe`). On macOS/Linux, run the backend directly: `cd backend && .venv/bin/python server.py`. Tracked as H4 in [`REVIEW.md`](REVIEW.md).
 - **Code execution is not sandboxed** — trusted-user only. The Python tool runs with your user's full permissions.
 - **Small models (1B–3B params) have limited reasoning** — upgrade to 7B+ for complex tasks.
 - **nomic-embed-text must be pulled** for memory to work: `ollama pull nomic-embed-text`.
