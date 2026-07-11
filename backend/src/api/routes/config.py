@@ -78,13 +78,16 @@ async def get_settings():
 
     # Build provider info (whether API key is set)
     # Check both runtime-stored keys (settings.json) and env vars.
+    # The settings field name comes from ADAPTER_MODEL_FIELDS (derived from
+    # PROVIDER_CONFIGS) — don't reconstruct it from model_env, which couples
+    # this code to the env-var-naming convention and breaks if they ever diverge.
     providers = {}
     for prov, info in PROVIDER_INFO.items():
         runtime_key = settings.get_api_key(prov)
         env_key = os.getenv(info["key_env"], "")
         key_set = bool(runtime_key or env_key)
-        model_env = info["model_env"]
-        model_value = getattr(settings, model_env.lower(), "") or info["default_model"]
+        settings_field = ADAPTER_MODEL_FIELDS.get(prov, "")
+        model_value = (getattr(settings, settings_field, "") if settings_field else "") or info["default_model"]
         providers[prov] = {
             "name": info["name"],
             "api_key_set": key_set,
@@ -178,10 +181,12 @@ async def set_provider_key(req: ProviderKeyRequest):
     settings.save_api_key(req.provider, req.api_key)
 
     # If a model was provided, persist it too so the adapter uses it
-    # on the next request.
+    # on the next request. The settings field name comes from the derived
+    # ADAPTER_MODEL_FIELDS map (single source of truth in PROVIDER_CONFIGS),
+    # not from reconstructing it via string manipulation.
     if req.model:
-        model_field = f"{req.provider.replace('-', '')}_model"
-        if hasattr(settings, model_field):
+        model_field = ADAPTER_MODEL_FIELDS.get(req.provider, "")
+        if model_field and hasattr(settings, model_field):
             setattr(settings, model_field, req.model)
             settings.save_runtime_settings(adapter=req.provider, model=req.model)
 
