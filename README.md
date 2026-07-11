@@ -159,7 +159,7 @@ Key settings:
 | `OLLAMA_MODEL` | _(empty = auto-detect)_ | Chat model to use |
 | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Embedding model for memory |
 | `LOCALMIND_CODE_EXEC_ENABLED` | `true` | Enable Python code execution tool |
-| `LOCALMIND_SHELL_ENABLED` | `true` | Enable shell command tool |
+| `LOCALMIND_SHELL_ENABLED` | `false` | Enable shell command tool (disabled by default for safety) |
 | `LOCALMIND_MAX_FILE_SIZE_MB` | `50` | Max upload file size |
 | `LOCALMIND_CODE_EXEC_TIMEOUT` | `30` | Code execution timeout (seconds) |
 | `LOCALMIND_SHELL_TIMEOUT` | `20` | Shell command timeout (seconds) |
