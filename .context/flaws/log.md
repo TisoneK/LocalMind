@@ -39,3 +39,39 @@ Friction caused by the `.context/` system or the protocol itself. See
 - **Root cause:** The protocol has one execution flow that covers both surfaces. There's no explicit "I am now working on `.context/`" or "I am now working on the project" declaration step. The two surfaces share the same 19-step flow, which is correct (both need discovery, both need commits), but the agent needs to be aware of which surface each step applies to.
 - **Suggested fix:** Add a "Two Surfaces" section to the protocol (early, before Phase 1) that defines: (1) The project — product code, normal commit prefixes, friction → `inefficiencies/`. (2) `.context/` — agent memory, `chore(context):` prefix, friction with the system → `flaws/`. State: "Know which surface you're on at all times. If you're editing a file under `.context/`, you're in memory mode — the rules in this protocol about `.context/` apply. If you're editing anything else, you're in project mode."
 - **Status:** open
+
+---
+## 2026-07-11 — Super Z / GLM-4.5 (Session 4)
+
+- **Flaw:** `roles/README.md` in the `TisoneK/.context` package referenced "Phase 5 (Steps 15–17)" but the base editions have only 4 phases. Steps 15–17 are in Phase 4 (Report & Context), not a separate Phase 5.
+- **Symptom:** An agent trying to map role instructions to edition steps would look for a Phase 5 that doesn't exist, causing confusion about which phase the memory-update steps belong to.
+- **Root cause:** The roles/README.md was written with a 5-phase mental model, but the editions were structured into 4 phases. The phase label was added for clarity but introduced a mismatch.
+- **Suggested fix:** Change "Phase 5 (Steps 15–17)" → "Phase 4, Steps 15–17" (or drop the phase label entirely and reference steps by number only).
+- **Status:** fixed in package — `TisoneK/.context` commit (this session), `roles/README.md` now says "Phase 4, Steps 15–17"
+
+---
+## 2026-07-11 — Super Z / GLM-4.5 (Session 4)
+
+- **Flaw:** `localmind-review.md` sat at the package root, making it look like a review of the `.context` package itself rather than an example deliverable from a project session.
+- **Symptom:** A new visitor to the `TisoneK/.context` repo (human or agent) might confuse the example review with a review of the protocol package, misreading LocalMind-specific findings as protocol findings.
+- **Root cause:** No `examples/` directory existed; the example file was placed at the root for convenience. The README explained it was an example, but the file's location didn't reinforce that.
+- **Suggested fix:** Move to `examples/localmind-review.md`. Create the `examples/` directory as the home for sample deliverables.
+- **Status:** fixed in package — `TisoneK/.context` commit (this session), moved to `examples/localmind-review.md`, README link updated
+
+---
+## 2026-07-11 — Super Z / GLM-4.5 (Session 4)
+
+- **Flaw:** The quickstart doc (`context-workflow-quickstart.md`) existed in the user's local uploads but was never committed to the `TisoneK/.context` package repo. New users/agents had no entry point explaining the two-repo mental model and bootstrap steps.
+- **Symptom:** A new user cloning `TisoneK/.context` for the first time sees protocol files, a skeleton, roles, and an example review — but no "how do I actually use this?" guide. They have to read the README and infer the workflow.
+- **Root cause:** The quickstart was written as a separate doc but never added to the repo. The README covers usage briefly but doesn't walk through the full two-repo model.
+- **Suggested fix:** Commit as `QUICKSTART.md` at the package root. Add to the README contents table.
+- **Status:** fixed in package — `TisoneK/.context` commit (this session), added as `QUICKSTART.md`, linked from README
+
+---
+## 2026-07-11 — Super Z / GLM-4.5 (Session 4)
+
+- **Flaw:** The cloud edition's `secrets/github-pat` guidance didn't distinguish cloud-sandbox persistence (session-only) from local-agent persistence (survives across sessions). The text said the file "dies with the sandbox" — correct for cloud, misleading for local agents who might read the cloud edition for reference.
+- **Symptom:** A local agent reading the cloud edition might wrongly conclude that `.context/secrets/` is always ephemeral, missing that on a local machine the file persists and can be reused across sessions.
+- **Root cause:** The guidance was written from the cloud-sandbox perspective only. The two persistence models (cloud ephemeral vs local persistent) weren't called out as a distinction.
+- **Suggested fix:** Add explicit cloud-vs-local sub-bullets under the `secrets/github-pat` guidance: cloud = session-only convenience, local = persists across sessions.
+- **Status:** fixed in package — `TisoneK/.context` commit (this session), `ai-engineering-protocol.md` Step 1 now has cloud/local sub-bullets
