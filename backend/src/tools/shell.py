@@ -214,11 +214,11 @@ def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
 
 
 def _human_size(n: int) -> str:
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if n < 1024:
-            return f"{n:.1f} {unit}"
-        n //= 1024
-    return f"{n:.1f} PB"
+    # Delegate to the shared helper. Kept as a thin wrapper so existing
+    # call sites in this module don't need updating.
+    from core.utils import human_size
+
+    return human_size(n)
 
 
 # ── Typed handlers — accept concrete values, no string interpretation ──────────

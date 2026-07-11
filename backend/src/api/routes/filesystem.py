@@ -178,11 +178,11 @@ async def get_file_meta(path: str):
 
 
 def _human_size(n: int) -> str:
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if n < 1024:
-            return f"{n:.1f} {unit}"
-        n //= 1024
-    return f"{n:.1f} PB"
+    # Delegate to the shared helper in core.utils. Kept as a thin wrapper
+    # so existing call sites in this module don't need updating.
+    from core.utils import human_size
+
+    return human_size(n)
 
 
 @router.post("/confirm-write")
