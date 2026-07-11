@@ -49,38 +49,10 @@ if literally nothing slowed you down.
 - **Workaround / fix:** Mocked `_is_url_safe` with `patch("tools.web_fetch._is_url_safe", side_effect=_fake_is_url_safe)` so the test isolates the redirect-following logic without DNS dependency.
 - **Prevent next time:** When testing functions that call external network resolution, mock the resolution function too — not just the HTTP client. Added a comment in the test file explaining this.
 
----
-## 2026-07-11 — GitHub Copilot / DeepSeek V4 Flash Free (Session 3)
+<!-- Session 3 (GitHub Copilot / DeepSeek V4 Flash Free) had 4 workflow-level
+     inefficiencies that were moved to flaws/log.md on 2026-07-11. Those
+     entries were about the protocol/.context/ system itself, not about
+     LocalMind's code/environment. See .context/flaws/log.md for the full
+     entries. Project-level inefficiencies from Session 3 (if any) would
+     appear below. -->
 
-- **Problem:** Jumped straight into editing `.context/` files when asked to "initialize .context/" — never stopped to read the workflow/protocol first. The `workflows/active.md` explicitly says the protocol is from `TisoneK/.context` and which edition to use, but I skipped that step and started making changes. User had to point out "Don't you have the workflow?"
-- **Cost:** One full round-trip with user redirecting me. Had to redo the initialization context-aware after reading the protocol.
-- **Cause:** No workflow-reading habit — treated the request as an editing task instead of following the protocol's execution steps. The protocol's Step 1 "Read the active workflow" is meant to prevent exactly this.
-- **Workaround / fix:** User redirected me. Read the workflow, fetched the protocol from `TisoneK/.context` on GitHub, then started following Steps 2–6 properly.
-- **Prevent next time:** Before ANY action — even "trivial" initialization — read `workflows/active.md` and fetch/load the protocol it references. The protocol's Phase 1 (Setup) exists to prevent this. Treat all user requests as protocol-governed unless stated otherwise.
-
----
-## 2026-07-11 — GitHub Copilot / DeepSeek V4 Flash Free (Session 3)
-
-- **Problem:** When looking for the protocol file, tried multiple wrong local paths: the VS Code prompts folder (`C:\Users\tison\AppData\Roaming\Code - Insiders\User\prompts`), workspace-wide `file_search` for `**/*protocol*` and `**/*.instructions.md` and `**/*.prompt.md`. All returned nothing because the protocol lives in a GitHub repo, not on the local filesystem. The workflow file already says "from the `TisoneK/.context` package" — I had the answer and didn't connect it.
-- **Cost:** 4 failed search tool calls + wasted time before using `github_repo` to fetch the protocol content.
-- **Cause:** Expected protocol files to be on local disk or in a standard VS Code path. Didn't map the phrase "from the `TisoneK/.context` package" to "fetch it from GitHub". The `workflows/active.md` already documents this clearly.
-- **Workaround / fix:** Used `github_repo` to query `TisoneK/.context` for the protocol. Got the full protocol content.
-- **Prevent next time:** When the workflow says "from the <owner>/<repo> package", use the GitHub repo tool to fetch it. Don't search local paths first. Better: read the workflow file's protocol field carefully before reaching for any tool.
-
----
-## 2026-07-11 — GitHub Copilot / DeepSeek V4 Flash Free (Session 3)
-
-- **Problem:** The initial `.context/` edits (registering agent in `ai-models.md`, adding environment to `environments.md`, logging session in `sessions.md`, updating `workflows/active.md`, setting `tasks/current.md`) were all done BEFORE reading and following the protocol. The changes themselves are correct, but the sequence violated the protocol's Step 2 (pull first) and Step 3 (read .context first, which I had read but not in order), and skipped Steps 4–6 (verify deps, read docs, discovery). The protocol's execution order exists so that the agent works from complete context, not partial context.
-- **Cost:** Required a backtrack to re-do the discovery phase properly (pull, read docs, discover conventions). Edits themselves were fine but workflow was out of order.
-- **Cause:** Treated "initialize .context/" as a standalone file-editing task rather than as a session that follows a protocol. The protocol makes every session follow the same 19 steps regardless of task size.
-- **Workaround / fix:** Backtracked to Step 2 (pull), Step 3 (re-read .context), Step 4 (verify deps), Step 5 (read docs), Step 6 (discovery summary). Confirmed all prior edits were consistent with the protocol's requirements.
-- **Prevent next time:** Follow the protocol steps in order from the first user request. Don't treat any task as "too small for the protocol." Phase 1 (Steps 1–6) must complete before any file editing begins.
-
----
-## 2026-07-11 — GitHub Copilot / DeepSeek V4 Flash Free (Session 3)
-
-- **Problem:** After finding the protocol, still needed manual user direction ("Don't you have the workflow?") to actually load it and follow it. The workflow file had been read in the very first tool calls but its implications weren't acted on.
-- **Cost:** User had to explicitly tell me what I should have inferred from the data already in context.
-- **Cause:** Read the workflow file passively (as documentation) rather than actively (as an instruction set to execute). The difference between reading and following.
-- **Workaround / fix:** Once user pointed it out, fetched the protocol and began executing its steps.
-- **Prevent next time:** Reading a workflow file IS a binding instruction — not informational reading. After reading `workflows/active.md`, immediately load and start executing the referenced protocol. Don't proceed with any tool use until the protocol is loaded.
