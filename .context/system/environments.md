@@ -1,0 +1,41 @@
+# Environments (update in place)
+
+Machines and sandboxes agents have run on, and what it takes to work on
+this project from each. One block per environment; update the matching
+block (and its "last verified" date) every time you run on it again.
+
+## Rules
+
+1. **Match before you add.** At session start, check whether the machine
+   you're on already has a block (use its "Identify by" line). Update the
+   match; add a new block only for a genuinely new environment.
+2. **Record what you verified, not what you assume.** A command belongs
+   under "Verified commands" only after it ran successfully on this
+   environment, this project.
+3. **Agents never delete blocks.** An environment the project no longer
+   uses may be pruned by the user; if you can't verify a block, leave it
+   alone — its last-verified date already says how stale it is.
+4. **Machine facts only.** Secret values go in `secrets/`; user
+   preferences in `user/`; project-wide decisions in `plans/`.
+
+---
+## Z.ai cloud sandbox (last verified 2026-07-11)
+
+- **Identify by:** workspace path `/home/z/my-project/`; env vars `FC_FUNCTION_NAME` / `SIGMA_APP_NAME` present; `CLAWHUB_WORKDIR=/home/z/my-project`
+- **OS:** Linux 6.5 (Ubuntu-based, containerized — `KATA_CONTAINER=true`)
+- **Runtimes:** Python 3.12.13, Node 22.x (via bun), bun
+- **Package manager:** npm (root `package-lock.json` with workspaces for `frontend` + `electron`); pip with venv for backend
+- **Verified commands:**
+  - Backend deps: `cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"`
+  - Backend lint: `cd backend && source .venv/bin/activate && ruff check .`
+  - Backend tests: `cd backend && source .venv/bin/activate && pytest ../tests` (197 pass, 36s)
+  - Frontend deps: `npm install` (at repo root)
+  - Frontend typecheck: `cd frontend && npx tsc -b` (0 errors)
+  - Frontend lint: `cd frontend && npx eslint .` (0 errors, 48 warnings)
+  - Frontend build: `cd frontend && npx vite build` (566KB bundle, 5s)
+- **Quirks:**
+  - System Python is locked down (`externally-managed-environment`) — must create a venv before `pip install`
+  - No persistent storage between sessions — `/home/z/my-project/` is wiped on session end; only `/home/z/my-project/download/` persists for user downloads
+  - `ruff` and `pytest` are not on PATH globally — must activate the backend venv first
+  - The file upload pipeline redacts secrets — `[REDACTED:github_token]` replaces real tokens in uploaded files. PAT must be pasted in chat.
+  - Git remote URL is stripped of token after clone; must re-add token for push, then strip again (see protocol Step 12)
