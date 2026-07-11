@@ -301,19 +301,70 @@ async def web_fetch(url: str) -> ToolResult:
     try:
         import httpx
 
+        # SECURITY: follow_redirects=False — we handle redirects manually so
+        # each redirect target is re-validated by _is_url_safe(). With
+        # follow_redirects=True, httpx would silently follow a 302 to an
+        # internal IP (e.g. 169.254.169.254) without giving us a chance to
+        # block it. This is the standard SSRF redirect-bypass pattern.
         async with httpx.AsyncClient(
             timeout=WEB_FETCH_TIMEOUT_SECS,
-            follow_redirects=True,
-            max_redirects=5,
+            follow_redirects=False,
             headers={
                 "User-Agent": "Mozilla/5.0 (compatible; LocalMind/1.0; +https://localmind.ai)",
                 "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9",
                 "Accept-Language": "en-US,en;q=0.5",
             },
         ) as client:
+            # Manually follow redirects with SSRF re-validation on each hop.
+            # This preserves redirect functionality (e.g. HTTP→HTTPS) while
+            # ensuring no redirect target escapes the SSRF check.
+            current_url = url
+            _MAX_REDIRECTS = 5
+            response = None
+            for _hop in range(_MAX_REDIRECTS + 1):
+                response = await client.get(current_url)
+                if response.status_code not in (301, 302, 303, 307, 308):
+                    break  # not a redirect — proceed with this response
+                location = response.headers.get("location")
+                if not location:
+                    break  # redirect with no Location header — proceed
+                # Resolve relative redirects against the current URL
+                redirect_url = str(httpx.URL(current_url).join(location))
+                # Re-validate the redirect target with SSRF check
+                is_safe, reason = _is_url_safe(redirect_url)
+                if not is_safe:
+                    logger.warning("[web_fetch] SSRF blocked on redirect: %s — %s", redirect_url, reason)
+                    return ToolResult(
+                        content=(
+                            f"Refused to follow redirect to '{redirect_url}' for security reasons: {reason}. "
+                            f"web_fetch blocks redirects to internal/private addresses to prevent SSRF."
+                        ),
+                        risk=RiskLevel.HIGH,
+                        source="web_fetch",
+                        success=False,
+                        error_type="ssrf_blocked",
+                        error_message=f"Redirect target blocked: {reason}",
+                        metadata={"url": url, "redirect_url": redirect_url},
+                    )
+                response.close()
+                current_url = redirect_url
+            else:
+                # Loop exhausted — too many redirects
+                return ToolResult(
+                    content=f"Too many redirects (limit: {_MAX_REDIRECTS}) when fetching {url}.",
+                    risk=RiskLevel.LOW,
+                    source="web_fetch",
+                    success=False,
+                    error_type="too_many_redirects",
+                    error_message=f"Exceeded {_MAX_REDIRECTS} redirects",
+                    metadata={"url": url, "final_url": current_url},
+                )
+
+            # Now `response` is the final (non-redirect) response.
+            # Re-use the existing content-type / size / extraction logic below.
             # First, do a HEAD request to check content type and size
             try:
-                head_resp = await client.head(url)
+                head_resp = await client.head(current_url)
                 content_type = head_resp.headers.get("content-type", "")
                 content_length = int(head_resp.headers.get("content-length", "0"))
 
@@ -342,8 +393,8 @@ async def web_fetch(url: str) -> ToolResult:
                 # HEAD request failed — proceed with GET anyway (some servers reject HEAD)
                 pass
 
-            # Fetch the page
-            response = await client.get(url)
+            # Use the response from the redirect-following loop above.
+            # (We already fetched current_url — no need to re-fetch.)
             response.raise_for_status()
 
             # Check content type from actual response
