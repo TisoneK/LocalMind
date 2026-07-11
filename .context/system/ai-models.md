@@ -10,6 +10,7 @@ accordingly).
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
+| GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 1 |
 
 ## Observations
 

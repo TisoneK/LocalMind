@@ -4,7 +4,7 @@ The workflow currently in force for this repo — which protocol edition
 agents follow and the standing session parameters. Update only when the
 user changes the rules; note the change in your session entry.
 
-- **Protocol:** `ai-engineering-protocol.md` (cloud/sandbox edition) — for cloud agents that clone with a PAT. Local agents (Claude Code, Cursor, Copilot) use `ai-engineering-protocol-local.md` from the `TisoneK/.context` package.
+- **Protocol:** `ai-engineering-protocol-local.md` (local edition) — this session runs GitHub Copilot on a local Windows machine. Cloud agents (Super Z on Z.ai sandbox) use the cloud/sandbox edition.
 - **Since:** 2026-07-11
 - **Default role:** engineer — full-scope, unless a session says otherwise. Role overlays (reviewer, security-auditor, docs-agent) available in the `TisoneK/.context` package's `roles/` directory.
 - **Scope:** discovery + review + fix all safe issues

@@ -19,6 +19,23 @@ block (and its "last verified" date) every time you run on it again.
    preferences in `user/`; project-wide decisions in `plans/`.
 
 ---
+---
+## Tison's local Windows machine (last verified 2026-07-11)
+
+- **Identify by:** hostname matches `Tison`; OS is Windows; user home is `C:\Users\tison`; Dev root is `C:\Users\tison\Dev`
+- **OS:** Windows 11 (PowerShell)
+- **Runtimes:** Node.js v24.13.0, Python 3.14.2, npm 11.12.1
+- **Package manager:** npm (root `package-lock.json` with workspaces); pip (system Python, not venv — on Windows, PEP 668 is advisory only)
+- **Verified commands:**
+  - `node --version` → v24.13.0 (2026-07-11)
+  - `python --version` → Python 3.14.2 (2026-07-11)
+  - `npm --version` → 11.12.1 (2026-07-11)
+- **Quirks:**
+  - Windows paths use backslashes; PowerShell handles both `/` and `\`
+  - No `make` — use npm scripts or PowerShell equivalents
+  - Python is system-wide (no venv isolation required on Windows, but still recommended for backend work)
+  - This is a local development machine — persistent storage, full filesystem access
+
 ## Z.ai cloud sandbox (last verified 2026-07-11)
 
 - **Identify by:** workspace path `/home/z/my-project/`; env vars `FC_FUNCTION_NAME` / `SIGMA_APP_NAME` present; `CLAWHUB_WORKDIR=/home/z/my-project`
