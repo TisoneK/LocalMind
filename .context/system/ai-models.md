@@ -10,7 +10,7 @@ accordingly).
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
-| GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 1 |
+| GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 
 ## Observations
 
@@ -24,6 +24,8 @@ Update in place when a newer session contradicts an old observation.
 - **Super Z / GLM-4.5:** Identified the PAT redaction issue on first session (2026-07-09) — upload pipeline scrubs secrets from files. Workaround: PAT goes in chat, not the protocol file. (2026-07-09, confirmed 2026-07-11)
 - **Super Z / GLM-4.5:** Pushed 10 commits in a single session without intervention — zero-interruption protocol works as designed with GLM-4.5 (2026-07-11)
 - **Super Z / GLM-4.5:** Designed the `.context/` agent-memory system and co-developed the `ai-engineering-protocol` package with the user across multiple sessions (2026-07-09 to 2026-07-11)
+- **GitHub Copilot / DeepSeek V4 Flash Free:** Demonstrated the "skip-Phase-1" anti-pattern — edited `.context/` files before reading the workflow or following protocol steps. User had to redirect multiple times. The 4 flaws logged from this session were all fixed in the protocol package by the next session (binding instruction rule, protocol source URL, no-task-too-small rule, two-surfaces section, session lifecycle markers). This session proved the `.context/` flaws-logging system works: friction was captured, moved to `flaws/`, and upstreamed to the protocol package without the user having to write any of it. (2026-07-11)
+- **GitHub Copilot / DeepSeek V4 Flash Free:** Asks rhetorical yes/no questions instead of acting — when the answer is clearly "yes" (e.g. "Want me to commit and push?", "Should I add an observation?"), asks instead of doing. This burns a round-trip for confirmation on something the agent should infer from context + protocol. The pattern: agent proposes → user says yes → agent does. Should be: agent does. The protocol's zero-interruption principle already says this — the agent isn't following it when the action is obvious. Fix: if a proposed action is the **default** next step (commit after edits, push after commit, log after noticing a pattern), don't ask — do it and report. Only ask when there's genuine ambiguity (which of two approaches, whether to proceed despite risk, permission for a broad-scope change). (2026-07-11)
 
 ## Correction (2026-07-11 — Session 5)
 
