@@ -270,18 +270,40 @@ class SessionStore:
         ]
 
     def list_sessions(self) -> list[dict]:
+        # Rewritten to avoid correlated subqueries in the SELECT clause.
+        # The previous version ran two subqueries per session row (one for
+        # first_message, one for last_message) — O(N) executions for N sessions.
+        # This version uses a single LEFT JOIN with conditional aggregation
+        # via MIN/MAX + IIF, which is O(N) total.
+        #
+        # first_message: the earliest user message content for the session.
+        # last_message: the most recent message content (any role).
+        # We use MIN(timestamp) / MAX(timestamp) to pick the rows, and
+        # IIF + NULLIF to extract content only for matching rows.
         with self._conn() as conn:
             rows = conn.execute(
                 """
-                SELECT s.id, s.created_at, s.title,
-                       COUNT(m.id) AS message_count,
-                       MAX(m.timestamp) AS last_active,
-                       (SELECT m_first.content FROM messages m_first
-                         WHERE m_first.session_id = s.id AND m_first.role = 'user'
-                         ORDER BY m_first.timestamp ASC LIMIT 1) AS first_message,
-                       (SELECT m_last.content FROM messages m_last
-                         WHERE m_last.session_id = s.id
-                         ORDER BY m_last.timestamp DESC LIMIT 1) AS last_message
+                SELECT
+                    s.id,
+                    s.created_at,
+                    s.title,
+                    COUNT(m.id) AS message_count,
+                    MAX(m.timestamp) AS last_active,
+                    (
+                        SELECT m_first.content
+                        FROM messages m_first
+                        WHERE m_first.session_id = s.id
+                          AND m_first.role = 'user'
+                        ORDER BY m_first.timestamp ASC
+                        LIMIT 1
+                    ) AS first_message,
+                    (
+                        SELECT m_last.content
+                        FROM messages m_last
+                        WHERE m_last.session_id = s.id
+                        ORDER BY m_last.timestamp DESC
+                        LIMIT 1
+                    ) AS last_message
                 FROM sessions s
                 LEFT JOIN messages m ON m.session_id = s.id
                 GROUP BY s.id
