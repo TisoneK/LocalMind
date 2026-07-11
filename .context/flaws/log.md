@@ -161,3 +161,21 @@ Flaws from Session 7 are now **fixed**:
 
 - **Flaw:** (covered by the PAT-leak flaw above — logged separately for traceability)
 - **Status:** fixed in package — both editions updated
+
+---
+## 2026-07-11 — Super Z / GLM-5.2 (Session 8) — pull-before-inspect gap
+
+- **Flaw:** The protocol says "pull before starting work" (Step 2), but when a user tells an agent mid-session to "check what another session did" or "pull changes," the agent doesn't have an explicit rule to pull first. The agent may inspect stale local state (via `git show` or `git log`) and report wrong information, only discovering the local is behind when a pull later fails.
+- **Symptom:** When told "maybe check what the session did first," the agent jumped straight to `git show` on the latest local commit, assuming local was current. It wasn't until a later `git pull` failed (on file-mode conflicts) that the agent realized remote was ahead. The inspection was performed on stale state.
+- **Root cause:** The protocol's pull rule is scoped to session start (Step 2), not to any point where remote may have moved ahead. There's no rule for mid-session sync — "if the user references another agent's work, or if any time has passed since your last pull, fetch first." An agent that pulled at Step 2 and has been working for an hour has no signal that remote may have moved.
+- **Suggested fix:** Add to the protocol: "Before inspecting another agent's work (git show, git log on commits you didn't make), or whenever the user references work you haven't seen — fetch first. If remote is ahead, pull before inspecting. Your local state is stale the moment another agent pushes." Add as a pitfall.
+- **Status:** fixed in package — both editions updated (this session)
+
+---
+## 2026-07-11 — Super Z / GLM-5.2 (Session 8) — rhetorical yes/no questions
+
+- **Flaw:** The Zero-Interruption Principle says "does not ask the user questions between steps," but agents read this as "don't ask for *clarification*" while still asking for *permission* on the default next step. The agent proposes ("Want me to fix this?"), the user says yes, the agent does it — burning a round-trip on something the protocol already prescribes.
+- **Symptom:** GLM-5.2 (this session) asked "Want me to proceed with all 5, or just some?" and "Want me to log both and apply the protocol fix?" — three times in a row — despite the user having repeatedly said "fix everything" earlier in the session. This is the same behavior logged as an observation about DeepSeek V4 Flash Free in Session 3. Two models, same pattern → it's a protocol gap, not a model trait.
+- **Root cause:** The protocol's Zero-Interruption Principle is stated generally ("does not ask questions") but doesn't explicitly call out the common failure mode: asking for permission on actions the protocol already authorizes. Agents draw a false distinction between "clarification" (which they know not to ask) and "permission" (which they think is polite). Without an explicit rule, agents default to asking.
+- **Suggested fix:** Add Pitfall #30: "Don't ask for permission on the default next step. If the proposed action is what the protocol already prescribes (commit after edits, push after commit, log after noticing a pattern, fix a flaw you found), do it and report — don't ask 'Want me to...?' Only ask when there's genuine ambiguity: which of two approaches to take, whether to proceed despite risk, or permission for a broad-scope change the protocol doesn't already authorize."
+- **Status:** fixed in package — both editions updated (this session)
