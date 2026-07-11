@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
 
@@ -175,13 +175,27 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
     setStatus('saving');
     setMessage(`Saving key for ${newKeyProvider}...`);
     try {
-      await localmindClient.setProviderKey(newKeyProvider, newKeyValue.trim(), newKeyModel || undefined);
+      const result = await localmindClient.setProviderKey(
+        newKeyProvider,
+        newKeyValue.trim(),
+        newKeyModel || undefined,
+      );
       setProviderKeys((prev) => ({ ...prev, [newKeyProvider]: true }));
       setNewKeyProvider('');  // close the inline form
       setNewKeyValue('');
       setNewKeyModel('');
-      setStatus('success');
-      setMessage(`API key saved for ${newKeyProvider}`);
+      if (result.validated) {
+        setStatus('success');
+        setMessage(`API key saved and validated for ${newKeyProvider}`);
+      } else {
+        // Key saved but validation failed — warn the user but don't block.
+        // The key may still work (health check can fail transiently).
+        setStatus('error');
+        setMessage(
+          result.validation_error ||
+          `Key saved for ${newKeyProvider}, but validation failed. It may still work — try sending a message.`,
+        );
+      }
       onSave();
     } catch (err) {
       setStatus('error');
@@ -197,11 +211,12 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       setProviderKeys((prev) => ({ ...prev, [provider]: false }));
       setStatus('success');
       setMessage(`API key removed for ${provider}`);
+      onSave();
     } catch (err) {
       setStatus('error');
       setMessage(err instanceof Error ? err.message : 'Failed to delete API key');
     }
-  }, []);
+  }, [onSave]);
 
   const handleSaveOllamaUrl = useCallback(async () => {
     setStatus('saving');
@@ -236,6 +251,55 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
     }
   }, []);
 
+  // ── Accessibility: focus trap + Escape-to-close ──────────────────────
+  // Trap focus inside the modal so Tab doesn't escape to elements behind
+  // the backdrop. Close on Escape. Restore focus to the previously-focused
+  // element when the modal closes.
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+    // Focus the modal container so screen readers announce it
+    const modal = modalRef.current;
+    if (modal) {
+      // Find the first focusable element inside the modal
+      const focusable = modal.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      focusable?.focus();
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !modalRef.current) return;
+      // Focus trap: keep Tab within the modal
+      const focusables = modalRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      // Restore focus to the element that opened the modal
+      previouslyFocused.current?.focus();
+    };
+  }, [onClose]);
+
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -248,18 +312,29 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
-        className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl border border-[#1a2a1a] bg-[#0d140d] shadow-2xl"
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-modal-title"
+        tabIndex={-1}
+        className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl border border-[#1a2a1a] bg-[#0d140d] shadow-2xl outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#1a2a1a] bg-[#0d140d] px-6 py-4">
-          <h2 className="text-lg font-semibold text-[#d4e8d4]">Settings</h2>
+          <h2 id="settings-modal-title" className="text-lg font-semibold text-[#d4e8d4]">
+            Settings
+          </h2>
           <button
             onClick={onClose}
             className="rounded-md p-1.5 text-[#8ab08a] hover:bg-[#1a2a1a] hover:text-[#d4e8d4] transition-colors"
             title="Close"
+            aria-label="Close settings"
           >
             <X className="h-4 w-4" />
           </button>
@@ -416,6 +491,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                               disabled={status === 'saving'}
                               className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[#e05555] hover:bg-[#e05555]/10 transition-colors disabled:opacity-50"
                               title={`Remove ${p.name} API key`}
+                              aria-label={`Remove ${p.name} API key`}
                             >
                               <Trash2 className="h-3 w-3" />
                               Remove

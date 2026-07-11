@@ -325,20 +325,68 @@ async def set_provider_key(req: ProviderKeyRequest):
     """
     Validate and store a provider API key at runtime.
     The key is saved to settings.json so it persists across restarts.
+
+    After saving, a lightweight health check is run against the provider
+    so the user gets immediate feedback if the key is invalid (typo,
+    wrong account, expired). The key is saved regardless of the health
+    check result — the user may be offline, or the provider may be
+    temporarily unreachable. The `validated` field reflects the health
+    check outcome.
     """
     if req.provider not in PROVIDER_INFO:
         raise HTTPException(status_code=400, detail=f"Unknown provider. Valid: {list(PROVIDER_INFO.keys())}")
 
     info = PROVIDER_INFO[req.provider]
 
-    # Save the API key to runtime storage
+    # Save the API key to runtime storage first — we want it persisted
+    # even if the health check fails (user may be offline).
     settings.save_api_key(req.provider, req.api_key)
+
+    # If a model was provided, persist it too so the adapter uses it
+    # on the next request.
+    if req.model:
+        model_field = f"{req.provider.replace('-', '')}_model"
+        if hasattr(settings, model_field):
+            setattr(settings, model_field, req.model)
+            settings.save_runtime_settings(adapter=req.provider, model=req.model)
+
+    # Run a health check against the provider to validate the key.
+    # This is best-effort: a False result doesn't unsave the key.
+    validated = False
+    validation_error: str | None = None
+    try:
+        from adapters import clear_adapter_cache, get_adapter
+
+        # Clear the cache so the new key is picked up (the cached adapter
+        # may have been constructed with the old key or none at all).
+        clear_adapter_cache(req.provider)
+        adapter = get_adapter(req.provider)
+        validated = await adapter.health_check()
+        if not validated:
+            validation_error = "Key saved, but the provider did not respond to a health check. The key may be invalid, the provider may be down, or your network may be blocking the request."
+        # Close the adapter's HTTP client to avoid leaking connections.
+        if hasattr(adapter, "close"):
+            await adapter.close()
+    except Exception as exc:
+        # Adapter construction can raise ValueError if the key is empty
+        # or the provider is misconfigured. Surface that as a validation
+        # failure rather than a 500.
+        validation_error = f"Key saved, but validation failed: {exc}"
+
+    # Clear the cache again so the next chat request builds a fresh
+    # adapter with the validated key.
+    clear_adapter_cache(req.provider)
 
     return {
         "provider": req.provider,
         "name": info["name"],
-        "validated": True,
-        "message": f"API key saved for {info['name']}",
+        "validated": validated,
+        "validation_error": validation_error,
+        "message": (
+            f"API key saved for {info['name']}."
+            if validated
+            else f"API key saved for {info['name']}, but validation failed."
+        ),
     }
 
 

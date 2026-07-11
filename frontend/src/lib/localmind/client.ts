@@ -525,8 +525,12 @@ class LocalMindClient {
     this.savePersistedSettings({ adapter, model: model || '' });
   }
 
-  async setProviderKey(provider: string, apiKey: string, model?: string): Promise<void> {
-    await this.request('/api/settings/provider-key', {
+  async setProviderKey(
+    provider: string,
+    apiKey: string,
+    model?: string,
+  ): Promise<{ validated: boolean; validation_error: string | null; message: string }> {
+    return this.request('/api/settings/provider-key', {
       method: 'POST',
       body: JSON.stringify({ provider, api_key: apiKey, model }),
     });
