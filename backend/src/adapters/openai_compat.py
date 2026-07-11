@@ -121,7 +121,7 @@ class ProviderConfig:
     base_url: str  # e.g. "https://api.openai.com/v1"
     api_key: str  # from env var
     default_model: str  # fallback if none specified
-    headers: dict = None  # optional extra headers
+    headers: dict | None = None  # optional extra headers
     supports_streaming: bool = True
 
 
@@ -1163,6 +1163,20 @@ class OpenAICompatAdapter(BaseAdapter):
                     yield StreamChunk(text="", done=True, error=error_msg)
                     return
 
+                # Anthropic streaming SSE event format (different from OpenAI):
+                #   event: message_start          — session metadata
+                #   event: content_block_start    — new content block (index, type)
+                #   event: content_block_delta    — incremental text: delta.text
+                #   event: content_block_stop     — block complete
+                #   event: message_delta          — stop_reason, usage
+                #   event: message_stop           — message complete → [DONE]
+                #
+                # Each SSE frame has both an `event:` line and a `data:` line.
+                # We only parse the `data:` line and dispatch on `obj["type"]`.
+                # The previous code read `obj.get("content", [])` which is the
+                # NON-STREAMING response shape — streaming deltas never have a
+                # top-level `content` array, so every chunk was silently dropped
+                # and the user saw a blank response.
                 async for line in response.aiter_lines():
                     if not line or not line.startswith("data: "):
                         continue
@@ -1173,13 +1187,46 @@ class OpenAICompatAdapter(BaseAdapter):
 
                     try:
                         obj = json.loads(data)
-                        # Anthropic uses "content" array instead of delta
-                        content = obj.get("content", [])
-                        for block in content:
-                            if block.get("type") == "text":
-                                text = block.get("text", "")
+                        evt_type = obj.get("type", "")
+
+                        # content_block_delta carries the actual text tokens.
+                        # delta.type is "text_delta" for text, "input_json_delta"
+                        # for tool inputs (we don't support Anthropic tool calls
+                        # here — falls back to plain chat via chat_with_tools).
+                        if evt_type == "content_block_delta":
+                            delta = obj.get("delta", {})
+                            if delta.get("type") == "text_delta":
+                                text = delta.get("text", "")
                                 if text:
                                     yield StreamChunk(text=text, done=False)
+
+                        # message_stop signals the end of the streamed message.
+                        # Anthropic doesn't send a [DONE] line — we synthesize
+                        # the done chunk here so the caller's stream terminates.
+                        elif evt_type == "message_stop":
+                            yield StreamChunk(text="", done=True)
+                            return
+
+                        # message_delta carries stop_reason — surface content
+                        # filter blocks as an error so the user sees a clear
+                        # message instead of a blank response.
+                        elif evt_type == "message_delta":
+                            delta = obj.get("delta", {})
+                            stop_reason = delta.get("stop_reason", "")
+                            if stop_reason in (
+                                "content_filter",
+                                "safety_filter",
+                                "prohibited_content",
+                            ):
+                                error_msg = (
+                                    f"{self._provider_name} blocked the response "
+                                    f"(stop_reason={stop_reason}). This is usually "
+                                    f"a content filter — try rephrasing your message "
+                                    f"or switching to a different provider."
+                                )
+                                logger.warning(error_msg)
+                                yield StreamChunk(text="", done=True, error=error_msg)
+                                return
                     except (json.JSONDecodeError, KeyError):
                         continue
             finally:
