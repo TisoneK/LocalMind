@@ -1,121 +1,50 @@
-# .context/ — Agent Memory for This Repo
+# .context/ — Agent Memory + Vendored Protocol
 
-This directory is the project's institutional memory for AI agents. It is
-**committed to git** and travels with the repo: every agent, on every
-machine, with any model, pulls the same context — who worked on what, on
-which system, what's open, what's decided, and what went wrong before.
+<!-- CORE-OWNED — refreshed from core/templates/context-README.md on
+core updates. Project-specific notes belong in memory/ files, never here. -->
 
-The repo's docs (`README`, `docs/`) describe the **product**.
-This directory describes the **process**.
-
-## Structure
+This directory makes any AI agent — any model, any machine, local or
+cloud — a continuing member of this project instead of a stranger. It
+is committed to git and travels with the repo. It has **two zones**:
 
 ```text
 .context/
-├── README.md            # this file — structure + rules
-├── system/
-│   ├── environments.md  # machines/sandboxes agents have run on (OS, toolchain versions, quirks)
-│   └── ai-models.md     # registry: which agents + models have worked on this repo
-├── user/
-│   ├── identity.md      # who the user is (name, git identity, role on the project)
-│   └── preferences.md   # how the user likes things done (commit style, tone, review depth)
-├── workflows/
-│   └── active.md        # workflow currently in force (protocol edition, scope, push policy)
-├── agents/
-│   └── sessions.md      # append-only log — one entry per agent session
-├── reviews/
-│   └── YYYY-MM-DD-review.md  # session review reports (see reviews/README.md)
-├── tasks/
-│   ├── current.md       # the task being worked on right now (one at a time, overwrite)
-│   └── backlog.md       # append-only open items for future sessions
-├── plans/
-│   └── decisions.md     # append-only ADR-style architectural decisions
-├── inefficiencies/
-│   └── log.md           # append-only project-level friction (code, env, deps)
-├── flaws/
-│   ├── README.md        # what goes here vs inefficiencies/ — the two-surfaces rule
-│   └── log.md           # append-only workflow/protocol friction — flows to the package repo
-└── secrets/             # LOCAL-ONLY — self-gitignored, never tracked, never travels
-    ├── .gitignore       # ignores everything here except itself + the README
-    └── <slug>           # one secret per file: line 1 = value, lines 2+ = notes
+├── README.md     # this file — the zone map
+├── kickoff.md    # THE FRONT DOOR — read this first, every session
+├── core/         # the protocol, vendored — package-owned, READ-ONLY
+│   ├── VERSION           # core semver in force here
+│   ├── rules/            # the protocol editions (local + cloud)
+│   ├── roles/            # mission overlays
+│   ├── schemas/          # context-schema.md — the single source of truth on formats
+│   ├── templates/        # what memory files are generated from
+│   └── bin/context-sync  # status / verify / update / rollback
+└── memory/       # this project's living memory — project-owned, writable
+    ├── agents/sessions.md       # append-only session log
+    ├── tasks/current.md         # the task in progress (also the session lock)
+    ├── tasks/backlog.md         # append-only open items
+    ├── plans/decisions.md       # append-only ADRs
+    ├── flaws/log.md             # protocol friction — flows upstream to the package
+    ├── inefficiencies/log.md    # project friction
+    ├── reviews/                 # session reports
+    ├── workflows/active.md      # standing session parameters
+    ├── system/                  # machines + agent/model registry
+    ├── user/                    # identity + preferences
+    ├── overrides/rules.md       # project-local protocol adjustments
+    ├── core.lock                # last-known-good core version (context-sync writes it)
+    └── secrets/                 # LOCAL-ONLY — self-gitignored, never travels
 ```
 
-Every file agents write to carries its entry template in an HTML
-comment — at the top of the file itself, or in its directory's README
-(`reviews/`, `secrets/`). Read the template before writing; don't
-invent formats.
+## The three rules that matter most
 
-## Two surfaces — know which one you're on
-
-Every repo managed by this protocol has **two surfaces**. An agent
-edits one or the other — never both in the same commit — and must know
-which one it's on at all times.
-
-1. **The project** — product code, docs, tests, config. Commits use
-   normal prefixes (`fix:`, `feat:`, `docs:`). Friction with the project
-   (its code, toolchain, environment, dependencies) goes in
-   `inefficiencies/log.md`.
-2. **`.context/`** — this directory. Agent memory. Commits use
-   `chore(context):`. Friction **with the `.context/` system or the
-   protocol itself** (a rule that's ambiguous, a step that's missing, a
-   template that's confusing) goes in `flaws/log.md`.
-
-If you're editing a file under `.context/`, you're in **memory mode**.
-If you're editing anything else, you're in **project mode**. The
-protocol's 19 steps apply to both, but the commit prefix and the
-friction-logging destination differ. When in doubt: "Am I editing the
-project's product, or am I editing the agent's memory of the project?"
-
-## Rules (for agents and humans)
-
-1. **Read before you work.** Agents read this directory at session start
-   (sessions → current task → backlog → flaws → inefficiencies → decisions)
-   and update it at session end.
-2. **Append-only logs are append-only.** `agents/sessions.md`,
-   `inefficiencies/log.md`, `flaws/log.md`, `tasks/backlog.md`, and
-   `plans/decisions.md` never lose entries. Corrections are appended,
-   never edited in. **Exception — exact duplicates:** byte-identical
-   entries (same session ID, same date, same content) may be removed to
-   deduplicate. When you remove a duplicate, leave a one-line note in
-   its place: `Removed duplicate Session N entry (byte-identical to the
-   entry above).` This keeps the log clean without erasing history.
-3. **Overwrite files are current-state only.** `tasks/current.md`,
-   `workflows/active.md`, and the `system/` + `user/` files describe *now*;
-   update them in place. History lives in the append-only logs.
-4. **No secrets in tracked files — ever.** This directory is committed
-   to git. Env var *names* and where secrets live are fine in shared
-   files; values belong only in `secrets/`, whose own `.gitignore` keeps
-   everything but its README out of git (rules in `secrets/README.md`).
-5. **Commit with `chore(context):`.** Context updates are process, not
-   product — keep them out of the changelog. One exception: review
-   reports in `reviews/` commit as `docs(review):` — they're a
-   deliverable, not bookkeeping.
-6. **Friction logging is mandatory — and split by surface.** Project
-   friction goes in `inefficiencies/log.md`; workflow/protocol friction
-   goes in `flaws/log.md`. Both logs are append-only and honest. See
-   `flaws/README.md` for the split rule.
-7. **Flaws flow to the package.** `flaws/log.md` is the source of truth
-   inside this project. Periodically — or when a pattern repeats — the
-   flaws here are back-ported to the protocol package at `TisoneK/.context`.
-   When a flaw is fixed in the package, append a "Fixed in package" line
-   to the entry here; don't delete the original.
-8. **Verify before trusting.** Entries reflect what was true when written.
-   If the codebase disagrees, the codebase wins — append a correction.
-
-## File modes at a glance
-
-| File | Mode |
-|---|---|
-| `agents/sessions.md` | append-only |
-| `inefficiencies/log.md` | append-only (project friction) |
-| `flaws/log.md` | append-only (workflow/protocol friction) |
-| `tasks/backlog.md` | append-only |
-| `plans/decisions.md` | append-only |
-| `reviews/YYYY-MM-DD-review.md` | new file per session |
-| `tasks/current.md` | overwrite |
-| `workflows/active.md` | overwrite |
-| `system/environments.md` | update in place |
-| `system/ai-models.md` | update in place |
-| `user/identity.md` | update in place |
-| `user/preferences.md` | update in place |
-| `secrets/<slug>` | local-only — never committed, never travels |
+1. **Never write under `core/`.** It is a versioned, checksummed copy
+   of the protocol package — updated only as a whole tree by
+   `core/bin/context-sync`. Protocol improvements go to the package
+   repo via `memory/flaws/log.md`, not into this copy.
+2. **`memory/` is this project's data.** Write it per each file's mode —
+   append-only logs stay append-only, `chore(context):` commit prefix,
+   no secret values in tracked files, ever. The full spec:
+   `core/schemas/context-schema.md`.
+3. **Sessions start at `kickoff.md`** (one level up from memory —
+   `.context/kickoff.md`). It routes you by agent type to your edition
+   in `core/rules/`. Memory never chooses your edition — your agent
+   type does.

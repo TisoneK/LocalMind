@@ -35,7 +35,7 @@ correction twice.
 ## Communication
 
 - Plain-language changelog entries (grandmother test); technical detail in review reports, not the changelog (approved pattern, 2026-07-11)
-- Reports go in `.context/reviews/` (was `docs/report/` — migrated 2026-07-11) (correction, 2026-07-11)
+- Reports go in `.context/memory/reviews/` (was `docs/report/` — migrated 2026-07-11; path updated to `memory/reviews/` on 2026-07-15 core 0.2.0 migration) (correction, 2026-07-11; updated 2026-07-15)
 - Chat summary at session end: one paragraph + commits + findings + open items (approved pattern, 2026-07-11)
 
 ## Code style
