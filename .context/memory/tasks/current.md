@@ -6,5 +6,5 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Task:** none — no session in progress (Session 10 migration to core 0.2.0 completed 2026-07-15)
+- **Task:** none — no session in progress (Session 11 git-identity fix completed 2026-07-15)
 - **Status:** idle

@@ -31,6 +31,7 @@ correction twice.
 - Push to main directly after each commit; one logical change per commit (pre-flight)
 - Conventional Commits with scope: `fix(security):`, `feat(api):`, `docs:`, `chore(context):` (approved pattern, 2026-07-11)
 - Pull before pushing — other agents or the user may have pushed (approved pattern, 2026-07-11)
+- Set local git config (`user.name`, `user.email`) before the first commit on cloud/sandbox — identity must match `memory/user/identity.md`; the sandbox default identity is never the user's (correction, 2026-07-15 — Sessions 9–10 shipped commits as `Z User <z@container>`, fixed in Session 11 by rebasing with `--reset-author`)
 
 ## Communication
 
