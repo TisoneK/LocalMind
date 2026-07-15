@@ -36,7 +36,7 @@ block (and its "last verified" date) every time you run on it again.
   - Python is system-wide (no venv isolation required on Windows, but still recommended for backend work)
   - This is a local development machine — persistent storage, full filesystem access
 
-## Z.ai cloud sandbox (last verified 2026-07-11)
+## Z.ai cloud sandbox (last verified 2026-07-15)
 
 - **Identify by:** workspace path `/home/z/my-project/`; env vars `FC_FUNCTION_NAME` / `SIGMA_APP_NAME` present; `CLAWHUB_WORKDIR=/home/z/my-project`
 - **OS:** Linux 6.5 (Ubuntu-based, containerized — `KATA_CONTAINER=true`)
