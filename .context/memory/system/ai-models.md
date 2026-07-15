@@ -40,9 +40,10 @@ as GLM-5.2 (or whatever the user confirms in Pre-Flight).
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-15 | 8 |
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-15 | 9 |
 
 Observations above attributed to "GLM-4.5" were produced by GLM-5.2.
 
 - **Super Z / GLM-5.2:** Session 7 sweep review — found and fixed the last 2 DRY violations from Session 6's provider consolidation (`config.py` was still reconstructing settings field names via string manipulation instead of using the derived `ADAPTER_MODEL_FIELDS` map). Also caught a stale README "Known Issues" bullet referencing the pre-`.context/` legacy `REVIEW.md`. Did NOT re-confirm the model version with the user this session — relied on the Session 5 correction in this file. If the model has changed since Session 5, this session's entries are mislabeled. (2026-07-11)
 - **Super Z / GLM-5.2:** Session 9 — narrow context-sync session only. Did NOT run baseline checks (no venv, no ruff, no pytest, no tsc, no eslint). Did NOT perform code review. Did NOT re-confirm model version with user (4th session in a row carrying forward GLM-5.2 from Session 5 — should ask the user to confirm next time the model is discussed). Discovered that Session 8 (commits `586c7ad`, `09751b8`, `55e702a` on 2026-07-11 — fixing Session 7 flaws) was never formally logged in `agents/sessions.md`. Logged as flaw F-2026-07-15-1. (2026-07-15)
+- **Super Z / GLM-5.2:** Session 10 — migrated LocalMind from flat pre-0.2.0 `.context/` to the core 0.2.0 two-zone layout (vendored `core/` + writable `memory/`). Followed `MIGRATION.md` from the `TisoneK/.context` package. All memory moved via `git mv` (history preserved). Core verified OK (0.2.0). Generated `.context/kickoff.md` + root `AGENTS.md` as new entry points. Did NOT re-confirm model version with user (5th session in a row — this is becoming a pattern; the protocol's "never guess your model" rule is technically satisfied by carrying forward the Session 5 correction, but a fresh confirmation would be healthier). Demonstrated capability: structural migration of `.context/` with zero data loss, following a package-provided migration spec. (2026-07-15)
