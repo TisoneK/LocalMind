@@ -382,8 +382,8 @@ agents/coding/
 
 ## ADR-9: Add ZenMux provider (unified API gateway with free models + insurance)
 
-**Date:** 2026-07-27 (Session 33 — proposed, smoke test blocked, NOT yet implemented)
-**Status:** proposed (blocked — see "Smoke test result" below)
+**Date:** 2026-07-27 (Session 33 — Steps 1-4 implemented, Step 5 smoke test still BLOCKED)
+**Status:** implemented but untested (config code shipped; API smoke test blocked by plan limitation)
 **Author:** Super Z / GLM-5.2 (feature request from user + web research)
 
 ### Smoke test result (Session 33)
@@ -393,9 +393,9 @@ agents/coding/
 - **Key is valid.** `GET /api/v1/models` returns 200 with 145 models (Claude, GPT, Gemini, Grok, DeepSeek, GLM, Kimi, MiniMax, etc.).
 - **All chat completions return 403.** `POST /api/v1/chat/completions` returns `{"error":{"code":"403","type":"access_denied","message":"You have no permission to access this resource"}}` for every model tested (8 models across 6 providers).
 - **Root cause:** The user is on ZenMux's free plan ("5 Flows/5h, $0"), which explicitly states **"Studio Chat only"** and **"No API Request access."** The `/models` endpoint isn't gated (listing models is free), but `/chat/completions` requires a paid plan. The free Builder tier mentioned in the web research does NOT include API access — it's Studio Chat only.
-- **No code written.** The smoke test caught this BEFORE any integration code was written — exactly what the smoke test is for. No wasted work.
+- **Steps 1-4 implemented anyway (config-only).** User explicitly asked to implement. The integration is config-only (ProviderConfig + env var + context windows + frontend wiring) — no new adapter logic. The adapter code that handles OpenAI-compatible providers already exists and is tested (Zen, Chutes, Z.ai). Risk of config-only change is lower than adapter logic changes. All code is marked "IMPLEMENTED BUT UNTESTED" with explicit comments. When the user upgrades to a paid plan, they run the smoke test (Step 5); if it fails, we fix the adapter THEN — with a working key, not blind.
 
-**To unblock:** the user needs to upgrade to a ZenMux plan that includes API access. Per ZenMux's pricing: Pro ($20/mo), Max ($100/mo), or Ultra ($400/mo). Actual model usage is pay-as-you-go per-token against a topped-up balance, separate from the subscription. The user should check zenmux.ai for which plan includes API access — it may be that ANY paid plan unlocks it, or it may require a specific tier. Once the account can make API calls, re-run the smoke test; if it passes, proceed with the implementation steps below.
+**To unblock the smoke test:** the user needs to upgrade to a ZenMux plan that includes API access. Per ZenMux's pricing: Pro ($20/mo), Max ($100/mo), or Ultra ($400/mo). Once the account can make API calls, re-run the smoke test (Step 5 below); if it passes, mark ADR-9 as "tested — done." If it fails (e.g., ZenMux has a quirk like DeepSeek's trailing-tool-role 400), fix the adapter with a working key.
 
 ### Context
 
