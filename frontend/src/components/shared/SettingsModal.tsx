@@ -37,6 +37,7 @@ const PROVIDERS: ProviderDef[] = [
   { id: 'vercel', name: 'Vercel AI Gateway' },
   { id: 'zai', name: 'Z.ai (GLM-5.2 free)' },
   { id: 'zen', name: 'Zen AI' },
+  { id: 'zenmux', name: 'ZenMux (paid — API access requires subscription)' },
 ];
 
 // Shape of the per-provider info returned by GET /api/settings

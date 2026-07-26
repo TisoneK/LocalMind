@@ -142,6 +142,8 @@ class Settings(BaseSettings):
     gemini_model: str = ""
     chutes_model: str = ""
     zai_model: str = ""
+    # ADR-9: ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked).
+    zenmux_model: str = ""
 
     # Server
     localmind_host: str = "127.0.0.1"
@@ -426,6 +428,9 @@ class Settings(BaseSettings):
             "gemini": "GEMINI_API_KEY",
             "chutes": "CHUTES_API_KEY",
             "zai": "ZAI_API_KEY",
+            # ADR-9: ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked,
+            # free plan has no API access). See ADR-9 for details.
+            "zenmux": "ZENMUX_API_KEY",
         }
         env_var = env_key_map.get(provider)
         if env_var:

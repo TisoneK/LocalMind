@@ -106,6 +106,25 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "glm-5": 128000,
     "glm-5-turbo": 128000,
     "glm-4.7": 128000,
+    # ZenMux — aggregated models (provider/model-name format).
+    # ADR-9: IMPLEMENTED BUT UNTESTED. Context windows are the underlying
+    # model's, sourced from the provider's documentation. Unknown models
+    # fall back to "default": 32768.
+    "x-ai/grok-4.5": 131072,
+    "anthropic/claude-opus-5": 200000,
+    "anthropic/claude-sonnet-5": 200000,
+    "anthropic/claude-opus-4-8": 200000,
+    "anthropic/claude-fable-5": 200000,
+    "google/gemini-3.6-flash": 1048576,
+    "google/gemini-3.5-flash": 1048576,
+    "google/gemini-3.5-flash-lite": 1048576,
+    "openai/gpt-5.6-luna": 128000,
+    "openai/gpt-5.6-terra": 128000,
+    "openai/gpt-5.6-sol": 128000,
+    "z-ai/glm-5.2": 1048576,
+    "deepseek/deepseek-v4-flash": 131072,
+    "moonshotai/kimi-k3": 262144,
+    "minimax/minimax-m3": 128000,
     # Default fallback
     "default": 32768,
 }
@@ -203,6 +222,28 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         key_env="ZEN_API_KEY",
         model_env="ZEN_MODEL",
         settings_field="zen_model",
+    ),
+    # ZenMux — unified API gateway aggregating 100+ models (Claude, GPT,
+    # Gemini, Grok, DeepSeek, GLM, etc.) with one API key. OpenAI-SDK
+    # compatible. Model format: "provider/model-name" (e.g. "x-ai/grok-4.5",
+    # "anthropic/claude-opus-5", "google/gemini-3.6-flash").
+    #
+    # ADR-9 (Session 33): IMPLEMENTED BUT UNTESTED. The smoke test is
+    # BLOCKED — the free plan returns 403 on all chat completions ("No
+    # API Request access"). A paid plan (Pro $20/mo, Max $100/mo, or
+    # Ultra $400/mo) is required for API access. When the user upgrades,
+    # re-run the smoke test (ADR-9 Step 5) before marking this as tested.
+    # Per the flaw log (Session 31/33): do NOT claim this works without
+    # a real-API smoke test.
+    "zenmux": ProviderConfig(
+        name="zenmux",
+        display_name="ZenMux (paid — API access requires subscription)",
+        base_url="https://zenmux.ai/api/v1",
+        api_key=os.getenv("ZENMUX_API_KEY", ""),
+        default_model="x-ai/grok-4.5",  # currently free on paid plans per web research
+        key_env="ZENMUX_API_KEY",
+        model_env="ZENMUX_MODEL",
+        settings_field="zenmux_model",
     ),
     # High-performance / infra
     "groq": ProviderConfig(

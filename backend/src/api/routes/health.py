@@ -93,6 +93,8 @@ async def health():
         "gemini": settings.gemini_model,
         "chutes": settings.chutes_model,
         "zai": settings.zai_model,
+        # ADR-9: ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked).
+        "zenmux": settings.zenmux_model,
     }
     current_model = model_setting_map.get(adapter_name) or settings.ollama_model
 
