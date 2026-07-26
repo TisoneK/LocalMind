@@ -29,7 +29,9 @@ from __future__ import annotations
 from agents.base_agent import DEFAULT_MAX_ITERATIONS, DEFAULT_MAX_WALL_CLOCK_SECS, AgentConfig, BaseAgent
 from agents.browser_agent import BrowserAgent
 from agents.coding_agent import CodingAgent
+from agents.direct_agent import DirectAgent
 from agents.registry import get_agent, is_registered, list_agents, register
+from agents.research_agent import ResearchAgent
 
 # Auto-register all built-in agents at import time.
 # Each agent registers itself under its short name. The UI picker and
@@ -41,12 +43,16 @@ from agents.registry import get_agent, is_registered, list_agents, register
 #   3. Import the class here and call register("<name>", AgentClass)
 register("browser", BrowserAgent)
 register("coding", CodingAgent)
+register("research", ResearchAgent)
+register("direct", DirectAgent)
 
 __all__ = [
     "BaseAgent",
     "AgentConfig",
     "BrowserAgent",
     "CodingAgent",
+    "DirectAgent",
+    "ResearchAgent",
     "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_MAX_WALL_CLOCK_SECS",
     "get_agent",
