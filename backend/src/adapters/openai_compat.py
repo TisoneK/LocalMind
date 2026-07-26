@@ -709,6 +709,40 @@ class OpenAICompatAdapter(BaseAdapter):
                 "content": enhanced_messages[0]["content"] + tool_context,
             }
 
+        # Session 31 (root cause found via real-model testing):
+        # DeepSeek-v4-flash-free (via Zen) and possibly other providers
+        # reject requests where the last message is a `tool` role — they
+        # return HTTP 400 "Upstream request failed". This breaks the agent
+        # loop: after every tool execution, the loop appends an
+        # `assistant`+`tool_calls` message and a `tool` role message, then
+        # calls chat_with_tools again. The last message is `tool` role →
+        # 400 error → adapter yields error chunk → loop sees error →
+        # retries or falls through to _force_final_answer → user sees the
+        # generic "I started the Running command request..." fallback.
+        #
+        # Fix: if the last message is a `tool` role, append a synthetic
+        # `user` message prompting the model to continue. This is harmless
+        # for providers that don't have this requirement (the model just
+        # sees an extra instruction) and necessary for providers that do.
+        # Verified against Zen/DeepSeek: appending a user message after
+        # the tool role makes the request succeed (200 OK).
+        if enhanced_messages and enhanced_messages[-1].get("role") == "tool":
+            enhanced_messages = list(enhanced_messages) + [
+                {
+                    "role": "user",
+                    "content": (
+                        "Based on the tool result above, continue. Either call "
+                        "another tool if needed, or provide your final answer to "
+                        "the user."
+                    ),
+                }
+            ]
+            logger.debug(
+                "[adapter] %s: appended synthetic user message after trailing "
+                "tool role (provider may require user-terminated messages)",
+                self._provider_name,
+            )
+
         payload = {
             "model": self._model,
             "messages": enhanced_messages,
@@ -864,6 +898,22 @@ class OpenAICompatAdapter(BaseAdapter):
                 # 2. Check for both the full pattern AND the "minimax:tool_call" prefix
                 #    (partial match) — if we see even the start of a tool call, keep reading
                 # 3. After 15 chunks with no sign of tool calling, break confidently
+                #
+                # Session 31 (root cause found via real-model testing):
+                # DeepSeek-v4-flash-free produces 80+ reasoning chunks BEFORE
+                # the tool_call delta arrives. The break at chunks_read >= 15
+                # was firing during the reasoning phase, falling through to
+                # Phase 2b (text streaming), which silently dropped the
+                # tool_call deltas (it only handles content/reasoning, not
+                # tool_calls). The model's tool call was lost — user saw
+                # empty output.
+                #
+                # Fix: only break out of Phase 1 if we've seen actual CONTENT
+                # (not just reasoning). Reasoning-only chunks mean the model
+                # is still thinking and hasn't decided between text vs tool
+                # call yet. We must keep reading until content or tool_calls
+                # arrives. Add a hard cap (500 chunks) to prevent infinite
+                # looping if the model streams reasoning forever.
                 if not tool_call_detected and initial_text_chunks and chunks_read >= 4:
                     _full_text_so_far = "".join(raw_content_parts)
                     _mm_full_check = re.search(
@@ -882,11 +932,24 @@ class OpenAICompatAdapter(BaseAdapter):
                         logger.info(
                             "[adapter] MiniMax tool_call prefix detected in Phase 1 — continuing to read for full pattern"
                         )
-                    elif chunks_read >= 15:
-                        # Read enough chunks with no tool call sign — this is text
+                    elif _full_text_so_far and chunks_read >= 15:
+                        # We've seen actual CONTENT (not just reasoning) and no
+                        # tool call sign — this is a text response. Break.
                         phase1_done = True
                         break
-                    # else: chunks_read < 15, keep reading to be sure
+                    elif not _full_text_so_far and chunks_read >= 500:
+                        # Reasoning-only for 500 chunks with no content or
+                        # tool_calls — model is stuck thinking. Break to avoid
+                        # infinite loop; Phase 2b will stream whatever comes.
+                        logger.warning(
+                            "[adapter] Phase 1 read 500 chunks of reasoning with no "
+                            "content or tool_calls — breaking to avoid infinite loop"
+                        )
+                        phase1_done = True
+                        break
+                    # else: keep reading — either chunks_read < 15, or we've
+                    # only seen reasoning (no content yet) and the model may
+                    # still produce a tool_call.
 
             # ── Safety filter check ─────────────────────────────────────────
             # If the provider blocked the response via a safety/content filter
