@@ -346,3 +346,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** (1) Dynamic todos from model synthesis (not fixed templates) — future session. (2) Thinking block CSS sizing. (3) Auto-switch tabs. (4) Phase 2 loop extraction + context compaction deferred.
 - **Report:** none.
 - **Notes:** The user's bug report was precise and comprehensive. The recurring pattern: components exist but aren't wired end-to-end. The todo-updated listener was the clearest example — the SSE bridge dispatched the event, but no one was listening. The thinking prompt fix addresses the root cause of both the shallow reasoning AND the prompt-leak bug (Session 23): the model was reciting the checklist it was told to check, which is both shallow AND leaks the prompt contents. The fix invites decomposition instead. Token-strip dance applied.
+
+---
+## 2026-07-27 — Session 30
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai — 25th session not re-confirmed) | **Platform:** Z.ai cloud sandbox | **Role:** engineer
+- **Feature:** `agent-loop-closed-loop` (system status feedback vs model thinking)
+- **Task:** User reported: "Thinking..." is system thinking, not model thinking. Show real pipeline status first, only show "Thinking" when the model actually reasons. Like Claude does.
+- **Commits:** 2 — `fix: real pipeline status feedback instead of static "Thinking..."` + this memory commit.
+- **Outcome:** done — (1) Added `statusText` field to ChatMessage type. (2) Replaced static "Thinking..." in CenterPanel with `lastMsg.statusText` — shows real pipeline messages ("Let me search the web...", "Understanding your request..."). Falls back to "Thinking" only if model is actually reasoning. (3) Added immediate acknowledgment: assistant message starts with "Got it — working on your request..." instead of dead "Thinking...". Baseline held: 378 tests pass, 0 real ruff bugs.
+- **Open items:** (1) Dynamic todos from model synthesis — future session. (2) Thinking block CSS sizing. (3) Auto-switch tabs. (4) Phase 2 loop extraction deferred.
+- **Report:** none.
+- **Notes:** The user's distinction was precise: "Thinking..." is SYSTEM thinking (pipeline stages), not MODEL thinking. The fix gives the user real feedback as stages progress — "Got it — working on your request..." → "Understanding your request..." → "Let me search the web..." — and only shows "Thinking" when the model's actual reasoning trace arrives. This is the Claude-style feedback the user wanted. Token-strip dance applied.

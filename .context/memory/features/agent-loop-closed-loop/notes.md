@@ -971,3 +971,53 @@ request before outputting JSON.
   todos. Future session.
 - Thinking block sizing (CSS fix, frontend-only).
 - Auto-switch to relevant tab when a tool starts.
+
+---
+## 2026-07-27 — Super Z / GLM-5.2 (Session 30)
+
+Fixed the static "Thinking..." UI. The user's insight: "Thinking..."
+is SYSTEM thinking (pipeline stages running in the background), not
+the model's reasoning. The user should see real pipeline status first
+("Got it — working on your request...", "Let me search the web...",
+"Understanding your request..."), and only see "Thinking" when the
+model is actually generating reasoning tokens.
+
+**Root cause:** CenterPanel.tsx showed a hardcoded "Thinking..." label
+whenever streaming started and no content existed yet. The engine was
+already emitting `status_update` events with real pipeline stage
+messages, but:
+1. The `status_update` handler (Session 29) wrote to `statusText`, not
+   `thinking` — good
+2. But CenterPanel didn't read `statusText` — it just showed "Thinking..."
+3. There was no immediate acknowledgment when the request landed
+
+**What landed:**
+
+1. **`statusText` field added to ChatMessage type.** The `status_update`
+   handler (Session 29) already writes to it; now the type matches.
+
+2. **CenterPanel.tsx: replaced static "Thinking..." with dynamic status.**
+   The streaming indicator now shows `lastMsg.statusText` (the real
+   pipeline status from `status_update` events). Falls back to "Thinking"
+   ONLY if the model is actually reasoning (`message.thinking` has
+   content). Falls back to "Working on it..." if no status yet.
+
+3. **Immediate acknowledgment.** When the user sends a message, the
+   assistant message is created with `statusText: "Got it — working on
+   your request..."` — instant feedback instead of a dead "Thinking..."
+   while the pipeline spins up. The engine's `status_update` events
+   then update this as stages progress.
+
+**The flow now:**
+1. User sends message → assistant message appears with "Got it — working
+   on your request..."
+2. Engine starts → emits `status_update: "Understanding your request..."`
+   → UI updates
+3. Engine classifies → emits `status_update: "Let me search the web..."`
+   → UI updates
+4. Model starts reasoning → `thinking_token` events arrive → ThinkingBlock
+   shows the actual reasoning (the status line stays until content arrives)
+5. Model generates response → content streams → status indicator hides
+
+The user sees real pipeline progress in the chat, not a dead label.
+"Thinking" only appears when the model is actually thinking.

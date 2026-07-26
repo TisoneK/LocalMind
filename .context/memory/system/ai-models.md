@@ -105,4 +105,8 @@ Updated registry row:
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-27 | 28 |
+- **Super Z / GLM-5.2:** Session 30 — replaced static "Thinking..." with real pipeline status feedback. The user's insight: "Thinking..." is system thinking (pipeline stages), not model thinking. Fix: added statusText field to ChatMessage, replaced hardcoded "Thinking..." in CenterPanel with lastMsg.statusText (real pipeline messages), added immediate acknowledgment ("Got it — working on your request..."). Only shows "Thinking" when model actually reasons. Baseline held: 378 tests pass, 0 real ruff bugs. (2026-07-27)
+
+Updated registry row:
+
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-27 | 29 |
