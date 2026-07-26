@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Feature:** none — no session in progress (Session 22 fixed chat title pollution — titles now intent-gated via is_trivial_input; "Hi" → "New Chat" placeholder, no LLM call wasted. See `.context/memory/features/agent-loop-closed-loop/notes.md`.)
+- **Feature:** none — no session in progress (Session 23 fixed the thinking/response separation security bug — reasoning no longer leaks into chat text, including system prompt PII. See `.context/memory/features/agent-loop-closed-loop/notes.md`.)
 - **Task:** none
 - **Status:** idle

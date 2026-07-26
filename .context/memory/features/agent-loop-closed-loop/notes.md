@@ -593,3 +593,47 @@ the `is_trivial_input()` detector from Session 21.
 21 new tests verify the intent-gating: trivial inputs return "New Chat"
 placeholder, trivial inputs don't trigger refine, substantive inputs do
 trigger refine, already-refined titles don't get overwritten.
+
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 23)
+
+Fixed a critical security bug: the model's internal reasoning was
+leaking into the chat response verbatim, including system prompt
+contents (user's name "tison", "Windows 11", "0 facts in memory",
+the full values list, response format examples). Any user could extract
+the entire system prompt just by looking at a "Hi" response.
+
+**Root cause:** the OpenAI-compat adapter was MERGING reasoning_content
+into text:
+```python
+text = delta.get("content", "") or delta.get("reasoning_content", "")
+```
+This treats the model's internal thinking as interchangeable with the
+actual answer — if `content` is empty, it falls back to `reasoning_content`.
+That's why thinking leaked into chat: the adapter was merging reasoning
+into the text stream instead of routing it to the `thinking` field.
+
+**The fix:** built `_extract_content_and_reasoning(delta)` helper that
+keeps them SEPARATE:
+- `content` → `StreamChunk.text` (the actual answer)
+- `reasoning_content` → `StreamChunk.thinking` (internal reasoning, rendered
+  in a collapsible "THINKING" panel)
+- Never merged
+
+Also handles `<think>...</think>` tags (DeepSeek-v3, Qwen format) —
+extracts the tag content to `reasoning`, removes it from `content`.
+
+Fixed all 4 occurrences of the bug in openai_compat.py (lines 742, 854,
+1028, 1190). The Ollama adapter was already correct (routes thinking to
+the `thinking` field) — the bug was only in the OpenAI-compat adapter.
+
+12 new tests verify the separation: content-only, reasoning-only, both
+fields, empty delta, None values, <think> tag handling (closed/unclosed/
+multiple), and the critical security test — PII (name, OS, memory state,
+system prompt values) stays in reasoning, NOT in content.
+
+**The user was right to call this "worse than a display bug."** It's a
+prompt-leak/security concern: any user could extract the system prompt
+(including user PII structure) just by looking at thinking output. The
+fix ensures reasoning never appears in the chat text, only in the
+collapsible thinking panel.

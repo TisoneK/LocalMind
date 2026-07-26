@@ -77,4 +77,8 @@ Updated registry row:
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 21 |
+- **Super Z / GLM-5.2:** Session 23 — fixed a critical security bug: the model's internal reasoning was leaking into chat verbatim, including system prompt contents (user name, OS, memory state, full values list). Root cause: openai_compat.py merged reasoning_content into text (4 occurrences). Built _extract_content_and_reasoning() helper that keeps them separate — content → StreamChunk.text, reasoning → StreamChunk.thinking. Also handles <think> tags (DeepSeek-v3, Qwen). 12 new tests verify PII stays in reasoning. Baseline held: 357 tests pass, 0 real ruff bugs. The user was right to call this "worse than a display bug" — it's a prompt-leak/security concern. (2026-07-26)
+
+Updated registry row:
+
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 22 |

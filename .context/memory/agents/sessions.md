@@ -262,3 +262,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** (1) Title locks in after first generation (no re-titling on topic drift) — per user's design decision. (2) Phase 2 loop extraction + context compaction still deferred.
 - **Report:** none.
 - **Notes:** The user's design was exactly right: title-gen should fire when there's real intent to summarize, not on a fixed turn count. The is_trivial_input() detector from Session 21 was the perfect signal — no new classification needed, just piggyback on the existing detector. The fix is conservative: trivial inputs get "New Chat" placeholder + no LLM call; substantive inputs get the normal title-gen; already-refined titles are never overwritten. This prevents both the "Hi" pollution AND the wasted LLM calls on greetings. Token-strip dance applied.
+
+---
+## 2026-07-26 — Session 23
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai — 18th session not re-confirmed) | **Platform:** Z.ai cloud sandbox | **Role:** engineer
+- **Feature:** `agent-loop-closed-loop` (fixed thinking/response separation — security bug)
+- **Task:** User reported the model's internal reasoning was leaking into the chat verbatim, including system prompt contents (user's name, OS, memory state, full values list). Any user could extract the entire system prompt. Fix: separate reasoning from content in the adapter.
+- **Commits:** 2 — `fix(adapter): separate reasoning from content — no more thinking leak into chat (security)` + this memory commit.
+- **Outcome:** done — Found root cause: `text = delta.get("content", "") or delta.get("reasoning_content", "")` in 4 places in openai_compat.py — merging reasoning into text. Built `_extract_content_and_reasoning(delta)` helper that keeps them separate: content → StreamChunk.text, reasoning_content → StreamChunk.thinking. Also handles <think>...</think> tags (DeepSeek-v3, Qwen format). Fixed all 4 occurrences. Ollama adapter was already correct. 12 new tests verify separation + PII stays in reasoning. Baseline held: 357 tests pass, 0 real ruff bugs.
+- **Open items:** (1) The system prompt structure still invites verbatim quoting (tells model to "check against values" as a reasoning step) — a future session could restructure it so the model doesn't need to quote it back. (2) Phase 2 loop extraction + context compaction still deferred.
+- **Report:** none.
+- **Notes:** The user was right to call this "worse than a display bug" — it's a prompt-leak/security concern. The fix is at the adapter level: reasoning_content and <think> tags go to StreamChunk.thinking (collapsible panel), content goes to StreamChunk.text (chat). Never merged. The SSE stream + frontend already handle the thinking field correctly (verified via grep) — the bug was purely in the adapter merging the two. The smoke test confirmed: PII ("Windows 11", "0 facts in memory", "Accuracy over confidence") stays in reasoning, NOT in content. Token-strip dance applied.
