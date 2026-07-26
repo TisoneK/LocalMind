@@ -718,3 +718,61 @@ The user's insight was exactly right: "the recurring shape of nearly
 every bug found today" is state not being scoped to sessions and
 exceptions being silently swallowed. This session addresses both:
 the tool-state isolation (Bug 1) and the silent hang (Bug 2).
+
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 26)
+
+Structural audit for silent-failure and state-leak points. The user's
+insight: "stop chasing bugs one at a time from user reports, and instead
+do a structural audit for silent-failure and state-leak points across
+the codebase."
+
+**Audit findings:**
+
+1. **4 silent `except: pass` blocks** found via grep. Reviewed each:
+   - `_pipeline.py:1041` — NameError for optional variable (acceptable fallback)
+   - `openai_compat.py:1155` — JSON parse for tool calls (acceptable fallback)
+   - `thinking_dispatcher.py:972,980` — enum parse for execution_mode/safety_level (acceptable fallback)
+   All 4 are parsing fallbacks, not the dangerous kind. No fix needed.
+
+2. **Session deletion doesn't clean up engine state** — REAL BUG. The
+   `delete_session` API only deleted from the store. The engine's 5
+   per-session dicts (`_intent_history`, `_pending_writes`,
+   `_pending_clarification`, `_last_code`, `_last_observation`) grew
+   unbounded. Also `SessionContextManager` had no `clear_session` method.
+   FIX: added `engine.cleanup_session(session_id)` that clears all 5
+   dicts + calls `session_ctx.clear_session()`. Wired into the DELETE
+   `/sessions/{id}` endpoint. Added `clear_session()` to
+   SessionContextManager.
+
+3. **Adapter `**kwargs` silently swallows unsupported params** — the
+   `stream=True` bug class from Session 24. The `chat()` method accepts
+   `**kwargs` but never validates them — unsupported kwargs are
+   silently ignored.
+   FIX: added kwargs validation to `OpenAICompatAdapter.chat()`. Logs
+   a warning for any unsupported kwarg so callers know it's being
+   ignored. The warning is testable (the e2e test asserts it fires).
+
+4. **Per-session state is properly keyed** — the 5 dicts all use
+   `session_id` as the key. The Session 25 bug (tool selection
+   persisting across sessions) was a FRONTEND issue (component state
+   not reset), not a backend state-keying issue. Backend state
+   isolation is correct.
+
+**E2E behavioral tests** in `tests/e2e/test_structural_audit.py` (10 tests):
+- Session lifecycle: cleanup_session removes all 5 per-session dicts
+- cleanup_session doesn't affect other sessions
+- cleanup_session is idempotent
+- SessionContextManager.clear_session works
+- Adapter kwargs validation logs warning for unsupported kwargs
+- New session gets fresh state (no leak after cleanup)
+
+These are behavioral tests, not unit tests — they simulate real usage
+sequences (delete session → verify state gone, send unsupported kwarg →
+verify warning, recycle session ID → verify fresh state).
+
+**The user was right**: unit tests with clean inputs gave false
+confidence. The bugs found in Sessions 21-25 were all at boundaries
+(session transitions, tool→generation handoff, adapter contracts) that
+unit tests don't exercise. This audit + e2e tests catch the boundary
+class of bugs.

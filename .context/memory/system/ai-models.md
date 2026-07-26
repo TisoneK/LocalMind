@@ -89,4 +89,8 @@ Updated registry row:
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 24 |
+- **Super Z / GLM-5.2:** Session 26 — structural audit for silent-failure + state-leak points per user's request. Found + fixed: (1) session-deletion state leak (5 engine dicts grew unbounded, never cleaned on delete — added cleanup_session + wired into DELETE endpoint), (2) adapter kwargs silent swallow (chat() accepted **kwargs but never validated — added warning log for unsupported kwargs). Audited 4 silent except:pass blocks — all acceptable parsing fallbacks. Built 10 e2e behavioral tests that simulate real usage sequences (session lifecycle, cleanup isolation, adapter contract). Baseline held: 367 tests pass, 0 real ruff bugs. The user's insight was right: unit tests with clean inputs gave false confidence; the bugs were all at boundaries. (2026-07-26)
+
+Updated registry row:
+
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 25 |
