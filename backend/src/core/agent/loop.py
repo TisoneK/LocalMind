@@ -2539,17 +2539,35 @@ class AgentLoop:
                     _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
                 return
 
-        # ── MAX_ITERATIONS hit ─────────────────────────────────────────
+        # ── MAX_ITERATIONS hit (or wall-clock cap broke the loop) ──────
         trace.hit_limit = True
-        logger.warning(f"[agent.loop] hit MAX_ITERATIONS={MAX_ITERATIONS} — {trace.summary()}")
+        logger.warning(f"[agent.loop] loop ended — {trace.summary()}")
         if _obs:
-            _obs.emit("agent_loop_done", intent=intent.value, iterations=MAX_ITERATIONS, hit_limit=True)
-        async for chunk in self._force_final_answer(
-            loop_messages=loop_messages,
-            observation_log=observation_log,
-            active_adapter=active_adapter,
-        ):
-            yield chunk
+            _obs.emit("agent_loop_done", intent=intent.value, iterations=trace.iterations_used, hit_limit=True)
+
+        # Session 31: ALWAYS try to synthesize a final answer from what
+        # we gathered. Wrap with a timeout so this doesn't hang too.
+        # If it times out, yield the observation log directly — the user
+        # sees what happened instead of nothing.
+        try:
+            async for chunk in self._force_final_answer(
+                loop_messages=loop_messages,
+                observation_log=observation_log,
+                active_adapter=active_adapter,
+            ):
+                yield chunk
+        except asyncio.TimeoutError:
+            logger.warning("[agent.loop] final synthesis timed out — yielding observation log")
+            yield StreamChunk(
+                text="I completed the tool calls but ran out of time to synthesize a final answer. Here's what I did:\n\n" + observation_log[:2000],
+                done=True,
+            )
+        except Exception as e:
+            logger.warning(f"[agent.loop] final synthesis failed: {e}")
+            yield StreamChunk(
+                text="I completed the tool calls but couldn't generate a final summary. Here's what I did:\n\n" + observation_log[:2000],
+                done=True,
+            )
 
     # ------------------------------------------------------------------
     # Web-search result handler

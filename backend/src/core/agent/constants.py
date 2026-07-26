@@ -10,8 +10,13 @@ v3.0: Updated for Dynamic Capability Orchestration architecture.
 from core.models import Intent
 
 # ── Iteration budget ──────────────────────────────────────────────────────────
-
-MAX_ITERATIONS: int = 5
+# Session 31: lowered from 5 to 3. With the free-tier model taking ~30-40s
+# per call, 5 iterations × 40s = 200s — way over the 90s wall-clock cap.
+# 3 iterations is enough for: plan → execute → synthesize. The 4th and 5th
+# iterations were rarely productive on small models anyway — they just
+# repeated the same tool calls. The _force_final_answer step runs AFTER
+# the loop, so it needs room in the wall-clock budget.
+MAX_ITERATIONS: int = 3
 PLAN_ITERATION_COST: int = 1
 CLARIFICATION_THRESHOLD: float = 0.45
 

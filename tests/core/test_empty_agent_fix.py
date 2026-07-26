@@ -516,7 +516,7 @@ class TestAgentConstants:
 
     def test_max_iterations_sufficient(self):
         from core.agent.constants import MAX_ITERATIONS
-        assert MAX_ITERATIONS >= 4, f"Need enough iterations for Plan→Execute→Verify, got {MAX_ITERATIONS}"
+        assert MAX_ITERATIONS >= 3, f"Need enough iterations for Plan→Execute→Verify, got {MAX_ITERATIONS}"
 
     def test_agent_intents_include_shell(self):
         from core.agent.constants import AGENT_INTENTS
