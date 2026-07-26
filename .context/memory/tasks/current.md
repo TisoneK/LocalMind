@@ -6,5 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Task:** none — no session in progress (Session 12 context-sync + ADR-5 capture completed 2026-07-26; next session should pick up backlog B-2026-07-26-1 per ADR-5)
+- **Feature:** none — no session in progress (Session 13 feature-scoped memory preview adopted 2026-07-26; feature `agent-loop-closed-loop` remains in-progress in its own manifest at `.context/memory/features/agent-loop-closed-loop/manifest.md`. Next session picks it up — read that manifest first.)
+- **Task:** none
 - **Status:** idle

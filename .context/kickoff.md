@@ -126,9 +126,13 @@ sh .context/core/bin/context-sync status    # drift: is a newer core available?
 
 `README.md` (the zone map) → then, under `memory/`:
 `workflows/active.md` → `agents/sessions.md` (last 3–5 entries) →
-`tasks/current.md` → `tasks/backlog.md` → `inefficiencies/log.md` →
-`flaws/log.md` → `plans/decisions.md` → `overrides/rules.md` →
-`system/` → `user/` → note what's in `secrets/` (never print values).
+`tasks/current.md` → `features/ledger.md` (skim — one line per feature
+ever) → the active feature's `features/<slug>/manifest.md` +
+`notes.md` (only the slug named in `tasks/current.md`'s `Feature:` line;
+skip if `Feature: none`) → `tasks/backlog.md` →
+`inefficiencies/log.md` → `flaws/log.md` → `plans/decisions.md` →
+`overrides/rules.md` → `system/` → `user/` → note what's in `secrets/`
+(never print values).
 
 If `memory/tasks/current.md` shows another live session in progress,
 **do not start** — one agent per project repo at a time.

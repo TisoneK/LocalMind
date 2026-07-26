@@ -67,3 +67,16 @@ in `workflows/active.md` is currently set to ADR-5 implementation —
 backlog items B-2026-07-26-1 (5-step loop + workspace-state injection)
 and B-2026-07-26-2 (context compaction) are the entry points. Don't
 relitigate the closed-loop model — implement it.
+
+## Feature-scoped memory (added 2026-07-26, Session 13)
+
+Multi-session work is tracked under
+`.context/memory/features/<slug>/manifest.md` — read the active one
+(named in `tasks/current.md`'s `Feature:` line) before starting; update
+it before you stop. The `features/ledger.md` file is append-only and
+permanent (one line per feature ever); the per-feature directory is
+working state that may be archived to `features/archive/` once the
+ledger line records the merge sha or abandonment reason. Single-session
+work uses `Feature: none` and skips the feature directory entirely.
+This is a project-level preview of core 0.3.0 (core is still at 0.2.0);
+see `memory/overrides/rules.md` for the full opt-in.
