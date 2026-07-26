@@ -394,9 +394,32 @@ async def _event_stream(
 
     # ── Stage 2: schedule LLM title as background task ────────────────────
     # Fires after the response stream completes so it never blocks the user.
-    if is_first:
-        asyncio.create_task(refine_title_async(session_id, message))
-        logger.info(f"[title] LLM refinement scheduled for {session_id[:8]}")
+    #
+    # Session 22: title-gen is now intent-gated, not turn-count-gated.
+    # Instead of firing only on `is_first`, we check `should_refine_title()`
+    # which returns True when:
+    #   - The message is non-trivial (not a greeting/thanks/farewell)
+    #   - AND the title hasn't already been refined (still a placeholder)
+    # This means: if message 1 is "Hi", title-gen skips. If message 2 is
+    # "How do I fix a Python bug?", title-gen fires on that. The sidebar
+    # shows "New Chat" until a substantive message arrives.
+    try:
+        from core.title_generator import should_refine_title
+
+        _current_title = _engine._store.get_session_title(session_id)
+        if should_refine_title(message, _current_title):
+            asyncio.create_task(refine_title_async(session_id, message))
+            logger.info(f"[title] LLM refinement scheduled for {session_id[:8]} (message: {message[:30]!r})")
+        else:
+            logger.info(
+                f"[title] skipping LLM refinement for {session_id[:8]} "
+                f"(trivial input or title already refined)"
+            )
+    except Exception as _title_exc:
+        # Fallback to the old is_first behavior if should_refine_title fails
+        logger.warning(f"[title] should_refine_title check failed: {_title_exc} — using is_first fallback")
+        if is_first:
+            asyncio.create_task(refine_title_async(session_id, message))
 
 
 @router.post("/chat")
