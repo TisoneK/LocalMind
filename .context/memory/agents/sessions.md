@@ -214,3 +214,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** (1) Intent→agent selection function not built — Session 19. (2) Phase 2 loop extraction + context compaction deferred. (3) Pre-existing naming inconsistency documented but not fixed.
 - **Report:** none.
 - **Notes:** All 4 agents now exist as structural skeletons. The ADR-6 organizational structure is fully in place. The actual routing (which agent gets selected) is the remaining gap — Session 19 builds the intent→agent selection function. Token-strip dance applied.
+
+---
+## 2026-07-26 — Session 19
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai — 14th session not re-confirmed) | **Platform:** Z.ai cloud sandbox | **Role:** engineer
+- **Feature:** `agent-loop-closed-loop` (built intent→agent selection — feature at natural completion point)
+- **Task:** Build `agents/selection.py` — the intent→agent name→agent class mapping. Non-breaking (opt-in). Completes the ADR-6 selection layer.
+- **Commits:** 2 — `feat(agents): add intent→agent selection layer (ADR-6)` + this memory commit.
+- **Outcome:** done — Built `agents/selection.py` with `intent_to_agent_name()`, `select_agent()`, `list_intent_mappings()`. Maps all 11 Intent enum values to agent names (SHELL/FILE_*/CODE_EXEC/SYSINFO/MEMORY_OP→coding, WEB_SEARCH/WEB_FETCH→research, BROWSE→browser, CHAT→direct). 16 new tests verify every intent is mapped, mapping is deterministic, each intent maps to the agent whose scoped toolset includes that intent. Registered in `agents/__init__.py`. Baseline held: 297 tests pass, 0 real ruff bugs.
+- **Open items:** (1) Engine wiring — `select_agent(intent)` not yet called by the engine pipeline (opt-in, needs design decision on UI picker vs auto-selection). (2) Phase 2 loop body extraction deferred (non-blocking). (3) Context compaction (B-2026-07-26-2) deferred. (4) Pre-existing naming inconsistency documented but not fixed.
+- **Report:** none.
+- **Notes:** Feature at natural completion point. The ADR-5 differentiator (workspace_state feedback loop) is live in AgentLoop.run(). The ADR-6 organizational structure (4 agents sharing BaseAgent, scoped tools, pairwise-disjoint toolsets) is in place. The intent→agent selection layer is built and tested. The remaining work (engine wiring, Phase 2 loop extraction, context compaction) is explicitly deferred and non-blocking. The feature is usable now — a future session can flip the engine wiring to call `select_agent(intent)(adapter).run(...)` instead of `AgentLoop(adapter).run(...)`. Token-strip dance applied.

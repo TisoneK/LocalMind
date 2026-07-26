@@ -33,18 +33,31 @@ B-2026-07-26-1 (5-step loop + iteration cap + workspace-state injection
   alongside other work but every commit touching agent-mode is prefixed
   to make the trail greppable: `feat(agent-loop):` /
   `feat(workspace):` / `feat(context):` / `feat(agents):`)
-- **Status:** in-progress
+- **Status:** in-progress (core complete — Phase 2 loop extraction + context compaction deferred)
 - **Current state:** ADR-5 captured Session 12. ADR-6 captured Session 14.
-  Sessions 15-17 built the first 2 agents (browser, coding) + workspace_state
-  feedback service (ADR-5 differentiator, live). **Session 18** completed the
-  4-agent registry: built `research_agent.py` (web_search + web_fetch scoped,
-  10 iters / 300s) and `direct_agent.py` (tools_enabled=False, empty toolset,
-  1 iter / 60s — what Direct Mode becomes per ADR-6). 23 new tests verify all
-  4 agents + pairwise-disjoint toolsets. Registry now has all 4 agents:
-  browser, coding, research, direct. Baseline held: 281 tests pass (197
+  Sessions 15-18 built all 4 agents (browser, coding, research, direct) +
+  workspace_state feedback service (ADR-5 differentiator, live in
+  AgentLoop.run()). **Session 19** built the intent→agent selection layer
+  (`agents/selection.py`): maps every Intent enum value to an agent name,
+  then looks up the agent class via the registry. 16 new tests verify every
+  intent is mapped, the mapping is deterministic, and each intent maps to
+  the agent whose scoped toolset includes that intent. The selection layer
+  is non-breaking (opt-in — the existing engine pipeline still uses
+  AgentLoop directly; a future session wires `select_agent(intent)` into
+  the engine to replace the if/else). Baseline held: 297 tests pass (197
   baseline + 19 agents + 25 workspace_state + 17 coding_agent + 23
-  research/direct), 0 real ruff bugs (112 E501 pre-existing). Last touched:
-  Session 18 (2026-07-26).
+  research/direct + 16 selection), 0 real ruff bugs (112 E501 pre-existing).
+  Last touched: Session 19 (2026-07-26).
+
+  **Feature at natural completion point.** The ADR-5 differentiator
+  (workspace_state feedback loop) is live. The ADR-6 organizational
+  structure (4 specialized agents sharing BaseAgent, each with scoped
+  tools) is in place. The intent→agent selection layer is built and
+  tested. What remains deferred: (1) Phase 2 loop body extraction
+  (BaseAgent._run_loop() — the 2926-line refactor, non-blocking); (2)
+  wiring select_agent() into the engine pipeline (replaces if/else with
+  registry lookup — opt-in, needs a design decision on UI picker vs
+  auto-selection); (3) context compaction (B-2026-07-26-2, Medium).
 - **Next steps:** Next implementation session should: (1) build
   `research_agent.py` (web_search + web_fetch scoped tools, enough-sources
   is_done) and `direct_agent.py` (tools_enabled=False, steps 1-2 only).

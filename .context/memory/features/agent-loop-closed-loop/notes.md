@@ -426,3 +426,25 @@ direct. This is the ADR-6 organizational structure fully in place —
 4 specialized agents sharing BaseAgent, each with its own scoped
 toolset. The actual routing (which agent gets selected for a given
 user message) is Session 19's work.
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 19)
+
+Built the intent→agent selection layer — `agents/selection.py`. Maps
+every Intent enum value to an agent name, then looks up the agent class
+via the registry. 16 new tests verify: every intent is mapped (no
+KeyErrors), the mapping is deterministic, each intent maps to the agent
+whose scoped toolset includes that intent, and select_agent() returns
+the right BaseAgent subclass.
+
+The selection layer is non-breaking (opt-in). The existing engine
+pipeline still uses AgentLoop directly. A future session wires
+`select_agent(intent)` into the engine to replace the if/else — that's
+the last wiring step, but it needs a design decision on UI picker vs
+auto-selection (ADR-6 prefers UI picker; this intent-based mapping is
+the deterministic fallback).
+
+**Feature at natural completion point.** The ADR-5 differentiator
+(workspace_state feedback loop) is live. The ADR-6 organizational
+structure (4 agents sharing BaseAgent, scoped tools) is in place. The
+selection layer is built and tested. Deferred: Phase 2 loop extraction,
+engine wiring, context compaction.

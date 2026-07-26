@@ -61,4 +61,8 @@ Updated registry row:
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 17 |
+- **Super Z / GLM-5.2:** Session 19 — built the intent→agent selection layer (agents/selection.py). Maps all 11 Intent enum values to agent names. 16 new tests verify every intent is mapped, mapping is deterministic, each intent maps to the agent whose scoped toolset includes that intent. Feature at natural completion point — ADR-5 differentiator live, ADR-6 4-agent structure in place, selection layer built. Deferred: Phase 2 loop extraction, engine wiring, context compaction. Baseline held: 297 tests pass, 0 real ruff bugs. (2026-07-26)
+
+Updated registry row:
+
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 18 |
