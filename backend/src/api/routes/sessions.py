@@ -131,8 +131,28 @@ async def get_history(session_id: str):
 
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
-    """Delete a session and all its messages."""
+    """Delete a session and all its messages.
+
+    Session 26: also clean up engine state (intent history, pending
+    writes, pending clarifications, cached code, observations) to
+    prevent unbounded memory growth and state leaks across sessions.
+    """
     deleted = _store.delete_session(session_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    # Session 26: clean up engine per-session state dicts
+    try:
+        from api.routes.chat import _engine
+
+        _engine.cleanup_session(session_id)
+    except Exception as e:
+        # Non-fatal — the session is already deleted from the store.
+        # Log but don't fail the request.
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "[sessions] engine cleanup failed for %s: %s", session_id[:8], e
+        )
+
     return {"deleted": session_id}

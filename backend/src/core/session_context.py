@@ -178,6 +178,18 @@ class SessionContextManager:
         """Update the CWD for a session (convenience method)."""
         return self.get_context(session_id).update_cwd(new_cwd)
 
+    def clear_session(self, session_id: str) -> bool:
+        """Session 26: remove a session's context when it's deleted.
+
+        Prevents unbounded growth and state leaks across sessions that
+        reuse the same ID.
+        """
+        if session_id in self._contexts:
+            del self._contexts[session_id]
+            logger.debug("[session_context] cleared session %s", session_id[:8])
+            return True
+        return False
+
     def _prune_sessions(self) -> None:
         """Remove the oldest session contexts to prevent unbounded growth."""
         oldest = sorted(self._contexts.keys())[: len(self._contexts) - MAX_SESSIONS // 2]

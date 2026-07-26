@@ -198,6 +198,42 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             history.pop(0)
         return list(history)
 
+    def cleanup_session(self, session_id: str) -> None:
+        """Session 26: clean up all per-session state when a session is deleted.
+
+        Previously, deleting a session only removed it from the store —
+        the engine's per-session dicts (_intent_history, _pending_writes,
+        _pending_clarification, _last_code, _last_observation) kept
+        growing unbounded. This is called from the DELETE /sessions/{id}
+        endpoint to clean up engine state.
+
+        Also prevents state leaks: if a session is deleted while it has
+        pending writes or clarifications, those are discarded (not
+        carried over to a future session that reuses the same ID).
+        """
+        removed = []
+        for d in (
+            self._intent_history,
+            self._pending_writes,
+            self._pending_clarification,
+            self._last_code,
+            self._last_observation,
+        ):
+            if session_id in d:
+                del d[session_id]
+                removed.append(d.__class__.__name__)
+        if removed:
+            logger.info(
+                "[engine] cleaned up session %s state from %d dicts",
+                session_id[:8],
+                len(removed),
+            )
+        # Clean up session context (CWD tracking)
+        try:
+            self._session_ctx.clear_session(session_id)
+        except Exception:
+            pass  # SessionContextManager may not have clear_session
+
     def _store_observation(self, session_id: str, obs: ObsCollector, **data):
         """Store the latest observation snapshot for a session.
 

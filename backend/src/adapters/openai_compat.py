@@ -608,6 +608,21 @@ class OpenAICompatAdapter(BaseAdapter):
         intent: str = "chat",
         **kwargs,
     ) -> AsyncIterator[StreamChunk]:
+        # Session 26: validate kwargs — previously unsupported kwargs
+        # (like stream=True) were silently swallowed into **kwargs,
+        # causing bugs that were impossible to trace. Now: log a warning
+        # so callers know their kwarg is being ignored.
+        _SUPPORTED_KWARGS = set()  # chat() doesn't use any kwargs yet
+        _unsupported = set(kwargs.keys()) - _SUPPORTED_KWARGS
+        if _unsupported:
+            logger.warning(
+                "[adapter] %s.chat() received unsupported kwargs: %s — "
+                "these are silently ignored. Supported: %s",
+                self.__class__.__name__,
+                _unsupported,
+                _SUPPORTED_KWARGS or "(none)",
+            )
+
         timeout = self._timeouts.get(intent, 120)
 
         # Build payload based on provider
