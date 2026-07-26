@@ -85,4 +85,8 @@ Updated registry row:
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 23 |
+- **Super Z / GLM-5.2:** Session 25 — fixed tool-state isolation (selectedTool persisted across sessions, causing stale sysinfo hint) + thinking-forever hang (model call had no timeout). Frontend: added sessionId prop to ChatInput, reset selectedTool on change. Backend: wrapped chat_with_tools in asyncio.wait_for(MAX_WALL_CLOCK_SECS) with visible error on timeout. Baseline held: 357 tests pass, 0 real ruff bugs. The user's meta-observation about the recurring shape of bugs (state not scoped + silent exceptions) is worth a future audit. (2026-07-26)
+
+Updated registry row:
+
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 24 |

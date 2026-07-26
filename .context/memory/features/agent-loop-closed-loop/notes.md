@@ -677,3 +677,44 @@ prevent the return. Also fixed `trivial_response()`:
 Both bugs confirmed by code analysis — no new tests needed (the fixes
 are structural: variable initialization + control flow). Baseline held:
 357 tests pass, 0 real ruff bugs.
+
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 25)
+
+Fixed two bugs the user reported:
+
+**Bug 1: Tool selection persists across sessions ("sysinfo was for the
+first chat it just didnt reset").**
+
+Root cause: `ChatInput.tsx` holds `selectedTool` as component state
+(`useState('auto')`). When the user selects "sysinfo" in one chat and
+clicks "New Chat", the `selectedTool` state stays "sysinfo" — it's NOT
+reset. The next message sends `tool='sysinfo'` as a hint → the frontend
+sets `X-LocalMind-Intent: sysinfo` with `X-Intent-Confidence: 1.0` →
+the backend's client-pre-classification check (line 655 in _pipeline.py)
+sees high confidence and skips the ThinkingDispatcher entirely, using
+the stale sysinfo intent for the new chat.
+
+Fix: added `sessionId` prop to ChatInput. A `useEffect` resets
+`selectedTool` to 'auto' when `sessionId` changes. Prop chain:
+WorkspaceLayout → CenterPanel → ChatInput. New Chat now resets the tool
+selection to 'auto', so the backend gets no stale hint and runs fresh
+intent classification.
+
+**Bug 2: "Thinking forever" — silent hang with no visible output.**
+
+Root cause: the agent loop's `chat_with_tools()` call was `await`ed
+without a timeout. The wall-clock cap (Session 16) only fires BETWEEN
+iterations — if a single model call hangs, it blocks forever with no
+visible error. The user saw "Thinking..." indefinitely with no output.
+
+Fix: wrapped the `chat_with_tools()` call in `asyncio.wait_for()` with
+`MAX_WALL_CLOCK_SECS` timeout. On timeout: logs a warning, emits an obs
+event, yields a visible error message ("I'm taking too long to respond
+— the model call timed out after Ns. Please try again or rephrase."),
+and returns. No more silent hangs.
+
+The user's insight was exactly right: "the recurring shape of nearly
+every bug found today" is state not being scoped to sessions and
+exceptions being silently swallowed. This session addresses both:
+the tool-state isolation (Bug 1) and the silent hang (Bug 2).

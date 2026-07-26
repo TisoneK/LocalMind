@@ -286,3 +286,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** (1) Phase 2 loop extraction + context compaction still deferred. (2) System prompt restructuring (so model doesn't quote it verbatim) still open.
 - **Report:** none.
 - **Notes:** Both bugs were control-flow issues, not logic errors. Bug 1 was a variable-scope issue — `prompt_messages` was conditionally assigned in one branch but unconditionally referenced in another. Bug 2 was a return-ordering issue — cleanup code between the streaming loop and the return could fail and prevent the return, causing the normal pipeline to run after the short-circuit. The user's observation ("It replied 'Hi, how can I help you today?' then it disappeared and it gave that one") was exactly the duplicate-response symptom: the trivial short-circuit streamed a response, then the cleanup failed, then the normal pipeline ran and replaced it. Token-strip dance applied.
+
+---
+## 2026-07-26 — Session 25
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai — 20th session not re-confirmed) | **Platform:** Z.ai cloud sandbox | **Role:** engineer
+- **Feature:** `agent-loop-closed-loop` (fixed tool-state isolation + thinking-forever hang)
+- **Task:** User reported: (1) tool selection persists across sessions — "sysinfo was for the first chat it just didnt reset", (2) "thinking forever" — silent hang with no visible output.
+- **Commits:** 2 — `fix: reset tool selection on session change + hard timeout on model call` + this memory commit.
+- **Outcome:** done — Bug 1: ChatInput.tsx held selectedTool as component state that persisted across session changes. Added sessionId prop + useEffect to reset to 'auto' on session change. Prop chain: WorkspaceLayout → CenterPanel → ChatInput. Bug 2: agent loop's chat_with_tools() call had no timeout — wrapped in asyncio.wait_for(MAX_WALL_CLOCK_SECS). On timeout: visible error message + return (no more silent hang). Baseline held: 357 tests pass, 0 real ruff bugs. Frontend tsc not re-run (node_modules not installed — frontend changes are prop-passing only, no new types).
+- **Open items:** (1) The user's broader observation: "the recurring shape of nearly every bug found today is state not being scoped to sessions and exceptions being silently swallowed." A future session could do a full audit of global vs per-session state + silent except blocks. (2) Phase 2 loop extraction + context compaction still deferred.
+- **Report:** none.
+- **Notes:** The user's diagnosis was exactly right on both bugs. Bug 1 was a frontend state-isolation issue — the tool selector didn't reset on New Chat. Bug 2 was a missing timeout on the model call — the wall-clock cap between iterations (Session 16) couldn't catch a single hanging call. Both fixes are structural: the tool reset is a useEffect on sessionId, the timeout is asyncio.wait_for. The user's meta-observation about the recurring shape of these bugs (state + silent exceptions) is worth a future audit session. Token-strip dance applied.
