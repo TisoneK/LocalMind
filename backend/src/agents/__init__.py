@@ -32,6 +32,7 @@ from agents.coding_agent import CodingAgent
 from agents.direct_agent import DirectAgent
 from agents.registry import get_agent, is_registered, list_agents, register
 from agents.research_agent import ResearchAgent
+from agents.selection import intent_to_agent_name, list_intent_mappings, select_agent
 
 # Auto-register all built-in agents at import time.
 # Each agent registers itself under its short name. The UI picker and
@@ -56,7 +57,10 @@ __all__ = [
     "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_MAX_WALL_CLOCK_SECS",
     "get_agent",
+    "intent_to_agent_name",
     "is_registered",
     "list_agents",
+    "list_intent_mappings",
     "register",
+    "select_agent",
 ]
