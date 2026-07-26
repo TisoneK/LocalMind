@@ -515,6 +515,43 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             yield StreamChunk(text="", done=True)
             return
 
+        # ── 0.5. Trivial-input short-circuit (Session 21) ────────────────
+        # Greetings/thanks/farewells/yes-no/acknowledgments bypass the
+        # full ThinkingDispatcher (which burns ~11s + ~4.8k tokens on a
+        # one-word "Hi"). Instead, stream a direct chat response with a
+        # minimal prompt. Conservative: only short-circuits OBVIOUSLY
+        # trivial inputs. Anything ambiguous falls through to the normal
+        # pipeline.
+        try:
+            from core.trivial_input import is_trivial_input, trivial_intent, trivial_response
+
+            if is_trivial_input(message):
+                _trivial_kind = trivial_intent(message)
+                logger.info(
+                    "[engine] trivial-input short-circuit: %r → %s (skipping dispatcher)",
+                    message[:40],
+                    _trivial_kind,
+                )
+                _obs.emit(
+                    "trivial_short_circuit",
+                    message_preview=message[:40],
+                    kind=_trivial_kind,
+                )
+                _trivial_adapter = self._adapter_for(Intent.CHAT)
+                async for _chunk in trivial_response(message, _trivial_adapter, history=None):
+                    yield _chunk
+                # Record the turn for history
+                self._store.add_message(session_id, "user", message)
+                _assistant_text = ""
+                # We already yielded — reconstruct for storage is not worth it.
+                # The store will get the assistant message from the caller if needed.
+                _obs.emit("trivial_short_circuit_done", kind=_trivial_kind, elapsed_secs=time.monotonic() - t0)
+                return
+        except Exception as _trivial_exc:
+            # If the trivial detector fails, fall through to the normal
+            # pipeline. Never block on this.
+            logger.warning("[engine] trivial-input check failed: %s — falling through", _trivial_exc)
+
         # ── 1. History ────────────────────────────────────────────────────
         history = self._store.get_history(session_id)
 
