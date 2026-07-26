@@ -205,9 +205,18 @@ async def trivial_response(
     Yields:
         StreamChunk — the model's direct response, streamed token by token.
     """
-    # Build a minimal prompt — no system prompt machinery, no tool defs,
-    # no JSON schema. Just a direct instruction.
-    messages = []
+    # Build a minimal prompt — a short system prompt + the user message.
+    # No tool defs, no JSON schema, no ThinkingDispatcher. Just chat.
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are LocalMind, a local AI assistant. Respond naturally "
+                "and briefly. Do not output your reasoning process — just "
+                "give the response directly."
+            ),
+        }
+    ]
     if history:
         # Include the last few turns for context (greetings in context
         # might get a different response than out-of-context)
@@ -222,12 +231,13 @@ async def trivial_response(
 
     # Stream the response directly from the adapter — no agent loop,
     # no tool calls, no planning. Just chat.
+    # Session 24: removed `stream=True` kwarg — the adapter already streams
+    # (it's an async generator). The extra kwarg was silently ignored but
+    # could cause issues with some providers.
     try:
-        async for chunk in adapter.chat(messages=messages, stream=True):
+        async for chunk in adapter.chat(messages, intent="chat"):
             if hasattr(chunk, "text") and chunk.text:
                 yield StreamChunk(text=chunk.text, done=False)
-            elif hasattr(chunk, "delta") and chunk.delta:
-                yield StreamChunk(text=chunk.delta, done=False)
         yield StreamChunk(text="", done=True)
     except Exception:
         # If the direct chat fails, yield a minimal fallback and done.

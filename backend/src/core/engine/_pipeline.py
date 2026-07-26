@@ -507,6 +507,18 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         _obs = obs or ObsCollector()
         t0 = time.monotonic()
 
+        # Session 24: initialize prompt_messages early so it's always bound.
+        # Previously, prompt_messages was only assigned inside the DIRECT
+        # mode block (line ~811) or the main agent path (line ~1748). But
+        # the orchestrator block (line ~1212) references it for metrics at
+        # line ~1246 — if neither the DIRECT block nor the main path ran
+        # before the orchestrator, prompt_messages was unbound, causing:
+        #   UnboundLocalError: cannot access local variable 'prompt_messages'
+        # Initializing it here as an empty list ensures it's always bound.
+        # If a code path doesn't build real prompt_messages, the metrics
+        # compute 0 tokens — harmless.
+        prompt_messages: list[dict] = []
+
         # ── 0. Safety gate ────────────────────────────────────────────────
         is_safe, gate_reason = safety_check(message)
         if not is_safe:
@@ -522,6 +534,15 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # minimal prompt. Conservative: only short-circuits OBVIOUSLY
         # trivial inputs. Anything ambiguous falls through to the normal
         # pipeline.
+        #
+        # Session 24 fix: the `return` must fire IMMEDIATELY after the
+        # streaming loop completes — BEFORE any cleanup. Previously, if
+        # the cleanup (self._store.add_message) raised an exception, the
+        # outer except caught it and fell through to the normal pipeline,
+        # producing a DUPLICATE response (the first one streamed, then
+        # the normal pipeline ran and replaced it). Now: stream → return
+        # immediately. Cleanup is best-effort in a try/except that can't
+        # prevent the return.
         try:
             from core.trivial_input import is_trivial_input, trivial_intent, trivial_response
 
@@ -540,12 +561,19 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 _trivial_adapter = self._adapter_for(Intent.CHAT)
                 async for _chunk in trivial_response(message, _trivial_adapter, history=None):
                     yield _chunk
-                # Record the turn for history
-                self._store.add_message(session_id, "user", message)
-                _assistant_text = ""
-                # We already yielded — reconstruct for storage is not worth it.
-                # The store will get the assistant message from the caller if needed.
-                _obs.emit("trivial_short_circuit_done", kind=_trivial_kind, elapsed_secs=time.monotonic() - t0)
+                # Session 24: return IMMEDIATELY after streaming completes.
+                # Cleanup is best-effort — must not prevent the return
+                # (which would cause a duplicate response from the normal
+                # pipeline running after the short-circuit).
+                try:
+                    self._store.add_message(session_id, "user", message)
+                    _obs.emit(
+                        "trivial_short_circuit_done",
+                        kind=_trivial_kind,
+                        elapsed_secs=time.monotonic() - t0,
+                    )
+                except Exception:
+                    pass  # cleanup failure must not cause a duplicate
                 return
         except Exception as _trivial_exc:
             # If the trivial detector fails, fall through to the normal
