@@ -317,3 +317,97 @@ a new untracked file, but `git diff --stat` doesn't show untracked
 files (only tracked-but-modified); fixed by modifying the existing
 tracked README.md instead. Both were test bugs, not module bugs — the
 module behaved correctly.
+
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 17)
+
+Built the CodingAgent — the second concrete BaseAgent subclass and the
+centerpiece of the CODING HARNESS diagram. Same thin-subclass pattern
+as BrowserAgent (Session 15): scoped tools, context builder, is_done,
+non-breaking Phase 1 delegation to existing AgentLoop.
+
+**What landed:**
+
+Created `backend/src/agents/coding/` subpackage + `coding_agent.py`:
+- `coding/tools.py` — `CODING_TOOLS = {shell, file_task, file_write,
+  edit_file, code_exec}`. 5 tools — the focused coding surface from
+  the diagram's Column 3 (Execute: shell/file_read/code_exec; Land:
+  file_write/file_edit). Excludes web_search, web_fetch, browse,
+  memory_op, sysinfo.
+- `coding/context_builder.py` — coding-specific context header.
+  Mentions the workspace_state feedback loop (the coding agent benefits
+  most from it — git diff shows what it changed, build/test results
+  show whether the change worked). Includes memory facts (capped at 10)
+  + orchestrator plan.
+- `coding/is_done.py` — Phase 1: always `(False, "")`. Phase 2 will
+  add: tests pass → done, build succeeds → done, no more tool calls →
+  done.
+- `coding_agent.py` — `CodingAgent(BaseAgent)`. Config: name="coding",
+  max_iterations=20, max_wall_clock_secs=600 (10 min — coding tasks
+  are slow and need more headroom than browser tasks). Description is
+  concrete (ADR-6 point 6): mentions what it does (edits files, runs
+  shell, executes code), what it can't do (web/browser/memory), and
+  the workspace state feedback loop.
+
+17 new tests in `tests/agents/test_coding_agent.py`: config, description
+concreteness, build_context (header + memory facts + workspace state
+mention), is_done Phase 1, scoped_tools filters non-coding (5 tools,
+excludes web/browser/memory/sysinfo), registry (coding registered,
+both browser+coding present), CODING_TOOLS invariants (subset of
+AGENT_ALLOWED_TOOLS, 5 tools, excludes web/browser), build_coding_context
+(memory facts capped, orchestrator plan, workspace mention), is_coding_done
+Phase 1, coding vs browser comparison (disjoint toolsets, coding has
+more iterations/wall-clock).
+
+**Pre-existing naming inconsistency discovered:**
+
+The assertion `CODING_TOOLS.issubset(AGENT_ALLOWED_TOOLS)` caught a
+naming mismatch: `Intent.FILE_EDIT.value` is `"file_edit"` but
+`AGENT_ALLOWED_TOOLS` uses `"edit_file"` (the tool module name in
+`tools/edit_file.py`). Most intent values match their tool module names,
+but FILE_EDIT doesn't — its intent value is `"file_edit"` while its
+tool module is `edit_file.py`. Fixed by using string literals that
+match `AGENT_ALLOWED_TOOLS` (the names the tool-filtering logic in
+`agent/loop.py` actually compares against), with a NOTE comment
+documenting the inconsistency. This is a pre-existing codebase issue,
+not introduced by this session — just surfaced by the assertion.
+
+**Design decisions:**
+
+1. **5 coding tools, not 10.** The coding agent's scoped toolset is
+   shell + file_task + file_write + edit_file + code_exec. Excludes
+   web_search/web_fetch (research agent), browse (browser agent),
+   memory_op (secondary during coding — the agent has env_context +
+   workspace_state), sysinfo (the agent gets system info from
+   env_context already). Smaller surface = more reliable selection on
+   gemma3:1b-class hardware (ADR-6 point 6).
+
+2. **20 iterations / 600s wall clock.** Coding tasks need more headroom
+   than browser tasks — a typical "create X" task takes 2-3 iterations,
+   but debugging can take more. 20 iterations / 10 minutes is generous;
+   the wall-clock cap (added Session 16) is the real safety net. The
+   existing AgentLoop's MAX_ITERATIONS=5 still applies in Phase 1 (the
+   AgentConfig caps aren't enforced yet — that's Phase 2).
+
+3. **Context mentions workspace_state.** The coding agent's
+   build_context() explicitly mentions "The workspace state (git
+   status, diff since last turn, last build/test result) is injected
+   into your context every turn — use it to verify your changes." This
+   primes the model to look for and use the workspace_state feedback
+   (which AgentLoop.run() injects per Session 16). The test
+   `test_build_coding_context_mentions_workspace_state` locks this in.
+
+4. **Disjoint toolsets between agents.** The test
+   `test_coding_and_browser_have_different_toolsets` verifies that
+   CODING_TOOLS and BROWSER_TOOLS are disjoint — no overlap. This is
+   the ADR-6 scoped-toolset value: each agent has its own focused
+   surface, the model never sees tools outside its agent's scope.
+
+**What didn't land (deferred):**
+
+- `research_agent.py` + `direct_agent.py` — next session (same pattern,
+  should be quick)
+- Intent router / engine pipeline wiring — needs a design decision
+  (UI picker vs intent-based auto-selection)
+- Phase 2 loop body extraction — not blocking
+- Context compaction step (B-2026-07-26-2) — deferred
