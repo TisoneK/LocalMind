@@ -228,22 +228,19 @@ class _ReflectionMixin:
                 if _corr_match:
                     _correction = _corr_match.group(1).strip()
 
-                # Store a correction in history so the user sees it
-                # on their next turn. This is the key improvement:
-                # reflection isn't just logging — it actively improves
-                # the conversation by surfacing the fix.
+                # Session 31: DON'T store the correction as a visible chat
+                # message — that created a confusing "⚠️ Self-correction"
+                # second message in the chat that users didn't ask for.
+                # Keep it as an obs event for observability only.
                 if _correction and len(_correction) > 10:
-                    _correction_msg = f"⚠️ **Self-correction:** {_correction}"
-                    # Append correction as an assistant message in history
-                    # so it's visible in the conversation and informs future turns.
-                    self._persist_assistant_message(session_id, _correction_msg)
                     obs.emit(
                         "reflection_correction",
                         intent=intent.value,
                         correction=_correction[:200],
                     )
                     logger.info(
-                        "[reflect] stored correction in history (session=%s): %s",
+                        "[reflect] correction found (NOT shown to user, "
+                        "session=%s): %s",
                         session_id[:8],
                         _correction[:80],
                     )

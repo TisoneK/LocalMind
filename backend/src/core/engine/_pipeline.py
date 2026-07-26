@@ -2455,18 +2455,29 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
             # Session 31: GUARANTEE — if the agent loop produced no text,
             # yield an error message BEFORE the done signal. This is the
-            # fix for "no final output" — the #1 bug. Previously, the
-            # empty-response check (Session 29) stored the error in
-            # response_text but never yielded it — the done=True from the
-            # agent loop had already closed the stream.
+            # fix for "no final output" — the #1 bug.
             _agent_response = "".join(full_response_chunks)
             if not _agent_response.strip():
-                _agent_response = (
-                    "I ran the tool but couldn't generate a response. "
-                    "This usually happens when the tool output is too "
-                    "large for the context window. Try a more specific "
-                    "request."
+                # Session 31: check if the tool was disabled — that's a
+                # different error than "output too large"
+                from core.config import settings
+
+                _shell_disabled = (
+                    effective_intent == Intent.SHELL
+                    and not getattr(settings, "localmind_shell_enabled", False)
                 )
+                if _shell_disabled:
+                    _agent_response = (
+                        "Shell commands are disabled. Enable them in "
+                        "Settings or set LOCALMIND_SHELL_ENABLED=true "
+                        "in your .env file."
+                    )
+                else:
+                    _agent_response = (
+                        "I wasn't able to complete that request. The "
+                        "tool may have failed or returned no useful "
+                        "output. Please try rephrasing your request."
+                    )
                 full_response_chunks = [_agent_response]
                 yield StreamChunk(text=_agent_response, done=False)
                 logger.warning(

@@ -171,8 +171,10 @@ class Settings(BaseSettings):
     localmind_code_exec_timeout: int = 30
     localmind_code_exec_enabled: bool = True
 
-    # Shell tool
-    localmind_shell_enabled: bool = False
+    # Shell tool — Session 31: enabled by default. LocalMind is a local-first
+    # app where the user explicitly wants to run commands. Disabling shell by
+    # default made every shell request silently fail with a misleading error.
+    localmind_shell_enabled: bool = True
 
     # Context window management
     localmind_response_reserve_tokens: int = 2048

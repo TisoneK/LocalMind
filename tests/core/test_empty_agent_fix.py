@@ -20,21 +20,19 @@ and P8 (flywheel accuracy) were already implemented before the fix session.
 """
 from __future__ import annotations
 
-import asyncio
-import json
 import time
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from dataclasses import dataclass
 
 # Prompts moved from <repo>/core/prompts/ to <repo>/backend/src/core/prompts/
 # during the backend/src/ reorganization. This constant points to the correct
 # location regardless of where the test file lives.
 from pathlib import Path as _Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 _PROMPTS_DIR = _Path(__file__).resolve().parent.parent.parent / "backend" / "src" / "core" / "prompts"
 
-from core.models import Intent, ToolResult, RiskLevel, StreamChunk
-
+from core.models import Intent
 
 # ── P1: Enhanced base.md personality ───────────────────────────────────────
 
@@ -42,7 +40,6 @@ class TestP1EnhancedPersonality:
     """Verify that the base.md prompt file contains the expected sections."""
 
     def test_base_md_exists_and_has_substance(self):
-        from pathlib import Path
         base_path = _PROMPTS_DIR / "base.md"
         assert base_path.exists(), "base.md should exist"
         content = base_path.read_text()
@@ -50,7 +47,6 @@ class TestP1EnhancedPersonality:
         assert len(content) > 500, f"base.md too short ({len(content)} chars) — expected rich personality"
 
     def test_base_md_contains_memory_awareness(self):
-        from pathlib import Path
         base_path = _PROMPTS_DIR / "base.md"
         content = base_path.read_text().lower()
         # Memory awareness section should be present
@@ -58,21 +54,18 @@ class TestP1EnhancedPersonality:
         assert "remember" in content or "knowledge" in content, "base.md should frame memory as knowledge"
 
     def test_base_md_contains_ambiguity_handling(self):
-        from pathlib import Path
         base_path = _PROMPTS_DIR / "base.md"
         content = base_path.read_text().lower()
         # Should have guidance for ambiguous situations
         assert "ambig" in content or "uncertain" in content, "base.md should address ambiguity"
 
     def test_base_md_contains_mistake_recovery(self):
-        from pathlib import Path
         base_path = _PROMPTS_DIR / "base.md"
         content = base_path.read_text().lower()
         # Should have guidance for handling mistakes
         assert "mistake" in content or "error" in content or "wrong" in content, "base.md should address mistakes"
 
     def test_base_md_contains_useful_over_impressive_value(self):
-        from pathlib import Path
         base_path = _PROMPTS_DIR / "base.md"
         content = base_path.read_text().lower()
         # "Useful over impressive" is the 6th core value added in P1
@@ -85,7 +78,6 @@ class TestP3MemoryWeaving:
     """Verify that memory facts are framed as knowledge, not raw data."""
 
     def test_chat_md_frames_memory_as_knowledge(self):
-        from pathlib import Path
         chat_path = _PROMPTS_DIR / "chat.md"
         content = chat_path.read_text().lower()
         # Should frame facts as things the agent knows, not data from a store
@@ -136,14 +128,12 @@ class TestP6SkillInjection:
     """Verify skill .md files are injected into agent prompts."""
 
     def test_skill_files_exist(self):
-        from pathlib import Path
         skills_dir = _PROMPTS_DIR / "skills"
         assert skills_dir.exists(), "skills/ directory should exist"
         skill_files = list(skills_dir.glob("*.md"))
         assert len(skill_files) >= 5, f"Expected at least 5 skill files, found {len(skill_files)}"
 
     def test_coding_skill_has_content(self):
-        from pathlib import Path
         coding_path = _PROMPTS_DIR / "skills" / "coding.md"
         assert coding_path.exists(), "coding.md should exist"
         content = coding_path.read_text()
@@ -180,16 +170,13 @@ class TestP9ReflectionLoop:
 
     @pytest.mark.asyncio
     async def test_reflect_on_answer_stores_correction(self):
-        """When reflection finds an issue, a correction is stored in history."""
+        """When reflection finds an issue, a correction is emitted as an obs event.
+        Session 31: corrections are NO LONGER stored as visible chat messages —
+        they're obs events only. This test verifies the obs event is emitted."""
         from core.engine import Engine
         engine = Engine()
         from core.obs import ObsCollector
         obs = ObsCollector()
-
-        # Track whether append was called
-        append_calls = []
-        original_append = engine._store.append
-        engine._store.append = lambda *args, **kwargs: append_calls.append(args)
 
         # Mock adapter to return a review with CORRECTION
         async def mock_chat(messages, temperature=0.0, **kwargs):
@@ -211,18 +198,18 @@ class TestP9ReflectionLoop:
                 obs=obs,
             )
 
-        # Should have stored a correction in history
-        # (The _reflect_on_answer appends a correction message to the store)
-        assert len(append_calls) >= 1, f"Expected at least 1 append call, got {len(append_calls)}"
-        # Find the correction message
-        correction_found = False
-        for call_args in append_calls:
-            if len(call_args) >= 2:
-                msg = call_args[1]
-                if hasattr(msg, 'content') and 'correction' in msg.content.lower():
-                    correction_found = True
-                    break
-        assert correction_found, "Should store a correction message in history"
+        # Session 31: correction should be emitted as an obs event, NOT
+        # stored as a visible chat message.
+        events = obs.drain()
+        correction_events = [e for e in events if e.type == "reflection_correction"]
+        assert len(correction_events) >= 1, (
+            f"Expected at least 1 reflection_correction obs event, got {len(correction_events)}"
+        )
+        # The correction text should be in the event
+        correction_text = correction_events[0].data.get("correction", "")
+        assert "main.py" in correction_text or "utils.py" in correction_text, (
+            f"Expected correction text to mention main.py/utils.py, got: {correction_text}"
+        )
 
     @pytest.mark.asyncio
     async def test_reflect_emits_obs_event(self):
@@ -362,14 +349,14 @@ class TestP11SubAgentFramework:
         assert len(agents) >= 4, f"Expected at least 4 sub-agents, found {len(agents)}"
 
     def test_sub_agent_types_are_defined(self):
-        from core.agent.sub_agent import CODER_AGENT, RESEARCHER_AGENT, WRITER_AGENT, OPERATOR_AGENT
+        from core.agent.sub_agent import CODER_AGENT, OPERATOR_AGENT, RESEARCHER_AGENT, WRITER_AGENT
         assert CODER_AGENT.name == "coder"
         assert RESEARCHER_AGENT.name == "researcher"
         assert WRITER_AGENT.name == "writer"
         assert OPERATOR_AGENT.name == "operator"
 
     def test_sub_agents_have_restricted_tools(self):
-        from core.agent.sub_agent import CODER_AGENT, RESEARCHER_AGENT, WRITER_AGENT, OPERATOR_AGENT
+        from core.agent.sub_agent import CODER_AGENT, RESEARCHER_AGENT, WRITER_AGENT
         # Researcher should NOT have file_write or code_exec
         assert "file_write" not in RESEARCHER_AGENT.allowed_tools
         assert "code_exec" not in RESEARCHER_AGENT.allowed_tools
