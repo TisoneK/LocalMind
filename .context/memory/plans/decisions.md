@@ -382,9 +382,20 @@ agents/coding/
 
 ## ADR-9: Add ZenMux provider (unified API gateway with free models + insurance)
 
-**Date:** 2026-07-27 (Session 33 — proposed, NOT yet implemented)
-**Status:** proposed
+**Date:** 2026-07-27 (Session 33 — proposed, smoke test blocked, NOT yet implemented)
+**Status:** proposed (blocked — see "Smoke test result" below)
 **Author:** Super Z / GLM-5.2 (feature request from user + web research)
+
+### Smoke test result (Session 33)
+
+**BLOCKED.** Ran the real-API smoke test per ADR-9 Step 5 (and per the flaw log: don't ship provider/adapter changes without testing). Findings:
+
+- **Key is valid.** `GET /api/v1/models` returns 200 with 145 models (Claude, GPT, Gemini, Grok, DeepSeek, GLM, Kimi, MiniMax, etc.).
+- **All chat completions return 403.** `POST /api/v1/chat/completions` returns `{"error":{"code":"403","type":"access_denied","message":"You have no permission to access this resource"}}` for every model tested (8 models across 6 providers).
+- **Root cause:** The user is on ZenMux's free plan ("5 Flows/5h, $0"), which explicitly states **"Studio Chat only"** and **"No API Request access."** The `/models` endpoint isn't gated (listing models is free), but `/chat/completions` requires a paid plan. The free Builder tier mentioned in the web research does NOT include API access — it's Studio Chat only.
+- **No code written.** The smoke test caught this BEFORE any integration code was written — exactly what the smoke test is for. No wasted work.
+
+**To unblock:** the user needs to upgrade to a ZenMux plan that includes API access. Per ZenMux's pricing: Pro ($20/mo), Max ($100/mo), or Ultra ($400/mo). Actual model usage is pay-as-you-go per-token against a topped-up balance, separate from the subscription. The user should check zenmux.ai for which plan includes API access — it may be that ANY paid plan unlocks it, or it may require a specific tier. Once the account can make API calls, re-run the smoke test; if it passes, proceed with the implementation steps below.
 
 ### Context
 
@@ -392,20 +403,21 @@ User wants to add ZenMux (zenmux.ai) as a new LLM provider. ZenMux is a unified 
 
 **Why ZenMux is worth adding:**
 
-1. **Free models available right now.** Grok 4.5 is currently offered free. Claude Opus 4.6 has a free promotion running (time-limited — worth checking if still live). Nano Banana Pro is free for image generation (with rate limits). These rotate, but there's always something free.
+1. **Free models available (on paid plans).** Grok 4.5, Claude Opus 4.6 promo, etc. rotate over time. NOTE: per the smoke test above, these "free models" require a paid subscription — the free plan has no API access at all.
 
-2. **Standing free tier.** The free Builder subscription gives ~5 flows per 5 hours (~165 flows/month) for personal development. This is separate from the rotating free-model promos — it's the baseline free tier.
+2. ~~**Standing free tier.**~~ **REMOVED — see smoke test result.** The free Builder tier (~5 flows/5h) is Studio Chat only with no API access. Not usable for LocalMind integration.
 
 3. **"Insurance" differentiator.** ZenMux's paid tiers (Pro $20/mo, Max $100/mo, Ultra $400/mo) automatically compensate you when you get hallucinated outputs, excessive latency, or low throughput. This is unique — no other provider LocalMind integrates offers this. For a local-first app where the user is paying per-token, the hallucination insurance is genuinely valuable.
 
 4. **Model aggregation.** One API key covers 100+ models across providers. Instead of managing separate keys for OpenAI, Anthropic, Google, etc., the user manages one ZenMux key and gets access to all of them. Lower friction for the user.
 
-5. **Pay-as-you-go per-token.** Model usage is billed per-token at model/provider-specific rates against a topped-up balance, separate from the subscription tiers. The free tier + promos give free usage; beyond that, it's per-token.
+5. **Pay-as-you-go per-token.** Model usage is billed per-token at model/provider-specific rates against a topped-up balance, separate from the subscription tiers.
 
-**Integration specifics (from web research):**
+**Integration specifics (from web research + smoke test):**
 - **Base URL:** `https://zenmux.ai/api/v1`
 - **Protocol:** OpenAI-SDK compatible (same as Zen, Chutes, Z.ai)
-- **Model format:** `provider/model-name` (e.g. `google/gemini-3.1-pro-preview`, `anthropic/claude-opus-4-6`, `xai/grok-4.5`)
+- **Model format:** `provider/model-name` (e.g. `google/gemini-3.6-flash`, `anthropic/claude-opus-5`, `x-ai/grok-4.5`) — NOTE: the actual format uses hyphens (`x-ai/`) not the web-researched `xai/`. Verified from the `/models` response.
+- **Plan requirement:** A PAID plan (Pro/Max/Ultra) is required for API access. The free plan returns 403 on all chat completions. This must be documented in LocalMind's provider description so users don't waste time creating a free key that can't make calls.
 - **Also supports:** OpenAI's Responses API on the same base URL (not needed for LocalMind's current adapter, but good to know)
 - **Auth:** Bearer token in `Authorization` header (standard)
 
