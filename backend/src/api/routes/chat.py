@@ -176,6 +176,16 @@ async def _event_stream(
                         }
                     )
 
+                # Session 27: Bridge todo events to SSE so the frontend's
+                # TodoList panel can display the plan + progress.
+                if evt.type in ("todo_added", "todo_updated", "todo_cleared"):
+                    yield _sse(
+                        {
+                            "type": evt.type,
+                            "todo": evt.data,
+                        }
+                    )
+
                 # Bridge thinking_start/thinking_done obs events to proper SSE
                 # thinking_start/thinking_end events. The frontend handles these
                 # to show the ThinkingBlock component with real-time content.

@@ -234,6 +234,169 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         except Exception:
             pass  # SessionContextManager may not have clear_session
 
+        # Session 27: clean up todos for this session
+        try:
+            import sqlite3
+
+            from core.config import settings
+
+            conn = sqlite3.connect(settings.localmind_db_path)
+            conn.execute("DELETE FROM todos WHERE session_id = ?", (session_id,))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+
+    # ── Session 27: Todo plan emission ─────────────────────────────────
+    # The user's core complaint: "The UI is just dumb or empty waiting for
+    # final output which never came." The fix: emit a todo plan for multi-step
+    # intents so the UI shows progress. This mirrors the .context/memory/tasks/
+    # current.md pattern — the agent lays down a plan, executes it, checks off
+    # each step. The UI's TodoList panel now has real data to display.
+
+    _INTENT_TODO_PLANS: dict[Intent, list[str]] = {
+        Intent.WEB_SEARCH: [
+            "Search the web for relevant results",
+            "Analyze and filter the search results",
+            "Synthesize a clear answer from the findings",
+        ],
+        Intent.WEB_FETCH: [
+            "Fetch the requested web page",
+            "Extract the relevant content",
+            "Present the information clearly",
+        ],
+        Intent.FILE_TASK: [
+            "Read and analyze the file",
+            "Process the file content",
+            "Provide the requested information",
+        ],
+        Intent.FILE_WRITE: [
+            "Prepare the file content",
+            "Write the file to disk",
+            "Verify the file was written correctly",
+        ],
+        Intent.FILE_EDIT: [
+            "Read the target file",
+            "Apply the requested edits",
+            "Verify the changes are correct",
+        ],
+        Intent.CODE_EXEC: [
+            "Prepare the code for execution",
+            "Run the code in the sandbox",
+            "Analyze the output and report results",
+        ],
+        Intent.SHELL: [
+            "Execute the shell command",
+            "Capture the command output",
+            "Report the results",
+        ],
+        Intent.BROWSE: [
+            "Navigate to the target page",
+            "Interact with the page elements",
+            "Extract the requested information",
+        ],
+    }
+
+    def _emit_todo_plan(
+        self,
+        session_id: str,
+        intent: Intent,
+        message: str,
+        obs: ObsCollector,
+    ) -> None:
+        """Session 27: emit a todo plan for multi-step intents.
+
+        Creates todos in the DB and emits obs events so the frontend's
+        TodoList panel can display the plan + track progress. This gives
+        the user immediate visibility into what the agent is doing,
+        instead of a dead UI waiting for final output.
+        """
+        plan = self._INTENT_TODO_PLANS.get(intent)
+        if not plan:
+            return  # single-step intents (CHAT, SYSINFO) don't get a plan
+
+        try:
+            import sqlite3
+            import time
+            import uuid
+
+            from core.config import settings
+
+            conn = sqlite3.connect(settings.localmind_db_path)
+            now = time.time()
+
+            # Clear existing todos for this session (new request = new plan)
+            conn.execute("DELETE FROM todos WHERE session_id = ?", (session_id,))
+
+            # Create the todos
+            for i, content in enumerate(plan):
+                todo_id = str(uuid.uuid4())
+                conn.execute(
+                    """INSERT INTO todos
+                       (id, session_id, content, completed, status,
+                        priority, "order", created_at, updated_at)
+                       VALUES (?, ?, ?, 0, 'pending', 'medium', ?, ?, ?)""",
+                    (todo_id, session_id, content, i, now, now),
+                )
+                # Emit obs event for each todo — the SSE bridge in chat.py
+                # forwards these to the frontend's TodoList panel
+                obs.emit(
+                    "todo_added",
+                    id=todo_id,
+                    session_id=session_id,
+                    content=content,
+                    status="pending",
+                    order=i,
+                )
+
+            conn.commit()
+            conn.close()
+            logger.info(
+                "[engine] emitted %d-step todo plan for %s (session=%s)",
+                len(plan),
+                intent.value,
+                session_id[:8],
+            )
+        except Exception as e:
+            logger.warning("[engine] todo plan emission failed: %s", e)
+
+    def _update_todo_status(
+        self,
+        session_id: str,
+        step_index: int,
+        status: str,
+        obs: ObsCollector,
+    ) -> None:
+        """Session 27: update a todo's status (pending → in_progress → done)."""
+        try:
+            import sqlite3
+            import time
+
+            from core.config import settings
+
+            conn = sqlite3.connect(settings.localmind_db_path)
+            row = conn.execute(
+                'SELECT id FROM todos WHERE session_id = ? AND "order" = ?',
+                (session_id, step_index),
+            ).fetchone()
+            if row:
+                todo_id = row[0]
+                conn.execute(
+                    "UPDATE todos SET status = ?, completed = ?, updated_at = ? WHERE id = ?",
+                    (status, 1 if status == "done" else 0, time.time(), todo_id),
+                )
+                conn.commit()
+                obs.emit(
+                    "todo_updated",
+                    id=todo_id,
+                    session_id=session_id,
+                    status=status,
+                    order=step_index,
+                )
+            conn.close()
+        except Exception as e:
+            logger.warning("[engine] todo status update failed: %s", e)
+
     def _store_observation(self, session_id: str, obs: ObsCollector, **data):
         """Store the latest observation snapshot for a session.
 
@@ -1334,6 +1497,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
         # ── 6. Tool dispatch ───────────────────────────────────────────
         tool_result: Optional[ToolResult] = None
+
+        # Session 27: emit a todo plan for multi-step intents so the UI
+        # shows progress instead of sitting dead. This mirrors the
+        # .context/memory/tasks/current.md pattern — the agent lays down
+        # a plan, the UI displays it, the user sees what's happening.
+        self._emit_todo_plan(session_id, effective_intent, message, _obs)
 
         # CRITICAL: FILE_TASK and SYSINFO always call real tools.
         # These are handled directly — NOT through the agent loop.

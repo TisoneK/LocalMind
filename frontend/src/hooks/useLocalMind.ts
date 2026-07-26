@@ -717,27 +717,38 @@ export function useChat(
                 break;
               }
 
-              case 'todo_created': {
-                // The agent created a todo from its execution plan.
-                // Dispatch a custom event so the useTodos hook (or any
-                // other listener) can add it to the todos panel.
+              case 'todo_created':
+              case 'todo_added': {
+                // Session 27: the engine emitted a todo from its plan.
+                // Dispatch a custom event so the useTodos hook can add
+                // it to the todos panel.
                 const todo = parsed.todo || {};
-                if (todo.text) {
+                if (todo.content || todo.text) {
                   window.dispatchEvent(new CustomEvent('localmind:todo-created', {
+                    detail: {
+                      ...todo,
+                      text: todo.text || todo.content,
+                    },
+                  }));
+                }
+                break;
+              }
+
+              case 'todo_completed':
+              case 'todo_updated': {
+                // Session 27: a todo's status changed (in_progress / done).
+                const todo = parsed.todo || {};
+                if (todo.id || todo.order !== undefined) {
+                  window.dispatchEvent(new CustomEvent('localmind:todo-updated', {
                     detail: todo,
                   }));
                 }
                 break;
               }
 
-              case 'todo_completed': {
-                // A tool finished — mark the corresponding todo as complete.
-                const todo = parsed.todo || {};
-                if (todo.id) {
-                  window.dispatchEvent(new CustomEvent('localmind:todo-completed', {
-                    detail: todo,
-                  }));
-                }
+              case 'todo_cleared': {
+                // Session 27: clear all todos for this session (new request).
+                window.dispatchEvent(new CustomEvent('localmind:todo-cleared'));
                 break;
               }
 
