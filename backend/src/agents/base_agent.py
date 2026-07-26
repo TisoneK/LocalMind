@@ -1,0 +1,269 @@
+"""
+BaseAgent — abstract base class for LocalMind's multi-agent architecture.
+
+Implements ADR-6 (refines ADR-5): multiple distinct agents (coding,
+research, browser, direct) sharing a common 5-step loop shape:
+    assemble → call model → parse → execute → observe → repeat
+    "until done, blocked, or limit"
+
+This module defines the *interface* and the *shared loop delegation*.
+Each concrete subclass (BrowserAgent, CodingAgent, ResearchAgent,
+DirectAgent) supplies its own:
+    - context_builder  — what to gather before each turn
+    - tools            — its scoped toolset (smaller surface = more
+                          reliable selection on gemma3:1b-class models)
+    - is_done()        — its own stop condition
+
+What's shared here (and eventually in the loop itself, once the
+existing AgentLoop is fully decomposed):
+    - The 5-step loop shape
+    - Hard iteration cap + wall-clock cap (ADR-5 requirement)
+    - Token budget & compaction (ADR-5 / B-2026-07-26-2)
+    - Streaming interface back to the frontend
+    - Permission checking (the upgraded safety_gate from ADR-5)
+
+Phase 1 (this session, Session 15): BaseAgent is a structural skeleton.
+It defines the interface and delegates run() to the existing AgentLoop
+for backward compatibility. The existing AgentLoop continues to handle
+all traffic; BrowserAgent is wired into the registry but the actual
+routing migration happens in a future session.
+
+Phase 2 (future session): extract the loop body from AgentLoop into
+BaseAgent._run_loop(), with per-agent hooks for build_context() and
+is_done(). The existing AgentLoop becomes a thin shim that constructs
+a default agent and calls its run() method.
+
+Phase 3 (future session): CodingAgent, ResearchAgent, DirectAgent
+subclasses. The intent router / model_router becomes a registry lookup.
+"""
+
+from __future__ import annotations
+
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import AsyncIterator, Optional
+
+from core.agent.constants import AGENT_ALLOWED_TOOLS
+from core.models import Intent, StreamChunk, ToolResult
+
+logger = logging.getLogger(__name__)
+
+
+# ── Hard caps (ADR-5 requirement: "repeat until done, blocked, OR limit") ────
+# These prevent a small model from spinning forever on a task it can't solve.
+# Configured here so per-agent subclasses can override if they need more
+# headroom (e.g., a coding agent may need more iterations than a browser agent).
+
+DEFAULT_MAX_ITERATIONS = 20
+DEFAULT_MAX_WALL_CLOCK_SECS = 300  # 5 minutes
+
+
+@dataclass
+class AgentConfig:
+    """Per-agent configuration. Subclasses override defaults as needed."""
+
+    name: str  # e.g., "browser", "coding", "research", "direct"
+    max_iterations: int = DEFAULT_MAX_ITERATIONS
+    max_wall_clock_secs: int = DEFAULT_MAX_WALL_CLOCK_SECS
+    # The scoped toolset — a subset of AGENT_ALLOWED_TOOLS. A browser agent
+    # shouldn't have shell tools; a coding agent shouldn't have browser tools.
+    # Smaller surface = more reliable selection on small models (ADR-6 point 6).
+    allowed_tools: frozenset[str] = field(default_factory=lambda: AGENT_ALLOWED_TOOLS)
+    # Whether this agent executes tools at all. DirectAgent sets this to False
+    # — it's steps 1-2 only (assemble → model → respond), no tool execution.
+    tools_enabled: bool = True
+
+
+class BaseAgent(ABC):
+    """
+    Abstract base for all LocalMind agents.
+
+    A concrete agent supplies:
+        - config()           — its AgentConfig (name, caps, scoped tools)
+        - build_context()    — gather/shape logic before each turn
+        - is_done()          — stop condition (tests pass / enough sources / ...)
+        - description()      — human-readable tool description for the model
+
+    The run() method is shared — it delegates to the existing AgentLoop
+    in Phase 1, and will host the actual 5-step loop in Phase 2.
+    """
+
+    def __init__(self, adapter):
+        """
+        Args:
+            adapter: the model adapter (Ollama, OpenAI-compat, etc.) used
+                for LLM calls. Passed in by the engine at construction time.
+        """
+        self._adapter = adapter
+
+    # ------------------------------------------------------------------
+    # Abstract interface — each concrete agent must supply these
+    # ------------------------------------------------------------------
+
+    @abstractmethod
+    def config(self) -> AgentConfig:
+        """Return this agent's configuration (name, caps, scoped tools)."""
+
+    @abstractmethod
+    def build_context(
+        self,
+        messages: list[dict],
+        intent: Intent,
+        memory_facts: Optional[list[str]] = None,
+        orchestrator_context: Optional[str] = None,
+    ) -> str:
+        """
+        Gather and shape context before each turn.
+
+        This is the agent's "Column 1 — Shape" from the CODING HARNESS
+        diagram (ADR-5). Each agent type gathers differently:
+            - CodingAgent: codebase search/index, @file resolution, AGENTS.md
+            - ResearchAgent: web/doc search, source tracking
+            - BrowserAgent: page state, DOM snapshot, nav history
+            - DirectAgent: nothing (thin wrapper)
+
+        Returns a string to inject into the system prompt for the next
+        model call. Per ADR-5, this is also where workspace_state.snapshot()
+        gets injected for the coding agent (the feedback loop).
+        """
+
+    @abstractmethod
+    def is_done(
+        self,
+        iterations: int,
+        wall_clock_secs: float,
+        last_tool_result: Optional[ToolResult],
+        trace: object,
+    ) -> tuple[bool, str]:
+        """
+        Decide whether the loop should terminate.
+
+        Returns:
+            (done, reason) — True if the loop should stop, with a
+            human-readable reason. False to continue.
+
+        Per-agent stop conditions:
+            - CodingAgent: tests pass / build succeeds / user says stop
+            - ResearchAgent: enough sources gathered / query exhausted
+            - BrowserAgent: task-page reached / form submitted / user says stop
+            - DirectAgent: always done after one model call (no loop)
+
+        The base loop also enforces hard caps (max_iterations,
+        max_wall_clock_secs) regardless of is_done()'s answer — that's
+        the "OR limit" from ADR-5.
+        """
+
+    @abstractmethod
+    def description(self) -> str:
+        """
+        Human-readable description of what this agent does, for the
+        model's tool-calling prompt. Per ADR-6 point 6, this must be
+        concrete enough that a gemma3:1b-class model can reliably pick
+        the right agent from the registry.
+        """
+
+    # ------------------------------------------------------------------
+    # Shared loop — delegates to existing AgentLoop in Phase 1
+    # ------------------------------------------------------------------
+
+    async def run(
+        self,
+        messages: list[dict],
+        intent: Intent,
+        initial_tool_result: Optional[ToolResult],
+        available_tools: list[dict],
+        confidence: float = 1.0,
+        adapter=None,
+        intent_history: Optional[list[str]] = None,
+        obs=None,
+        memory_facts: Optional[list[str]] = None,
+        orchestrator_context: Optional[str] = None,
+        skip_planning: bool = False,
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Run the agent loop.
+
+        Phase 1 (this session): delegates to the existing AgentLoop.
+        This keeps the new abstraction non-breaking — all existing
+        traffic continues to flow through AgentLoop unchanged. The
+        BaseAgent subclass is wired into the registry but the actual
+        routing migration happens in a future session.
+
+        Phase 2 (future): this method hosts the actual 5-step loop:
+            1. assemble prompt from build_context() + workspace_state
+            2. call model (plan · tool calls · stream)
+            3. parse calls · route · permissions
+            4. execute tools · capture output
+            5. observe (errors · diff · test logs) → feed back into context
+            ↻ repeat until is_done() returns True, blocked, or hard cap hit
+
+        The hard caps (max_iterations, max_wall_clock_secs) are enforced
+        here regardless of is_done()'s answer — that's the "OR limit"
+        from ADR-5.
+        """
+        # Phase 1 delegation: construct an AgentLoop and call its run().
+        # Import is local to avoid circular imports at module load time
+        # (core.agent.loop imports from core.agent.constants, etc.).
+        from core.agent.loop import AgentLoop
+
+        cfg = self.config()
+        logger.info(
+            "[base_agent] %s running (intent=%s, tools_enabled=%s, "
+            "max_iter=%d, max_wall=%ds)",
+            cfg.name,
+            intent.value,
+            cfg.tools_enabled,
+            cfg.max_iterations,
+            cfg.max_wall_clock_secs,
+        )
+
+        if not cfg.tools_enabled:
+            # DirectAgent path: steps 1-2 only (assemble → model → respond).
+            # No tool execution. The existing AgentLoop isn't invoked.
+            # Phase 2 will implement this properly; for now, log and fall
+            # through to the engine's CHAT path (which already handles
+            # no-tool streaming).
+            logger.info(
+                "[base_agent] %s has tools_enabled=False — caller should "
+                "route to the CHAT path, not the agent loop",
+                cfg.name,
+            )
+
+        loop = AgentLoop(adapter=adapter or self._adapter)
+        async for chunk in loop.run(
+            messages=messages,
+            intent=intent,
+            initial_tool_result=initial_tool_result,
+            available_tools=available_tools,
+            confidence=confidence,
+            adapter=adapter,
+            intent_history=intent_history,
+            obs=obs,
+            memory_facts=memory_facts,
+            orchestrator_context=orchestrator_context,
+            skip_planning=skip_planning,
+        ):
+            yield chunk
+
+    # ------------------------------------------------------------------
+    # Helpers shared across all agents
+    # ------------------------------------------------------------------
+
+    def scoped_tools(self, all_tools: list[dict]) -> list[dict]:
+        """
+        Filter the global tool list down to this agent's scoped allowlist.
+
+        Per ADR-6: a coding agent doesn't have browser tools; a browser
+        agent doesn't have shell tools. Smaller surface = more reliable
+        selection on small models.
+
+        Args:
+            all_tools: the full list of registered tool dicts (from
+                tools.available_tools()).
+
+        Returns:
+            The subset matching this agent's config().allowed_tools.
+        """
+        allowed = self.config().allowed_tools
+        return [t for t in all_tools if t.get("intent") in allowed]
