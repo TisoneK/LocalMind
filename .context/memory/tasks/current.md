@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Feature:** none — no session in progress (Session 28 wired todo status updates + captured ADR-7: .context/ persistent learning + workflow constraints. See `.context/memory/features/agent-loop-closed-loop/notes.md`.)
+- **Feature:** none — no session in progress (Session 29 fixed 5 bugs: todo update listener, todo status in agent loop, status text leak, silent process, shallow thinking prompt. See `.context/memory/features/agent-loop-closed-loop/notes.md`.)
 - **Task:** none
 - **Status:** idle

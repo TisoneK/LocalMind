@@ -101,4 +101,8 @@ Updated registry row:
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-27 | 27 |
+- **Super Z / GLM-5.2:** Session 29 — fixed 5 bugs: (1) todo-updated frontend listener was missing (events dispatched but never received), (2) todo status updates only in direct-dispatch path not agent loop, (3) status_update overwrote thinking field causing "Searching the web" in chat, (4) empty agent-loop response passed through silently, (5) thinking prompt was a checklist not decomposition. All fixed. Baseline held: 378 tests pass, 0 real ruff bugs. (2026-07-27)
+
+Updated registry row:
+
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-27 | 28 |

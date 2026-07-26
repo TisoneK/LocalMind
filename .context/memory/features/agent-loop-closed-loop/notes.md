@@ -916,3 +916,58 @@ pipeline problem one layer up.
 consulting workflows before acting, writing to `.context/` at session
 end) is future sessions. This session is the scaffolding — the
 structure + the constraint-style content. The wiring makes it live.
+
+---
+## 2026-07-27 — Super Z / GLM-5.2 (Session 29)
+
+Fixed 5 bugs from the user's report:
+
+**Bug 1: Todos created but never updated (list stays at 0/3).**
+Root cause: the `localmind:todo-updated` event was dispatched by the
+SSE bridge but had NO frontend listener — the frontend only listened
+for `localmind:todo-completed`. Fix: added `todo-updated` listener that
+updates status (pending → in_progress → done) + a `todo-cleared`
+listener for new-request resets.
+
+**Bug 2: Todo status updates in wrong code path.**
+Root cause: Session 28's `_update_todo_status()` calls were in the
+direct-dispatch block (SYSINFO only). WEB_SEARCH and all other
+AGENT_INTENTS go through the agent loop — which had NO status updates.
+Fix: added `_update_todo_status(session, 0, "in_progress")` before the
+agent loop starts, and `_update_todo_status(session, 0, "done")` +
+`_update_todo_status(session, 1, "done")` after it completes.
+
+**Bug 3: "Searching the web" duplicated in chat + actions.**
+Root cause: the `status_update` SSE handler wrote the status text
+("Let me search the web for that...") into `message.thinking` — which
+rendered in the chat area. Fix: use a separate `statusText` field
+instead of overwriting `thinking`.
+
+**Bug 4: Process goes silent after first action.**
+Root cause: the agent loop produced no output when the model choked on
+large tool results (5118 tokens of raw search → 1 completion token).
+The empty response was passed through with no error. Fix: added a check
+after the agent loop — if `response_text` is empty AND the intent is an
+AGENT_INTENT, surface an explicit error message ("I ran the tool but
+couldn't generate a response from the results...") instead of silence.
+
+**Bug 5: Thinking prompt is shallow (checklist, not decomposition).**
+Root cause: the ThinkingDispatcher's system prompt was structured as a
+classification checklist (AVAILABLE CAPABILITIES, CAPABILITY FLAGS,
+EXECUTION MODES, CRITICAL RULES). The model walked through the list
+verbatim in its reasoning — shallow, mechanical, and the direct cause
+of the prompt-leak bug (Session 23: the model recited the checklist it
+was told to check). Fix: added a "HOW TO THINK" preamble that invites
+open-ended decomposition: "What is the user ACTUALLY trying to
+accomplish? What do you know? What's missing? What would a human
+expert do first?" The model now reasons about the substance of the
+request before outputting JSON.
+
+**What's deferred (the user's design direction):**
+- Dynamic todos from model synthesis (not fixed templates). The user
+  wants todos to come AFTER the model reasons about the request, not
+  from `_INTENT_TODO_PLANS` hardcoded per intent. This requires the
+  model to output a plan as part of its thinking, then parse it into
+  todos. Future session.
+- Thinking block sizing (CSS fix, frontend-only).
+- Auto-switch to relevant tab when a tool starts.

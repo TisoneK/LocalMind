@@ -334,3 +334,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** (1) Engine wiring for .context/ — reading at startup, consulting workflows before acting, writing at session end. This is future sessions — the scaffolding is in place. (2) Phase 2 loop extraction + context compaction still deferred.
 - **Report:** none.
 - **Notes:** The user's design principles for .context/ are the key insight: workflows define constraints and checkpoints, NOT procedures. The agent has creative autonomy — it knows the goal, figures out HOW on its own. The .context/ must be WRITTEN TO, not just read — every workflow ends with a learning step. The test for a well-written workflow: does it tell the agent what "done" looks like and what it must not violate, without telling it which exact actions to take? This is the same pattern that made the user's own .context/ workflow powerful — it's not a script, it's knowledge + boundaries. Token-strip dance applied.
+
+---
+## 2026-07-27 — Session 29
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai — 24th session not re-confirmed) | **Platform:** Z.ai cloud sandbox | **Role:** engineer
+- **Feature:** `agent-loop-closed-loop` (5 bug fixes from user report)
+- **Task:** User reported: todos never update, process goes silent, "Searching the web" leaks into chat, thinking is shallow. Fix all.
+- **Commits:** 2 — `fix: todo updates + status leak + silent process + thinking prompt rewrite` + this memory commit.
+- **Outcome:** done — (1) Added `todo-updated` + `todo-cleared` frontend listeners (were missing — todo status events were dispatched but never received). (2) Added `_update_todo_status()` calls to the agent loop path (were only in direct-dispatch/SYSINFO). (3) Fixed `status_update` handler: uses `statusText` field instead of overwriting `thinking` (which caused "Searching the web" to appear in chat). (4) Added empty-response check after agent loop — surfaces an error message instead of silence when the model chokes on large tool results. (5) Rewrote ThinkingDispatcher system prompt: added "HOW TO THINK" preamble that invites open-ended decomposition ("What is the user ACTUALLY trying to accomplish?") instead of checklist-walking. Baseline held: 378 tests pass, 0 real ruff bugs.
+- **Open items:** (1) Dynamic todos from model synthesis (not fixed templates) — future session. (2) Thinking block CSS sizing. (3) Auto-switch tabs. (4) Phase 2 loop extraction + context compaction deferred.
+- **Report:** none.
+- **Notes:** The user's bug report was precise and comprehensive. The recurring pattern: components exist but aren't wired end-to-end. The todo-updated listener was the clearest example — the SSE bridge dispatched the event, but no one was listening. The thinking prompt fix addresses the root cause of both the shallow reasoning AND the prompt-leak bug (Session 23): the model was reciting the checklist it was told to check, which is both shallow AND leaks the prompt contents. The fix invites decomposition instead. Token-strip dance applied.
