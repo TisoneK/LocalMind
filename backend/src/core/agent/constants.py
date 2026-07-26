@@ -15,6 +15,19 @@ MAX_ITERATIONS: int = 5
 PLAN_ITERATION_COST: int = 1
 CLARIFICATION_THRESHOLD: float = 0.45
 
+# ADR-5: hard wall-clock cap. The loop terminates on "done, blocked, OR
+# limit" — this is the time-based limit, preventing a small model from
+# spinning forever on a task it can't solve. Sized for gemma3:1b-class
+# target hardware where every iteration is expensive. 300s = 5 minutes.
+MAX_WALL_CLOCK_SECS: float = 300.0
+
+# ── Workspace state feedback (ADR-5) ─────────────────────────────────────────
+# Whether to inject workspace_state.snapshot() into the agent's context
+# at step 1 (assemble prompt) of each turn. This is the "observations
+# flow back into context every turn" loop from the CODING HARNESS
+# diagram — the literal difference between a harness and a bare API.
+WORKSPACE_STATE_ENABLED: bool = True
+
 # ── Context window protection ─────────────────────────────────────────────────
 
 OBS_LOG_MAX_CHARS: int = 2000

@@ -62,6 +62,7 @@ from core.agent.constants import (
     AGENT_INTENTS,
     CLARIFICATION_THRESHOLD,
     MAX_ITERATIONS,
+    MAX_WALL_CLOCK_SECS,
     OBS_LOG_MAX_CHARS,
     PLAN_ENABLED,
     PLAN_ITERATION_COST,
@@ -71,6 +72,7 @@ from core.agent.constants import (
     VERIFY_CODE_EXEC,
     VERIFY_ENABLED,
     VERIFY_FILE_WRITE,
+    WORKSPACE_STATE_ENABLED,
 )
 from core.agent.models import AgentStep, AgentTrace
 from core.models import Intent, StreamChunk, ToolResult
@@ -213,6 +215,8 @@ from core.agent.prompts import build_agent_system_prompt, build_planning_prompt
 from core.agent.synthesizer import AnswerSynthesizer
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.context_builder import _build_environment_context
+from core.workspace_state import format_snapshot, mark_turn_start
+from core.workspace_state import snapshot as workspace_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -597,6 +601,7 @@ class AgentLoop:
         active_adapter = adapter or self._adapter
         trace = AgentTrace()
         _obs = obs  # may be None — all obs.emit() calls guarded below
+        _loop_start_time = time.monotonic()  # ADR-5: wall-clock cap baseline
 
         if _obs:
             _obs.emit("agent_loop_start", intent=intent.value)
@@ -618,6 +623,30 @@ class AgentLoop:
         # ── Build tool definitions filtered by allowlist ───────────────
         filtered_tools = _filtered_tool_defs()
         env_context = _build_environment_context()
+
+        # ── ADR-5: Workspace state feedback ──────────────────────────────
+        # Mark the turn start (records current HEAD for diff tracking),
+        # then take a snapshot of git status/diff/build result. The
+        # snapshot is injected into the system prompt below — this is the
+        # "observations flow back into context every turn" loop from the
+        # CODING HARNESS diagram, the literal difference between a harness
+        # and a bare API.
+        workspace_context = ""
+        if WORKSPACE_STATE_ENABLED:
+            try:
+                mark_turn_start()
+                ws_snap = workspace_snapshot()
+                workspace_context = format_snapshot(ws_snap)
+                if workspace_context:
+                    logger.debug(
+                        "[agent_loop] workspace_state injected (%d chars)",
+                        len(workspace_context),
+                    )
+            except Exception as ws_exc:
+                # Workspace state must never break the agent loop —
+                # log and continue with empty context.
+                logger.warning("[agent_loop] workspace_state failed: %s", ws_exc)
+                workspace_context = ""
 
         # ── Phase 0: Planning ────────────────────────────────────────────
         # Run a separate LLM call (no tools) to produce a step-by-step plan.
@@ -701,6 +730,12 @@ class AgentLoop:
             orchestrator_context=orchestrator_context,
         )
 
+        # ADR-5: append workspace state to the system prompt. This is the
+        # feedback loop — git status, diff since last turn, last build
+        # result — that turns a bare API call into a real harness.
+        if workspace_context:
+            system_prompt = system_prompt + "\n\n" + workspace_context
+
         # Replace or prepend the system message
         if loop_messages and loop_messages[0]["role"] == "system":
             loop_messages[0] = {
@@ -768,6 +803,26 @@ class AgentLoop:
         # ── Main loop ──────────────────────────────────────────────────
         for iteration in range(MAX_ITERATIONS):
             trace.iterations_used = iteration + 1
+
+            # ADR-5: hard wall-clock cap. The loop terminates on "done,
+            # blocked, OR limit" — this is the time-based limit. Prevents
+            # a small model from spinning forever on a task it can't solve.
+            _elapsed = time.monotonic() - _loop_start_time
+            if _elapsed > MAX_WALL_CLOCK_SECS:
+                logger.warning(
+                    "[agent_loop] wall-clock cap hit after %.1fs (iter %d/%d) — forcing final answer",
+                    _elapsed,
+                    iteration + 1,
+                    MAX_ITERATIONS,
+                )
+                if _obs:
+                    _obs.emit(
+                        "agent_loop_wall_clock_cap",
+                        intent=intent.value,
+                        elapsed_secs=_elapsed,
+                        iteration=iteration + 1,
+                    )
+                break
 
             # Build iteration-specific context hint
             failure_hint = ""
