@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from agents.base_agent import DEFAULT_MAX_ITERATIONS, DEFAULT_MAX_WALL_CLOCK_SECS, AgentConfig, BaseAgent
 from agents.browser_agent import BrowserAgent
+from agents.coding_agent import CodingAgent
 from agents.registry import get_agent, is_registered, list_agents, register
 
 # Auto-register all built-in agents at import time.
@@ -39,11 +40,13 @@ from agents.registry import get_agent, is_registered, list_agents, register
 #   2. Create agents/<name>/ subpackage with context_builder, tools, is_done
 #   3. Import the class here and call register("<name>", AgentClass)
 register("browser", BrowserAgent)
+register("coding", CodingAgent)
 
 __all__ = [
     "BaseAgent",
     "AgentConfig",
     "BrowserAgent",
+    "CodingAgent",
     "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_MAX_WALL_CLOCK_SECS",
     "get_agent",
