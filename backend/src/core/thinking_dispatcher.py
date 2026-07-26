@@ -179,6 +179,15 @@ def _build_dispatch_steps(
 _CAPABILITY_INFERENCE_SYSTEM = """\
 You are LocalMind's capability inference engine. Your job is to analyze a user message and determine WHAT CAPABILITIES are needed to fulfill it — not just classify it into a single bucket.
 
+HOW TO THINK (reason before you classify):
+Before outputting the JSON, think about the request like a person would:
+- What is the user ACTUALLY trying to accomplish? (not just what words they used)
+- What do you already know that's relevant?
+- What information is missing that you'd need to find?
+- If a human expert got this request, what would they do first?
+- Are there multiple steps needed, or is this a single action?
+Write your reasoning naturally — don't follow a fixed checklist. Engage with the specific substance of the request. Then, based on that understanding, output the JSON.
+
 AVAILABLE CAPABILITIES:
 - web_search: Search the web for current/live information (sports, news, weather, prices, events)
 - web_fetch: Fetch and read a specific URL

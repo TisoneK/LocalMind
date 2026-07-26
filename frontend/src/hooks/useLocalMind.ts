@@ -692,12 +692,12 @@ export function useChat(
 
               case 'status_update': {
                 // Real-time progress feedback during tool execution.
-                // Show as status text in the thinking area.
+                // Session 29: DON'T overwrite thinking with status text —
+                // that caused "Searching the web" to appear in the chat.
+                // Instead, set a separate `statusText` field that the UI
+                // can show in the status area, not in the thinking block.
                 const statusText = parsed.status || '';
                 if (statusText) {
-                  // Set thinkStartTime if not already set — status_update
-                  // may arrive before thinking_start (e.g., from the
-                  // dispatcher's planning phase).
                   if (!thinkStartTime) thinkStartTime = Date.now();
                   const statusMs = thinkStartTime ? Date.now() - thinkStartTime : 0;
                   setMessages((prev) => {
@@ -706,7 +706,7 @@ export function useChat(
                     if (last && last.role === 'assistant') {
                       updated[updated.length - 1] = {
                         ...last,
-                        thinking: statusText,
+                        statusText: statusText,
                         thinkMs: statusMs,
                         isAgent: true,
                       };
@@ -1100,6 +1100,51 @@ export function useTodos(sessionId: string | null) {
     };
     window.addEventListener('localmind:todo-completed', handler);
     return () => window.removeEventListener('localmind:todo-completed', handler);
+  }, []);
+
+  // Session 29: Listen for todo-updated events — when the engine updates
+  // a todo's status (pending → in_progress → done), update the UI.
+  // Previously this event was dispatched but had NO listener, so todo
+  // status never updated (list stayed at 0/3).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.id) {
+        setTodos((prev) => prev.map((t) =>
+          t.id === detail.id
+            ? {
+                ...t,
+                completed: detail.status === 'done' ? true : t.completed,
+                // Add a status field for in_progress visual indicator
+                ...(detail.status ? { status: detail.status } : {}),
+              }
+            : t
+        ));
+      } else if (detail?.order !== undefined) {
+        // If we only have order (not id), update by order
+        setTodos((prev) => prev.map((t, i) =>
+          i === detail.order
+            ? {
+                ...t,
+                completed: detail.status === 'done' ? true : t.completed,
+                ...(detail.status ? { status: detail.status } : {}),
+              }
+            : t
+        ));
+      }
+    };
+    window.addEventListener('localmind:todo-updated', handler);
+    return () => window.removeEventListener('localmind:todo-updated', handler);
+  }, []);
+
+  // Session 29: Listen for todo-cleared events — clear all todos
+  // when the engine starts a new request.
+  useEffect(() => {
+    const handler = () => {
+      setTodos([]);
+    };
+    window.addEventListener('localmind:todo-cleared', handler);
+    return () => window.removeEventListener('localmind:todo-cleared', handler);
   }, []);
 
   const addTodo = useCallback(async (text: string) => {

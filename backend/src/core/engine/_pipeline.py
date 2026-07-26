@@ -2357,6 +2357,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # start_request() was only called in the CHAT path.
             self._metrics.start_request()
 
+            # Session 29: mark todo step 0 as in_progress for agent-loop
+            # intents (WEB_SEARCH, CODE_EXEC, SHELL, etc.). Previously
+            # todo status updates were only in the direct-dispatch block
+            # (SYSINFO only) — agent-loop intents never got updates.
+            self._update_todo_status(session_id, 0, "in_progress", _obs)
+
             # ADR-6: when AGENT_SELECTION_ENABLED, use the selected agent's
             # run() method instead of calling AgentLoop directly. The agent
             # passes its scoped toolset to AgentLoop (a coding agent sees
@@ -2428,6 +2434,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             label = _TOOL_LABELS.get(effective_intent, effective_intent.value)
             _obs.emit("tool_status", tool=effective_intent.value, label=label, status="done")
             _obs.emit("thinking_done", intent=effective_intent.value)
+            # Session 29: mark todo steps 0 + 1 as done — the agent loop
+            # completed (tool execution + processing).
+            self._update_todo_status(session_id, 0, "done", _obs)
+            self._update_todo_status(session_id, 1, "done", _obs)
         else:
             # CHAT and other non-agent intents: direct stream, no loop overhead.
             # Emit thinking_start so the UI shows a thinking indicator, then stream.
@@ -2459,6 +2469,26 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         for prefix in _UNCERTAINTY_PREFIXES_FINAL:
             if response_text.startswith(prefix):
                 response_text = response_text[len(prefix) :].strip()
+
+        # Session 29: if the agent loop produced NO output, surface an
+        # error instead of silence. This is the "process goes silent
+        # after first action" bug — the model choked on large tool
+        # results (e.g., 5118 tokens of raw search results → 1
+        # completion token) and produced nothing. Without this check,
+        # the user sees a dead UI with no indication of failure.
+        if not response_text.strip() and effective_intent in AGENT_INTENTS:
+            response_text = (
+                "I ran the tool but couldn't generate a response from the "
+                "results. This usually happens when the tool output is too "
+                "large for the model's context window. Please try a more "
+                "specific request, or ask me to summarize the results "
+                "differently."
+            )
+            logger.warning(
+                "[engine] empty response from agent loop for %s — "
+                "model likely choked on tool output size",
+                effective_intent.value,
+            )
 
         # ── 7b-metrics. Record streaming completion for agent-mode paths ───────
         # CHAT and FILE_TASK call record_streaming_complete() inside their own
