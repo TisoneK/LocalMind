@@ -165,23 +165,28 @@ export function CenterPanel({
         </div>
 
         {/* Streaming indicator — only show when assistant content is still empty */}
-        {/* FIX 5+7: Show step narration while tools are running, and let the */}
-        {/* streaming tokens appear in the message itself once they start. The */}
-        {/* old static "Generating response..." is gone — the user sees either */}
-        {/* tool progress steps or live token streaming. */}
+        {/* Session 30: replace static "Thinking..." with real pipeline status. */}
+        {/* The engine emits status_update events ("Let me search the web...", */}
+        {/* "Understanding your request...", etc.) — show those instead of a */}
+        {/* dead "Thinking..." label. Only show "Thinking" when the model is */}
+        {/* actually reasoning (thinking_token events fill message.thinking). */}
         {isStreaming && (() => {
           const lastMsg = messages[messages.length - 1];
           const hasContent = lastMsg && lastMsg.role === 'assistant' && lastMsg.content && lastMsg.content.trim().length > 0;
           const hasToolCalls = lastMsg && lastMsg.role === 'assistant' && lastMsg.toolCalls && lastMsg.toolCalls.length > 0;
+          const hasThinking = lastMsg && lastMsg.role === 'assistant' && lastMsg.thinking && lastMsg.thinking.trim().length > 0;
           // If there's content or tool calls already visible in the message,
           // don't show the separate indicator — the message itself is the feedback.
           if (hasContent || hasToolCalls) return null;
-          // Only show the spinner when nothing has rendered yet (thinking phase).
+          // Get the status text — prefer the real pipeline status, fall back
+          // to "Thinking" only if the model is actually reasoning, otherwise
+          // "Working on it..." as the initial acknowledgment.
+          const statusText = lastMsg?.statusText || (hasThinking ? 'Thinking' : 'Working on it...');
           return (
             <div className="px-4 py-3">
               <div className="flex items-center gap-2">
                 <Loader2 className="h-3 w-3 text-[#39d353] animate-spin" />
-                <span className="text-[10px] text-[#8ab08a]">Thinking...</span>
+                <span className="text-[10px] text-[#8ab08a]">{statusText}</span>
                 <span className="flex gap-0.5">
                   <span className="w-1 h-1 bg-[#39d353] rounded-full animate-bounce [animation-delay:0ms]" />
                   <span className="w-1 h-1 bg-[#39d353] rounded-full animate-bounce [animation-delay:150ms]" />

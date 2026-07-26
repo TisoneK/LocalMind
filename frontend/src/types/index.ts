@@ -41,6 +41,10 @@ export interface ChatMessage {
   pendingWrite?: PendingWrite;
   /** Structured diff data from edit_file tool results */
   diffData?: DiffData;
+  /** Session 30: system status feedback — reflects real pipeline stage
+   * (e.g., "Let me search the web...", "Understanding your request...").
+   * Distinct from `thinking` which is the model's actual reasoning trace. */
+  statusText?: string;
 }
 
 /** Structured diff data for rendering DiffBlock in chat messages */

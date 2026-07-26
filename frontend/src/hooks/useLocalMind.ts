@@ -300,6 +300,10 @@ export function useChat(
         content: '',
         timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
         toolCalls: [],
+        // Session 30: immediate acknowledgment — the user sees this
+        // instantly instead of a dead "Thinking..." while the pipeline
+        // spins up. Updated by status_update events as stages progress.
+        statusText: 'Got it — working on your request...',
       };
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
