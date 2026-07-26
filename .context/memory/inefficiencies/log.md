@@ -92,3 +92,12 @@ if literally nothing slowed you down.
 - **Cause:** `AgentStep`'s required fields aren't documented in the dataclass docstring; you have to read the definition or look at existing usage.
 - **Workaround / fix:** Added the missing `tool_input=None, observation=None` kwargs to the test. Test passed on next run.
 - **Prevent next time:** When constructing `AgentStep` in tests, always pass all required fields explicitly — don't rely on defaults that don't exist. Could be fixed at the source by giving `tool_input` and `observation` default values of `None`, but that's a behavior change for another session.
+
+---
+## 2026-07-27 — Super Z / GLM-5.2 (Session 31, addendum)
+
+- **Problem:** I shipped a fallback message that guessed "free-tier model overload" as the cause of the "Tools execution failure" bug — WITHOUT testing against the real model first. The user correctly pushed back: "for a 4-step task, context overflow is not plausible." The "overload" diagnosis was a plausible-sounding but unverified self-diagnosis — same pattern as the earlier "tool output too large" message that turned out to be wrong.
+- **Cost:** Two extra commits (f316904 + d09327c) and one extra round-trip with the user. The first fix (08d1934) was treating the symptom, not the cause. The revision (f316904) made the fallback more honest but was STILL treating the symptom. The actual root cause (two adapter bugs) wasn't found until the user provided an API key for real-model testing.
+- **Cause:** I trusted my own plausible-sounding guess instead of testing it. The fallback message was written BEFORE any real-model testing. When the user pushed back, it took 10 minutes and 2 API calls to find the actual bug — should have done that FIRST.
+- **Workaround / fix:** Real-model testing via the user's Zen API key found the root cause: (1) DeepSeek rejects messages ending with `tool` role → HTTP 400; (2) Phase 1 detection dropped tool_call deltas during long reasoning streams. Both fixed in commit d09327c.
+- **Prevent next time:** When a fallback message GUESSES at a cause, treat the guess as a hypothesis to test, not a diagnosis to ship. If the user can provide an API key for the failing model, test against the real model BEFORE writing the fallback. The real-model test is almost always faster than the guess-revise-guess cycle. Logged as a flaw in `flaws/log.md` too — this is a protocol-level lesson, not just a project-level inefficiency.

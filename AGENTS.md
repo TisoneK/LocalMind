@@ -98,3 +98,32 @@ If you add a new code path where the model's text might be empty after
 tool execution, wire it through `AgentLoop._summarize_trace_for_user()`
 so the user sees what tools ran. Regression tests live in
 `tests/e2e/test_tool_execution_failure.py`.
+
+## Adapter provider quirks (added 2026-07-27, Session 31 addendum)
+
+The OpenAI-compat adapter (`backend/src/adapters/openai_compat.py`)
+has two provider-specific quirks that were the ACTUAL root cause of the
+"Tools execution failure" bug (not model overload — that was a wrong
+guess). If you touch the adapter, know these:
+
+1. **Trailing `tool` role → 400 on some providers.** DeepSeek-v4-flash-free
+   (via Zen) and possibly other providers reject requests where the last
+   message is a `tool` role. The agent loop sends this format after every
+   tool execution. Fix: `chat_with_tools` appends a synthetic `user`
+   message when the last message is `tool` role. This is general (applies
+   to all providers) — do not remove it unless you've verified the
+   provider accepts tool-terminated messages.
+
+2. **Phase 1 detection must wait for content, not just reasoning.** Some
+   models (DeepSeek-v4-flash-free) produce 80+ reasoning chunks before
+   the tool_call delta arrives. Phase 1 breaks at `chunks_read >= 15` —
+   but ONLY if it has seen actual `content` (not just reasoning).
+   Reasoning-only streams keep reading until content or tool_calls
+   arrives (hard cap: 500 chunks). If you change the Phase 1 break
+   condition, test against a model that produces long reasoning streams
+   before tool calls — otherwise you'll reintroduce the silent-drop bug.
+
+Regression tests: `tests/adapters/test_zen_deepseek_fixes.py`. The
+real-model test scripts that found these bugs are in
+`/home/z/my-project/scripts/` (not committed — they contain API key
+references in comments, but no actual keys).
