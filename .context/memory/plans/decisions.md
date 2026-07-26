@@ -288,17 +288,17 @@ Three concrete symptoms of this mismatch:
 
 ### Decision
 
-**Route tasks to agents, not tools.** Agents own their tools; the agent's workflow governs HOW it uses them.
+**Route tasks to agents, not tools.** Agents own their tools; the agent's workflow governs HOW it uses them. Agents are self-contained packages (directories), not single modules.
 
 ```
 User message → Task classifier → TASK TYPE (coding / research / browse / chat)
-            → Agent for that task type (CodingAgent, ResearchAgent, ...)
-            → Agent loads its workflow (coding.md / research.md / ...)
+            → Agent for that task type (agents/coding/, agents/research/, ...)
+            → Agent loads its workflow (agents/coding/workflow.md)
             → Agent decides which of its tools to use, in what order, with what verification
             → If the task needs another domain → agent triggers another agent (parallel or handoff)
 ```
 
-Four principles:
+Five principles:
 
 1. **Classification by task type, not tool.** "Create hello world repo" is a *coding* task → CodingAgent. The CodingAgent owns shell + file_write + file_edit + code_exec + file_task — it decides which to use based on its workflow.
 
@@ -308,22 +308,61 @@ Four principles:
 
 4. **The workflow is the value.** The coding workflow's "read-before-write, verify-after-write, follow-conventions, small-verifiable-changes" is what guides the agent's tool use — not just having 5 tools vs 10. The workflow files (`coding.md`, `research.md`, `safety.md`, etc.) are loaded into the agent's system prompt and govern its behavior.
 
+5. **Agents are directories, not modules.** Each agent is a self-contained package — a directory co-locating everything that defines the agent. This makes agents robust (rich, extensible, testable) instead of limited to what fits in a single class file. A single-file agent (`coding_agent.py`) can hold a class definition but can't co-locate its workflow, context builder, scoped tools, tests, and persona docs. A directory-based agent (`agents/coding/`) holds all of that as a unified unit.
+
+### Agent directory structure (Principle 5 in detail)
+
+Each agent lives in its own directory under `backend/src/agents/<name>/`:
+
+```
+agents/coding/
+├── __init__.py          # exports CodingAgent (the class, re-exported from agent.py)
+├── agent.py             # the BaseAgent subclass (CodingAgent) — config(), description()
+├── workflow.md          # the constraint-style workflow (was backend/data/workflows/coding.md)
+├── context_builder.py   # build_coding_context() — loads workflow.md + gathers context
+├── tools.py             # CODING_TOOLS frozenset — the agent's scoped toolset
+├── is_done.py           # is_coding_done() — the agent's stop condition
+├── persona.md           # the agent's persona/expertise framing (was inline in prompts.py)
+└── tests/
+    ├── __init__.py
+    ├── test_context.py  # tests for build_coding_context()
+    ├── test_workflow.py # tests that workflow.md is loaded + injected
+    └── test_is_done.py  # tests for the stop condition
+```
+
+**Why directories, not modules:**
+
+- **Co-location.** Everything that defines the coding agent is in one place. To understand the coding agent, you read one directory — not `coding_agent.py` + `coding/context_builder.py` + `coding/tools.py` + `coding/is_done.py` + `data/workflows/coding.md` + the persona section of `prompts.py`. Today these are scattered across 4+ locations.
+- **Extensibility.** A directory can grow. Want to add a `examples/` subfolder with sample coding tasks? Add a `verifier.py` for agent-specific verification logic? Add a `README.md` documenting the agent's design? A directory makes this natural; a single file forces everything into class methods or external files.
+- **Testability.** Tests live next to the code they test. `agents/coding/tests/test_workflow.py` verifies the coding workflow is loaded and injected — co-located with the workflow it tests.
+- **Discoverability.** `ls agents/` shows you every agent in the system. Each is a directory. Adding a new agent = adding a new directory. No registry editing, no imports to wire — the registry auto-discovers directories (Phase 1 implementation detail).
+- **Robustness.** A single-file agent is fragile — it can only hold a class. A directory-based agent is robust — it holds a class + workflow + context + tools + tests + persona + examples. This is the difference between "a class that happens to be called an agent" and "a real agent package."
+
+**Current state (pre-ADR-8):** The directory structure partially exists — `agents/coding/`, `agents/research/`, `agents/browser/`, `agents/direct/` each have `context_builder.py`, `is_done.py`, `tools.py`, `__init__.py`. BUT:
+- The agent CLASSES (`CodingAgent`, `ResearchAgent`, etc.) are single files OUTSIDE their directories: `coding_agent.py`, `research_agent.py`, etc. They should be INSIDE: `agents/coding/agent.py`.
+- The workflow files (`coding.md`, `research.md`) are in `backend/data/workflows/` — a separate location. They should be INSIDE the agent directory: `agents/coding/workflow.md`.
+- The personas are inline in `prompts.py` (`_PERSONA_MAP`). They should be `agents/coding/persona.md`.
+- The SubAgentType agents (CODER, RESEARCHER, WRITER, OPERATOR, ANALYST) in `sub_agent.py` are dataclass instances in a single file — no directory at all. They should be `agents/coder/`, `agents/researcher/`, etc. (or merged into the existing agents per Phase 1).
+- There are no per-agent tests co-located with the agents.
+
 ### Implementation phases (multi-session)
 
-**Phase 1: Unify the two agent systems.** Merge `SubAgentType` (from `sub_agent.py`) into the `BaseAgent` registry. One registry, one agent type hierarchy. The sub-agent framework's delegation mechanics (`execute_sub_tasks`, `decompose_task`) become methods on `BaseAgent` — any agent can delegate to any other agent.
+**Phase 1: Agents as directories (structural foundation).** Convert each agent from a single-file module to a self-contained directory package. Move the agent class into `agents/<name>/agent.py`, move the workflow file into `agents/<name>/workflow.md`, move the persona into `agents/<name>/persona.md`. The `__init__.py` re-exports the class for backward compatibility. The registry auto-discovers agent directories (any directory under `agents/` with an `agent.py` is an agent). This is the foundation — it makes the agents robust enough to hold the workflows and delegation logic that Phases 2-4 add. Without this, Phase 2 (wire build_context) has nowhere to co-locate the workflow files.
 
-**Phase 2: Wire `build_context()` into `BaseAgent.run()`.** When an agent runs, it calls `build_context()` to gather its task-specific context — INCLUDING loading its workflow file (`coding.md`, `research.md`, etc.). The context is passed through to `build_agent_system_prompt()` and injected as a section. This is the fix backlogged in Session 33: the workflow files finally reach the model.
+**Phase 2: Wire `build_context()` into `BaseAgent.run()`.** When an agent runs, it calls `build_context()` to gather its task-specific context — INCLUDING loading its workflow file (`agents/coding/workflow.md`, `agents/research/workflow.md`, etc.). The context is passed through to `build_agent_system_prompt()` and injected as a section. This is the fix backlogged in Session 33: the workflow files finally reach the model. (Depends on Phase 1 — the workflow files need to be co-located with the agent for `build_context()` to find them.)
 
-**Phase 3: Agent-initiated delegation.** Replace the `should_use_sub_agents()` keyword heuristic with agent-initiated delegation. The CodingAgent's workflow + system prompt includes the ability to say "I need research on X" → the framework spawns a ResearchAgent sub-task → results flow back → CodingAgent continues. This is the "agents can trigger other agents to work parallelly or hand over" the user described.
+**Phase 3: Agent-initiated delegation.** Replace the `should_use_sub_agents()` keyword heuristic with agent-initiated delegation. The CodingAgent's workflow + system prompt includes the ability to say "I need research on X" → the framework spawns a ResearchAgent sub-task → results flow back → CodingAgent continues. This is the "agents can trigger other agents to work parallelly or hand over" the user described. (Depends on Phase 1 — delegation needs the unified agent directory structure to spawn sub-agents by name.)
 
-**Phase 4: Task-type classifier.** Replace (or augment) the intent classifier with a task-type classifier. "Create hello world repo" → task_type=coding (not intent=SHELL). The task type selects the agent; the agent's workflow governs tool use. Intent classification can still exist as a signal the agent uses, but it's no longer the routing key.
+**Phase 4: Task-type classifier.** Replace (or augment) the intent classifier with a task-type classifier. "Create hello world repo" → task_type=coding (not intent=SHELL). The task type selects the agent; the agent's workflow governs tool use. Intent classification can still exist as a signal the agent uses, but it's no longer the routing key. (Depends on Phases 1-2 — the classifier needs real agents with real workflows to route to.)
 
 ### Consequences
 
-- **This is a multi-session architectural milestone.** Phases 1-4 span multiple sessions. Phase 1 (unify registries) is the foundation; Phase 2 (wire build_context) is the highest-leverage piece — it makes the workflow files actually reach the model. Phases 3-4 are the full agent-centric vision.
-- **The workflow files become load-bearing.** `coding.md`, `research.md`, `safety.md`, `general.md` — these are no longer documentation; they're the agent's instruction set. They must be well-written (constraint-style, not procedural — per ADR-7).
+- **This is a multi-session architectural milestone.** Phases 1-4 span multiple sessions. Phase 1 (agents as directories) is the structural foundation; Phase 2 (wire build_context) is the highest-leverage piece — it makes the workflow files actually reach the model. Phases 3-4 are the full agent-centric vision.
+- **Agents become real packages, not classes.** The shift from `coding_agent.py` (single file) to `agents/coding/` (directory) is structural — each agent co-locates its class, workflow, context builder, tools, stop condition, persona, and tests. This makes agents robust (extensible, testable, discoverable) instead of fragile (limited to what fits in one file).
+- **The workflow files become load-bearing AND co-located.** `agents/coding/workflow.md`, `agents/research/workflow.md`, etc. — these are no longer documentation in a separate `data/workflows/` directory; they're part of the agent package, loaded into the system prompt. They must be well-written (constraint-style, not procedural — per ADR-7).
 - **The intent classifier becomes a signal, not a router.** Intent (SHELL, FILE_WRITE, etc.) is still useful for the agent to know what kind of tool the user expects — but it's no longer the routing key. Task type (coding/research/browse/chat) is the router.
 - **Agent-to-agent delegation is the new capability.** This is the biggest unlock: a coding task that needs research no longer requires the user to break it into two messages, and no longer requires the system to re-classify (losing context). The CodingAgent just delegates.
+- **The registry becomes auto-discovering.** Instead of manually registering agents in `__init__.py`, the registry scans `agents/` for directories with an `agent.py` file. Adding a new agent = adding a new directory. This is the discoverability benefit of the directory structure.
 - **Per the flaw log: every phase needs real-model testing before shipping.** This ADR is proposed, not implemented. No code changes this session.
 
 ### Supersedes / builds on
