@@ -375,6 +375,62 @@ PROVIDER_KEY_ENVS: dict[str, str] = {
 }
 
 
+# ── Session 23: thinking/response separation helper ──────────────────────────
+# Models that support "thinking mode" (GLM, DeepSeek, Qwen, etc.) stream
+# their internal reasoning in delta.reasoning_content and the final answer
+# in delta.content. The previous code merged both into `text`:
+#     text = delta.get("content", "") or delta.get("reasoning_content", "")
+# That was a security/UX bug: the model's internal reasoning (which often
+# quotes the system prompt verbatim, including user PII like name/OS/memory
+# state) leaked into the chat response. Users could extract the entire
+# system prompt just by looking at a "Hi" response.
+#
+# The fix: route reasoning_content to StreamChunk.thinking (which the UI
+# renders in a collapsible "THINKING" panel) and content to StreamChunk.text
+# (the actual answer). Never merge them.
+
+
+def _extract_content_and_reasoning(delta: dict) -> tuple[str, str]:
+    """
+    Extract content (the answer) and reasoning_content (internal thinking)
+    from a streaming delta, keeping them SEPARATE.
+
+    Returns:
+        (content, reasoning) — both may be empty strings. The caller must
+        route content to StreamChunk.text and reasoning to StreamChunk.thinking.
+        Never merge them.
+
+    Some models (DeepSeek-v3, Qwen) wrap reasoning in <think>...</think>
+    tags inside content instead of using a separate reasoning_content field.
+    We detect and split that too — the <think> portion goes to reasoning,
+    the rest stays as content.
+    """
+    content = delta.get("content", "") or ""
+    reasoning = delta.get("reasoning_content", "") or ""
+
+    # Some models (DeepSeek-v3, Qwen) put reasoning in <think>...</think>
+    # tags inside content instead of a separate field. Split it out.
+    if "<think>" in content:
+        import re as _re
+
+        # Extract <think>...</think> blocks → reasoning
+        think_matches = _re.findall(r"<think>(.*?)</think>", content, _re.DOTALL)
+        if think_matches:
+            reasoning += "".join(think_matches)
+            # Remove the <think> blocks from content
+            content = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL)
+
+        # Handle unclosed <think> (streaming — tag opened but not yet closed)
+        # If there's an open <think> with no closing tag, everything after it
+        # is reasoning, not content.
+        if "<think>" in content and "</think>" not in content:
+            idx = content.find("<think>")
+            reasoning += content[idx + len("<think>") :]
+            content = content[:idx]
+
+    return content, reasoning
+
+
 class OpenAICompatAdapter(BaseAdapter):
     """Composable adapter for OpenAI-compatible APIs."""
 
@@ -734,15 +790,18 @@ class OpenAICompatAdapter(BaseAdapter):
                             if tc.get("function", {}).get("arguments"):
                                 tool_call_buffers[idx]["arguments"] += tc["function"]["arguments"]
 
-                    # Capture text content. Z.ai/GLM models stream reasoning
-                    # tokens in delta.reasoning_content (thinking mode) and
-                    # the final answer in delta.content. We must read both —
-                    # if we only read content, thinking-mode models yield
-                    # nothing because content stays empty during reasoning.
-                    text = delta.get("content", "") or delta.get("reasoning_content", "")
-                    if text:
-                        raw_content_parts.append(text)
-                        initial_text_chunks.append(StreamChunk(text=text, done=False))
+                    # Session 23: route reasoning_content to `thinking`, content
+                    # to `text`. Never merge them — merging leaks the model's
+                    # internal reasoning (which quotes the system prompt,
+                    # including user PII) into the chat response.
+                    _content, _reasoning = _extract_content_and_reasoning(delta)
+                    if _reasoning:
+                        initial_text_chunks.append(
+                            StreamChunk(text="", thinking=_reasoning, done=False)
+                        )
+                    if _content:
+                        raw_content_parts.append(_content)
+                        initial_text_chunks.append(StreamChunk(text=_content, done=False))
 
                     # Check finish_reason for tool calls — THIS signals completion
                     finish_reason = choice.get("finish_reason", "")
@@ -851,9 +910,14 @@ class OpenAICompatAdapter(BaseAdapter):
                                         tool_call_buffers[idx]["name"] = tc["function"]["name"]
                                     if tc.get("function", {}).get("arguments"):
                                         tool_call_buffers[idx]["arguments"] += tc["function"]["arguments"]
-                            text = delta.get("content", "") or delta.get("reasoning_content", "")
-                            if text:
-                                raw_content_parts.append(text)
+                            # Session 23: separate reasoning from content
+                            _content, _reasoning = _extract_content_and_reasoning(delta)
+                            if _reasoning:
+                                # Reasoning goes to a separate buffer — not
+                                # raw_content_parts (which becomes the response text)
+                                pass  # reasoning is streamed via thinking field elsewhere
+                            if _content:
+                                raw_content_parts.append(_content)
                             finish_reason = choice.get("finish_reason", "")
                             if finish_reason == "tool_calls":
                                 # Tool call complete — stop reading
@@ -1025,11 +1089,15 @@ class OpenAICompatAdapter(BaseAdapter):
                                 obj = json.loads(data)
                                 _choice = obj.get("choices", [{}])[0]
                                 delta = _choice.get("delta", {})
-                                text = delta.get("content", "") or delta.get("reasoning_content", "")
+                                # Session 23: separate reasoning from content
+                                _content, _reasoning = _extract_content_and_reasoning(delta)
                                 # Bug C fix: explicitly handle empty content deltas.
                                 # Some providers send delta.content="" as keepalives.
                                 # These are not errors — just skip and continue.
-                                if text:
+                                if _reasoning:
+                                    yield StreamChunk(text="", thinking=_reasoning, done=False)
+                                if _content:
+                                    text = _content
                                     # v8.2: Filter MiniMax tool_call XML from streaming text.
                                     filtered_text = _mm_full_pattern.sub("", text)
                                     filtered_text = _mm_prefix_pattern.sub("", filtered_text)
@@ -1186,10 +1254,12 @@ class OpenAICompatAdapter(BaseAdapter):
                         obj = json.loads(data)
                         choice = obj.get("choices", [{}])[0]
                         delta = choice.get("delta", {})
-                        # Read both content and reasoning_content (GLM thinking mode)
-                        text = delta.get("content", "") or delta.get("reasoning_content", "")
-                        if text:
-                            yield StreamChunk(text=text, done=False)
+                        # Session 23: separate reasoning from content
+                        _content, _reasoning = _extract_content_and_reasoning(delta)
+                        if _reasoning:
+                            yield StreamChunk(text="", thinking=_reasoning, done=False)
+                        if _content:
+                            yield StreamChunk(text=_content, done=False)
 
                         # Check finish_reason for safety/content filter blocks.
                         # Gemini returns finish_reason="SAFETY" when its content
