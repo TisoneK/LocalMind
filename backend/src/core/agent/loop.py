@@ -3033,6 +3033,22 @@ class AgentLoop:
             "what I sent it, and what it returned:",
             "",
         ]
+        # Session 32: if the iteration limit was hit, say so explicitly.
+        # The previous fallback guessed "overload" — that was a wrong
+        # diagnosis. The real cause was almost always the iteration cap
+        # being too low (now fixed — raised from 3 to 8). When hit_limit
+        # is True, the user needs to know: the model didn't fail, it just
+        # ran out of iterations before finishing the task.
+        if getattr(trace, "hit_limit", False):
+            lines.insert(0, (
+                f"I hit my iteration limit ({trace.iterations_used} iterations) "
+                f"before completing the task. This is NOT a model overload or "
+                f"context-overflow issue — I simply ran out of steps. Here's "
+                f"what I managed to do before the cap:"
+            ))
+            # Remove the generic "couldn't summarize" line we just added —
+            # it's misleading when the real cause is the iteration cap.
+            lines = [lines[0], ""] + lines[3:]
         for i, step in enumerate(tool_calls, 1):
             status = "FAILED" if step.tool_failed else "ok"
             _input = (step.tool_input or "").strip()
@@ -3064,14 +3080,29 @@ class AgentLoop:
             lines.append(observation_log[:1500])
 
         lines.append("")
-        lines.append(
-            "What to try next:\n"
-            "  • Check the outputs above — if a tool returned something\n"
-            "    unexpected, that's likely the real cause (not 'overload').\n"
-            "  • Try one step at a time to isolate which step breaks.\n"
-            "  • Or switch to a larger model if you want me to retry the\n"
-            "    synthesis with more reasoning capacity."
-        )
+        # Session 32: tailor the "what to try" advice to the actual cause.
+        # If hit_limit is True, the advice is "tell me to continue" or
+        # "raise the iteration limit" — NOT "switch to a larger model"
+        # (the model didn't fail, it just ran out of steps).
+        if getattr(trace, "hit_limit", False):
+            lines.append(
+                "What to try next:\n"
+                "  • Tell me to \"continue\" — I'll pick up where I left off\n"
+                "    and finish the remaining steps.\n"
+                "  • Or ask me to do one step at a time so each step gets\n"
+                "    its own iteration budget.\n"
+                "  • The iteration limit is configurable via the\n"
+                "    LOCALMIND_MAX_ITERATIONS env var (default: 8)."
+            )
+        else:
+            lines.append(
+                "What to try next:\n"
+                "  • Check the outputs above — if a tool returned something\n"
+                "    unexpected, that's likely the real cause (not 'overload').\n"
+                "  • Try one step at a time to isolate which step breaks.\n"
+                "  • Or switch to a larger model if you want me to retry the\n"
+                "    synthesis with more reasoning capacity."
+            )
         return "\n".join(lines)
 
     # ------------------------------------------------------------------

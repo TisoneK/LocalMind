@@ -2477,32 +2477,59 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     # is not plausible. The real cause is more likely a tool
                     # returning broken data that chokes the synthesizer.
                     #
-                    # This is the engine's LAST-RESORT fallback — it fires
-                    # when the agent loop itself yielded zero text chunks
-                    # (meaning the loop's own evidence-based fallbacks also
-                    # didn't fire, which shouldn't happen but we guard
-                    # against it anyway). Be honest: we don't know what went
-                    # wrong, and suggest the user check the tool outputs in
-                    # the terminal panel + try one step at a time to isolate.
+                    # Session 32: this engine fallback should rarely fire now
+                    # — the loop's own _summarize_trace_for_user + hit_limit-
+                    # aware messaging covers the common cases. But if we get
+                    # here, check the obs events for agent_loop_done with
+                    # hit_limit=True — that's the most common cause and
+                    # deserves a specific message.
                     _intent_label = _TOOL_LABELS.get(
                         effective_intent, effective_intent.value
                     )
-                    _agent_response = (
-                        f"I started the {_intent_label} request but "
-                        f"something went wrong and I couldn't produce a "
-                        f"response. I don't want to guess why — the honest "
-                        f"answer is I don't know yet.\n\n"
-                        f"What to try:\n"
-                        f"  • Check the Terminal panel (bottom of the screen) —\n"
-                        f"    it shows the actual command + output for each\n"
-                        f"    tool I ran. If a tool returned something\n"
-                        f"    unexpected, that's likely the real cause.\n"
-                        f"  • Try one step at a time (e.g. just 'create the\n"
-                        f"    directory') to isolate which step breaks.\n"
-                        f"  • Or re-run the request — if it works on retry,\n"
-                        f"    it was transient; if it fails the same way,\n"
-                        f"    it's a real bug worth reporting."
-                    )
+                    # Check if the loop hit its iteration limit — that's the
+                    # most common cause and deserves an honest, specific message
+                    # (not "overload" or "I don't know").
+                    _hit_limit = False
+                    _iterations_used = 0
+                    try:
+                        for _evt in _obs.drain():
+                            if _evt.type == "agent_loop_done" and _evt.data.get("hit_limit"):
+                                _hit_limit = True
+                                _iterations_used = _evt.data.get("iterations", 0)
+                                break
+                    except Exception:
+                        pass
+
+                    if _hit_limit:
+                        _agent_response = (
+                            f"I hit my iteration limit ({_iterations_used} iterations) "
+                            f"before completing the {_intent_label} task. This is NOT a "
+                            f"model overload or context-overflow issue — I simply ran out "
+                            f"of steps before finishing.\n\n"
+                            f"What to try:\n"
+                            f"  • Tell me to \"continue\" — I'll pick up where I left off.\n"
+                            f"  • Or ask me to do one step at a time so each step gets\n"
+                            f"    its own iteration budget.\n"
+                            f"  • The iteration limit is configurable via the\n"
+                            f"    LOCALMIND_MAX_ITERATIONS env var (default: 8)."
+                        )
+                    else:
+                        _agent_response = (
+                            f"I started the {_intent_label} request but "
+                            f"something went wrong and I couldn't produce a "
+                            f"response. I don't want to guess why — the honest "
+                            f"answer is I don't know yet.\n\n"
+                            f"What to try:\n"
+                            f"  • Check the Terminal panel (bottom of the screen) —\n"
+                            f"    it shows the actual command + output for each\n"
+                            f"    tool I ran. If a tool returned something\n"
+                            f"    unexpected, that's likely the real cause.\n"
+                            f"  • Try one step at a time (e.g. just 'create the\n"
+                            f"    directory') to isolate which step breaks.\n"
+                            f"  • Or re-run the request — if it works on retry,\n"
+                            f"    it was transient; if it fails the same way,\n"
+                            f"    it's a real bug worth reporting."
+                        )
                 full_response_chunks = [_agent_response]
                 yield StreamChunk(text=_agent_response, done=False)
                 logger.warning(

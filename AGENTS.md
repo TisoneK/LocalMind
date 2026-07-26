@@ -127,3 +127,41 @@ Regression tests: `tests/adapters/test_zen_deepseek_fixes.py`. The
 real-model test scripts that found these bugs are in
 `/home/z/my-project/scripts/` (not committed — they contain API key
 references in comments, but no actual keys).
+
+## Iteration limit + check-before-acting contract (added 2026-07-27, Session 32)
+
+Two contracts from Session 32, both critical — removing either
+reintroduces the "Tools execution failure" bug:
+
+1. **Iteration limit must be >= 8 and configurable.** The Session 31 cap
+   of 3 was too low — the model did 3 reconnaissance calls (checking
+   state before acting, exactly what we want) and hit the cap before the
+   actual work. `MAX_ITERATIONS` defaults to 8 (configurable via
+   `LOCALMIND_MAX_ITERATIONS` env var); `MAX_WALL_CLOCK_SECS` defaults to
+   180s (configurable via `LOCALMIND_MAX_WALL_CLOCK_SECS`). Do NOT lower
+   these defaults below 8 / 180s without a concrete reason — multi-step
+   tasks (recon + work + verify) need the room. The wall-clock cap is the
+   real safety net against a spinning model, not the iteration cap.
+
+2. **Fallback messages must say "iteration limit reached" when
+   `trace.hit_limit` is True.** Sessions 21-31 kept guessing "overload" /
+   "context overflow" / "tool output too large" when the actual cause was
+   the iteration cap. The misdiagnosis was worse than no diagnosis — it
+   sent the user down wrong paths. When `hit_limit` is True,
+   `_summarize_trace_for_user()` and the engine fallback MUST say
+   "iteration limit reached" explicitly and suggest "tell me to continue"
+   (NOT "switch to a larger model" — the model didn't fail, it ran out of
+   steps). If you add a new fallback path, check `trace.hit_limit` first.
+
+3. **"Check before acting" is a universal workflow constraint.**
+   `backend/data/workflows/safety.md` defines the rule: every tool
+   invocation that creates, writes, modifies, or deletes something MUST
+   first check whether the target already exists or has content, and
+   adapt the plan based on what's found — never act on an assumed state.
+   This is injected into the agent system prompt for ALL agent intents via
+   `build_agent_system_prompt()`. If you add a new tool, the safety
+   workflow already covers it (it's universal). If you remove the
+   injection, the model will go back to running `mkdir` before checking
+   if the dir exists, and barreling into non-empty unrelated directories.
+
+Regression tests: `tests/e2e/test_iteration_limit_and_safety.py`.

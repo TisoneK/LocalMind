@@ -7,27 +7,53 @@ v3.0: Updated for Dynamic Capability Orchestration architecture.
 - Capability-aware constants only
 """
 
+import os
+
 from core.models import Intent
 
 # ── Iteration budget ──────────────────────────────────────────────────────────
-# Session 31: lowered from 5 to 3. With the free-tier model taking ~30-40s
-# per call, 5 iterations × 40s = 200s — way over the 90s wall-clock cap.
-# 3 iterations is enough for: plan → execute → synthesize. The 4th and 5th
-# iterations were rarely productive on small models anyway — they just
-# repeated the same tool calls. The _force_final_answer step runs AFTER
-# the loop, so it needs room in the wall-clock budget.
-MAX_ITERATIONS: int = 3
+# Session 32 (raised from 3): the previous cap of 3 was too low for multi-step
+# tasks. The user's "Create hello world repo" scenario needed 6 steps
+# (mkdir-check, dir-check, git-version-check, git-init, file-write, git-commit)
+# but the model hit the cap at step 3 (during reconnaissance) and never reached
+# the actual work. The model was doing exactly what we want — checking state
+# before acting — and the cap punished it for being thorough.
+#
+# New default of 8 gives room for: reconnaissance (2-3 calls) + actual work
+# (3-5 calls) + verification (1-2 calls). The wall-clock cap is the real
+# safety net — it prevents a small model from spinning forever on a task it
+# can't solve, even with 8 iterations available.
+#
+# Configurable via LOCALMIND_MAX_ITERATIONS env var (must be >= 1).
+# config.py also has localmind_agent_max_iterations (default 6) but that
+# value was never read — this env var is the actual source of truth.
+_MAX_ITERATIONS_DEFAULT = 8
+try:
+    _env_max_iter = int(os.getenv("LOCALMIND_MAX_ITERATIONS", str(_MAX_ITERATIONS_DEFAULT)))
+    MAX_ITERATIONS: int = max(1, _env_max_iter)
+except (ValueError, TypeError):
+    MAX_ITERATIONS: int = _MAX_ITERATIONS_DEFAULT
+
 PLAN_ITERATION_COST: int = 1
 CLARIFICATION_THRESHOLD: float = 0.45
 
 # ADR-5: hard wall-clock cap. The loop terminates on "done, blocked, OR
 # limit" — this is the time-based limit, preventing a small model from
 # spinning forever on a task it can't solve.
-# Session 31: lowered from 300s to 90s. The adapter's own HTTP timeout is
-# 120s — if the wall-clock cap is 300s, a single slow model call can hang
-# the UI for 2 full minutes before any timeout fires. 90s means at most
-# one slow call + one retry before the user sees a result or error.
-MAX_WALL_CLOCK_SECS: float = 90.0
+# Session 32 (raised from 90s to 180s): the previous 90s cap was too
+# aggressive — with MAX_ITERATIONS=8 and free-tier models taking ~20-30s
+# per call, 90s only allowed ~3-4 iterations before the cap fired. 180s
+# allows 6-8 iterations, which is enough for the recon + work + verify
+# pattern. The per-call timeout (PER_CALL_TIMEOUT_SECS) is the real
+# protection against a single hanging call.
+#
+# Configurable via LOCALMIND_MAX_WALL_CLOCK_SECS env var (must be >= 30).
+_WALL_CLOCK_DEFAULT = 180.0
+try:
+    _env_wall = float(os.getenv("LOCALMIND_MAX_WALL_CLOCK_SECS", str(_WALL_CLOCK_DEFAULT)))
+    MAX_WALL_CLOCK_SECS: float = max(30.0, _env_wall)
+except (ValueError, TypeError):
+    MAX_WALL_CLOCK_SECS: float = _WALL_CLOCK_DEFAULT
 
 # Session 31: per-iteration timeout for each model call (chat_with_tools).
 # This is SEPARATE from the wall-clock cap — it limits a SINGLE model call,

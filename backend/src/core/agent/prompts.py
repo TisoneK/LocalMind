@@ -576,6 +576,46 @@ Do NOT re-plan or re-think — just call the tools as described in the plan.
     if skill_fragment:
         skill_section = f"\n## Intent-specific expertise\n{skill_fragment}\n"
 
+    # Session 32: inject the universal "check before acting" safety workflow.
+    # This is a constraint that applies to EVERY tool that creates, writes,
+    # modifies, or deletes — not a per-tool fix. The user's "Create hello
+    # world repo" scenario revealed the model was running `mkdir` BEFORE
+    # checking if the directory existed, and barreling forward into a
+    # non-empty unrelated directory instead of scoping into a subdirectory.
+    # This workflow makes "check state before acting" a universal rule.
+    safety_section = ""
+    from pathlib import Path as _Path
+
+    _safety_path = _Path(__file__).resolve().parent.parent.parent.parent / "data" / "workflows" / "safety.md"
+    try:
+        if _safety_path.exists():
+            _safety_content = _safety_path.read_text()
+            # Extract just the "The universal rule" + "How it applies per tool"
+            # sections to keep the prompt focused (skip the header, "what done
+            # looks like", "what you must NOT do", "why this exists", "learning
+            # step" — those are for humans reading the file, not for the model
+            # every single turn).
+            _lines = _safety_content.splitlines()
+            _extract_lines = []
+            _in_section = False
+            for _line in _lines:
+                if _line.startswith("## The universal rule"):
+                    _in_section = True
+                elif _line.startswith("## What you must NOT do"):
+                    _in_section = True
+                elif _line.startswith("## Why this exists"):
+                    _in_section = False  # stop before the history section
+                if _in_section:
+                    _extract_lines.append(_line)
+            if _extract_lines:
+                safety_section = (
+                    "\n## SAFETY: Check before acting (universal rule)\n"
+                    + "\n".join(_extract_lines).strip()
+                    + "\n"
+                )
+    except Exception:
+        pass  # non-fatal — the constraint is best-effort
+
     # ── Expert persona framing ──────────────────────────────────────────
     # P9: Deepened personas with cognitive strategies, failure modes,
     # and self-correction triggers. Each persona now includes:
@@ -801,7 +841,7 @@ You may deviate ONLY if a tool call fails and you need an alternative approach.
 
 Available tools:
 {agent_tool_list}
-{intent_ctx}{memory_section}{skill_section}{persona_section}{shell_guidance}{plan_section}{orchestrator_section}
+{intent_ctx}{memory_section}{skill_section}{safety_section}{persona_section}{shell_guidance}{plan_section}{orchestrator_section}
 EXECUTION AGENT IDENTITY:
 You are an Execution Agent. This means:
 - Your ONLY output is tool calls and final answers based on tool results.

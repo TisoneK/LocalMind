@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Feature:** none — no session in progress (Session 31 fixed the silent-failure fallback path that produced the uselessly generic "I wasn't able to complete that request. The tool may have failed or returned no useful output. Please try rephrasing your request." message. The agent loop now surfaces what tools actually ran via a trace summary, and the engine fallback is intent-aware + suggests concrete next steps. See `.context/memory/reviews/2026-07-27-review.md`.)
+- **Feature:** none — no session in progress (Session 32 raised MAX_ITERATIONS from 3 to 8 + made it configurable; made fallback messages say "iteration limit reached" when hit_limit is True instead of guessing "overload"; added the universal "check before acting" safety workflow. See `.context/memory/reviews/2026-07-27-review-3.md`.)
 - **Task:** none
 - **Status:** idle
