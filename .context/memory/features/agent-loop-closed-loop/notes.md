@@ -542,3 +542,54 @@ settings to `minimax-m2.5-free`.
 11.5s is a production-breaking UX bug. The agents were wired in but
 the pipeline itself was over-engineered for trivial inputs. This fix
 addresses the root cause.
+
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 22)
+
+Fixed the chat title pollution bug the user reported. The sidebar was
+filling up with "Hi" / "Hello" / "Quick hello" because:
+
+1. Stage 1 (placeholder): `generate_title_smart("Hi")` returned "Hi" (the
+   greeting text, capitalized) — not "New Chat"
+2. Stage 2 (LLM refine): `refine_title_async()` fired on every first
+   message, including "Hi" — wasting an LLM call that either failed
+   (model error → silent fallback to "Hi") or produced a bad title
+
+**Root cause:** title-gen was turn-count-gated (fires on `is_first`),
+not intent-gated. A greeting on turn 1 has no intent to summarize.
+
+**Fix (per the user's design):** title-gen is now intent-gated using
+the `is_trivial_input()` detector from Session 21.
+
+1. `generate_title_smart()` now returns "New Chat" for trivial inputs
+   (greetings/thanks/farewells/yes-no/acknowledgments), NOT the greeting
+   text. The sidebar shows "New Chat" until a substantive message arrives.
+
+2. New `should_refine_title(message, current_title)` function — returns
+   True only when:
+   - The message is non-trivial (has real intent to summarize)
+   - AND the title hasn't already been refined (current_title is None,
+     "New Chat", or "Error — try again")
+   This is the intent-gated trigger the user requested.
+
+3. `refine_title_async()` now checks `is_trivial_input()` first and
+   returns immediately for greetings — no LLM call wasted on "Hi".
+
+4. `chat.py` Stage 2 now calls `should_refine_title(message, current_title)`
+   instead of just checking `is_first`. Title-gen fires on the first
+   SUBSTANTIVE message, regardless of turn number. If message 1 is "Hi",
+   title-gen skips. If message 2 is "How do I fix a Python bug?",
+   title-gen fires on that.
+
+**Behavior change:**
+- "Hi" → placeholder "New Chat", no LLM call → title stays "New Chat"
+- "Hi" then "How do I fix a Python bug?" → title-gen fires on message 2,
+  produces a real title like "Python debug help"
+- "How do I fix a Python bug?" as first message → title-gen fires
+  immediately (substantive first message)
+- Already-refined titles are NOT overwritten (no re-titling on drift —
+  per the user's question, the title locks in after first generation)
+
+21 new tests verify the intent-gating: trivial inputs return "New Chat"
+placeholder, trivial inputs don't trigger refine, substantive inputs do
+trigger refine, already-refined titles don't get overwritten.

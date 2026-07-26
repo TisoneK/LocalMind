@@ -250,3 +250,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** (1) Minimax model issue is a user-config typo (`minimax-M2.1-free` → should be `minimax-m2.5-free`). Not a code bug. (2) Phase 2 loop extraction + context compaction still deferred. (3) The trivial short-circuit doesn't record the assistant response to history (the response is streamed but not stored) — acceptable for trivial inputs, but a future session could improve this.
 - **Report:** none.
 - **Notes:** The user was right to call this out — "This is messed up!!!" was a fair response to a one-word greeting burning 11.5s. I had declared the feature "genuinely complete" in Session 20, but a production-breaking UX bug was still live. The agents were wired in but the pipeline itself was over-engineered for trivial inputs. This fix addresses the root cause: deterministic detection, zero LLM calls for classification, direct streaming. The detector is intentionally conservative — better to fall through to the full pipeline than to short-circuit a real question. Token-strip dance applied.
+
+---
+## 2026-07-26 — Session 22
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai — 17th session not re-confirmed) | **Platform:** Z.ai cloud sandbox | **Role:** engineer
+- **Feature:** `agent-loop-closed-loop` (fixed chat title pollution — intent-gated title-gen)
+- **Task:** User reported the sidebar was filling up with "Hi" / "Hello" / "Quick hello" — title-gen was firing on every first message regardless of content. Fix: gate title-gen on intent (via is_trivial_input from Session 21), not turn count.
+- **Commits:** 2 — `fix(title): intent-gated title generation — greetings wait for substantive message` + this memory commit.
+- **Outcome:** done — (1) `generate_title_smart()` returns "New Chat" for trivial inputs (not the greeting text). (2) New `should_refine_title(message, current_title)` function — returns True only when message is non-trivial AND title isn't already refined. (3) `refine_title_async()` checks is_trivial_input() first and returns immediately for greetings — no LLM call wasted. (4) `chat.py` Stage 2 calls `should_refine_title()` instead of just `is_first` — title-gen fires on first SUBSTANTIVE message regardless of turn number. 21 new tests verify the intent-gating. Baseline held: 345 tests pass, 0 real ruff bugs.
+- **Open items:** (1) Title locks in after first generation (no re-titling on topic drift) — per user's design decision. (2) Phase 2 loop extraction + context compaction still deferred.
+- **Report:** none.
+- **Notes:** The user's design was exactly right: title-gen should fire when there's real intent to summarize, not on a fixed turn count. The is_trivial_input() detector from Session 21 was the perfect signal — no new classification needed, just piggyback on the existing detector. The fix is conservative: trivial inputs get "New Chat" placeholder + no LLM call; substantive inputs get the normal title-gen; already-refined titles are never overwritten. This prevents both the "Hi" pollution AND the wasted LLM calls on greetings. Token-strip dance applied.

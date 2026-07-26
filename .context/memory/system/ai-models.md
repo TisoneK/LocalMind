@@ -73,4 +73,8 @@ Updated registry row:
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 20 |
+- **Super Z / GLM-5.2:** Session 22 — fixed chat title pollution. Titles were firing on every first message regardless of content ("Hi" → "Hi" title). Built intent-gated title-gen: generate_title_smart() returns "New Chat" for trivial inputs, should_refine_title() gates the LLM call on is_trivial_input(), refine_title_async() skips trivial inputs entirely. chat.py Stage 2 now fires on first SUBSTANTIVE message, not is_first. 21 new tests. Baseline held: 345 tests pass, 0 real ruff bugs. The user's design insight was correct: title-gen should be intent-gated, not turn-count-gated — and the is_trivial_input() detector from Session 21 was the perfect signal, no new classification needed. (2026-07-26)
+
+Updated registry row:
+
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 21 |
