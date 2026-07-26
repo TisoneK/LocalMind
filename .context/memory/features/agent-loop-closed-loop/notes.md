@@ -411,3 +411,18 @@ not introduced by this session — just surfaced by the assertion.
   (UI picker vs intent-based auto-selection)
 - Phase 2 loop body extraction — not blocking
 - Context compaction step (B-2026-07-26-2) — deferred
+
+
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 18)
+
+Completed the 4-agent registry. Built ResearchAgent (web_search +
+web_fetch, 10 iters / 300s) and DirectAgent (tools_enabled=False, empty
+toolset, 1 iter / 60s). Same thin-subclass pattern as browser + coding.
+23 new tests verify all 4 agents, their scoped toolsets are pairwise
+disjoint (ADR-6 value), and DirectAgent is the only agent with
+tools_enabled=False. Registry now complete: browser, coding, research,
+direct. This is the ADR-6 organizational structure fully in place —
+4 specialized agents sharing BaseAgent, each with its own scoped
+toolset. The actual routing (which agent gets selected for a given
+user message) is Session 19's work.

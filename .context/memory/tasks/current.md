@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Feature:** none — no session in progress (Session 17 built the CodingAgent 2026-07-26; feature `agent-loop-closed-loop` remains in-progress in its own manifest at `.context/memory/features/agent-loop-closed-loop/manifest.md`. Next session should build `research_agent.py` + `direct_agent.py` — same pattern, should be quick. Registry now has 2 agents: browser + coding.)
+- **Feature:** none — no session in progress (Session 18 completed the 4-agent registry: browser, coding, research, direct. Next session should build the intent→agent selection function to wire agents into the engine.)
 - **Task:** none
 - **Status:** idle

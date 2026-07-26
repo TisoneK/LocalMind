@@ -57,4 +57,8 @@ Observations above attributed to "GLM-4.5" were produced by GLM-5.2.
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 16 |
+- **Super Z / GLM-5.2:** Session 18 — completed the 4-agent registry (ResearchAgent + DirectAgent). 23 new tests verify all 4 agents, pairwise-disjoint toolsets, DirectAgent is the only agent with tools_enabled=False. Registry now complete: browser, coding, research, direct. The ADR-6 organizational structure is fully in place. Baseline held: 281 tests pass, 0 real ruff bugs. (2026-07-26)
+
+Updated registry row:
+
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 17 |

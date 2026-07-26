@@ -35,26 +35,16 @@ B-2026-07-26-1 (5-step loop + iteration cap + workspace-state injection
   `feat(workspace):` / `feat(context):` / `feat(agents):`)
 - **Status:** in-progress
 - **Current state:** ADR-5 captured Session 12. ADR-6 captured Session 14.
-  Feature-scoped memory directory created Session 13. **Session 15**
-  created the `backend/src/agents/` package (`base_agent.py`, `registry.py`,
-  `browser_agent.py`, `browser/` subpackage) + 19 tests. Non-breaking
-  Phase 1: `BaseAgent.run()` delegates to existing `AgentLoop`. **Session
-  16** delivered the ADR-5 differentiator: built
-  `backend/src/core/workspace_state.py` (the feedback service) + 25 tests,
-  wired into `AgentLoop.run()` at step 1. Also added the ADR-5 hard
-  wall-clock cap (`MAX_WALL_CLOCK_SECS = 300.0`) enforced in the iteration
-  loop. **Session 17** built `coding_agent.py` + `coding/` subpackage
-  (the second concrete agent — the centerpiece of the CODING HARNESS
-  diagram). Scoped to 5 tools: shell, file_task, file_write, edit_file,
-  code_exec. Excludes web/browser/memory/sysinfo. 20 max iterations /
-  600s wall clock (coding tasks need more headroom than browser tasks).
-  17 new tests. Discovered a pre-existing naming inconsistency:
-  `Intent.FILE_EDIT.value` is `"file_edit"` but `AGENT_ALLOWED_TOOLS`
-  uses `"edit_file"` (the tool module name) — documented in
-  `coding/tools.py` with a NOTE comment. Registry now has 2 agents:
-  browser + coding. Baseline held: 258 tests pass (197 baseline + 19
-  agents + 25 workspace_state + 17 coding_agent), 0 real ruff bugs (112
-  E501 pre-existing). Last touched: Session 17 (2026-07-26).
+  Sessions 15-17 built the first 2 agents (browser, coding) + workspace_state
+  feedback service (ADR-5 differentiator, live). **Session 18** completed the
+  4-agent registry: built `research_agent.py` (web_search + web_fetch scoped,
+  10 iters / 300s) and `direct_agent.py` (tools_enabled=False, empty toolset,
+  1 iter / 60s — what Direct Mode becomes per ADR-6). 23 new tests verify all
+  4 agents + pairwise-disjoint toolsets. Registry now has all 4 agents:
+  browser, coding, research, direct. Baseline held: 281 tests pass (197
+  baseline + 19 agents + 25 workspace_state + 17 coding_agent + 23
+  research/direct), 0 real ruff bugs (112 E501 pre-existing). Last touched:
+  Session 18 (2026-07-26).
 - **Next steps:** Next implementation session should: (1) build
   `research_agent.py` (web_search + web_fetch scoped tools, enough-sources
   is_done) and `direct_agent.py` (tools_enabled=False, steps 1-2 only).
