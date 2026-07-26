@@ -200,3 +200,120 @@ The session stayed scoped to "promote browser_agent to a full agent as
 the smallest-risk first concrete step" per the manifest's next-steps.
 Didn't try to do too much — the loop body extraction is a separate
 session's work.
+
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 16)
+
+Delivered the ADR-5 differentiator: the workspace-state feedback loop.
+This is the "observations flow back into context every turn" line from
+the CODING HARNESS diagram — the literal difference between a harness
+and a bare API.
+
+**Key decision: deviated from the manifest's "Phase 2 first" plan.**
+The Session 15 manifest said `coding_agent.py + workspace_state.py`
+"require Phase 2 loop extraction first." Session 16 reconsidered that
+rationale and concluded it's wrong for `workspace_state.py` specifically:
+it's a standalone service (`snapshot() -> dict`) that can be wired into
+the existing `AgentLoop.run()` with a small surgical change, without
+extracting the loop body. This delivers the ADR-5 differentiator
+without the risky 2926-line refactor. Phase 2 (full loop extraction)
+remains a future session's work but isn't blocking. The manifest's
+"Next steps" was corrected to reflect this.
+
+**What landed:**
+
+1. **`backend/src/core/workspace_state.py`** — the feedback service.
+   - `WorkspaceSnapshot` dataclass: git_available, git_status,
+     git_diff_stat, git_branch, git_head, last_build_result, open_files,
+     timestamp. `is_clean()` helper.
+   - `snapshot(cwd)` — takes a point-in-time snapshot. Never raises
+     (git unavailable → git_available=False, all git_* fields empty).
+     5s timeout on all git subprocess calls.
+   - `format_snapshot(snap)` — formats as a string for context
+     injection. Concise (gemma3:1b-class hardware — every token
+     expensive). Caps git status at 50 lines, diff stat at 30 lines,
+     build output tail at 500 chars.
+   - `mark_turn_start(cwd)` — records current HEAD as the baseline for
+     the next snapshot's diff. Called at the beginning of each agent
+     turn.
+   - `record_build_result(result, command, output_tail, exit_code)` —
+     records the last test/build/typecheck result. Persists across
+     snapshots within a session.
+   - `reset()` — clears per-session state (for tests).
+   - Git helpers: `_git_rev_parse`, `_git_branch`, `_git_status_short`,
+     `_git_diff_stat` — all synchronous, all timeout-guarded, all
+     return None on failure.
+
+2. **25 tests** in `tests/core/test_workspace_state.py`: WorkspaceSnapshot
+   defaults + is_clean variants, snapshot() on non-git dir + nonexistent
+   dir + clean repo + dirty repo + diff stat + diff since
+   mark_turn_start, mark_turn_start() in git repo + non-git dir,
+   record_build_result() stores + caps output + persists across
+   snapshots, format_snapshot() empty + branch/head + clean + dirty +
+   build result + caps status lines, reset() clears build result +
+   turn head, git helper edge cases (timeout + git not on PATH).
+
+3. **Wired into `AgentLoop.run()`** — small surgical change (3 edits):
+   - Added `mark_turn_start()` + `snapshot()` + `format_snapshot()` at
+     step 1 (assemble prompt), guarded by `WORKSPACE_STATE_ENABLED`
+     flag and a try/except (workspace_state must never break the loop).
+   - Appended `workspace_context` to the system prompt after
+     `build_agent_system_prompt()` builds it.
+   - Added `_loop_start_time = time.monotonic()` at the top of `run()`
+     and a wall-clock cap check at the top of the iteration loop:
+     `if _elapsed > MAX_WALL_CLOCK_SECS: break` (with obs emit + log
+     warning).
+
+4. **`MAX_WALL_CLOCK_SECS = 300.0`** + **`WORKSPACE_STATE_ENABLED = True`**
+   added to `agent/constants.py`. The wall-clock cap is the ADR-5 "OR
+   limit" — prevents a small model from spinning forever. 300s = 5 min.
+
+**Design decisions:**
+
+1. **Standalone module, not part of BaseAgent.** `workspace_state.py`
+   lives in `core/` not `agents/`. It's a service the agent loop
+   consumes, not part of the agent abstraction. This keeps it usable
+   by the existing `AgentLoop` (Phase 1) AND by `BaseAgent._run_loop()`
+   (Phase 2) without restructuring.
+
+2. **Never raises.** `snapshot()` catches all git failures (timeout,
+     FileNotFoundError, OSError) and returns `git_available=False`. The
+   agent loop's try/except is a second safety net. Workspace state is
+   observability — it must never break the primary code path.
+
+3. **Per-turn diff baseline.** `mark_turn_start()` records the HEAD at
+   the beginning of each turn. The next snapshot diffs against it,
+   showing only what changed during this turn. Without
+   `mark_turn_start()`, snapshot reports the full unstaged diff — still
+   useful, just less precise.
+
+4. **Wall-clock cap breaks the loop, doesn't raise.** When the cap is
+   hit, the loop `break`s and falls through to the existing "force
+   final answer" path (which already handles the max-iterations case).
+   No new error path — just a new termination condition.
+
+5. **`WORKSPACE_STATE_ENABLED` flag.** Defaults True but can be
+   disabled via constants.py if the context bloat becomes a problem
+   on small models. The flag is checked in the loop, not in
+   workspace_state itself — the service is always available, the loop
+   decides whether to use it.
+
+**What didn't land (deferred):**
+
+- Intent router wiring (`model_router.py` → `agents.registry.get_agent()`)
+  — next session's smallest step
+- `coding_agent.py`, `research_agent.py`, `direct_agent.py` subclasses
+- Phase 2 loop body extraction (`BaseAgent._run_loop()`) — not blocking
+- Context compaction step (B-2026-07-26-2) — deferred
+- Open-file tracking (frontend would need to report open files to the
+  backend) — `open_files` field exists in WorkspaceSnapshot but is
+  always empty for now
+
+**Test failures during development:** 2 of the initial 25 tests
+failed. (1) `test_snapshot_diff_since_mark_turn_start` — passed `&&`
+as separate args to `git add` instead of using `shell=True`; fixed by
+using a shell string. (2) `test_snapshot_includes_diff_stat` — wrote
+a new untracked file, but `git diff --stat` doesn't show untracked
+files (only tracked-but-modified); fixed by modifying the existing
+tracked README.md instead. Both were test bugs, not module bugs — the
+module behaved correctly.
