@@ -310,3 +310,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** (1) The e2e tests cover the boundary class of bugs (session transitions, adapter contracts) that unit tests miss. A future session could extend them to cover reasoning-model output separation (Bug 2 from Session 23) and tool-failure paths (Bug 2 from Session 25) with real model simulations. (2) Phase 2 loop extraction + context compaction still deferred.
 - **Report:** none.
 - **Notes:** The user's framing was exactly right: "the recurring shape of nearly every bug found today is silent failure at a boundary — between sessions, between tools and generation, between reasoning and display, between adapters and unsupported params." The audit found 2 real boundary bugs (session-deletion leak + adapter kwargs) plus 4 acceptable fallbacks. The e2e tests are the lasting value — they simulate real usage sequences, not just "does function X return Y." Unit tests with clean inputs gave false confidence; the bugs were all at boundaries. Token-strip dance applied.
+
+---
+## 2026-07-27 — Session 27
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai — 22nd session not re-confirmed) | **Platform:** Z.ai cloud sandbox | **Role:** engineer
+- **Feature:** `agent-loop-closed-loop` (built todo plan system — UI shows progress instead of dead)
+- **Task:** User reported: "The UI is just dumb or empty waiting for final output which never came." The system should understand the request, lay down a plan/todos, show them in the UI, execute each step, mark it done. Like the .context/memory/tasks/current.md pattern. The pieces existed but were disconnected.
+- **Commits:** 2 — `feat: todo plan system — UI shows multi-step plans instead of dead air` + this memory commit.
+- **Outcome:** done — (1) Migration 006: todos table. (2) Todo API fully implemented (was a stub returning []). (3) Engine._emit_todo_plan() creates per-intent plans (WEB_SEARCH: search → analyze → synthesize) and emits todo_added obs events. (4) SSE bridge in chat.py forwards todo events to frontend. (5) Frontend handles todo_added/todo_updated SSE events. (6) Session cleanup clears todos. 11 new e2e tests. Baseline held: 378 tests pass, 0 real ruff bugs.
+- **Open items:** (1) Todo status updates (marking steps in_progress/done as engine progresses) are implemented but not yet called at every execution point — the plan emission alone gives the UI real content, status updates make it dynamic. (2) Phase 2 loop extraction + context compaction still deferred.
+- **Report:** none.
+- **Notes:** The user's insight was exactly right: "its already in the codebase we are not reinventing anything. its just not functional in real time." The todo API was a stub, the orchestrator's planner wrote to a scratch dir the UI never saw, and WEB_SEARCH was excluded from the orchestrator path. The fix connects the pieces: engine emits a plan → DB persists it → SSE forwards it → frontend displays it. The UI now shows what the agent is doing instead of sitting dead. Token-strip dance applied.

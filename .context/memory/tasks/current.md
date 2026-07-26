@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Feature:** none — no session in progress (Session 26 did structural audit: found + fixed session-deletion state leak + adapter kwargs silent swallow. Built 10 e2e behavioral tests. See `.context/memory/features/agent-loop-closed-loop/notes.md`.)
+- **Feature:** none — no session in progress (Session 27 built the todo plan system — UI now shows a plan for multi-step tasks instead of sitting dead. See `.context/memory/features/agent-loop-closed-loop/notes.md`.)
 - **Task:** none
 - **Status:** idle

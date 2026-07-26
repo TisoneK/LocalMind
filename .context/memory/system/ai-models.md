@@ -93,4 +93,8 @@ Updated registry row:
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 25 |
+- **Super Z / GLM-5.2:** Session 27 — built the todo plan system. The UI was dead because the todo API was a stub (returned []), the orchestrator's planner wrote to a scratch dir the UI never saw, and WEB_SEARCH was excluded from the orchestrator path. Fix: migration 006 (todos table), full todo API CRUD, engine._emit_todo_plan() creates per-intent plans (search → analyze → synthesize) and emits SSE events, frontend handles them. 11 new e2e tests. Baseline held: 378 tests pass, 0 real ruff bugs. The user's insight was right: the pieces existed, they were just disconnected. (2026-07-27)
+
+Updated registry row:
+
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-27 | 26 |

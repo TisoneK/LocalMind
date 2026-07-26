@@ -776,3 +776,86 @@ confidence. The bugs found in Sessions 21-25 were all at boundaries
 (session transitions, tool→generation handoff, adapter contracts) that
 unit tests don't exercise. This audit + e2e tests catch the boundary
 class of bugs.
+
+---
+## 2026-07-27 — Super Z / GLM-5.2 (Session 27)
+
+Fixed the core UX issue: "The UI is just dumb or empty waiting for final
+output which never came." The user's insight: the system should
+understand the request, lay down a plan/todos, show them in the UI, then
+execute each step and mark it done — like the .context/memory/tasks/
+current.md pattern. The pieces existed but were disconnected.
+
+**Root causes found:**
+
+1. **Todo API was a complete stub.** `get_todos` returned `[]`, 
+   `create_todo` didn't persist, `update_todo` raised 501. No DB table
+   existed. The UI's TodoList panel showed "No tasks yet" because the
+   API literally always returned empty.
+
+2. **The orchestrator's planner wrote to a per-turn scratch directory**
+   (`ws.write_todo(tasks)`) that the UI never saw — disconnected from
+   the todo API.
+
+3. **The engine excluded WEB_SEARCH from the orchestrator path**
+   (line 1277), so "Trending stories today" went direct-dispatch →
+   single generation call → choked on 5118 tokens of raw search
+   results → 1 completion token → dead UI.
+
+**What landed:**
+
+1. **Migration 006: todos table.** Persistent storage for todos with
+   session_id, content, status (pending/in_progress/done/failed),
+   priority, order, timestamps.
+
+2. **Todo API fully implemented.** GET /todos (with session filter),
+   POST /todos (create), POST /todos/batch (create multiple, used by
+   engine), PATCH /todos/{id} (update status/completed), DELETE
+   /todos/{id}, DELETE /todos/session/{id} (clear session). All persist
+   to the DB. Route ordering fixed (session/{id} before {todo_id}).
+
+3. **Engine._emit_todo_plan()** — called at the start of tool dispatch
+   for multi-step intents. Creates a per-intent plan (e.g., WEB_SEARCH:
+   "Search the web → Analyze results → Synthesize answer") and emits
+   `todo_added` obs events for each step. The SSE bridge in chat.py
+   forwards these to the frontend's TodoList panel.
+
+4. **Engine._update_todo_status()** — updates a todo's status
+   (pending → in_progress → done) and emits `todo_updated` events.
+
+5. **Per-intent plans** for WEB_SEARCH, WEB_FETCH, FILE_TASK,
+   FILE_WRITE, FILE_EDIT, CODE_EXEC, SHELL, BROWSE. CHAT and SYSINFO
+   don't get plans (single-step).
+
+6. **SSE bridge in chat.py** — `todo_added`, `todo_updated`,
+   `todo_cleared` events forwarded to the frontend.
+
+7. **Frontend useLocalMind.ts** — handles `todo_added`/`todo_created`
+   and `todo_updated`/`todo_completed` SSE events, dispatches custom
+   events for the TodoList panel.
+
+8. **Session cleanup** — `cleanup_session()` now also clears todos
+   from the DB.
+
+11 new tests in `tests/e2e/test_todo_system.py`: todo API CRUD (create,
+read, update, delete, batch, clear session, ordering) + engine plan
+emission (WEB_SEARCH creates 3-step plan, CHAT creates none).
+
+**What this means for the user:** when they send "Trending stories
+today", the UI now immediately shows:
+  1. Search the web for relevant results (pending)
+  2. Analyze and filter the search results (pending)
+  3. Synthesize a clear answer from the findings (pending)
+
+Instead of a dead UI waiting for final output. The user sees the plan,
+knows what's happening, and can track progress — exactly like the
+.context/memory/tasks/current.md pattern they built for their own
+workflow.
+
+**What's still deferred:** the todo status updates (marking steps
+in_progress/done as the engine progresses) are implemented but not yet
+called at every execution point. A future session should wire
+`_update_todo_status(session, 0, "in_progress")` when the tool dispatch
+starts, `_update_todo_status(session, 0, "done")` when it returns, etc.
+The plan emission alone gives the UI real content to display — the
+status updates make it dynamic.
