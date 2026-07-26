@@ -242,6 +242,7 @@ class BaseAgent(ABC):
             obs=obs,
             memory_facts=memory_facts,
             orchestrator_context=orchestrator_context,
+            agent_config=cfg,  # ADR-6: pass the scoped toolset + caps
             skip_planning=skip_planning,
         ):
             yield chunk

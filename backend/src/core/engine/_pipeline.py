@@ -30,6 +30,7 @@ from adapters.ollama import _is_small_model
 from core import context_builder
 from core.agent import AGENT_INTENTS, AgentLoop
 from core.agent.constants import (
+    AGENT_SELECTION_ENABLED,
     REFLECT_ENABLED,
     REFLECT_INTENTS,
 )
@@ -2078,22 +2079,69 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # Without this, the status bar shows 0 tok/s and 0ms latency because
             # start_request() was only called in the CHAT path.
             self._metrics.start_request()
-            async for chunk in self._agent_loop.run(
-                messages=prompt_messages,
-                intent=effective_intent,
-                initial_tool_result=tool_result,
-                available_tools=available_tools(),
-                confidence=confidence,
-                adapter=active_adapter,
-                intent_history=intent_history,
-                obs=_obs,
-                memory_facts=memory_facts,
-                orchestrator_context=orchestrator_context or None,
-                skip_planning=_skip_planning,
-            ):
-                safe_text = _filter_system_leaks(chunk.text)
-                full_response_chunks.append(safe_text)
-                yield StreamChunk(text=safe_text, done=chunk.done)
+
+            # ADR-6: when AGENT_SELECTION_ENABLED, use the selected agent's
+            # run() method instead of calling AgentLoop directly. The agent
+            # passes its scoped toolset to AgentLoop (a coding agent sees
+            # only 5 tools, a browser agent sees only 1, etc.). When False
+            # or when selection fails, fall back to the direct AgentLoop
+            # call (pre-ADR-6 behavior).
+            _use_agent = False
+            _agent_instance = None
+            if AGENT_SELECTION_ENABLED:
+                try:
+                    from agents import select_agent
+
+                    _agent_cls = select_agent(effective_intent)
+                    if _agent_cls is not None:
+                        _agent_instance = _agent_cls(adapter=agent_adapter)
+                        _use_agent = True
+                        logger.info(
+                            "[engine] ADR-6 agent selected: %s for intent=%s",
+                            _agent_instance.config().name,
+                            effective_intent.value,
+                        )
+                except Exception as _sel_exc:
+                    logger.warning(
+                        "[engine] agent selection failed (%s) — falling back to AgentLoop",
+                        _sel_exc,
+                    )
+
+            if _use_agent and _agent_instance is not None:
+                _agent_run = _agent_instance.run(
+                    messages=prompt_messages,
+                    intent=effective_intent,
+                    initial_tool_result=tool_result,
+                    available_tools=available_tools(),
+                    confidence=confidence,
+                    adapter=active_adapter,
+                    intent_history=intent_history,
+                    obs=_obs,
+                    memory_facts=memory_facts,
+                    orchestrator_context=orchestrator_context or None,
+                    skip_planning=_skip_planning,
+                )
+                async for chunk in _agent_run:
+                    safe_text = _filter_system_leaks(chunk.text)
+                    full_response_chunks.append(safe_text)
+                    yield StreamChunk(text=safe_text, done=chunk.done)
+            else:
+                async for chunk in self._agent_loop.run(
+                    messages=prompt_messages,
+                    intent=effective_intent,
+                    initial_tool_result=tool_result,
+                    available_tools=available_tools(),
+                    confidence=confidence,
+                    adapter=active_adapter,
+                    intent_history=intent_history,
+                    obs=_obs,
+                    memory_facts=memory_facts,
+                    orchestrator_context=orchestrator_context or None,
+                    skip_planning=_skip_planning,
+                ):
+                    safe_text = _filter_system_leaks(chunk.text)
+                    full_response_chunks.append(safe_text)
+                    yield StreamChunk(text=safe_text, done=chunk.done)
 
             # ── FIX: Mark the top-level tool_status as done after agent loop completes ──
             # Without this, the frontend's "Running command" spinner stays stuck because

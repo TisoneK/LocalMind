@@ -450,9 +450,16 @@ def _truncate_observation(obs: str, max_chars: int = OBS_LOG_MAX_CHARS) -> str:
     return obs[:half] + f"\n… [{len(obs) - max_chars} chars truncated] …\n" + obs[-half:]
 
 
-def _filtered_tool_defs() -> list[dict]:
-    """Return TOOL_DEFINITIONS filtered to only AGENT_ALLOWED_TOOLS."""
-    allowed_names = AGENT_ALLOWED_TOOLS
+def _filtered_tool_defs(allowed_tools: Optional[frozenset[str]] = None) -> list[dict]:
+    """Return TOOL_DEFINITIONS filtered to the allowed tool set.
+
+    Args:
+        allowed_tools: optional scoped toolset (from an AgentConfig). When
+            provided, only tools whose name is in this set are returned.
+            When None (the default), filters to AGENT_ALLOWED_TOOLS (the
+            global allowlist) — preserving the pre-ADR-6 behavior.
+    """
+    allowed_names = allowed_tools if allowed_tools is not None else AGENT_ALLOWED_TOOLS
     return [td for td in TOOL_DEFINITIONS if td["function"]["name"] in allowed_names]
 
 
@@ -578,6 +585,7 @@ class AgentLoop:
         memory_facts: Optional[list[str]] = None,
         orchestrator_context: Optional[str] = None,
         skip_planning: bool = False,
+        agent_config=None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -621,7 +629,13 @@ class AgentLoop:
             return
 
         # ── Build tool definitions filtered by allowlist ───────────────
-        filtered_tools = _filtered_tool_defs()
+        # ADR-6: when an agent_config is provided, use its scoped
+        # allowed_tools instead of the global AGENT_ALLOWED_TOOLS. This
+        # is the ADR-6 value — a coding agent sees only 5 tools, a
+        # browser agent sees only 1, etc. Smaller surface = more
+        # reliable selection on gemma3:1b-class hardware.
+        scoped_tools = agent_config.allowed_tools if agent_config is not None else None
+        filtered_tools = _filtered_tool_defs(scoped_tools)
         env_context = _build_environment_context()
 
         # ── ADR-5: Workspace state feedback ──────────────────────────────

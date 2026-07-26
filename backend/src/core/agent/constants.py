@@ -28,6 +28,16 @@ MAX_WALL_CLOCK_SECS: float = 300.0
 # diagram — the literal difference between a harness and a bare API.
 WORKSPACE_STATE_ENABLED: bool = True
 
+# ── Agent selection (ADR-6) ──────────────────────────────────────────────────
+# Whether the engine uses agents.registry.select_agent(intent) to pick
+# the agent for a given intent, instead of calling AgentLoop directly.
+# When True, the engine constructs the selected agent and calls its
+# run() method — which passes the agent's scoped toolset to AgentLoop
+# (ADR-6: a coding agent sees only 5 tools, a browser agent sees only 1,
+# etc.). When False, the engine calls AgentLoop directly with the global
+# AGENT_ALLOWED_TOOLS (pre-ADR-6 behavior).
+AGENT_SELECTION_ENABLED: bool = True
+
 # ── Context window protection ─────────────────────────────────────────────────
 
 OBS_LOG_MAX_CHARS: int = 2000
