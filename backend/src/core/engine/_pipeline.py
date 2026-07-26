@@ -2416,10 +2416,22 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     orchestrator_context=orchestrator_context or None,
                     skip_planning=_skip_planning,
                 )
+                # Session 31: CRITICAL FIX — intercept done=True from the
+                # agent loop. If the loop produced NO text, the done signal
+                # would close the SSE stream with zero output — the user
+                # sees nothing. Instead: hold the done signal, check if
+                # there's content, yield an error message if not, THEN
+                # yield done. This guarantees SOMETHING always reaches
+                # the user.
                 async for chunk in _agent_run:
                     safe_text = _filter_system_leaks(chunk.text)
-                    full_response_chunks.append(safe_text)
-                    yield StreamChunk(text=safe_text, done=chunk.done)
+                    if safe_text:
+                        full_response_chunks.append(safe_text)
+                    if chunk.done:
+                        # Don't forward done yet — check content first
+                        # (handled below after the loop)
+                        continue
+                    yield StreamChunk(text=safe_text, done=False)
             else:
                 async for chunk in self._agent_loop.run(
                     messages=prompt_messages,
@@ -2435,8 +2447,33 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     skip_planning=_skip_planning,
                 ):
                     safe_text = _filter_system_leaks(chunk.text)
-                    full_response_chunks.append(safe_text)
-                    yield StreamChunk(text=safe_text, done=chunk.done)
+                    if safe_text:
+                        full_response_chunks.append(safe_text)
+                    if chunk.done:
+                        continue  # Hold done — check content first
+                    yield StreamChunk(text=safe_text, done=False)
+
+            # Session 31: GUARANTEE — if the agent loop produced no text,
+            # yield an error message BEFORE the done signal. This is the
+            # fix for "no final output" — the #1 bug. Previously, the
+            # empty-response check (Session 29) stored the error in
+            # response_text but never yielded it — the done=True from the
+            # agent loop had already closed the stream.
+            _agent_response = "".join(full_response_chunks)
+            if not _agent_response.strip():
+                _agent_response = (
+                    "I ran the tool but couldn't generate a response. "
+                    "This usually happens when the tool output is too "
+                    "large for the context window. Try a more specific "
+                    "request."
+                )
+                full_response_chunks = [_agent_response]
+                yield StreamChunk(text=_agent_response, done=False)
+                logger.warning(
+                    "[engine] empty response from agent loop for %s — "
+                    "yielding error message before done",
+                    effective_intent.value,
+                )
 
             # ── FIX: Mark the top-level tool_status as done after agent loop completes ──
             # Without this, the frontend's "Running command" spinner stays stuck because

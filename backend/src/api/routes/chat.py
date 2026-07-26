@@ -385,7 +385,12 @@ async def _event_stream(
 
     except Exception as exc:
         logger.error(f"[chat] stream error: {exc}", exc_info=True)
+        # Session 31: GUARANTEE — always yield SOMETHING to the user.
+        # If the engine crashed before producing any output, yield an
+        # error token + done so the frontend shows the error and resets.
+        yield _sse({"type": "token", "content": f"⚠️ An error occurred: {str(exc)[:200]}"})
         yield _sse({"type": "error", "error": str(exc)})
+        yield _sse({"type": "done"})
 
     finally:
         # GUARANTEE: If the generator was interrupted (client disconnect,
