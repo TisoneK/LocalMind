@@ -448,3 +448,52 @@ the deterministic fallback).
 structure (4 agents sharing BaseAgent, scoped tools) is in place. The
 selection layer is built and tested. Deferred: Phase 2 loop extraction,
 engine wiring, context compaction.
+
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 20)
+
+Wired the agents into the engine end-to-end. The 4 agents are no longer
+dead code — the engine pipeline now calls `select_agent(intent)` to pick
+the agent, constructs it, and calls its `run()` method. The agent passes
+its scoped toolset to `AgentLoop.run()` via the new `agent_config`
+parameter, so the model only sees the tools that belong to its agent.
+
+**What landed:**
+
+1. `_filtered_tool_defs()` now accepts an optional `allowed_tools`
+   parameter. When provided, filters to that scoped set instead of the
+   global `AGENT_ALLOWED_TOOLS`. Default behavior unchanged (backward
+   compat).
+
+2. `AgentLoop.run()` now accepts an optional `agent_config` parameter.
+   When provided, its `allowed_tools` is passed to `_filtered_tool_defs()`
+   — the model sees only the agent's scoped tools.
+
+3. `BaseAgent.run()` now passes `self.config()` as `agent_config` to
+   `AgentLoop.run()`. The scoped toolset flows through automatically.
+
+4. `AGENT_SELECTION_ENABLED = True` added to `constants.py`. When True,
+   the engine uses `select_agent(intent)` to pick the agent.
+
+5. Engine pipeline (`_pipeline.py`) wired: when `AGENT_SELECTION_ENABLED`,
+   calls `select_agent(effective_intent)` → constructs the agent → calls
+   `agent.run()`. Falls back to direct `AgentLoop.run()` on any failure
+   (non-breaking — the try/except catches selection errors and logs a
+   warning).
+
+6. 7 new tests in `tests/agents/test_scoped_tools.py` verify
+   `_filtered_tool_defs()` respects the scoped allowlist: coding agent
+   sees 5 tools, browser agent sees its subset, empty set returns no
+   tools, coding scope is smaller than global.
+
+**Verified end-to-end:** smoke test confirmed coding agent sees exactly
+5 tools (code_exec, edit_file, file_task, file_write, shell) vs 9 global
+tools. The ADR-6 scoped-toolset value is now live — a gemma3:1b-class
+model choosing among 5 coding tools is far more reliable than choosing
+among 9+ flat tools.
+
+**The feature is now genuinely complete.** ADR-5 differentiator (workspace
+feedback) live. ADR-6 4-agent structure built. Selection layer built.
+Engine wired. Scoped tools actually filter. What remains deferred: Phase
+2 loop body extraction (internal refactor, non-blocking) and context
+compaction (B-2026-07-26-2, separate backlog item).

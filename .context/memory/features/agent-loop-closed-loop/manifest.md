@@ -33,7 +33,7 @@ B-2026-07-26-1 (5-step loop + iteration cap + workspace-state injection
   alongside other work but every commit touching agent-mode is prefixed
   to make the trail greppable: `feat(agent-loop):` /
   `feat(workspace):` / `feat(context):` / `feat(agents):`)
-- **Status:** in-progress (core complete — Phase 2 loop extraction + context compaction deferred)
+- **Status:** in-progress (ADR-5 + ADR-6 wired end-to-end — agents now actually selected and run with scoped tools)
 - **Current state:** ADR-5 captured Session 12. ADR-6 captured Session 14.
   Sessions 15-18 built all 4 agents (browser, coding, research, direct) +
   workspace_state feedback service (ADR-5 differentiator, live in
