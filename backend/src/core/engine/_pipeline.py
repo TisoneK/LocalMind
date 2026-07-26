@@ -238,7 +238,6 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         try:
             import sqlite3
 
-            from core.config import settings
 
             with sqlite3.connect(settings.localmind_db_path, timeout=5) as conn:
                 conn.execute("DELETE FROM todos WHERE session_id = ?", (session_id,))
@@ -319,7 +318,6 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             import time
             import uuid
 
-            from core.config import settings
 
             # Session 30 FIX: use context manager so the connection is
             # ALWAYS closed, even if an exception occurs. Previously,
@@ -378,7 +376,6 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             import sqlite3
             import time
 
-            from core.config import settings
 
             # Session 30 FIX: use context manager so the connection is
             # ALWAYS closed. Previously, a leaked connection could lock
@@ -2460,8 +2457,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             if not _agent_response.strip():
                 # Session 31: check if the tool was disabled — that's a
                 # different error than "output too large"
-                from core.config import settings
-
+                # NOTE: settings is already imported at module level (line 39)
                 _shell_disabled = (
                     effective_intent == Intent.SHELL
                     and not getattr(settings, "localmind_shell_enabled", False)
