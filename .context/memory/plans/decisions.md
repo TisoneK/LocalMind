@@ -92,3 +92,95 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 
 - **Supersedes:** none. Builds on ADR-4 (`.context/` is the agent memory system) — the workspace-state feedback loop turns `.context/`'s cross-*session* memory into cross-*turn* memory *within* a session.
 
+---
+## ADR-6: Multi-agent architecture with shared base_agent (refines ADR-5) (2026-07-26)
+
+- **Author:** Super Z / GLM-5.2 (Session 14)
+- **Status:** accepted (architectural target — implementation pending, part of feature `agent-loop-closed-loop`)
+- **Context:** ADR-5 (Session 12) adopted the CODING HARNESS closed-loop as agent-mode's target but didn't specify the *organizational structure* — one agent or many? In Session 14 the user worked through three options for how `backend/` should be organized:
+
+  **Option 1 — Multi-harness framework** (`harness/coding/`, `harness/research/`, `harness/direct/`):
+  base.py defines the abstract loop; each harness supplies `build_context()`, `tools`, `observe()`, `is_done()`. The user rejected this framing: *"More like an agent"* — harnesses are workflow pickers, agents are addressable things.
+
+  **Option 2 — Single unified agent** (`harness/agent.py` + flat `tools/`):
+  one agent loop, all tools available, the model dynamically picks tools per task. Closer to how Claude Code behaves — "coding" vs "research" isn't a mode, it's just which tools happen to get called. The user identified the core risk: *"tool descriptions have to be good enough that a small local model (gemma3:1b-class) reliably picks the right one."* With a flat tool surface and a 1B-class model, wrong-tool selection is the likely failure mode.
+
+  **Option 3 — Multiple distinct agents with shared base** (`agents/base_agent.py` + `agents/coding_agent.py` + `agents/research_agent.py` + `agents/browser_agent.py` + ...):
+  each agent is a complete, addressable thing — a thin subclass of `base_agent.py` that supplies its own `context_builder`, scoped `tools`, and `is_done()`. Shared in the base: the 5-step loop, compaction, streaming, permission checking. The user converged here: *"Like coding agent, research agent, browser agent."* Key argument: a scoped toolset per agent is exactly what a small model needs — fewer tools to choose from = more reliable selection. And explicit user selection (a UI picker) avoids an expensive LLM-based router call before the real agent even starts.
+
+  **Existing LocalMind structure** (verified Session 14):
+  - `backend/src/core/agent/` — `loop.py` (2926 LOC), `orchestrator.py` (532 LOC), `tool_dispatch.py` (109 LOC), `prompts.py`, `constants.py`, `models.py`, `search.py`, `sub_agent.py`, `synthesizer.py`, `agent_filters.py`. This is the de-facto base — the 5-step loop, retry logic, planning. It would become `base_agent.py` + shared infrastructure.
+  - `backend/src/tools/` — flat bag of 14 tools: `shell.py`, `file_reader.py`, `file_writer.py`, `edit_file.py`, `web_search.py`, `web_fetch.py`, `browser_agent.py`, `code_exec.py`, `memory_tool.py`, `sysinfo.py`, `installed_programs.py`, plus `base.py`, `contracts/`, `code_executor/`. No per-agent scoping exists today — every tool is available to every agent invocation.
+  - `backend/src/core/workspace/manager.py` — the per-turn scratch directory (TODO.md / CONTEXT.md / inbox / outbox). Stays as-is; NOT the same as the ADR-5 `workspace_state.py` service (per ADR-5's "do not conflate" note).
+
+- **Decision:** Adopt **option 3 — multiple distinct agents with shared `base_agent.py`**. This refines ADR-5 by specifying the organizational structure: the closed-loop from ADR-5 is implemented by `base_agent.py`, and multiple specialized agents subclass it. Concretely:
+
+  1. **Target directory structure:**
+     ```text
+     backend/agents/
+       __init__.py
+       base_agent.py          # abstract 5-step loop (assemble → call model → parse → execute → observe → repeat)
+                               # + shared compaction/token-budget logic, streaming interface, permission checking
+                               # + hard iteration cap + wall-clock cap (ADR-5 requirement)
+       registry.py             # name -> agent class; the intent router / UI picker selects one
+
+       coding_agent.py         # thin subclass: supplies coding-specific context_builder, scoped tools, is_done()
+       coding/
+         context_builder.py    # codebase search/index, @file resolution, AGENTS.md
+         workspace_state.py    # git status/diff, build/test/typecheck — the ADR-5 feedback service
+         tools/
+           bash.py             # from backend/src/tools/shell.py
+           filesystem.py       # from file_reader.py + file_writer.py + edit_file.py
+           code_exec.py        # from code_exec.py + code_executor/
+
+       research_agent.py
+       research/
+         context_builder.py    # source tracking, query planning
+         tools/
+           web_search.py       # from web_search.py
+           doc_reader.py       # from web_fetch.py (reframed)
+
+       browser_agent.py        # NOTE: backend/src/tools/browser_agent.py already exists — promoted to a full agent
+       browser/
+         context_builder.py    # page state, DOM snapshot, nav history
+         tools/
+           navigate.py
+           click.py
+           extract.py
+
+       direct_agent.py         # thin wrapper — steps 1-2 only (assemble → model → respond), no tool execution
+                               # this is what Direct Mode becomes
+
+       <future: automation_agent.py, notes_agent.py, etc.>
+     ```
+
+  2. **What each agent supplies to `base_agent.py`:**
+     - `context_builder` — its own gather/shape logic (codebase index vs. web search vs. page state vs. nothing)
+     - `tools` — its own scoped toolset (a coding agent doesn't have browser tools; a browser agent doesn't have `bash`)
+     - `is_done()` — its own stop condition (tests pass / enough sources / task-page reached / user says stop)
+
+  3. **What's shared in `base_agent.py` regardless of agent:**
+     - The 5-step loop and "repeat until done, blocked, or limit" logic (ADR-5)
+     - Token budget & compaction (ADR-5 / B-2026-07-26-2)
+     - Streaming interface back to the frontend
+     - Permission checking (the upgraded safety_gate from ADR-5)
+     - Hard iteration cap + wall-clock cap (ADR-5 / B-2026-07-26-1)
+
+  4. **Direct Mode vs Agent Mode becomes a selection, not a code path.** Direct Mode = `direct_agent.py` (thin wrapper, no tools or tools auto-denied). Agent Mode = user picks from `{coding, research, browser, ...}` via a UI picker. The existing toggle in `backend/src/core/model_router.py` / the engine pipeline becomes a registry lookup, not an if/else buried in a chat handler.
+
+  5. **Explicit user selection over LLM-based router.** Given the gemma3:1b-class target hardware, an extra classification call before the real agent starts is expensive (burns a full model call) and a wrong classification wastes the whole turn. A UI picker is cheaper and more reliable. A future LLM-based router is NOT forbidden — it's deferred until hardware improves or a future model makes it cheap enough.
+
+  6. **Tool descriptions are the real design risk.** The user identified this in the option-2 exploration and it carries over: even with a scoped toolset per agent, a 1B-class model needs the tool schema itself to pre-disambiguate. Tool descriptions must be concrete enough that the model rarely picks wrong. This is an implementation-time concern, not an architectural one — but it's the most likely failure mode and should be tested early.
+
+- **Consequences:**
+  - **Refines ADR-5, does not supersede it.** ADR-5 defines the loop shape (the what); ADR-6 defines the organizational structure (the how-many). Both apply: every agent implements the ADR-5 closed-loop, and there are multiple specialized agents per ADR-6.
+  - The `backend/src/core/agent/` → `backend/agents/base_agent.py` migration is the single biggest piece of implementation work. The 2926-line `loop.py` monolith decomposes into `base_agent.py` (the shared loop + caps + compaction) plus per-agent subclasses. This is multi-session work.
+  - The flat `backend/src/tools/` bag gets redistributed into per-agent `tools/` subdirectories. Tools shared across agents (e.g., `memory_tool.py`) stay at a shared level or get duplicated per agent — decision deferred to implementation.
+  - The existing `backend/src/tools/browser_agent.py` is already a "browser agent" in name but is currently structured as a tool, not a full agent. Promoting it to a full agent (per the structure above) is a natural first concrete step — it's already domain-scoped.
+  - `direct_agent.py` replaces the current Direct Mode code path. The existing dual-mode logic in `backend/src/core/engine/_pipeline.py` and `backend/src/core/model_router.py` simplifies to a registry lookup.
+  - The intent router (`backend/src/core/model_router.py`) becomes a thin layer that either (a) reads the user's UI selection and looks up `registry.py`, or (b) in a future session, makes an LLM-based classification call. Not both — pick one per session.
+  - Future agents (`automation_agent.py`, `notes_agent.py`) fit cleanly: subclass `base_agent.py`, supply context_builder + tools + is_done(), register in `registry.py`. No existing agent needs to change.
+  - **The `agent-loop-closed-loop` feature scope expands.** Originally (Session 13) it was "implement ADR-5 — the closed-loop wiring." Now it's "implement ADR-5 + ADR-6 — the closed-loop wiring AND the multi-agent restructure." The feature name still fits (the closed-loop is still the core concept); the manifest is updated to reflect the expanded scope.
+
+- **Supersedes:** none. **Refines:** ADR-5 (specifies the organizational structure ADR-5 left open). **Builds on:** ADR-4 (`.context/` is the agent memory system).
+
