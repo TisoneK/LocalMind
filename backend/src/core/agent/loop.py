@@ -64,6 +64,7 @@ from core.agent.constants import (
     MAX_ITERATIONS,
     MAX_WALL_CLOCK_SECS,
     OBS_LOG_MAX_CHARS,
+    PER_CALL_TIMEOUT_SECS,
     PLAN_ENABLED,
     PLAN_ITERATION_COST,
     PLAN_TIMEOUT_SECS,
@@ -859,12 +860,11 @@ class AgentLoop:
                 iteration_messages.append({"role": "user", "content": context_content})
 
             # ── LLM call with tools ───────────────────────────────────
-            # Session 25: wrap with a hard timeout to prevent "thinking
-            # forever" when the model hangs. The wall-clock cap between
-            # iterations (line ~825) only fires between iterations — if
-            # a single model call hangs, it blocks forever. This timeout
-            # catches that: if the model doesn't respond within
-            # MAX_WALL_CLOCK_SECS, we break with a visible error.
+            # Session 25/31: wrap with a hard timeout to prevent "thinking
+            # forever" when the model hangs. Uses PER_CALL_TIMEOUT_SECS
+            # (45s) — SHORTER than the adapter's 120s HTTP timeout so the
+            # user sees a result before the adapter itself times out.
+            # The wall-clock cap (90s total) is checked between iterations.
             t_llm = time.monotonic()
             try:
                 result = await asyncio.wait_for(
@@ -874,26 +874,27 @@ class AgentLoop:
                         temperature=0.3,
                         intent=intent.value,
                     ),
-                    timeout=MAX_WALL_CLOCK_SECS,
+                    timeout=PER_CALL_TIMEOUT_SECS,
                 )
             except asyncio.TimeoutError:
                 logger.warning(
                     "[agent_loop] model call timed out after %.0fs (iter %d) — breaking with error",
-                    MAX_WALL_CLOCK_SECS,
+                    PER_CALL_TIMEOUT_SECS,
                     iteration + 1,
                 )
                 if _obs:
                     _obs.emit(
                         "agent_loop_model_timeout",
                         intent=intent.value,
-                        timeout_secs=MAX_WALL_CLOCK_SECS,
+                        timeout_secs=PER_CALL_TIMEOUT_SECS,
                         iteration=iteration + 1,
                     )
                 yield StreamChunk(
                     text=(
-                        f"I'm taking too long to respond — the model call "
-                        f"timed out after {int(MAX_WALL_CLOCK_SECS)}s. "
-                        f"Please try again or rephrase your request."
+                        f"The model is taking too long to respond "
+                        f"(timed out after {int(PER_CALL_TIMEOUT_SECS)}s). "
+                        f"The free-tier model may be overloaded. "
+                        f"Please try again or switch to a faster model."
                     ),
                     done=False,
                 )

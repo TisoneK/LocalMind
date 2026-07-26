@@ -17,9 +17,19 @@ CLARIFICATION_THRESHOLD: float = 0.45
 
 # ADR-5: hard wall-clock cap. The loop terminates on "done, blocked, OR
 # limit" — this is the time-based limit, preventing a small model from
-# spinning forever on a task it can't solve. Sized for gemma3:1b-class
-# target hardware where every iteration is expensive. 300s = 5 minutes.
-MAX_WALL_CLOCK_SECS: float = 300.0
+# spinning forever on a task it can't solve.
+# Session 31: lowered from 300s to 90s. The adapter's own HTTP timeout is
+# 120s — if the wall-clock cap is 300s, a single slow model call can hang
+# the UI for 2 full minutes before any timeout fires. 90s means at most
+# one slow call + one retry before the user sees a result or error.
+MAX_WALL_CLOCK_SECS: float = 90.0
+
+# Session 31: per-iteration timeout for each model call (chat_with_tools).
+# This is SEPARATE from the wall-clock cap — it limits a SINGLE model call,
+# not the total loop time. If a single call takes longer than this, we break
+# with an error instead of waiting for the adapter's 120s HTTP timeout.
+# 45s is generous for a free-tier model but prevents the 120s dead-hang.
+PER_CALL_TIMEOUT_SECS: float = 45.0
 
 # ── Workspace state feedback (ADR-5) ─────────────────────────────────────────
 # Whether to inject workspace_state.snapshot() into the agent's context
