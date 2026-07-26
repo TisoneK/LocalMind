@@ -97,4 +97,8 @@ Updated registry row:
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-27 | 26 |
+- **Super Z / GLM-5.2:** Session 28 — wired todo status updates (step 0 in_progress → done, step 1 in_progress → done, step 2 done when response finalizes). Captured ADR-7: LocalMind .context/ persistent learning + workflow constraints. Created backend/data/.context/ (system/user/agents/codebase/memory/flaws) + backend/data/workflows/ (7 constraint-style files: general, research, coding, error_recovery, clarification, memory_update, system_task). Each workflow defines done+constraints+learning step, NOT a script. The user's design principles: .context/ is for learning, doesn't restrain creativity, workflows are constraints not procedures, .context/ must be written to, directory is extensible. Baseline held: 378 tests pass, 0 real ruff bugs. (2026-07-27)
+
+Updated registry row:
+
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-27 | 27 |

@@ -322,3 +322,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** (1) Todo status updates (marking steps in_progress/done as engine progresses) are implemented but not yet called at every execution point — the plan emission alone gives the UI real content, status updates make it dynamic. (2) Phase 2 loop extraction + context compaction still deferred.
 - **Report:** none.
 - **Notes:** The user's insight was exactly right: "its already in the codebase we are not reinventing anything. its just not functional in real time." The todo API was a stub, the orchestrator's planner wrote to a scratch dir the UI never saw, and WEB_SEARCH was excluded from the orchestrator path. The fix connects the pieces: engine emits a plan → DB persists it → SSE forwards it → frontend displays it. The UI now shows what the agent is doing instead of sitting dead. Token-strip dance applied.
+
+---
+## 2026-07-27 — Session 28
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai — 23rd session not re-confirmed) | **Platform:** Z.ai cloud sandbox | **Role:** engineer
+- **Feature:** `agent-loop-closed-loop` (todo status updates + ADR-7: .context/ system)
+- **Task:** (1) Finish remaining todo status updates from Session 27. (2) Capture the user's .context/-for-LocalMind vision as ADR-7 + build the scaffolding.
+- **Commits:** 2 — `feat: todo status updates + ADR-7 .context/ system + workflow constraints` + this memory commit.
+- **Outcome:** done — (1) Wired _update_todo_status() at execution points: step 0 in_progress when tool starts, step 0 done + step 1 in_progress when tool returns, steps 1+2 done when response finalizes. (2) ADR-7 captured: two-layer system — backend/data/.context/ (persistent learning: system/user/agents/codebase/memory/flaws) + backend/data/workflows/ (7 constraint-style files). Each workflow defines "done" + constraints + learning step, NOT a script. Created 7 workflow files: general, research, coding, error_recovery, clarification, memory_update, system_task. Seeded .context/ with initial content from Sessions 21-27. Baseline held: 378 tests pass, 0 real ruff bugs.
+- **Open items:** (1) Engine wiring for .context/ — reading at startup, consulting workflows before acting, writing at session end. This is future sessions — the scaffolding is in place. (2) Phase 2 loop extraction + context compaction still deferred.
+- **Report:** none.
+- **Notes:** The user's design principles for .context/ are the key insight: workflows define constraints and checkpoints, NOT procedures. The agent has creative autonomy — it knows the goal, figures out HOW on its own. The .context/ must be WRITTEN TO, not just read — every workflow ends with a learning step. The test for a well-written workflow: does it tell the agent what "done" looks like and what it must not violate, without telling it which exact actions to take? This is the same pattern that made the user's own .context/ workflow powerful — it's not a script, it's knowledge + boundaries. Token-strip dance applied.

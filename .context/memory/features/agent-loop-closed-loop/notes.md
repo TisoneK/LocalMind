@@ -859,3 +859,60 @@ called at every execution point. A future session should wire
 starts, `_update_todo_status(session, 0, "done")` when it returns, etc.
 The plan emission alone gives the UI real content to display — the
 status updates make it dynamic.
+
+---
+## 2026-07-27 — Super Z / GLM-5.2 (Session 28)
+
+Two things: (1) finished the todo status updates from Session 27, (2)
+captured the user's `.context/`-for-LocalMind vision as ADR-7 + built
+the scaffolding.
+
+**Part 1: Todo status updates wired.**
+
+Session 27 emitted the plan (3 steps for WEB_SEARCH) but didn't update
+statuses as the engine progressed. Session 28 wired:
+- Step 0 → "in_progress" when tool dispatch starts
+- Step 0 → "done" + step 1 → "in_progress" when the tool returns
+- Step 1 → "done" + step 2 → "done" when the response is finalized
+
+The UI now shows real-time progress: pending → in_progress → done as
+each step executes.
+
+**Part 2: ADR-7 — LocalMind persistent learning + workflow constraints.**
+
+The user's insight: "it works as if it doesn't have memory and its
+frustrating, like a child that can't think." The fix isn't a smarter
+model — it's giving LocalMind the same `.context/` infrastructure the
+user built for their own coding workflow. The system needs to:
+- Know what it's working on (persistent task state — Session 27's todos)
+- Know what it's learned about the user/system/codebase (`.context/`)
+- Know what "done" looks like for each type of request (workflows/)
+- Learn from every interaction (write-back to `.context/`)
+
+**Key design principles (from the user):**
+1. `.context/` is for learning about the system, user, agents, codebase
+2. `.context/` doesn't restrain creativity — the agent figures out HOW
+3. Workflows define constraints + checkpoints, NOT procedures
+4. `.context/` must be WRITTEN TO, not just read
+5. The directory is extensible — new workflows added as patterns emerge
+
+**What was created:**
+- `backend/data/.context/` — persistent learning structure (system/,
+  user/, agents/, codebase/, memory/, flaws/) seeded with initial
+  content from Sessions 21–27
+- `backend/data/workflows/` — 7 constraint-style workflow files:
+  general.md, research.md, coding.md, error_recovery.md,
+  clarification.md, memory_update.md, system_task.md
+- Each workflow defines "done" + constraints + a learning step — NOT
+  a script. The agent has creative autonomy within the constraints.
+
+**The test for whether a workflow is written right:** does it tell the
+agent what "done" looks like and what it must not violate, without
+telling it which exact actions to take? If yes, constraint. If no
+(reads like a fixed sequence of tool calls), it's recreating the rigid
+pipeline problem one layer up.
+
+**What's deferred:** the engine wiring (reading `.context/` at startup,
+consulting workflows before acting, writing to `.context/` at session
+end) is future sessions. This session is the scaffolding — the
+structure + the constraint-style content. The wiring makes it live.

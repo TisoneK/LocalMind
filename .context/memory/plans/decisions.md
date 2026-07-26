@@ -184,3 +184,77 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 
 - **Supersedes:** none. **Refines:** ADR-5 (specifies the organizational structure ADR-5 left open). **Builds on:** ADR-4 (`.context/` is the agent memory system).
 
+---
+## ADR-7: LocalMind persistent learning + workflow constraints (the .context/ system) (2026-07-27)
+
+- **Author:** Super Z / GLM-5.2 (Session 28)
+- **Status:** accepted (architectural target — implementation multi-session)
+- **Context:** Sessions 21–27 fixed a series of bugs that all traced back to the same root cause: LocalMind's pipeline is single-shot — classify once, pick one tool, generate once, done. There's no persistent learning across sessions, no task plan that survives a single turn, no workflow constraints that tell the agent what "done" looks like. The user observed: "it works as if it doesn't have memory and its frustrating, like a child that can't think."
+
+  The user's insight: they already solved this problem for their own coding workflow via the `.context/` system (this very protocol). The `.context/memory/` structure — `tasks/current.md`, `agents/sessions.md`, `user/preferences.md`, `system/environments.md`, `plans/decisions.md`, `flaws/log.md` — isn't just task files. It's **persistent learning infrastructure**: the system knows what it's working on, what it's learned about the user, what went wrong before, and what it decided. Every session reads it at startup and writes to it at exit. The agent doesn't follow a script — it knows the goal, knows what's true, and figures out HOW on its own.
+
+  The user's design principles (stated explicitly):
+  1. **`.context/` is for learning about the system, user, ai-agents, codebase — and learning from it.** Not just task tracking.
+  2. **`.context/` doesn't restrain the agent from creativity.** The agent knows what it needs to do next but has to figure out on its own how to achieve that goal.
+  3. **Workflows define constraints and checkpoints, NOT procedures.** A workflow tells the agent what "done" looks like and what it must not violate — NOT which exact tool calls to make. If a workflow reads like a fixed sequence of tool calls, it recreates the rigid single-shot pipeline problem one layer up.
+  4. **`.context/` must be WRITTEN TO, not just read.** Every workflow needs a step at the end: "what did we learn here that belongs in `.context/`?" If LocalMind hits the same wrong-tool or same-question-forgotten failure twice, `.context/` isn't being written to or consulted.
+  5. **The directory is extensible, not fixed.** New workflow files get added as new request patterns emerge — same as `.context/` grew organically over sessions rather than being scoped upfront.
+
+- **Decision:** Build a two-layer system for LocalMind:
+
+  **Layer 1: `backend/data/.context/` — persistent learning (read AND write)**
+
+  ```text
+  backend/data/.context/
+  ├── system/
+  │   ├── environment.md     # hardware, OS, installed tools, constraints (durable version of sysinfo)
+  │   └── models.md          # which models are available, their strengths/weaknesses
+  ├── user/
+  │   ├── identity.md        # who the user is (name, role, timezone)
+  │   └── preferences.md     # communication style, recurring projects, patterns
+  ├── agents/
+  │   └── capabilities.md    # what each agent can do, past successes/failures
+  ├── codebase/
+  │   ├── architecture.md    # how LocalMind is structured (this ADR, ADR-5, ADR-6)
+  │   └── known_bugs.md      # bugs found and fixed (Session 21-27 findings)
+  ├── memory/
+  │   ├── sessions.md        # append-only log of what happened each session
+  │   └── facts.md           # accumulated user facts (the learning output)
+  └── flaws/
+      └── log.md             # what went wrong + what was learned (the feedback loop)
+  ```
+
+  **Layer 2: `backend/data/workflows/` — constraint-style workflow files**
+
+  ```text
+  backend/data/workflows/
+  ├── general.md             # default — "understand the request, act, verify"
+  ├── research.md            # multi-source lookups (search → dedupe → synthesize)
+  ├── coding.md              # file edits, running commands, verifying changes
+  ├── error_recovery.md      # retry once, degrade to partial, or surface error
+  ├── clarification.md       # ask a follow-up when intent is ambiguous
+  ├── memory_update.md       # when and how to write new facts to .context/
+  └── system_task.md         # OS-level actions where safety/confirmation matters
+  ```
+
+  **Design rules for workflow files** (the critical part):
+
+  1. **Define "done", not "how".** A workflow says what the final output must look like and what constraints must be satisfied — NOT which tools to call in what order. Example: `research.md` says "the final output must be a real synthesis from multiple sources, and raw search results must be chunked/summarized before feeding to Generate if they exceed the context budget." It does NOT say "step 1: call web_search, step 2: call synthesis_tool."
+
+  2. **Define checkpoints, not scripts.** A workflow says "verify before marking done" — e.g., "don't mark a step done until its output actually satisfies what it was for." The agent decides HOW to verify.
+
+  3. **Every workflow ends with a learning step.** "What did we learn here that belongs in `.context/`?" This is the write-back that makes the system learn across sessions. If a workflow doesn't have this, it's static — not learning.
+
+  4. **The agent has creative autonomy.** The workflow provides boundaries and knowledge. The actual path from "here" to "goal achieved" is the agent's own reasoning — same as how the `.context/` sessions in this project discovered steps as they went, each informed by the previous one.
+
+  **The test for whether a workflow is written right:** does it tell the agent what "done" looks like and what it must not violate, without telling it which exact actions to take to get there? If yes, it's a constraint. If no (it reads like a fixed sequence of tool calls), it's recreating the rigid pipeline problem.
+
+- **Consequences:**
+  - This is a multi-session architectural milestone. Layer 1 (`.context/` structure) and Layer 2 (`workflows/` files) are created in this session as scaffolding. The engine wiring (reading `.context/` at startup, writing to it at session end, consulting workflows before acting) is future sessions.
+  - The `workflows/` files are constraint-style from day one — NOT procedural scripts. This is the key design decision that prevents recreating the rigid pipeline one layer up.
+  - The `.context/` structure mirrors the project's own `.context/memory/` but is adapted for LocalMind's runtime (learning about the user's machine, the user's preferences, the codebase LocalMind is working on — not about LocalMind's own development).
+  - Every workflow's learning step feeds back into `.context/`. This is the feedback loop: workflow runs → agent learns → `.context/` updated → next session reads it → agent is smarter. If LocalMind hits the same failure twice, the loop is broken.
+  - The `general.md` workflow is the fallback for anything that doesn't match a defined pattern. New workflows get authored as they're discovered to be needed — same organic growth as the project's `.context/`.
+
+- **Supersedes:** none. **Builds on:** ADR-4 (`.context/` is the agent memory system), ADR-5 (closed-loop), ADR-6 (multi-agent). **Extends:** the todo plan system (Session 27) — workflows define what the plan should look like, the engine emits it as todos, the agent executes with creative autonomy.
+
