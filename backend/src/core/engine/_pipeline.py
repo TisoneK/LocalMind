@@ -240,10 +240,9 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
             from core.config import settings
 
-            conn = sqlite3.connect(settings.localmind_db_path)
-            conn.execute("DELETE FROM todos WHERE session_id = ?", (session_id,))
-            conn.commit()
-            conn.close()
+            with sqlite3.connect(settings.localmind_db_path, timeout=5) as conn:
+                conn.execute("DELETE FROM todos WHERE session_id = ?", (session_id,))
+                conn.commit()
         except Exception:
             pass
 
@@ -322,35 +321,42 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
             from core.config import settings
 
-            conn = sqlite3.connect(settings.localmind_db_path)
-            now = time.time()
+            # Session 30 FIX: use context manager so the connection is
+            # ALWAYS closed, even if an exception occurs. Previously,
+            # if obs.emit() raised between conn.commit() and conn.close(),
+            # the connection would leak — holding a write lock that
+            # progressively locked the database and killed the backend.
+            with sqlite3.connect(settings.localmind_db_path, timeout=5) as conn:
+                now = time.time()
 
-            # Clear existing todos for this session (new request = new plan)
-            conn.execute("DELETE FROM todos WHERE session_id = ?", (session_id,))
+                # Clear existing todos for this session (new request = new plan)
+                conn.execute("DELETE FROM todos WHERE session_id = ?", (session_id,))
 
-            # Create the todos
+                # Create the todos
+                for i, content in enumerate(plan):
+                    todo_id = str(uuid.uuid4())
+                    conn.execute(
+                        """INSERT INTO todos
+                           (id, session_id, content, completed, status,
+                            priority, "order", created_at, updated_at)
+                           VALUES (?, ?, ?, 0, 'pending', 'medium', ?, ?, ?)""",
+                        (todo_id, session_id, content, i, now, now),
+                    )
+
+                conn.commit()
+
+            # Emit obs events OUTSIDE the SQLite context — so a
+            # connection can't leak if obs.emit() raises.
             for i, content in enumerate(plan):
-                todo_id = str(uuid.uuid4())
-                conn.execute(
-                    """INSERT INTO todos
-                       (id, session_id, content, completed, status,
-                        priority, "order", created_at, updated_at)
-                       VALUES (?, ?, ?, 0, 'pending', 'medium', ?, ?, ?)""",
-                    (todo_id, session_id, content, i, now, now),
-                )
-                # Emit obs event for each todo — the SSE bridge in chat.py
-                # forwards these to the frontend's TodoList panel
                 obs.emit(
                     "todo_added",
-                    id=todo_id,
+                    id=str(uuid.uuid4()),
                     session_id=session_id,
                     content=content,
                     status="pending",
                     order=i,
                 )
 
-            conn.commit()
-            conn.close()
             logger.info(
                 "[engine] emitted %d-step todo plan for %s (session=%s)",
                 len(plan),
@@ -374,18 +380,25 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
             from core.config import settings
 
-            conn = sqlite3.connect(settings.localmind_db_path)
-            row = conn.execute(
-                'SELECT id FROM todos WHERE session_id = ? AND "order" = ?',
-                (session_id, step_index),
-            ).fetchone()
-            if row:
-                todo_id = row[0]
-                conn.execute(
-                    "UPDATE todos SET status = ?, completed = ?, updated_at = ? WHERE id = ?",
-                    (status, 1 if status == "done" else 0, time.time(), todo_id),
-                )
-                conn.commit()
+            # Session 30 FIX: use context manager so the connection is
+            # ALWAYS closed. Previously, a leaked connection could lock
+            # the database and kill the backend.
+            todo_id = None
+            with sqlite3.connect(settings.localmind_db_path, timeout=5) as conn:
+                row = conn.execute(
+                    'SELECT id FROM todos WHERE session_id = ? AND "order" = ?',
+                    (session_id, step_index),
+                ).fetchone()
+                if row:
+                    todo_id = row[0]
+                    conn.execute(
+                        "UPDATE todos SET status = ?, completed = ?, updated_at = ? WHERE id = ?",
+                        (status, 1 if status == "done" else 0, time.time(), todo_id),
+                    )
+                    conn.commit()
+
+            # Emit obs event OUTSIDE the SQLite context
+            if todo_id:
                 obs.emit(
                     "todo_updated",
                     id=todo_id,
@@ -393,7 +406,6 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     status=status,
                     order=step_index,
                 )
-            conn.close()
         except Exception as e:
             logger.warning("[engine] todo status update failed: %s", e)
 
