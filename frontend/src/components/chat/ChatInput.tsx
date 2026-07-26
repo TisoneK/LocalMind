@@ -25,9 +25,10 @@ interface ChatInputProps {
   isStreaming: boolean;
   modelName?: string;
   modelProvider?: string;
+  sessionId?: string;
 }
 
-export function ChatInput({ onSend, onAbort, isStreaming, modelName, modelProvider }: ChatInputProps) {
+export function ChatInput({ onSend, onAbort, isStreaming, modelName, modelProvider, sessionId }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [selectedTool, setSelectedTool] = useState('auto');
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
@@ -43,6 +44,16 @@ export function ChatInput({ onSend, onAbort, isStreaming, modelName, modelProvid
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Session 25: reset selectedTool to 'auto' when the session changes.
+  // Previously, the tool selection persisted across sessions — if the user
+  // selected "sysinfo" in one chat and then clicked "New Chat", the next
+  // message still sent tool='sysinfo' as a hint, causing the backend to
+  // skip intent classification and use the wrong tool. This is the
+  // "sysinfo was for the first chat it just didnt reset" bug.
+  useEffect(() => {
+    setSelectedTool('auto');
+  }, [sessionId]);
 
   // Auto-resize textarea
   useEffect(() => {

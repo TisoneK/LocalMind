@@ -859,13 +859,46 @@ class AgentLoop:
                 iteration_messages.append({"role": "user", "content": context_content})
 
             # ── LLM call with tools ───────────────────────────────────
+            # Session 25: wrap with a hard timeout to prevent "thinking
+            # forever" when the model hangs. The wall-clock cap between
+            # iterations (line ~825) only fires between iterations — if
+            # a single model call hangs, it blocks forever. This timeout
+            # catches that: if the model doesn't respond within
+            # MAX_WALL_CLOCK_SECS, we break with a visible error.
             t_llm = time.monotonic()
-            result = await active_adapter.chat_with_tools(
-                messages=iteration_messages,
-                tools=filtered_tools,
-                temperature=0.3,
-                intent=intent.value,
-            )
+            try:
+                result = await asyncio.wait_for(
+                    active_adapter.chat_with_tools(
+                        messages=iteration_messages,
+                        tools=filtered_tools,
+                        temperature=0.3,
+                        intent=intent.value,
+                    ),
+                    timeout=MAX_WALL_CLOCK_SECS,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "[agent_loop] model call timed out after %.0fs (iter %d) — breaking with error",
+                    MAX_WALL_CLOCK_SECS,
+                    iteration + 1,
+                )
+                if _obs:
+                    _obs.emit(
+                        "agent_loop_model_timeout",
+                        intent=intent.value,
+                        timeout_secs=MAX_WALL_CLOCK_SECS,
+                        iteration=iteration + 1,
+                    )
+                yield StreamChunk(
+                    text=(
+                        f"I'm taking too long to respond — the model call "
+                        f"timed out after {int(MAX_WALL_CLOCK_SECS)}s. "
+                        f"Please try again or rephrase your request."
+                    ),
+                    done=False,
+                )
+                yield StreamChunk(text="", done=True)
+                return
             llm_ms = round((time.monotonic() - t_llm) * 1000)
             logger.info(f"[agent.loop] iter={iteration + 1} LLM: {llm_ms}ms")
 

@@ -45,6 +45,7 @@ interface CenterPanelProps {
   currentIntent?: string;
   currentConfidence?: number;
   memoryCount: number;
+  sessionId?: string;
 }
 
 export function CenterPanel({
@@ -57,6 +58,7 @@ export function CenterPanel({
   currentIntent,
   currentConfidence,
   memoryCount,
+  sessionId,
 }: CenterPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -200,6 +202,7 @@ export function CenterPanel({
         isStreaming={isStreaming}
         modelName={selectedModel.name}
         modelProvider={selectedModel.provider}
+        sessionId={sessionId}
       />
     </div>
   );

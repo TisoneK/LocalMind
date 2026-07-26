@@ -309,6 +309,7 @@ export function WorkspaceLayout() {
           currentIntent={currentIntent}
           currentConfidence={currentConfidence}
           memoryCount={memoryFacts.length}
+          sessionId={currentSessionId || undefined}
         />
       </div>
 
