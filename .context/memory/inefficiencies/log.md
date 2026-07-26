@@ -74,3 +74,21 @@ if literally nothing slowed you down.
 - **Cause:** npm 11 (installed on this sandbox) enables `allow-scripts` by default. Older npm versions ran postinstall scripts automatically.
 - **Workaround / fix:** No workaround needed for review/lint/test work. If a future session needs to build the Electron app (`npm run build`), run `npm approve-scripts --allow-scripts-pending` first, or `npm approve-scripts electron esbuild` for just those two.
 - **Prevent next time:** Documented in `system/environments.md` Quirks section. Future sessions doing Electron builds: approve the scripts first.
+
+---
+## 2026-07-27 — Super Z / GLM-5.2 (Session 31)
+
+- **Problem:** The `docs/shell_tool_fix_analysis.md` doc was misleading on first read — it diagnoses the `re` conditional-import bug as the root cause of the user's "Tools execution failure" symptom, but that bug was already fixed in a prior session. I spent ~10 minutes verifying the shell tool was healthy before realizing the doc was stale and the actual remaining bug was the silent-failure FALLBACK PATH in the engine + agent loop.
+- **Cost:** ~10 minutes of redundant code reading + a brief detour thinking I'd need to fix `shell.py` before realizing the tool was already healthy.
+- **Cause:** The doc was written when the bug was live; it was never updated after the fix landed. Future agents reading it as authoritative would re-investigate the same already-fixed code.
+- **Workaround / fix:** Verified the current state of `shell.py` directly (`import re` at line 38 — top of module; `SYSTEM = platform.system()` at line 54 — resolved once). Identified the real remaining bug (silent-failure fallback) by tracing the user's exact symptom through the code.
+- **Prevent next time:** Backlogged: delete or rewrite `docs/shell_tool_fix_analysis.md` to reflect the current state. Either remove it (the analysis is historical) or convert it to a "historical record" section noting which items are fixed. A future session should pick this up.
+
+---
+## 2026-07-27 — Super Z / GLM-5.2 (Session 31)
+
+- **Problem:** `AgentStep` dataclass requires `tool_input` and `observation` as positional args (no defaults), but the existing test pattern in `tests/core/test_empty_agent_fix.py` constructs it with positional args in some places and keyword args in others. When writing the new regression test, I used keyword-only args and missed `tool_input`/`observation` — got a `TypeError` on the first test run.
+- **Cost:** One failed test run + one quick Edit to fix.
+- **Cause:** `AgentStep`'s required fields aren't documented in the dataclass docstring; you have to read the definition or look at existing usage.
+- **Workaround / fix:** Added the missing `tool_input=None, observation=None` kwargs to the test. Test passed on next run.
+- **Prevent next time:** When constructing `AgentStep` in tests, always pass all required fields explicitly — don't rely on defaults that don't exist. Could be fixed at the source by giving `tool_input` and `observation` default values of `None`, but that's a behavior change for another session.

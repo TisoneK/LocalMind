@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Feature:** none — no session in progress (Session 30 replaced static "Thinking..." with real pipeline status feedback. See `.context/memory/features/agent-loop-closed-loop/notes.md`.)
+- **Feature:** none — no session in progress (Session 31 fixed the silent-failure fallback path that produced the uselessly generic "I wasn't able to complete that request. The tool may have failed or returned no useful output. Please try rephrasing your request." message. The agent loop now surfaces what tools actually ran via a trace summary, and the engine fallback is intent-aware + suggests concrete next steps. See `.context/memory/reviews/2026-07-27-review.md`.)
 - **Task:** none
 - **Status:** idle

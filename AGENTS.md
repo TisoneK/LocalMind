@@ -80,3 +80,21 @@ ledger line records the merge sha or abandonment reason. Single-session
 work uses `Feature: none` and skips the feature directory entirely.
 This is a project-level preview of core 0.3.0 (core is still at 0.2.0);
 see `memory/overrides/rules.md` for the full opt-in.
+
+## Silent-failure fallback contract (added 2026-07-27, Session 31)
+
+The agent loop's contract with the engine is: **always yield text on
+the silent-failure path**. When the model returns an empty stream (or
+all chunks are filtered out as system-leak XML — common with free-tier
+models), the loop MUST yield a meaningful fallback that surfaces what
+tools actually ran, NOT silently return nothing. The engine's
+last-resort fallback (when the loop yields zero text) is intent-aware
+and suggests concrete next steps (switch model, one step at a time,
+re-run) — it MUST NOT say "rephrase your request" because the user's
+phrasing is almost never the cause (real cause: free-tier model
+overload or context window overflow).
+
+If you add a new code path where the model's text might be empty after
+tool execution, wire it through `AgentLoop._summarize_trace_for_user()`
+so the user sees what tools ran. Regression tests live in
+`tests/e2e/test_tool_execution_failure.py`.
