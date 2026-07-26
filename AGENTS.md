@@ -53,3 +53,17 @@ If you read nothing else, obey these rules:
 Formats and file rules: `.context/core/schemas/context-schema.md` is
 the single source of truth. Project-specific rule adjustments:
 `.context/memory/overrides/rules.md` (they win over the edition).
+
+---
+
+## LocalMind architectural target (added 2026-07-26, Session 12)
+
+Agent-mode is being aligned to the **CODING HARNESS closed-loop** model
+(Context → 5-step Agent Loop → Tools, with a Workspace feedback bar
+that pipes git/diff/test output back into context every turn). See
+**ADR-5** in `.context/memory/plans/decisions.md` for the full
+diagram-to-module mapping and the four gaps to close. Standing Target
+in `workflows/active.md` is currently set to ADR-5 implementation —
+backlog items B-2026-07-26-1 (5-step loop + workspace-state injection)
+and B-2026-07-26-2 (context compaction) are the entry points. Don't
+relitigate the closed-loop model — implement it.

@@ -15,7 +15,7 @@ the user changes the rules; note the change in your session entry.
 - **Since:** 2026-07-15 (migrated to core 0.2.0 two-zone layout; prior workflow history preserved in `agents/sessions.md`)
 - **Default role:** engineer — full-scope, unless a session says otherwise.
 - **Scope:** discovery + review + fix all safe issues
-- **Target:** general sweep
+- **Target:** implement ADR-5 — formalize the 5-step agent loop with iteration cap + per-turn workspace-state injection (backlog B-2026-07-26-1 first; B-2026-07-26-2 second). See `.context/memory/plans/decisions.md` ADR-5 for the full diagram-to-module mapping. A chat-message target overrides this standing Target; if the chat says "start" or "general sweep," fall back to the old default.
 - **Focus areas:** all — security, performance, UX, architecture, testing, docs
 - **Findings handling:** fix safe, flag architectural
 - **Push policy:** push to main directly after each commit
