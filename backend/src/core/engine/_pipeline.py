@@ -2489,10 +2489,18 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     # Check if the loop hit its iteration limit — that's the
                     # most common cause and deserves an honest, specific message
                     # (not "overload" or "I don't know").
+                    #
+                    # Session 33 FIX: use _obs.all() (read-only) NOT _obs.drain()
+                    # (destructive). The SSE bridge at chat.py:129 calls drain()
+                    # to forward events to the frontend — if we drain() here, we
+                    # steal the events before the bridge can forward them, and the
+                    # frontend's tool_status spinner stays stuck forever ("Running
+                    # command" never clears). This was the bug that made the user
+                    # say "we have broken the tools again" after Session 32.
                     _hit_limit = False
                     _iterations_used = 0
                     try:
-                        for _evt in _obs.drain():
+                        for _evt in _obs.all():
                             if _evt.type == "agent_loop_done" and _evt.data.get("hit_limit"):
                                 _hit_limit = True
                                 _iterations_used = _evt.data.get("iterations", 0)
