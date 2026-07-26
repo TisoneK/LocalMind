@@ -38,31 +38,34 @@ B-2026-07-26-1 (5-step loop + iteration cap + workspace-state injection
   ADR-6 captured Session 14 (the multi-agent organizational structure —
   refines ADR-5). Feature-scoped memory directory created Session 13 —
   this manifest is the live dogfood for the 0.3.0 feature-scoped memory
-  design. Implementation not started — this is the planning +
-  scaffolding state. The existing modules that map to the target
-  structure (verified via `wc -l` in Sessions 12 + 14):
-  `backend/src/core/agent/loop.py` (2926 LOC) → `base_agent.py`,
-  `backend/src/core/agent/orchestrator.py` (532 LOC) → shared planning,
-  `backend/src/core/agent/tool_dispatch.py` (109 LOC) → shared dispatch,
-  `backend/src/core/safety_gate.py` (135 LOC) → shared permission layer,
-  `backend/src/core/context_builder.py` (736 LOC) → per-agent
-  context_builders, `backend/src/tools/` (14 flat tools) → per-agent
-  scoped tools/, `backend/src/core/workspace/manager.py` (272 LOC —
-  the per-turn scratch directory, NOT the new workspace-state service;
-  do not conflate). The work is decomposition + redistribution + one
-  new service (`workspace_state.py`), not greenfield. Last touched:
-  Session 14 (2026-07-26) — ADR-6 capture only, no code changes.
-- **Next steps:** First implementation session should: (1) read this
-  manifest + `plans/decisions.md` ADR-5 AND ADR-6 + backlog items
-  B-2026-07-26-1 and B-2026-07-26-2; (2) **promote the existing
-  `backend/src/tools/browser_agent.py` to a full agent first** — it's
-  already domain-scoped in name, so it's the natural first concrete
-  step and the smallest risk (no existing coding/research agent to
-  break); (3) extract `base_agent.py` from `agent/loop.py` as the
-  shared loop, with `browser_agent.py` as the first subclass; (4) then
-  build `coding_agent.py` + `workspace_state.py` (the highest-leverage
-  piece per ADR-5's thesis); (5) then `research_agent.py` and
-  `direct_agent.py`; (6) leave the context compaction step
+  design. **Implementation started Session 15** — the first
+  implementation session after three architecture-capture sessions (12,
+  13, 14). Created the `backend/src/agents/` package: `base_agent.py`
+  (abstract `BaseAgent` + `AgentConfig` with hard iteration/wall-clock
+  caps per ADR-5), `registry.py` (name → agent class), `browser_agent.py`
+  (first concrete subclass), and `browser/` subpackage
+  (`context_builder.py`, `tools.py` with scoped `BROWSER_TOOLS`,
+  `is_done.py`). 19 new tests in `tests/agents/test_agents.py` lock in
+  the interface. Baseline held: 216 tests pass (197 baseline + 19 new),
+  0 real ruff bugs (112 E501 pre-existing), mypy error is pre-existing
+  numpy stub issue. The new `BaseAgent.run()` delegates to the existing
+  `AgentLoop` for backward compatibility (Phase 1) — non-breaking. The
+  existing `tools/browser_agent.py` tool stays registered for backward
+  compat; the new `BrowserAgent` class is the structural skeleton ADR-6
+  calls for. Last touched: Session 15 (2026-07-26) — first code commit
+  for this feature.
+- **Next steps:** Next implementation session should: (1) **extract
+  the loop body from `agent/loop.py` into `BaseAgent._run_loop()`** —
+  this is Phase 2 per the `base_agent.py` docstring. The existing
+  `AgentLoop` becomes a thin shim that constructs a default agent and
+  calls its `run()` method. (2) Wire the intent router / `model_router.py`
+  to look up `agents.registry.get_agent()` by name so browser tasks
+  route to `BrowserAgent` (currently the registry exists but the router
+  doesn't call it — that's intentional Phase 1 non-breaking behavior).
+  (3) Then build `coding_agent.py` + `workspace_state.py` (the
+  highest-leverage piece per ADR-5's thesis — the workspace feedback
+  loop is the differentiator). (4) Then `research_agent.py` and
+  `direct_agent.py`. (5) Leave the context compaction step
   (B-2026-07-26-2) for a follow-up session — it's Medium priority and
   touches `context_builder.py` which is already well-tested. Update
   this manifest's "Current state" at the end of each implementation

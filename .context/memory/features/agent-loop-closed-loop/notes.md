@@ -111,3 +111,92 @@ tool descriptions are too vague.
 **No code changes this session** — ADR-6 capture only, same scope
 discipline as Sessions 9, 12, 13 (architecture-capture sessions don't
 touch product code).
+
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 15)
+
+First implementation session for this feature. Three architecture-
+capture sessions (12, 13, 14) preceded it; the manifest's "Next steps"
+was detailed enough that implementation could start immediately.
+
+**What landed:**
+
+Created `backend/src/agents/` package — the structural skeleton ADR-6
+calls for:
+
+- `base_agent.py` — abstract `BaseAgent` class + `AgentConfig` dataclass.
+  The `AgentConfig` carries the ADR-5 hard caps (`max_iterations`,
+  `max_wall_clock_secs`) and the scoped `allowed_tools` frozenset per
+  ADR-6. `BaseAgent` defines the abstract interface (`config()`,
+  `build_context()`, `is_done()`, `description()`) plus a shared
+  `run()` that delegates to the existing `AgentLoop` in Phase 1
+  (non-breaking) and a `scoped_tools()` helper that filters the global
+  tool list down to the agent's allowlist.
+- `registry.py` — name → agent class registry with `register()`,
+  `get_agent()`, `list_agents()`, `is_registered()`. The UI picker /
+  intent router will call `get_agent(name)` to look up agents.
+- `browser_agent.py` — first concrete `BaseAgent` subclass. Supplies
+  browser-specific config (15 max iterations, 240s wall clock, scoped
+  to `Intent.BROWSE` only), delegates to `browser/` subpackage for
+  context/tools/is_done.
+- `browser/` subpackage — `context_builder.py` (browser-context header
+  + memory facts + orchestrator plan), `tools.py` (`BROWSER_TOOLS =
+  {Intent.BROWSE}` — the smallest possible scoped surface, ideal for
+  testing the scoped-tools concept), `is_done.py` (Phase 1: always
+  returns `(False, "")` — lets existing AgentLoop handle termination).
+
+19 new tests in `tests/agents/test_agents.py` lock in: BaseAgent is
+abstract, BrowserAgent config/description/context/is_done/scoped_tools,
+registry register/get/list/is_registered/conflict-raises. All 19 pass.
+Full suite: 216 pass (197 baseline + 19 new), 0 real ruff bugs (112
+E501 pre-existing), mypy error is pre-existing numpy stub issue.
+
+**Design decisions made during implementation:**
+
+1. **Non-breaking Phase 1 delegation.** `BaseAgent.run()` delegates to
+   the existing `AgentLoop` rather than hosting the loop body itself.
+   This keeps the new abstraction non-breaking — all existing traffic
+   continues to flow through `AgentLoop` unchanged. Phase 2 (next
+   session) will extract the loop body into `BaseAgent._run_loop()`.
+   The `agent/loop.py` docstring documents this phase plan.
+
+2. **The existing `tools/browser_agent.py` stays registered.** The new
+   `BrowserAgent` class composes the existing tool — it doesn't replace
+   it. The tool continues to be available via the flat `tools/`
+   registry; the new agent class is the structural skeleton for
+   per-agent scoping. A future session will migrate the routing so
+   browser tasks go through `BrowserAgent.scoped_tools()` instead of
+   the flat `_filtered_tool_defs()`.
+
+3. **`AgentConfig` carries the ADR-5 hard caps.** `max_iterations` and
+   `max_wall_clock_secs` are per-agent, with sensible defaults
+   (`DEFAULT_MAX_ITERATIONS = 20`, `DEFAULT_MAX_WALL_CLOCK_SECS = 300`).
+   BrowserAgent overrides to 15 / 240 (browser tasks are slow but
+   rarely need many iterations). These caps aren't enforced yet in
+   Phase 1 (the existing AgentLoop has its own MAX_ITERATIONS); Phase 2
+   will enforce them in `BaseAgent._run_loop()`.
+
+4. **`scoped_tools()` is a method, not a property.** It takes the full
+   tool list as an argument so the agent can filter against whatever
+   the global registry currently has, at call time. This avoids
+   ordering issues with tool registration vs. agent construction.
+
+5. **Description quality matters (ADR-6 point 6).** The test
+   `test_browser_agent_description_is_concrete` asserts the description
+   is >50 chars, mentions "browser" and "click"/"navigate", and
+   mentions what it CAN'T do. This locks in the ADR-6 point-6
+   requirement that agent descriptions must be concrete enough for a
+   gemma3:1b-class model to disambiguate.
+
+**What didn't land (deferred to next session):**
+
+- Loop body extraction (`BaseAgent._run_loop()`) — Phase 2
+- Intent router wiring (`model_router.py` → `agents.registry.get_agent()`)
+- `coding_agent.py` + `workspace_state.py` — the ADR-5 highest-leverage piece
+- `research_agent.py`, `direct_agent.py`
+- Context compaction step (B-2026-07-26-2)
+
+The session stayed scoped to "promote browser_agent to a full agent as
+the smallest-risk first concrete step" per the manifest's next-steps.
+Didn't try to do too much — the loop body extraction is a separate
+session's work.
