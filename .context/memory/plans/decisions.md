@@ -377,3 +377,137 @@ agents/coding/
 1. **Does the task-type classifier need an LLM call, or can it be keyword-based?** An LLM call adds latency; keyword-based is less accurate. Probably LLM-based but cached per-session (task type rarely changes mid-conversation).
 2. **How does agent-to-agent delegation handle streaming?** If the CodingAgent delegates to the ResearchAgent mid-stream, does the user see the ResearchAgent's work? Probably yes (in a sub-panel), but this is a UX decision.
 3. **What happens to the intent classifier?** It becomes a signal the agent uses ("the user mentioned shell commands, so shell is likely involved") rather than the router. Or it could be removed entirely if the task-type classifier is good enough. TBD.
+
+---
+
+## ADR-9: Add ZenMux provider (unified API gateway with free models + insurance)
+
+**Date:** 2026-07-27 (Session 33 — proposed, NOT yet implemented)
+**Status:** proposed
+**Author:** Super Z / GLM-5.2 (feature request from user + web research)
+
+### Context
+
+User wants to add ZenMux (zenmux.ai) as a new LLM provider. ZenMux is a unified API gateway aggregating 100+ AI models (Claude, GPT, Gemini, DeepSeek, Grok, etc.) with a single API key. It's OpenAI-SDK compatible — same protocol shape as the existing Zen, Chutes, and Z.ai providers — so it should slot into LocalMind's existing `OpenAICompatAdapter` as a drop-in.
+
+**Why ZenMux is worth adding:**
+
+1. **Free models available right now.** Grok 4.5 is currently offered free. Claude Opus 4.6 has a free promotion running (time-limited — worth checking if still live). Nano Banana Pro is free for image generation (with rate limits). These rotate, but there's always something free.
+
+2. **Standing free tier.** The free Builder subscription gives ~5 flows per 5 hours (~165 flows/month) for personal development. This is separate from the rotating free-model promos — it's the baseline free tier.
+
+3. **"Insurance" differentiator.** ZenMux's paid tiers (Pro $20/mo, Max $100/mo, Ultra $400/mo) automatically compensate you when you get hallucinated outputs, excessive latency, or low throughput. This is unique — no other provider LocalMind integrates offers this. For a local-first app where the user is paying per-token, the hallucination insurance is genuinely valuable.
+
+4. **Model aggregation.** One API key covers 100+ models across providers. Instead of managing separate keys for OpenAI, Anthropic, Google, etc., the user manages one ZenMux key and gets access to all of them. Lower friction for the user.
+
+5. **Pay-as-you-go per-token.** Model usage is billed per-token at model/provider-specific rates against a topped-up balance, separate from the subscription tiers. The free tier + promos give free usage; beyond that, it's per-token.
+
+**Integration specifics (from web research):**
+- **Base URL:** `https://zenmux.ai/api/v1`
+- **Protocol:** OpenAI-SDK compatible (same as Zen, Chutes, Z.ai)
+- **Model format:** `provider/model-name` (e.g. `google/gemini-3.1-pro-preview`, `anthropic/claude-opus-4-6`, `xai/grok-4.5`)
+- **Also supports:** OpenAI's Responses API on the same base URL (not needed for LocalMind's current adapter, but good to know)
+- **Auth:** Bearer token in `Authorization` header (standard)
+
+### Decision
+
+**Add ZenMux as a new provider in the OpenAI-compat adapter.** This is a configuration addition, not an architectural change — ZenMux uses the same protocol as existing providers, so no new adapter code is needed. The work is: (1) add a `ProviderConfig` entry, (2) add an env var mapping, (3) add model context windows, (4) wire the frontend, (5) test against the real API.
+
+### Implementation steps
+
+**Step 1: Add `ProviderConfig` in `backend/src/adapters/openai_compat.py`**
+
+Add to `PROVIDER_CONFIGS` (after the `zen` entry, since they're similar gateways):
+
+```python
+"zenmux": ProviderConfig(
+    name="zenmux",
+    display_name="ZenMux",
+    base_url="https://zenmux.ai/api/v1",
+    api_key=os.getenv("ZENMUX_API_KEY", ""),
+    default_model="xai/grok-4.5",  # currently free per web research
+    key_env="ZENMUX_API_KEY",
+    model_env="ZENMUX_MODEL",
+    settings_field="zenmux_model",
+),
+```
+
+Note: model strings use `provider/model-name` format (e.g. `xai/grok-4.5`, `anthropic/claude-opus-4-6`, `google/gemini-3.1-pro-preview`). This is different from most providers (which use bare model names) but the adapter passes the model string through as-is, so no format conversion is needed.
+
+**Step 2: Add env var mapping in `backend/src/core/config.py`**
+
+Add to the `env_key_map` in `get_api_key()`:
+```python
+"zenmux": "ZENMUX_API_KEY",
+```
+
+**Step 3: Add model context windows in `backend/src/adapters/openai_compat.py`**
+
+Add to `MODEL_CONTEXT_WINDOWS`:
+```python
+# ZenMux (aggregated models — use the underlying model's context window)
+"xai/grok-4.5": 131072,
+"anthropic/claude-opus-4-6": 200000,
+"anthropic/claude-sonnet-4-6": 200000,
+"google/gemini-3.1-pro-preview": 1048576,
+"google/gemini-3.5-flash": 1048576,
+"openai/gpt-5.5": 128000,
+"deepseek/deepseek-v4-flash": 131072,
+```
+
+Note: ZenMux aggregates 100+ models — we can't add all of them. Add the most common ones + the currently-free ones. Unknown models fall back to the `"default": 32768` entry. The model list should be fetched live from `GET /api/v1/models` (same as Zen) — the Settings panel already does this for other providers.
+
+**Step 4: Wire the frontend**
+
+Add to `frontend/src/components/shared/SettingsModal.tsx` provider list:
+```typescript
+{ id: 'zenmux', name: 'ZenMux (free models + insurance)' },
+```
+
+The ModelSelector and model-fetching endpoint (`GET /api/models?provider=zenmux`) already work generically — they call the provider's `/models` endpoint and display the results. No new frontend code needed beyond the provider list entry.
+
+**Step 5: REAL-API SMOKE TEST (per flaw log — DO NOT SKIP)**
+
+Per the Session 31/33 flaw log: **do not ship provider/adapter changes without a real-API smoke test.** Before committing:
+
+1. Get a ZenMux API key from the user (or sign up at zenmux.ai for the free tier).
+2. Run a trivial test call against `https://zenmux.ai/api/v1/chat/completions` with model `xai/grok-4.5` (currently free):
+   ```bash
+   curl -s -H "Authorization: Bearer $ZENMUX_API_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{"model":"xai/grok-4.5","messages":[{"role":"user","content":"Say hello"}],"stream":false}' \
+        https://zenmux.ai/api/v1/chat/completions
+   ```
+3. Verify: (a) the API returns 200, (b) the response has the expected `choices[0].message.content` shape, (c) streaming works (`"stream":true` returns SSE chunks), (d) the `provider/model-name` format is accepted.
+4. Test with the LocalMind adapter specifically: construct an `OpenAICompatAdapter(provider="zenmux")` and call `chat()` — verify it streams correctly and doesn't hit the trailing-tool-role 400 (Session 31's adapter fix should handle this, but verify).
+5. If any of these fail, fix the adapter BEFORE shipping — don't ship a broken provider.
+
+**Step 6: Test with a multi-step agent task**
+
+After the smoke test passes, test a multi-step task (e.g. "Create hello world repo") against ZenMux to verify:
+- The trailing-tool-role fix (Session 31) works with ZenMux's message format
+- The Phase 1 reasoning-detection fix (Session 31) works if ZenMux models produce reasoning_content
+- The iteration limit (Session 32) is sufficient
+- No SSE stream races (Session 33's `drain()` fix holds)
+
+### Consequences
+
+- **New provider option for users.** ZenMux gives access to 100+ models with one API key, including currently-free models (Grok 4.5, Claude Opus 4.6 promo). This is especially valuable for users who want to try multiple models without managing multiple API keys.
+- **No architectural change.** ZenMux uses the same OpenAI-compatible protocol as Zen, Chutes, Z.ai, etc. The existing `OpenAICompatAdapter` handles it. The work is configuration + frontend wiring + testing.
+- **Model string format difference.** ZenMux uses `provider/model-name` (e.g. `xai/grok-4.5`) instead of bare model names. The adapter passes the model string through as-is, so no conversion is needed — but the `MODEL_CONTEXT_WINDOWS` registry needs entries with the `provider/` prefix.
+- **Per the flaw log: the smoke test is mandatory.** Sessions 31-33 taught us that provider/adapter changes break in ways mocked tests can't catch (SSE races, message-format rejections, reasoning-stream handling). The real-API smoke test is Step 5, not an afterthought.
+- **The free-model rotation is a feature.** ZenMux's free models change over time. The Settings panel fetches the live model list from `GET /api/models?provider=zenmux`, so the user always sees what's currently available — no hardcoded model list to maintain.
+
+### Supersedes / builds on
+
+- **Builds on:** the OpenAI-compat adapter pattern (shared across Zen, Chutes, Z.ai, OpenRouter, etc.)
+- **Builds on:** Session 31's adapter fixes (trailing-tool-role synthetic user message, Phase 1 reasoning-only detection) — ZenMux will benefit from these automatically
+- **Does NOT supersede:** any existing provider. ZenMux is an addition, not a replacement.
+- **Does NOT supersede:** ADR-8 (agent-centric routing). This is a provider addition; ADR-8 is an architectural change to how tasks route to agents. They're independent.
+
+### Open questions
+
+1. **Which model should be the default?** `xai/grok-4.5` is currently free, but free models rotate. Should the default be a free model (changes over time) or a stable paid model (always available, costs tokens)? Probably default to the currently-free one and let the user change it.
+2. **Does ZenMux support the `tools` parameter for function calling?** Most OpenAI-compatible providers do, but some don't. The smoke test (Step 5) should verify this — if ZenMux doesn't support `tools`, the adapter's MiniMax-style text-based tool-call detection would need to handle it.
+3. **Does ZenMux return `reasoning_content` for reasoning models?** DeepSeek-v4-flash-free (via Zen) does, and the adapter handles it. ZenMux aggregates DeepSeek — does it pass through `reasoning_content`? The smoke test should verify this.
+4. **Should LocalMind document the insurance feature?** The hallucination/latency/throughput insurance is a ZenMux differentiator, but it's between the user and ZenMux — LocalMind doesn't participate. Probably just a note in the provider description: "ZenMux offers hallucination insurance on paid tiers — see zenmux.ai for details."
