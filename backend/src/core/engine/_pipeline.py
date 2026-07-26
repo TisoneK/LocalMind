@@ -2469,29 +2469,39 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         "in your .env file."
                     )
                 else:
-                    # Session 31: replaced the uselessly generic "The tool
-                    # may have failed or returned no useful output. Please
-                    # try rephrasing your request." message — it told the
-                    # user nothing about what actually happened and mis-
-                    # attributed the failure to their phrasing. The real
-                    # cause is almost always: the free-tier model returned
-                    # an empty stream after tool execution (overload,
-                    # context-too-large, or filtered output). Surface the
-                    # intent + concrete next steps instead.
+                    # Session 31 (revised per user feedback): the previous
+                    # fallback guessed "free-tier model overload" — a
+                    # plausible-sounding but unverified self-diagnosis. The
+                    # user correctly pushed back: for a small multi-step task
+                    # (mkdir, git init, write file, commit), context overflow
+                    # is not plausible. The real cause is more likely a tool
+                    # returning broken data that chokes the synthesizer.
+                    #
+                    # This is the engine's LAST-RESORT fallback — it fires
+                    # when the agent loop itself yielded zero text chunks
+                    # (meaning the loop's own evidence-based fallbacks also
+                    # didn't fire, which shouldn't happen but we guard
+                    # against it anyway). Be honest: we don't know what went
+                    # wrong, and suggest the user check the tool outputs in
+                    # the terminal panel + try one step at a time to isolate.
                     _intent_label = _TOOL_LABELS.get(
                         effective_intent, effective_intent.value
                     )
                     _agent_response = (
-                        f"I started the {_intent_label} request and ran "
-                        f"the available tools, but the model returned an "
-                        f"empty response when summarizing what happened. "
-                        f"This is almost always a free-tier model issue "
-                        f"(overload or context window overflow) — not a "
-                        f"problem with your request.\n\n"
-                        f"Try one of these:\n"
-                        f"  • Switch to a larger model (Settings → Model)\n"
-                        f"  • Ask me to do one step at a time\n"
-                        f"  • Re-run the request — transient overload is common"
+                        f"I started the {_intent_label} request but "
+                        f"something went wrong and I couldn't produce a "
+                        f"response. I don't want to guess why — the honest "
+                        f"answer is I don't know yet.\n\n"
+                        f"What to try:\n"
+                        f"  • Check the Terminal panel (bottom of the screen) —\n"
+                        f"    it shows the actual command + output for each\n"
+                        f"    tool I ran. If a tool returned something\n"
+                        f"    unexpected, that's likely the real cause.\n"
+                        f"  • Try one step at a time (e.g. just 'create the\n"
+                        f"    directory') to isolate which step breaks.\n"
+                        f"  • Or re-run the request — if it works on retry,\n"
+                        f"    it was transient; if it fails the same way,\n"
+                        f"    it's a real bug worth reporting."
                     )
                 full_response_chunks = [_agent_response]
                 yield StreamChunk(text=_agent_response, done=False)

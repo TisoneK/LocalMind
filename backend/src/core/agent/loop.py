@@ -2572,6 +2572,7 @@ class AgentLoop:
                 loop_messages=loop_messages,
                 observation_log=observation_log,
                 active_adapter=active_adapter,
+                trace=trace,  # Session 31: pass trace so empty-stream fallback can surface tool outputs
             ):
                 yield chunk
         except asyncio.TimeoutError:
@@ -2996,11 +2997,17 @@ class AgentLoop:
         silent-failure fallback path. Returns an empty string if no tools
         ran (so the caller knows there's nothing to summarize).
 
-        This is the antidote to the generic "I wasn't able to complete
-        that request. The tool may have failed or returned no useful
-        output. Please try rephrasing your request." message — when the
-        model's text response is empty (filtered out or genuinely empty),
-        the user STILL gets to see what the agent did on their behalf.
+        Session 31 (revised per user feedback): the previous version guessed
+        "free-tier model overload" — a plausible-sounding but unverified
+        self-diagnosis. The user correctly pushed back: for a 4-step task
+        (mkdir, git init, write a small file, commit), context overflow is
+        not plausible. The real cause is more likely a tool returning
+        broken/unexpected data that the synthesizer chokes on.
+
+        The honest fix: surface the ACTUAL tool inputs and outputs (truncated)
+        so the user can see for themselves what happened. Don't guess at the
+        cause — let the evidence speak. If a tool returned malformed data,
+        the user will spot it immediately in the output.
 
         Args:
             trace: AgentTrace with .steps (list of AgentStep).
@@ -3008,7 +3015,8 @@ class AgentLoop:
                 tools succeeded).
 
         Returns:
-            A user-facing string, or "" if no tool calls ran.
+            A user-facing string with tool call details, or "" if no tool
+            calls ran.
         """
         # Collect tool calls from the trace (skip pure-thinking steps
         # where tool_name is None).
@@ -3019,34 +3027,50 @@ class AgentLoop:
             return ""
 
         lines = [
-            "I ran the requested tools but couldn't generate a clean "
-            "summary (the model returned empty or filtered output). "
-            "Here's what actually happened:",
+            "I ran the requested tools but the model couldn't summarize "
+            "what happened (it returned an empty response). Instead of "
+            "guessing why, here's the raw evidence — each tool I called, "
+            "what I sent it, and what it returned:",
             "",
         ]
         for i, step in enumerate(tool_calls, 1):
-            status = "failed" if step.tool_failed else "ok"
+            status = "FAILED" if step.tool_failed else "ok"
             _input = (step.tool_input or "").strip()
-            if len(_input) > 80:
-                _input = _input[:77] + "..."
+            if len(_input) > 120:
+                _input = _input[:117] + "..."
             lines.append(f"  {i}. {step.tool_name}({_input}) — {status}")
-            # Surface a short snippet of the observation for failed tools
-            # so the user can see the error without scrolling logs.
-            if step.tool_failed and step.observation:
-                _obs_snippet = step.observation.strip().splitlines()[0][:200]
-                lines.append(f"     error: {_obs_snippet}")
+
+            # ALWAYS surface the observation (tool output), not just for
+            # failed tools. The user's point is that a SUCCEEDED tool might
+            # be returning malformed data that chokes the synthesizer —
+            # we need to show success outputs too, not just error outputs.
+            if step.observation:
+                _obs_text = step.observation.strip()
+                if len(_obs_text) > 300:
+                    _obs_text = _obs_text[:297] + "..."
+                # First non-empty line, or the whole thing if single-line
+                _first_line = _obs_text.splitlines()[0] if _obs_text.splitlines() else _obs_text
+                if step.tool_failed:
+                    lines.append(f"     → error: {_first_line}")
+                else:
+                    lines.append(f"     → output: {_first_line}")
 
         # Surface the observation log too if it has content (failed tools
-        # are logged here with their full error context).
+        # are logged here with their full error context — more detail than
+        # the per-step snippet above).
         if observation_log.strip():
             lines.append("")
-            lines.append("Details:")
+            lines.append("Full error details:")
             lines.append(observation_log[:1500])
 
         lines.append("")
         lines.append(
-            "Try switching to a larger model (Settings → Model), or ask "
-            "me to do one step at a time."
+            "What to try next:\n"
+            "  • Check the outputs above — if a tool returned something\n"
+            "    unexpected, that's likely the real cause (not 'overload').\n"
+            "  • Try one step at a time to isolate which step breaks.\n"
+            "  • Or switch to a larger model if you want me to retry the\n"
+            "    synthesis with more reasoning capacity."
         )
         return "\n".join(lines)
 
@@ -3059,11 +3083,17 @@ class AgentLoop:
         loop_messages: list[dict],
         observation_log: str,
         active_adapter,
+        trace=None,
     ) -> AsyncIterator[StreamChunk]:
         """
         After hitting MAX_ITERATIONS, ask the LLM to synthesize a final
         answer from everything gathered so far.  Uses plain chat() without
         tools — the model should just summarize what it knows.
+
+        Session 31: now accepts an optional `trace` parameter so the
+        empty-stream fallback can surface ACTUAL tool inputs/outputs
+        instead of guessing "overload" (per user feedback — the overload
+        diagnosis was unverified and likely wrong for small tasks).
         """
         # Strip tool_calls from messages for the plain chat call.
         # Convert tool results to user-readable context with generous truncation
@@ -3139,47 +3169,59 @@ class AgentLoop:
             )
             return  # CRITICAL: return after yielding the exception fallback
 
-        # Session 31: if the model returned an empty stream (or all chunks
-        # were filtered out as system-leak XML), yield a fallback that
-        # surfaces what actually happened. This prevents the engine from
-        # falling through to its generic "rephrase your request" message.
-        # The observation_log records every FAILED tool call; the
-        # trace.steps list (passed in via the caller) records every tool
-        # call regardless of status. We surface both for diagnostics.
+        # Session 31 (revised per user feedback): if the model returned an
+        # empty stream (or all chunks were filtered out as system-leak XML),
+        # yield a fallback that surfaces ACTUAL EVIDENCE — not a guess.
+        #
+        # The previous version guessed "free-tier model overload." The user
+        # correctly pushed back: for a 4-step task (mkdir, git init, write
+        # a small file, commit), context overflow is not plausible. The
+        # real cause is more likely a tool returning broken data that the
+        # synthesizer chokes on. So instead of guessing, surface the actual
+        # tool inputs and outputs from the trace and let the user decide.
         if not _any_text_yielded:
             logger.warning(
                 "[agent.loop] final synthesis produced no text — "
-                "yielding observation log fallback (model returned empty stream)"
+                "yielding evidence-based fallback (model returned empty stream)"
             )
-            if observation_log.strip():
+            # Try the trace summary first — it lists every tool call with
+            # its actual input and output (truncated). This is the honest
+            # fallback: show what happened, don't guess why.
+            _evidence_summary = ""
+            if trace is not None:
+                _evidence_summary = self._summarize_trace_for_user(trace, observation_log)
+
+            if _evidence_summary:
+                # Trace has tool calls — surface them as evidence.
+                yield StreamChunk(text=_evidence_summary, done=True)
+            elif observation_log.strip():
+                # No trace available but observation_log has content (failed
+                # tools). Surface that.
                 yield StreamChunk(
                     text=(
                         "I completed the tool calls but the model couldn't "
                         "synthesize a final response (it returned an empty "
-                        "stream — common with free-tier models when the "
-                        "context is too large or the model is overloaded).\n\n"
-                        "Here's what I did:\n\n"
+                        "stream). Here's what I did:\n\n"
                         + observation_log[:2000]
-                        + "\n\nTry switching to a larger model, or ask me to "
-                        "do one step at a time."
+                        + "\n\nCheck the outputs above — if a tool returned "
+                        "something unexpected, that's likely the real cause."
                     ),
                     done=True,
                 )
             else:
-                # Observation log is empty (no failed tool calls — all tools
-                # succeeded, but the model still couldn't synthesize). Give
-                # the user a concrete next step instead of a generic "rephrase".
+                # No tools ran AND no observation log — this is a genuine
+                # model issue (no tools to blame). Only here do we suggest
+                # model overload as a possibility.
                 yield StreamChunk(
                     text=(
-                        "I ran the requested tools but the model returned an "
-                        "empty response when trying to summarize what happened. "
-                        "This usually means the free-tier model is overloaded "
-                        "or the tool output was too large for its context "
-                        "window.\n\n"
+                        "The model returned an empty response and no tools "
+                        "were executed. This is likely a model-side issue "
+                        "(overload, rate limit, or the model rejected the "
+                        "prompt).\n\n"
                         "Try one of these:\n"
+                        "  • Re-run the request — transient overload is common\n"
                         "  • Switch to a larger model (Settings → Model)\n"
-                        "  • Ask me to do one step at a time\n"
-                        "  • Re-run the request — transient overload is common"
+                        "  • Try a simpler phrasing of your request"
                     ),
                     done=True,
                 )

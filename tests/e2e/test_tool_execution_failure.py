@@ -67,6 +67,7 @@ class TestForceFinalAnswerEmptyStream:
             loop_messages=[{"role": "user", "content": "test"}],
             observation_log=observation_log,
             active_adapter=mock_adapter,
+            trace=None,  # no trace — falls through to observation_log path
         ):
             chunks.append(chunk)
 
@@ -103,6 +104,7 @@ class TestForceFinalAnswerEmptyStream:
             loop_messages=[{"role": "user", "content": "test"}],
             observation_log="",  # no failed tools
             active_adapter=mock_adapter,
+            trace=None,  # no trace — simulates pre-trace-parameter call
         ):
             chunks.append(chunk)
 
@@ -110,7 +112,7 @@ class TestForceFinalAnswerEmptyStream:
         text = "".join(c.text for c in chunks)
         assert text.strip()
         # Should suggest concrete next steps
-        assert "model" in text.lower() or "switch" in text.lower(), (
+        assert "model" in text.lower() or "switch" in text.lower() or "re-run" in text.lower(), (
             "Fallback should suggest switching models or other concrete next steps, "
             f"got: {text!r}"
         )
@@ -137,6 +139,7 @@ class TestForceFinalAnswerEmptyStream:
             loop_messages=[{"role": "user", "content": "test"}],
             observation_log="[Tool: shell | Status: OK]",
             active_adapter=mock_adapter,
+            trace=None,
         ):
             chunks.append(chunk)
 
@@ -145,6 +148,88 @@ class TestForceFinalAnswerEmptyStream:
         # Must NOT contain the fallback text
         assert "couldn't synthesize" not in text.lower()
         assert "empty response" not in text.lower()
+
+
+    @pytest.mark.asyncio
+    async def test_empty_stream_with_trace_surfaces_actual_tool_outputs(self):
+        """Session 31 (revised per user feedback): when the trace has tool
+        calls, the fallback MUST surface the actual tool inputs and outputs
+        (truncated) — NOT guess 'overload'. This is the honest fix: show
+        evidence, don't speculate about the cause."""
+        from core.agent.loop import AgentTrace, AgentStep
+
+        loop = AgentLoop(adapter=MagicMock())
+
+        async def empty_chat(messages, temperature=0.4):
+            return
+            yield
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat = empty_chat
+
+        # Build a trace with 4 tool calls (the user's exact scenario:
+        # mkdir, git init, file_write, git commit)
+        trace = AgentTrace()
+        trace.steps = [
+            AgentStep(
+                iteration=1, thought="", tool_name="shell",
+                tool_input="mkdir C:\\Users\\tison\\...\\ProjectPhill",
+                observation="Directory created successfully",
+                tool_failed=False, retry_count=0, latency_ms=100,
+            ),
+            AgentStep(
+                iteration=2, thought="", tool_name="shell",
+                tool_input="git init",
+                observation="Initialized empty Git repository in C:/Users/tison/.../ProjectPhill/.git/",
+                tool_failed=False, retry_count=0, latency_ms=150,
+            ),
+            AgentStep(
+                iteration=3, thought="", tool_name="file_write",
+                tool_input="hello.py: print('Hello World')",
+                observation="File written: hello.py",
+                tool_failed=False, retry_count=0, latency_ms=50,
+            ),
+            AgentStep(
+                iteration=4, thought="", tool_name="shell",
+                tool_input="git add . && git commit -m 'initial'",
+                observation="",  # empty observation — maybe this is the problem?
+                tool_failed=False, retry_count=0, latency_ms=200,
+            ),
+        ]
+
+        chunks = []
+        async for chunk in loop._force_final_answer(
+            loop_messages=[{"role": "user", "content": "test"}],
+            observation_log="",  # no failed tools
+            active_adapter=mock_adapter,
+            trace=trace,
+        ):
+            chunks.append(chunk)
+
+        assert len(chunks) >= 1
+        text = "".join(c.text for c in chunks)
+        assert text.strip()
+
+        # MUST surface each tool call with its actual input
+        assert "shell" in text.lower(), "Fallback must name the shell tool calls"
+        assert "mkdir" in text.lower(), "Fallback must show the mkdir command"
+        assert "git init" in text.lower(), "Fallback must show the git init command"
+        assert "file_write" in text.lower(), "Fallback must name the file_write call"
+
+        # MUST surface actual tool outputs (not just "ok")
+        assert "Directory created" in text or "Initialized empty Git" in text, (
+            "Fallback must surface actual tool outputs so the user can spot malformed data"
+        )
+
+        # MUST NOT guess "overload" when tools ran — that's the unverified
+        # self-diagnosis the user pushed back on
+        assert "overload" not in text.lower() or "context window" not in text.lower(), (
+            "Fallback must NOT guess 'overload' when tools ran — surface evidence instead. "
+            f"Got: {text!r}"
+        )
+
+        # MUST NOT contain the old generic "rephrase" message
+        assert "rephrasing" not in text.lower()
 
 
 # ── 2. _summarize_trace_for_user: lists tools that actually ran ────────────
@@ -180,12 +265,12 @@ class TestSummarizeTraceForUser:
         trace.steps = [
             AgentStep(
                 iteration=1, thought="", tool_name="shell",
-                tool_input="mkdir test_repo", observation="",
+                tool_input="mkdir test_repo", observation="Directory created",
                 tool_failed=False, retry_count=0, latency_ms=100,
             ),
             AgentStep(
                 iteration=2, thought="", tool_name="file_write",
-                tool_input="hello.py: print('hi')", observation="",
+                tool_input="hello.py: print('hi')", observation="File written",
                 tool_failed=False, retry_count=0, latency_ms=50,
             ),
         ]
@@ -194,6 +279,11 @@ class TestSummarizeTraceForUser:
         assert "file_write" in result
         assert "mkdir test_repo" in result
         assert "ok" in result.lower()  # both succeeded
+        # Session 31 revised: should also surface outputs, not just status
+        assert "Directory created" in result or "output:" in result, (
+            "Summary should surface actual tool outputs (not just 'ok') so "
+            "the user can spot malformed data"
+        )
 
     def test_includes_error_snippet_for_failed_tools(self):
         """When a tool failed, the summary should surface the error."""
@@ -209,11 +299,11 @@ class TestSummarizeTraceForUser:
         ]
         result = AgentLoop._summarize_trace_for_user(trace, observation_log="")
         assert "shell" in result
-        assert "failed" in result.lower()
+        assert "FAILED" in result  # Session 31: uppercase FAILED for visibility
         assert "Command blocked" in result
 
     def test_includes_observation_log_when_present(self):
-        """When observation_log has content, surface it under 'Details:'."""
+        """When observation_log has content, surface it under 'Full error details:'."""
         from core.agent.loop import AgentStep, AgentTrace
 
         trace = AgentTrace()
@@ -226,24 +316,30 @@ class TestSummarizeTraceForUser:
         ]
         obs_log = "[Tool: shell | Status: FAILED]\nPermission denied\n"
         result = AgentLoop._summarize_trace_for_user(trace, observation_log=obs_log)
-        assert "Details:" in result
+        assert "Full error details:" in result
         assert "Permission denied" in result
 
-    def test_suggests_switching_models(self):
-        """The summary should suggest switching models or one-step-at-a-time."""
+    def test_suggests_checking_outputs_not_just_switching_models(self):
+        """Session 31 revised: the summary should suggest checking the outputs
+        first (to spot malformed data), not just 'switch to a larger model'."""
         from core.agent.loop import AgentStep, AgentTrace
 
         trace = AgentTrace()
         trace.steps = [
             AgentStep(
                 iteration=1, thought="", tool_name="shell",
-                tool_input="ls", observation="",
+                tool_input="ls", observation="file1.py\nfile2.py",
                 tool_failed=False, retry_count=0, latency_ms=10,
             ),
         ]
         result = AgentLoop._summarize_trace_for_user(trace, observation_log="")
-        assert "model" in result.lower() or "switch" in result.lower(), (
-            "Summary should suggest switching models as a concrete next step"
+        # Should suggest checking outputs as the first next step
+        assert "check" in result.lower() or "outputs" in result.lower(), (
+            "Summary should suggest checking tool outputs first (per user feedback: "
+            "the real cause is more likely broken tool data than 'overload')"
+        )
+        assert "one step at a time" in result.lower(), (
+            "Summary should suggest one-step-at-a-time isolation"
         )
 
 
@@ -276,7 +372,9 @@ class TestEngineFallbackMessage:
         )
 
     def test_new_fallback_mentions_concrete_next_steps(self):
-        """The new fallback should suggest switching models / one-step-at-a-time."""
+        """Session 31 revised: the new fallback should NOT guess 'overload'
+        — it should admit uncertainty and suggest checking tool outputs +
+        one-step-at-a-time isolation."""
         from pathlib import Path
 
         pipeline_path = (
@@ -285,11 +383,18 @@ class TestEngineFallbackMessage:
         )
         source = pipeline_path.read_text()
         # New message must mention at least one concrete next step
-        assert "Switch to a larger model" in source, (
-            "New fallback should suggest switching to a larger model"
-        )
         assert "one step at a time" in source, (
             "New fallback should suggest doing one step at a time"
+        )
+        assert "Terminal" in source or "terminal" in source, (
+            "New fallback should point the user to the Terminal panel where "
+            "the actual tool outputs are visible"
+        )
+        # Session 31 revised: must NOT guess "overload" in the engine fallback
+        # (the loop's evidence-based fallback handles that case better)
+        assert "almost always a free-tier model issue" not in source, (
+            "Engine fallback must NOT guess 'free-tier model issue' — that's "
+            "the unverified self-diagnosis the user pushed back on."
         )
 
 
