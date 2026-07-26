@@ -1540,10 +1540,17 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # disappears when the response arrives. Never touches the text content stream.
             label = _TOOL_LABELS.get(effective_intent, effective_intent.value)
             _obs.emit("tool_status", tool=effective_intent.value, label=label, status="running")
+            # Session 28: mark todo step 0 (tool execution) as in_progress
+            self._update_todo_status(session_id, 0, "in_progress", _obs)
             logger.info("[engine] Direct tool dispatch for %s", effective_intent.value)
             t_tool = time.monotonic()
             try:
                 tool_result = await dispatch(effective_intent, message)
+
+                # Session 28: mark todo step 0 as done — tool returned
+                self._update_todo_status(session_id, 0, "done", _obs)
+                # Mark step 1 (processing) as in_progress — generation starts next
+                self._update_todo_status(session_id, 1, "in_progress", _obs)
 
                 # ── CWD Detection from Tool Output ────────────────────────
                 # After dispatching a shell command, check if the output
@@ -2544,6 +2551,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
         # ── 10. Persist history ────────────────────────────────────────────
         self._persist_assistant_message(session_id, response_text)
+
+        # Session 28: mark remaining todo steps as done — the response
+        # is complete, all steps (processing + synthesis) are finished.
+        # This catches both the direct-dispatch path (step 1 + 2) and
+        # the agent-loop path (step 1 + 2) in one place.
+        self._update_todo_status(session_id, 1, "done", _obs)
+        self._update_todo_status(session_id, 2, "done", _obs)
 
         total_ms = round((time.monotonic() - t0) * 1000)
         self._metrics.record(effective_intent.value, latency_ms=total_ms, success=True)
