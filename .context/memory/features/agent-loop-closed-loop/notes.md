@@ -497,3 +497,48 @@ feedback) live. ADR-6 4-agent structure built. Selection layer built.
 Engine wired. Scoped tools actually filter. What remains deferred: Phase
 2 loop body extraction (internal refactor, non-blocking) and context
 compaction (B-2026-07-26-2, separate backlog item).
+
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 21)
+
+Fixed a real production bug the user caught: a one-word "Hi" was burning
+11.5s and ~4.8k tokens because it hit the full ThinkingDispatcher (JSON-
+schema capability inference LLM call) before being classified as CHAT.
+That's massive overkill for trivial inputs.
+
+**Root cause:** the engine pipeline runs ThinkingDispatcher for every
+message that isn't client-pre-classified. The dispatcher makes a full
+LLM call with a JSON-schema prompt to infer capabilities (requires_tools,
+requires_grounding, execution_mode, etc.). For "Hi" this is 11.5s of
+wasted compute — the answer is obviously "just chat, no tools."
+
+**Fix:** added `backend/src/core/trivial_input.py` — a deterministic
+trivial-input detector that short-circuits greetings/thanks/farewells/
+yes-no/acknowledgments BEFORE the dispatcher runs. The detector is
+conservative: only matches obviously-conversational inputs (≤5 words,
+≤40 chars, matches one of ~35 regex patterns). Anything ambiguous falls
+through to the normal pipeline. Wired into `engine/_pipeline.py`
+process() right after the safety gate (step 0.5).
+
+The short-circuit streams a direct chat response with a minimal prompt
+(no system prompt machinery, no tool defs, no JSON schema). Target:
+<500 tokens, <2s for trivial inputs (vs 11.5s / 4.8k tokens before).
+
+27 new tests verify the detector: greetings (hi/hello/hey/good morning/
+what's up), farewells (bye/see you/good night), thanks (thanks/thx/ty/
+appreciate it), acknowledgments (ok/okay/got it/sure), yes-no (yes/no/
+yep/nope), and non-trivial inputs that must NOT short-circuit (questions,
+code requests, long messages, greeting+question combos like "hi, can you
+help?"). Punctuation stripped, case-insensitive, whitespace trimmed.
+
+**Minimax model issue (separate):** the user's screenshot showed
+`minimax-M2.1-free` not supported. The codebase uses `minimax-m2.5-free`
+(lowercase, .5). The user's LocalMind settings have a typo — `M2.1`
+instead of `m2.5`. Not a code bug; the user needs to update their
+settings to `minimax-m2.5-free`.
+
+**The user was right to call this out.** I declared the feature
+"genuinely complete" in Session 20, but a one-word greeting burning
+11.5s is a production-breaking UX bug. The agents were wired in but
+the pipeline itself was over-engineered for trivial inputs. This fix
+addresses the root cause.

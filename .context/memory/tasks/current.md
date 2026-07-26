@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Feature:** none — no session in progress (Session 20 wired agents into the engine end-to-end; feature `agent-loop-closed-loop` is genuinely complete — ADR-5 workspace feedback live, ADR-6 4-agent structure built + selected + scoped tools filtering. Deferred: Phase 2 loop extraction, context compaction. See `.context/memory/features/agent-loop-closed-loop/manifest.md`.)
+- **Feature:** none — no session in progress (Session 21 fixed the trivial-input overkill bug; "Hi" now short-circuits before the ThinkingDispatcher. See `.context/memory/features/agent-loop-closed-loop/notes.md`.)
 - **Task:** none
 - **Status:** idle
