@@ -2537,6 +2537,24 @@ class AgentLoop:
                 logger.info(f"[agent.loop] finished iter={iteration + 1} — {trace.summary()}")
                 if _obs:
                     _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
+
+                # Session 31: if the model produced chunks but ALL of them
+                # were filtered out (system-leak XML, MiniMax tool-call XML,
+                # or just empty), full_text is empty. The engine's fallback
+                # would fire with the useless generic "I wasn't able to
+                # complete that request. The tool may have failed or
+                # returned no useful output. Please try rephrasing your
+                # request." message. Instead, surface what tools actually
+                # ran (from trace.steps) so the user knows what happened.
+                if not full_text.strip():
+                    _tool_summary = self._summarize_trace_for_user(trace, observation_log)
+                    if _tool_summary:
+                        logger.warning(
+                            "[agent.loop] iter=%d — model stream produced no text "
+                            "after filtering; yielding trace summary fallback",
+                            iteration + 1,
+                        )
+                        yield StreamChunk(text=_tool_summary, done=False)
                 return
 
         # ── MAX_ITERATIONS hit (or wall-clock cap broke the loop) ──────
@@ -2968,6 +2986,71 @@ class AgentLoop:
         return None
 
     # ------------------------------------------------------------------
+    # Trace summarization — for silent-failure fallbacks (Session 31)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _summarize_trace_for_user(trace, observation_log: str) -> str:
+        """
+        Build a user-facing summary of what tools actually ran, for the
+        silent-failure fallback path. Returns an empty string if no tools
+        ran (so the caller knows there's nothing to summarize).
+
+        This is the antidote to the generic "I wasn't able to complete
+        that request. The tool may have failed or returned no useful
+        output. Please try rephrasing your request." message — when the
+        model's text response is empty (filtered out or genuinely empty),
+        the user STILL gets to see what the agent did on their behalf.
+
+        Args:
+            trace: AgentTrace with .steps (list of AgentStep).
+            observation_log: the failed-tool log (may be empty if all
+                tools succeeded).
+
+        Returns:
+            A user-facing string, or "" if no tool calls ran.
+        """
+        # Collect tool calls from the trace (skip pure-thinking steps
+        # where tool_name is None).
+        tool_calls = [s for s in trace.steps if s.tool_name]
+        if not tool_calls:
+            # No tools ran — return empty so caller falls back to the
+            # model-overload suggestion in _force_final_answer.
+            return ""
+
+        lines = [
+            "I ran the requested tools but couldn't generate a clean "
+            "summary (the model returned empty or filtered output). "
+            "Here's what actually happened:",
+            "",
+        ]
+        for i, step in enumerate(tool_calls, 1):
+            status = "failed" if step.tool_failed else "ok"
+            _input = (step.tool_input or "").strip()
+            if len(_input) > 80:
+                _input = _input[:77] + "..."
+            lines.append(f"  {i}. {step.tool_name}({_input}) — {status}")
+            # Surface a short snippet of the observation for failed tools
+            # so the user can see the error without scrolling logs.
+            if step.tool_failed and step.observation:
+                _obs_snippet = step.observation.strip().splitlines()[0][:200]
+                lines.append(f"     error: {_obs_snippet}")
+
+        # Surface the observation log too if it has content (failed tools
+        # are logged here with their full error context).
+        if observation_log.strip():
+            lines.append("")
+            lines.append("Details:")
+            lines.append(observation_log[:1500])
+
+        lines.append("")
+        lines.append(
+            "Try switching to a larger model (Settings → Model), or ask "
+            "me to do one step at a time."
+        )
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------
     # Forced final answer after iteration limit
     # ------------------------------------------------------------------
 
@@ -3025,17 +3108,26 @@ class AgentLoop:
                 ),
             }
         ]
+        # Session 31: track whether the model produced ANY non-empty text.
+        # Free-tier models sometimes return an empty stream (zero chunks, or
+        # chunks whose text is entirely filtered out as system-leak XML).
+        # Without this check, _force_final_answer returns silently, the
+        # engine sees an empty full_response_chunks, and the user gets the
+        # uselessly generic "I wasn't able to complete that request. The
+        # tool may have failed or returned no useful output." fallback —
+        # with zero indication of what actually happened. This is the
+        # "Tools execution failure" symptom the user reported.
+        _any_text_yielded = False
         try:
             t_final = time.monotonic()
             async for chunk in active_adapter.chat(force_msg, temperature=0.4):
                 if chunk.error:
                     yield StreamChunk(text="", done=True, error=chunk.error)
                     return
-                filtered = StreamChunk(
-                    text=_filter_system_leaks(chunk.text),
-                    done=chunk.done,
-                )
-                yield filtered
+                filtered_text = _filter_system_leaks(chunk.text)
+                if filtered_text:
+                    _any_text_yielded = True
+                yield StreamChunk(text=filtered_text, done=chunk.done)
             logger.info(f"[agent.loop] final synthesis: {round((time.monotonic() - t_final) * 1000)}ms")
         except Exception as exc:
             logger.warning(f"[agent.loop] final synthesis failed: {exc}")
@@ -3045,3 +3137,49 @@ class AgentLoop:
                 ),
                 done=True,
             )
+            return  # CRITICAL: return after yielding the exception fallback
+
+        # Session 31: if the model returned an empty stream (or all chunks
+        # were filtered out as system-leak XML), yield a fallback that
+        # surfaces what actually happened. This prevents the engine from
+        # falling through to its generic "rephrase your request" message.
+        # The observation_log records every FAILED tool call; the
+        # trace.steps list (passed in via the caller) records every tool
+        # call regardless of status. We surface both for diagnostics.
+        if not _any_text_yielded:
+            logger.warning(
+                "[agent.loop] final synthesis produced no text — "
+                "yielding observation log fallback (model returned empty stream)"
+            )
+            if observation_log.strip():
+                yield StreamChunk(
+                    text=(
+                        "I completed the tool calls but the model couldn't "
+                        "synthesize a final response (it returned an empty "
+                        "stream — common with free-tier models when the "
+                        "context is too large or the model is overloaded).\n\n"
+                        "Here's what I did:\n\n"
+                        + observation_log[:2000]
+                        + "\n\nTry switching to a larger model, or ask me to "
+                        "do one step at a time."
+                    ),
+                    done=True,
+                )
+            else:
+                # Observation log is empty (no failed tool calls — all tools
+                # succeeded, but the model still couldn't synthesize). Give
+                # the user a concrete next step instead of a generic "rephrase".
+                yield StreamChunk(
+                    text=(
+                        "I ran the requested tools but the model returned an "
+                        "empty response when trying to summarize what happened. "
+                        "This usually means the free-tier model is overloaded "
+                        "or the tool output was too large for its context "
+                        "window.\n\n"
+                        "Try one of these:\n"
+                        "  • Switch to a larger model (Settings → Model)\n"
+                        "  • Ask me to do one step at a time\n"
+                        "  • Re-run the request — transient overload is common"
+                    ),
+                    done=True,
+                )

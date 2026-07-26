@@ -2469,10 +2469,29 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         "in your .env file."
                     )
                 else:
+                    # Session 31: replaced the uselessly generic "The tool
+                    # may have failed or returned no useful output. Please
+                    # try rephrasing your request." message — it told the
+                    # user nothing about what actually happened and mis-
+                    # attributed the failure to their phrasing. The real
+                    # cause is almost always: the free-tier model returned
+                    # an empty stream after tool execution (overload,
+                    # context-too-large, or filtered output). Surface the
+                    # intent + concrete next steps instead.
+                    _intent_label = _TOOL_LABELS.get(
+                        effective_intent, effective_intent.value
+                    )
                     _agent_response = (
-                        "I wasn't able to complete that request. The "
-                        "tool may have failed or returned no useful "
-                        "output. Please try rephrasing your request."
+                        f"I started the {_intent_label} request and ran "
+                        f"the available tools, but the model returned an "
+                        f"empty response when summarizing what happened. "
+                        f"This is almost always a free-tier model issue "
+                        f"(overload or context window overflow) — not a "
+                        f"problem with your request.\n\n"
+                        f"Try one of these:\n"
+                        f"  • Switch to a larger model (Settings → Model)\n"
+                        f"  • Ask me to do one step at a time\n"
+                        f"  • Re-run the request — transient overload is common"
                     )
                 full_response_chunks = [_agent_response]
                 yield StreamChunk(text=_agent_response, done=False)
