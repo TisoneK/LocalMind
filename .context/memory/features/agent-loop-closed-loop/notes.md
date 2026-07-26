@@ -637,3 +637,43 @@ prompt-leak/security concern: any user could extract the system prompt
 (including user PII structure) just by looking at thinking output. The
 fix ensures reasoning never appears in the chat text, only in the
 collapsible thinking panel.
+
+---
+## 2026-07-26 — Super Z / GLM-5.2 (Session 24)
+
+Fixed two bugs the user reported in the same exchange:
+
+**Bug 1: `prompt_messages` UnboundLocalError after tool execution.**
+Root cause: `prompt_messages` was only assigned inside the
+`if _execution_mode == ExecutionMode.DIRECT:` block (line ~811) or the
+main agent path (line ~1748). But the orchestrator block (line ~1212)
+references it for metrics at line ~1246. When `_execution_mode != DIRECT`
+AND `_should_use_orchestrator()` returned True, `prompt_messages` was
+never assigned before line 1246 used it — classic UnboundLocalError.
+
+Fix: initialized `prompt_messages: list[dict] = []` at the top of
+`process()`, before any branches. If a code path doesn't build real
+prompt_messages, the metrics compute 0 tokens — harmless.
+
+**Bug 2: Duplicate/replaced response — first response disappears, second
+one replaces it.**
+Root cause: the trivial-input short-circuit (Session 21) had cleanup
+code (`self._store.add_message()`) AFTER the streaming loop but BEFORE
+the `return`. If that cleanup raised an exception, the outer `except`
+caught it and fell through to the normal pipeline — which then produced
+a SECOND response. The frontend saw new chunks after `done=True` and
+replaced the first message's content.
+
+Fix: moved the `return` to fire IMMEDIATELY after the streaming loop
+completes. Cleanup is now best-effort in its own try/except that can't
+prevent the return. Also fixed `trivial_response()`:
+- Removed `stream=True` kwarg (adapter already streams — the kwarg was
+  silently ignored but could cause issues)
+- Added a minimal system prompt ("You are LocalMind... Do not output
+  your reasoning process — just give the response directly") so the
+  model knows its identity and doesn't leak thinking
+- Removed the `chunk.delta` branch (StreamChunk has `text`, not `delta`)
+
+Both bugs confirmed by code analysis — no new tests needed (the fixes
+are structural: variable initialization + control flow). Baseline held:
+357 tests pass, 0 real ruff bugs.

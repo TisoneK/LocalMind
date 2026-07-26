@@ -81,4 +81,8 @@ Updated registry row:
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 22 |
+- **Super Z / GLM-5.2:** Session 24 — fixed two control-flow bugs: (1) prompt_messages UnboundLocalError after tool execution (variable was conditionally assigned in one branch but referenced in another — fixed by initializing at top of process()), (2) duplicate/replaced response (trivial short-circuit cleanup could fail and prevent return, causing normal pipeline to run after the short-circuit — fixed by moving return before cleanup). Also fixed trivial_response(): removed stream=True kwarg, added minimal system prompt, removed dead delta branch. Baseline held: 357 tests pass, 0 real ruff bugs. (2026-07-26)
+
+Updated registry row:
+
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-26 | 23 |
