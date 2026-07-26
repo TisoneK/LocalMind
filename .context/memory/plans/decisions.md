@@ -258,3 +258,83 @@ relitigating them. To reverse one, append a new ADR that supersedes it.
 
 - **Supersedes:** none. **Builds on:** ADR-4 (`.context/` is the agent memory system), ADR-5 (closed-loop), ADR-6 (multi-agent). **Extends:** the todo plan system (Session 27) — workflows define what the plan should look like, the engine emits it as todos, the agent executes with creative autonomy.
 
+
+---
+
+## ADR-8: Agent-centric routing (tasks → agents → tools, not tasks → tools → agents)
+
+**Date:** 2026-07-27 (Session 33 — proposed, NOT yet implemented)
+**Status:** proposed
+**Author:** Super Z / GLM-5.2 (architectural insight from user)
+
+### Context
+
+The current architecture is **tool-centric** at the classification layer:
+
+```
+User message → Intent classifier → TOOL (SHELL / FILE_WRITE / WEB_SEARCH / ...)
+            → select_agent(intent) → agent whose toolset includes that tool
+            → AgentLoop with scoped tools → model picks tools
+```
+
+"Create hello world repo in C:\Users\tison\...\ProjectPhill" gets classified as `SHELL` (because it involves shell commands), then the CodingAgent is selected because its toolset includes `shell`. But the task ALSO needs `file_write` (creating hello.py) and `git` operations — the classification picked ONE tool, and the agent was downstream of that pick.
+
+The user identified the core problem: **"we are directing tasks to tools instead of agents! The agents are the ones who are supposed to use the tools."**
+
+Three concrete symptoms of this mismatch:
+1. **The CodingAgent is selected but hollow.** `BaseAgent.run()` delegates directly to `AgentLoop.run()` and never calls `self.build_context()`. The `coding.md` workflow (read-before-write, verify-after-write, follow-conventions) sits on disk unused. The CodingAgent's only effect is passing a scoped toolset.
+2. **The sub-agent framework exists but is a parallel system.** `core/agent/sub_agent.py` has its own agent types (CODER, RESEARCHER, WRITER, OPERATOR, ANALYST), its own registry, its own execution path — completely decoupled from the `BaseAgent` subclasses. Two agent registries that don't share agents, workflows, or context.
+3. **Multi-tool tasks get reduced to one tool.** "Create hello world repo" needs shell + file_write + git. Classifying it as "SHELL" is arbitrary. Under tool-centric routing, the agent loop has to figure out it also needs file_write — which works, but the workflow guidance (`coding.md`) that would structure that multi-tool reasoning never reaches the model.
+
+### Decision
+
+**Route tasks to agents, not tools.** Agents own their tools; the agent's workflow governs HOW it uses them.
+
+```
+User message → Task classifier → TASK TYPE (coding / research / browse / chat)
+            → Agent for that task type (CodingAgent, ResearchAgent, ...)
+            → Agent loads its workflow (coding.md / research.md / ...)
+            → Agent decides which of its tools to use, in what order, with what verification
+            → If the task needs another domain → agent triggers another agent (parallel or handoff)
+```
+
+Four principles:
+
+1. **Classification by task type, not tool.** "Create hello world repo" is a *coding* task → CodingAgent. The CodingAgent owns shell + file_write + file_edit + code_exec + file_task — it decides which to use based on its workflow.
+
+2. **Agents own tools; tools don't own agents.** The intent router no longer picks a tool and then finds the agent that has it. The task type picks the agent, and the agent's toolset is part of its identity.
+
+3. **Agents collaborate.** A coding task needing research doesn't get re-classified as "web_search" (losing the coding context). The CodingAgent delegates to the ResearchAgent — either parallel (both work simultaneously) or handoff (ResearchAgent returns results, CodingAgent continues). This replaces the current `should_use_sub_agents()` keyword heuristic with agent-initiated delegation.
+
+4. **The workflow is the value.** The coding workflow's "read-before-write, verify-after-write, follow-conventions, small-verifiable-changes" is what guides the agent's tool use — not just having 5 tools vs 10. The workflow files (`coding.md`, `research.md`, `safety.md`, etc.) are loaded into the agent's system prompt and govern its behavior.
+
+### Implementation phases (multi-session)
+
+**Phase 1: Unify the two agent systems.** Merge `SubAgentType` (from `sub_agent.py`) into the `BaseAgent` registry. One registry, one agent type hierarchy. The sub-agent framework's delegation mechanics (`execute_sub_tasks`, `decompose_task`) become methods on `BaseAgent` — any agent can delegate to any other agent.
+
+**Phase 2: Wire `build_context()` into `BaseAgent.run()`.** When an agent runs, it calls `build_context()` to gather its task-specific context — INCLUDING loading its workflow file (`coding.md`, `research.md`, etc.). The context is passed through to `build_agent_system_prompt()` and injected as a section. This is the fix backlogged in Session 33: the workflow files finally reach the model.
+
+**Phase 3: Agent-initiated delegation.** Replace the `should_use_sub_agents()` keyword heuristic with agent-initiated delegation. The CodingAgent's workflow + system prompt includes the ability to say "I need research on X" → the framework spawns a ResearchAgent sub-task → results flow back → CodingAgent continues. This is the "agents can trigger other agents to work parallelly or hand over" the user described.
+
+**Phase 4: Task-type classifier.** Replace (or augment) the intent classifier with a task-type classifier. "Create hello world repo" → task_type=coding (not intent=SHELL). The task type selects the agent; the agent's workflow governs tool use. Intent classification can still exist as a signal the agent uses, but it's no longer the routing key.
+
+### Consequences
+
+- **This is a multi-session architectural milestone.** Phases 1-4 span multiple sessions. Phase 1 (unify registries) is the foundation; Phase 2 (wire build_context) is the highest-leverage piece — it makes the workflow files actually reach the model. Phases 3-4 are the full agent-centric vision.
+- **The workflow files become load-bearing.** `coding.md`, `research.md`, `safety.md`, `general.md` — these are no longer documentation; they're the agent's instruction set. They must be well-written (constraint-style, not procedural — per ADR-7).
+- **The intent classifier becomes a signal, not a router.** Intent (SHELL, FILE_WRITE, etc.) is still useful for the agent to know what kind of tool the user expects — but it's no longer the routing key. Task type (coding/research/browse/chat) is the router.
+- **Agent-to-agent delegation is the new capability.** This is the biggest unlock: a coding task that needs research no longer requires the user to break it into two messages, and no longer requires the system to re-classify (losing context). The CodingAgent just delegates.
+- **Per the flaw log: every phase needs real-model testing before shipping.** This ADR is proposed, not implemented. No code changes this session.
+
+### Supersedes / builds on
+
+- **Builds on:** ADR-6 (multi-agent — this is the completion of ADR-6's vision; the BaseAgent subclasses become real agents with workflows, not hollow shells)
+- **Builds on:** ADR-7 (`.context/` system + workflows — the workflow files become load-bearing)
+- **Supersedes:** the `should_use_sub_agents()` keyword heuristic (Phase 3 replaces it with agent-initiated delegation)
+- **Does NOT supersede:** ADR-5 (closed-loop) — the 5-step loop shape stays; agents just get richer context and delegation ability
+
+### Open questions
+
+1. **Does the task-type classifier need an LLM call, or can it be keyword-based?** An LLM call adds latency; keyword-based is less accurate. Probably LLM-based but cached per-session (task type rarely changes mid-conversation).
+2. **How does agent-to-agent delegation handle streaming?** If the CodingAgent delegates to the ResearchAgent mid-stream, does the user see the ResearchAgent's work? Probably yes (in a sub-panel), but this is a UX decision.
+3. **What happens to the intent classifier?** It becomes a signal the agent uses ("the user mentioned shell commands, so shell is likely involved") rather than the router. Or it could be removed entirely if the task-type classifier is good enough. TBD.
