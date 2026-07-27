@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Feature:** none — no session in progress (Session 32 raised MAX_ITERATIONS from 3 to 8 + made it configurable; made fallback messages say "iteration limit reached" when hit_limit is True instead of guessing "overload"; added the universal "check before acting" safety workflow. See `.context/memory/reviews/2026-07-27-review-3.md`.)
+- **Feature:** none — no session in progress (Session 34 switched the standing Target from ADR-5 to ADR-8 — agent-centric routing — and seeded the feature-scoped memory at `.context/memory/features/adr-8-agent-centric-routing/`. Phase 1 (agents as directories) is backlogged as B-2026-07-27-1. See `.context/memory/reviews/` if a Session 34 review exists, else see the Session 34 entry in `agents/sessions.md`.)
 - **Task:** none
 - **Status:** idle

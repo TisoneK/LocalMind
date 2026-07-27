@@ -165,3 +165,53 @@ reintroduces the "Tools execution failure" bug:
    if the dir exists, and barreling into non-empty unrelated directories.
 
 Regression tests: `tests/e2e/test_iteration_limit_and_safety.py`.
+
+## LocalMind architectural target — ADR-8 (added 2026-07-27, Session 34)
+
+The standing Target is now **ADR-8: agent-centric routing** (tasks →
+agents → tools, not tasks → tools → agents). See the full ADR in
+`.context/memory/plans/decisions.md` ADR-8 for the five principles
+(classification by task type, agents own tools, agents collaborate,
+the workflow is the value, agents are directories) and the four
+implementation phases.
+
+**This supersedes ADR-5 as the standing Target** — but it does NOT
+supersede ADR-5 architecturally (per ADR-8's "Supersedes / builds on"
+section: ADR-8 *builds on* ADR-5; the 5-step closed-loop shape stays;
+agents just get richer context and delegation ability). All the
+Session 31-33 fixes (iteration cap, hit-limit-aware fallback,
+check-before-acting safety workflow, `_obs.all()` not `drain()` in
+the engine) are still in force and must not be regressed.
+
+**Four phases, multi-session:**
+1. **Agents as directories** — structural foundation. Move
+   `coding_agent.py` → `agents/coding/agent.py`,
+   `research_agent.py` → `agents/research/agent.py`,
+   `browser_agent.py` → `agents/browser/agent.py`,
+   `direct_agent.py` → `agents/direct/agent.py`. Move
+   `backend/data/workflows/<name>.md` →
+   `agents/<name>/workflow.md`. Move inline personas from
+   `prompts.py:_PERSONA_MAP` → `agents/<name>/persona.md`.
+   Registry auto-discovers directories with `agent.py`. Backlog item:
+   "Wire `build_context()` into `BaseAgent.run()`" (Session 33) is
+   Phase 2's prerequisite and currently blocked on Phase 1.
+2. **Wire `build_context()` into `BaseAgent.run()`** — workflow files
+   finally reach the model. Highest-leverage piece. Backlog item
+   already filed (Session 33).
+3. **Agent-initiated delegation** — replace `should_use_sub_agents()`
+   keyword heuristic with agent-initiated delegation (parallel or
+   handoff).
+4. **Task-type classifier** — replace or augment the intent classifier
+   so "create hello world repo" routes to `task_type=coding` (not
+   `intent=SHELL`).
+
+**Per the flaw log (Session 31/33): every phase needs real-model
+testing before shipping.** ADR-8 is currently **proposed** (Session 33
+filed it; Session 34 — this session — switches the standing Target
+from ADR-5 to ADR-8 and seeds the feature-scoped memory at
+`.context/memory/features/adr-8-agent-centric-routing/`). No code
+changes this session — this is context-only initialization.
+
+**Active feature directory:**
+`.context/memory/features/adr-8-agent-centric-routing/` (read its
+`manifest.md` + `notes.md` before starting Phase 1 work).

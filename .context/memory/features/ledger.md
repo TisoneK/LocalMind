@@ -11,3 +11,4 @@ archived or deleted **only after** its ledger line records the outcome
 -->
 
 - **agent-loop-closed-loop** — started 2026-07-26 · active · finished —
+- **adr-8-agent-centric-routing** — started 2026-07-27 · active · finished —
