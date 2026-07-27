@@ -5,6 +5,14 @@ Implements ADR-6 (refines ADR-5): multiple distinct agents (browser,
 coding, research, direct) sharing a common 5-step loop shape, each
 with its own scoped toolset, context builder, and stop condition.
 
+Implements ADR-8 Principle 5 (Session 34, Phase 1): agents are
+directories, not modules. Each agent lives in its own subpackage at
+`agents/<name>/` containing `agent.py` (the class), `context_builder.py`,
+`is_done.py`, `tools.py`, `__init__.py` (re-exports the class), and
+(Phase 2) `workflow.md` + `persona.md`. The registry auto-discovers
+directories with `agent.py` — adding a new agent = adding a new
+directory, no manual `register()` call needed.
+
 Public API:
     from agents import BaseAgent, BrowserAgent, get_agent, list_agents
 
@@ -16,36 +24,33 @@ Public API:
     for name, cls in list_agents():
         print(f"{name}: {cls(adapter=None).description()}")
 
-Phase 1 (Session 15): only BrowserAgent is registered. The existing
-AgentLoop continues to handle all other traffic. Adding CodingAgent,
-ResearchAgent, DirectAgent in future sessions is a matter of:
-    1. Subclassing BaseAgent
-    2. Calling register("name", AgentClass) below
-    3. Wiring the intent router / UI picker to call get_agent(name)
+Adding a new agent (ADR-8 Phase 1+):
+    1. Create agents/<name>/agent.py with a BaseAgent subclass
+    2. Create agents/<name>/{context_builder,is_done,tools}.py
+    3. Update agents/<name>/__init__.py to re-export the class
+    4. The registry auto-discovers it on next import — no edit needed here
+
+Legacy path (still supported via backward-compat shims):
+    from agents.coding_agent import CodingAgent  # ← shim → agents.coding.agent
 """
 
 from __future__ import annotations
 
 from agents.base_agent import DEFAULT_MAX_ITERATIONS, DEFAULT_MAX_WALL_CLOCK_SECS, AgentConfig, BaseAgent
-from agents.browser_agent import BrowserAgent
-from agents.coding_agent import CodingAgent
-from agents.direct_agent import DirectAgent
-from agents.registry import get_agent, is_registered, list_agents, register
-from agents.research_agent import ResearchAgent
+from agents.browser.agent import BrowserAgent
+from agents.coding.agent import CodingAgent
+from agents.direct.agent import DirectAgent
+from agents.registry import auto_discover_agents, get_agent, is_registered, list_agents, register
+from agents.research.agent import ResearchAgent
 from agents.selection import intent_to_agent_name, list_intent_mappings, select_agent
 
-# Auto-register all built-in agents at import time.
-# Each agent registers itself under its short name. The UI picker and
-# intent router look up agents by name via get_agent().
-#
-# To add a new agent:
-#   1. Create agents/<name>_agent.py with a BaseAgent subclass
-#   2. Create agents/<name>/ subpackage with context_builder, tools, is_done
-#   3. Import the class here and call register("<name>", AgentClass)
-register("browser", BrowserAgent)
-register("coding", CodingAgent)
-register("research", ResearchAgent)
-register("direct", DirectAgent)
+# Auto-register all built-in agents via directory discovery (ADR-8
+# Principle 5, Session 34 Phase 1). Scans agents/* for subdirectories
+# with agent.py and registers their classes under the directory name.
+# The explicit imports above (BrowserAgent, CodingAgent, etc.) ensure
+# the agent subpackages are loaded BEFORE auto_discover scans them —
+# otherwise pkgutil might not see them yet on a cold-start.
+auto_discover_agents()
 
 __all__ = [
     "BaseAgent",
@@ -56,6 +61,7 @@ __all__ = [
     "ResearchAgent",
     "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_MAX_WALL_CLOCK_SECS",
+    "auto_discover_agents",
     "get_agent",
     "intent_to_agent_name",
     "is_registered",
