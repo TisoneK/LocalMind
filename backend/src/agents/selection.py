@@ -124,3 +124,88 @@ def select_agent(intent: Intent) -> Optional[type]:
 def list_intent_mappings() -> list[tuple[Intent, str]]:
     """Return all (intent, agent_name) pairs. For documentation / UI."""
     return list(_INTENT_TO_AGENT.items())
+
+
+# ── ADR-8 Phase 4: task-type-based agent selection ─────────────────────────
+#
+# Per ADR-8 Principle 1: "Classification by task type, not tool. 'Create
+# hello world repo' is a *coding* task → CodingAgent — not a SHELL
+# intent → CodingAgent."
+#
+# The TaskProfile's `primary_domain` field (populated by
+# ThinkingDispatcher) is the task-type signal. It's set to values like
+# "browse", "web_fetch", "file_analysis", "system_info",
+# "shell_command" — these map to AGENTS (not intents). This is the
+# Phase 4 routing key.
+#
+# The intent classifier still exists as a SIGNAL (used for tool dispatch
+# and prompt construction), but it's no longer the ROUTING key for
+# agent selection. The task type (primary_domain) is the routing key.
+
+# Map primary_domain → agent name. When primary_domain is set
+# (non-empty), it takes precedence over the intent-based map.
+_DOMAIN_TO_AGENT: dict[str, str] = {
+    "browse": "browser",
+    "web_fetch": "research",
+    "web_search": "research",
+    "file_analysis": "coding",  # file reading/analysis is a coding task
+    "file_edit": "coding",
+    "file_write": "coding",
+    "system_info": "coding",  # sysinfo is shell-adjacent; coding agent handles it
+    "shell_command": "coding",
+    "code_exec": "coding",
+    "memory_op": "coding",
+    "chat": "direct",
+    "direct": "direct",
+}
+
+
+def primary_domain_to_agent_name(primary_domain: str) -> Optional[str]:
+    """Map a TaskProfile.primary_domain value to an agent name.
+
+    Per ADR-8 Phase 4: when the ThinkingDispatcher populates
+    primary_domain (e.g., "shell_command", "web_fetch", "browse"), this
+    function maps it to the appropriate agent. Returns None for
+    unknown/empty domains (caller falls back to intent-based selection).
+
+    Args:
+        primary_domain: the TaskProfile.primary_domain string. May be
+            empty (ThinkingDispatcher didn't populate it).
+
+    Returns:
+        The agent name (e.g., "coding", "research"), or None if the
+        domain isn't in the map.
+    """
+    if not primary_domain:
+        return None
+    return _DOMAIN_TO_AGENT.get(primary_domain)
+
+
+def select_agent_by_task_profile(
+    primary_domain: str,
+    fallback_intent: Intent,
+) -> Optional[type]:
+    """ADR-8 Phase 4: select an agent by task type (primary_domain),
+    falling back to intent-based selection.
+
+    Per ADR-8 Principle 1: "Classification by task type, not tool." The
+    primary_domain (populated by ThinkingDispatcher) is the task-type
+    signal. When available, it takes precedence over the intent-based
+    map. When unavailable (empty or unknown), fall back to the intent-
+    based map (Phase 1-3 behavior).
+
+    Args:
+        primary_domain: the TaskProfile.primary_domain string. May be
+            empty.
+        fallback_intent: the Intent derived from the task profile
+            (used when primary_domain is empty or unknown).
+
+    Returns:
+        The agent class, or None if neither path resolves.
+    """
+    # Try task-type-based selection first (Phase 4)
+    name = primary_domain_to_agent_name(primary_domain)
+    if name is None:
+        # Fall back to intent-based selection (Phase 1-3)
+        name = intent_to_agent_name(fallback_intent)
+    return get_agent(name)

@@ -42,7 +42,13 @@ from agents.coding.agent import CodingAgent
 from agents.direct.agent import DirectAgent
 from agents.registry import auto_discover_agents, get_agent, is_registered, list_agents, register
 from agents.research.agent import ResearchAgent
-from agents.selection import intent_to_agent_name, list_intent_mappings, select_agent
+from agents.selection import (
+    intent_to_agent_name,
+    list_intent_mappings,
+    primary_domain_to_agent_name,
+    select_agent,
+    select_agent_by_task_profile,
+)
 
 # Auto-register all built-in agents via directory discovery (ADR-8
 # Principle 5, Session 34 Phase 1). Scans agents/* for subdirectories
@@ -67,6 +73,8 @@ __all__ = [
     "is_registered",
     "list_agents",
     "list_intent_mappings",
+    "primary_domain_to_agent_name",
     "register",
     "select_agent",
+    "select_agent_by_task_profile",
 ]

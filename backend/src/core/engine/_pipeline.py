@@ -2382,15 +2382,27 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             _agent_instance = None
             if AGENT_SELECTION_ENABLED:
                 try:
-                    from agents import select_agent
+                    # ADR-8 Phase 4: select agent by task type
+                    # (primary_domain) first, falling back to intent-
+                    # based selection. The primary_domain is populated
+                    # by ThinkingDispatcher (e.g., "shell_command",
+                    # "web_fetch", "browse") and is the task-type
+                    # signal — it routes "create hello world repo" to
+                    # the coding agent directly, not via SHELL intent.
+                    from agents import select_agent_by_task_profile
 
-                    _agent_cls = select_agent(effective_intent)
+                    _agent_cls = select_agent_by_task_profile(
+                        _task_profile.primary_domain,
+                        effective_intent,
+                    )
                     if _agent_cls is not None:
                         _agent_instance = _agent_cls(adapter=agent_adapter)
                         _use_agent = True
                         logger.info(
-                            "[engine] ADR-6 agent selected: %s for intent=%s",
+                            "[engine] ADR-8 Phase 4 agent selected: %s for "
+                            "primary_domain=%r intent=%s",
                             _agent_instance.config().name,
+                            _task_profile.primary_domain,
                             effective_intent.value,
                         )
                 except Exception as _sel_exc:
