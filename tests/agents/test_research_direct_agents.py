@@ -48,11 +48,18 @@ def test_research_agent_description_concrete():
 
 
 def test_research_agent_build_context():
+    """ADR-8 Phase 2 (Session 34): build_context() loads the research
+    workflow from agents/research/workflow.md. The "## Research Workflow"
+    section header appears, plus the constraints (raw search results are
+    NOT the answer, chunk before generating, verify synthesis, etc.).
+    """
     agent = ResearchAgent(adapter=None)
     ctx = agent.build_context(
         messages=[], intent=Intent.WEB_SEARCH, memory_facts=["test fact"]
     )
-    assert "Research Agent" in ctx
+    # Phase 2: the workflow file is loaded
+    assert "Research Workflow" in ctx
+    assert "Raw search results are NOT the answer" in ctx
     assert "test fact" in ctx
 
 

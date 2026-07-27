@@ -231,6 +231,32 @@ class BaseAgent(ABC):
             )
 
         loop = AgentLoop(adapter=adapter or self._adapter)
+
+        # ADR-8 Phase 2 (Session 34): call build_context() and pass the
+        # result as `agent_context` to AgentLoop.run(). This is the
+        # load-bearing piece — the agent's workflow file
+        # (agents/coding/workflow.md, agents/research/workflow.md) is
+        # loaded by build_context() and reaches the model's system
+        # prompt via the `agent_context_section` in
+        # build_agent_system_prompt(). Without this call, the workflow
+        # files sit on disk unused (Session 33 finding); with it, they
+        # govern HOW the agent uses its scoped tools.
+        try:
+            agent_context_str = self.build_context(
+                messages=messages,
+                intent=intent,
+                memory_facts=memory_facts,
+                orchestrator_context=orchestrator_context,
+            )
+        except Exception as exc:
+            # Best-effort: if the context builder throws, log and
+            # continue with empty context — the agent loop still runs.
+            logger.warning(
+                "[base_agent] %s build_context() failed: %s — continuing with empty agent_context",
+                cfg.name, exc,
+            )
+            agent_context_str = ""
+
         async for chunk in loop.run(
             messages=messages,
             intent=intent,
@@ -242,6 +268,7 @@ class BaseAgent(ABC):
             obs=obs,
             memory_facts=memory_facts,
             orchestrator_context=orchestrator_context,
+            agent_context=agent_context_str,
             agent_config=cfg,  # ADR-6: pass the scoped toolset + caps
             skip_planning=skip_planning,
         ):

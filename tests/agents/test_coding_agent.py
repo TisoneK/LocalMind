@@ -52,7 +52,14 @@ def test_coding_agent_description_is_concrete():
 
 
 def test_coding_agent_build_context_returns_string():
-    """build_context returns a non-empty string with the agent-type header."""
+    """build_context returns a non-empty string with the coding workflow.
+
+    ADR-8 Phase 2 (Session 34): build_context() now loads the coding
+    workflow from agents/coding/workflow.md (was a static header in
+    Phase 1). The workflow's "## Coding Workflow" section appears in
+    the context string along with the constraints (read-before-write,
+    verify-after-write, follow-conventions, small-verifiable-changes).
+    """
     agent = CodingAgent(adapter=None)
     ctx = agent.build_context(
         messages=[{"role": "user", "content": "fix the bug in app.py"}],
@@ -60,7 +67,11 @@ def test_coding_agent_build_context_returns_string():
         memory_facts=["user prefers Python 3.12"],
     )
     assert isinstance(ctx, str)
-    assert "Coding Agent" in ctx
+    # Phase 2: the workflow file is loaded — its section header appears
+    assert "Coding Workflow" in ctx
+    # Phase 2: the workflow's constraints reach the context
+    assert "Read before writing" in ctx
+    assert "Verify after writing" in ctx
     assert "Python 3.12" in ctx  # memory facts are included
     # Must mention the workspace state feedback loop (ADR-5 differentiator)
     assert "workspace" in ctx.lower() or "git" in ctx.lower()

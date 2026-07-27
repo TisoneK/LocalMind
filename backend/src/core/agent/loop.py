@@ -587,6 +587,7 @@ class AgentLoop:
         orchestrator_context: Optional[str] = None,
         skip_planning: bool = False,
         agent_config=None,
+        agent_context: Optional[str] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -606,11 +607,50 @@ class AgentLoop:
                 (three-layer pipeline). Contains the structured execution plan
                 and confidence assessment. When present, the Execution Agent
                 should follow this plan rather than planning independently.
+            agent_config: Optional AgentConfig from the selected BaseAgent
+                subclass (ADR-6). When provided, its `max_iterations` and
+                `max_wall_clock_secs` override the module-level defaults
+                (ADR-8 Phase 2 — was dead code before; now honored).
+            agent_context: Optional agent-specific context string from the
+                selected BaseAgent's build_context() method (ADR-8 Phase 2).
+                When the CodingAgent is selected for SHELL/FILE_*/CODE_EXEC
+                intents, this contains the coding workflow loaded from
+                agents/coding/workflow.md. Passed through to
+                build_agent_system_prompt() and injected as the
+                `agent_context_section` in the system prompt.
         """
         active_adapter = adapter or self._adapter
         trace = AgentTrace()
         _obs = obs  # may be None — all obs.emit() calls guarded below
         _loop_start_time = time.monotonic()  # ADR-5: wall-clock cap baseline
+
+        # ADR-8 Phase 2 (Session 34): honor agent_config.max_iterations
+        # and agent_config.max_wall_clock_secs when provided. Previously
+        # these were dead code — the loop used module-level MAX_ITERATIONS
+        # and MAX_WALL_CLOCK_SECS regardless of which agent was selected.
+        # Now the CodingAgent can have more headroom (20 iterations / 10
+        # minutes) than the generic loop (8 iterations / 3 minutes),
+        # appropriate for coding tasks that need more steps. Fall back to
+        # the module-level defaults if agent_config is None or its caps
+        # are unset/invalid.
+        if (
+            agent_config is not None
+            and getattr(agent_config, "max_iterations", None)
+            and isinstance(agent_config.max_iterations, int)
+            and agent_config.max_iterations >= 1
+        ):
+            _effective_max_iter = agent_config.max_iterations
+        else:
+            _effective_max_iter = MAX_ITERATIONS
+        if (
+            agent_config is not None
+            and getattr(agent_config, "max_wall_clock_secs", None)
+            and isinstance(agent_config.max_wall_clock_secs, (int, float))
+            and agent_config.max_wall_clock_secs >= 1
+        ):
+            _effective_max_wall = agent_config.max_wall_clock_secs
+        else:
+            _effective_max_wall = MAX_WALL_CLOCK_SECS
 
         if _obs:
             _obs.emit("agent_loop_start", intent=intent.value)
@@ -743,6 +783,7 @@ class AgentLoop:
             plan_context=plan_context if plan_context else None,
             memory_facts=memory_facts,
             orchestrator_context=orchestrator_context,
+            agent_context=agent_context,
         )
 
         # ADR-5: append workspace state to the system prompt. This is the
@@ -816,19 +857,22 @@ class AgentLoop:
         _file_write_paths: set[str] = set()
 
         # ── Main loop ──────────────────────────────────────────────────
-        for iteration in range(MAX_ITERATIONS):
+        # ADR-8 Phase 2: use _effective_max_iter / _effective_max_wall
+        # (agent_config overrides when provided; module-level defaults
+        # otherwise) instead of the raw MAX_ITERATIONS / MAX_WALL_CLOCK_SECS.
+        for iteration in range(_effective_max_iter):
             trace.iterations_used = iteration + 1
 
             # ADR-5: hard wall-clock cap. The loop terminates on "done,
             # blocked, OR limit" — this is the time-based limit. Prevents
             # a small model from spinning forever on a task it can't solve.
             _elapsed = time.monotonic() - _loop_start_time
-            if _elapsed > MAX_WALL_CLOCK_SECS:
+            if _elapsed > _effective_max_wall:
                 logger.warning(
                     "[agent_loop] wall-clock cap hit after %.1fs (iter %d/%d) — forcing final answer",
                     _elapsed,
                     iteration + 1,
-                    MAX_ITERATIONS,
+                    _effective_max_iter,
                 )
                 if _obs:
                     _obs.emit(
@@ -856,7 +900,7 @@ class AgentLoop:
                 trimmed_log = observation_log
                 if len(observation_log) > _OBS_LOG_TOTAL_CAP:
                     trimmed_log = "…[earlier observations truncated]\n" + observation_log[-_OBS_LOG_TOTAL_CAP:]
-                context_content = f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{MAX_ITERATIONS}. "
+                context_content = f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{_effective_max_iter}. "
                 iteration_messages.append({"role": "user", "content": context_content})
 
             # ── LLM call with tools ───────────────────────────────────
