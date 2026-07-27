@@ -199,3 +199,170 @@ import CodingAgent` (the canonical). Verified by 4 identity tests in
 
 Token-strip dance applied (PAT unset from `.git/config` after the
 initial clone in the prior continuation of this session).
+
+---
+## 2026-07-27 — Super Z / GLM-5.2 (Session 34 — Phase 2 implementation)
+
+Phase 2 implementation session. User provided a Zen API key after I
+correctly identified Phase 2 as blocked on missing input (Pitfall #34).
+Per the Session 31/33 flaw log lesson ("use them to reproduce the bug
+BEFORE writing the fix"), I ran a BASELINE smoke test BEFORE writing
+any Phase 2 code, then implemented, then re-tested AFTER.
+
+**Real-model baseline (BEFORE Phase 2 code):**
+- 5/5 steps pass on Zen/deepseek-v4-flash-free: authenticate, simple
+  chat, streaming chat (27 chunks: 23 reasoning + 1 content + others),
+  tool-calling (model picks get_weather with city=Nairobi), trailing-
+  tool-role regression test.
+- **Finding: Session 31's trailing-tool-role 400 bug is FIXED SERVER-
+  SIDE.** Zen/DeepSeek now accepts HTTP 200 on messages ending with
+  `tool` role. The adapter workaround (`chat_with_tools` appends a
+  synthetic user message) is now redundant but harmless — keep it +
+  the regression tests; removing it would risk breaking other
+  providers that may still have the quirk.
+
+**Phase 2 deliverables (shipped this session):**
+
+1. `build_agent_system_prompt()` accepts a new `agent_context:
+   Optional[str]` param. When provided, it's injected as an 'AGENT
+   CONTEXT' section between the persona and shell-guidance sections.
+   When None or empty, the section is omitted (no leak).
+
+2. `build_coding_context()` ACTUALLY loads `agents/coding/workflow.md`
+   (was a static header in Phase 1). Returns the workflow constraints
+   (read-before-write, verify-after-write, use-workspace-state,
+   follow-conventions, small-verifiable-changes) + workspace-state
+   reminder + memory facts + orchestrator plan. Falls back to the
+   static header if the workflow file is missing.
+
+3. `build_research_context()` same — loads `agents/research/
+   workflow.md`.
+
+4. `BaseAgent.run()` now calls `self.build_context()` and passes the
+   result as `agent_context` to `AgentLoop.run()`. Try/except wraps
+   the call — if the context builder throws, log and continue with
+   empty `agent_context` (the agent loop still runs; the workflow is
+   guidance, not a hard requirement).
+
+5. `AgentLoop.run()` accepts the new `agent_context` param and passes
+   it to `build_agent_system_prompt()`. ALSO honors
+   `agent_config.max_iterations` and `agent_config.max_wall_clock_secs`
+   — was dead code before (loop used module-level MAX_ITERATIONS=8 /
+   MAX_WALL_CLOCK_SECS=180 regardless of which agent was selected).
+   Now the CodingAgent gets 20 iterations / 600s, the BrowserAgent
+   gets 15 / 240, etc. Falls back to module-level defaults when
+   agent_config is None or its caps are unset/invalid.
+
+6. File moves (per ADR-8 Principle 5 — co-locate workflow with agent):
+   - `backend/data/workflows/coding.md` →
+     `backend/src/agents/coding/workflow.md`
+   - `backend/data/workflows/research.md` →
+     `backend/src/agents/research/workflow.md`
+
+7. New test file: `tests/agents/test_phase2_wiring.py` — 11 tests
+   codifying the Phase 2 wiring invariant:
+   - `build_agent_system_prompt` injects AGENT CONTEXT section
+   - `build_agent_system_prompt` omits section when agent_context is
+     None or empty (no leak)
+   - `build_coding_context` loads workflow constraints
+   - `build_research_context` loads workflow constraints
+   - `build_coding_context` falls back gracefully when workflow file
+     missing
+   - `BaseAgent.run()` calls `build_context()` and passes result as
+     `agent_context` to `AgentLoop.run()`
+   - `BaseAgent.run()` continues with empty agent_context when
+     `build_context()` throws (best-effort)
+   - `AgentLoop` uses module defaults when agent_config is None
+   - `AgentLoop` honors `agent_config.max_iterations` /
+     `max_wall_clock_secs`
+   - End-to-end: coding workflow reaches `build_agent_system_prompt`
+     via the agent_context param
+
+**Updated existing tests:**
+- `test_coding_agent_build_context_returns_string`: now asserts
+  'Coding Workflow' + 'Read before writing' + 'Verify after writing'
+  (was 'Coding Agent' static header).
+- `test_research_agent_build_context`: now asserts 'Research Workflow'
+  + 'Raw search results are NOT the answer' (was 'Research Agent').
+
+**Scope decisions (recorded for future sessions):**
+- **safety.md move DEFERRED.** safety is universal (applies to ALL
+  agents), not per-agent. Left at `backend/data/workflows/safety.md`.
+  `prompts.py`'s hard-coded `_safety_path` continues to load it from
+  there. A future session could move it to `agents/_shared/workflows/
+  safety.md` or similar, but the universal nature means it doesn't
+  belong inside any one agent's directory.
+- **_PERSONA_MAP → persona.md move DEFERRED.** `_PERSONA_MAP` is
+  intent-keyed (`Intent.SHELL → 'The Operator'`,
+  `Intent.WEB_SEARCH → 'The Researcher'`, etc.), not agent-keyed.
+  Converting to per-agent persona.md files requires reworking the
+  intent→persona mapping (since one agent handles multiple intents
+  — e.g., the CodingAgent handles SHELL, FILE_WRITE, FILE_EDIT,
+  CODE_EXEC, FILE_TASK, all with different personas). Deferred to a
+  future phase that decides whether personas follow the agent or the
+  intent. The map stays inline in `prompts.py` for now.
+- **browser/direct context builders DEFERRED.** Left as Phase 1
+  static headers. Browser's context should be page-state-centric
+  (URL, title, snapshot) — needs browser-state injection, deferred.
+  Direct is intentionally minimal (no tools, no workflow needed).
+
+**Real-model smoke test AFTER Phase 2 code:**
+- 4/4 steps pass: workflow in prompt (24135 chars), real model
+  responds correctly with workflow in prompt (response='workflow
+  received' in 0.00s — the model just echoes the requested phrase,
+  confirming the prompt was received), full `agent.run()` pipeline
+  works (1.44s, response='phase 2 ok'), per-agent caps honored
+  (CodingAgent=20/600, Browser=15/240, Research=10/300, Direct=1/60).
+
+**Verification summary:**
+- Full pytest suite: **445 passed** (434 baseline + 11 new Phase 2
+  wiring tests). Zero regressions.
+- `ruff check` on changed files (ignoring E501): All checks passed.
+- `ruff check` on full `src/`: 66 errors, all pre-existing E501 (was
+  115 before Phase 1; decreased because some Phase 1 shim-file
+  long lines are gone).
+- Real-model smoke test: 4/4 pass (Zen/deepseek-v4-flash-free).
+- The Session 31/33 flaw-log lesson ("don't ship without real-model
+  testing") is finally applied correctly: tested BEFORE writing,
+  implemented, tested AFTER, shipped only when both passed.
+
+**Smoke-test scripts (NOT committed — contain API key references in
+comments, but no actual keys):**
+- `/home/z/my-project/scripts/phase2_smoke_baseline.py` — runs BEFORE
+  Phase 2 code; verifies Zen auth + chat + streaming + tool-calling
+  + trailing-tool-role regression.
+- `/home/z/my-project/scripts/phase2_smoke_after.py` — runs AFTER
+  Phase 2 code; verifies workflow in prompt + real model call + full
+  agent.run() + per-agent caps honored.
+
+**What's left for Phase 3 (agent-initiated delegation):**
+1. Replace `should_use_sub_agents()` keyword heuristic with agent-
+   initiated delegation. The CodingAgent's workflow + system prompt
+   includes the ability to say "I need research on X" → the
+   framework spawns a ResearchAgent sub-task → results flow back →
+   CodingAgent continues. Parallel or handoff — UX decision.
+2. SubAgentType merge decision: merge `core/agent/sub_agent.py`'s
+   CODER/RESEARCHER/WRITER/OPERATOR/ANALYST into the BaseAgent
+   subclasses (CODER → coding, RESEARCHER → research, OPERATOR →
+   direct, WRITER/ANALYST → new directories or dropped). This changes
+   behavior — touches the SubAgent execution path.
+3. Real-model smoke test mandatory.
+
+**What's left for Phase 4 (task-type classifier):**
+- Replace/augment the intent classifier with a task-type classifier.
+  "Create hello world repo" → task_type=coding (not intent=SHELL).
+  Task type selects the agent; agent's workflow governs tool use.
+  Probably LLM-based but cached per-session. Real-model test
+  mandatory.
+
+**Notes on the flaw-log lesson applied correctly this session:**
+For the first time in this session series, the real-model smoke test
+actually PREVENTED wasted work instead of being skipped. Session 31
+shipped a wrong diagnosis. Session 32 broke the SSE stream. Session
+33 caught the SSE bug only by code inspection (not testing). This
+session tested BEFORE writing, tested AFTER, and shipped only when
+both passed. The flaw-log lesson is finally sinking in.
+
+Token-strip dance applied (PAT unset from .git/config after the
+initial clone in the prior continuation; ZEN_API_KEY passed via env
+var, never persisted, never echoed beyond the last-4 check).
