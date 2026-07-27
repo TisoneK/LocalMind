@@ -12,3 +12,4 @@ archived or deleted **only after** its ledger line records the outcome
 
 - **agent-loop-closed-loop** — started 2026-07-26 · active · finished —
 - **adr-8-agent-centric-routing** — started 2026-07-27 · active · finished —
+- **adr-8-agent-centric-routing** — started 2026-07-27 · merged 672d0c8 (Phase 4) + 5deaece/6a76bd6/a91baa4 (Phases 1-3) · finished 2026-07-27 (all 4 phases shipped in Session 34; real-model smoke tests pass on Zen/deepseek-v4-flash-free; 497 tests pass; see manifest.md for the full per-phase breakdown)

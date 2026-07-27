@@ -598,3 +598,39 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   - **Real-model test of model CHOOSING to delegate**: the smoke test verifies the wiring (tool registered, dispatchable, safety limits work). It does NOT test the model actually CHOOSING to call `delegate` for a multi-domain task. That's left for manual end-user testing (user runs a multi-domain task in the UI and observes delegation).
 - **Report:** none (Phase 3 implementation IS the report; the persistent reference is `.context/memory/features/adr-8-agent-centric-routing/notes.md`).
 - **Notes:** Second session in a row where the real-model smoke test ran BEFORE committing. The delegate tool's end-to-end test caught a real bug during development: the first version used `asyncio.wait_for` directly on an async generator, which doesn't work (TypeError: 'async for' requires an object with __aiter__). Fixed by wrapping the generator in an async helper function that collects all chunks, then awaiting THAT with a timeout. The fix was verified by the smoke test before committing. The flaw-log lesson continues to sink in. Token-strip dance applied (PAT unset from .git/config; ZEN_API_KEY passed via env var, never persisted).
+
+---
+## 2026-07-27 — Session 34 (Phase 4 implementation — ADR-8 COMPLETE)
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai — 41st session not re-confirmed) | **Platform:** Z.ai cloud sandbox | **Role:** engineer
+- **Feature:** `adr-8-agent-centric-routing` (Phase 4 — task-type-based agent selection; ADR-8 COMPLETE)
+- **Task:** Continuation of Session 34 after Phase 3 shipped. User said "Continue" — per the Zero-Interruption lesson, continued into Phase 4 without asking. The Zen API key was already in env — reused it.
+- **Commits:** 2 — `feat(routing): ADR-8 Phase 4 — task-type-based agent selection` (code surface) + `chore(context): log Session 34 Phase 4 — ADR-8 complete` (context surface — Two-Surfaces rule).
+- **Outcome:** Phase 4 shipped. **ADR-8 IS NOW COMPLETE — all 4 phases implemented in a single session series (Session 34).** The engine now routes by task type (TaskProfile.primary_domain, populated by ThinkingDispatcher) first, falling back to intent-based selection when primary_domain is empty/unknown. The intent classifier continues to exist as a SIGNAL (tool dispatch, prompt construction, personas) but is no longer the ROUTING key for agent selection.
+- **Key discovery:** the task-type classifier already partially existed. The codebase has a `TaskProfile` model with a `primary_domain` field, populated by `ThinkingDispatcher` via fast-path heuristics (URL→browse, file attachment→file_analysis, etc.) AND an LLM call (free-form string, cached per-session via TaskProfile). Phase 4's job was to WIRE this into agent selection — not to build a new classifier.
+- **Phase 4 deliverables:**
+  - `backend/src/agents/selection.py` — added `_DOMAIN_TO_AGENT` map (12 entries); added `primary_domain_to_agent_name()` helper; added `select_agent_by_task_profile(primary_domain, fallback_intent)` which tries task-type first, falls back to intent.
+  - `backend/src/agents/__init__.py` — exported the new functions; ruff-fixed the import block.
+  - `backend/src/core/engine/_pipeline.py` — replaced `select_agent(effective_intent)` with `select_agent_by_task_profile(_task_profile.primary_domain, effective_intent)` at the agent-selection site.
+  - 32 new tests in `tests/agents/test_phase4_task_type_selection.py` covering all 12 known domains, fallback behavior, the "primary_domain wins over intent" invariant, backward compat, engine source inspection, and ThinkingDispatcher fast-path domain coverage.
+- **Real-model smoke test (per Session 31/33 flaw log — mandatory):**
+  - 4/4 steps pass on Zen/deepseek-v4-flash-free:
+    1. `select_agent_by_task_profile` routes all 9 test cases correctly.
+    2. Engine source uses `select_agent_by_task_profile` (verified via `inspect.getsource`).
+    3. Real `agent.run()` via task-type selection — selected DirectAgent via `primary_domain='chat'`, ran it, got response in 1.90s.
+    4. primary_domain wins over intent — web_fetch + SHELL intent → ResearchAgent; shell_command + WEB_SEARCH intent → CodingAgent.
+- **Scope decision (recorded in feature notes):**
+  - **The intent classifier is NOT removed.** It continues to exist as a SIGNAL (tool dispatch, prompt construction, `_PERSONA_MAP`). Phase 4 only changes the ROUTING key. A future session could remove the intent classifier entirely if the task-type classifier proves sufficient — but that's a big refactor (touches tool dispatch, prompt construction, personas).
+- **Verification summary:**
+  - Full pytest suite: **497 passed** (465 baseline + 32 new Phase 4 tests). Zero regressions.
+  - `ruff check` on changed files (ignoring E501): All checks passed.
+  - Real-model smoke test: 4/4 pass (Zen/deepseek-v4-flash-free).
+- **ADR-8 status update needed (future session):** the ADR text in `.context/memory/plans/decisions.md` still says "Status: proposed" and "Date: 2026-07-27 (Session 33 — proposed, NOT yet implemented)". A future session should update the Status to "accepted — implemented (Session 34, all 4 phases)" and add an "Implementation" section pointing at the 8 commits.
+- **Open items (post-ADR-8, deferred):**
+  - SubAgentType merge or deprecate (the old `core/agent/sub_agent.py` framework coexists with the new `delegate` tool).
+  - Parallel delegation (currently handoff only).
+  - Remove intent classifier (optional, big refactor).
+  - Real-model test of model CHOOSING to delegate (Phase 3 wiring is tested; model behavior is manual end-user testing).
+  - Real-model test of task-type routing for ambiguous cases like "Create hello world repo" (unit tests verify the routing logic; real-model test would verify ThinkingDispatcher populates primary_domain correctly for this input).
+- **Report:** none (Phase 4 implementation IS the report; the persistent reference is `.context/memory/features/adr-8-agent-centric-routing/notes.md`).
+- **Notes:** This is the first ADR in the LocalMind project implemented across all phases in a single session series (Session 34), with real-model smoke tests running BEFORE each phase shipped. The flaw-log lesson ("don't ship without real-model testing") was applied correctly for Phases 2, 3, and 4. Phase 1 was pure structural (no model path touched) so the smoke test was N/A. The Zero-Interruption flaw logged earlier this session (after the Phase 1 init paused to ask "next session?") was respected for the rest of the session: Phases 2, 3, and 4 all continued without asking. Token-strip dance applied throughout.
