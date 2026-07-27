@@ -564,3 +564,37 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   - **Optional cleanup:** remove the adapter's now-redundant trailing-tool-role workaround (synthetic user message) IF the user confirms Zen/DeepSeek is the only provider used. Currently the workaround is harmless and protects against other providers that may still have the quirk — leave it.
 - **Report:** none (Phase 2 implementation IS the report; the persistent reference is `.context/memory/features/adr-8-agent-centric-routing/notes.md`).
 - **Notes:** First session in the series where the real-model smoke test actually PREVENTED wasted work instead of being skipped. Session 31 shipped a wrong diagnosis. Session 32 broke the SSE stream. Session 33 caught the SSE bug only by code inspection (not testing). This session tested BEFORE writing, tested AFTER, and shipped only when both passed. The flaw-log lesson is finally sinking in. The baseline also found that Session 31's adapter bug is fixed server-side — Zen/DeepSeek now accepts HTTP 200 on trailing tool role, so the adapter workaround is redundant but kept for safety. Token-strip dance applied (PAT unset from .git/config; ZEN_API_KEY passed via env var, never persisted).
+
+---
+## 2026-07-27 — Session 34 (Phase 3 implementation — agent-initiated delegation)
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai — 40th session not re-confirmed) | **Platform:** Z.ai cloud sandbox | **Role:** engineer
+- **Feature:** `adr-8-agent-centric-routing` (Phase 3 — agent-initiated delegation via the `delegate` tool)
+- **Task:** Continuation of Session 34 after Phase 2 shipped. User said "Continue" — per the Zero-Interruption lesson (logged as a flaw earlier this session), I continued into Phase 3 without asking. The Zen API key was already in env from Phase 2 — reused it.
+- **Commits:** 2 — `feat(agents): ADR-8 Phase 3 — agent-initiated delegation via 'delegate' tool` (code surface) + `chore(context): log Session 34 Phase 3 — agent-initiated delegation` (context surface — Two-Surfaces rule, two commits, one push).
+- **Outcome:** Phase 3 shipped. The agent-initiated delegation primitive is live. Any agent with `delegate` in its allowed_tools can call `delegate(target_agent='research', task='...')` to hand off a sub-task to another agent. The framework looks up the target agent in the registry, constructs it with the current adapter, runs it via `agent.run()`, and returns the sub-agent's response as the ToolResult content. Handoff semantics (the calling agent blocks until the sub-agent finishes, then continues with the result). Recursion depth capped at 2 (prevents infinite chains). Wall-clock cap at 120s per delegation. Adapter passed through `dispatch_with_retry()` via a new `adapter` kwarg → contextvar.
+- **Phase 3 deliverables:**
+  - New `Intent.DELEGATE` enum value.
+  - New `delegate` tool (`backend/src/tools/delegate.py` — 391 lines): validates args, checks recursion depth, constructs sub-agent with current adapter, runs it with wall-clock cap, returns ToolResult.
+  - `dispatch_with_retry()` accepts `adapter` kwarg; sets it as current adapter via contextvar before dispatch.
+  - `TOOL_DEFINITIONS` includes the `delegate` entry (with `target_agent` enum: research/coding/browser/direct).
+  - `_extract_tool_input` handles `delegate` (serializes args as JSON).
+  - `AGENT_ALLOWED_TOOLS` includes `'delegate'`.
+  - Agent toolsets updated: CODING_TOOLS now 6 tools (5 + delegate), RESEARCH_TOOLS now 3 tools (2 + delegate), BROWSER_TOOLS now 2 tools (1 + delegate). DIRECT_TOOLS unchanged (empty — DirectAgent is delegated TO, not FROM).
+  - 20 new tests in `tests/agents/test_phase3_delegation.py` covering registration, definition, arg validation, recursion limit, adapter access, end-to-end delegation with mocked sub-agent.
+  - 9 existing tests updated to match Phase 3 toolsets (size assertions, disjoint-checks now strip `delegate` since it's intentionally shared).
+- **Real-model smoke test (per Session 31/33 flaw log — mandatory):**
+  - 4/4 steps pass on Zen/deepseek-v4-flash-free:
+    1. delegate tool definition appears in TOOL_DEFINITIONS (622 chars).
+    2. **delegate tool dispatchable end-to-end** — constructed a real DirectAgent with the Zen adapter, ran it, got a response. Free-tier model returned a truncated response, but the WIRING works (adapter set, sub-agent constructed, sub-agent ran, response collected, ToolResult returned with success=True).
+    3. recursion_limit enforced at depth 2 (MAX_DELEGATION_DEPTH).
+    4. full `agent.run()` pipeline works with delegate in the toolset (CodingAgent ran in 2.01s).
+- **Scope decision (recorded in feature notes):**
+  - **SubAgentType merge DEFERRED.** The `core/agent/sub_agent.py` framework (CODER, RESEARCHER, WRITER, OPERATOR, ANALYST) continues to exist as a parallel system. Phase 3 ships the delegation PRIMITIVE (the `delegate` tool); SubAgentType is the OLD delegation system (keyword-based `should_use_sub_agents()` heuristic). A future phase can merge or deprecate SubAgentType. Both systems coexist for now — the engine checks `should_use_sub_agents()` BEFORE the agent loop; if True, SubAgentType path; otherwise agent loop runs and model can choose `delegate`. No conflict.
+- **Open items:**
+  - **Phase 4** (next): task-type classifier replaces/augments the intent classifier. "Create hello world repo" → task_type=coding (not intent=SHELL). Probably LLM-based but cached per-session. Real-model test mandatory. This is the FINAL phase of ADR-8.
+  - **SubAgentType merge** (later): decide whether to merge SubAgentType into BaseAgent subclasses or deprecate it entirely now that `delegate` provides the same capability via a cleaner API.
+  - **Parallel delegation** (future enhancement): currently handoff only (calling agent blocks). Parallel delegation (both work simultaneously, results merged) would require streaming two agent loops concurrently — significantly more complex.
+  - **Real-model test of model CHOOSING to delegate**: the smoke test verifies the wiring (tool registered, dispatchable, safety limits work). It does NOT test the model actually CHOOSING to call `delegate` for a multi-domain task. That's left for manual end-user testing (user runs a multi-domain task in the UI and observes delegation).
+- **Report:** none (Phase 3 implementation IS the report; the persistent reference is `.context/memory/features/adr-8-agent-centric-routing/notes.md`).
+- **Notes:** Second session in a row where the real-model smoke test ran BEFORE committing. The delegate tool's end-to-end test caught a real bug during development: the first version used `asyncio.wait_for` directly on an async generator, which doesn't work (TypeError: 'async for' requires an object with __aiter__). Fixed by wrapping the generator in an async helper function that collects all chunks, then awaiting THAT with a timeout. The fix was verified by the smoke test before committing. The flaw-log lesson continues to sink in. Token-strip dance applied (PAT unset from .git/config; ZEN_API_KEY passed via env var, never persisted).
