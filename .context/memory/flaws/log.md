@@ -218,3 +218,90 @@ Flaws from Session 7 are now **fixed**:
 - **Workaround / fix:** Soft-reset the mixed commit (`git reset --soft HEAD~1`), unstage the `.context/` files, commit the code as `feat:`, then commit the context as `chore(context):`. Force-pushed with `--force-with-lease` to fix the history. Verified the split: commit `8639db3` has 4 code files only, commit `8756301` has 2 `.context/` files only.
 - **Suggested package fix:** Add to the protocol's Exit checklist: "Verify the last commit doesn't mix surfaces. If a single commit contains both product code (backend/, frontend/, tests/) AND `.context/` files, split it: soft-reset, commit code as `feat:`/`fix:`/etc., commit `.context/` as `chore(context):`. The Two-Surfaces rule is in the protocol but easy to violate when rushing — an explicit pre-push check would catch it."
 - **Status:** fixed in this session (force-pushed the split). But the pattern — rushing commits and mixing surfaces — is worth logging so the next agent catches it before pushing.
+
+---
+## 2026-07-27 — Super Z / GLM-5.2 (Session 34)
+
+- **Flaw:** After completing the ADR-8 initialization session (context-
+  only — switched standing Target from ADR-5 to ADR-8, seeded feature-
+  scoped memory, committed and pushed), I framed the next session as
+  "Suggested next session: Start ADR-8 Phase 1..." — implicitly waiting
+  for the user to start it. This violates the Zero-Interruption
+  Principle (flaw logged Session 8: "Don't ask for permission on the
+  default next step").
+- **Symptom:** User responded: "Why did you pause. thats a violation."
+  Three short sentences. The user correctly identified that Phase 1
+  was the default next step per ADR-8's phase plan + the
+  B-2026-07-27-1 backlog item I had just filed. I had the protocol
+  authority to continue; I chose to wait instead.
+- **Root cause:** I conflated "session complete" (initialization
+  committed and pushed, `tasks/current.md` cleared, session logged —
+  per protocol Step 15) with "work complete." Initialization was
+  complete, but ADR-8 Phase 1 was the next DEFAULT step in the same
+  logical work stream. The protocol's Zero-Interruption rule applies
+  to the default next step in the work stream, not just within a
+  single declared task. I treated my self-imposed session boundary as
+  a hard stop.
+- **Cost:** One user round-trip ("Why did you pause") + a small
+  re-priming cost (re-read the manifest, re-confirm the scope). The
+  actual Phase 1 implementation was straightforward — 757 insertions
+  / 354 deletions across 15 files, 22 new tests, 434 tests pass, zero
+  regressions. The pause cost more than the work.
+- **Suggested package fix:** The Session 8 flaw already covers this
+  pattern ("Don't ask 'Want me to...?'"). The lesson here is the
+  INVERSE: don't even FRAME the default next step as a suggestion.
+  Phrasing like "Suggested next session: ..." or "Next session
+  should start ..." is the same violation, just softer. If the work
+  is the default next step per the ADR plan + a backlog item exists
+  + the work doesn't need user input (no design decision, no
+  destructive action, no real-model testing that needs credentials),
+  the protocol authorizes continuing. Do the work, report at the
+  next natural stopping point. Don't manufacture a stopping point
+  by framing the next step as a question.
+- **Status:** open — the protocol-level lesson (Session 8 + Session 34)
+  is now well-documented; the package-level fix would be to strengthen
+  the Zero-Interruption wording in both editions to explicitly cover
+  "don't frame the default next step as a suggestion either."
+
+---
+## 2026-07-27 — Super Z / GLM-5.2 (Session 34 — Phase 1)
+
+- **Flaw:** During Phase 1 implementation, the first version of
+  `agents/coding/agent.py` imported `from agents.coding import
+  CODING_TOOLS, build_coding_context, is_coding_done`. This created a
+  circular import: `agents/__init__.py` → `agents.coding.agent` →
+  `agents.coding` (subpackage `__init__.py`, partially-initialized) →
+  ImportError. Same pattern in all 4 agent.py files. Caught by
+  `python -c "from agents import CodingAgent"` smoke test BEFORE
+  running pytest — no test cycles wasted.
+- **Symptom:** `ImportError: cannot import name 'CODING_TOOLS' from
+  partially initialized module 'agents.coding'`.
+- **Root cause:** When the agent class moves INTO the subpackage, the
+  subpackage `__init__.py` re-exports the class (`from agents.coding.agent
+  import CodingAgent`). If `agent.py` then imports from the subpackage
+  (`from agents.coding import ...`), Python sees the partially-
+  initialized subpackage (its `__init__.py` hasn't finished running)
+  and the import fails. The old layout (when `coding_agent.py` was a
+  sibling module OUTSIDE the subpackage) didn't have this problem
+  because `coding_agent.py` imported from the subpackage without
+  itself being imported BY the subpackage.
+- **Workaround / fix:** In each `agent.py`, import from the SUBMODULES
+  directly — `from agents.coding.context_builder import
+  build_coding_context`, `from agents.coding.is_done import
+  is_coding_done`, `from agents.coding.tools import CODING_TOOLS` —
+  NOT from the subpackage `__init__`. The subpackage `__init__.py`
+  then re-exports both ways safely (it imports `CodingAgent` from
+  `agent.py`, which has already imported everything it needs from the
+  submodules — no cycle).
+- **Prevent next time:** When moving a class INTO a subpackage that
+  already has sibling modules, import from the SIBLINGS (not from
+  the subpackage `__init__`). The `__init__.py` re-export direction
+  is `__init__.py` → `agent.py` → submodules — never `agent.py` →
+  `__init__.py` → submodules. Documented in
+  `agents/coding/agent.py`'s module docstring implicitly via the
+  direct submodule imports.
+- **Status:** fixed in this session — circular import eliminated.
+  Codified by `tests/agents/test_directory_layout.py::test_agent_directory_has_agent_py`
+  and `test_agent_subpackage_re_exports_class` (if the layout breaks
+  again, these tests fail at import time, surfacing the issue
+  immediately).

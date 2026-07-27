@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Feature:** none — no session in progress (Session 34 switched the standing Target from ADR-5 to ADR-8 — agent-centric routing — and seeded the feature-scoped memory at `.context/memory/features/adr-8-agent-centric-routing/`. Phase 1 (agents as directories) is backlogged as B-2026-07-27-1. See `.context/memory/reviews/` if a Session 34 review exists, else see the Session 34 entry in `agents/sessions.md`.)
+- **Feature:** none — no session in progress (Session 34 Phase 1 complete: ADR-8 agent classes moved INTO their directories at `backend/src/agents/{coding,research,browser,direct}/agent.py`. Backward-compat shims retained at the old `*_agent.py` paths. Registry auto-discovers directories with `agent.py`. 434 tests pass (412 baseline + 22 new Phase 1 layout tests). Real-model smoke test N/A for Phase 1 (pure structural move, no model path touched). Phase 2 (wire `build_context()` into `BaseAgent.run()` — workflow files reach the model — real-model test mandatory) is next. See `.context/memory/features/adr-8-agent-centric-routing/notes.md` for the Phase 1 implementation record + Phase 2 entry points.)
 - **Task:** none
 - **Status:** idle
