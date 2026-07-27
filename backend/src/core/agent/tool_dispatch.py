@@ -56,9 +56,17 @@ async def dispatch_with_retry(
     tool_input: str,
     max_retries: int = TOOL_MAX_RETRIES,
     base_delay: float = TOOL_RETRY_BASE_DELAY,
+    adapter=None,
 ) -> tuple[Optional[ToolResult], bool, int]:
     """
     Dispatch a tool with exponential-backoff retries and a per-tool timeout.
+
+    Args:
+        adapter: optional adapter instance, made available to tools that
+            need it (e.g., the `delegate` tool uses it to construct the
+            sub-agent with the same model + provider). When provided, it's
+            set as the "current adapter" via contextvar before dispatch.
+            Tools that don't need an adapter ignore it.
 
     Returns:
         (result, failed, retry_count)
@@ -66,6 +74,17 @@ async def dispatch_with_retry(
         - failed:      True if all attempts failed
         - retry_count: number of retries used (0 = succeeded first try)
     """
+    # ADR-8 Phase 3: set the current adapter so the delegate tool can
+    # access it. The set is conditional on `adapter` being provided
+    # (some tests call dispatch_with_retry without an adapter).
+    if adapter is not None:
+        try:
+            from tools.delegate import set_current_adapter
+            set_current_adapter(adapter)
+        except ImportError:
+            # tools.delegate not yet imported (e.g., during bootstrap) — skip
+            pass
+
     timeout_secs = _tool_timeout(tool_intent)
     last_error: Optional[Exception] = None
 

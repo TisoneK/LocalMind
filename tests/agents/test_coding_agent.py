@@ -28,10 +28,11 @@ def test_coding_agent_config():
     cfg = agent.config()
     assert cfg.name == "coding"
     assert cfg.tools_enabled is True
-    # Scoped toolset: 5 coding tools, not the full AGENT_ALLOWED_TOOLS
+    # Scoped toolset: 6 coding tools (5 + delegate per ADR-8 Phase 3),
+    # not the full AGENT_ALLOWED_TOOLS
     assert cfg.allowed_tools == CODING_TOOLS
     assert cfg.allowed_tools == frozenset(
-        {"shell", "file_task", "file_write", "edit_file", "code_exec"}
+        {"shell", "file_task", "file_write", "edit_file", "code_exec", "delegate"}
     )
     assert cfg.allowed_tools.issubset(AGENT_ALLOWED_TOOLS)
     # Coding tasks need more iterations than browser tasks
@@ -105,11 +106,12 @@ def test_coding_agent_scoped_tools_filters_non_coding():
         {"intent": "browse", "description": "browser"},
         {"intent": "memory_op", "description": "memory"},
         {"intent": "sysinfo", "description": "sysinfo"},
+        {"intent": "delegate", "description": "delegate"},  # ADR-8 Phase 3
     ]
     scoped = agent.scoped_tools(all_tools)
     scoped_intents = {t["intent"] for t in scoped}
     assert scoped_intents == CODING_TOOLS
-    assert len(scoped) == 5
+    assert len(scoped) == 6  # 5 coding tools + delegate (ADR-8 Phase 3)
     # Must NOT include web/browser/memory/sysinfo tools
     assert "web_search" not in scoped_intents
     assert "web_fetch" not in scoped_intents
@@ -153,11 +155,17 @@ def test_coding_tools_is_subset_of_agent_allowed():
     assert CODING_TOOLS.issubset(AGENT_ALLOWED_TOOLS)
 
 
-def test_coding_tools_has_five_tools():
-    """The coding agent's scoped toolset is exactly 5 tools."""
-    assert len(CODING_TOOLS) == 5
+def test_coding_tools_has_six_tools():
+    """The coding agent's scoped toolset is exactly 6 tools.
+
+    ADR-8 Phase 3 (Session 34): 5 coding tools (shell, file_task,
+    file_write, edit_file, code_exec) + delegate (agent-initiated
+    delegation to research/browser/direct when the coding task needs
+    another domain).
+    """
+    assert len(CODING_TOOLS) == 6
     assert CODING_TOOLS == frozenset(
-        {"shell", "file_task", "file_write", "edit_file", "code_exec"}
+        {"shell", "file_task", "file_write", "edit_file", "code_exec", "delegate"}
     )
 
 
@@ -208,13 +216,19 @@ def test_is_coding_done_phase1_always_false():
 
 
 def test_coding_and_browser_have_different_toolsets():
-    """CodingAgent and BrowserAgent have disjoint toolsets (ADR-6 scoped tools)."""
+    """CodingAgent and BrowserAgent have disjoint PRIMARY toolsets.
+
+    ADR-8 Phase 3 (Session 34): both agents have the shared `delegate`
+    tool, but their PRIMARY tools (the non-delegate tools) are disjoint.
+    """
     from agents.browser import BROWSER_TOOLS
 
     coding = CodingAgent(adapter=None)
     assert coding.config().allowed_tools != BROWSER_TOOLS
-    # Disjoint: no overlap between coding tools and browser tools
-    assert coding.config().allowed_tools.isdisjoint(BROWSER_TOOLS)
+    # Primary tools (excluding shared 'delegate') are disjoint
+    coding_primary = coding.config().allowed_tools - {"delegate"}
+    browser_primary = BROWSER_TOOLS - {"delegate"}
+    assert coding_primary.isdisjoint(browser_primary)
 
 
 def test_coding_agent_has_more_iterations_than_browser():

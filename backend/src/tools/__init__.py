@@ -148,6 +148,7 @@ def available_tools() -> list[dict]:
 from tools import (
     browser_agent,  # noqa: E402, F401 -- BROWSE (real browser interaction)
     code_exec,  # noqa: E402, F401 -- registers CODE_EXEC
+    delegate,  # noqa: E402, F401 -- ADR-8 Phase 3: agent-initiated delegation
     edit_file,  # noqa: E402, F401 -- FILE_EDIT (in-place file editing)
     file_reader,  # noqa: E402, F401 -- registers FILE_TASK
     file_writer,  # noqa: E402, F401 -- FILE_WRITE (secondary intent)

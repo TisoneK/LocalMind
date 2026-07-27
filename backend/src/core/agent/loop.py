@@ -437,6 +437,49 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "delegate",
+            "description": (
+                "Delegate a sub-task to another specialized agent. Use this when "
+                "the current task requires a different domain of expertise (e.g., "
+                "a coding task that needs web research, or a research task that "
+                "needs file analysis). The sub-agent runs with its own scoped tools "
+                "and returns its result; you continue with that result in your "
+                "context. Available target agents: 'research' (web search + fetch), "
+                "'coding' (shell + file tools + code exec), 'browser' (headless "
+                "browser), 'direct' (single model call, no tools). Use 'delegate' "
+                "sparingly — it costs an extra agent loop. If you can handle the "
+                "task with your own tools, do that instead."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target_agent": {
+                        "type": "string",
+                        "enum": ["research", "coding", "browser", "direct"],
+                        "description": (
+                            "The agent to delegate to. 'research' for web search "
+                            "+ fetch; 'coding' for shell + file tools + code exec; "
+                            "'browser' for headless browser; 'direct' for a "
+                            "single model call (no tools)."
+                        ),
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": (
+                            "A clear, self-contained sub-task description that the "
+                            "target agent can execute without further context. "
+                            "Example: 'Find the current weather in Nairobi and "
+                            "return the temperature + conditions.'"
+                        ),
+                    },
+                },
+                "required": ["target_agent", "task"],
+            },
+        },
+    },
 ]
 
 
@@ -541,6 +584,10 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         return f"{operation} {content}".strip()
     elif tool_name == "sysinfo":
         return tool_args.get("query", "")
+    elif tool_name == "delegate":
+        # delegate dispatcher expects JSON-encoded args (target_agent + task)
+        # — same pattern as edit_file. The delegate tool parses it back.
+        return json.dumps(tool_args, ensure_ascii=False)
     else:
         # Fallback: join all values
         return " ".join(str(v) for v in tool_args.values() if v)
@@ -1617,7 +1664,7 @@ class AgentLoop:
                                 )
 
                     else:
-                        tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input)
+                        tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input, adapter=active_adapter)
 
                     latency_ms = round((time.monotonic() - t_tool) * 1000)
 
@@ -2061,7 +2108,7 @@ class AgentLoop:
                         tool_failed = False
                         try:
                             tool_intent = Intent(tc_name)
-                            tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input)
+                            tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input, adapter=active_adapter)
                             latency_ms = round((time.monotonic() - t_tool) * 1000)
 
                             if tool_result:

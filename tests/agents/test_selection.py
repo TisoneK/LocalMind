@@ -37,11 +37,27 @@ def test_every_intent_is_mapped():
 
 
 def test_list_intent_mappings_covers_all_intents():
-    """list_intent_mappings() returns one entry per Intent."""
+    """list_intent_mappings() returns one entry per ROUTING Intent.
+
+    ADR-8 Phase 3 (Session 34): Intent.DELEGATE is a meta-tool intent
+    (the agent calls the `delegate` tool, which is then dispatched by
+    the agent loop). It is NOT a routing intent — the intent classifier
+    never produces DELEGATE; it's only invoked when the model calls the
+    delegate tool. So it's excluded from the routing map.
+    """
     mappings = list_intent_mappings()
     mapped_intents = {intent for intent, _ in mappings}
-    for intent in Intent:
-        assert intent in mapped_intents, f"intent {intent.value} not in mappings"
+    # All routing intents must be mapped
+    routing_intents = {i for i in Intent if i != Intent.DELEGATE}
+    for intent in routing_intents:
+        assert intent in mapped_intents, f"routing intent {intent.value} not in mappings"
+    # DELEGATE is intentionally NOT in the routing map
+    assert Intent.DELEGATE not in mapped_intents, (
+        "Intent.DELEGATE should not be in the routing map — it's a "
+        "meta-tool intent, not a routing intent. The intent classifier "
+        "never produces DELEGATE; it's only invoked when the model calls "
+        "the delegate tool."
+    )
 
 
 # ── Intent → agent name correctness ──────────────────────────────────────────

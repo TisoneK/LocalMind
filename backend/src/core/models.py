@@ -49,6 +49,7 @@ class Intent(str, Enum):
     FILE_EDIT = "file_edit"
     BROWSE = "browse"  # Real browser interaction (click, fill, scroll, screenshot)
     CHAT = "chat"
+    DELEGATE = "delegate"  # ADR-8 Phase 3: agent-initiated delegation
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

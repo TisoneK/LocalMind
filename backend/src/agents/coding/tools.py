@@ -36,10 +36,14 @@ from core.agent.constants import AGENT_ALLOWED_TOOLS
 #   - file_write → create files (Land)
 #   - edit_file  → modify files in-place (Land)
 #   - code_exec  → execute code (Execute)
+#   - delegate   → ADR-8 Phase 3: delegate to research/browser/direct
+#     when the coding task needs another domain (e.g., "write a script
+#     that uses the current weather API" — delegate the weather lookup
+#     to the research agent, then continue coding with the result).
 #
 # Excluded (belong to other agents or are secondary):
-#   - web_search, web_fetch → research agent
-#   - browse → browser agent
+#   - web_search, web_fetch → research agent (delegate to it instead)
+#   - browse → browser agent (delegate to it instead)
 #   - memory_op → shared but secondary during coding (the agent has
 #     env_context + workspace_state for context)
 #   - sysinfo → the agent gets system info from env_context already
@@ -50,6 +54,7 @@ CODING_TOOLS: frozenset[str] = frozenset(
         "file_write",
         "edit_file",
         "code_exec",
+        "delegate",  # ADR-8 Phase 3: agent-initiated delegation
     }
 )
 

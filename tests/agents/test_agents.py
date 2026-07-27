@@ -59,9 +59,9 @@ def test_browser_agent_config():
     cfg = agent.config()
     assert cfg.name == "browser"
     assert cfg.tools_enabled is True
-    # Scoped toolset: only Intent.BROWSE, not the full AGENT_ALLOWED_TOOLS
+    # Scoped toolset: browse + delegate (ADR-8 Phase 3), not the full AGENT_ALLOWED_TOOLS
     assert cfg.allowed_tools == BROWSER_TOOLS
-    assert cfg.allowed_tools == frozenset({Intent.BROWSE.value})
+    assert cfg.allowed_tools == frozenset({Intent.BROWSE.value, "delegate"})
     assert cfg.allowed_tools.issubset(AGENT_ALLOWED_TOOLS)
     # Browser tasks are slow but rarely need many iterations
     assert cfg.max_iterations < DEFAULT_MAX_ITERATIONS
@@ -117,10 +117,13 @@ def test_browser_agent_scoped_tools_filters_non_browser():
         {"intent": "code_exec", "description": "code"},
         {"intent": "file_task", "description": "file read"},
         {"intent": "web_search", "description": "search"},
+        {"intent": "delegate", "description": "delegate"},  # ADR-8 Phase 3
     ]
     scoped = agent.scoped_tools(all_tools)
-    assert len(scoped) == 1
-    assert scoped[0]["intent"] == "browse"
+    assert len(scoped) == 2  # browse + delegate (ADR-8 Phase 3)
+    scoped_intents = {t["intent"] for t in scoped}
+    assert "browse" in scoped_intents
+    assert "delegate" in scoped_intents
 
 
 def test_browser_agent_scoped_tools_empty_input():
@@ -191,9 +194,14 @@ def test_browser_tools_is_subset_of_agent_allowed():
     assert BROWSER_TOOLS.issubset(AGENT_ALLOWED_TOOLS)
 
 
-def test_browser_tools_only_browse():
-    """The browser agent's scoped toolset is exactly one tool: Intent.BROWSE."""
-    assert BROWSER_TOOLS == frozenset({Intent.BROWSE.value})
+def test_browser_tools_browse_plus_delegate():
+    """The browser agent's scoped toolset is browse + delegate.
+
+    ADR-8 Phase 3 (Session 34): added 'delegate' so the browser agent
+    can hand off research/coding sub-tasks to the appropriate agent
+    instead of trying to do them itself (it has no shell/file tools).
+    """
+    assert BROWSER_TOOLS == frozenset({Intent.BROWSE.value, "delegate"})
 
 
 def test_build_browser_context_includes_memory_facts():

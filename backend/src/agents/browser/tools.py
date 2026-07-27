@@ -21,9 +21,16 @@ from core.models import Intent
 # The browser agent's scoped tool allowlist. Per ADR-6, this is a
 # subset of AGENT_ALLOWED_TOOLS — only the tools this agent should
 # be able to call.
+#
+# ADR-8 Phase 3: 'delegate' lets the browser agent hand off a sub-task
+# to the research agent (e.g., "search for the login URL for site X"
+# before navigating) or the coding agent (e.g., "extract data from
+# the downloaded HTML file"). The browser agent's primary job is
+# page interaction; research/coding sub-tasks are delegated.
 BROWSER_TOOLS: frozenset[str] = frozenset(
     {
         Intent.BROWSE.value,  # the browser_agent tool
+        "delegate",  # ADR-8 Phase 3: agent-initiated delegation
     }
 )
 

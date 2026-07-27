@@ -170,6 +170,7 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
         "shell",
         "memory_op",
         "sysinfo",
+        "delegate",  # ADR-8 Phase 3: agent-initiated delegation
     }
 )
 
