@@ -1,6 +1,6 @@
 # Browser Agent — Real Web Interaction
 
-You have access to a real browser via the `browse` tool. This is NOT just web search or web fetch — it's a full browser that can click, fill forms, scroll, take screenshots, and execute JavaScript.
+You have access to a real browser via the `browse` tool. This is NOT just web search or web fetch — it's a full browser that can click, fill forms, scroll, take screenshots, inspect rendered DOM/HTML, inspect captured network requests, read console messages, and execute JavaScript.
 
 ## When to use the browser
 
@@ -23,7 +23,8 @@ Always follow this pattern:
    - Scroll: `{"action": "scroll", "direction": "down", "amount": 500}`
 4. **Re-snapshot**: after navigation or DOM changes, snapshot again to get new refs
 5. **Read result**: `{"action": "text", "ref": "@e3"}` to read element text
-6. **Close**: `{"action": "close"}` when done
+6. **Inspect when needed**: use `dom` for rendered HTML, `network` for captured requests, and `console` for browser messages/errors
+7. **Close**: `{"action": "close"}` when done
 
 ## Key rules
 
@@ -31,6 +32,7 @@ Always follow this pattern:
 - **Use fill, not type** — fill clears the field first
 - **Wait after navigation** — `{"action": "wait", "target": "2000"}` for 2s, or `{"action": "wait", "target": "--load networkidle"}`
 - **Take screenshots for the user** — `{"action": "screenshot"}` captures the current page
+- **Treat DOM, network, and console output as sensitive page data** — it may contain tokens, cookies, PII, or application secrets
 - **Never submit sensitive data** without explicit user permission
 - **Close the browser when done** — `{"action": "close"}`
 
@@ -48,6 +50,9 @@ Always follow this pattern:
 | `scrollintoview` | `ref` | Scroll element into view |
 | `screenshot` | `path?`, `full?` | Take screenshot |
 | `text` | `ref` | Get element text |
+| `dom` | `selector?` | Get rendered HTML for a selector or the whole page |
+| `network` | `filter?`, `type?`, `method?`, `status?`, `clear?` | Read captured network requests |
+| `console` | `json?`, `clear?` | Read browser console messages |
 | `url` | — | Get current URL |
 | `title` | — | Get page title |
 | `eval` | `script` | Execute JavaScript |
@@ -70,5 +75,8 @@ Always follow this pattern:
    → Shows: search results with new refs
 7. {"action": "text", "ref": "@e3"}
    → Returns the text of the first result
-8. {"action": "close"}
+8. `{"action": "dom", "selector": "#results"}` — inspect rendered HTML when text/snapshot is not enough
+9. `{"action": "network", "filter": "/api/"}` — inspect captured API requests
+10. `{"action": "console", "json": true}` — read structured console messages
+11. `{"action": "close"}`
 ```

@@ -38,7 +38,8 @@ class BrowserAgent(BaseAgent):
     The Browser Agent — drives a real headless browser via agent-browser.
 
     Scoped toolset: Intent.BROWSE only (navigate, click, fill, scroll,
-    screenshot, eval JS, etc.). Cannot run shell commands, edit files,
+    screenshot, DOM/network/console inspection, eval JS, etc.). Cannot run
+    shell commands, edit files,
     or execute code.
 
     Stop condition (Phase 2): close action / form submitted / target
@@ -86,8 +87,9 @@ class BrowserAgent(BaseAgent):
     def description(self) -> str:
         return (
             "Browser Agent — drives a real headless browser to navigate, "
-            "click, fill forms, scroll, take screenshots, and execute "
-            "JavaScript. Use this agent when the task requires interacting "
+            "click, fill forms, scroll, take screenshots, inspect rendered "
+            "DOM, network requests, and console logs, or execute JavaScript. "
+            "Use this agent when the task requires interacting "
             "with live web pages (logging in, filling forms, clicking "
             "buttons, reading dynamic content that needs JavaScript). "
             "Cannot run shell commands, edit local files, or execute code. "

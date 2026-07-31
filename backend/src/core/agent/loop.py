@@ -266,6 +266,68 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "browse",
+            "description": (
+                "Drive a real headless browser. Navigate, inspect interactive elements, "
+                "click, fill forms, scroll, take screenshots, read text or HTML, "
+                "inspect network requests, read console messages, and execute JavaScript. "
+                "Use DOM/network/console inspection only when needed; page output may "
+                "contain sensitive user or session data."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "open",
+                            "snapshot",
+                            "click",
+                            "fill",
+                            "type",
+                            "press",
+                            "scroll",
+                            "scrollintoview",
+                            "screenshot",
+                            "text",
+                            "dom",
+                            "network",
+                            "console",
+                            "url",
+                            "title",
+                            "eval",
+                            "back",
+                            "forward",
+                            "reload",
+                            "close",
+                            "wait",
+                        ],
+                        "description": "The browser action to perform",
+                    },
+                    "url": {"type": "string", "description": "For open: URL to navigate to"},
+                    "ref": {"type": "string", "description": "Element reference such as @e1"},
+                    "selector": {"type": "string", "description": "For dom: CSS selector or element reference; defaults to html"},
+                    "value": {"type": "string", "description": "Text, key, script, or wait target depending on action"},
+                    "script": {"type": "string", "description": "For eval: JavaScript to execute"},
+                    "direction": {"type": "string", "enum": ["up", "down", "left", "right"]},
+                    "amount": {"type": "integer", "description": "For scroll: pixel amount"},
+                    "path": {"type": "string", "description": "For screenshot: optional output path"},
+                    "full": {"type": "boolean", "description": "For screenshot: capture the full page"},
+                    "filter": {"type": "string", "description": "For network: URL pattern filter"},
+                    "type": {"type": "string", "description": "For network: resource type filter, such as xhr,fetch"},
+                    "method": {"type": "string", "description": "For network: HTTP method filter"},
+                    "status": {"type": "string", "description": "For network: status filter, such as 2xx"},
+                    "clear": {"type": "boolean", "description": "For network/console: clear captured entries after reading"},
+                    "json": {"type": "boolean", "description": "For console: return structured JSON output"},
+                    "interactive": {"type": "boolean", "description": "For snapshot: limit output to interactive elements (default true)"},
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "code_exec",
             "description": "Execute Python code and return the output",
             "parameters": {
@@ -756,6 +818,10 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         return json.dumps(tool_args, ensure_ascii=False)
     elif tool_name == "diagnostics":
         # diagnostics dispatcher expects JSON-encoded args (operation + text/path)
+        return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "browse":
+        # browse dispatcher expects JSON-encoded args so action-specific
+        # options (selector, filters, clear/json flags) survive dispatch.
         return json.dumps(tool_args, ensure_ascii=False)
     else:
         # Fallback: join all values
@@ -1273,6 +1339,7 @@ class AgentLoop:
                         "git": f"Git: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Git operation",
                         "process": f"Process: {call.tool_args.get('operation', '')} {call.tool_args.get('name', '')}" if call.tool_args.get('operation') else "Process operation",
                         "diagnostics": f"Diagnostics: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Analyzing failure",
+                        "browse": f"Browser: {call.tool_args.get('action', '')}" if call.tool_args.get('action') else "Using browser",
                     }
                     _label = _label_map.get(call.tool_name, f"Running {call.tool_name}")
                     yield StreamChunk(text="", done=False, status=_label)
@@ -1697,6 +1764,7 @@ class AgentLoop:
                         "git": f"Git: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Git operation",
                         "process": f"Process: {tool_args.get('operation', '')} {tool_args.get('name', '')}" if tool_args.get('operation') else "Process operation",
                         "diagnostics": f"Diagnostics: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Analyzing failure",
+                        "browse": f"Browser: {tool_args.get('action', '')}" if tool_args.get('action') else "Using browser",
                     }
                     action_label = action_labels.get(tool_name, f"Running {tool_name}")
                 logger.info(

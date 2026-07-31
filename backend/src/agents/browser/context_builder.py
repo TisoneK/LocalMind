@@ -51,8 +51,10 @@ def build_browser_context(
         "You are running as the Browser Agent. Your tool surface is",
         "scoped to browser interaction only — you cannot run shell",
         "commands, edit files, or execute code. Use the browse tool to",
-        "navigate, click, fill forms, scroll, screenshot, and execute",
-        "JavaScript on the current page.",
+        "navigate, click, fill forms, scroll, screenshot, inspect rendered",
+        "DOM/HTML, network requests, console messages, and execute",
+        "JavaScript on the current page. DOM, network, and console output",
+        "may contain sensitive page data; inspect it only when needed.",
         "",
     ]
 

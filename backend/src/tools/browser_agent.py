@@ -7,6 +7,7 @@ Unlike web_fetch (which only fetches static HTML), this tool drives a real
 headless browser that can:
   - Navigate to pages (open, back, forward, reload)
   - Take snapshots of interactive elements (buttons, inputs, links)
+  - Inspect rendered DOM/HTML, network requests, and console messages
   - Click, fill forms, scroll, take screenshots
   - Execute JavaScript
   - Handle authentication and cookies
@@ -24,6 +25,9 @@ Usage from the agent loop:
     {"action": "scroll", "direction": "down", "amount": 500}
     {"action": "screenshot", "path": "/tmp/page.png"}
     {"action": "text", "ref": "@e3"}
+    {"action": "dom", "selector": "#main"}
+    {"action": "network", "filter": "api"}
+    {"action": "console"}
     {"action": "eval", "script": "document.title"}
     {"action": "close"}
 
@@ -138,6 +142,12 @@ def _parse_action(message: str) -> dict | None:
         return {"action": "snapshot"}
     if "screenshot" in msg_lower:
         return {"action": "screenshot"}
+    if "console" in msg_lower:
+        return {"action": "console"}
+    if "network" in msg_lower:
+        return {"action": "network"}
+    if "dom" in msg_lower or "html" in msg_lower:
+        return {"action": "dom"}
 
     # "click @e1"
     click_match = re.search(r"click\s+(@\w+)", msg_lower)
@@ -200,9 +210,12 @@ async def browser_agent(message: str) -> ToolResult:
                 '  {"action": "scroll", "direction": "down", "amount": 500}\n'
                 '  {"action": "screenshot"}\n'
                 '  {"action": "text", "ref": "@e3"}\n'
+                '  {"action": "dom", "selector": "#main"}\n'
+                '  {"action": "network", "filter": "api"}\n'
+                '  {"action": "console"}\n'
                 '  {"action": "eval", "script": "document.title"}\n'
                 '  {"action": "close"}\n\n'
-                "Or use natural language: 'open https://example.com', 'click @e1', 'snapshot'"
+                "Or use natural language: 'open https://example.com', 'click @e1', 'snapshot', 'inspect the DOM'"
             ),
             risk=RiskLevel.LOW,
             source="browser_agent",
@@ -211,7 +224,18 @@ async def browser_agent(message: str) -> ToolResult:
             error_message="Could not parse browser action from message",
         )
 
-    act = action.get("action", "").lower()
+    raw_action = action.get("action", "")
+    if not isinstance(raw_action, str) or not raw_action.strip():
+        return ToolResult(
+            content="Browser action must include a non-empty string 'action' field.",
+            risk=RiskLevel.LOW,
+            source="browser_agent",
+            success=False,
+            error_type="invalid_action",
+            error_message="The action field must be a non-empty string",
+        )
+
+    act = raw_action.strip().lower()
     args: list[str] = []
     risk = RiskLevel.LOW
 
@@ -324,6 +348,31 @@ async def browser_agent(message: str) -> ToolResult:
             )
         args = ["get", "text", ref]
 
+    elif act == "dom":
+        selector = action.get("selector", action.get("ref", "html"))
+        if not isinstance(selector, str) or not selector.strip():
+            selector = "html"
+        args = ["get", "html", selector.strip()]
+        risk = RiskLevel.MEDIUM  # Rendered HTML may contain user or session data
+
+    elif act == "network":
+        args = ["network", "requests"]
+        risk = RiskLevel.MEDIUM  # URLs/headers may expose tokens or personal data
+        if action.get("clear", False):
+            args.append("--clear")
+        for option in ("filter", "type", "method", "status"):
+            value = action.get(option)
+            if value:
+                args.extend([f"--{option}", str(value)])
+
+    elif act == "console":
+        args = ["console"]
+        risk = RiskLevel.MEDIUM  # Console output may contain application secrets
+        if action.get("clear", False):
+            args.append("--clear")
+        if action.get("json", False):
+            args.append("--json")
+
     elif act == "url":
         args = ["get", "url"]
 
@@ -368,13 +417,31 @@ async def browser_agent(message: str) -> ToolResult:
         args = ["wait", target]
 
     else:
+        supported = (
+            "open, snapshot, click, fill, type, press, scroll, scrollintoview, "
+            "screenshot, text, dom, network, console, url, title, eval, back, "
+            "forward, reload, close, wait"
+        )
         return ToolResult(
-            content=f"Unknown browser action: '{act}'. Supported: open, snapshot, click, fill, type, press, scroll, scrollintoview, screenshot, text, url, title, eval, back, forward, reload, close, wait",
+            content=f"Unknown browser action: '{act}'. Supported: {supported}",
             risk=RiskLevel.LOW,
             source="browser_agent",
             success=False,
             error_type="unknown_action",
             error_message=f"Unknown action: {act}",
+        )
+
+    # Validate all CLI arguments before invoking subprocess. Model-produced
+    # JSON can contain the wrong scalar type; never let that become a raw
+    # TypeError from create_subprocess_exec.
+    if not all(isinstance(arg, str) for arg in args):
+        return ToolResult(
+            content=f"Invalid argument for browser action '{act}': all arguments must be strings.",
+            risk=RiskLevel.LOW,
+            source="browser_agent",
+            success=False,
+            error_type="invalid_argument",
+            error_message="Browser CLI arguments must be strings",
         )
 
     # Run the command
@@ -390,11 +457,13 @@ async def browser_agent(message: str) -> ToolResult:
     success = exit_code == 0
     if not success and stderr:
         output = f"Error: {stderr.strip()}\n\n{output}"
+    content = f"Browser action: {act}\n\n{output}" if output else f"Browser action: {act} (no output)"
+    if len(content) > _MAX_OUTPUT:
+        marker = "\n\n[... browser output truncated]"
+        content = content[: _MAX_OUTPUT - len(marker)] + marker
 
     return ToolResult(
-        content=f"Browser action: {act}\n\n{output}"
-        if output
-        else f"Browser action: {act} (no output)",
+        content=content,
         risk=risk,
         source="browser_agent",
         success=success,
@@ -406,7 +475,11 @@ async def browser_agent(message: str) -> ToolResult:
 register_tool(
     Intent.BROWSE,
     browser_agent,
-    description="Real browser interaction — navigate, click, fill forms, scroll, screenshot, execute JS. Uses agent-browser CLI.",
+    description=(
+        "Real browser interaction — navigate, click, fill forms, scroll, screenshot, "
+        "inspect DOM/network/console, and execute JS. DOM, network, and console "
+        "inspection may expose page data. Uses agent-browser CLI."
+    ),
     cost=0.5,
     latency_ms=3000,
     parallelizable=False,  # Browser is stateful — never run concurrently
