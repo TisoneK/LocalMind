@@ -25,6 +25,7 @@ import type {
   ModelOption,
   CompletionSuggestion,
 } from '@/types';
+import { createSSEParser } from './sse';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -259,32 +260,34 @@ class LocalMindClient {
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
-        let buffer = '';
+        let streamCompleted = false;
+        const finish = (): void => {
+          if (!streamCompleted) {
+            streamCompleted = true;
+            onDone();
+          }
+        };
+        const parser = createSSEParser(onChunk, finish);
 
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
-
-            // SSE events are separated by double newlines
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]') {
-                  onDone();
-                  return;
-                }
-                onChunk(data);
-              }
+            if (parser.push(decoder.decode(value, { stream: true }))) {
+              return;
             }
           }
-          // Stream ended without [DONE] — treat as complete
-          onDone();
+
+          // TextDecoder can retain an incomplete UTF-8 sequence between
+          // chunks, so decode its final bytes before flushing the SSE line.
+          if (parser.push(decoder.decode())) {
+            return;
+          }
+          parser.flush();
+          // Streams may end without [DONE]; still complete after the final
+          // buffered event has been delivered.
+          finish();
         } catch (_err) {
           // AbortError is expected when the user cancels
           if (controller.signal.aborted) {
