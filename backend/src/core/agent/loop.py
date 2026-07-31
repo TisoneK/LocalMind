@@ -451,7 +451,8 @@ TOOL_DEFINITIONS = [
                 "'coding' (shell + file tools + code exec), 'browser' (headless "
                 "browser), 'verifier' (run tests, reproduce bugs, validate "
                 "behavior), 'reviewer' (assess code quality and spec "
-                "conformance), 'direct' (single model call, no tools). Use 'delegate' "
+                "conformance), 'debugger' (isolate failures and find "
+                "root causes of bugs), 'direct' (single model call, no tools). Use 'delegate' "
                 "sparingly — it costs an extra agent loop. If you can handle the "
                 "task with your own tools, do that instead."
             ),
@@ -460,7 +461,7 @@ TOOL_DEFINITIONS = [
                 "properties": {
                     "target_agent": {
                         "type": "string",
-                        "enum": ["research", "coding", "browser", "direct", "verifier", "reviewer"],
+                        "enum": ["research", "coding", "browser", "direct", "verifier", "reviewer", "debugger"],
                         "description": (
                             "The agent to delegate to. 'research' for web search "
                             "+ fetch; 'coding' for shell + file tools + code exec; "

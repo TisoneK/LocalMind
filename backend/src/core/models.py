@@ -52,6 +52,7 @@ class Intent(str, Enum):
     PROCESS = "process"  # Process management (start, stop, restart, status, logs, wait)
     VERIFY = "verify"  # Verification (run tests, reproduce bugs, check acceptance criteria)
     REVIEW = "review"  # Code review (spec conformance, quality assessment, best practices)
+    DEBUG = "debug"  # Debugging (isolate failures, trace root causes, reproduce bugs)
     CHAT = "chat"
     DELEGATE = "delegate"  # ADR-8 Phase 3: agent-initiated delegation
 

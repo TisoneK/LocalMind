@@ -110,14 +110,14 @@ def test_registry_auto_discovers_all_built_in_agents():
     # The auto_discover helper is idempotent — re-running it on the same
     # package is a no-op (same class registered under same name).
     count = auto_discover_agents()
-    assert count == 6, (
-        f"auto_discover_agents should find 6 agents (coding, research, "
-        f"browser, direct, verifier, reviewer); found {count}"
+    assert count == 7, (
+        f"auto_discover_agents should find 7 agents (coding, research, "
+        f"browser, direct, verifier, reviewer, debugger); found {count}"
     )
 
     registered_names = {name for name, _ in list_agents()}
-    assert {"coding", "research", "browser", "direct", "verifier", "reviewer"}.issubset(registered_names), (
-        f"all 6 built-in agent names should be in registry; got {registered_names}"
+    assert {"coding", "research", "browser", "direct", "verifier", "reviewer", "debugger"}.issubset(registered_names), (
+        f"all 7 built-in agent names should be in registry; got {registered_names}"
     )
 
 

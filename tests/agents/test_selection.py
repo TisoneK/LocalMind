@@ -31,7 +31,7 @@ def test_every_intent_is_mapped():
     """Every Intent enum value has a mapping — no KeyErrors."""
     for intent in Intent:
         name = intent_to_agent_name(intent)
-        assert name in {"browser", "coding", "research", "direct", "verifier", "reviewer"}, (
+        assert name in {"browser", "coding", "research", "direct", "verifier", "reviewer", "debugger"}, (
             f"intent {intent.value} mapped to unknown agent {name!r}"
         )
 
