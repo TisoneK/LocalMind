@@ -106,7 +106,7 @@ def test_delegate_in_tool_definitions():
     # target_agent has an enum constraint
     assert "enum" in fn["parameters"]["properties"]["target_agent"]
     assert set(fn["parameters"]["properties"]["target_agent"]["enum"]) == {
-        "research", "coding", "browser", "direct", "verifier", "reviewer", "debugger"
+        "research", "coding", "browser", "direct", "verifier", "reviewer", "debugger", "analyst"
     }
 
 
