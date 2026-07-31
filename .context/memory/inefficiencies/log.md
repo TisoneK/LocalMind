@@ -128,3 +128,12 @@ if literally nothing slowed you down.
 - **Cause:** The local environment differs from the previously recorded Windows/cloud environments, and the generic command did not account for the backend's version constraint.
 - **Workaround / fix:** Reused the installed uv-managed Python 3.12.13, created `backend/.venv`, installed `backend[dev]`, and ran validation through `backend/.venv/bin/python`.
 - **Prevent next time:** Check `pyproject.toml`'s `requires-python` and available uv interpreters before running Python baseline commands; prefer the project-local venv path.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 37)
+
+- **Problem:** The first reviewer report was returned as an internal reasoning fragment rather than a structured review summary, and the frontend has no test harness for its critical SSE parser.
+- **Cost:** Review interpretation required an additional pass; the parser issue can currently be verified by code inspection but not locked with a frontend regression test.
+- **Cause:** The project has strong backend coverage but no frontend tests, while the UI transport contract is split between a native stream parser and React state handlers.
+- **Workaround / fix:** Used the backend API regression test for the shipped contract fix, validated the frontend with production build/lint, and recorded the parser follow-up separately instead of mixing it into the first fix.
+- **Prevent next time:** Add a small frontend test harness around the SSE parser before changing more UI transport behavior.

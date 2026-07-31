@@ -87,12 +87,15 @@ Four implementation phases (multi-session):
   structural moves, `feat(agent-loop):` for Phase 2 wiring, etc.)
 - **Status:** in-progress (Phase 0 = initialization done in Session 34;
   Phases 1-4 not started)
-- **Current state:** Session 34 (this session) is context-only
-  initialization. The standing Target in `workflows/active.md` is
-  switched from ADR-5 to ADR-8. Root `AGENTS.md` has the new
-  "architectural target — ADR-8" section. Feature-scoped memory
-  seeded (this `manifest.md` + `notes.md`). `tasks/backlog.md` has a
-  new Phase 1 entry. No code touched.
+- **Current state:** Phase 1–4 implementation work is present in the
+  repository, but the runtime is still transitional: directory agents,
+  workflows, delegation, and task-profile selection are tested while
+  several engine branches still call `AgentLoop` directly. Session 37's
+  tools audit confirmed this is a real integration boundary, not a reason
+  to broadly rewrite the transport path. The next safe work is to finish
+  message transport reliability, then instrument and close runtime agent
+  wiring gaps one at a time with real-model validation where behavior
+  changes.
 - **No-regression list (must hold after every phase):**
   1. Session 31/32 fix: `MAX_ITERATIONS=8` default, configurable via
      `LOCALMIND_MAX_ITERATIONS` env var; `MAX_WALL_CLOCK_SECS=180s`,

@@ -36,3 +36,6 @@ records.
 
 ---
 - **2026-07-31 — Session 36** — Buffy / openai/gpt-5.6-luna — completed Project setup: installed locked npm and backend dev dependencies, verified core 0.5.0, and passed 497 backend tests plus frontend build/typecheck without product-code changes. Detail: `.context/memory/sessions/2026-07-31-36/notes.md`.
+
+---
+- **2026-07-31 — Session 37** — Buffy / openai/gpt-5.6-luna — fixed typed SSE upload failures so the UI no longer completes an empty assistant bubble; 498 backend tests and frontend validation passed. Next: flush final buffered SSE event. Detail: `.context/memory/sessions/2026-07-31-37/notes.md`.

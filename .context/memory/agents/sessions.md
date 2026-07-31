@@ -668,3 +668,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 ## 2026-07-31 — Session 36 commit correction
 
 - **Correction:** Project setup context records committed as `5290253` (`chore(context): record Project setup`) and pushed successfully to `origin/main`.
+
+---
+## 2026-07-31 — Session 37
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** Local macOS development machine (macOS 15.7.7) | **Role:** engineer
+- **Feature:** none
+- **Task:** Kick off `.context/kickoff.md` Target: Tools; trace the message/UI/agent/tool path and fix the first safe connection defect.
+- **Commits:** 2 product/context commits (`be7dd56` + this context commit)
+- **Outcome:** done — fixed upload/storage failures being silently ignored by the frontend by normalizing the SSE error contract; added regression coverage and completed the tools/agents integration audit.
+- **Open items:** frontend SSE final-buffer flush is next; ADR-8 agent registry/task routing remains transitional in the engine; see `.context/memory/reviews/2026-07-31-review-3.md`.
+- **Report:** `.context/memory/reviews/2026-07-31-review-3.md`
+- **Notes:** `.context/memory/sessions/2026-07-31-37/notes.md`
