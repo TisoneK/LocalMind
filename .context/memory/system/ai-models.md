@@ -9,7 +9,7 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
-| Buffy | openai/gpt-5.6-luna | 2026-07-31 | 2026-07-31 | 3 |
+| Buffy | openai/gpt-5.6-luna | 2026-07-31 | 2026-07-31 | 4 |
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 
@@ -115,3 +115,4 @@ Updated registry row:
 - **Buffy / openai/gpt-5.6-luna:** Completed a context-only LocalMind clone and vendored-core sync from 0.2.0 to 0.5.0; verified the core manifest and preserved project memory without changing product code (2026-07-31).
 - **Buffy / openai/gpt-5.6-luna:** Completed Project setup on local macOS: installed locked npm workspaces, created a Python 3.12.13 backend venv via uv because system Python is 3.9.6, and verified 497 backend tests plus frontend build/typecheck. (2026-07-31)
 - **Buffy / openai/gpt-5.6-luna:** Traced the full UI→SSE→API→engine→agent/tool path, fixed a typed SSE upload-error contract defect, and identified final-buffer loss as the next frontend transport risk. (2026-07-31)
+- **Buffy / openai/gpt-5.6-luna:** Extended a stateful CLI-backed browser wrapper with DOM/network/console inspection, sensitive-output risk classification, final output bounds, malformed-argument validation, and mocked subprocess tests; live CLI testing was blocked because `agent-browser` is not installed locally. (2026-07-31)

@@ -808,3 +808,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Report:** `.context/memory/reviews/2026-07-31-review-5.md`
 - **Notes:** `.context/memory/sessions/2026-07-31-39/notes.md`
 - **Open items:** add public `streamChat()` mocked-fetch/ReadableStream integration coverage, then resume the transitional ADR-8 engine wiring audit.
+
+---
+## 2026-07-31 — Session 50
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** `adr-8-agent-centric-routing`
+- **Task:** Complete B-2026-07-31-4 — audit and upgrade BrowserAgent against the capability gap analysis.
+- **Commits:** 1 product (`b7f1f98`) + 1 context commit (closeout)
+- **Outcome:** done — added DOM/HTML inspection, network-request inspection with filters, console inspection, model-facing browse schema/dispatch wiring, medium-risk classification for sensitive page data, bounded final output, malformed-argument validation, updated browser guidance, and 50 focused regression tests.
+- **Validation:** 50 focused tests; 411 handoff tests; compile/schema checks; changed-file Ruff clean; `git diff --check` clean. One existing event-loop deprecation warning remains. Live browser smoke test was blocked because the optional `agent-browser` CLI is not installed on this macOS machine.
+- **Open items:** Live BrowserAgent smoke test on a machine with `agent-browser install`; B-2026-07-31-9 Observe capability; B-2026-07-31-10 non-coding capability roadmap; ADR-8 runtime-wiring follow-ups.
+- **Report:** `.context/memory/reviews/2026-07-31-review-7.md`
+- **Notes:** none

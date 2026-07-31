@@ -145,3 +145,12 @@ if literally nothing slowed you down.
 - **Cost:** The requested fix required introducing the first frontend test runner while repairing the parser.
 - **Workaround / fix:** Added the project-local Vitest script/dependency, extracted a pure SSE parser, and locked the unterminated-event behavior with focused tests.
 - **Prevent next time:** Keep transport helpers independently testable and add a public `streamChat()` integration fixture before changing additional UI stream behavior.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 50)
+
+- **Problem:** The optional `agent-browser` CLI was not installed on this macOS checkout, so live BrowserAgent smoke testing could not run.
+- **Cost:** No code rework; live validation was deferred after the mocked contract tests passed.
+- **Cause:** Browser automation is an optional external CLI dependency and is not installed by default in this environment.
+- **Workaround / fix:** Verified the documented command syntax through authoritative documentation and tested the wrapper at its subprocess boundary with 50 focused mocked tests.
+- **Prevent next time:** Install `agent-browser` and Chromium before a session that requires live browser verification; keep mocked tests as the deterministic regression layer.

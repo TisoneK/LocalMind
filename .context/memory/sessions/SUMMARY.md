@@ -35,6 +35,9 @@ records.
 - **2026-07-31 — Session 49** — Buffy / deepseek/deepseek-v4-pro — built Diagnostics tool with 4 operations (inspect_error, analyze_traceback, inspect_logs, inspect_test_failure); 28 new tests, 335 total tests pass. Commit `1c59431`. Gap analysis delivered: 8/10 items.
 
 ---
+- **2026-07-31 — Session 50** — Buffy / openai/gpt-5.6-luna — upgraded BrowserAgent with DOM/HTML, network-request, and console inspection; added browse schema wiring, sensitive-output safeguards, bounded output, and 50 mocked regression tests. Product commit `b7f1f98`; 411 handoff tests pass. Live CLI smoke test remains open because `agent-browser` is not installed.
+
+---
 - **2026-07-31 — Session 46** — Buffy / deepseek/deepseek-v4-pro — built AnalystAgent with 3-tool toolset (file_task, git, delegate — the tightest); 29 new tests, 307 total agent tests pass. Commit `a90ea6c`. Gap analysis complete — all 8 agents implemented.
 
 ---

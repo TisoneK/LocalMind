@@ -89,13 +89,17 @@ Four implementation phases (multi-session):
   Phases 1-4 implementation work is present; runtime wiring remains transitional)
 - **Current state:** Phase 1–4 implementation work is present in the
   repository, but several engine branches still call `AgentLoop` directly.
-  Sessions 37–39 repaired the confirmed chat transport/UI loss paths:
+  Session 50 also completed the BrowserAgent capability upgrade: the
+  browse tool now exposes DOM/HTML, network-request, and console
+  inspection with bounded output and focused mocked coverage. Sessions
+  37–39 repaired the confirmed chat transport/UI loss paths:
   typed upload failures, final unterminated SSE events, disconnected
   Actions/todos, inconsistent active statuses, delayed live metrics, and
   stream-finalization state races. The next safe work is a public
   `streamChat()` integration regression, then instrument and close runtime
   agent wiring gaps one at a time with real-model validation where behavior
-  changes.
+  changes. The optional `agent-browser` CLI still needs a live smoke test
+  on a machine with Chromium installed.
 
 - **No-regression list (must hold after every phase):**
   1. Session 31/32 fix: `MAX_ITERATIONS=8` default, configurable via
