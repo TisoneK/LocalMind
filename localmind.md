@@ -2,13 +2,15 @@
 > Auto-updated at server startup by `core/knowledge_writer.py`.
 > Do not hand-edit the Runtime Configuration table — it will be overwritten.
 > To permanently change a value, update `.env` instead.
-> Version: v0.5-dev
+> Version: v0.6-dev
 
 ## What LocalMind Is
 
 LocalMind is a local AI runtime — a FastAPI server that wraps Ollama models and gives them
-real tools: file reading, code execution, shell access, web search, and persistent memory.
-Everything runs on the user's machine. No data leaves the device.
+real tools: file reading, code execution, shell access, git operations, process management,
+web search, and persistent memory. Everything runs on the user's machine. No data leaves
+the device. LocalMind uses a multi-agent architecture with 8 specialized agents sharing a
+common loop shape and per-agent scoped toolsets.
 
 ## What I Can Do
 
@@ -28,6 +30,18 @@ real tools wired directly into my pipeline. Here is what I can actually do on yo
   directly to your machine.
 - **Run Python code** — I can execute Python and show you the real output, not a guess.
 - **Run system commands** — I can list files, check disk space, run git commands, and more.
+- **Manage Git repositories** — I can show status, diff changes, view commit history,
+  create branches, commit changes, merge, stash, and reset — with safety gates.
+- **Manage long-running processes** — I can start dev servers, test runners, and builds
+  in the background, check their status, read logs, and stop them when done.
+- **Run tests and verify code** — I have a dedicated VerifierAgent that runs test suites,
+  reproduces bugs, and validates that code works.
+- **Review code quality** — I have a dedicated ReviewerAgent that assesses implementations
+  against specs, checks style, and identifies issues.
+- **Diagnose failures** — I have a dedicated DebuggerAgent that isolates root causes of
+  bugs by tracing through code and checking git history.
+- **Analyze requirements** — I have a dedicated AnalystAgent that reads specs and project
+  context to clarify what needs to be built.
 - **Tell you about your system** — Current time, date, OS, CPU, RAM, and disk — instantly
   and accurately, without guessing.
 
@@ -55,6 +69,26 @@ alone, without calling a tool.
 | Shell timeout | 20 s |
 | Response reserve | 512 tokens |
 
+## Agent Registry (v0.6)
+
+LocalMind uses 8 specialized agents (ADR-6), each with a scoped toolset:
+
+| Agent | Tools | Role |
+|---|---|---|
+| Browser | browse, delegate | Drive a headless browser |
+| Coding | shell, file_task, file_write, edit_file, code_exec, git, process, delegate | Build, edit, and manage code |
+| Research | web_search, web_fetch, delegate | Search and fetch web content |
+| Direct | (none) | Single model call, no tools |
+| Verifier | shell, process, git, file_task, edit_file, delegate | Run tests, reproduce bugs, validate |
+| Reviewer | file_task, git, shell, delegate | Assess code quality and spec conformance |
+| Debugger | file_task, git, shell, process, delegate | Isolate failures, find root causes |
+| Analyst | file_task, git, delegate | Clarify requirements, analyze specs |
+
+Agents are selected by intent (`Intent.VERIFY → verifier`) or by task type
+(`primary_domain → agent`). The `delegate` tool lets any agent hand off work
+to another agent. All agents share a common `BaseAgent` with a 5-step loop
+(assemble → call → parse → execute → observe) and hard iteration + wall-clock caps.
+
 ## Tool Reference
 
 ### 1. WEB_SEARCH
@@ -80,16 +114,29 @@ Chunked at 1500 tokens with 200-token overlap. Max size: 50 MB.
 **Registered intent:** `shell`
 **Enabled:** true. Timeout: 20 s.
 
-### 6. SYSINFO (hardware + time, offline)
+### 6. GIT (structured version control)
+**Registered intent:** `git`
+**Operations:** status, diff, log, branch, checkout, commit, merge, stash, reset
+**Safety:** reset --hard blocked, non-repo check, commit requires message
+**Note:** Use this instead of raw shell git commands — it provides structured output
+and safety gates.
+
+### 7. PROCESS (long-running process management)
+**Registered intent:** `process`
+**Operations:** start, stop, restart, status, logs, wait
+**Safety:** SIGTERM with 5s grace → SIGKILL escalation, daemon stdout/stderr capture
+**Note:** Use for dev servers, test runners, builds — shell kills after 20s timeout.
+
+### 8. SYSINFO (hardware + time, offline)
 **Registered intent:** `sysinfo`
 **Speed:** <100 ms, fully offline. Always accurate for time/date/hardware.
 
-### 7. MEMORY_OP (persistent semantic memory)
+### 9. MEMORY_OP (persistent semantic memory)
 **Registered intent:** `memory_op`
 **Backend:** sqlite-vec + nomic-embed-text embeddings.
 **Passive retrieval:** relevant facts auto-injected into every turn.
 
-### 8. BROWSE (real browser interaction)
+### 10. BROWSE (real browser interaction)
 **Registered intent:** `browse`
 **Capabilities:** navigate, click, fill forms, scroll, screenshot, execute JS
 **Backend:** agent-browser CLI (headless Chromium)
