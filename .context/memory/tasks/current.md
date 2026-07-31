@@ -6,6 +6,6 @@ you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
 - **Session:** —
-- **Feature:** none — no session in progress (Session 40 complete)
+- **Feature:** none — no session in progress (Session 41 complete)
 - **Task:** none
 - **Status:** idle

@@ -4,6 +4,18 @@ One entry per agent session, newest at the bottom. Never edit or delete
 past entries — append corrections instead.
 
 ---
+## 2026-07-31 — Session 41
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — Phase A implementation session
+- **Task:** Build structured Git tool (`backend/src/tools/git_tool.py`) with 9 operations (status, diff, log, branch, checkout, commit, merge, stash, reset). Wire into AGENT_ALLOWED_TOOLS, CODING_TOOLS, TOOL_DEFINITIONS, selection.py, and UI label maps.
+- **Commits:** 1 product (`a16400a`) — `feat(git): add structured Git tool — 9 semantic operations for CodingAgent`
+- **Outcome:** done — 36 tests pass, ruff clean. Git tool exposes 9 semantic operations with safety gates (reset --hard blocked, non-repo check, required args validation). Wired end-to-end: Intent.GIT → tool registration → TOOL_DEFINITIONS → _extract_tool_input → dispatch → CodingAgent scoped toolset. UI labels show "Git: status" etc. in the Actions panel.
+- **Open items:** None from this session. Phase A complete. Process tool (B-2026-07-31-3) and VerifierAgent (B-2026-07-31-2) are the natural next steps per the gap analysis roadmap.
+- **Report:** none — implementation session (test file is the verification)
+- **Notes:** Code review found 4 issues (dead _DESTRUCTIVE_OPS, missing git labels in UI label maps, commit edge case with add_all on clean tree, selection.py not updated). All fixed before commit. The `_session_cwd_var` duplication between shell.py and git_tool.py is a known pattern — both tools need their own context var; the Engine calls `set_session_cwd()` on each.
+
+---
 ## 2026-07-31 — Session 40
 
 - **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
