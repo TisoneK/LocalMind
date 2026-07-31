@@ -39,3 +39,6 @@ records.
 
 ---
 - **2026-07-31 — Session 37** — Buffy / openai/gpt-5.6-luna — fixed typed SSE upload failures so the UI no longer completes an empty assistant bubble; 498 backend tests and frontend validation passed. Next: flush final buffered SSE event. Detail: `.context/memory/sessions/2026-07-31-37/notes.md`.
+
+---
+- **2026-07-31 — Session 38** — Buffy / openai/gpt-5.6-luna — fixed frontend SSE final-buffer loss with a reusable parser and Vitest regression coverage; frontend tests/build passed and lint had 0 errors. Next: public `streamChat()` integration coverage. Detail: `.context/memory/sessions/2026-07-31-38/notes.md`.

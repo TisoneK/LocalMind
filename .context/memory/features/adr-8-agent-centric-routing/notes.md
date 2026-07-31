@@ -669,8 +669,17 @@ The Zero-Interruption flaw logged earlier this session (after the
 Phase 1 init paused to ask "next session?") was respected for the
 rest of the session: Phases 2, 3, and 4 all continued without
 asking, per the protocol's "do the default next step and report"
-rule.
+rule.Token-strip dance applied throughout (PAT unset from .git/config;
+ZEN_API_KEY passed via env var, never persisted, never echoed beyond the
+last-4 check).
 
-Token-strip dance applied throughout (PAT unset from .git/config;
-ZEN_API_KEY passed via env var, never persisted, never echoed
-beyond the last-4 check).
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 38)
+
+The ADR-8 runtime target was not broadened this session. Instead, the
+next confirmed message-path defect was repaired: `streamChat()` now uses
+a dedicated SSE parser and flushes final decoder/parser state when the
+server closes without a trailing newline. This keeps transport reliability
+separate from future agent-routing work. Focused Vitest coverage passes;
+next follow-up is a public `streamChat()` integration test before resuming
+transitional engine wiring audit.

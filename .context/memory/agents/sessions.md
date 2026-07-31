@@ -680,3 +680,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** frontend SSE final-buffer flush is next; ADR-8 agent registry/task routing remains transitional in the engine; see `.context/memory/reviews/2026-07-31-review-3.md`.
 - **Report:** `.context/memory/reviews/2026-07-31-review-3.md`
 - **Notes:** `.context/memory/sessions/2026-07-31-37/notes.md`
+
+---
+## 2026-07-31 — Session 38
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** Local macOS development machine (macOS 15.7.7) | **Role:** engineer
+- **Feature:** none
+- **Task:** Fix the frontend SSE parser so it flushes the final buffered event and add focused regression coverage.
+- **Commits:** product commit plus context commit (recorded after closeout)
+- **Outcome:** done — extracted a dependency-free SSE parser, wired `streamChat()` to flush final decoder/parser state, guarded exactly-once completion, and added Vitest coverage for an unterminated final event.
+- **Validation:** 2 Vitest tests passed; frontend build/typecheck passed; lint 0 errors (49 existing warnings); diff check passed; code review found no blocker.
+- **Open items:** add a public `streamChat()` mocked-fetch/ReadableStream integration test, then resume the transitional ADR-8 engine wiring audit.
+- **Report:** `.context/memory/reviews/2026-07-31-review-4.md`
+- **Notes:** `.context/memory/sessions/2026-07-31-38/notes.md`

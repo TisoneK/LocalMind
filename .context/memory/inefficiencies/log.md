@@ -137,3 +137,11 @@ if literally nothing slowed you down.
 - **Cause:** The project has strong backend coverage but no frontend tests, while the UI transport contract is split between a native stream parser and React state handlers.
 - **Workaround / fix:** Used the backend API regression test for the shipped contract fix, validated the frontend with production build/lint, and recorded the parser follow-up separately instead of mixing it into the first fix.
 - **Prevent next time:** Add a small frontend test harness around the SSE parser before changing more UI transport behavior.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 38)
+
+- **Problem:** The frontend stream parser had no executable test boundary, so the final-buffer transport defect could only be identified by inspection during Session 37.
+- **Cost:** The requested fix required introducing the first frontend test runner while repairing the parser.
+- **Workaround / fix:** Added the project-local Vitest script/dependency, extracted a pure SSE parser, and locked the unterminated-event behavior with focused tests.
+- **Prevent next time:** Keep transport helpers independently testable and add a public `streamChat()` integration fixture before changing additional UI stream behavior.
