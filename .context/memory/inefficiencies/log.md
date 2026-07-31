@@ -119,3 +119,12 @@ if literally nothing slowed you down.
 - **Cause:** The user is on ZenMux's free plan ("5 Flows/5h, $0"), which explicitly states "Studio Chat only" and "No API Request access." The `/models` endpoint isn't gated (listing models is free), but `/chat/completions` requires a paid plan. The free Builder tier mentioned in the web research (~165 flows/month) apparently doesn't include API access either — it's Studio Chat only.
 - **Workaround / fix:** None possible in code. The user needs to upgrade to a ZenMux plan that includes API access. Per ZenMux's pricing: Pro ($20/mo) adds latency/throughput insurance; Max ($100/mo) adds hallucination coverage; Ultra ($400/mo) includes SLA guarantees. Actual model usage is pay-as-you-go per-token against a topped-up balance, separate from the subscription. The user should check zenmux.ai for which plan includes API access — it may be that ANY paid plan unlocks it, or it may require a specific tier.
 - **Prevent next time:** When integrating a new provider, check the plan requirements BEFORE requesting an API key. The web research for ADR-9 mentioned "free Builder subscription tier for personal development, capped at roughly 5 flows per 5 hours" — but didn't catch that this tier is Studio Chat only with no API access. ADR-9 has been updated to note: "the free plan does NOT include API access — a paid plan (Pro/Max/Ultra) is required for LocalMind integration." Future provider integrations should verify API access is available on the user's plan before starting the smoke test.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 36)
+
+- **Problem:** The first baseline command used `python -m pytest`, but this macOS environment exposes only `python3`, and its system Python 3.9.6 is below the backend's declared Python >=3.10 requirement.
+- **Cost:** One failed baseline invocation and a short setup detour.
+- **Cause:** The local environment differs from the previously recorded Windows/cloud environments, and the generic command did not account for the backend's version constraint.
+- **Workaround / fix:** Reused the installed uv-managed Python 3.12.13, created `backend/.venv`, installed `backend[dev]`, and ran validation through `backend/.venv/bin/python`.
+- **Prevent next time:** Check `pyproject.toml`'s `requires-python` and available uv interpreters before running Python baseline commands; prefer the project-local venv path.

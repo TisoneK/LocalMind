@@ -651,3 +651,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 ## 2026-07-31 — Session 35 commit correction
 
 - **Correction:** The context sync and session-memory initialization committed as `634ccc77cd99c22045ea46d83794a6266de3a31f` (`chore(context): sync core to 0.5.0 and initialize session memory`) and was pushed successfully to `origin/main`.
+
+---
+## 2026-07-31 — Session 36
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** Local macOS development machine (macOS 15.7.7) | **Role:** engineer
+- **Feature:** none
+- **Task:** Initialize kickoff.md target: Project setup; verify repository, install dependencies, and record the local environment.
+- **Commits:** 1 context-only commit (SHA recorded after commit)
+- **Outcome:** done — verified `main` and origin are current, core 0.5.0 integrity/status passed, installed locked npm workspaces, created backend Python 3.12.13 venv via uv, and completed validation without product-code changes.
+- **Open items:** npm audit follow-up for 18 reported vulnerabilities; existing Ruff E501 findings and frontend warnings remain; see `.context/memory/reviews/2026-07-31-review-2.md`.
+- **Report:** `.context/memory/reviews/2026-07-31-review-2.md`
+- **Notes:** `.context/memory/sessions/2026-07-31-36/notes.md`

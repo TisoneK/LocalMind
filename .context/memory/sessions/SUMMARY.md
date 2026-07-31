@@ -33,3 +33,6 @@ records.
 
 ---
 - **2026-07-31 — Session 35** — Buffy / openai/gpt-5.6-luna — cloned LocalMind, synced vendored core 0.2.0 → 0.5.0 with integrity verified, preserved memory, and initialized kickoff/AGENTS/session templates. Detail: `.context/memory/sessions/2026-07-31-35/notes.md`.
+
+---
+- **2026-07-31 — Session 36** — Buffy / openai/gpt-5.6-luna — completed Project setup: installed locked npm and backend dev dependencies, verified core 0.5.0, and passed 497 backend tests plus frontend build/typecheck without product-code changes. Detail: `.context/memory/sessions/2026-07-31-36/notes.md`.

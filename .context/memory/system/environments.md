@@ -64,11 +64,15 @@ block (and its "last verified" date) every time you run on it again.
 
 - **Identify by:** workspace path `/Users/bao/Code`; macOS host; local project checkout at `/Users/bao/Code/LocalMind`
 - **OS:** macOS 15.7.7
-- **Runtimes:** Node.js v24.17.0, Python 3.9.6, npm 11.13.0
-- **Package manager:** npm (root `package-lock.json` with workspaces); pip for backend work
+- **Runtimes:** Node.js v24.17.0, Python 3.9.6, Python 3.12.13 via uv, npm 11.13.0
+- **Package manager:** npm (root `package-lock.json` with workspaces); uv for the backend project-local Python environment
 - **Verified commands:**
-  - `git clone https://github.com/TisoneK/LocalMind.git /Users/bao/Code/LocalMind`
-  - `sh .context/core/bin/context-sync update /Users/bao/Code/context`
   - `sh .context/core/bin/context-sync verify` → core 0.5.0 integrity OK
-  - `sh .context/core/bin/context-sync status /Users/bao/Code/context` → up to date
-- **Quirks:** Context-only session; no product test suite was run. Local agent uses the user's existing git credentials and does not need the supplied PAT for this public clone.
+  - `sh .context/core/bin/context-sync status` → up to date
+  - `npm ci` → 962 packages added, 965 packages audited
+  - `uv venv backend/.venv --python /Users/bao/.local/bin/python3.12`
+  - `uv pip install --python backend/.venv/bin/python -e 'backend[dev]'`
+  - `backend/.venv/bin/python -m pytest -q` → 497 passed
+  - `npm run build --workspace=localmind-frontend` → passed
+  - `npm run lint --workspace=localmind-frontend` → 0 errors, 49 warnings
+- **Quirks:** The `python` command is unavailable and system `python3` is 3.9.6, below the backend's `>=3.10` requirement; use `backend/.venv/bin/python` (Python 3.12.13 via uv). Backend Ruff currently reports 117 pre-existing E501 findings. `npm ci` reported 18 dependency vulnerabilities (17 high, 1 critical) and deprecated transitive packages. Local agent uses the user's existing git credentials and does not need a PAT for this public clone.
