@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$comment": "Machine-readable mirror of context-schema.md (the authoritative document). Update both in the same commit. Consumers: context-sync, future check tooling, agents that prefer structured data.",
   "title": ".context/ directory schema",
-  "coreVersion": "0.2.0",
+  "coreVersion": "0.5.0",
   "zones": {
     "core": {
       "path": ".context/core/",
@@ -46,6 +46,9 @@
     "flaws/README.md":         { "mode": "generated",        "scope": "project" },
     "inefficiencies/log.md":   { "mode": "append-only",      "scope": "project" },
     "reviews/README.md":       { "mode": "generated",        "scope": "project" },
+    "sessions/README.md":       { "mode": "generated",        "scope": "project" },
+    "sessions/SUMMARY.md":       { "mode": "update-in-place",  "scope": "project", "note": "entries are removable; permanent record is agents/sessions.md" },
+    "sessions/YYYY-MM-DD-N/notes.md": { "mode": "append-only-while-active", "scope": "project", "note": "per-session detailed notes; disposable — durable facts must be promoted first" },
     "reviews/YYYY-MM-DD-*.md": { "mode": "new-file-per-session", "scope": "project", "commitPrefix": "docs(review):" },
     "workflows/active.md":     { "mode": "overwrite",        "scope": "project", "note": "protocol field is recorded 'by agent type', naming BOTH editions — never a single edition" },
     "system/environments.md":  { "mode": "update-in-place",  "scope": "machine", "keyedBy": "Identify by" },

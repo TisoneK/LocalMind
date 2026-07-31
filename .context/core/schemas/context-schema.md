@@ -60,7 +60,8 @@ core/
 ├── CHANGELOG.md         # one entry per release + migration notes
 ├── MANIFEST.sha256      # checksums of every core file — integrity check
 ├── bin/
-│   └── context-sync     # status / verify / update / rollback / bootstrap
+│   ├── context-sync     # POSIX-sh: status / verify / update / rollback / bootstrap
+│   └── context-sync.ps1 # PowerShell port (Windows): status / verify / update / rollback / lock
 ├── rules/
 │   ├── ai-engineering-protocol-local.md   # LOCAL agents' edition
 │   └── ai-engineering-protocol.md         # CLOUD/SANDBOX agents' edition
@@ -76,7 +77,9 @@ core/
 ```
 
 Integrity: `sh .context/core/bin/context-sync verify` checks every core
-file against `MANIFEST.sha256`. A failed verify means core was
+file against `MANIFEST.sha256` (on Windows:
+`pwsh -File .context/core/bin/context-sync.ps1 verify` — the port shares
+the same manifest). A failed verify means core was
 hand-edited or corrupted — restore it (`context-sync rollback` or
 `git checkout` of the last good commit) and log a flaw. Never "fix"
 core in place inside a project.
@@ -110,6 +113,9 @@ File inventory, write modes, and scopes. **Write modes:**
 | `inefficiencies/log.md` | append-only | project | Friction with the project's code, env, deps |
 | `reviews/YYYY-MM-DD-*.md` | new file per session | project | Session reports (deliverables — commit as `docs(review):`) |
 | `reviews/README.md` | generated | project | Naming + report structure (pointer to this schema) |
+| `sessions/README.md` | generated | project | Session-scoped memory rules, disposable principle, promotion rule |
+| `sessions/SUMMARY.md` | update-in-place (entries are removable) | project | Compressed session history — one line per session, prunable. The permanent record is `agents/sessions.md` |
+| `sessions/YYYY-MM-DD-N/notes.md` | append-only while active; deletable after promotion | project | Per-session detailed notes — research, exploration, dead ends. Disposable; durable facts must be promoted first |
 | `workflows/active.md` | overwrite | project (see scoping!) | Standing session parameters + core version in force |
 | `system/environments.md` | update-in-place | **machine** | One block per machine/sandbox, keyed by an "Identify by" line |
 | `system/ai-models.md` | update-in-place | **agent** | Registry + evidence-based observations per agent/model |
@@ -129,7 +135,8 @@ wins.
 ### Reading order (session start)
 
 `.context/README.md` → `kickoff.md` → `memory/workflows/active.md` →
-`memory/agents/sessions.md` (last 3–5) → `memory/tasks/current.md` →
+`memory/agents/sessions.md` (last 3–5) → `memory/sessions/SUMMARY.md`
+(skim last 10 entries for compressed continuity) → `memory/tasks/current.md` →
 `memory/tasks/backlog.md` → `memory/inefficiencies/log.md` →
 `memory/flaws/log.md` → `memory/plans/decisions.md` →
 `memory/overrides/rules.md` → `memory/system/` → `memory/user/` →

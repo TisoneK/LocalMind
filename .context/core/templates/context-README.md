@@ -17,7 +17,7 @@ is committed to git and travels with the repo. It has **two zones**:
 │   ├── roles/            # mission overlays
 │   ├── schemas/          # context-schema.md — the single source of truth on formats
 │   ├── templates/        # what memory files are generated from
-│   └── bin/context-sync  # status / verify / update / rollback
+│   └── bin/              # context-sync (sh) + context-sync.ps1 (Windows): status / verify / update / rollback
 └── memory/       # this project's living memory — project-owned, writable
     ├── agents/sessions.md       # append-only session log
     ├── tasks/current.md         # the task in progress (also the session lock)
@@ -30,6 +30,10 @@ is committed to git and travels with the repo. It has **two zones**:
     ├── system/                  # machines + agent/model registry
     ├── user/                    # identity + preferences
     ├── overrides/rules.md       # project-local protocol adjustments
+    ├── sessions/                # per-session detailed notes (optional, deletable)
+    │   ├── SUMMARY.md           # compressed history — entries are removable
+    │   └── YYYY-MM-DD-N/
+    │       └── notes.md         # session-scoped detail
     ├── core.lock                # last-known-good core version (context-sync writes it)
     └── secrets/                 # LOCAL-ONLY — self-gitignored, never travels
 ```

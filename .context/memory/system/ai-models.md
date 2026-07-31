@@ -9,6 +9,7 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
+| Buffy | openai/gpt-5.6-luna | 2026-07-31 | 2026-07-31 | 1 |
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 
@@ -110,3 +111,5 @@ Updated registry row:
 Updated registry row:
 
 | Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-27 | 29 |
+
+- **Buffy / openai/gpt-5.6-luna:** Completed a context-only LocalMind clone and vendored-core sync from 0.2.0 to 0.5.0; verified the core manifest and preserved project memory without changing product code (2026-07-31).

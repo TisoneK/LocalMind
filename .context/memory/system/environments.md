@@ -59,3 +59,16 @@ block (and its "last verified" date) every time you run on it again.
   - Git remote URL is stripped of token after clone; must re-add token for push, then strip again (see protocol Step 12)
   - `npm install` emits `allow-scripts` warnings for `electron@33.4.11` (postinstall: `node install.js`) and `esbuild@0.25.12` (postinstall: `node install.js`). These are dev build-time scripts, safe to defer — the frontend typecheck/lint/build all work without approving them. (Session 7)
   - **File-mode drift after sandbox wipe:** when the sandbox wipes and re-clones a repo, all files come back with mode `100755` (executable) instead of `100644`. This makes `git status` show every file as modified and blocks `git pull` with "Please commit your changes or stash them before you merge." Fix: `git config core.fileMode false && git checkout -- .` then pull. This is a sandbox filesystem artifact, not real changes. (Session 8)
+
+## Local macOS development machine (last verified 2026-07-31)
+
+- **Identify by:** workspace path `/Users/bao/Code`; macOS host; local project checkout at `/Users/bao/Code/LocalMind`
+- **OS:** macOS 15.7.7
+- **Runtimes:** Node.js v24.17.0, Python 3.9.6, npm 11.13.0
+- **Package manager:** npm (root `package-lock.json` with workspaces); pip for backend work
+- **Verified commands:**
+  - `git clone https://github.com/TisoneK/LocalMind.git /Users/bao/Code/LocalMind`
+  - `sh .context/core/bin/context-sync update /Users/bao/Code/context`
+  - `sh .context/core/bin/context-sync verify` → core 0.5.0 integrity OK
+  - `sh .context/core/bin/context-sync status /Users/bao/Code/context` → up to date
+- **Quirks:** Context-only session; no product test suite was run. Local agent uses the user's existing git credentials and does not need the supplied PAT for this public clone.

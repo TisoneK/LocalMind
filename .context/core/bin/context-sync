@@ -17,8 +17,14 @@
 #
 # Commands (package mode — run from a clone of the protocol package):
 #   manifest             regenerate core/MANIFEST.sha256 (maintainers, per release)
-#   bootstrap DEST       initialize DEST project repo with .context/
-#                        (vendored core + memory skeleton + root files)
+#   bootstrap DEST       initialize DEST project repo with .context/ (vendored
+#                        core + memory skeleton + root files); also registers
+#                        DEST's origin remote in the package's fleet.md
+#   harvest [FLEET]      collect open flaws, Upstream:candidate inefficiencies,
+#                        and [core-defect] overrides from every project listed
+#                        in fleet.md into inbox/ for triage. Read-only on the
+#                        projects; dedups against inbox/.harvested. FLEET
+#                        defaults to the package's fleet.md
 #
 # Exit codes: 0 ok · 1 failure · 2 usage · 3 verify mismatch
 
@@ -111,6 +117,26 @@ write_lock() { # $1 = version
 lock_version() {
   [ -f "$MEMORY_DIR/core.lock" ] || { echo ""; return; }
   sed -n 's/^version=//p' "$MEMORY_DIR/core.lock" | head -n1
+}
+
+fleet_file() { echo "${CONTEXT_FLEET:-$PACKAGE_DIR/fleet.md}"; }
+
+# record a project in the package's fleet registry (package mode). idempotent
+# on the remote URL. $1 = git remote url, $2 = core version at bootstrap.
+fleet_register() {
+  FF=$(fleet_file)
+  if [ ! -f "$FF" ]; then
+    {
+      echo "# Fleet registry — every project bootstrapped from this protocol package."
+      echo "# Appended by 'context-sync bootstrap'; read by 'context-sync harvest'."
+      echo "# One project per line:  <git-remote-url>  bootstrapped=<date>  core=<version>"
+      echo "# Append-only. Edit by hand only to correct a URL or add a repo bootstrapped"
+      echo "# elsewhere. A '#' comment or blank line is ignored by harvest."
+      echo
+    } > "$FF"
+  fi
+  if grep -Fq "$1" "$FF" 2>/dev/null; then return 0; fi
+  printf '%s  bootstrapped=%s  core=%s\n' "$1" "$(date +%Y-%m-%d)" "$2" >> "$FF"
 }
 
 need_project() { [ "$MODE" = project ] || die "'$1' runs inside a project (.context/core/bin/context-sync), not the package clone"; }
@@ -245,12 +271,123 @@ cmd_bootstrap() {
     echo "verified=$(date +%Y-%m-%d)"
   } > "$DEST/.context/memory/core.lock"
 
+  RURL=$(git -C "$DEST" remote get-url origin 2>/dev/null || true)
+  if [ -n "${RURL:-}" ]; then
+    fleet_register "$RURL" "$V"
+    say "registered in $(fleet_file): $RURL"
+  else
+    say "note: $DEST has no 'origin' remote yet — add its URL to $(fleet_file)"
+    say "      by hand once it has one, so 'context-sync harvest' can reach it."
+  fi
+
   say "bootstrapped $DEST/.context (core $V) + AGENTS.md"
   say "next (the bootstrapping agent does this):"
   say "  1. fill .context/kickoff.md Project Facts + AGENTS.md <PROJECT_NAME>"
   say "  2. fill memory/: user/, workflows/active.md, system/, tasks/current.md, agents/sessions.md"
   say "  3. scan: grep -rn '<PROJECT\\|<GIT_\\|<LIVE_' $DEST/.context --include='*.md' (hits only in HTML comments/token forms)"
   say "  4. commit as: chore(context): bootstrap .context/ (core $V)  — and push"
+}
+
+# resolve a fleet URL to a readable local checkout. Prefers a sibling clone
+# whose origin matches the URL (identify by remote, never by dir name — the
+# scrapamoja lesson); else shallow-clones read-only into the harvest cache.
+# $1 = url, $2 = cache dir. echoes a repo path with .context/memory, or fails.
+resolve_repo() {
+  _name=$(basename "$1" .git)
+  for _cand in "$PACKAGE_DIR/../$_name" "$PACKAGE_DIR/../$_name.git"; do
+    [ -d "$_cand/.git" ] || continue
+    _curl=$(git -C "$_cand" remote get-url origin 2>/dev/null || true)
+    [ "$_curl" = "$1" ] || continue
+    [ -d "$_cand/.context/memory" ] && { echo "$_cand"; return 0; }
+  done
+  _dst="$2/$_name"
+  if [ -d "$_dst/.git" ]; then
+    git -C "$_dst" pull --ff-only --quiet >/dev/null 2>&1 || true
+  else
+    rm -rf "$_dst"
+    git clone --depth 1 --quiet "$1" "$_dst" >/dev/null 2>&1 || return 1
+  fi
+  [ -d "$_dst/.context/memory" ] && { echo "$_dst"; return 0; }
+  return 1
+}
+
+# extract entry blocks from a markdown log that contain a marker, skipping any
+# already in the ledger, and append the survivors to the run's output. A block
+# runs from one line matching START to the next (or EOF); text inside HTML
+# comments (<!-- ... -->, where the templates live) is ignored so example
+# lines never harvest. $1=file $2=marker(ERE) $3=section title $4=ledger
+# $5=repo $6=outfile $7=block-start ERE (e.g. '^## ' or '^- '). Echoes the
+# count of new entries written.
+harvest_source() {
+  [ -f "$1" ] || { echo 0; return 0; }
+  _tmpd=$(mktemp -d) || { echo 0; return 0; }
+  awk -v want="$2" -v start="$7" -v dir="$_tmpd" '
+    function flush() { if (buf ~ start && hit) { n++; f=sprintf("%s/blk-%05d", dir, n); printf "%s", buf > f; close(f) } buf=""; hit=0 }
+    /<!--/ { incmt=1 }
+    incmt  { if (/-->/) incmt=0; next }
+    $0 ~ start { flush() }
+    { buf = buf $0 "\n"; if ($0 ~ want) hit=1 }
+    END { flush() }
+  ' "$1"
+  _new=0
+  for _b in "$_tmpd"/blk-*; do
+    [ -e "$_b" ] || continue
+    _h=$($HASH < "$_b" | awk '{print $1}')
+    grep -Fq "$_h" "$4" 2>/dev/null && continue
+    if [ "$_new" -eq 0 ]; then printf '\n### %s\n\n' "$3" >> "$6"; fi
+    _new=$((_new + 1))
+    cat "$_b" >> "$6"
+    printf '\n' >> "$6"
+    printf '%s  %s  %s\n' "$_h" "$5" "$3" >> "$4"
+  done
+  rm -rf "$_tmpd"
+  echo "$_new"
+}
+
+cmd_harvest() {
+  need_package harvest
+  FF=${1:-$(fleet_file)}
+  [ -f "$FF" ] || die "no fleet registry at $FF — bootstrap a project first, or list repos there by hand"
+  HASH=$(sha_cmd)
+  CACHE=$PACKAGE_DIR/.harvest-cache
+  INBOX=$PACKAGE_DIR/inbox
+  LEDGER=$INBOX/.harvested
+  mkdir -p "$CACHE" "$INBOX"
+  [ -f "$LEDGER" ] || printf '# harvest ledger — <entry-hash>  <repo>  <section>. Dedups across runs. Committed.\n' > "$LEDGER"
+
+  OUT=$INBOX/harvest-$(date +%Y-%m-%d).md
+  total=0; repos=0; reached=0
+  # field 1 of every non-comment, non-blank fleet line is the git URL
+  URLS=$(grep -v '^[[:space:]]*#' "$FF" | awk 'NF {print $1}')
+  for url in $URLS; do
+    repos=$((repos + 1))
+    name=$(basename "$url" .git)
+    repo=$(resolve_repo "$url" "$CACHE") || { err "unreachable: $name ($url) — no matching sibling clone and clone failed (private? no creds?)"; continue; }
+    reached=$((reached + 1))
+    mem="$repo/.context/memory"
+    RTMP=$(mktemp) || continue
+    nf=$(harvest_source "$mem/flaws/log.md"          'Status:[^A-Za-z]*open'        "flaws (open)"                         "$LEDGER" "$name" "$RTMP" '^## ')
+    ni=$(harvest_source "$mem/inefficiencies/log.md" 'Upstream:[^A-Za-z]*candidate' "inefficiencies (upstream candidate)" "$LEDGER" "$name" "$RTMP" '^## ')
+    no=$(harvest_source "$mem/overrides/rules.md"    'core-defect'                  "overrides (core-defect)"             "$LEDGER" "$name" "$RTMP" '^- ')
+    sub=$((nf + ni + no))
+    if [ "$sub" -gt 0 ]; then
+      [ -f "$OUT" ] || printf '# Harvest inbox — %s\n\nTriage each entry: fix in core, or reject. Delete this file when done;\nthe ledger (inbox/.harvested) keeps triaged entries from re-harvesting.\n' "$(date +%Y-%m-%d)" > "$OUT"
+      { printf '\n---\n## %s  (%s)\n' "$name" "$url"; cat "$RTMP"; } >> "$OUT"
+      total=$((total + sub))
+      say "$name: +$nf flaws, +$ni inefficiencies, +$no overrides"
+    else
+      say "$name: nothing new"
+    fi
+    rm -f "$RTMP"
+  done
+
+  say ""
+  if [ "$total" -eq 0 ]; then
+    say "harvest: nothing new across $reached/$repos reachable repos (all already in the ledger)"
+  else
+    say "harvest: $total new entries from $reached/$repos repos -> $OUT"
+    say "next: triage $OUT (fix in core, or reject), then delete it. The ledger keeps them from re-harvesting."
+  fi
 }
 
 # --- dispatch ----------------------------------------------------------------
@@ -263,7 +400,8 @@ case "$CMD" in
   lock)      need_project lock; write_lock "$(core_version "$CORE_DIR")"; say "locked $(core_version "$CORE_DIR")" ;;
   manifest)  cmd_manifest "$@" ;;
   bootstrap) cmd_bootstrap "$@" ;;
+  harvest)   cmd_harvest "$@" ;;
   ''|-h|--help|help)
-    sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
   *) die "unknown command: $CMD (try: context-sync help)" ;;
 esac

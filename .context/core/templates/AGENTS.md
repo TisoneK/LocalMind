@@ -28,7 +28,9 @@ If you read nothing else, obey these rules:
    `.context/memory/workflows/active.md`,
    `.context/memory/agents/sessions.md` (last entries),
    `.context/memory/tasks/current.md`, and
-   `.context/memory/inefficiencies/log.md` (known traps).
+   `.context/memory/inefficiencies/log.md` (known traps). If the
+   active session has detailed notes at
+   `.context/memory/sessions/`, skim them for current state.
 5. **One task at a time.** If `.context/memory/tasks/current.md` shows
    another live session in progress, do not start.
 6. **Append-only files are append-only:** `agents/sessions.md`,

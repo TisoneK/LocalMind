@@ -111,12 +111,22 @@ sh .context/core/bin/context-sync verify    # integrity: core matches its MANIFE
 sh .context/core/bin/context-sync status    # drift: is a newer core available?
 ```
 
+On **Windows** (no POSIX shell) run the PowerShell port instead — same
+commands, same output:
+
+```powershell
+pwsh -File .context/core/bin/context-sync.ps1 verify
+pwsh -File .context/core/bin/context-sync.ps1 status
+```
+
 - `verify` fails → core was hand-edited or corrupted. Run
-  `sh .context/core/bin/context-sync rollback`, log a flaw in
+  `sh .context/core/bin/context-sync rollback` (Windows:
+  `pwsh -File .context/core/bin/context-sync.ps1 rollback`), log a flaw in
   `memory/flaws/log.md`, continue on the restored core.
 - `status` reports a newer core with the **same MAJOR** → run
-  `sh .context/core/bin/context-sync update` (it replaces `core/` only;
-  memory is never touched), commit as
+  `sh .context/core/bin/context-sync update` (Windows: the `.ps1` with
+  `update`) — it replaces `core/` only,
+  memory is never touched — then commit as
   `chore(context): update core to <version>`, and read the new
   `core/CHANGELOG.md` entries.
 - A **MAJOR** bump, or no update source reachable → note it in your
@@ -125,10 +135,12 @@ sh .context/core/bin/context-sync status    # drift: is a newer core available?
 ### Step 2 — Read `.context/`
 
 `README.md` (the zone map) → then, under `memory/`:
-`workflows/active.md` → `agents/sessions.md` (last 3–5 entries) →
-`tasks/current.md` → `tasks/backlog.md` → `inefficiencies/log.md` →
-`flaws/log.md` → `plans/decisions.md` → `overrides/rules.md` →
-`system/` → `user/` → note what's in `secrets/` (never print values).
+`workflows/active.md` → `agents/sessions.md` (last 3–5 entries —
+if the active entry points to `sessions/<date>-N/notes.md`, skim it
+for the current state) → `tasks/current.md` → `tasks/backlog.md` →
+`inefficiencies/log.md` → `flaws/log.md` → `plans/decisions.md` →
+`overrides/rules.md` → `system/` → `user/` → note what's in
+`secrets/` (never print values).
 
 If `memory/tasks/current.md` shows another live session in progress,
 **do not start** — one agent per project repo at a time.

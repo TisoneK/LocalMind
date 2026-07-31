@@ -172,7 +172,8 @@ or am I editing the agent's memory of the project?"
 - [ ] Report written, committed, AND pushed (`.context/memory/reviews/`)
 - [ ] CHANGELOG updated, committed, AND pushed (if behavior changed)
 - [ ] `.context/memory/tasks/`, `.context/memory/system/`, `.context/memory/plans/` updated, committed, AND pushed
-- [ ] `.context/memory/agents/sessions.md` + `.context/memory/inefficiencies/log.md` + `.context/memory/flaws/log.md` appended, committed, AND pushed
+- [ ] `.context/memory/agents/sessions.md` + `.context/memory/sessions/SUMMARY.md` + `.context/memory/inefficiencies/log.md` + `.context/memory/flaws/log.md` appended, committed, AND pushed
+- [ ] `.context/memory/sessions/` notes promoted + committed, AND pushed (if this session produced a notes file)
 - [ ] `tasks/current.md` cleared (set to idle)
 - [ ] Temporary files cleaned up, dev servers stopped
 - [ ] Chat summary delivered to user
@@ -227,16 +228,17 @@ git pull --ff-only
 - If `.context/` exists, read it in this order:
   1. `.context/README.md` — the zone map (core = read-only protocol; memory = this project's data)
   2. `.context/memory/agents/sessions.md` — who worked here before, with which model, on which machine, and what they did (read the last 3–5 entries)
-  3. `.context/memory/tasks/current.md` — is a task marked in-progress? If a prior session died mid-task, this is where you find out.
-  4. `.context/memory/tasks/backlog.md` — open items waiting for a session like this one
-  5. `.context/memory/flaws/log.md` — known workflow/protocol traps — where the `.context` system itself misled a prior agent. **Don't re-hit a logged flaw.**
-  6. `.context/memory/inefficiencies/log.md` — known project traps (tool failures, flaky tests, env quirks). **Don't re-hit a logged trap.**
-  7. `.context/memory/plans/decisions.md` — architectural decisions already made. **Don't relitigate them; don't "fix" code into violating them.**
-  8. `.context/memory/overrides/rules.md` — project-local protocol adjustments. **Overrides beat this edition** (except secret-handling and append-only rules).
-  9. `.context/memory/system/environments.md` + `.context/memory/system/ai-models.md` — environments and agents seen before (a cloud agent and you may be alternating on this repo — this is how you know)
-  10. `.context/memory/user/identity.md` + `.context/memory/user/preferences.md` — who the user is and how they like things done
-  11. `.context/memory/workflows/active.md` — the workflow currently in force
-  12. `.context/memory/secrets/` — local-only secret values available on this machine (never tracked; empty on a fresh clone). Note what's available — never print values.
+  3. `.context/memory/sessions/SUMMARY.md` — compressed session continuity (skim the last ~10 entries; if the file doesn't exist yet, skip — it's created by the first session that runs on 0.5.0+)
+  4. `.context/memory/tasks/current.md` — is a task marked in-progress? If a prior session died mid-task, this is where you find out.
+  5. `.context/memory/tasks/backlog.md` — open items waiting for a session like this one
+  6. `.context/memory/flaws/log.md` — known workflow/protocol traps — where the `.context` system itself misled a prior agent. **Don't re-hit a logged flaw.**
+  7. `.context/memory/inefficiencies/log.md` — known project traps (tool failures, flaky tests, env quirks). **Don't re-hit a logged trap.**
+  8. `.context/memory/plans/decisions.md` — architectural decisions already made. **Don't relitigate them; don't "fix" code into violating them.**
+  9. `.context/memory/overrides/rules.md` — project-local protocol adjustments. **Overrides beat this edition** (except secret-handling and append-only rules).
+  10. `.context/memory/system/environments.md` + `.context/memory/system/ai-models.md` — environments and agents seen before (a cloud agent and you may be alternating on this repo — this is how you know)
+  11. `.context/memory/user/identity.md` + `.context/memory/user/preferences.md` — who the user is and how they like things done
+  12. `.context/memory/workflows/active.md` — the workflow currently in force
+  13. `.context/memory/secrets/` — local-only secret values available on this machine (never tracked; empty on a fresh clone). Note what's available — never print values.
 - If `.context/` does NOT exist, bootstrap it now (see Bootstrap in the `.context/` section) and commit it: `chore(context): bootstrap .context/ (core <version>)`.
 - **Migration:** if `docs/report/` contains prior reviews, move them: `git mv docs/report/*.md .context/memory/reviews/` in the same bootstrap commit. Leave a `docs/report/README.md` pointer saying reviews now live in `.context/memory/reviews/`.
 - Set `.context/memory/tasks/current.md` to this session's task before starting work (overwrite — it holds one task at a time).
@@ -376,8 +378,16 @@ git push origin main  # uses the user's existing credentials
 - `.context/memory/user/preferences.md`: record every standing preference this session revealed — corrections the user gave, patterns they approved, things they stated — with provenance + date, per the file's learning rules. One-off instructions don't count. Skip if none.
 - `.context/memory/plans/decisions.md`: append an ADR-style entry for every architectural decision made or confirmed this session (context → decision → consequences). Skip if none.
 
-**Step 17 — Log the session + inefficiencies**
-- Append a session entry to `.context/memory/agents/sessions.md` (append-only): date, agent, model, platform, task, commits (count + SHA range), outcome, open items.
+**Step 17 — Log the session**
+- Append a session entry to `.context/memory/agents/sessions.md` (append-only). This is the permanent record: date, agent, model, platform, task, commits (count + SHA range), outcome, open items. Include the `Notes:` line — set to the `memory/sessions/<date>-<N>/notes.md` path if you created notes, or "none". **Do not confuse this with SUMMARY.md: this file gets the full ~7-line entry; SUMMARY.md gets ONE line.**
+- Append a one-line summary to `.context/memory/sessions/SUMMARY.md`. This is the prunable compressed continuity (unlike `agents/sessions.md` which is append-only forever). Format: date, agent, model, one-line outcome, and a key decision/discovery if any. **One line only — do not write the full session entry here.**
+- **Context Promotion:** if you created a `memory/sessions/<date>-<N>/notes.md` for this session, evaluate its contents before closing: *"Does anything in these notes need to survive beyond this session?"*
+  - **Durable facts → promote.** Distill and write them into their proper persistent domain: an architectural insight → `plans/decisions.md` (ADR); a new constraint or workaround → `inefficiencies/log.md`; a new backlog item → `tasks/backlog.md`; a user preference discovered → `user/preferences.md`; a protocol friction → `flaws/log.md`. Promotion is selective — the goal is not to copy the notes; it is to move durable knowledge to where future agents will find it without reading session history. **The invariant: permanent context must never depend exclusively on an individual session.** A durable fact lives in its domain file, not only in a session directory — so deleting the session cannot delete the knowledge.
+  - **Session-scoped detail → stays.** Research notes, attempted approaches, dead ends, intermediate reasoning — these remain in the notes file. A future agent can retrieve them selectively if the detail is needed.
+  - **Nothing worth keeping → no notes file needed.** A trivial session (typo fix, one-line config) that produced no research or exploration needs no `memory/sessions/` directory at all — the summary line in `agents/sessions.md` is the entire record.
+  - After promotion, you may delete `notes.md` if its raw history is no longer useful. The summary line in `agents/sessions.md` is the permanent record that the session happened.
+- **SUMMARY.md pruning:** if `memory/sessions/SUMMARY.md` exceeds ~40 lines, prune entries older than the last 10. Distill any un-promoted key facts from pruned entries into the durable logs first. SUMMARY.md is prunable — never let it become another giant append-only history file. A pruned summary line MUST have a corresponding permanent entry in `agents/sessions.md`.
+- **Session notes heuristic:** create a `memory/sessions/<date>-<N>/notes.md` if your session involved any of: more than one attempted approach, external research, a decision made after considering alternatives, a dead end you'd want the next agent to know about, or exploration that produced useful negative results. A truly trivial session (typo fix, one-line config change, docs correction with no research) needs no notes file.
 - Append every inefficiency you hit to `.context/memory/inefficiencies/log.md` (append-only): tool failures, flaky tests, misleading docs, commands that didn't work as documented, time wasted rediscovering something `.context/` should have told you. **Be honest — this log is how the protocol improves.** An empty inefficiency entry ("none this session") is valid only if literally nothing slowed you down.
 - Append every workflow/protocol flaw to `.context/memory/flaws/log.md` (append-only): ambiguous rules, missing steps, confusing templates — friction caused by the `.context` system itself, not the project. Suggest a concrete package fix in each entry (see `flaws/README.md`).
 - Commit (`chore(context): log session YYYY-MM-DD`) and push.
@@ -449,6 +459,10 @@ git push origin main  # uses the user's existing credentials
     │   └── log.md           # append-only workflow/protocol friction — flows to the package repo
     ├── overrides/
     │   └── rules.md         # project-local protocol adjustments — beat this edition (except secrets/append-only)
+    ├── sessions/            # per-session detailed notes (optional, deletable)
+    │   ├── SUMMARY.md     # compressed history — entries are removable
+    │   └── YYYY-MM-DD-N/
+    │       └── notes.md     # session-scoped detail — research, dead ends, reasoning
     ├── core.lock            # last-known-good core version — written by context-sync, never by hand
     └── secrets/             # LOCAL-ONLY — self-gitignored, never tracked, never travels
         ├── .gitignore       # ignores everything here except itself + the README
@@ -482,6 +496,8 @@ authoritative spec for every file (mode, scope, ownership) is
 | Which agent + model you are | `.context/memory/system/ai-models.md` | update |
 | Something you learned about the user | `.context/memory/user/preferences.md` | update |
 | A change to the workflow itself | `.context/memory/workflows/active.md` | update |
+| Compressed session continuity | `.context/memory/sessions/SUMMARY.md` | update-in-place (entries are removable) |
+| Session-scoped detail (research, dead ends, exploration) | `.context/memory/sessions/YYYY-MM-DD-N/notes.md` | append while active; deletable after promotion |
 | A secret value the agent needs on this machine | `.context/memory/secrets/<slug>` | local-only — never committed |
 | A project-local exception to this protocol | `.context/memory/overrides/rules.md` | update |
 | A learning about this protocol itself | `.context/memory/flaws/log.md` — never edit `core/` | append (flows to the package) |
@@ -494,6 +510,7 @@ authoritative spec for every file (mode, scope, ownership) is
 4. **Friction logging is mandatory — and split by surface.** Project friction goes in `inefficiencies/log.md`; workflow/protocol friction goes in `flaws/log.md` (see `flaws/README.md` for the split, and how flaws flow back to the package repo). Both honest, every session. Wasted time you don't log is time the next agent wastes again.
 5. **Verify before trusting.** `.context/` reflects what was true when written. If it contradicts the codebase, the codebase wins — fix the `.context/` entry (append a correction).
 6. **Small and current beats big and stale.** Session entries are ~10 lines, not transcripts. Reports carry the detail.
+7. **Session data is disposable.** Detailed session notes (`memory/sessions/`) may be deleted when no longer useful. The compact summary in `memory/sessions/SUMMARY.md` is prunable; the formal registry in `agents/sessions.md` is the permanent record. Before deleting any session data, promote durable facts to their persistent domain — **permanent context must never depend exclusively on an individual session.**
 
 ### Entry templates
 

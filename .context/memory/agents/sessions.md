@@ -634,3 +634,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   - Real-model test of task-type routing for ambiguous cases like "Create hello world repo" (unit tests verify the routing logic; real-model test would verify ThinkingDispatcher populates primary_domain correctly for this input).
 - **Report:** none (Phase 4 implementation IS the report; the persistent reference is `.context/memory/features/adr-8-agent-centric-routing/notes.md`).
 - **Notes:** This is the first ADR in the LocalMind project implemented across all phases in a single session series (Session 34), with real-model smoke tests running BEFORE each phase shipped. The flaw-log lesson ("don't ship without real-model testing") was applied correctly for Phases 2, 3, and 4. Phase 1 was pure structural (no model path touched) so the smoke test was N/A. The Zero-Interruption flaw logged earlier this session (after the Phase 1 init paused to ask "next session?") was respected for the rest of the session: Phases 2, 3, and 4 all continued without asking. Token-strip dance applied throughout.
+
+---
+## 2026-07-31 — Session 35
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** local macOS 15.7.7 (`/Users/bao/Code`) | **Role:** engineer
+- **Feature:** none
+- **Task:** Clone LocalMind, understand the `.context/` E2E workflow, sync the vendored core, and initialize the generated entry points and core/memory session structure.
+- **Commits:** pending — context-only update; commit SHA will be recorded by the next correction if needed.
+- **Outcome:** done — cloned `/Users/bao/Code/LocalMind` from the clean HTTPS remote; confirmed the existing two-zone `.context/` layout; verified canonical `/Users/bao/Code/context` at core 0.5.0; updated the project core from 0.2.0 to 0.5.0 with `context-sync`; verified integrity and up-to-date status; preserved project memory; refreshed `.context/kickoff.md` and `AGENTS.md` while preserving LocalMind-specific guidance; initialized the 0.5.0 session-memory templates.
+- **Open items:** none for this context-sync task.
+- **Report:** none — context-only initialization/sync.
+- **Notes:** `.context/memory/sessions/2026-07-31-35/notes.md`

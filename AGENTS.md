@@ -28,7 +28,9 @@ If you read nothing else, obey these rules:
    `.context/memory/workflows/active.md`,
    `.context/memory/agents/sessions.md` (last entries),
    `.context/memory/tasks/current.md`, and
-   `.context/memory/inefficiencies/log.md` (known traps).
+   `.context/memory/inefficiencies/log.md` (known traps). If the
+   active session has detailed notes at
+   `.context/memory/sessions/`, skim them for current state.
 5. **One task at a time.** If `.context/memory/tasks/current.md` shows
    another live session in progress, do not start.
 6. **Append-only files are append-only:** `agents/sessions.md`,
@@ -53,20 +55,16 @@ If you read nothing else, obey these rules:
 Formats and file rules: `.context/core/schemas/context-schema.md` is
 the single source of truth. Project-specific rule adjustments:
 `.context/memory/overrides/rules.md` (they win over the edition).
-
----
-
 ## LocalMind architectural target (added 2026-07-26, Session 12)
 
-Agent-mode is being aligned to the **CODING HARNESS closed-loop** model
+Agent-mode is aligned to the **CODING HARNESS closed-loop** model
 (Context → 5-step Agent Loop → Tools, with a Workspace feedback bar
 that pipes git/diff/test output back into context every turn). See
-**ADR-5** in `.context/memory/plans/decisions.md` for the full
-diagram-to-module mapping and the four gaps to close. Standing Target
-in `workflows/active.md` is currently set to ADR-5 implementation —
-backlog items B-2026-07-26-1 (5-step loop + workspace-state injection)
-and B-2026-07-26-2 (context compaction) are the entry points. Don't
-relitigate the closed-loop model — implement it.
+**ADR-5** in `.context/memory/plans/decisions.md` for the foundational
+diagram-to-module mapping. ADR-8 is now the standing implementation
+target; it builds on ADR-5 without replacing the closed-loop model.
+Do not relitigate the closed-loop model — implement the current ADR-8
+target in `workflows/active.md`.
 
 ## Feature-scoped memory (added 2026-07-26, Session 13)
 
@@ -78,7 +76,7 @@ permanent (one line per feature ever); the per-feature directory is
 working state that may be archived to `features/archive/` once the
 ledger line records the merge sha or abandonment reason. Single-session
 work uses `Feature: none` and skips the feature directory entirely.
-This is a project-level preview of core 0.3.0 (core is still at 0.2.0);
+This is a project-level preview ahead of core 0.5.0 (feature-scoped memory is not yet part of the vendored core);
 see `memory/overrides/rules.md` for the full opt-in.
 
 ## Silent-failure fallback contract (added 2026-07-27, Session 31)

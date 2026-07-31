@@ -37,11 +37,11 @@ Generation rules for the bootstrapping agent:
 >   and follow it."* Add a target description in the same message if you
 >   have one.
 > - **Cloud/sandbox agent** (empty workspace): *"Clone
->   `https://github.com/TisoneK/LocalMind.git`, read `.context/kickoff.md`,
->   follow it."* If the project repo is private — or the session will push
->   (it will) — paste a PAT for **this project repo** in that same chat
->   message. That is the only credential any session needs: the protocol
->   is already in the repo.
+>   `https://github.com/TisoneK/LocalMind.git`, read `.context/kickoff.md`, follow it."* If the
+>   project repo is private — or the session will push (it will) — paste
+>   a PAT for **this project repo** in that same chat message. That is
+>   the only credential any session needs: the protocol is already in
+>   the repo.
 
 ---
 
@@ -49,10 +49,10 @@ Generation rules for the bootstrapping agent:
 
 - **Project name:** LocalMind
 - **Project repository URL:** https://github.com/TisoneK/LocalMind.git
-- **Project repo privacy:** Private
+- **Project repo privacy:** Public
 - **Default branch:** main
-- **Live application:** N/A (local-first Electron desktop app — no cloud deployment)
-- **Git identity:** Tisone Kironget `<tisonkironget@gmail.com>`
+- **Live application:** N/A (local-first Electron desktop app)
+- **Git identity:** Tisone Kironget `tisonkironget@gmail.com`
 - **Protocol:** vendored at `.context/core/` (version: see `.context/core/VERSION`)
 - **Package upstream (core updates + flaw back-ports):** https://github.com/TisoneK/.context.git
 - **Edition routing:** local agents → `.context/core/rules/ai-engineering-protocol-local.md`; cloud/sandbox agents → `.context/core/rules/ai-engineering-protocol.md`
@@ -83,10 +83,10 @@ once, or record `unknown`.
 - **Cloud/sandbox agent** — clone the project repo only:
 
   ```bash
-  # Private repo: PAT from chat — strip it from .git/config right after.
-  # A missing credential is a missing input: this repo is private (and
-  # you'll push), so if no PAT arrived in chat, ask NOW.
-  git clone https://x-access-token:${GIT_TOKEN}@github.com/TisoneK/LocalMind.git LocalMind && cd LocalMind
+  # If private: PAT from chat — strip it from .git/config right after.
+  # A missing credential is a missing input: if the repo is private (or
+  # you'll push, which you will) and no PAT arrived in chat, ask NOW.
+  git clone <PROJECT_REPO_URL_WITH_TOKEN_IF_PRIVATE> <REPO> && cd <REPO>
   git remote set-url origin https://github.com/TisoneK/LocalMind.git
   git config user.name "Tisone Kironget" && git config user.email "tisonkironget@gmail.com"
   ```
@@ -111,12 +111,22 @@ sh .context/core/bin/context-sync verify    # integrity: core matches its MANIFE
 sh .context/core/bin/context-sync status    # drift: is a newer core available?
 ```
 
+On **Windows** (no POSIX shell) run the PowerShell port instead — same
+commands, same output:
+
+```powershell
+pwsh -File .context/core/bin/context-sync.ps1 verify
+pwsh -File .context/core/bin/context-sync.ps1 status
+```
+
 - `verify` fails → core was hand-edited or corrupted. Run
-  `sh .context/core/bin/context-sync rollback`, log a flaw in
+  `sh .context/core/bin/context-sync rollback` (Windows:
+  `pwsh -File .context/core/bin/context-sync.ps1 rollback`), log a flaw in
   `memory/flaws/log.md`, continue on the restored core.
 - `status` reports a newer core with the **same MAJOR** → run
-  `sh .context/core/bin/context-sync update` (it replaces `core/` only;
-  memory is never touched), commit as
+  `sh .context/core/bin/context-sync update` (Windows: the `.ps1` with
+  `update`) — it replaces `core/` only,
+  memory is never touched — then commit as
   `chore(context): update core to <version>`, and read the new
   `core/CHANGELOG.md` entries.
 - A **MAJOR** bump, or no update source reachable → note it in your
@@ -125,14 +135,12 @@ sh .context/core/bin/context-sync status    # drift: is a newer core available?
 ### Step 2 — Read `.context/`
 
 `README.md` (the zone map) → then, under `memory/`:
-`workflows/active.md` → `agents/sessions.md` (last 3–5 entries) →
-`tasks/current.md` → `features/ledger.md` (skim — one line per feature
-ever) → the active feature's `features/<slug>/manifest.md` +
-`notes.md` (only the slug named in `tasks/current.md`'s `Feature:` line;
-skip if `Feature: none`) → `tasks/backlog.md` →
+`workflows/active.md` → `agents/sessions.md` (last 3–5 entries —
+if the active entry points to `sessions/<date>-N/notes.md`, skim it
+for the current state) → `tasks/current.md` → `tasks/backlog.md` →
 `inefficiencies/log.md` → `flaws/log.md` → `plans/decisions.md` →
-`overrides/rules.md` → `system/` → `user/` → note what's in `secrets/`
-(never print values).
+`overrides/rules.md` → `system/` → `user/` → note what's in
+`secrets/` (never print values).
 
 If `memory/tasks/current.md` shows another live session in progress,
 **do not start** — one agent per project repo at a time.
