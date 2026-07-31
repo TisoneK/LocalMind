@@ -5,7 +5,7 @@ session start (protocol Step 3), clear it at session end (Step 15). If
 you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
-- **Session:** —
-- **Feature:** none — no session in progress (Session 41 complete)
+- **Session:** none (idle)
+- **Feature:** none
 - **Task:** none
 - **Status:** idle

@@ -4,6 +4,19 @@ One entry per agent session, newest at the bottom. Never edit or delete
 past entries — append corrections instead.
 
 ---
+## 2026-07-31 — Session 42
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — Phase A implementation session (Process tool)
+- **Task:** Build Process management tool (`backend/src/tools/process_tool.py`) with 6 operations (start, stop, restart, status, logs, wait) plus a process registry for long-running process lifecycle management. Wire into AGENT_ALLOWED_TOOLS, CODING_TOOLS, TOOL_DEFINITIONS, selection.py, and UI label maps.
+- **Commits:** 1 product (`d59c54f`) — `feat(process): add Process management tool - start, stop, restart, status, logs, wait`
+- **Outcome:** done — 29 tests pass, ruff clean. Process tool exposes 6 operations with a ManagedProcess dataclass + process registry (dict-based, keyed by name). Safety: SIGTERM with 5s grace → SIGKILL escalation, daemon reader threads for stdout/stderr capture, 30s default wait timeout. Wired through all 7 integration points: Intent.PROCESS → AGENT_ALLOWED_TOOLS → CODING_TOOLS → TOOL_DEFINITIONS → _extract_tool_input → selection.py → both UI label maps. All 36 existing git tests still pass (no regression).
+- **Open items:** None from this session. Phase A now complete (Git + Process tools). VerifierAgent (B-2026-07-31-2) is the natural next step — it can now start services with the process tool before testing them.
+- **Report:** none — implementation session (test file is the verification)
+- **Notes:** Code review found several issues (missing `action_labels` entry for process, race condition risk on state/exit_code reads, missing `time` import, format string bug in status output). All fixed before commit. Extracted `_do_stop()` helper from `_process_stop()` for reuse in `_process_restart()`. The `_session_cwd_var` duplication pattern (shell.py, git_tool.py, process_tool.py) is deliberate — each tool manages its own context var; the Engine calls `set_session_cwd()` on each.
+
+---
+
 ## 2026-07-31 — Session 41
 
 - **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
