@@ -85,28 +85,28 @@ don't remove the line.
 
 ---
 ---
-- [ ] **[Critical] B-2026-07-31-1 — Build structured Git tool for CodingAgent** (added 2026-07-31 by Buffy, Session 40) — The agent currently has no structured way to answer "did that work? what changed?" after file operations. `workspace_state.py` injects git state into context as text, but the agent can't call git as a tool. Build `backend/src/tools/git_tool.py` exposing 9 operations: status, diff, log, branch, checkout, commit, merge, stash, reset. Wire into `AGENT_ALLOWED_TOOLS` and CodingAgent's scoped toolset. This is the single highest-leverage addition — closes the verification gap for every coding task. See `.context/memory/reviews/2026-07-31-review-6.md` Phase A for full context.
+- [x] **[Critical] B-2026-07-31-1 — Build structured Git tool for CodingAgent** (added 2026-07-31, done Session 41 — commit `a16400a`) — 9 operations: status, diff, log, branch, checkout, commit, merge, stash, reset. 36 tests.
 
 ---
-- [ ] **[Critical] B-2026-07-31-2 — Build VerifierAgent for systematic test execution and validation** (added 2026-07-31 by Buffy, Session 40) — LocalMind can write code but cannot systematically prove it works. Build a `VerifierAgent(BaseAgent)` that: runs the project's test suite, parses failures, reproduces reported bugs, checks acceptance criteria, runs static analysis (ruff/eslint/tsc), validates CLI/API behavior, and reports failures to the orchestrator. Scoped tools: shell + git + file_reader. Prerequisite: Git tool (B-2026-07-31-1) and Process tool (B-2026-07-31-3). See `.context/memory/reviews/2026-07-31-review-6.md` Phase B.
+- [x] **[Critical] B-2026-07-31-2 — Build VerifierAgent for systematic test execution and validation** (added 2026-07-31, done Session 43 — commit `accc4a2`) — 6 scoped tools (shell, process, git, file_task, edit_file, delegate). 43 tests.
 
 ---
-- [ ] **[High] B-2026-07-31-3 — Build Process management tool for long-running processes** (added 2026-07-31 by Buffy, Session 40) — Shell covers one-shot commands but `npm run dev`, `uvicorn`, `docker compose`, `pytest`, `playwright` need start/stop/restart/status/logs/wait. Build `backend/src/tools/process_tool.py` with PID tracking via subprocess. Prerequisite for VerifierAgent (can't run tests without starting the services they depend on). See `.context/memory/reviews/2026-07-31-review-6.md` Phase A.
+- [x] **[High] B-2026-07-31-3 — Build Process management tool for long-running processes** (added 2026-07-31, done Session 42 — commit `d59c54f`) — 6 operations: start, stop, restart, status, logs, wait. 29 tests.
 
 ---
-- [ ] **[High] B-2026-07-31-4 — Evaluate and upgrade BrowserAgent for full DOM interaction** (added 2026-07-31 by Buffy, Session 40) — The user's analysis distinguishes "browsing the Internet" (present: web_search, web_fetch) from "operating a browser" (limited: browser_agent exists but capabilities like click, type, select, inspect DOM, screenshot, network inspection, console reading may be absent). Evaluate current BrowserAgent against the 10-point capability list; build out what's missing. Critical for UI verification and reverse-engineering. See `.context/memory/reviews/2026-07-31-review-6.md` Phase C.
+- [ ] **[High] B-2026-07-31-4 — Evaluate and upgrade BrowserAgent for full DOM interaction** (added 2026-07-31 by Buffy, Session 40) — The user's analysis distinguishes "browsing the Internet" (present: web_search, web_fetch) from "operating a browser" (limited: browser_agent exists but capabilities like click, type, select, inspect DOM, screenshot, network inspection, console reading may be absent). Evaluate current BrowserAgent against the 10-point capability list; build out what's missing. Critical for UI verification and reverse-engineering. See `.context/memory/reviews/2026-07-31-review-6.md` Phase C. **Next priority** — per Session 49 review, this is the highest-priority item remaining from the gap analysis.
 
 ---
-- [ ] **[Medium] B-2026-07-31-5 — Build Diagnostics tool for structured error analysis** (added 2026-07-31 by Buffy, Session 40) — When something fails, the agent manually inspects files. Build `backend/src/tools/diagnostics.py` with: parse Python tracebacks (file, line, error type, message), parse pytest output (failed tests, assertions, diffs), parse ruff/eslint errors. Gives the future DebuggerAgent structured data to reason about. See `.context/memory/reviews/2026-07-31-review-6.md` Phase B.
+- [x] **[Medium] B-2026-07-31-5 — Build Diagnostics tool for structured error analysis** (added 2026-07-31, done Session 49 — commit `1c59431`) — 4 operations: inspect_error, analyze_traceback, inspect_logs, inspect_test_failure. 28 tests.
 
 ---
-- [ ] **[Medium] B-2026-07-31-6 — Build ReviewerAgent for code quality review** (added 2026-07-31 by Buffy, Session 40) — Determines whether implementation satisfies specification and quality requirements. Separate from Tester (which verifies it works) — Reviewer evaluates whether it's well-built. See `.context/memory/reviews/2026-07-31-review-6.md` Phase C.
+- [x] **[Medium] B-2026-07-31-6 — Build ReviewerAgent for code quality review** (added 2026-07-31, done Session 44 — commit `f4180ae`) — 4 scoped tools (file_task, git, shell, delegate). 34 tests.
 
 ---
-- [ ] **[Medium] B-2026-07-31-7 — Build DebuggerAgent for root-cause analysis** (added 2026-07-31 by Buffy, Session 40) — Uses diagnostics + git history to trace bugs to their source. Prerequisites: Diagnostics tool (B-2026-07-31-5) + Git tool (B-2026-07-31-1). See `.context/memory/reviews/2026-07-31-review-6.md` Phase D.
+- [x] **[Medium] B-2026-07-31-7 — Build DebuggerAgent for root-cause analysis** (added 2026-07-31, done Session 45 — commit `d92b36d`) — 5 scoped tools (file_task, git, shell, process, delegate). 34 tests.
 
 ---
-- [ ] **[Medium] B-2026-07-31-8 — Build AnalystAgent for requirements/specification analysis** (added 2026-07-31 by Buffy, Session 40) — Answers "What exactly are we supposed to build?" Reads project context, user intent, and produces structured requirements before the Planner/Coder act. The user's analysis identifies this as a missing layer between user request and implementation. See `.context/memory/reviews/2026-07-31-review-6.md` Phase D.
+- [x] **[Medium] B-2026-07-31-8 — Build AnalystAgent for requirements/specification analysis** (added 2026-07-31, done Session 46 — commit `a90ea6c`) — 3 scoped tools (file_task, git, delegate). 29 tests.
 
 ---
 - [ ] **[Low, Long-term] B-2026-07-31-9 — Build Observe capability for desktop awareness** (added 2026-07-31 by Buffy, Session 40) — Screen, active_window, clipboard, notifications, running_apps, filesystem_changes, system_state. Foundation for "what's happening right now?" — the user's Observe→Think→Decide→Act→Observe→Verify loop. See `.context/memory/reviews/2026-07-31-review-6.md` Phase E.
