@@ -5,10 +5,12 @@ Covers: chat SSE streaming, sessions CRUD, health endpoint, tool registry.
 Engine is mocked so tests run without Ollama.
 """
 from __future__ import annotations
+
+import io
 import json
-import pytest
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -169,15 +171,40 @@ class TestChat:
         r = client.post("/api/chat", data={"session_id": "t9"})
         assert r.status_code == 422
 
+    def test_upload_failure_emits_typed_error_event(self, client, tmp_path):
+        """Upload/storage failures must render in the chat instead of being ignored.
+
+        The frontend only handles typed SSE events. A legacy untyped
+        {"error": ..., "done": true} payload was treated as an unknown event,
+        leaving the assistant bubble empty after the stream completed.
+        """
+        from core.config import settings
+
+        uploads_path = tmp_path / "not-a-directory"
+        uploads_path.write_text("occupied")
+        with patch.object(settings, "localmind_uploads_path", str(uploads_path)):
+            r = client.post(
+                "/api/chat",
+                data={"message": "read this", "session_id": "upload-error"},
+                files={"file": ("note.txt", io.BytesIO(b"hello"), "text/plain")},
+            )
+
+        assert r.status_code == 200
+        events = _parse_sse(r.text)
+        error_events = [e for e in events if e.get("type") == "error"]
+        assert error_events
+        assert "File upload failed" in error_events[0]["error"]
+        assert any(e.get("type") == "done" for e in events)
+
 
 # ── Sessions ──────────────────────────────────────────────────────────────────
 
 class TestSessions:
     def _seed(self, client, sid):
         # Seed the store directly using the shared store instance
-        from storage.db import get_shared_store
-        from core.models import Message, Role
         from core.config import settings
+        from core.models import Message, Role
+        from storage.db import get_shared_store
         store = get_shared_store(settings.localmind_db_path)
         store.append(sid, Message(role=Role.USER, content="hello"))
         store.append(sid, Message(role=Role.ASSISTANT, content="response"))
@@ -234,8 +261,8 @@ class TestToolRegistry:
 
     @pytest.mark.asyncio
     async def test_dispatch_none_for_unregistered_chat(self):
-        from tools import dispatch
         from core.models import Intent
+        from tools import dispatch
         assert await dispatch(Intent.CHAT, "hello") is None
 
     @pytest.mark.asyncio

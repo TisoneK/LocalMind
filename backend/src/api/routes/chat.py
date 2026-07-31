@@ -473,7 +473,10 @@ async def chat(
             if not safe_name or safe_name in (".", "..") or "\x00" in safe_name:
                 raise HTTPException(
                     status_code=400,
-                    detail="Invalid filename. Filenames must be non-empty and cannot contain path separators or null bytes.",
+                    detail=(
+                        "Invalid filename. Filenames must be non-empty and cannot contain "
+                        "path separators or null bytes."
+                    ),
                 )
             dest = uploads_dir / safe_name
             dest.write_bytes(file_bytes)
@@ -495,7 +498,11 @@ async def chat(
             _upload_error_msg = f"File upload failed: {exc}"
 
             async def _err():
-                yield _sse({"error": _upload_error_msg, "done": True})
+                # Keep upload failures on the same typed SSE contract as
+                # engine/adapter failures so the frontend renders the error
+                # instead of silently completing an empty assistant bubble.
+                yield _sse({"type": "error", "error": _upload_error_msg})
+                yield _sse({"type": "done"})
 
             return StreamingResponse(
                 _err(),
