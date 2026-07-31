@@ -663,3 +663,8 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** npm audit follow-up for 18 reported vulnerabilities; existing Ruff E501 findings and frontend warnings remain; see `.context/memory/reviews/2026-07-31-review-2.md`.
 - **Report:** `.context/memory/reviews/2026-07-31-review-2.md`
 - **Notes:** `.context/memory/sessions/2026-07-31-36/notes.md`
+
+---
+## 2026-07-31 — Session 36 commit correction
+
+- **Correction:** Project setup context records committed as `5290253` (`chore(context): record Project setup`) and pushed successfully to `origin/main`.
