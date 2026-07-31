@@ -599,6 +599,45 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "diagnostics",
+            "description": (
+                "Analyze errors, tracebacks, logs, and test failures to provide "
+                "structured diagnostic output. Use this instead of raw shell or "
+                "file_task when you need to understand WHY something failed. "
+                "Operations: inspect_error (analyze an error message — extracts "
+                "error type, message, stack frames, and likely origin), "
+                "analyze_traceback (parse a Python traceback into call stack and "
+                "immediate cause with file paths and line numbers), inspect_logs "
+                "(scan log text or log file for error/warning patterns with counts), "
+                "inspect_test_failure (parse pytest/unittest failure output into "
+                "expected vs actual values, diff, and source location). All "
+                "operations return structured output with severity classification "
+                "and suggested next actions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["inspect_error", "analyze_traceback", "inspect_logs", "inspect_test_failure"],
+                        "description": "The diagnostic operation to perform",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "The error, traceback, log, or failure text to analyze",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "For inspect_logs: optional file path to read logs from. If omitted, the 'text' parameter is analyzed directly.",
+                    },
+                },
+                "required": ["operation"],
+            },
+        },
+    },
 ]
 
 
@@ -714,6 +753,9 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
     elif tool_name == "process":
         # process dispatcher expects JSON-encoded args (operation + params)
         # — same pattern as git/delegate. The process tool parses it back.
+        return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "diagnostics":
+        # diagnostics dispatcher expects JSON-encoded args (operation + text/path)
         return json.dumps(tool_args, ensure_ascii=False)
     else:
         # Fallback: join all values
@@ -1230,6 +1272,7 @@ class AgentLoop:
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
                         "git": f"Git: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Git operation",
                         "process": f"Process: {call.tool_args.get('operation', '')} {call.tool_args.get('name', '')}" if call.tool_args.get('operation') else "Process operation",
+                        "diagnostics": f"Diagnostics: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Analyzing failure",
                     }
                     _label = _label_map.get(call.tool_name, f"Running {call.tool_name}")
                     yield StreamChunk(text="", done=False, status=_label)
@@ -1653,6 +1696,7 @@ class AgentLoop:
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
                         "git": f"Git: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Git operation",
                         "process": f"Process: {tool_args.get('operation', '')} {tool_args.get('name', '')}" if tool_args.get('operation') else "Process operation",
+                        "diagnostics": f"Diagnostics: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Analyzing failure",
                     }
                     action_label = action_labels.get(tool_name, f"Running {tool_name}")
                 logger.info(

@@ -33,7 +33,7 @@ def test_coding_agent_config():
     assert cfg.allowed_tools == CODING_TOOLS
     assert cfg.allowed_tools == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
-         "git", "process", "delegate"}
+         "git", "process", "delegate", "diagnostics"}
     )
     assert cfg.allowed_tools.issubset(AGENT_ALLOWED_TOOLS)
     # Coding tasks need more iterations than browser tasks
@@ -104,6 +104,7 @@ def test_coding_agent_scoped_tools_filters_non_coding():
         {"intent": "code_exec", "description": "code exec"},
         {"intent": "git", "description": "git"},
         {"intent": "process", "description": "process"},
+        {"intent": "diagnostics", "description": "diagnostics"},
         {"intent": "web_search", "description": "web search"},
         {"intent": "web_fetch", "description": "web fetch"},
         {"intent": "browse", "description": "browser"},
@@ -114,7 +115,7 @@ def test_coding_agent_scoped_tools_filters_non_coding():
     scoped = agent.scoped_tools(all_tools)
     scoped_intents = {t["intent"] for t in scoped}
     assert scoped_intents == CODING_TOOLS
-    assert len(scoped) == 8  # 5 coding + git + process + delegate
+    assert len(scoped) == 9  # 5 coding + git + process + delegate + diagnostics
     # Must NOT include web/browser/memory/sysinfo tools
     assert "web_search" not in scoped_intents
     assert "web_fetch" not in scoped_intents
@@ -158,17 +159,15 @@ def test_coding_tools_is_subset_of_agent_allowed():
     assert CODING_TOOLS.issubset(AGENT_ALLOWED_TOOLS)
 
 
-def test_coding_tools_has_eight_tools():
-    """The coding agent's scoped toolset is exactly 8 tools.
+def test_coding_tools_has_nine_tools():
+    """The coding agent's scoped toolset is exactly 9 tools.
 
-    Sessions 41-42 added git and process tools to the coding agent's
-    scoped toolset. The toolset is now: 5 coding tools (shell, file_task,
-    file_write, edit_file, code_exec) + git + process + delegate = 8.
+    Sessions 41-49 added git, process, and diagnostics tools.
     """
-    assert len(CODING_TOOLS) == 8
+    assert len(CODING_TOOLS) == 9
     assert CODING_TOOLS == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
-         "git", "process", "delegate"}
+         "git", "process", "delegate", "diagnostics"}
     )
 
 

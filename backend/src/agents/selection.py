@@ -77,6 +77,7 @@ _INTENT_TO_AGENT: dict[Intent, str] = {
     Intent.REVIEW: "reviewer",  # Session 44: code review routes to ReviewerAgent
     Intent.DEBUG: "debugger",  # Session 45: debugging routes to DebuggerAgent
     Intent.ANALYZE: "analyst",  # Session 46: analysis routes to AnalystAgent
+    Intent.DIAGNOSTICS: "coding",  # Session 49: diagnostics routes to coding agent
 }
 
 

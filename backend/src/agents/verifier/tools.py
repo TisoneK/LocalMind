@@ -32,6 +32,7 @@ VERIFIER_TOOLS: frozenset[str] = frozenset(
         "file_task",
         "edit_file",
         "delegate",  # ADR-8 Phase 3: delegate to coding for complex fixes
+        "diagnostics",  # Session 49: structured failure analysis
     }
 )
 

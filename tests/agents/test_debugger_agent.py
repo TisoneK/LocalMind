@@ -166,8 +166,8 @@ def test_debugger_tools_exclude_edit_file():
     assert "edit_file" not in DEBUGGER_TOOLS
 
 
-def test_debugger_tools_has_exactly_5():
-    assert len(DEBUGGER_TOOLS) == 5
+def test_debugger_tools_has_exactly_6():
+    assert len(DEBUGGER_TOOLS) == 6
 
 
 # ── Registry integration tests ───────────────────────────────────────

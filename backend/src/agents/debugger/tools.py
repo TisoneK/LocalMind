@@ -29,6 +29,7 @@ DEBUGGER_TOOLS: frozenset[str] = frozenset(
         "shell",
         "process",
         "delegate",
+        "diagnostics",  # Session 49: structured failure analysis
     }
 )
 

@@ -54,6 +54,7 @@ class Intent(str, Enum):
     REVIEW = "review"  # Code review (spec conformance, quality assessment, best practices)
     DEBUG = "debug"  # Debugging (isolate failures, trace root causes, reproduce bugs)
     ANALYZE = "analyze"  # Analysis (understand requirements, clarify what to build)
+    DIAGNOSTICS = "diagnostics"  # Diagnostics (inspect errors, analyze tracebacks, inspect logs)
     CHAT = "chat"
     DELEGATE = "delegate"  # ADR-8 Phase 3: agent-initiated delegation
 

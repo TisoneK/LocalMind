@@ -209,8 +209,8 @@ def test_verifier_tools_exclude_sysinfo():
     assert "sysinfo" not in VERIFIER_TOOLS
 
 
-def test_verifier_tools_has_exactly_6():
-    assert len(VERIFIER_TOOLS) == 6
+def test_verifier_tools_has_exactly_7():
+    assert len(VERIFIER_TOOLS) == 7
 
 
 # ── Registry integration tests ───────────────────────────────────────
