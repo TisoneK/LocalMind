@@ -449,7 +449,8 @@ TOOL_DEFINITIONS = [
                 "and returns its result; you continue with that result in your "
                 "context. Available target agents: 'research' (web search + fetch), "
                 "'coding' (shell + file tools + code exec), 'browser' (headless "
-                "browser), 'direct' (single model call, no tools). Use 'delegate' "
+                "browser), 'verifier' (run tests, reproduce bugs, validate "
+                "behavior), 'direct' (single model call, no tools). Use 'delegate' "
                 "sparingly — it costs an extra agent loop. If you can handle the "
                 "task with your own tools, do that instead."
             ),
@@ -458,7 +459,7 @@ TOOL_DEFINITIONS = [
                 "properties": {
                     "target_agent": {
                         "type": "string",
-                        "enum": ["research", "coding", "browser", "direct"],
+                        "enum": ["research", "coding", "browser", "direct", "verifier"],
                         "description": (
                             "The agent to delegate to. 'research' for web search "
                             "+ fetch; 'coding' for shell + file tools + code exec; "

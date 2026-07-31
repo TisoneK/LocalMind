@@ -73,6 +73,7 @@ _INTENT_TO_AGENT: dict[Intent, str] = {
     Intent.MEMORY_OP: "coding",
     Intent.GIT: "coding",  # Session 41: git operations route to coding agent
     Intent.PROCESS: "coding",  # Session 42: process management routes to coding agent
+    Intent.VERIFY: "verifier",  # Session 43: verification routes to VerifierAgent
 }
 
 
@@ -159,6 +160,7 @@ _DOMAIN_TO_AGENT: dict[str, str] = {
     "memory_op": "coding",
     "chat": "direct",
     "direct": "direct",
+    "verify": "verifier",  # Session 43: verification tasks route to VerifierAgent
 }
 
 

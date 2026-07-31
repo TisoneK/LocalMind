@@ -153,6 +153,7 @@ AGENT_INTENTS: frozenset[Intent] = frozenset(
         Intent.GIT,
         Intent.MEMORY_OP,
         Intent.PROCESS,
+        Intent.VERIFY,
         Intent.SHELL,
         Intent.WEB_SEARCH,
         Intent.WEB_FETCH,

@@ -102,7 +102,7 @@ def test_shim_identity_matches_canonical(shim_path, canonical_path, agent_class_
 
 
 def test_registry_auto_discovers_all_built_in_agents():
-    """The auto_discover_agents() helper registers all 4 built-in agents."""
+    """The auto_discover_agents() helper registers all 5 built-in agents."""
     from agents import list_agents
     from agents.registry import auto_discover_agents
 
@@ -110,14 +110,14 @@ def test_registry_auto_discovers_all_built_in_agents():
     # The auto_discover helper is idempotent — re-running it on the same
     # package is a no-op (same class registered under same name).
     count = auto_discover_agents()
-    assert count == 4, (
-        f"auto_discover_agents should find 4 agents (coding, research, "
-        f"browser, direct); found {count}"
+    assert count == 5, (
+        f"auto_discover_agents should find 5 agents (coding, research, "
+        f"browser, direct, verifier); found {count}"
     )
 
     registered_names = {name for name, _ in list_agents()}
-    assert {"coding", "research", "browser", "direct"}.issubset(registered_names), (
-        f"all 4 built-in agent names should be in registry; got {registered_names}"
+    assert {"coding", "research", "browser", "direct", "verifier"}.issubset(registered_names), (
+        f"all 5 built-in agent names should be in registry; got {registered_names}"
     )
 
 

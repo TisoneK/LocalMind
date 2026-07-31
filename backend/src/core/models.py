@@ -50,6 +50,7 @@ class Intent(str, Enum):
     BROWSE = "browse"  # Real browser interaction (click, fill, scroll, screenshot)
     GIT = "git"  # Structured Git operations (status, diff, log, branch, commit, etc.)
     PROCESS = "process"  # Process management (start, stop, restart, status, logs, wait)
+    VERIFY = "verify"  # Verification (run tests, reproduce bugs, check acceptance criteria)
     CHAT = "chat"
     DELEGATE = "delegate"  # ADR-8 Phase 3: agent-initiated delegation
 
