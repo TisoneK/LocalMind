@@ -17,6 +17,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { localmindClient } from '@/lib/localmind/client';
+import { applyTodoCreated, applyTodoUpdated, estimateTokens, isActiveToolStatus } from '@/lib/localmind/progress';
 import type {
   ChatMessage,
   Session,
@@ -136,6 +137,7 @@ interface ChatState {
   activeToolCalls: ToolCall[];
   liveObservation: ObservationData | null;
   lastMetrics: PerformanceMetrics | null;
+  elapsedMs: number;
   send: (message: string, sessionIdOverride?: string, tool?: string) => void;
   abort: () => void;
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
@@ -153,6 +155,8 @@ export function useChat(
   const [activeToolCalls, setActiveToolCalls] = useState<ToolCall[]>([]);
   const [liveObservation, setLiveObservation] = useState<ObservationData | null>(null);
   const [lastMetrics, setLastMetrics] = useState<PerformanceMetrics | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const streamStartedAtRef = useRef<number | null>(null);
   const abortRef = useRef<(() => void) | null>(null);
 
   const prevSessionIdRef = useRef<string | null>(null);
@@ -166,6 +170,22 @@ export function useChat(
   // without needing them as useCallback dependencies (avoids stale closures).
   useEffect(() => {
     isStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  // Keep a real clock running during the complete request, including dispatcher
+  // and tool execution time. Event-driven timestamps alone freeze while a tool
+  // is running because no token event may arrive for several seconds.
+  useEffect(() => {
+    if (!isStreaming || streamStartedAtRef.current === null) return;
+    const tick = () => {
+      const startedAt = streamStartedAtRef.current;
+      if (startedAt !== null) {
+        setElapsedMs(Date.now() - startedAt);
+      }
+    };
+    tick();
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
   }, [isStreaming]);
 
   // SAFETY: If isStreaming stays true for more than 120s, force-reset it.
@@ -182,7 +202,7 @@ export function useChat(
         abortRef.current = null;
         setActiveToolCalls((prev) =>
           prev.map((tc) =>
-            tc.status === 'running'
+            isActiveToolStatus(tc.status)
               ? { ...tc, status: 'done' as const, duration: tc.duration || 120000 }
               : tc
           )
@@ -196,14 +216,14 @@ export function useChat(
   // status for more than 60 seconds, mark it as "done" — the backend likely
   // completed without sending a tool_result event. This prevents infinite spinners.
   useEffect(() => {
-    const running = activeToolCalls.filter((tc) => tc.status === 'running');
+    const running = activeToolCalls.filter((tc) => isActiveToolStatus(tc.status));
     if (running.length === 0) return;
     const timer = setTimeout(() => {
       setActiveToolCalls((prev) => {
-        const hasStuck = prev.some((tc) => tc.status === 'running');
+        const hasStuck = prev.some((tc) => isActiveToolStatus(tc.status));
         if (!hasStuck) return prev;
         return prev.map((tc) =>
-          tc.status === 'running'
+          isActiveToolStatus(tc.status)
             ? { ...tc, status: 'done' as const, duration: tc.duration || 60000 }
             : tc
         );
@@ -308,11 +328,15 @@ export function useChat(
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
+      streamStartedAtRef.current = Date.now();
+      setElapsedMs(0);
+      setLastMetrics(null);
       setActiveToolCalls([]);
       setLiveObservation(null);
 
       let currentContent = '';
       let thinkingContent = '';
+      let streamedProgressText = '';
       let thinkStartTime = 0;
       const toolCalls: ToolCall[] = [];
       const toolsUsedSet = new Set<string>();
@@ -341,6 +365,20 @@ export function useChat(
                 // in real-time so the user sees each token as it arrives, replacing
                 // the static "Generating response..." indicator.
                 currentContent += token;
+                streamedProgressText += token;
+                const estimatedCompletionTokens = estimateTokens(streamedProgressText);
+                const liveElapsed = streamStartedAtRef.current
+                  ? Date.now() - streamStartedAtRef.current
+                  : 0;
+                setLastMetrics((prev) => ({
+                  tokensPerSecond: liveElapsed > 0
+                    ? Math.round(estimatedCompletionTokens / (liveElapsed / 1000) * 100) / 100
+                    : 0,
+                  latency: liveElapsed,
+                  totalTokens: estimatedCompletionTokens + (prev?.promptTokens || 0),
+                  promptTokens: prev?.promptTokens || 0,
+                  completionTokens: estimatedCompletionTokens,
+                }));
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
@@ -369,8 +407,23 @@ export function useChat(
               }
 
               case 'thinking_token': {
-                thinkingContent += parsed.thinking || parsed.content || '';
+                const thinkingToken = parsed.thinking || parsed.content || '';
+                thinkingContent += thinkingToken;
+                streamedProgressText += thinkingToken;
                 const thinkMs = thinkStartTime ? Date.now() - thinkStartTime : 0;
+                const estimatedCompletionTokens = estimateTokens(streamedProgressText);
+                const liveElapsed = streamStartedAtRef.current
+                  ? Date.now() - streamStartedAtRef.current
+                  : 0;
+                setLastMetrics((prev) => ({
+                  tokensPerSecond: liveElapsed > 0
+                    ? Math.round(estimatedCompletionTokens / (liveElapsed / 1000) * 100) / 100
+                    : 0,
+                  latency: liveElapsed,
+                  totalTokens: estimatedCompletionTokens + (prev?.promptTokens || 0),
+                  promptTokens: prev?.promptTokens || 0,
+                  completionTokens: estimatedCompletionTokens,
+                }));
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
@@ -399,8 +452,14 @@ export function useChat(
 
               case 'tool_call': {
                 const tc = parsed.tool_call || parsed;
-                // Dispatch event so RightPanel can auto-switch to the Observe tab
-                window.dispatchEvent(new CustomEvent('localmind:tool-call-started'));
+                // Focus the left Actions tab only when a tool actually starts.
+                // Completed events should update the existing row without
+                // stealing focus back from the user's current panel.
+                if (isActiveToolStatus(tc.status) || tc.status === 'pending' || tc.status === 'in_progress' || tc.status === 'started') {
+                  window.dispatchEvent(new CustomEvent('localmind:tool-call-started', {
+                    detail: { tool: tc.name || tc.tool || 'unknown' },
+                  }));
+                }
                 // FIX 2: Build human-readable label from tool_args if LLM didn't provide one.
                 // This replaces raw tool names like "file_write" with descriptions
                 // like "Creating hello world script" in Task Progress.
@@ -428,7 +487,7 @@ export function useChat(
                   // the same NAME and update it. This prevents duplicate
                   // entries where the "running" one stays spinning forever.
                   const runningIdx = toolCalls.findIndex(
-                    (existing) => existing.name === toolCall.name && existing.status === 'running'
+                    (existing) => existing.name === toolCall.name && isActiveToolStatus(existing.status)
                   );
                   if (runningIdx !== -1) {
                     toolCalls[runningIdx] = { ...toolCalls[runningIdx], ...toolCall, id: toolCalls[runningIdx].id };
@@ -464,7 +523,7 @@ export function useChat(
               case 'tool_result': {
                 const tr = parsed.tool_result || parsed;
                 const idx = toolCalls.findIndex(
-                  (tc) => tc.name === (tr.name || tr.tool) && tc.status === 'running'
+                  (tc) => tc.name === (tr.name || tr.tool) && isActiveToolStatus(tc.status)
                 );
                 if (idx !== -1) {
                   toolCalls[idx] = {
@@ -537,10 +596,10 @@ export function useChat(
                     const doneTool = obsData.tool || '';
                     if (doneTool) {
                       setActiveToolCalls((prev) => {
-                        const hasRunning = prev.some((tc) => tc.name === doneTool && tc.status === 'running');
+                        const hasRunning = prev.some((tc) => tc.name === doneTool && isActiveToolStatus(tc.status));
                         if (!hasRunning) return prev;
                         return prev.map((tc) =>
-                          tc.name === doneTool && tc.status === 'running'
+                          tc.name === doneTool && isActiveToolStatus(tc.status)
                             ? { ...tc, status: 'done' as const, duration: tc.duration || 0 }
                             : tc
                         );
@@ -567,12 +626,24 @@ export function useChat(
                         : Number(obsData.context_tokens || 0) > 0
                           ? Number(obsData.context_tokens)
                           : 0;
-                      setLastMetrics({
-                        tokensPerSecond: _elapsed_s > 0 ? Math.round(_tokens / _elapsed_s * 100) / 100 : 0,
-                        latency: _latency,
-                        totalTokens: _tokens + _estimatedPrompt,
-                        promptTokens: _estimatedPrompt,
-                        completionTokens: _completionTokens,
+                      setLastMetrics((prev) => {
+                        // Some providers report latency before token usage. Keep
+                        // the live estimate instead of replacing it with zero.
+                        const completionTokens = _completionTokens > 0
+                          ? _completionTokens
+                          : prev?.completionTokens || 0;
+                        const promptTokens = _estimatedPrompt > 0
+                          ? _estimatedPrompt
+                          : prev?.promptTokens || 0;
+                        return {
+                          tokensPerSecond: _elapsed_s > 0
+                            ? Math.round(completionTokens / _elapsed_s * 100) / 100
+                            : prev?.tokensPerSecond || 0,
+                          latency: _latency,
+                          totalTokens: completionTokens + promptTokens,
+                          promptTokens,
+                          completionTokens,
+                        };
                       });
                     }
                   }
@@ -583,10 +654,10 @@ export function useChat(
               case 'done': {
                 // Mark ALL running tool calls as done — the response is complete
                 if (toolCalls.length > 0) {
-                  const hasRunning = toolCalls.some(tc => tc.status === 'running');
+                  const hasRunning = toolCalls.some(tc => isActiveToolStatus(tc.status));
                   if (hasRunning) {
                     for (let i = 0; i < toolCalls.length; i++) {
-                      if (toolCalls[i].status === 'running') {
+                      if (isActiveToolStatus(toolCalls[i].status)) {
                         toolCalls[i] = { ...toolCalls[i], status: 'done' as const, duration: toolCalls[i].duration || 0 };
                       }
                     }
@@ -644,12 +715,24 @@ export function useChat(
                 const _latency = Number(m.total_latency_ms || 0);
                 if (_tokens > 0 || _latency > 0) {
                   const _elapsed_s = _latency / 1000;
-                  setLastMetrics({
-                    tokensPerSecond: _elapsed_s > 0 ? Math.round(_tokens / _elapsed_s * 100) / 100 : 0,
-                    latency: _latency,
-                    totalTokens: _tokens + _promptTokens,
-                    promptTokens: _promptTokens,
-                    completionTokens: _tokens,
+                  setLastMetrics((prev) => {
+                    // Providers may omit token usage on the final metrics event;
+                    // preserve the live estimate when that happens.
+                    const completionTokens = _tokens > 0
+                      ? _tokens
+                      : prev?.completionTokens || 0;
+                    const promptTokens = _promptTokens > 0
+                      ? _promptTokens
+                      : prev?.promptTokens || 0;
+                    return {
+                      tokensPerSecond: _elapsed_s > 0
+                        ? Math.round(completionTokens / _elapsed_s * 100) / 100
+                        : prev?.tokensPerSecond || 0,
+                      latency: _latency,
+                      totalTokens: completionTokens + promptTokens,
+                      promptTokens,
+                      completionTokens,
+                    };
                   });
                 }
                 break;
@@ -671,7 +754,7 @@ export function useChat(
                 // Also update the active tool call status when terminal completes
                 if (termEvt.tool) {
                   const idx = toolCalls.findIndex(
-                    (tc) => tc.name === termEvt.tool && tc.status === 'running'
+                    (tc) => tc.name === termEvt.tool && isActiveToolStatus(tc.status)
                   );
                   if (idx !== -1) {
                     toolCalls[idx] = {
@@ -702,6 +785,17 @@ export function useChat(
                 // can show in the status area, not in the thinking block.
                 const statusText = parsed.status || '';
                 if (statusText) {
+                  const liveElapsed = streamStartedAtRef.current
+                    ? Date.now() - streamStartedAtRef.current
+                    : 0;
+                  setElapsedMs(liveElapsed);
+                  setLastMetrics((prev) => ({
+                    tokensPerSecond: prev?.tokensPerSecond || 0,
+                    latency: liveElapsed,
+                    totalTokens: prev?.totalTokens || 0,
+                    promptTokens: prev?.promptTokens || 0,
+                    completionTokens: prev?.completionTokens || 0,
+                  }));
                   if (!thinkStartTime) thinkStartTime = Date.now();
                   const statusMs = thinkStartTime ? Date.now() - thinkStartTime : 0;
                   setMessages((prev) => {
@@ -759,6 +853,20 @@ export function useChat(
               default:
                 if (parsed.content && !_isPromptLeak(parsed.content)) {
                   currentContent += parsed.content;
+                  streamedProgressText += parsed.content;
+                  const estimatedCompletionTokens = estimateTokens(streamedProgressText);
+                  const liveElapsed = streamStartedAtRef.current
+                    ? Date.now() - streamStartedAtRef.current
+                    : 0;
+                  setLastMetrics((prev) => ({
+                    tokensPerSecond: liveElapsed > 0
+                      ? Math.round(estimatedCompletionTokens / (liveElapsed / 1000) * 100) / 100
+                      : 0,
+                    latency: liveElapsed,
+                    totalTokens: estimatedCompletionTokens + (prev?.promptTokens || 0),
+                    promptTokens: prev?.promptTokens || 0,
+                    completionTokens: estimatedCompletionTokens,
+                  }));
                   setMessages((prev) => {
                     const updated = [...prev];
                     const last = updated[updated.length - 1];
@@ -776,6 +884,20 @@ export function useChat(
                 return;
               }
               currentContent += rawData;
+              streamedProgressText += rawData;
+              const estimatedCompletionTokens = estimateTokens(streamedProgressText);
+              const liveElapsed = streamStartedAtRef.current
+                ? Date.now() - streamStartedAtRef.current
+                : 0;
+              setLastMetrics((prev) => ({
+                tokensPerSecond: liveElapsed > 0
+                  ? Math.round(estimatedCompletionTokens / (liveElapsed / 1000) * 100) / 100
+                  : 0,
+                latency: liveElapsed,
+                totalTokens: estimatedCompletionTokens + (prev?.promptTokens || 0),
+                promptTokens: prev?.promptTokens || 0,
+                completionTokens: estimatedCompletionTokens,
+              }));
               setMessages((prev) => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
@@ -789,33 +911,29 @@ export function useChat(
         },
         () => {
           setIsStreaming(false);
+          streamStartedAtRef.current = null;
           streamingSessionRef.current = null;
           abortRef.current = null;
-          // Mark any remaining running tool calls as done.
-          // NOTE: Compute the updated list first, then call both setters
-          // sequentially. Calling setMessages *inside* the setActiveToolCalls
-          // updater is a React anti-pattern that double-fires under StrictMode.
-          let didUpdate = false;
-          const updatedToolCalls: ToolCall[] = [];
-          setActiveToolCalls((prev) => {
-            const hasRunning = prev.some((tc) => tc.status === 'running');
-            if (!hasRunning) return prev;
-            const mapped = prev.map((tc) =>
-              tc.status === 'running'
-                ? { ...tc, status: 'done' as const, duration: tc.duration || 0 }
-                : tc
-            );
-            updatedToolCalls.push(...mapped);
-            didUpdate = true;
-            return mapped;
-          });
-          // Sync the message's toolCalls array too (outside the updater)
-          if (didUpdate && updatedToolCalls.length > 0) {
+          // Finalize the closure-owned list synchronously, then publish the
+          // same snapshot to both the Actions state and assistant message.
+          // Reading values populated inside a React state updater here is racy:
+          // React may invoke that updater after this callback returns.
+          const finalizedToolCalls = toolCalls.map((tc) =>
+            isActiveToolStatus(tc.status)
+              ? { ...tc, status: 'done' as const, duration: tc.duration || 0 }
+              : tc
+          );
+          const didUpdate = finalizedToolCalls.some(
+            (tc, index) => tc.status !== toolCalls[index].status
+          );
+          if (didUpdate) {
+            toolCalls.splice(0, toolCalls.length, ...finalizedToolCalls);
+            setActiveToolCalls(finalizedToolCalls);
             setMessages((prevMsgs) => {
               const msgs = [...prevMsgs];
               const last = msgs[msgs.length - 1];
               if (last && last.role === 'assistant' && last.toolCalls) {
-                const updatedMap = new Map(updatedToolCalls.map(tc => [tc.id, tc]));
+                const updatedMap = new Map(finalizedToolCalls.map(tc => [tc.id, tc]));
                 msgs[msgs.length - 1] = {
                   ...last,
                   toolCalls: last.toolCalls.map(tc => updatedMap.get(tc.id) || tc),
@@ -828,6 +946,7 @@ export function useChat(
         // onError
         () => {
           setIsStreaming(false);
+          streamStartedAtRef.current = null;
           streamingSessionRef.current = null;
           abortRef.current = null;
           setMessages((prev) => {
@@ -856,19 +975,20 @@ export function useChat(
     abortRef.current = null;
     streamingSessionRef.current = null;
     setIsStreaming(false);
+    streamStartedAtRef.current = null;
     // Mark any running tool calls as done on abort
     setActiveToolCalls((prev) => {
-      const hasRunning = prev.some((tc) => tc.status === 'running');
+      const hasRunning = prev.some((tc) => isActiveToolStatus(tc.status));
       if (!hasRunning) return prev;
       return prev.map((tc) =>
-        tc.status === 'running'
+        isActiveToolStatus(tc.status)
           ? { ...tc, status: 'done' as const, duration: tc.duration || 0 }
           : tc
       );
     });
   }, []);
 
-  return { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, send, abort, setMessages, onTerminalEvent };
+  return { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, elapsedMs, send, abort, setMessages, onTerminalEvent };
 }
 
 // ─── Prompt leak detection (FIX 1) ────────────────────────────────────
@@ -1065,80 +1185,31 @@ export function useTodos(sessionId: string | null) {
     return () => { mounted = false; };
   }, [sessionId]);
 
-  // Listen for agent-created todos from the SSE stream.
-  // When the agent plans, it parses its STEPS into todos and emits
-  // todo_created events. This listener adds them to the local state
-  // immediately for instant UI feedback.
+  // Apply agent-created todos immediately. The backend may send either
+  // `content` or `text`; the helper normalizes both and replaces a generic
+  // same-ID fallback instead of silently dropping the richer task.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (detail?.text) {
-        setTodos((prev) => {
-          // Don't add duplicates
-          if (prev.some((t) => t.id === detail.id || t.text === detail.text)) {
-            return prev;
-          }
-          return [...prev, {
-            id: detail.id || `todo-${Date.now()}`,
-            text: detail.text,
-            completed: detail.completed || false,
-          }];
-        });
-      }
+      setTodos((prev) => applyTodoCreated(prev, detail || {}));
     };
     window.addEventListener('localmind:todo-created', handler);
     return () => window.removeEventListener('localmind:todo-created', handler);
   }, []);
 
-  // Listen for todo-completed events — when a tool finishes, the
-  // corresponding plan todo is marked complete. This gives the user
-  // real-time progress through the execution plan.
+  // Apply status transitions through the same stable ID/order contract for
+  // both todo_updated and todo_completed events.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (detail?.id) {
-        setTodos((prev) => prev.map((t) =>
-          t.id === detail.id ? { ...t, completed: detail.completed ?? true } : t
-        ));
-      }
-    };
-    window.addEventListener('localmind:todo-completed', handler);
-    return () => window.removeEventListener('localmind:todo-completed', handler);
-  }, []);
-
-  // Session 29: Listen for todo-updated events — when the engine updates
-  // a todo's status (pending → in_progress → done), update the UI.
-  // Previously this event was dispatched but had NO listener, so todo
-  // status never updated (list stayed at 0/3).
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.id) {
-        setTodos((prev) => prev.map((t) =>
-          t.id === detail.id
-            ? {
-                ...t,
-                completed: detail.status === 'done' ? true : t.completed,
-                // Add a status field for in_progress visual indicator
-                ...(detail.status ? { status: detail.status } : {}),
-              }
-            : t
-        ));
-      } else if (detail?.order !== undefined) {
-        // If we only have order (not id), update by order
-        setTodos((prev) => prev.map((t, i) =>
-          i === detail.order
-            ? {
-                ...t,
-                completed: detail.status === 'done' ? true : t.completed,
-                ...(detail.status ? { status: detail.status } : {}),
-              }
-            : t
-        ));
-      }
+      setTodos((prev) => applyTodoUpdated(prev, detail || {}));
     };
     window.addEventListener('localmind:todo-updated', handler);
-    return () => window.removeEventListener('localmind:todo-updated', handler);
+    window.addEventListener('localmind:todo-completed', handler);
+    return () => {
+      window.removeEventListener('localmind:todo-updated', handler);
+      window.removeEventListener('localmind:todo-completed', handler);
+    };
   }, []);
 
   // Session 29: Listen for todo-cleared events — clear all todos

@@ -172,6 +172,8 @@ async def _event_stream(
                                 "status": _status,
                                 "iteration": _iteration,
                                 "latency_ms": _latency_ms,
+                                "tool_args": _args_str,
+                                "arguments": _args_str,
                             },
                         }
                     )

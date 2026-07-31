@@ -1,5 +1,5 @@
 export type MessageRole = 'user' | 'assistant';
-export type ToolStatus = 'running' | 'done' | 'failed' | 'pending';
+export type ToolStatus = 'running' | 'started' | 'in_progress' | 'done' | 'failed' | 'pending';
 export type IntentType = 'code' | 'file' | 'chat' | 'search' | 'shell' | 'memory';
 
 export interface ToolCall {
@@ -112,8 +112,12 @@ export interface ActionItem {
 
 export interface TodoItem {
   id: string;
+  /** Canonical UI label. The backend calls this field `content`. */
   text: string;
   completed: boolean;
+  status?: ToolStatus;
+  order?: number;
+  sessionId?: string;
   subtasks?: TodoItem[];
 }
 

@@ -313,6 +313,16 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         if not plan:
             return  # single-step intents (CHAT, SYSINFO) don't get a plan
 
+        # Keep the fallback useful even when the model's richer plan is not
+        # available: describe this request rather than showing a generic,
+        # unrelated checklist.
+        intent_label = intent.value.replace('_', ' ')
+        plan = [
+            f"Understand: {message.strip()[:72]}",
+            f"Run the {intent_label} action",
+            "Verify the result and explain what changed",
+        ]
+
         try:
             import sqlite3
             import time
@@ -330,9 +340,13 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # Clear existing todos for this session (new request = new plan)
                 conn.execute("DELETE FROM todos WHERE session_id = ?", (session_id,))
 
-                # Create the todos
+                # Create the todos with stable plan IDs. The agent loop emits
+                # todo_created/todo_completed using plan-{index}; using the same
+                # IDs here lets the UI update the persisted task instead of
+                # appending a second unrelated task.
+                plan_ids = [f"plan-{i}" for i in range(len(plan))]
                 for i, content in enumerate(plan):
-                    todo_id = str(uuid.uuid4())
+                    todo_id = plan_ids[i]
                     conn.execute(
                         """INSERT INTO todos
                            (id, session_id, content, completed, status,
@@ -348,7 +362,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             for i, content in enumerate(plan):
                 obs.emit(
                     "todo_added",
-                    id=str(uuid.uuid4()),
+                    id=plan_ids[i],
                     session_id=session_id,
                     content=content,
                     status="pending",
@@ -2440,7 +2454,15 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         # Don't forward done yet — check content first
                         # (handled below after the loop)
                         continue
-                    yield StreamChunk(text=safe_text, done=False)
+                    yield StreamChunk(
+                        text=safe_text,
+                        done=False,
+                        error=chunk.error,
+                        thinking=chunk.thinking,
+                        metadata=chunk.metadata,
+                        status=chunk.status,
+                        dispatch_steps=chunk.dispatch_steps,
+                    )
             else:
                 async for chunk in self._agent_loop.run(
                     messages=prompt_messages,
@@ -2460,7 +2482,15 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         full_response_chunks.append(safe_text)
                     if chunk.done:
                         continue  # Hold done — check content first
-                    yield StreamChunk(text=safe_text, done=False)
+                    yield StreamChunk(
+                        text=safe_text,
+                        done=False,
+                        error=chunk.error,
+                        thinking=chunk.thinking,
+                        metadata=chunk.metadata,
+                        status=chunk.status,
+                        dispatch_steps=chunk.dispatch_steps,
+                    )
 
             # Session 31: GUARANTEE — if the agent loop produced no text,
             # yield an error message BEFORE the done signal. This is the

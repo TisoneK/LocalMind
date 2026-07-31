@@ -50,7 +50,6 @@ SyntaxHighlighter.registerLanguage('shell', shell);
 SyntaxHighlighter.registerLanguage('shell-session', shell);
 import { ChatMessage as ChatMessageType, FileResult, PendingWrite } from '@/types';
 import { ThinkingBlock } from './ThinkingBlock';
-import { ToolSteps } from '@/components/chat/ToolSteps';
 import { DiffBlock, type DiffHunk } from '@/components/shared/DiffBlock';
 
 interface ChatMessageProps {
@@ -565,13 +564,6 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
           {/* Thinking block — includes tool call steps for clean UX */}
           {message.thinking && message.isAgent && (
             <ThinkingBlock thinking={message.thinking} thinkMs={message.thinkMs} isStreaming={isStreaming} />
-          )}
-
-          {/* Tool calls — shown INSIDE thinking block context only */}
-          {message.toolCalls && message.toolCalls.length > 0 && (
-            <div className="mb-2 max-w-full overflow-hidden opacity-70">
-              <ToolSteps toolCalls={message.toolCalls} compact />
-            </div>
           )}
 
           {/* Content — rendered as Markdown for assistant, plain for user */}

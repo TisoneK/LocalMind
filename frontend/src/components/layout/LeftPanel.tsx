@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Cpu, Trash2, Loader2, CheckCircle2, XCircle, Terminal, Globe, FileEdit, Brain } from 'lucide-react';
 import { Session, ActionItem, FileNode, TodoItem, ModelOption, ToolCall } from '@/types';
 import { ActionHistory } from '@/components/panels/ActionHistory';
 import { FileExplorer } from '@/components/panels/FileExplorer';
 import { TodoList } from '@/components/panels/TodoList';
+import { isActiveToolStatus } from '@/lib/localmind/progress';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 
 interface LeftPanelProps {
@@ -50,6 +51,14 @@ export function LeftPanel({
   const [activeTab, setActiveTab] = useState<LeftTab>('chat');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const isCompact = width < 220;
+
+  // Tool progress belongs in Actions, not in the chat transcript. The chat
+  // hook emits this event as soon as the backend announces a tool call.
+  useEffect(() => {
+    const showActions = () => setActiveTab('actions');
+    window.addEventListener('localmind:tool-call-started', showActions);
+    return () => window.removeEventListener('localmind:tool-call-started', showActions);
+  }, []);
 
   // Format epoch timestamp to human-readable date/time
   function formatTimestamp(ts: string | number, formattedDate?: string): string {
@@ -218,7 +227,7 @@ export function LeftPanel({
                     memory_op: <Brain className="h-3 w-3" />,
                     sysinfo: <Zap className="h-3 w-3" />,
                   };
-                  const statusIcon = tc.status === 'running'
+                  const statusIcon = isActiveToolStatus(tc.status)
                     ? <Loader2 className="h-3 w-3 animate-spin text-[#e8a420]" />
                     : tc.status === 'done'
                       ? <CheckCircle2 className="h-3 w-3 text-[#39d353]" />
@@ -264,12 +273,12 @@ export function LeftPanel({
       </div>
 
       {/* Running tasks indicator — compact, with cancel button */}
-      {activeToolCalls.filter(tc => tc.status === 'running').length > 0 && (
+      {activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length > 0 && (
         <div className="border-t border-[#1a2a1a] px-3 py-2">
           <div className="flex items-center gap-1.5 mb-1.5">
             <Loader2 className="h-3 w-3 animate-spin text-[#e8a420]" />
             <span className="text-[10px] text-[#e8a420] font-medium">
-              {activeToolCalls.filter(tc => tc.status === 'running').length} task{activeToolCalls.filter(tc => tc.status === 'running').length > 1 ? 's' : ''} running
+              {activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length} task{activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length > 1 ? 's' : ''} running
             </span>
             {onAbort && (
               <button
@@ -281,7 +290,7 @@ export function LeftPanel({
               </button>
             )}
           </div>
-          {activeToolCalls.filter(tc => tc.status === 'running').map((tc) => {
+          {activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).map((tc) => {
             const iconMap: Record<string, React.ReactNode> = {
               file_write: <FileEdit className="h-3 w-3" />,
               file_task: <FileEdit className="h-3 w-3" />,
@@ -307,7 +316,7 @@ export function LeftPanel({
       {/* Todos — always show so users can add tasks even when the list is empty.
           Previously the `todos.length > 0` condition made it impossible to
           create the first todo via the UI (chicken-and-egg). */}
-      {activeToolCalls.filter(tc => tc.status === 'running').length === 0 && (
+      {activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length === 0 && (
         <div className="border-t border-[#1a2a1a] p-3">
           <div className="flex items-center gap-1.5 mb-2">
             <CheckSquare className="h-3 w-3 text-[#e8a420]" />

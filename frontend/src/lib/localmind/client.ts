@@ -196,11 +196,11 @@ class LocalMindClient {
   async getSessionHistory(sessionId: string): Promise<ChatMessage[]> {
     const data = await this.request<{ history: any[] }>(
       `/api/sessions/${sessionId}/history`
-    );
-    return (data.history || []).map((m) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
+    );      return (data.history || []).map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+
       // Backend stores timestamps as raw epoch floats (e.g. 1783586329.77).
       // Format to HH:MM for display — same format as live messages.
       timestamp: typeof m.timestamp === 'number'
@@ -344,10 +344,16 @@ class LocalMindClient {
 
   async getTodos(sessionId: string): Promise<TodoItem[]> {
     try {
-      const data = await this.request<TodoItem[]>(
+      const data = await this.request<any[]>(
         `/api/todos?session_id=${encodeURIComponent(sessionId)}`
       );
-      return Array.isArray(data) ? data : [];
+      return Array.isArray(data)
+        ? data.map((todo) => ({
+            ...todo,
+            text: todo.text || todo.content || '',
+            sessionId: todo.sessionId || todo.session_id,
+          }))
+        : [];
     } catch {
       return [];
     }

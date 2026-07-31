@@ -25,6 +25,8 @@ interface RightPanelProps {
   metrics: PerformanceMetricsType;
   /** SSE-driven lastMetrics for instant token display */
   lastMetrics?: PerformanceMetricsType | null;
+  /** Wall-clock request duration updated while the stream is active */
+  elapsedMs?: number;
   collapsed: boolean;
   onToggleCollapse: () => void;
   /** FIX 4: Force the terminal tab to be active when agent runs shell/code_exec */
@@ -53,6 +55,7 @@ export function RightPanel({
   onMemoryDelete,
   metrics,
   lastMetrics,
+  elapsedMs,
   collapsed,
   onToggleCollapse,
   forceTerminalTab,
@@ -76,19 +79,6 @@ export function RightPanel({
       onTerminalTabShown?.();
     }
   }, [forceTerminalTab, activeTab, onTerminalTabShown]);
-
-  // v0.7: Auto-switch to Observe tab when a tool call fires
-  // This ensures users see real-time action progress instead of
-  // having to manually switch tabs.
-  useEffect(() => {
-    const handler = () => {
-      if (activeTab !== 'observability') {
-        setActiveTab('observability');
-      }
-    };
-    window.addEventListener('localmind:tool-call-started', handler);
-    return () => window.removeEventListener('localmind:tool-call-started', handler);
-  }, [activeTab]);
 
   // Listen for 'localmind:activate-terminal' from code block Run buttons
   useEffect(() => {
@@ -198,7 +188,7 @@ export function RightPanel({
       </div>
 
       {/* Performance metrics */}
-      <PerformanceMetrics metrics={metrics} lastMetrics={lastMetrics} />
+      <PerformanceMetrics metrics={metrics} lastMetrics={lastMetrics} elapsedMs={elapsedMs} />
 
       {showSettings && (
         <SettingsModal onClose={() => setShowSettings(false)} onSave={refreshModels} />

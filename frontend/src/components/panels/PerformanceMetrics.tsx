@@ -14,6 +14,8 @@ interface PerformanceMetricsProps {
   metrics: PerformanceMetricsType;
   /** SSE-driven lastMetrics — used to detect whether we have real data */
   lastMetrics?: PerformanceMetricsType | null;
+  /** Wall-clock duration of the current/most recent request */
+  elapsedMs?: number;
 }
 
 /** Display "—" for undefined/null, otherwise format the number (including 0) */
@@ -22,7 +24,7 @@ function fmtTok(v: number | undefined): string {
   return v.toLocaleString();
 }
 
-export function PerformanceMetrics({ metrics, lastMetrics }: PerformanceMetricsProps) {
+export function PerformanceMetrics({ metrics, lastMetrics, elapsedMs = 0 }: PerformanceMetricsProps) {
   // Prefer lastMetrics (SSE-driven, instant) when it has real data,
   // otherwise fall back to the polled metrics.
   const source = (lastMetrics && ((lastMetrics.totalTokens || 0) > 0 || (lastMetrics.latency || 0) > 0))
@@ -30,7 +32,10 @@ export function PerformanceMetrics({ metrics, lastMetrics }: PerformanceMetricsP
     : metrics;
 
   const tokensPerSecond = source.tokensPerSecond ?? 0;
-  const latency = source.latency ?? 0;
+  // The server only knows final latency after completion. While a request is
+  // active, the hook's wall clock keeps this value moving through dispatcher,
+  // tool execution, and generation instead of leaving the footer frozen.
+  const latency = elapsedMs > 0 ? elapsedMs : (source.latency ?? 0);
   const totalTokens = source.totalTokens ?? 0;
   const promptTokens = source.promptTokens ?? 0;
   const completionTokens = source.completionTokens ?? 0;

@@ -19,6 +19,7 @@ import {
   useHealth,
 } from '@/hooks/useLocalMind';
 import { localmindClient, getPersistedSettings } from '@/lib/localmind/client';
+import { isActiveToolStatus } from '@/lib/localmind/progress';
 
 export function WorkspaceLayout() {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -113,7 +114,7 @@ export function WorkspaceLayout() {
   // Hook data — useChat receives the terminal event callback
   const health = useHealth();
   const { sessions, refresh: refreshSessions, deleteSession } = useSessions();
-  const { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, send, abort, setMessages } =
+  const { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, elapsedMs, send, abort, setMessages } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId);
   const { files } = useFileTree();
@@ -200,7 +201,7 @@ export function WorkspaceLayout() {
   // shell or code_exec commands, so the user sees the output immediately.
   const [forceTerminalTab, setForceTerminalTab] = useState(false);
   useEffect(() => {
-    if (activeToolCalls.some(tc => (tc.name === 'shell' || tc.name === 'code_exec') && tc.status === 'running')) {
+    if (activeToolCalls.some(tc => (tc.name === 'shell' || tc.name === 'code_exec') && isActiveToolStatus(tc.status))) {
       setForceTerminalTab(true);
       // Auto-uncollapse the right panel if it's collapsed
       if (rightPanelCollapsed) {
@@ -342,6 +343,7 @@ export function WorkspaceLayout() {
           onMemoryDelete={deleteFact}
           metrics={metrics}
           lastMetrics={lastMetrics}
+          elapsedMs={elapsedMs}
           collapsed={rightPanelCollapsed}
           onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
           forceTerminalTab={forceTerminalTab}
