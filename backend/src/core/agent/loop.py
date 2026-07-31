@@ -480,6 +480,75 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "git",
+            "description": (
+                "Structured Git version control operations. Use this instead of "
+                "shell for git commands — it provides semantic, structured output "
+                "that's easier to reason about. Operations: status (working tree "
+                "state — what's staged and unstaged), diff (show unstaged or staged "
+                "changes), log (recent commit history), branch (list all branches "
+                "or create a new one), checkout (switch to a different branch), "
+                "commit (commit staged changes or stage-all-and-commit), merge "
+                "(merge a branch into current), stash (push/pop/list stashed "
+                "changes), reset (--soft/--mixed to undo commits — --hard is "
+                "blocked for safety). ALWAYS check git status before committing. "
+                "ALWAYS check git log before resetting to understand what you're "
+                "undoing."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["status", "diff", "log", "branch", "checkout", "commit", "merge", "stash", "reset"],
+                        "description": "The git operation to perform",
+                    },
+                    "staged": {
+                        "type": "boolean",
+                        "description": "For 'diff': show staged changes instead of unstaged (default: false)",
+                    },
+                    "count": {
+                        "type": "integer",
+                        "description": "For 'log': number of recent commits to show (default: 10, max: 50)",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "For 'branch': name of new branch to create",
+                    },
+                    "branch": {
+                        "type": "string",
+                        "description": "For 'checkout'/'merge': branch name to switch to or merge",
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "For 'commit': commit message. For 'stash': stash description",
+                    },
+                    "add_all": {
+                        "type": "boolean",
+                        "description": "For 'commit': stage all changes before committing (git add -A && git commit). Default: false (commit only staged changes)",
+                    },
+                    "action": {
+                        "type": "string",
+                        "enum": ["push", "pop", "list"],
+                        "description": "For 'stash': push (save changes), pop (restore and remove), or list (show all stashes). Default: push",
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["--soft", "--mixed", "--hard"],
+                        "description": "For 'reset': reset mode. --soft keeps changes staged; --mixed keeps changes unstaged; --hard is BLOCKED for safety (use shell if absolutely needed). Default: --mixed",
+                    },
+                    "ref": {
+                        "type": "string",
+                        "description": "For 'reset': ref to reset to (default: HEAD, which undoes the last commit)",
+                    },
+                },
+                "required": ["operation"],
+            },
+        },
+    },
 ]
 
 
@@ -587,6 +656,10 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
     elif tool_name == "delegate":
         # delegate dispatcher expects JSON-encoded args (target_agent + task)
         # — same pattern as edit_file. The delegate tool parses it back.
+        return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "git":
+        # git dispatcher expects JSON-encoded args (operation + params)
+        # — same pattern as delegate/edit_file. The git tool parses it back.
         return json.dumps(tool_args, ensure_ascii=False)
     else:
         # Fallback: join all values
@@ -1101,6 +1174,7 @@ class AgentLoop:
                         "shell": f"Running: {_command[:80]}" if _command else "Running command",
                         "memory_op": f"Memory: {call.tool_args.get('operation', '')} {call.tool_args.get('content', '')[:40]}".strip(),
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
+                        "git": f"Git: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Git operation",
                     }
                     _label = _label_map.get(call.tool_name, f"Running {call.tool_name}")
                     yield StreamChunk(text="", done=False, status=_label)
@@ -1522,6 +1596,7 @@ class AgentLoop:
                         "shell": f"Running: {_command[:80]}" if _command else "Running command",
                         "memory_op": f"Memory: {tool_args.get('operation', '')} {tool_args.get('content', '')[:40]}".strip(),
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
+                        "git": f"Git: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Git operation",
                     }
                     action_label = action_labels.get(tool_name, f"Running {tool_name}")
                 logger.info(

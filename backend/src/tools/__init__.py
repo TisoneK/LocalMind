@@ -152,6 +152,7 @@ from tools import (
     edit_file,  # noqa: E402, F401 -- FILE_EDIT (in-place file editing)
     file_reader,  # noqa: E402, F401 -- registers FILE_TASK
     file_writer,  # noqa: E402, F401 -- FILE_WRITE (secondary intent)
+    git_tool,  # noqa: E402, F401 -- GIT (structured git operations)
     memory_tool,  # noqa: E402, F401 -- registers MEMORY_OP
     shell,  # noqa: E402, F401 -- registers SHELL
     sysinfo,  # noqa: E402, F401 -- registers SYSINFO (offline: time, date, specs)

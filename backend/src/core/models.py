@@ -48,6 +48,7 @@ class Intent(str, Enum):
     FILE_WRITE = "file_write"
     FILE_EDIT = "file_edit"
     BROWSE = "browse"  # Real browser interaction (click, fill, scroll, screenshot)
+    GIT = "git"  # Structured Git operations (status, diff, log, branch, commit, etc.)
     CHAT = "chat"
     DELEGATE = "delegate"  # ADR-8 Phase 3: agent-initiated delegation
 
