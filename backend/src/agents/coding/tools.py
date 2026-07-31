@@ -55,6 +55,7 @@ CODING_TOOLS: frozenset[str] = frozenset(
         "edit_file",
         "code_exec",
         "git",
+        "process",
         "delegate",  # ADR-8 Phase 3: agent-initiated delegation
     }
 )

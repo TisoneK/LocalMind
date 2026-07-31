@@ -549,6 +549,52 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "process",
+            "description": (
+                "Manage long-running processes — start, stop, restart, check status, "
+                "read logs, and wait for completion. Use this for commands that run "
+                "for more than a few seconds: dev servers (npm run dev, uvicorn), "
+                "test runners (pytest, npm test), builds, docker containers. "
+                "Operations: start (provide name + command → the process runs in "
+                "background and you get its PID), stop (graceful SIGTERM by default, "
+                "or force=true for SIGKILL), restart (stop + start), status (list "
+                "all tracked processes or check a specific one), logs (read captured "
+                "stdout/stderr — last 200 lines), wait (block until process finishes "
+                "or timeout, default 30s). ALWAYS start long-running commands with "
+                "this tool instead of shell — shell kills commands after 20s timeout."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["start", "stop", "restart", "status", "logs", "wait"],
+                        "description": "The process operation to perform",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Process name — a short identifier you'll use to refer to this process in subsequent calls (e.g., 'dev-server', 'pytest-run')",
+                    },
+                    "command": {
+                        "type": "string",
+                        "description": "For 'start'/'restart': the shell command to run (e.g., 'npm run dev', 'uvicorn main:app'). Supports shell syntax like && and pipes.",
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "For 'stop': force-kill with SIGKILL instead of graceful SIGTERM. Default: false",
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "For 'wait': maximum seconds to wait (default: 30, max: 300)",
+                    },
+                },
+                "required": ["operation"],
+            },
+        },
+    },
 ]
 
 
@@ -660,6 +706,10 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
     elif tool_name == "git":
         # git dispatcher expects JSON-encoded args (operation + params)
         # — same pattern as delegate/edit_file. The git tool parses it back.
+        return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "process":
+        # process dispatcher expects JSON-encoded args (operation + params)
+        # — same pattern as git/delegate. The process tool parses it back.
         return json.dumps(tool_args, ensure_ascii=False)
     else:
         # Fallback: join all values
@@ -1175,6 +1225,7 @@ class AgentLoop:
                         "memory_op": f"Memory: {call.tool_args.get('operation', '')} {call.tool_args.get('content', '')[:40]}".strip(),
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
                         "git": f"Git: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Git operation",
+                        "process": f"Process: {call.tool_args.get('operation', '')} {call.tool_args.get('name', '')}" if call.tool_args.get('operation') else "Process operation",
                     }
                     _label = _label_map.get(call.tool_name, f"Running {call.tool_name}")
                     yield StreamChunk(text="", done=False, status=_label)
@@ -1597,6 +1648,7 @@ class AgentLoop:
                         "memory_op": f"Memory: {tool_args.get('operation', '')} {tool_args.get('content', '')[:40]}".strip(),
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
                         "git": f"Git: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Git operation",
+                        "process": f"Process: {tool_args.get('operation', '')} {tool_args.get('name', '')}" if tool_args.get('operation') else "Process operation",
                     }
                     action_label = action_labels.get(tool_name, f"Running {tool_name}")
                 logger.info(

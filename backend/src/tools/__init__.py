@@ -154,6 +154,7 @@ from tools import (
     file_writer,  # noqa: E402, F401 -- FILE_WRITE (secondary intent)
     git_tool,  # noqa: E402, F401 -- GIT (structured git operations)
     memory_tool,  # noqa: E402, F401 -- registers MEMORY_OP
+    process_tool,  # noqa: E402, F401 -- PROCESS (long-running process management)
     shell,  # noqa: E402, F401 -- registers SHELL
     sysinfo,  # noqa: E402, F401 -- registers SYSINFO (offline: time, date, specs)
     web_fetch,  # noqa: E402, F401 -- registers WEB_FETCH (follow-up URL fetching)

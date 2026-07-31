@@ -72,6 +72,7 @@ _INTENT_TO_AGENT: dict[Intent, str] = {
     Intent.SYSINFO: "coding",
     Intent.MEMORY_OP: "coding",
     Intent.GIT: "coding",  # Session 41: git operations route to coding agent
+    Intent.PROCESS: "coding",  # Session 42: process management routes to coding agent
 }
 
 
