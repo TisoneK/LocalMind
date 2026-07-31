@@ -4,6 +4,19 @@ One entry per agent session, newest at the bottom. Never edit or delete
 past entries — append corrections instead.
 
 ---
+## 2026-07-31 — Session 49
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — Phase D implementation session
+- **Task:** Build Diagnostics tool (`backend/src/tools/diagnostics.py`) with 4 operations: inspect_error, analyze_traceback, inspect_logs, inspect_test_failure. Structured semantic output instead of raw shell — parses tracebacks, extracts file paths, line numbers, error types, severity classification, and suggested actions. Wire through Intent.DIAGNOSTICS, AGENT_ALLOWED_TOOLS, CODING_TOOLS (+diagnostics → 9 tools), VERIFIER_TOOLS (+diagnostics → 7 tools), DEBUGGER_TOOLS (+diagnostics → 6 tools), TOOL_DEFINITIONS, _extract_tool_input, selection.py, and UI label maps.
+- **Commits:** 1 product (`1c59431`) — `feat(diagnostics): add Diagnostics tool — 4 operations for structured failure analysis`
+- **Outcome:** done — 28 new tests pass, 335 total tests pass (0 failures). Diagnostics tool uses a shared `_parse_frames_and_error()` helper to eliminate duplicate parsing between inspect_error and analyze_traceback. All 4 operations return structured markdown output with severity classification and suggested next actions. Wired end-to-end: Intent.DIAGNOSTICS → tool registration → TOOL_DEFINITIONS → _extract_tool_input → dispatch → 3 agent toolsets. Fixed a parser bug in _analyze_traceback where the `in_source_context` flag blocked subsequent frame matching — refactored to a shared parser that handles frames correctly.
+- **Open items:** None from this session. The gap analysis is now complete: 10 items → 8 delivered (Git, Process, Verifier, Reviewer, Debugger, Analyst, Diagnostics, Delegate audit). Remaining: Browser upgrade (pre-existing), non-coding roadmap (long-term).
+- **Report:** none — implementation session (test file is the verification)
+- **Notes:** Refactored the parser mid-session to extract a shared `_parse_frames_and_error()` helper — the original implementation had a bug where `in_source_context = True` blocked subsequent `File "..."` lines from being recognized as new frames. The shared parser eliminates duplicate code and fixes the bug. 13 files changed, 757 insertions, 13 deletions. 335 tests pass (28 diagnostics + 307 agents).
+
+---
+
 ## 2026-07-31 — Session 46
 
 - **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
