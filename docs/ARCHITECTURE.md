@@ -1,6 +1,6 @@
 # LocalMind — Architecture
 
-> **Last updated:** 2026-07-09 (v4.0 — ThinkingDispatcher architecture)
+> **Last updated:** 2026-07-31 (v4.1 — 8-agent registry, 15 tools)
 
 ## Overview
 
@@ -34,7 +34,7 @@ LocalMind is a layered system. Each layer has one responsibility and communicate
 ┌──────▼──────┐ ┌─────▼─────┐ ┌───▼──────────────┐
 │ TOOL        │ │ STORAGE   │ │ ADAPTER           │
 │ REGISTRY    │ │ SQLite +  │ │ Ollama            │
-│ 13 tools    │ │ sqlite-vec│ │ OpenAI-compat     │
+│ 15 tools    │ │ sqlite-vec│ │ OpenAI-compat     │
 │ (see below) │ └───────────┘ └──────────────────┘
 └─────────────┘
 ```
@@ -67,8 +67,27 @@ Key sub-modules:
 - **MetricsStore** (`core/metrics.py`) — aggregated p50/p95 latency per intent + tool success rates.
 - **SafetyGate** (`core/safety_gate.py`) — input safety screening.
 
+### Agent Registry (ADR-6)
+
+8 agents sharing a common `BaseAgent` with per-agent scoped toolset (ADR-6). Smaller tool surface = more reliable selection on small models.
+
+| # | Agent | Iter | Wall | Tools | Role |
+|---|---|---|---|---|---|
+| 1 | Browser | 15 | 240s | browse + delegate | Drive a browser |
+| 2 | Coding | 20 | 600s | shell, file_task, file_write, edit_file, code_exec, git, process, delegate | Build & edit code |
+| 3 | Research | 10 | 300s | web_search, web_fetch, delegate | Search & fetch web |
+| 4 | Direct | 1 | 60s | (none) | Single model call |
+| 5 | Verifier | 15 | 480s | shell, process, git, file_task, edit_file, delegate | Run tests, prove it works |
+| 6 | Reviewer | 10 | 300s | file_task, git, shell, delegate | Assess quality & specs |
+| 7 | Debugger | 12 | 360s | file_task, git, shell, process, delegate | Isolate root causes |
+| 8 | Analyst | 8 | 180s | file_task, git, delegate | Clarify requirements |
+
+Agents live in `agents/<name>/` directories (ADR-8 Principle 5). Each directory contains: `agent.py`, `context_builder.py`, `tools.py`, `is_done.py`, `workflow.md`. The registry auto-discovers directories with `agent.py`.
+
+Intent → agent routing in `agents/selection.py`: `Intent.VERIFY → verifier`, `Intent.REVIEW → reviewer`, etc.
+
 ### Tool Registry
-13 isolated modules in `tools/`. Each tool exposes a single `async run()` function. Tools share no state. A broken tool cannot crash the engine.
+15 isolated modules in `tools/`. Each tool exposes a single `async run()` function. Tools share no state. A broken tool cannot crash the engine.
 
 | Tool | Module | Risk | Description |
 |---|---|---|---|
@@ -80,6 +99,8 @@ Key sub-modules:
 | Browser agent | `browser_agent.py` | MEDIUM | Headless Chromium automation |
 | Code exec | `code_exec.py` | MEDIUM | Run Python (30s timeout) |
 | Shell | `shell.py` | MEDIUM | System commands (20s timeout) |
+| Git | `git_tool.py` | MEDIUM | Structured git ops (status, diff, log, branch, commit, etc.) |
+| Process | `process_tool.py` | MEDIUM | Long-running process management (start, stop, restart, logs) |
 | Memory | `memory_tool.py` | LOW | Persistent semantic memory |
 | Sysinfo | `sysinfo.py` | LOW | Hardware + time (offline, <100ms) |
 | Installed programs | `installed_programs.py` | LOW | List installed apps (Windows/Linux/macOS) |
@@ -137,7 +158,7 @@ LocalMind/
 │   ├── src/
 │   │   ├── core/              Core engine
 │   │   │   ├── config.py      Pydantic settings (from .env)
-│   │   │   ├── models.py      Shared data models (TaskProfile, OrchestrationPlan, etc.)
+│   │   │   ├── models.py      Shared data models (TaskProfile, OrchestrationPlan, Intent, etc.)
 │   │   │   ├── context_builder.py  Prompt assembly + token management
 │   │   │   ├── thinking_dispatcher.py  LLM-based capability inference (sole router)
 │   │   │   ├── execution_graph.py  DAG-based parallel capability execution
@@ -153,10 +174,10 @@ LocalMind/
 │   │   │   │   ├── _memory_mixin.py
 │   │   │   │   ├── _persistence_mixin.py
 │   │   │   │   └── _reflection_mixin.py
-│   │   │   ├── agent/         Agent loop + sub-agents
-│   │   │   │   ├── loop.py         AgentLoop (multi-turn tool calling)
+│   │   │   ├── agent/         Agent loop (multi-turn tool calling)
+│   │   │   │   ├── loop.py         AgentLoop
 │   │   │   │   ├── orchestrator.py AgentOrchestrator
-│   │   │   │   ├── sub_agent.py    Sub-agent registry (coder, researcher, etc.)
+│   │   │   │   ├── sub_agent.py    Sub-agent dispatcher
 │   │   │   │   ├── prompts.py      Agent system prompt builder
 │   │   │   │   ├── tool_dispatch.py Tool dispatch with retry
 │   │   │   │   ├── synthesizer.py  Multi-source synthesis
@@ -170,7 +191,20 @@ LocalMind/
 │   │   │       ├── skills/    Skill .md files (coding, debugging, research, etc.)
 │   │   │       └── *.md       Per-intent prompt fragments
 │   │   │
-│   │   ├── tools/             Tool modules (13 tools — see table above)
+│   │   ├── agents/            8-agent registry (ADR-6)
+│   │   │   ├── base_agent.py   BaseAgent abstract class + AgentConfig
+│   │   │   ├── registry.py     Agent discovery + registration
+│   │   │   ├── selection.py    Intent → agent name → agent class routing
+│   │   │   ├── coding/         CodingAgent (shell, file, code_exec, git, process)
+│   │   │   ├── research/       ResearchAgent (web_search, web_fetch)
+│   │   │   ├── browser/        BrowserAgent (headless browser)
+│   │   │   ├── direct/         DirectAgent (no tools, single call)
+│   │   │   ├── verifier/       VerifierAgent (tests, bug reproduction)
+│   │   │   ├── reviewer/       ReviewerAgent (code quality, spec conformance)
+│   │   │   ├── debugger/       DebuggerAgent (root cause diagnosis)
+│   │   │   └── analyst/        AnalystAgent (requirements analysis)
+│   │   │
+│   │   ├── tools/             Tool modules (15 tools — see table above)
 │   │   ├── adapters/          Model runtime adapters (Ollama, OpenAI-compat)
 │   │   ├── api/               FastAPI application
 │   │   │   ├── app.py         App factory + CORS + static + lifespan

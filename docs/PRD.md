@@ -28,10 +28,31 @@ An open-source tool-use and retrieval layer that wraps any Ollama model and make
 |---|---|---|
 | 1 | File reading (PDF, DOCX, TXT, CSV, code) | v0.1 |
 | 2 | Web search (DuckDuckGo / Brave) | v0.2 |
-| 3 | Cross-session memory (SQLite + ChromaDB) | v0.3 |
+| 3 | Cross-session memory (SQLite + sqlite-vec) | v0.3 |
 | 4 | CLI + scripting support | v0.4 |
 | 5 | Code execution (sandboxed Python + JS) | v0.5 |
 | 6 | File writing (with confirmation UX) | v0.5 |
+| 7 | Git operations (status, diff, log, commit, etc.) | v0.6 |
+| 8 | Process management (start, stop, restart, logs) | v0.6 |
+| 9 | 8-agent registry (browser, coding, research, direct, verifier, reviewer, debugger, analyst) | v0.6 |
+
+## Agent Registry (v0.6)
+
+LocalMind uses a multi-agent architecture (ADR-6) with per-agent scoped toolsets.
+Each agent is a thin `BaseAgent` subclass with its own context builder, scoped
+tools, and stop condition. The registry auto-discovers agents from the
+`agents/<name>/` directory structure (ADR-8 Principle 5).
+
+| Agent | Tools | Role |
+|---|---|---|
+| Browser | browse | Drive a headless browser |
+| Coding | shell, file_task, file_write, edit_file, code_exec, git, process, delegate | Build, edit, and manage code |
+| Research | web_search, web_fetch, delegate | Search and fetch web content |
+| Direct | (none) | Single model call, no tools |
+| Verifier | shell, process, git, file_task, edit_file, delegate | Run tests, reproduce bugs, validate |
+| Reviewer | file_task, git, shell, delegate | Assess code quality and spec conformance |
+| Debugger | file_task, git, shell, process, delegate | Isolate failures, find root causes |
+| Analyst | file_task, git, delegate | Clarify requirements, analyze specs |
 
 ## Non-Goals
 
@@ -87,6 +108,13 @@ Tasks:
 | AnythingLLM | ✓ | ✓ | ✗ | ✗ Complex |
 | Msty | ✗ | ✗ | ✗ | ✓ |
 | **LocalMind** | ✓ | ✓ | ✓ | ✓ |
+
+### v0.6 — Agent Architecture + Diagnostics
+- 8-agent registry with per-agent scoped toolsets (ADR-6)
+- Structured Git tool (status, diff, log, branch, commit, etc.)
+- Process management tool (start, stop, restart, logs, wait)
+- Agent delegation via `delegate` tool (ADR-8 Phase 3)
+- workspace_state feedback loop (git diff after every turn)
 
 ## Model Profiles
 
