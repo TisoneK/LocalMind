@@ -4,6 +4,18 @@ One entry per agent session, newest at the bottom. Never edit or delete
 past entries — append corrections instead.
 
 ---
+## 2026-07-31 — Session 40
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — gap analysis review session
+- **Task:** Cross-reference the user's comprehensive capability gap analysis against LocalMind's current codebase — identify what already exists, what's partially present, what's entirely missing, and produce a structured review report with prioritization
+- **Commits:** 1 (`.context/` memory only — this commit)
+- **Outcome:** done — produced detailed cross-reference matrix (tools, agents, non-coding capabilities) with 10 findings (2 Critical, 3 High, 2 Medium, 3 Low). Added 10 prioritized backlog items (B-2026-07-31-1 through B-2026-07-31-10) organized into 5 implementation phases. No product code changes — review/analysis session only.
+- **Open items:** 10 new backlog items: Git tool (Critical), VerifierAgent (Critical), Process tool (High), Browser upgrade (High), Diagnostics tool (Medium), ReviewerAgent (Medium), DebuggerAgent (Medium), AnalystAgent (Medium), Observe capability (Low/Long-term), Non-coding roadmap (Low/Long-term).
+- **Report:** `.context/memory/reviews/2026-07-31-review-6.md`
+- **Notes:** The user's analysis is correct: LocalMind has a mature coding agent core but is missing the non-coding capability layer that distinguishes a general assistant from a coding harness. The highest-leverage additions are Git tool + Verifier agent (close the verification gap) and Process tool (enables long-running service management). The non-coding capabilities (Observe, Computer Interaction, Personal Productivity) are better built as a connector/plugin framework. Baseline: 497/498 tests pass (1 pre-existing failure in test_todo_system.py), 117 ruff E501 (pre-existing), frontend typecheck clean, eslint 0 errors.
+
+---
 ## 2026-07-09 — Session 1
 
 - **Agent:** Super Z | **Model:** GLM-4.5 (Z.ai) | **Platform:** Z.ai cloud sandbox (Linux 6.5) | **Role:** engineer
