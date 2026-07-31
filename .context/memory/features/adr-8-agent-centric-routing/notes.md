@@ -683,3 +683,17 @@ server closes without a trailing newline. This keeps transport reliability
 separate from future agent-routing work. Focused Vitest coverage passes;
 next follow-up is a public `streamChat()` integration test before resuming
 transitional engine wiring audit.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 39)
+
+The session stayed within the transport/UI boundary rather than changing
+ADR-8 routing. The frontend now treats `pending`, `started`,
+`in_progress`, and `running` as one active tool lifecycle across Actions,
+terminal focus, tool-result matching, timeout/abort cleanup, and stream
+completion. Tool arguments reach the SSE bridge so the Actions panel can
+show useful labels and previews. Todo updates use stable ID/order matching.
+The elapsed clock ticks during the full request, cumulative thinking plus
+answer text drives live token estimates, sparse final metrics preserve those
+estimates, and stream completion publishes one synchronously finalized tool
+snapshot to both UI state surfaces. Product commit: `a4ab7c2`.

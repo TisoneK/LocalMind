@@ -42,3 +42,6 @@ records.
 
 ---
 - **2026-07-31 — Session 38** — Buffy / openai/gpt-5.6-luna — fixed frontend SSE final-buffer loss with a reusable parser and Vitest regression coverage; frontend tests/build passed and lint had 0 errors. Next: public `streamChat()` integration coverage. Detail: `.context/memory/sessions/2026-07-31-38/notes.md`.
+
+---
+- **2026-07-31 — Session 39** — Buffy / openai/gpt-5.6-luna — connected streamed agent progress to Actions, todos, metrics, elapsed time, and terminal state; unified active statuses and fixed finalization races. Product commit `a4ab7c2`; 7 focused frontend tests/build/backend compile passed; pytest unavailable in Python 3.12. Detail: `.context/memory/sessions/2026-07-31-39/notes.md`.

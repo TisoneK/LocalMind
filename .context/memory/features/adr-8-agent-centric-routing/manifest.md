@@ -86,15 +86,16 @@ Four implementation phases (multi-session):
   to make the trail greppable: `refactor(agents):` for Phase 1
   structural moves, `feat(agent-loop):` for Phase 2 wiring, etc.)
 - **Status:** in-progress (Phase 0 = initialization done in Session 34;
-  Phases 1-4 not started)- **Current state:** Phase 1–4 implementation work is present in
-  the repository, but the runtime is still transitional: directory agents,
-  workflows, delegation, and task-profile selection are tested while
-  several engine branches still call `AgentLoop` directly. Sessions 37–38
-  repaired the two confirmed chat transport loss paths (typed upload
-  failures and final unterminated SSE events). The next safe work is a
-  public `streamChat()` integration regression, then instrument and close
-  runtime agent wiring gaps one at a time with real-model validation where
-  behavior changes.
+  Phases 1-4 implementation work is present; runtime wiring remains transitional)
+- **Current state:** Phase 1–4 implementation work is present in the
+  repository, but several engine branches still call `AgentLoop` directly.
+  Sessions 37–39 repaired the confirmed chat transport/UI loss paths:
+  typed upload failures, final unterminated SSE events, disconnected
+  Actions/todos, inconsistent active statuses, delayed live metrics, and
+  stream-finalization state races. The next safe work is a public
+  `streamChat()` integration regression, then instrument and close runtime
+  agent wiring gaps one at a time with real-model validation where behavior
+  changes.
 
 - **No-regression list (must hold after every phase):**
   1. Session 31/32 fix: `MAX_ITERATIONS=8` default, configurable via

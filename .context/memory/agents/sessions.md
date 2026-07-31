@@ -693,3 +693,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** add a public `streamChat()` mocked-fetch/ReadableStream integration test, then resume the transitional ADR-8 engine wiring audit.
 - **Report:** `.context/memory/reviews/2026-07-31-review-4.md`
 - **Notes:** `.context/memory/sessions/2026-07-31-38/notes.md`
+
+---
+## 2026-07-31 — Session 39
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** Local macOS development machine | **Role:** engineer
+- **Feature:** `adr-8-agent-centric-routing`
+- **Task:** Continue the real-time agent progress UI repair: connect Actions, todos, metrics, elapsed time, and streamed tool state.
+- **Commits:** product `a4ab7c2d525dc4ee8efd54c24b986f877e805917`; context commit recorded after continuity updates
+- **Outcome:** done — active tool status handling is unified across all UI lifecycle paths; Actions auto-focus, descriptive tool arguments, streamed todo updates/completion, live elapsed/token metrics, sparse final metrics preservation, and synchronous stream-finalization state synchronization are repaired.
+- **Validation:** 7 focused frontend tests passed; frontend build/typecheck passed; lint 0 errors / 50 existing warnings; backend Python 3.12 compile passed; diff check passed; final review found no blockers. Backend pytest was unavailable in the supported interpreter because pytest is not installed.
+- **Report:** `.context/memory/reviews/2026-07-31-review-5.md`
+- **Notes:** `.context/memory/sessions/2026-07-31-39/notes.md`
+- **Open items:** add public `streamChat()` mocked-fetch/ReadableStream integration coverage, then resume the transitional ADR-8 engine wiring audit.
