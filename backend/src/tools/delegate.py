@@ -78,8 +78,9 @@ async def delegate(message: str) -> ToolResult:
 
     Args (parsed from `message` — JSON-encoded by the agent loop):
         target_agent: the name of the agent to delegate to (e.g.,
-            "research", "coding", "browser", "direct"). Must be a
-            registered agent name.
+            "research", "coding", "browser", "direct", "verifier",
+            "reviewer", "debugger", "analyst"). Must be a registered
+            agent name — any of the 8 agents in the registry.
         task: the sub-task description. A clear, self-contained
             instruction that the sub-agent can execute without further
             context from the calling agent.
@@ -383,9 +384,13 @@ register_tool(
         "a coding task that needs web research, or a research task that "
         "needs file analysis). The sub-agent runs with its own scoped "
         "tools and returns its result; you continue with that result in "
-        "your context. Target agents: 'research' (web search + fetch), "
-        "'coding' (shell + file tools + code exec), 'browser' (headless "
-        "browser), 'direct' (single model call, no tools)."
+        "your context. Available agents: 'research' (web search + fetch), "
+        "'coding' (shell + file tools + code exec + git + process), "
+        "'browser' (headless browser), 'verifier' (run tests, reproduce "
+        "bugs, validate behavior), 'reviewer' (assess code quality and "
+        "spec conformance), 'debugger' (isolate root causes of failures), "
+        "'analyst' (understand requirements and clarify what to build), "
+        "'direct' (single model call, no tools)."
     ),
     cost=1.0,  # delegation is expensive — sub-agent runs its own loop
     latency_ms=5000,  # rough estimate — sub-agent takes time
