@@ -51,6 +51,7 @@ class Intent(str, Enum):
     GIT = "git"  # Structured Git operations (status, diff, log, branch, commit, etc.)
     PROCESS = "process"  # Process management (start, stop, restart, status, logs, wait)
     VERIFY = "verify"  # Verification (run tests, reproduce bugs, check acceptance criteria)
+    REVIEW = "review"  # Code review (spec conformance, quality assessment, best practices)
     CHAT = "chat"
     DELEGATE = "delegate"  # ADR-8 Phase 3: agent-initiated delegation
 

@@ -50,6 +50,7 @@ from agents.selection import (
     select_agent_by_task_profile,
 )
 from agents.verifier.agent import VerifierAgent
+from agents.reviewer.agent import ReviewerAgent
 
 # Auto-register all built-in agents via directory discovery (ADR-8
 # Principle 5, Session 34 Phase 1). Scans agents/* for subdirectories
@@ -67,6 +68,7 @@ __all__ = [
     "DirectAgent",
     "ResearchAgent",
     "VerifierAgent",
+    "ReviewerAgent",
     "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_MAX_WALL_CLOCK_SECS",
     "auto_discover_agents",

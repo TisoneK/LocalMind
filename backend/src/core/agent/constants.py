@@ -154,6 +154,7 @@ AGENT_INTENTS: frozenset[Intent] = frozenset(
         Intent.MEMORY_OP,
         Intent.PROCESS,
         Intent.VERIFY,
+        Intent.REVIEW,
         Intent.SHELL,
         Intent.WEB_SEARCH,
         Intent.WEB_FETCH,

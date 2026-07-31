@@ -74,6 +74,7 @@ _INTENT_TO_AGENT: dict[Intent, str] = {
     Intent.GIT: "coding",  # Session 41: git operations route to coding agent
     Intent.PROCESS: "coding",  # Session 42: process management routes to coding agent
     Intent.VERIFY: "verifier",  # Session 43: verification routes to VerifierAgent
+    Intent.REVIEW: "reviewer",  # Session 44: code review routes to ReviewerAgent
 }
 
 
@@ -161,6 +162,7 @@ _DOMAIN_TO_AGENT: dict[str, str] = {
     "chat": "direct",
     "direct": "direct",
     "verify": "verifier",  # Session 43: verification tasks route to VerifierAgent
+    "review": "reviewer",  # Session 44: code review tasks route to ReviewerAgent
 }
 
 
