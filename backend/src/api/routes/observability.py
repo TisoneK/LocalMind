@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 
@@ -17,6 +17,27 @@ class ToolEvent(BaseModel):
     status: str  # "started", "completed", "failed"
 
 
+class ObservationEventSummary(BaseModel):
+    type: str
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class ObservationWorkspaceSummary(BaseModel):
+    git_available: bool = False
+    git_branch: str = ""
+    git_head: str = ""
+    git_status: str = ""
+    git_diff_stat: str = ""
+    last_build_result: Optional[dict[str, Any]] = None
+    open_files: list[str] = Field(default_factory=list)
+
+
+class ObservationSummary(BaseModel):
+    timestamp: float
+    workspace: ObservationWorkspaceSummary
+    recent_events: list[ObservationEventSummary] = Field(default_factory=list)
+
+
 class ObservabilityData(BaseModel):
     session_id: str
     intent: Optional[str] = None
@@ -25,7 +46,8 @@ class ObservabilityData(BaseModel):
     memory_hits: int = 0
     context_tokens: int = 0
     latency_ms: float = 0
-    tool_timeline: List[ToolEvent] = []
+    tool_timeline: List[ToolEvent] = Field(default_factory=list)
+    observation: Optional[ObservationSummary] = None
 
 
 def _get_engine():
@@ -35,7 +57,10 @@ def _get_engine():
     return _engine
 
 
-@router.get("/observability/{session_id}", response_model=ObservabilityData)
+@router.get(
+    "/observability/{session_id}",
+    response_model=ObservabilityData,
+)
 async def get_observability(session_id: str):
     """Get observability data for a session.
 
@@ -49,6 +74,7 @@ async def get_observability(session_id: str):
     obs_data = engine._last_observation.get(session_id)
 
     if obs_data:
+        snapshot = getattr(engine, "_last_observation_snapshots", {}).get(session_id)
         return ObservabilityData(
             session_id=session_id,
             intent=obs_data.get("intent"),
@@ -57,6 +83,11 @@ async def get_observability(session_id: str):
             memory_hits=obs_data.get("memory_hits", 0),
             context_tokens=obs_data.get("context_tokens", 0),
             latency_ms=obs_data.get("latency_ms", 0),
+            observation=(
+                ObservationSummary.model_validate(snapshot.to_public_summary())
+                if snapshot is not None
+                else None
+            ),
         )
 
     # Fallback: aggregate from MetricsStore for this session's intent

@@ -203,9 +203,9 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         """Capture an opt-in observation without consuming request events.
 
         The chat/SSE route remains responsible for destructive ``drain()``
-        calls. This helper uses the collector's read-only ``all()`` path so
-        orchestration, diagnostics, and future UI consumers can inspect a
-        coherent workspace-plus-events snapshot without stealing events from
+        calls. This helper uses the collector's read-only ``history()`` path
+        so orchestration, diagnostics, and future UI consumers can inspect a
+        coherent full-request workspace-plus-events snapshot without stealing events from
         the active stream.
         """
         from core.workspace_state import snapshot as workspace_snapshot

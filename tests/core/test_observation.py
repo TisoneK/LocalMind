@@ -81,6 +81,37 @@ def test_event_payload_formatting_is_deterministic():
     assert '{"a": 2, "z": 1}' in formatted
 
 
+def test_snapshot_capture_bounds_retained_event_history():
+    """Long request histories retain only the newest bounded events."""
+    events = [ObsEvent(type=f"event_{i}", data={"i": i}) for i in range(60)]
+
+    observation = ObservationSnapshot.from_events(WorkspaceSnapshot(), events)
+
+    assert len(observation.recent_events) == 50
+    assert observation.recent_events[0].type == "event_10"
+    assert observation.recent_events[-1].type == "event_59"
+
+
+def test_public_summary_is_bounded_and_structured():
+    """Public summaries cap workspace and event payload sizes."""
+    observation = ObservationSnapshot.from_events(
+        WorkspaceSnapshot(
+            git_status="s" * 5000,
+            git_diff_stat="d" * 5000,
+            open_files=["f" * 1000 for _ in range(20)],
+        ),
+        [ObsEvent(type="large", data={"value": "x" * 5000}) for _ in range(25)],
+    )
+
+    summary = observation.to_public_summary()
+
+    assert len(summary["workspace"]["git_status"]) == 4000
+    assert len(summary["workspace"]["git_diff_stat"]) == 3000
+    assert len(summary["workspace"]["open_files"]) == 10
+    assert len(summary["recent_events"]) == 20
+    assert summary["recent_events"][0]["data"]["truncated"] is True
+
+
 def test_snapshot_copies_event_sequence_and_nested_payload():
     """Later mutations of source events do not alter the snapshot."""
     event = ObsEvent(type="first", data={"nested": {"value": 1}})

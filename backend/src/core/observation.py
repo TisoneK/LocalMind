@@ -19,7 +19,12 @@ from typing import Iterable
 from core.obs import ObsCollector, ObsEvent
 from core.workspace_state import WorkspaceSnapshot, format_snapshot
 
+_MAX_CAPTURE_EVENTS = 50
 _MAX_FORMATTED_EVENTS = 20
+_MAX_SUMMARY_EVENTS = 20
+_MAX_SUMMARY_STRING_CHARS = 500
+_MAX_SUMMARY_STATUS_CHARS = 4000
+_MAX_SUMMARY_DIFF_CHARS = 3000
 
 
 @dataclass(frozen=True, init=False)
@@ -49,10 +54,15 @@ class ObservationSnapshot:
             "_workspace",
             deepcopy(workspace) if workspace is not None else WorkspaceSnapshot(),
         )
+        # Bound retained state at capture time, not only at API serialization.
+        # Long-running requests can emit many progress events; keeping the
+        # newest events is sufficient for diagnostics and avoids unbounded
+        # per-session snapshot memory.
+        captured_events = tuple(recent_events)[-_MAX_CAPTURE_EVENTS:]
         object.__setattr__(
             self,
             "_recent_events",
-            tuple(deepcopy(event) for event in recent_events),
+            tuple(deepcopy(event) for event in captured_events),
         )
         object.__setattr__(
             self,
@@ -92,6 +102,54 @@ class ObservationSnapshot:
 
         return cls(workspace=workspace, recent_events=events)
 
+    def to_public_summary(
+        self,
+        *,
+        max_events: int = _MAX_SUMMARY_EVENTS,
+    ) -> dict:
+        """Return a bounded, JSON-safe summary for API consumers.
+
+        This intentionally exposes a projection rather than the owned
+        compatibility objects. It keeps response size bounded and prevents
+        callers from observing or mutating internal snapshot state.
+        """
+
+        workspace = self._workspace
+        build_result = workspace.last_build_result
+        bounded_build = None
+        if build_result:
+            bounded_build = {
+                "result": str(build_result.get("result", ""))[:100],
+                "command": str(build_result.get("command", ""))[:_MAX_SUMMARY_STRING_CHARS],
+                "output_tail": str(build_result.get("output_tail", ""))[:_MAX_SUMMARY_STRING_CHARS],
+                "exit_code": build_result.get("exit_code"),
+                "timestamp": build_result.get("timestamp"),
+            }
+
+        event_summaries = []
+        if max_events > 0:
+            for event in self._recent_events[-min(max_events, _MAX_SUMMARY_EVENTS) :]:
+                event_summaries.append(
+                    {
+                        "type": event.type[:100],
+                        "data": _bounded_event_data(event.data),
+                    }
+                )
+
+        return {
+            "timestamp": self.timestamp,
+            "workspace": {
+                "git_available": workspace.git_available,
+                "git_branch": workspace.git_branch[:200],
+                "git_head": workspace.git_head[:40],
+                "git_status": workspace.git_status[:_MAX_SUMMARY_STATUS_CHARS],
+                "git_diff_stat": workspace.git_diff_stat[:_MAX_SUMMARY_DIFF_CHARS],
+                "last_build_result": bounded_build,
+                "open_files": [str(path)[:_MAX_SUMMARY_STRING_CHARS] for path in workspace.open_files[:10]],
+            },
+            "recent_events": event_summaries,
+        }
+
     def format_context(
         self,
         *,
@@ -120,6 +178,21 @@ class ObservationSnapshot:
             sections.append("\n".join(event_lines))
 
         return "\n\n".join(sections)
+
+
+def _bounded_event_data(data: dict) -> dict:
+    """Bound event payloads while retaining their structured shape when safe."""
+
+    try:
+        serialized = json.dumps(data, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        return {"truncated": True, "preview": str(data)[:_MAX_SUMMARY_STRING_CHARS]}
+    if len(serialized) <= _MAX_SUMMARY_STRING_CHARS:
+        return json.loads(serialized)
+    return {
+        "truncated": True,
+        "preview": serialized[:_MAX_SUMMARY_STRING_CHARS],
+    }
 
 
 def _format_event_data(data: dict) -> str:
