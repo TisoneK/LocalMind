@@ -231,6 +231,18 @@ passed; final review is ship-ready. The local runtime is on Zen with
 - **Task:** none
 - **Status:** idle
 
+---
+## Handoff Notes (Session 63, 2026-08-01)
+
+Completed and pushed the real-time Observe metrics bridge and corrected the
+incomplete Session 62 closeout. Product commit: `8f253bf`; review:
+`.context/memory/reviews/2026-08-01-review-20.md`; context closeout follows in a
+separate `chore(context):` commit. Frontend build passed, 12 tests passed, lint
+has 0 errors / 53 warnings, diff check passed, and final review is ship-ready.
+
+Deferred: focused component-level precedence tests and backend prompt-token
+telemetry. The repository should remain idle after this closeout.
+
 - **Session:** none (idle)
 - **Feature:** none
 - **Task:** none

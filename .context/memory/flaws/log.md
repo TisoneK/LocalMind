@@ -305,3 +305,19 @@ Flaws from Session 7 are now **fixed**:
   and `test_agent_subpackage_re_exports_class` (if the layout breaks
   again, these tests fail at import time, surfacing the issue
   immediately).
+
+---
+## 2026-08-01 — Buffy / openai/gpt-5.6-luna (Session 63)
+
+- **Flaw:** The workflow allowed a session to reach a confident chat-level
+  completion report even though the product change had not gone through the
+  mandatory commit/push/context closeout sequence.
+- **Symptom:** Session 62 recorded the Zen/UI work as complete, but the later
+  live metrics fix remained uncommitted and absent from the context handoff.
+- **Root cause:** Review and validation were treated as the end of the session;
+  the exit checklist was not re-read and enforced before the final response.
+- **Suggested fix:** Add a machine-checkable completion gate to the protocol or
+  agent harness: refuse a completion report while product files are dirty,
+  context records are stale, or `HEAD` is not synchronized with `origin/main`.
+- **Status:** open — corrective behavior completed in Session 63; protocol
+  package change is still required.

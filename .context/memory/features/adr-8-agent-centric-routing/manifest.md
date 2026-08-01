@@ -98,8 +98,11 @@ Four implementation phases (multi-session):
   tools, agent selection, SSE, or runtime observation behavior.  BrowserAgent inspection, chat transport/UI repairs, and workspace feedback remain intact.
   Session 62 corrected the Zen free-model default to `deepseek-v4-flash-free`
   and contained CenterPanel transcript scrolling so streaming cannot displace
-  the workspace header/composer. These are additive runtime/UI repairs and do
-  not alter agent routing or delegation contracts.
+  the workspace header/composer. Session 63 added the live Observe metrics
+  bridge: streaming latency follows the request clock, prompt-token telemetry
+  is used for Context Tokens when available, and completion tokens are never
+  mislabeled as context. These are additive runtime/UI repairs and do not
+  alter agent routing or delegation contracts.
   Deferred work includes keyed Engine locks, direct fast-path policy tests, the
 
   public `streamChat()` integration regression, remaining transitional

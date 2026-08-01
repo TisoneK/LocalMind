@@ -60,7 +60,7 @@ block (and its "last verified" date) every time you run on it again.
   - `npm install` emits `allow-scripts` warnings for `electron@33.4.11` (postinstall: `node install.js`) and `esbuild@0.25.12` (postinstall: `node install.js`). These are dev build-time scripts, safe to defer — the frontend typecheck/lint/build all work without approving them. (Session 7)
   - **File-mode drift after sandbox wipe:** when the sandbox wipes and re-clones a repo, all files come back with mode `100755` (executable) instead of `100644`. This makes `git status` show every file as modified and blocks `git pull` with "Please commit your changes or stash them before you merge." Fix: `git config core.fileMode false && git checkout -- .` then pull. This is a sandbox filesystem artifact, not real changes. (Session 8)
 
-## Local macOS development machine (last verified 2026-07-31)
+## Local macOS development machine (last verified 2026-08-01)
 
 - **Identify by:** workspace path `/Users/bao/Code`; macOS host; local project checkout at `/Users/bao/Code/LocalMind`
 - **OS:** macOS 15.7.7
@@ -90,4 +90,6 @@ block (and its "last verified" date) every time you run on it again.
   - `cd backend && .venv/bin/python -m pytest -q` → 786 passed, 1 existing todo-plan assertion failure (2026-07-31)
   - `cd frontend && npm run build` → passed; `npm run lint` → 0 errors / 53 warnings (2026-07-31)
   - `cd frontend && npm run test -- --run` → 9 passed; `npm run build` → passed; `npm run lint` → 0 errors / 53 warnings (2026-07-31)
+  - `cd frontend && npm run build` → passed; `npm run lint` → 0 errors / 53 warnings; `npm test -- --run` → 12 passed across 3 files (2026-08-01)
+  - `git diff --check` → clean; live backend SSE probe → HTTP 200 (2026-08-01)
 - **Quirks:** The `python` command is unavailable and system `python3` is 3.9.6, below the backend's `>=3.10` requirement; use `backend/.venv/bin/python` (Python 3.12.13 via uv). Backend Ruff currently reports 132 E501 findings plus 3 non-E501 findings. `npm ci` reported 18 dependency vulnerabilities (17 high, 1 critical) and deprecated transitive packages. Local agent uses the user's existing git credentials and does not need a PAT for this public clone. The optional `agent-browser` CLI is not installed; BrowserAgent tests must mock `_run_browser_cmd` unless the CLI is installed for live smoke testing.

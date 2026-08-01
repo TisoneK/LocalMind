@@ -977,3 +977,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Validation:** 6 focused Zen tests passed; live SSE completed with 27 events and no error; frontend build passed; 12 frontend tests passed; ESLint had 0 errors and 53 existing warnings; `git diff --check` passed; final review was ship-ready. The live backend reported adapter `zen` and current model `deepseek-v4-flash-free`; the local frontend was reachable. `backend/.env` remained Git-ignored and no key was written to tracked files or context.
 - **Review:** `.context/memory/reviews/2026-08-01-review-19.md` — independent review: ship-ready, no blockers.
 - **Notes:** The only remaining `minimax-m2.5-free` source occurrence is a compatibility context-window entry. Optional follow-ups are dedicated API/frontend regression coverage and throttling or switching smooth scrolling to `behavior: "auto"` during long streams.
+
+---
+## 2026-08-01 — Session 63
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing — observability metrics closeout
+- **Task:** Finish the real-time Observe metrics fix and correct the incomplete Session 62 product/context closeout.
+- **Commits:** 1 product (`8f253bf`) + 1 context closeout
+- **Outcome:** done — WorkspaceLayout now bridges live latency and prompt-token metrics into the Observe panel without labeling completion tokens as context. The public changelog, review report, feature memory, environment/model records, append-only logs, and current-task handoff were updated separately.
+- **Validation:** frontend production build passed; 12 frontend tests passed; lint has 0 errors / 53 warnings; `git diff --check` passed; final independent review was ship-ready. Product and context commits were pushed to `origin/main`; final tree is clean and synchronized.
+- **Open items:** Add focused component-level precedence tests and backend prompt-token telemetry when practical. These remain deferred and are recorded in review-20.
+- **Report:** `.context/memory/reviews/2026-08-01-review-20.md`
+- **Notes:** Session 62 was incorrectly reported complete before the metrics product change was committed/pushed. This session completed the mandatory two-surface closeout and recorded the process correction in `.context/memory/flaws/log.md`.

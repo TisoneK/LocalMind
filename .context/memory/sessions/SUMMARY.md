@@ -90,3 +90,21 @@ records.
 
 ---
 - **2026-07-31 — Session 57** — Buffy / openai/gpt-5.6-luna — surfaced the bounded structured observation summary in the frontend Observe panel with typed models, defensive mapping, and a compact read-only Runtime Snapshot. 9 frontend tests passed; production build/typecheck passed; lint 0 errors / 53 warnings; product commit `1dc6a34`. Detail: `.context/memory/reviews/2026-07-31-review-14.md`.
+
+---
+- **2026-07-31 — Session 58** — Buffy / openai/gpt-5.6-luna — added the read-only `/api/capabilities` discovery surface and descriptive Observe catalog without changing routing, tools, or agent selection. 12 frontend tests and 16 focused backend tests passed. Product commit `6f438fc82caf0c61afce1f1f1c49c26440a3f4a1`; detail `.context/memory/reviews/2026-07-31-review-15.md`.
+
+---
+- **2026-07-31 — Session 59** — Buffy / openai/gpt-5.6-luna — shipped deterministic worker-to-report evidence from tool traces for empty or weak synthesis paths. 70 focused tests passed. Product commit `83d74778608d3fc933a080df4b3b32605cfb0ab5`; detail `.context/memory/reviews/2026-07-31-review-16.md`.
+
+---
+- **2026-07-31 — Session 60** — Buffy / openai/gpt-5.6-luna — shipped structured FreeBuff-style delegation packets, isolated child run IDs, bounded results, tool restrictions, and failure metadata while preserving legacy calls. 87 focused tests passed. Product commit `b9b97ff`; detail `.context/memory/reviews/2026-07-31-review-17.md`.
+
+---
+- **2026-07-31 — Session 61** — Buffy / openai/gpt-5.6-luna — renamed runtime agent instruction files from `workflow.md` to `playbook.md`, updating loaders, prompt terminology, and tests while preserving generic workflows. 191 focused tests passed. Product commit `044e140`; detail `.context/memory/reviews/2026-07-31-review-18.md`.
+
+---
+- **2026-08-01 — Session 62** — Buffy / openai/gpt-5.6-luna — corrected Zen's free default to `deepseek-v4-flash-free` and contained CenterPanel transcript scrolling so streaming cannot displace the workspace header/composer. 6 focused Zen tests, live SSE, frontend build, and 12 frontend tests passed. Product commit `f985fb9`; detail `.context/memory/reviews/2026-08-01-review-19.md`.
+
+---
+- **2026-08-01 — Session 63** — Buffy / openai/gpt-5.6-luna — shipped the live Observe metrics bridge and completed the previously incomplete product/context closeout. Build passed, 12 frontend tests passed, lint 0 errors / 53 warnings, review ship-ready. Product commit `8f253bf`; detail `.context/memory/reviews/2026-08-01-review-20.md`.

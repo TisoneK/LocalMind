@@ -827,3 +827,24 @@ Validation: 6 focused Zen tests, frontend build, 12 frontend tests, ESLint with
 0 errors, live SSE completion, and diff checks passed. Final review was
 ship-ready with smooth-scroll throttling deferred as a non-blocking follow-up.
 Product commit: `f985fb9`.
+
+---
+## 2026-08-01 — Buffy / openai/gpt-5.6-luna (Session 63)
+
+The live Observe metrics fix was initially validated but left uncommitted after
+Session 62, creating a mismatch between product state and context claims. The
+product change was committed separately as `8f253bf` and pushed before this
+context closeout.
+
+WorkspaceLayout now merges live metrics into the Observe panel. While streaming,
+latency uses the live request clock and current prompt-token telemetry takes
+precedence for Context Tokens. Completion/total tokens are never used as
+context. After completion, structured observation values remain preferred over
+historical fallbacks.
+
+Validation: frontend production build passed, 12 frontend tests passed, lint had
+0 errors / 53 warnings, diff checks passed, and independent review was
+ship-ready. The backend probe returned HTTP 200 but did not expose prompt-token
+keys, so Context Tokens remain blank until the provider emits that telemetry.
+Product commit: `8f253bf`; review:
+`.context/memory/reviews/2026-08-01-review-20.md`.

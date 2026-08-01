@@ -199,3 +199,12 @@ if literally nothing slowed you down.
 - **Cause:** TypeScript interfaces describe expected payloads but do not validate JSON received over the network.
 - **Workaround / fix:** Added a defensive client-boundary mapper for strings, numbers, arrays, events, and build metadata, plus legacy-null and malformed-payload Vitest coverage.
 - **Prevent next time:** Treat every API response as untrusted at the client boundary and add malformed-payload coverage whenever a new nested response shape is introduced.
+
+---
+## 2026-08-01 — Buffy / openai/gpt-5.6-luna (Session 63)
+
+- **Problem:** The real-time Observe metrics fix was validated but left uncommitted while the prior session had already been reported complete.
+- **Cost:** One corrective closeout pass and an additional product/context commit cycle.
+- **Cause:** The implementation flow stopped after review and testing instead of running the repository exit checklist through commit, push, context update, and clean-tree verification.
+- **Workaround / fix:** Committed the product surface as `8f253bf`, pushed it, then prepared a separate context closeout with review, session, summary, environment/model, feature, and friction updates.
+- **Prevent next time:** Treat validation as an intermediate gate only; always run the two-surface exit checklist before reporting completion, including `git status --short --branch` and remote synchronization.
