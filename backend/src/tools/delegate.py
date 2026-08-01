@@ -52,6 +52,14 @@ import json
 import logging
 from typing import Optional
 
+from core.agent.delegation import (
+    AgentRunContext,
+    DelegationInstructionPacket,
+    DelegationResult,
+    get_current_run_id,
+    reset_current_run_id,
+    set_current_run_id,
+)
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
@@ -95,13 +103,13 @@ async def delegate(message: str) -> ToolResult:
     """
     # Parse the args from the JSON-encoded message
     try:
-        # The agent loop serializes multi-param tool calls as JSON
-        # (per _extract_tool_input in loop.py — same pattern as
-        # edit_file). Parse it back here.
+        # The agent loop serializes multi-param tool calls as JSON. Parse
+        # the complete instruction packet, not just target_agent/task.
         if message.strip().startswith("{"):
             args = json.loads(message)
-            target_agent = args.get("target_agent", "").strip()
-            task = args.get("task", "").strip()
+            packet = DelegationInstructionPacket.from_payload(args)
+            target_agent = packet.target_agent
+            task = packet.objective
         else:
             # Fallback: the message is the task only; target_agent
             # was not provided. This is an error — we can't delegate
@@ -117,10 +125,10 @@ async def delegate(message: str) -> ToolResult:
                 success=False,
                 error_type="invalid_input",
             )
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, ValueError) as exc:
         return ToolResult(
             content=(
-                f"ERROR: could not parse delegate arguments as JSON: {exc}. "
+                f"ERROR: invalid delegation instruction: {exc}. "
                 f"Expected format: {{\"target_agent\": \"research\", \"task\": \"...\"}}. "
                 f"Got: {message[:200]!r}"
             ),
@@ -153,6 +161,10 @@ async def delegate(message: str) -> ToolResult:
             success=False,
             error_type="invalid_input",
         )
+
+    # Legacy callers may provide only target_agent/task. They still receive
+    # the new packet contract with empty optional sections.
+    parent_run_id = get_current_run_id()
 
     # Look up the target agent in the registry
     try:
@@ -230,16 +242,32 @@ async def delegate(message: str) -> ToolResult:
             error_type="adapter_unavailable",
         )
 
-    # Construct the sub-agent and run it
+    # Construct the child run context before setup so construction/configuration
+    # failures can still return a correlated structured result.
+    child_context = AgentRunContext.create(
+        packet,
+        parent_run_id=parent_run_id,
+    )
     try:
         sub_agent = agent_class(adapter=adapter)
     except Exception as exc:
+        report = DelegationResult(
+            status="failed",
+            run_id=child_context.run_id,
+            agent_name=target_agent,
+            error_type="construction_failed",
+        )
         return ToolResult(
             content=f"ERROR: could not construct sub-agent {target_agent!r}: {exc}",
             risk=RiskLevel.HIGH,
             source="delegate",
             success=False,
             error_type="construction_failed",
+            metadata={
+                "instruction": packet.to_metadata(),
+                "run": child_context.to_metadata(),
+                "delegation": report.to_metadata(),
+            },
         )
 
     logger.info(
@@ -251,10 +279,13 @@ async def delegate(message: str) -> ToolResult:
     # delegation from consuming the entire turn budget. The sub-agent's
     # own max_iterations / max_wall_clock_secs also apply (via its
     # AgentConfig, honored per ADR-8 Phase 2).
+    child_run_token = set_current_run_id(child_context.run_id)
     _current_depth.set(current_depth + 1)
     try:
+        # The child receives only this fixed instruction packet. It does not
+        # inherit the parent's message history, memory, or mutable trace.
         sub_messages = [
-            {"role": "user", "content": task},
+            {"role": "user", "content": packet.to_prompt()},
         ]
 
         # Determine the intent for the sub-agent. The sub-agent picks
@@ -268,8 +299,16 @@ async def delegate(message: str) -> ToolResult:
         # apply a wall-clock timeout. asyncio.wait_for doesn't directly
         # support async generators (it expects a single awaitable), so
         # we collect all chunks inside an async helper function and
-        # await THAT with a timeout.
+        # await THAT with a timeout. A non-standard child gets no tools
+        # unless it exposes the BaseAgent config contract.
         async def _collect_sub_agent_response() -> str:
+            child_allowed_tools: frozenset[str] = frozenset()
+            config_method = getattr(sub_agent, "config", None)
+            if callable(config_method):
+                child_config = config_method()
+                configured_tools = getattr(child_config, "allowed_tools", frozenset())
+                child_allowed_tools = frozenset(configured_tools).difference(packet.forbidden_tools)
+
             chunks: list[str] = []
             async for chunk in sub_agent.run(
                 messages=sub_messages,
@@ -277,6 +316,7 @@ async def delegate(message: str) -> ToolResult:
                 initial_tool_result=None,
                 available_tools=[],  # the sub-agent's config().allowed_tools is used
                 confidence=1.0,
+                allowed_tool_names=child_allowed_tools,
             ):
                 if chunk.text:
                     chunks.append(chunk.text)
@@ -288,32 +328,71 @@ async def delegate(message: str) -> ToolResult:
                 timeout=DELEGATION_WALL_CLOCK_SECS,
             )
         except asyncio.TimeoutError:
+            report = DelegationResult(
+                status="timed_out",
+                run_id=child_context.run_id,
+                agent_name=target_agent,
+                error_type="timeout",
+            )
             return ToolResult(
                 content=(
                     f"ERROR: delegation to {target_agent!r} timed out after "
-                    f"{DELEGATION_WALL_CLOCK_SECS}s. The sub-agent may still "
-                    f"be running, but its output is not available. Try a "
-                    f"more focused sub-task or use your own tools directly."
+                    f"{DELEGATION_WALL_CLOCK_SECS}s. The sub-agent output is "
+                    "not available."
                 ),
                 risk=RiskLevel.MEDIUM,
                 source="delegate",
                 success=False,
                 error_type="timeout",
+                metadata={
+                    "instruction": packet.to_metadata(),
+                    "run": child_context.to_metadata(),
+                    "delegation": report.to_metadata(),
+                },
+            )
+        except Exception as exc:
+            logger.warning("[delegate] %s child run failed: %s", target_agent, exc)
+            report = DelegationResult(
+                status="failed",
+                run_id=child_context.run_id,
+                agent_name=target_agent,
+                error_type="child_exception",
+            )
+            return ToolResult(
+                content=f"ERROR: delegated {target_agent!r} agent failed: {exc}",
+                risk=RiskLevel.MEDIUM,
+                source="delegate",
+                success=False,
+                error_type="child_exception",
+                metadata={
+                    "instruction": packet.to_metadata(),
+                    "run": child_context.to_metadata(),
+                    "delegation": report.to_metadata(),
+                },
             )
 
         sub_response = sub_response.strip()
         if not sub_response:
+            report = DelegationResult(
+                status="failed",
+                run_id=child_context.run_id,
+                agent_name=target_agent,
+                error_type="empty_response",
+            )
             return ToolResult(
                 content=(
                     f"Sub-agent {target_agent!r} returned an empty response "
-                    f"for task: {task[:200]!r}. It may have hit its own "
-                    f"iteration limit or had a tool failure. Try a more "
-                    f"focused sub-task or handle the task directly."
+                    f"for task: {task[:200]!r}."
                 ),
                 risk=RiskLevel.MEDIUM,
                 source="delegate",
                 success=False,
                 error_type="empty_response",
+                metadata={
+                    "instruction": packet.to_metadata(),
+                    "run": child_context.to_metadata(),
+                    "delegation": report.to_metadata(),
+                },
             )
 
         logger.info(
@@ -321,6 +400,12 @@ async def delegate(message: str) -> ToolResult:
             target_agent, len(sub_response), task[:100],
         )
 
+        report = DelegationResult(
+            status="completed",
+            run_id=child_context.run_id,
+            agent_name=target_agent,
+            output=sub_response,
+        )
         return ToolResult(
             content=(
                 f"## Delegated to {target_agent} agent\n\n"
@@ -335,10 +420,14 @@ async def delegate(message: str) -> ToolResult:
                 "task_length": len(task),
                 "response_length": len(sub_response),
                 "depth": current_depth + 1,
+                "instruction": packet.to_metadata(),
+                "run": child_context.to_metadata(),
+                "delegation": report.to_metadata(),
             },
         )
     finally:
         _current_depth.set(current_depth)
+        reset_current_run_id(child_run_token)
 
 
 # ── Adapter + recursion-depth context vars ─────────────────────────────────

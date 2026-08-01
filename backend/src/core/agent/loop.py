@@ -541,6 +541,30 @@ TOOL_DEFINITIONS = [
                             "return the temperature + conditions.'"
                         ),
                     },
+                    "scope": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of exactly what the child should investigate or change.",
+                    },
+                    "constraints": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional literal constraints such as 'Do not modify files'.",
+                    },
+                    "forbidden_tools": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional tools the child must not use, in addition to its agent allowlist.",
+                    },
+                    "input_evidence": {
+                        "type": "string",
+                        "description": "Optional selected evidence from the parent run; the child does not inherit parent history.",
+                    },
+                    "output_contract": {
+                        "type": "object",
+                        "additionalProperties": {"type": "string"},
+                        "description": "Optional named report requirements, for example {\"format\": \"structured report\"}.",
+                    },
                 },
                 "required": ["target_agent", "task"],
             },

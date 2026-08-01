@@ -31,7 +31,97 @@ from unittest.mock import MagicMock
 import pytest
 
 from core.agent.constants import AGENT_ALLOWED_TOOLS
-from core.models import Intent, RiskLevel
+from core.agent.delegation import (
+    AgentRunContext,
+    DelegationInstructionPacket,
+    DelegationResult,
+    get_current_run_id,
+    reset_current_run_id,
+    set_current_run_id,
+)
+from core.models import Intent
+
+# ── Fixed instruction packet and isolated run contracts ────────────────────
+
+
+def test_delegation_packet_renders_literal_scoped_instructions():
+    packet = DelegationInstructionPacket.from_payload(
+        {
+            "target_agent": "research",
+            "task": "Find current authentication guidance",
+            "scope": ["Official documentation only"],
+            "constraints": ["Do not modify files"],
+            "forbidden_tools": ["shell"],
+            "input_evidence": "The parent found three candidate providers.",
+            "output_contract": {"format": "structured report", "must_include": "sources"},
+        }
+    )
+
+    prompt = packet.to_prompt()
+    metadata = packet.to_metadata()
+    assert "The parent found three candidate providers." in prompt
+    assert "BEGIN UNTRUSTED EVIDENCE" in prompt
+    assert "END UNTRUSTED EVIDENCE" in prompt
+    assert "The parent found three candidate providers." not in str(metadata)
+    assert metadata["input_evidence_present"] is True
+    assert packet.target_agent == "research"
+    assert "Objective: Find current authentication guidance" in prompt
+    assert "- Do not modify files" in prompt
+    assert "- shell" in prompt
+    assert "format: structured report" in prompt
+    assert "must_include: sources" in prompt
+
+
+def test_delegation_packet_is_immutable_and_run_context_is_scoped():
+    packet = DelegationInstructionPacket.from_payload(
+        {"target_agent": "verifier", "task": "Run the focused checks"}
+    )
+    context = AgentRunContext.create(packet, parent_run_id="run_parent")
+    assert context.run_id.startswith("run_")
+    assert context.parent_run_id == "run_parent"
+    assert context.to_metadata()["instruction"]["objective"] == "Run the focused checks"
+
+    token = set_current_run_id(context.run_id)
+    try:
+        assert get_current_run_id() == context.run_id
+        with pytest.raises(Exception):
+            packet.objective = "mutated"  # frozen contract
+    finally:
+        reset_current_run_id(token)
+    assert get_current_run_id() is None
+
+
+def test_delegation_packet_rejects_oversized_payloads():
+    with pytest.raises(ValueError, match="at most"):
+        DelegationInstructionPacket.from_payload(
+            {"target_agent": "research", "task": "x" * 4_001}
+        )
+    with pytest.raises(ValueError, match="at most"):
+        DelegationInstructionPacket.from_payload(
+            {
+                "target_agent": "research",
+                "task": "short task",
+                "input_evidence": "x" * 4_001,
+            }
+        )
+
+
+def test_delegation_result_is_json_friendly():
+    result = DelegationResult(
+        status="completed",
+        run_id="run_child",
+        agent_name="research",
+        output="Found two sources.",
+    )
+    assert result.to_metadata() == {
+        "status": "completed",
+        "run_id": "run_child",
+        "agent_name": "research",
+        "output_preview": "Found two sources.",
+        "output_chars": 18,
+        "error_type": "",
+        "iterations": 0,
+    }
 
 
 # ── Tool registration ─────────────────────────────────────────────────────
@@ -81,7 +171,7 @@ def test_delegate_in_browser_tools():
     assert "delegate" in BROWSER_TOOLS
 
 
-def test_delegate_NOT_in_direct_tools():
+def test_delegate_not_in_direct_tools():
     """DIRECT_TOOLS does NOT include 'delegate' (DirectAgent has no tools)."""
     from agents.direct import DIRECT_TOOLS
     assert "delegate" not in DIRECT_TOOLS
@@ -281,6 +371,172 @@ async def test_dispatch_with_retry_accepts_adapter_kwarg():
 
 
 @pytest.mark.asyncio
+async def test_delegate_child_exception_returns_structured_failure():
+    from tools import delegate as delegate_mod
+    from tools.delegate import delegate
+
+    class _ExplodingAgent:
+        def __init__(self, adapter=None):
+            self.adapter = adapter
+
+        async def run(self, **kwargs):
+            raise RuntimeError("child exploded")
+            yield  # pragma: no cover
+
+    from agents.registry import _REGISTRY
+    saved_registry = dict(_REGISTRY)
+    _REGISTRY.clear()
+    _REGISTRY["research"] = _ExplodingAgent
+    adapter_token = delegate_mod._current_adapter.set(MagicMock())
+    depth_token = delegate_mod._current_depth.set(0)
+    try:
+        result = await delegate(
+            json.dumps({"target_agent": "research", "task": "explode safely"})
+        )
+        assert result.success is False
+        assert result.error_type == "child_exception"
+        assert result.metadata["delegation"]["status"] == "failed"
+        assert result.metadata["delegation"]["error_type"] == "child_exception"
+        assert delegate_mod._current_depth.get() == 0
+        assert get_current_run_id() is None
+    finally:
+        delegate_mod._current_depth.reset(depth_token)
+        delegate_mod._current_adapter.reset(adapter_token)
+        _REGISTRY.clear()
+        _REGISTRY.update(saved_registry)
+
+
+@pytest.mark.asyncio
+async def test_delegate_applies_forbidden_tools_to_child_allowlist():
+    from tools import delegate as delegate_mod
+    from tools.delegate import delegate
+
+    class _Config:
+        allowed_tools = frozenset({"web_search", "shell"})
+
+    class _ResearchAgent:
+        received_allowed = None
+
+        def __init__(self, adapter=None):
+            self.adapter = adapter
+
+        def config(self):
+            return _Config()
+
+        async def run(self, **kwargs):
+            type(self).received_allowed = kwargs["allowed_tool_names"]
+            yield type("Chunk", (), {"text": "restricted result"})()
+
+    from agents.registry import _REGISTRY
+    saved_registry = dict(_REGISTRY)
+    _REGISTRY.clear()
+    _REGISTRY["research"] = _ResearchAgent
+    adapter_token = delegate_mod._current_adapter.set(MagicMock())
+    depth_token = delegate_mod._current_depth.set(0)
+    try:
+        result = await delegate(
+            json.dumps(
+                {
+                    "target_agent": "research",
+                    "task": "research safely",
+                    "forbidden_tools": ["shell"],
+                }
+            )
+        )
+        assert result.success is True
+        assert result.metadata["delegation"]["status"] == "completed"
+        assert _ResearchAgent.received_allowed == frozenset({"web_search"})
+    finally:
+        delegate_mod._current_depth.reset(depth_token)
+        delegate_mod._current_adapter.reset(adapter_token)
+        _REGISTRY.clear()
+        _REGISTRY.update(saved_registry)
+
+
+@pytest.mark.asyncio
+async def test_delegate_timeout_returns_structured_failure_and_restores_parent(monkeypatch):
+    from tools import delegate as delegate_mod
+    from tools.delegate import delegate
+
+    class _SlowAgent:
+        def __init__(self, adapter=None):
+            self.adapter = adapter
+
+        async def run(self, **kwargs):
+            await asyncio.sleep(0.05)
+            yield type("Chunk", (), {"text": "late result"})()
+
+    from agents.registry import _REGISTRY
+    saved_registry = dict(_REGISTRY)
+    _REGISTRY.clear()
+    _REGISTRY["research"] = _SlowAgent
+    adapter_token = delegate_mod._current_adapter.set(MagicMock())
+    depth_token = delegate_mod._current_depth.set(0)
+    parent_token = set_current_run_id("run_parent")
+    monkeypatch.setattr(delegate_mod, "DELEGATION_WALL_CLOCK_SECS", 0.001)
+    try:
+        result = await delegate(
+            json.dumps({"target_agent": "research", "task": "time out safely"})
+        )
+        assert result.success is False
+        assert result.error_type == "timeout"
+        assert result.metadata["delegation"]["status"] == "timed_out"
+        assert result.metadata["run"]["parent_run_id"] == "run_parent"
+        assert get_current_run_id() == "run_parent"
+        assert delegate_mod._current_depth.get() == 0
+    finally:
+        reset_current_run_id(parent_token)
+        delegate_mod._current_depth.reset(depth_token)
+        delegate_mod._current_adapter.reset(adapter_token)
+        _REGISTRY.clear()
+        _REGISTRY.update(saved_registry)
+
+
+@pytest.mark.asyncio
+async def test_delegate_setup_exception_returns_structured_failure():
+    from tools import delegate as delegate_mod
+    from tools.delegate import delegate
+
+    class _BadConfigAgent:
+        def __init__(self, adapter=None):
+            self.adapter = adapter
+
+        def config(self):
+            raise RuntimeError("bad config")
+
+        async def run(self, **kwargs):
+            yield type("Chunk", (), {"text": "unreachable"})()
+
+    from agents.registry import _REGISTRY
+    saved_registry = dict(_REGISTRY)
+    _REGISTRY.clear()
+    _REGISTRY["research"] = _BadConfigAgent
+    adapter_token = delegate_mod._current_adapter.set(MagicMock())
+    depth_token = delegate_mod._current_depth.set(0)
+    parent_token = set_current_run_id("run_parent")
+    try:
+        result = await delegate(
+            json.dumps({
+                "target_agent": "research",
+                "task": "handle setup failure",
+                "input_evidence": "private evidence that must not be returned",
+            })
+        )
+        assert result.success is False
+        assert result.error_type == "child_exception"
+        assert result.metadata["run"]["parent_run_id"] == "run_parent"
+        assert "private evidence" not in str(result.metadata)
+        assert result.metadata["delegation"]["output_chars"] == 0
+        assert get_current_run_id() == "run_parent"
+    finally:
+        reset_current_run_id(parent_token)
+        delegate_mod._current_depth.reset(depth_token)
+        delegate_mod._current_adapter.reset(adapter_token)
+        _REGISTRY.clear()
+        _REGISTRY.update(saved_registry)
+
+
+@pytest.mark.asyncio
 async def test_delegate_runs_sub_agent_and_returns_its_response(monkeypatch):
     """End-to-end: delegate() runs the sub-agent and returns its response."""
     from tools import delegate as delegate_mod
@@ -288,10 +544,13 @@ async def test_delegate_runs_sub_agent_and_returns_its_response(monkeypatch):
 
     # Mock the ResearchAgent to return a canned response
     class _FakeResearchAgent:
+        received_messages = []
+
         def __init__(self, adapter=None):
             self.adapter = adapter
 
         async def run(self, **kwargs):
+            self.received_messages.append(kwargs["messages"])
             # Yield a fake response
             from core.models import StreamChunk
             yield StreamChunk(text="The weather in Nairobi is 22°C, light rain.", done=False)
@@ -308,13 +567,27 @@ async def test_delegate_runs_sub_agent_and_returns_its_response(monkeypatch):
         depth_token = delegate_mod._current_depth.set(0)
         try:
             result = await delegate(
-                json.dumps({"target_agent": "research", "task": "find weather in Nairobi"})
+                json.dumps(
+                    {
+                        "target_agent": "research",
+                        "task": "find weather in Nairobi",
+                        "constraints": ["Do not modify files"],
+                        "output_contract": {"must_include": "temperature"},
+                    }
+                )
             )
             assert result.success is True
             assert result.source == "delegate"
             assert "22°C" in result.content
             assert "light rain" in result.content
             assert result.metadata["target_agent"] == "research"
+            assert result.metadata["delegation"]["status"] == "completed"
+            assert result.metadata["run"]["parent_run_id"] is None
+            child_prompt = _FakeResearchAgent.received_messages[0][0]["content"]
+            assert "DELEGATED TASK INSTRUCTION" in child_prompt
+            assert "- Do not modify files" in child_prompt
+            assert "must_include: temperature" in child_prompt
+            assert get_current_run_id() is None
         finally:
             delegate_mod._current_depth.reset(depth_token)
             delegate_mod._current_adapter.reset(adapter_token)
