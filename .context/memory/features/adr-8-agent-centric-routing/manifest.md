@@ -85,19 +85,23 @@ Four implementation phases (multi-session):
   alongside other work but every commit touching agent-mode is prefixed
   to make the trail greppable: `refactor(agents):` for Phase 1
   structural moves, `feat(agent-loop):` for Phase 2 wiring, etc.)
-- **Status:** completed for the ADR-8 phases; autonomy runtime work is an
-  additive first slice and the transitional wiring follow-ups remain open.
+- **Status:** completed for the ADR-8 phases; autonomy and additive capability
+  runtime work are shipping in narrow slices, with transitional wiring
+  follow-ups remaining open.
 - **Current state:** Phases 1–4 are implemented. Session 51 added the first
   autonomy slice: persisted objectives, a background ObjectiveRuntime,
   pause/resume/cancel lifecycle controls, ownership/lease fencing, explicit
   read-only tool policy propagation, Engine serialization, objective API
-  routes, and frontend objective controls. The implementation is covered by
-  focused lifecycle/policy/API tests and the affected backend/frontend gates.
-  BrowserAgent inspection, chat transport/UI repairs, and workspace feedback
-  remain intact. Deferred work includes keyed Engine locks, direct fast-path
-  policy tests, the public `streamChat()` integration regression, remaining
-  transitional AgentLoop wiring, optional SubAgentType consolidation, and a
-  live `agent-browser` smoke test on a machine with Chromium installed.
+  routes, frontend objective controls, and the first read-only capability
+  discovery surface (`GET /api/capabilities` plus an Observe catalog section).
+  The capability projection is descriptive only and does not alter routing,
+  tools, agent selection, SSE, or runtime observation behavior. BrowserAgent
+  inspection, chat transport/UI repairs, and workspace feedback remain intact.
+  Deferred work includes keyed Engine locks, direct fast-path policy tests, the
+  public `streamChat()` integration regression, remaining transitional
+  AgentLoop wiring, optional SubAgentType consolidation, a live `agent-browser`
+  smoke test, and separate contracts for actionable non-coding capabilities.
+
 
 - **No-regression list (must hold after every phase):**
   1. Session 31/32 fix: `MAX_ITERATIONS=8` default, configurable via

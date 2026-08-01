@@ -152,8 +152,27 @@ build status, diff summary, and newest runtime events. Legacy sessions with
 Added client regression coverage for legacy null snapshots and malformed nested
 payloads. Validation: 9 frontend Vitest tests passed across 3 files, production
 build/typecheck passed, lint had 0 errors / 53 existing warnings, and diff
-checks passed. Final review was ship-ready. Product commit: `1dc6a34`.
+checks passed. Final review was ship-ready. Product commit: `1dc6a34`.Next: add the next narrow capability-family contract or a controlled Observe integration test, preserving all current developer agents, routing, tools, and SSE behavior.
 
-Next: evaluate whether capability metadata belongs in a separate descriptive
-read-only discovery section, without changing routing, tools, or developer
-agents until its contract is justified.
+---
+
+## Handoff Notes (Session 58, 2026-07-31)
+
+Implemented the first read-only capability discovery surface. Added
+`GET /api/capabilities` over the existing typed capability catalog, a typed
+frontend wire/client mapper with malformed nested-payload normalization and
+empty fallback, and a compact descriptive Capabilities section in Observe.
+The endpoint does not alter routing, tool availability, agent selection, or
+runtime observation behavior. Capability badges include visually hidden
+descriptions for screen readers.
+
+Validation: 12 frontend Vitest tests, TypeScript noEmit, production build,
+16 focused backend tests, Python compile checks, changed-file Ruff, and diff
+check all passed. ESLint had 0 errors / 53 existing warnings. Final review was
+ship-ready. Product commit: `6f438fc82caf0c61afce1f1f1c49c26440a3f4a1`.
+
+Deferred: keep capability metadata descriptive until separate contracts exist
+for actionable computer interaction, productivity/connectors, and other
+non-coding tools. GitHub reported existing Dependabot findings during push;
+this slice made no dependency changes.
+

@@ -674,6 +674,29 @@ ZEN_API_KEY passed via env var, never persisted, never echoed beyond the
 last-4 check).
 
 ---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 58)
+
+Continued the additive capability-family roadmap with a deliberately
+read-only discovery vertical slice. The existing `core/capabilities.py`
+catalog now has a FastAPI `/api/capabilities` projection grouped by family.
+The frontend fetches and defensively normalizes the wire payload, falls back
+to an empty catalog when discovery is unavailable, and renders descriptive
+metadata in the existing Observe panel. The capability badges retain the
+compact visual treatment and include visually hidden descriptions for assistive
+technology.
+
+Scope was intentionally limited: no agent selection, tool dispatch, tool
+availability, SSE payload, or runtime observation behavior changed. The
+catalog remains descriptive until separate contracts are designed for
+computer interaction, productivity/connectors, data analysis, and other
+non-coding actions.
+
+Validation: 12 frontend tests, TypeScript noEmit, production build, 16 backend
+focused tests, compile checks, changed-file Ruff, and diff checks passed.
+ESLint reported 0 errors and 53 existing warnings. Final code review was
+ship-ready. Product commit: `6f438fc82caf0c61afce1f1f1c49c26440a3f4a1`.
+
+---
 ## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 51)
 
 Completed the first autonomy slice built on the ADR-8 agent-centric

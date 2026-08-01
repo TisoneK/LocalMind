@@ -912,3 +912,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** evaluate whether capability metadata belongs in a separate descriptive read-only discovery section; preserve all current developer-agent roles, routing, tools, and runtime behavior.
 - **Report:** `.context/memory/reviews/2026-07-31-review-14.md`
 - **Notes:** Review required defensive normalization for malformed runtime payloads; added client-level regression coverage rather than widening scope with component-test infrastructure.
+
+---
+## 2026-07-31 — Session 58
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing — additive capability discovery
+- **Task:** Continue the non-coding capability roadmap with a read-only capability-family discovery surface, without removing developer agents or changing routing/tool behavior.
+- **Commits:** 1 product (`6f438fc`) + 1 context closeout
+- **Outcome:** done — added `GET /api/capabilities` over the existing typed capability catalog; added frontend wire types, defensive client mapping, hook/panel wiring, and a compact descriptive Capabilities section in Observe. Added malformed nested-payload and backend-unavailable coverage. Capability descriptions include visually hidden accessible text. No agent selection, tool dispatch, tool availability, SSE, or runtime observation behavior changed.
+- **Validation:** 12 frontend Vitest tests; TypeScript noEmit; production build; 16 focused backend tests; Python compile checks; changed-file Ruff; and `git diff --check` all passed. ESLint had 0 errors / 53 existing warnings. Final blocker review was ship-ready.
+- **Open items:** Keep capability metadata descriptive until separate contracts exist for actionable computer interaction, productivity/connectors, data analysis, and other non-coding actions. Continue preserving all developer-agent roles, routing, tools, and SSE behavior. GitHub reported existing Dependabot findings during push; no dependency changes were made.
+- **Report:** `.context/memory/reviews/2026-07-31-review-15.md`
+- **Notes:** Product commit `6f438fc82caf0c61afce1f1f1c49c26440a3f4a1` is pushed to `origin/main`. The capability endpoint is intentionally read-only and descriptive.
