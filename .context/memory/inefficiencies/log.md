@@ -163,3 +163,12 @@ if literally nothing slowed you down.
 - **Cause:** The test and current plan wording drifted across prior feature work, and safe lint cleanup was not folded into the related commits.
 - **Workaround / fix:** Recorded the exact failing test and Ruff findings in the Session 52 review and environment handoff. No product changes were made.
 - **Prevent next time:** Reconcile the todo-plan UI/test contract and clean the three non-E501 Ruff findings in a dedicated safe-fix session before starting the capability-family implementation.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 53)
+
+- **Problem:** No new implementation friction. The existing backend baseline still contains the known todo-plan assertion drift, so the full suite is not completely green.
+- **Cost:** No rework; the catalog was validated independently and the unrelated failure was preserved rather than changed opportunistically.
+- **Cause:** The test expects older wording than the current engine plan output.
+- **Workaround / fix:** Recorded the failure separately and kept the new capability catalog behavior isolated from todo-plan semantics.
+- **Prevent next time:** Reconcile the todo-plan test/UI contract in a dedicated safe-fix session before expanding runtime capability discovery.

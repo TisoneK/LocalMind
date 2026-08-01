@@ -836,6 +836,19 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Notes:** The working tree was initially uncommitted despite `current.md` being idle; this session reconciled that mismatch, validated the full slice, and separated product/context commits per the two-surface rule.
 
 ---
+## 2026-07-31 — Session 53
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — additive capability-family foundation
+- **Task:** Continue autonomously from ADR-10 by defining the first stable capability-family contract without removing developer agents or changing runtime routing.
+- **Commits:** 1 product (`6443cc8`) + 1 context closeout
+- **Outcome:** done — added typed `CapabilityFamily`, immutable `CapabilityMetadata`, complete catalog coverage for existing capabilities, lookup/family helpers, and focused tests. Dynamic observations remain separate in `workspace_state`.
+- **Validation:** 64 focused tests; 767 backend tests passed with 1 existing todo-plan assertion failure; changed-file compile/Ruff/diff checks passed; frontend build/typecheck passed; frontend lint 0 errors / 53 warnings; final review ship-ready.
+- **Open items:** add a separate observation snapshot contract; later integrate catalog metadata into discovery/UI; add catalog-to-tool registry integrity checks; reconcile the existing todo-plan assertion and three non-E501 Ruff findings.
+- **Report:** `.context/memory/reviews/2026-07-31-review-10.md`
+- **Notes:** none
+
+---
 ## 2026-07-31 — Session 52
 
 - **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0

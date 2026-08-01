@@ -59,3 +59,22 @@ Next safe architectural step: define capability-family and observation
 contracts before adding a broad new tool list. Preserve all current developer
 agents and use the existing Capability, TaskProfile, ExecutionGraph, registry,
 delegation, and objective-runtime foundations.
+
+---
+
+## Handoff Notes (Session 53, 2026-07-31)
+
+Implemented the first additive capability-family slice without changing
+existing developer agents, routing, tool dispatch, or runtime observation.
+Added `core/capabilities.py` with typed `CapabilityFamily`, immutable
+`CapabilityMetadata`, a complete catalog for every existing `Capability`, and
+family/lookup helpers. Added focused catalog tests.
+
+Validation: 64 focused tests passed; full backend suite 767 passed / 1 existing
+failure in `test_engine_emit_todo_plan`; changed-file compile and Ruff passed;
+frontend build/typecheck passed; frontend lint 0 errors / 53 warnings; final
+review ship-ready. Product commit: `6443cc8`.
+
+Next: keep the catalog descriptive until stable, then add a separate structured
+observation snapshot contract and later integrate capability metadata into
+runtime discovery/UI. Do not remove or weaken developer agents.

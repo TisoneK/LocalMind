@@ -75,3 +75,6 @@ records.
 
 ---
 - **2026-07-31 — Session 52** — Buffy / openai/gpt-5.6-luna — completed kickoff and recorded ADR-10: expand LocalMind through additive capability families and an Observe→Think→Decide→Act→Verify loop while preserving all developer agents. Baseline: 760 backend passed / 1 existing todo-plan failure; frontend build/typecheck clean; no product changes. Detail: `.context/memory/reviews/2026-07-31-review-9.md`.
+
+---
+- **2026-07-31 — Session 53** — Buffy / openai/gpt-5.6-luna — added the typed immutable capability-family catalog and 64 focused tests without changing routing, tools, or developer agents. Full backend: 767 passed / 1 existing todo-plan failure; frontend build/typecheck clean. Product commit `6443cc8`. Detail: `.context/memory/reviews/2026-07-31-review-10.md`.

@@ -80,4 +80,6 @@ block (and its "last verified" date) every time you run on it again.
   - `cd backend && .venv/bin/python -m pytest -q` → 760 passed, 1 baseline failure in `test_engine_emit_todo_plan` (2026-07-31)
   - `cd frontend && npm run build` → passed; `npm run lint` → 0 errors, 53 warnings (2026-07-31)
   - `cd backend && .venv/bin/ruff check .` → 132 E501 findings plus 3 non-E501 findings (2026-07-31)
+  - `cd backend && .venv/bin/python -m pytest ../tests/core/test_capabilities.py ../tests/agents/test_phase4_task_type_selection.py ../tests/core/test_workspace_state.py -q` → 64 passed (2026-07-31)
+  - changed-file compile and Ruff for `core/capabilities.py` + `tests/core/test_capabilities.py` → passed (2026-07-31)
 - **Quirks:** The `python` command is unavailable and system `python3` is 3.9.6, below the backend's `>=3.10` requirement; use `backend/.venv/bin/python` (Python 3.12.13 via uv). Backend Ruff currently reports 132 E501 findings plus 3 non-E501 findings. `npm ci` reported 18 dependency vulnerabilities (17 high, 1 critical) and deprecated transitive packages. Local agent uses the user's existing git credentials and does not need a PAT for this public clone. The optional `agent-browser` CLI is not installed; BrowserAgent tests must mock `_run_browser_cmd` unless the CLI is installed for live smoke testing.
