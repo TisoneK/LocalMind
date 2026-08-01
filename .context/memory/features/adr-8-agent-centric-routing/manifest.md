@@ -101,8 +101,11 @@ Four implementation phases (multi-session):
   the workspace header/composer. Session 63 added the live Observe metrics
   bridge: streaming latency follows the request clock, prompt-token telemetry
   is used for Context Tokens when available, and completion tokens are never
-  mislabeled as context. These are additive runtime/UI repairs and do not
-  alter agent routing or delegation contracts.
+  mislabeled as context. Session 64 completed the backend prompt-token telemetry
+  path: provider usage is normalized and preserved through adapters, AgentLoop,
+  Engine, tool calls, terminal frames, and fallback/error paths. These are
+  additive runtime/UI repairs and do not alter agent routing or delegation
+  contracts.
   Deferred work includes keyed Engine locks, direct fast-path policy tests, the
 
   public `streamChat()` integration regression, remaining transitional

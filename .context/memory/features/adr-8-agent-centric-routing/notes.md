@@ -298,9 +298,9 @@ any Phase 2 code, then implemented, then re-tested AFTER.
   Converting to per-agent persona.md files requires reworking the
   intent→persona mapping (since one agent handles multiple intents
   — e.g., the CodingAgent handles SHELL, FILE_WRITE, FILE_EDIT,
-  CODE_EXEC, FILE_TASK, all with different personas). Deferred to a
-  future phase that decides whether personas follow the agent or the
-  intent. The map stays inline in `prompts.py` for now.
+  CODE_EXEC, FILE_TASK, all with different personas).Deferred to a future phase that decides whether personas follow the agent or the
+intent. The map stays inline in `prompts.py` for now.
+
 - **browser/direct context builders DEFERRED.** Left as Phase 1
   static headers. Browser's context should be page-state-centric
   (URL, title, snapshot) — needs browser-state injection, deferred.
@@ -848,3 +848,8 @@ ship-ready. The backend probe returned HTTP 200 but did not expose prompt-token
 keys, so Context Tokens remain blank until the provider emits that telemetry.
 Product commit: `8f253bf`; review:
 `.context/memory/reviews/2026-08-01-review-20.md`.
+
+---
+## 2026-08-01 — Buffy / openai/gpt-5.6-luna (Session 64)
+
+The backend prompt-token telemetry slice is additive to the ADR-8 runtime. It does not alter agent routing, delegation, or playbook contracts. Provider adapters now normalize real usage, and the closed-loop AgentLoop/Engine boundary carries usage through tool results, streaming terminal frames, forced synthesis, and evidence fallbacks so the Observe panel can distinguish real prompt counts from estimates. The OpenAI-compatible adapter retries once without optional `stream_options.include_usage` when a provider rejects that field. Focused validation passed; the one full-suite todo-plan wording failure remains unrelated.

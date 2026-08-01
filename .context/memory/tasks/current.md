@@ -238,10 +238,16 @@ Completed and pushed the real-time Observe metrics bridge and corrected the
 incomplete Session 62 closeout. Product commit: `8f253bf`; review:
 `.context/memory/reviews/2026-08-01-review-20.md`; context closeout follows in a
 separate `chore(context):` commit. Frontend build passed, 12 tests passed, lint
-has 0 errors / 53 warnings, diff check passed, and final review is ship-ready.
+has 0 errors / 53 warnings, diff check passed, and final review is ship-ready.Deferred: focused component-level precedence tests and backend prompt-token telemetry. The repository should remain idle after this closeout.
 
-Deferred: focused component-level precedence tests and backend prompt-token
-telemetry. The repository should remain idle after this closeout.
+---
+## Handoff Notes (Session 64, 2026-08-01)
+
+Implemented backend provider prompt-token telemetry so Context Tokens can use real provider usage. OpenAI-compatible and Ollama adapters normalize usage; StreamChunk, AgentLoop, and Engine preserve it across streams, tool calls, terminal frames, forced synthesis, and fallback/error paths. Optional `stream_options.include_usage` rejection now retries without that field.
+
+Validation: 63 focused telemetry/API/evidence tests passed; changed-file compilation and diff checks passed; frontend build passed with 0 lint errors / 53 warnings; full backend suite 809 passed / 1 unrelated existing todo-plan wording failure. Product and context commits are recorded in the Session 64 entry after closeout.
+
+Next: keep provider usage best-effort and separately address the pre-existing todo-plan wording mismatch if desired.
 
 - **Session:** none (idle)
 - **Feature:** none

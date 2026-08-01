@@ -990,3 +990,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** Add focused component-level precedence tests and backend prompt-token telemetry when practical. These remain deferred and are recorded in review-20.
 - **Report:** `.context/memory/reviews/2026-08-01-review-20.md`
 - **Notes:** Session 62 was incorrectly reported complete before the metrics product change was committed/pushed. This session completed the mandatory two-surface closeout and recorded the process correction in `.context/memory/flaws/log.md`.
+
+---
+## 2026-08-01 — Session 64
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** `adr-8-agent-centric-routing` — additive runtime telemetry slice
+- **Task:** Implement backend prompt-token telemetry so Context Tokens populate from real provider usage.
+- **Commits:** Product `0bcf57839925b8f8e57fd096987bc146a73ca4f9`; context SHA recorded after closeout.
+- **Outcome:** done — normalized OpenAI-compatible and Ollama usage; added `StreamChunk.usage`; preserved usage through adapter streams, tool-call results, AgentLoop reconstruction, Engine `turn_complete` observations, forced synthesis, and evidence/error fallbacks; added compatibility retry without optional `stream_options` when explicitly rejected; added focused regression tests.
+- **Validation:** 63 focused telemetry/API/evidence tests passed; changed-file Python compilation passed; `git diff --check` passed; frontend production build passed with 0 lint errors / 53 warnings; full backend suite 809 passed / 1 unrelated existing failure in `test_engine_emit_todo_plan` due to a stale expected todo label.
+- **Review:** ship-ready after fixing forced-synthesis usage ordering; report `.context/memory/reviews/2026-08-01-review-21.md`.
+- **Open items:** Provider usage remains best-effort where providers omit usage. The unrelated todo-plan wording mismatch remains deferred.
+- **Notes:** No secrets were added to tracked files or logs. Product and context surfaces were kept separate per protocol.
