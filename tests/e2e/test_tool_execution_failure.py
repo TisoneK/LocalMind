@@ -149,6 +149,47 @@ class TestForceFinalAnswerEmptyStream:
         assert "couldn't synthesize" not in text.lower()
         assert "empty response" not in text.lower()
 
+    @pytest.mark.asyncio
+    async def test_weak_forced_synthesis_appends_report_before_done(self):
+        """A weak non-empty synthesis must still report tool evidence before
+        the terminal stream marker is emitted."""
+        from core.agent.loop import AgentStep, AgentTrace
+
+        loop = AgentLoop(adapter=MagicMock())
+        trace = AgentTrace(
+            steps=[
+                AgentStep(
+                    iteration=1,
+                    thought="",
+                    tool_name="shell",
+                    tool_input="ls Dev",
+                    observation="todo\nvert",
+                    tool_failed=False,
+                ),
+            ]
+        )
+
+        async def weak_chat(messages, temperature=0.4):
+            yield StreamChunk(text="Here's the result:", done=True)
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat = weak_chat
+
+        chunks = []
+        async for chunk in loop._force_final_answer(
+            loop_messages=[{"role": "user", "content": "show Dev"}],
+            observation_log="",
+            active_adapter=mock_adapter,
+            trace=trace,
+        ):
+            chunks.append(chunk)
+
+        text = "".join(chunk.text for chunk in chunks)
+        assert "Here's the result:" in text
+        assert "todo" in text
+        assert "vert" in text
+        assert chunks[-1].done is True
+        assert all(not chunk.done for chunk in chunks[:-1])
 
     @pytest.mark.asyncio
     async def test_empty_stream_with_trace_surfaces_actual_tool_outputs(self):
@@ -156,7 +197,7 @@ class TestForceFinalAnswerEmptyStream:
         calls, the fallback MUST surface the actual tool inputs and outputs
         (truncated) — NOT guess 'overload'. This is the honest fix: show
         evidence, don't speculate about the cause."""
-        from core.agent.loop import AgentTrace, AgentStep
+        from core.agent.loop import AgentStep, AgentTrace
 
         loop = AgentLoop(adapter=MagicMock())
 
@@ -498,3 +539,73 @@ class TestEndToEndSilentFailureScenario:
             f"Fallback should surface what tools ran OR suggest switching models; "
             f"got: {full_text!r}"
         )
+
+
+# ── 5. Explicit worker → report contract ─────────────────────────────────
+
+
+class TestWorkReport:
+    """The deterministic worker report prevents evidence-free model text
+    from being accepted as the final answer after tool execution."""
+
+    def test_heading_only_response_requires_report_and_renders_evidence(self):
+        from core.agent.models import AgentStep, AgentTrace
+
+        trace = AgentTrace(
+            steps=[
+                AgentStep(
+                    iteration=1,
+                    thought="",
+                    tool_name="shell",
+                    tool_input="ls Dev",
+                    observation="todo\nused_car_website_blueprint\nvert",
+                    tool_failed=False,
+                ),
+            ]
+        )
+
+        report = trace.work_report()
+
+        assert report.needs_report("Here's what's in Dev:")
+        rendered = report.render()
+        assert "shell(ls Dev)" in rendered
+        assert "todo" in rendered
+        assert "used_car_website_blueprint" in rendered
+
+    def test_response_that_reports_evidence_does_not_trigger_report(self):
+        from core.agent.models import AgentStep, AgentTrace
+
+        trace = AgentTrace(
+            steps=[
+                AgentStep(
+                    iteration=1,
+                    thought="",
+                    tool_name="shell",
+                    tool_input="ls Dev",
+                    observation="todo\nvert",
+                    tool_failed=False,
+                ),
+            ]
+        )
+
+        assert not trace.work_report().needs_report(
+            "Dev contains todo and vert."
+        )
+
+    def test_side_effect_only_success_does_not_require_evidence(self):
+        from core.agent.models import AgentStep, AgentTrace
+
+        trace = AgentTrace(
+            steps=[
+                AgentStep(
+                    iteration=1,
+                    thought="",
+                    tool_name="file_write",
+                    tool_input="hello.py",
+                    observation="OK",
+                    tool_failed=False,
+                ),
+            ]
+        )
+
+        assert not trace.work_report().needs_report("Created hello.py successfully.")

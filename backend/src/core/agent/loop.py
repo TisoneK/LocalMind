@@ -2781,65 +2781,80 @@ class AgentLoop:
                                     allowed_tool_names=effective_allowed,
                                 )
                                 _late_lat = round((time.monotonic() - t_late) * 1000)
-                                if _late_result:
-                                    _late_obs = _filter_tool_injection(_late_result.content)
-                                    if Intent(_tc_name) == Intent.WEB_SEARCH:
-                                        _user_q = ""
-                                        for m in messages:
-                                            if m.get("role") == "user":
-                                                _user_q = m.get("content", "")
-                                                break
-                                        async for chunk in self._handle_web_search_result(
-                                            safe_obs=_late_obs,
-                                            query=_tc_input,
-                                            thought=_strip_minimax_tool_calls(_minimax_buffer),
-                                            iteration=iteration,
-                                            trace=trace,
-                                            user_question=_user_q,
-                                            adapter=active_adapter,
-                                            allowed_tool_names=effective_allowed,
-                                        ):
-                                            yield chunk
-                                        return
-                                    if not _late_failed:
-                                        yield StreamChunk(
-                                            text="",
-                                            done=False,
-                                            status=f"Done — {_tc_label} ({_late_lat}ms)",
-                                        )
-                                    call_id = str(uuid.uuid4())
-                                    safe_late_obs = (
-                                        (
-                                            f"[ACTUAL TOOL OUTPUT — use ONLY this data in your response]\n"
-                                            f"{_late_obs}\n"
-                                            f"[END TOOL OUTPUT — do NOT invent or add items not shown above]"
-                                        )
-                                        if not _late_failed and _late_obs
-                                        else _late_obs
+                                _late_obs = (
+                                    _filter_tool_injection(_late_result.content)
+                                    if _late_result
+                                    else f"[Tool {_tc_name} returned no result]"
+                                )
+                                if Intent(_tc_name) == Intent.WEB_SEARCH:
+                                    _user_q = ""
+                                    for m in messages:
+                                        if m.get("role") == "user":
+                                            _user_q = m.get("content", "")
+                                            break
+                                    async for chunk in self._handle_web_search_result(
+                                        safe_obs=_late_obs,
+                                        query=_tc_input,
+                                        thought=_strip_minimax_tool_calls(_minimax_buffer),
+                                        iteration=iteration,
+                                        trace=trace,
+                                        user_question=_user_q,
+                                        adapter=active_adapter,
+                                        allowed_tool_names=effective_allowed,
+                                    ):
+                                        yield chunk
+                                    return
+
+                                trace.steps.append(
+                                    AgentStep(
+                                        iteration=iteration + 1,
+                                        thought=_strip_minimax_tool_calls(_minimax_buffer),
+                                        tool_name=_tc_name,
+                                        tool_input=_tc_input,
+                                        observation=_late_obs[:500],
+                                        tool_failed=_late_failed,
+                                        latency_ms=_late_lat,
                                     )
-                                    loop_messages.append(
-                                        {
-                                            "role": "assistant",
-                                            "content": _strip_minimax_tool_calls(_minimax_buffer),
-                                            "tool_calls": [
-                                                {
-                                                    "id": call_id,
-                                                    "type": "function",
-                                                    "function": {
-                                                        "name": _tc_name,
-                                                        "arguments": json.dumps(_norm_args),
-                                                    },
-                                                }
-                                            ],
-                                        }
+                                )
+                                if not _late_failed:
+                                    yield StreamChunk(
+                                        text="",
+                                        done=False,
+                                        status=f"Done — {_tc_label} ({_late_lat}ms)",
                                     )
-                                    loop_messages.append(
-                                        {
-                                            "role": "tool",
-                                            "tool_call_id": call_id,
-                                            "content": safe_late_obs,
-                                        }
+                                call_id = str(uuid.uuid4())
+                                safe_late_obs = (
+                                    (
+                                        f"[ACTUAL TOOL OUTPUT — use ONLY this data in your response]\n"
+                                        f"{_late_obs}\n"
+                                        f"[END TOOL OUTPUT — do NOT invent or add items not shown above]"
                                     )
+                                    if not _late_failed and _late_obs
+                                    else _late_obs
+                                )
+                                loop_messages.append(
+                                    {
+                                        "role": "assistant",
+                                        "content": _strip_minimax_tool_calls(_minimax_buffer),
+                                        "tool_calls": [
+                                            {
+                                                "id": call_id,
+                                                "type": "function",
+                                                "function": {
+                                                    "name": _tc_name,
+                                                    "arguments": json.dumps(_norm_args),
+                                                },
+                                            }
+                                        ],
+                                    }
+                                )
+                                loop_messages.append(
+                                    {
+                                        "role": "tool",
+                                        "tool_call_id": call_id,
+                                        "content": safe_late_obs,
+                                    }
+                                )
                             except Exception as _late_exc:
                                 logger.warning(f"[agent.loop] late MiniMax intercept failed: {_late_exc}")
                             if _obs:
@@ -2872,6 +2887,16 @@ class AgentLoop:
                     logger.info(f"[agent.loop] finished iter={iteration + 1} — {trace.summary()}")
                     if _obs:
                         _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
+                    _worker_report = trace.work_report()
+                    if _worker_report.needs_report(full_text):
+                        _report_text = _worker_report.render()
+                        if _report_text:
+                            logger.info(
+                                "[agent.loop] short final response did not report tool evidence; "
+                                "emitting worker report"
+                            )
+                            yield StreamChunk(text="\n\n" + _report_text, done=False)
+                    yield StreamChunk(text="", done=True)
                     return
 
                 # Stream remaining chunks — with mid-stream MiniMax detection
@@ -2901,9 +2926,10 @@ class AgentLoop:
                     # Also strip any partial MiniMax XML from individual chunks
                     _chunk_clean = _strip_minimax_tool_calls(filtered_text)
                     if _chunk_clean:
-                        yield StreamChunk(text=_chunk_clean, done=chunk.done)
-                    elif chunk.done:
-                        yield StreamChunk(text="", done=True)
+                        # Keep the terminal marker until report enforcement has
+                        # completed below; otherwise the client can finalize
+                        # before the worker report is delivered.
+                        yield StreamChunk(text=_chunk_clean, done=False)
 
                 trace.final_response = full_text
                 trace.steps.append(
@@ -2919,15 +2945,22 @@ class AgentLoop:
                 if _obs:
                     _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
 
-                # Session 31: if the model produced chunks but ALL of them
-                # were filtered out (system-leak XML, MiniMax tool-call XML,
-                # or just empty), full_text is empty. The engine's fallback
-                # would fire with the useless generic "I wasn't able to
-                # complete that request. The tool may have failed or
-                # returned no useful output. Please try rephrasing your
-                # request." message. Instead, surface what tools actually
-                # ran (from trace.steps) so the user knows what happened.
-                if not full_text.strip():
+                # Explicit worker → report boundary: a tool-bearing turn is
+                # not complete merely because the model emitted some text.
+                # If that text contains no evidence from successful tool work,
+                # append the deterministic report derived from the trace.
+                _worker_report = trace.work_report()
+                if _worker_report.needs_report(full_text):
+                    _report_text = _worker_report.render()
+                    if _report_text:
+                        logger.info(
+                            "[agent.loop] final response did not report tool evidence; "
+                            "emitting worker report"
+                        )
+                        yield StreamChunk(text="\n\n" + _report_text, done=False)
+                elif not full_text.strip():
+                    # Preserve the existing diagnostic fallback for the rare
+                    # case where no structured worker report is available.
                     _tool_summary = self._summarize_trace_for_user(trace, observation_log)
                     if _tool_summary:
                         logger.warning(
@@ -2936,6 +2969,7 @@ class AgentLoop:
                             iteration + 1,
                         )
                         yield StreamChunk(text=_tool_summary, done=False)
+                yield StreamChunk(text="", done=True)
                 return
 
         # ── MAX_ITERATIONS hit (or wall-clock cap broke the loop) ──────
@@ -3571,26 +3605,49 @@ class AgentLoop:
         # with zero indication of what actually happened. This is the
         # "Tools execution failure" symptom the user reported.
         _any_text_yielded = False
+        _final_chunks: list[StreamChunk] = []
+        _final_text_parts: list[str] = []
         try:
             t_final = time.monotonic()
             async for chunk in active_adapter.chat(force_msg, temperature=0.4):
                 if chunk.error:
-                    yield StreamChunk(text="", done=True, error=chunk.error)
+                    _error_report = trace.work_report().render() if trace is not None else ""
+                    yield StreamChunk(text=_error_report, done=True, error=chunk.error)
                     return
                 filtered_text = _filter_system_leaks(chunk.text)
                 if filtered_text:
                     _any_text_yielded = True
-                yield StreamChunk(text=filtered_text, done=chunk.done)
+                    _final_text_parts.append(filtered_text)
+                # Hold the terminal marker until the worker report contract
+                # has been enforced below.
+                _final_chunks.append(StreamChunk(text=filtered_text, done=False))
             logger.info(f"[agent.loop] final synthesis: {round((time.monotonic() - t_final) * 1000)}ms")
         except Exception as exc:
             logger.warning(f"[agent.loop] final synthesis failed: {exc}")
-            yield StreamChunk(
-                text=(
-                    "I've reached my iteration limit. Here are the key findings gathered so far:\n\n" + observation_log
-                ),
-                done=True,
+            _error_report = trace.work_report().render() if trace is not None else ""
+            _exception_text = (
+                "I've reached my iteration limit. Here are the key findings gathered so far:\n\n"
+                + observation_log
             )
+            if _error_report:
+                _exception_text += "\n\n" + _error_report
+            yield StreamChunk(text=_exception_text, done=True)
             return  # CRITICAL: return after yielding the exception fallback
+
+        _final_text = "".join(_final_text_parts)
+        if trace is not None and trace.work_report().needs_report(_final_text):
+            _report_text = trace.work_report().render()
+            if _report_text:
+                logger.info(
+                    "[agent.loop] forced final response did not report tool evidence; "
+                    "emitting worker report"
+                )
+                _final_chunks.append(StreamChunk(text="\n\n" + _report_text, done=False))
+
+        if _final_chunks and _any_text_yielded:
+            for _final_chunk in _final_chunks:
+                yield _final_chunk
+            yield StreamChunk(text="", done=True)
 
         # Session 31 (revised per user feedback): if the model returned an
         # empty stream (or all chunks were filtered out as system-leak XML),
