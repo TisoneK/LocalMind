@@ -10,7 +10,7 @@ in Session 34. **ADR-8 builds on ADR-5** (closed-loop shape stays —
 5-step loop + workspace feedback bar — agents just get richer context
 and delegation ability) and **ADR-6/ADR-7** (BaseAgent subclasses
 become real agents with workflows, not hollow shells; the `.context/`
-protocol + workflow files become load-bearing).
+protocol + playbook files become load-bearing).
 
 Five principles (full ADR text in `.context/memory/plans/decisions.md`
 ADR-8):
@@ -27,7 +27,7 @@ ADR-8):
    govern tool use, not just scoped toolsets.
 5. **Agents are directories, not modules.** Each agent is a
    self-contained package under `backend/src/agents/<name>/`:
-   `agent.py` + `workflow.md` + `context_builder.py` + `tools.py` +
+   `agent.py` + `playbook.md` + `context_builder.py` + `tools.py` +
    `is_done.py` + `persona.md` + `tests/`. Co-location >
    scattered-class-and-data. Auto-discovering registry (scan `agents/`
    for directories with `agent.py`).
@@ -40,8 +40,8 @@ Four implementation phases (multi-session):
   `agents/coding/agent.py`, `research_agent.py` →
   `agents/research/agent.py`, `browser_agent.py` →
   `agents/browser/agent.py`, `direct_agent.py` →
-  `agents/direct/agent.py`. Move workflow files from
-  `backend/data/workflows/<name>.md` → `agents/<name>/workflow.md`.
+  `agents/direct/agent.py`. Move playbook files from
+  `backend/data/workflows/<name>.md` → `agents/<name>/playbook.md`.
   Move inline personas from `prompts.py:_PERSONA_MAP` →
   `agents/<name>/persona.md`. `__init__.py` re-exports from `agent.py`
   for backward compatibility. The registry auto-discovers directories
@@ -50,11 +50,11 @@ Four implementation phases (multi-session):
   is the safety net).
 
 - **Phase 2 — Wire `build_context()` into `BaseAgent.run()`**
-  (highest-leverage piece). The workflow files finally reach the
+  (highest-leverage piece). The playbook files finally reach the
   model. `BaseAgent.run()` calls `self.build_context()` before
   delegating to `AgentLoop.run()`; the result is passed through to
   `build_agent_system_prompt()` and injected as a system-prompt
-  section. `build_coding_context()` actually loads `workflow.md`
+  section. `build_coding_context()` actually loads `playbook.md`
   (currently returns a static header — `agents/coding/context_builder.py:55-84`).
   Also: `AgentLoop.run()` respects `agent_config.max_iterations` and
   `agent_config.max_wall_clock_secs` when provided (currently dead
@@ -112,6 +112,12 @@ Four implementation phases (multi-session):
   exception, and empty-response paths. Legacy `{target_agent, task}` calls
   remain compatible. Delegation is still synchronous handoff in this slice;
   parallel child execution and frontend child-run panels remain deferred.
+  Session 61 renamed the six runtime agent instruction files from
+  `workflow.md` to `playbook.md`, updated all playbook loaders and prompt/test
+  terminology, and preserved the generic Plan→Execute→Verify workflow plus
+  universal `backend/data/workflows/safety.md` policy. The product commit is
+  `044e140`; validation and review are recorded in
+  `.context/memory/reviews/2026-07-31-review-18.md`.
 
 
 - **No-regression list (must hold after every phase):**
@@ -145,7 +151,7 @@ Four implementation phases (multi-session):
 - **Success criteria (Phase 1 = structural refactor, no behavior change):**
   1. `ls backend/src/agents/` shows four directories: `coding/`,
      `research/`, `browser/`, `direct/` — each with `agent.py` (the
-     class) + `workflow.md` + `persona.md` + `context_builder.py` +
+     class) + `playbook.md` + `persona.md` + `context_builder.py` +
      `is_done.py` + `tools.py` + `__init__.py` + `tests/`.
   2. `coding_agent.py`, `research_agent.py`, `browser_agent.py`,
      `direct_agent.py` no longer exist as standalone modules — their

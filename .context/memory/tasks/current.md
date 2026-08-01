@@ -203,3 +203,15 @@ Validation: 87 focused tests passed; compile/Ruff/diff checks passed; final revi
 - **Task:** none
 - **Status:** idle
 
+
+---
+## Handoff Notes (Session 61, 2026-07-31)
+
+Implemented and shipped the runtime workflow-to-playbook naming boundary. Product commit `044e140`; review `.context/memory/reviews/2026-07-31-review-18.md`.
+
+Six runtime agent instruction files now use `playbook.md`, loaders and injected context use Playbook terminology, and generic/shared workflows remain intentionally named workflows. Validation: 191 focused tests passed, compilation and diff checks passed, stale runtime references are gone, and final review is ship-ready. Known Ruff baseline findings remain unchanged.
+
+- **Session:** none (idle)
+- **Feature:** none
+- **Task:** none
+- **Status:** idle

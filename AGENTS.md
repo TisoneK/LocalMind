@@ -188,12 +188,12 @@ the engine) are still in force and must not be regressed.
    `browser_agent.py` → `agents/browser/agent.py`,
    `direct_agent.py` → `agents/direct/agent.py`. Move
    `backend/data/workflows/<name>.md` →
-   `agents/<name>/workflow.md`. Move inline personas from
+   `agents/<name>/playbook.md`. Move inline personas from
    `prompts.py:_PERSONA_MAP` → `agents/<name>/persona.md`.
    Registry auto-discovers directories with `agent.py`. Backlog item:
    "Wire `build_context()` into `BaseAgent.run()`" (Session 33) is
    Phase 2's prerequisite and currently blocked on Phase 1.
-2. **Wire `build_context()` into `BaseAgent.run()`** — workflow files
+2. **Wire `build_context()` into `BaseAgent.run()`** — playbook files
    finally reach the model. Highest-leverage piece. Backlog item
    already filed (Session 33).
 3. **Agent-initiated delegation** — replace `should_use_sub_agents()`

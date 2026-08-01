@@ -953,3 +953,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Report:** `.context/memory/reviews/2026-07-31-review-17.md`
 - **Notes:** Product commit `b9b97ff` pushed successfully. GitHub reported existing Dependabot findings during push; this slice made no dependency changes.
 
+
+---
+## 2026-07-31 — Session 61
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing — runtime agent playbook naming
+- **Task:** Rename runtime agent instruction files from `workflow.md` to `playbook.md` so they are distinct from the repository `.context/` protocol and generic execution workflows.
+- **Commits:** 1 product (`044e140`) + 1 context closeout
+- **Outcome:** done — renamed six runtime files for Analyst, Coding, Debugger, Research, Reviewer, and Verifier; updated `_PLAYBOOK_PATH` loaders, injected Playbook headings, prompt/comments/docs/tests, and preserved the generic Plan→Execute→Verify workflow plus universal `backend/data/workflows/safety.md` policy. All renamed file contents were preserved except intentional title changes. The repository `.context/` protocol was not renamed.
+- **Validation:** 191 focused agent tests passed with one existing asyncio deprecation warning; changed Python files compiled; `git diff --check` passed; stale runtime reference audit found no `workflow.md`, `_WORKFLOW_PATH`, or agent-specific `* Workflow` references. Ruff retained known baseline findings (10 existing test import/style findings and 88 existing E501 findings).
+- **Review:** `.context/memory/reviews/2026-07-31-review-18.md` — independent review: ship-ready, no blockers.
+- **Next boundary:** keep runtime playbooks separate from `.context/`; future worker additions should use `playbook.md` and hard programmatic tool/report contracts.

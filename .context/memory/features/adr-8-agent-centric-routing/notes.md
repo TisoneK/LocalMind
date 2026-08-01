@@ -792,3 +792,18 @@ The session implemented the first explicit FreeBuff-style delegation contract on
 
 **Next boundary:** support parallel delegated workers and an explicit parent synthesis/child-run observability surface only as a separate slice. Preserve the fixed instruction, isolation, bounded metadata, and structured failure contracts.
 
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 61)
+
+Renamed LocalMind's runtime agent instruction files from `workflow.md` to `playbook.md` to establish a clear naming boundary: `.context/` remains the repository-development protocol, generic Plan→Execute→Verify and `backend/data/workflows/safety.md` remain execution-policy workflows, and `backend/src/agents/<name>/playbook.md` is the runtime behavior contract for that agent.
+
+**Delivered:**
+- Renamed six runtime files: Analyst, Coding, Debugger, Research, Reviewer, and Verifier.
+- Updated six context builders to use `_PLAYBOOK_PATH` and inject Playbook section headings.
+- Updated agent documentation, BaseAgent/AgentLoop/prompt terminology, architecture docs, AGENTS guidance, and affected regression tests.
+- Preserved all playbook content except the intentional `# Workflow:` → `# Playbook:` title change.
+
+**Validation:** 191 focused tests passed; compilation and diff checks passed; no stale runtime `workflow.md` references remain. The independent final review was ship-ready with no blockers. Product commit: `044e140`. Review: `.context/memory/reviews/2026-07-31-review-18.md`.
+
+**Next boundary:** future runtime worker roles should be represented by a co-located `playbook.md`; do not make product agents read the repository `.context/` memory/protocol.
