@@ -119,3 +119,21 @@ ship-ready. Product commit: `cefd65c`.
 Next: expose retained structured snapshots through the existing observability
 read path with bounded serialization and regression coverage. Preserve SSE,
 agent, routing, and tool behavior.
+
+---
+
+## Handoff Notes (Session 56, 2026-07-31)
+
+Continued autonomously by exposing retained structured observations through the
+existing observability API. Added a typed optional `observation` projection with
+capture-time retention capped at 50 events, API output capped at 20 events, and
+bounded workspace/event strings. Preserved the existing nullable response fields
+and verified the actual FastAPI wire shape with TestClient.
+
+Validation: 19 focused API/observation/runtime tests passed; compile and diff
+checks passed; changed read-path Ruff clean; full backend 786 passed / 1 existing
+todo-plan wording assertion failure; frontend build passed with 0 lint errors /
+53 warnings; final review ship-ready. Product commit: `455b9b9`.
+
+Next: inspect the frontend observability fetch/type contract and decide whether
+to add a read-only bounded summary panel without widening the existing UI scope.

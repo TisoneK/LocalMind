@@ -875,6 +875,19 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Notes:** review caught that a final snapshot must use full request history, not only events still pending after intermediate SSE drains.
 
 ---
+## 2026-07-31 — Session 56
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — bounded observability API projection
+- **Task:** Continue autonomously by exposing retained structured observations through the existing observability read path without changing SSE payloads, routing, tools, or developer agents.
+- **Commits:** 1 product (`455b9b9`) + 1 context closeout
+- **Outcome:** done — added typed bounded workspace/event projection, capture-time history cap, optional API response field, legacy nullable-field preservation, and FastAPI wire coverage.
+- **Validation:** 19 focused tests; compile and diff checks passed; changed read-path Ruff clean; frontend build passed with 0 lint errors / 53 warnings; full backend 786 passed / 1 existing todo-plan wording assertion failure; final review ship-ready.
+- **Open items:** inspect frontend observability fetch/type contract and decide whether a bounded read-only summary panel is additive; preserve all current developer-agent, routing, tool, and SSE behavior.
+- **Report:** `.context/memory/reviews/2026-07-31-review-13.md`
+- **Notes:** review caught and fixed both nullable-field wire compatibility and capture-time memory bounds.
+
+---
 ## 2026-07-31 — Session 52
 
 - **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
