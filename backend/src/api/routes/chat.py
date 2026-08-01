@@ -366,6 +366,11 @@ async def _event_stream(
             # being buffered by the server's write buffer.
             await asyncio.sleep(0)
 
+        # Capture a structured observation before the destructive SSE flush.
+        # The snapshot uses read-only collector access, so every event below
+        # remains available to the existing stream bridge.
+        _engine.build_observation_snapshot(obs=obs, session_id=session_id)
+
         # Final obs flush — emit comprehensive turn_complete data
         for evt in obs.drain():
             yield _sse(evt.to_sse_dict())

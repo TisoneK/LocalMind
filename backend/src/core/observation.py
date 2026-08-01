@@ -78,9 +78,9 @@ class ObservationSnapshot:
         workspace: WorkspaceSnapshot,
         collector: ObsCollector,
     ) -> "ObservationSnapshot":
-        """Capture the collector's currently buffered events without draining it."""
+        """Capture every request event without draining the collector."""
 
-        return cls(workspace=workspace, recent_events=collector.all())
+        return cls(workspace=workspace, recent_events=collector.history())
 
     @classmethod
     def from_events(

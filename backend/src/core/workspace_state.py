@@ -171,7 +171,11 @@ def reset() -> None:
 # ── Snapshot collection ──────────────────────────────────────────────────────
 
 
-def snapshot(cwd: Optional[str] = None) -> WorkspaceSnapshot:
+def snapshot(
+    cwd: Optional[str] = None,
+    *,
+    include_turn_diff: bool = True,
+) -> WorkspaceSnapshot:
     """
     Take a point-in-time snapshot of the workspace state.
 
@@ -186,6 +190,10 @@ def snapshot(cwd: Optional[str] = None) -> WorkspaceSnapshot:
     Args:
         cwd: the working directory to snapshot. Defaults to the current
             working directory.
+        include_turn_diff: whether to use the process-level turn baseline
+            when calculating git_diff_stat. Set this to False for an
+            explicitly selected workspace whose baseline may belong to a
+            different request or session.
 
     Returns:
         A WorkspaceSnapshot. Use format_snapshot() to turn it into a
@@ -210,15 +218,15 @@ def snapshot(cwd: Optional[str] = None) -> WorkspaceSnapshot:
     snap.git_status = _git_status_short(str(work_dir))
 
     # Diff: against _last_turn_head if set, else full unstaged diff
-    if _last_turn_head and _last_turn_head != head:
+    if include_turn_diff and _last_turn_head and _last_turn_head != head:
         snap.git_diff_stat = _git_diff_stat(
             _last_turn_head, str(work_dir)
         )
-    elif _last_turn_head == head:
+    elif include_turn_diff and _last_turn_head == head:
         # No new commits since mark_turn_start — show unstaged changes only
         snap.git_diff_stat = _git_diff_stat(None, str(work_dir))
     else:
-        # No baseline — show full unstaged diff
+        # No baseline, or explicitly requested a baseline-free snapshot.
         snap.git_diff_stat = _git_diff_stat(None, str(work_dir))
 
     return snap

@@ -31,6 +31,10 @@ class ObsCollector:
 
     def __init__(self):
         self._events: list[ObsEvent] = []
+        # Keep a request-local history separate from the pending queue.
+        # ``drain()`` must remain destructive for SSE flushing, while
+        # structured observation snapshots need events already forwarded.
+        self._history: list[ObsEvent] = []
 
     def emit(self, event_type: str, **data):
         # FIX: Use JSON-safe serialization instead of str() to avoid
@@ -45,11 +49,18 @@ class ObsCollector:
                 safe_data[k] = v  # Keep numbers/bools as-is for JSON
             else:
                 safe_data[k] = str(v)
-        self._events.append(ObsEvent(type=event_type, data=safe_data))
+        event = ObsEvent(type=event_type, data=safe_data)
+        self._events.append(event)
+        self._history.append(event)
 
     def drain(self) -> list[ObsEvent]:
         events, self._events = self._events, []
         return events
 
     def all(self) -> list[ObsEvent]:
+        """Return pending events without clearing them."""
         return list(self._events)
+
+    def history(self) -> list[ObsEvent]:
+        """Return every event emitted during this request, without clearing."""
+        return list(self._history)

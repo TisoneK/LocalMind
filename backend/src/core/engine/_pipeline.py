@@ -55,6 +55,7 @@ from core.models import (
     ToolResult,
 )
 from core.obs import ObsCollector
+from core.observation import ObservationSnapshot
 from core.safety_gate import check as safety_check
 from core.session_context import SessionContextManager
 from core.summarizer import maybe_compress_history
@@ -121,6 +122,10 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # Stored on every turn_complete so the /api/observability endpoint
         # can return real data instead of hardcoded zeros.
         self._last_observation: dict[str, dict] = {}
+        # Latest structured workspace-plus-events snapshot per session.
+        # Captured opt-in by the chat/SSE boundary without replacing the
+        # existing serializable observability cache above.
+        self._last_observation_snapshots: dict[str, ObservationSnapshot] = {}
         # Per-session working directory via SessionContextManager.
         # Tracks CWD across tool calls so shell commands execute in the
         # correct directory (e.g., after user navigates to
@@ -189,6 +194,37 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         model = best_model_for(intent, fallback=settings.ollama_model)
         return get_adapter(settings.localmind_adapter, model_override=model)
 
+    def build_observation_snapshot(
+        self,
+        obs: Optional[ObsCollector] = None,
+        cwd: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> ObservationSnapshot:
+        """Capture an opt-in observation without consuming request events.
+
+        The chat/SSE route remains responsible for destructive ``drain()``
+        calls. This helper uses the collector's read-only ``all()`` path so
+        orchestration, diagnostics, and future UI consumers can inspect a
+        coherent workspace-plus-events snapshot without stealing events from
+        the active stream.
+        """
+        from core.workspace_state import snapshot as workspace_snapshot
+
+        collector = obs if obs is not None else ObsCollector()
+        observation = ObservationSnapshot.from_collector(
+            workspace=workspace_snapshot(
+                cwd,
+                include_turn_diff=cwd is None,
+            ),
+            collector=collector,
+        )
+        if session_id:
+            if len(self._last_observation_snapshots) >= 200:
+                oldest = next(iter(self._last_observation_snapshots))
+                del self._last_observation_snapshots[oldest]
+            self._last_observation_snapshots[session_id] = observation
+        return observation
+
     def _update_intent_history(self, session_id: str, intent: Intent) -> list[str]:
         """Track a rolling window of intent values per session."""
         # Prune old sessions to prevent unbounded memory growth
@@ -222,6 +258,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             self._pending_clarification,
             self._last_code,
             self._last_observation,
+            self._last_observation_snapshots,
         ):
             if session_id in d:
                 del d[session_id]
@@ -330,7 +367,6 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         try:
             import sqlite3
             import time
-            import uuid
 
 
             # Session 30 FIX: use context manager so the connection is
