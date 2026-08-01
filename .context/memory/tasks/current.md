@@ -137,3 +137,23 @@ todo-plan wording assertion failure; frontend build passed with 0 lint errors /
 
 Next: inspect the frontend observability fetch/type contract and decide whether
 to add a read-only bounded summary panel without widening the existing UI scope.
+
+---
+
+## Handoff Notes (Session 57, 2026-07-31)
+
+Continued autonomously by surfacing the bounded structured observation summary
+in the existing frontend Observe panel. Added typed workspace/event models,
+defensive snake_case-to-camelCase client mapping, hook pass-through, and a
+compact read-only Runtime Snapshot section with git state, open-file count,
+build status, diff summary, and newest runtime events. Legacy sessions with
+`observation: null` retain the prior UI behavior.
+
+Added client regression coverage for legacy null snapshots and malformed nested
+payloads. Validation: 9 frontend Vitest tests passed across 3 files, production
+build/typecheck passed, lint had 0 errors / 53 existing warnings, and diff
+checks passed. Final review was ship-ready. Product commit: `1dc6a34`.
+
+Next: evaluate whether capability metadata belongs in a separate descriptive
+read-only discovery section, without changing routing, tools, or developer
+agents until its contract is justified.

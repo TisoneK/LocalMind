@@ -899,3 +899,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** define capability-family and observation contracts; build an incremental Observe vertical slice; reconcile the todo-plan baseline assertion; clean the three non-E501 Ruff findings; preserve all developer-agent roles and toolsets.
 - **Report:** `.context/memory/reviews/2026-07-31-review-9.md`
 - **Notes:** none
+
+---
+## 2026-07-31 — Session 57
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — frontend runtime observation surface
+- **Task:** Continue autonomously by surfacing the bounded structured observation summary in the existing frontend Observe panel without changing SSE, routing, tools, or developer agents.
+- **Commits:** 1 product (`1dc6a34`) + 1 context closeout
+- **Outcome:** done — added typed workspace/event models, defensive snake_case-to-camelCase client mapping, hook pass-through, and a compact read-only Runtime Snapshot section showing git/workspace state, open-file count, build status, diff summary, and recent runtime events. Legacy `observation: null` sessions retain the previous UI behavior.
+- **Validation:** 9 frontend Vitest tests across 3 files; production build/typecheck passed; ESLint 0 errors / 53 existing warnings; diff check passed; final review ship-ready.
+- **Open items:** evaluate whether capability metadata belongs in a separate descriptive read-only discovery section; preserve all current developer-agent roles, routing, tools, and runtime behavior.
+- **Report:** `.context/memory/reviews/2026-07-31-review-14.md`
+- **Notes:** Review required defensive normalization for malformed runtime payloads; added client-level regression coverage rather than widening scope with component-test infrastructure.

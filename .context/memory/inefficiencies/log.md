@@ -190,3 +190,12 @@ if literally nothing slowed you down.
 - **Cause:** The existing collector intentionally makes `drain()` destructive, and the first integration reused `all()` without modeling full request history separately.
 - **Workaround / fix:** Added `ObsCollector.history()` while preserving `all()`/`drain()` semantics; snapshots now capture full request history before the final drain.
 - **Prevent next time:** Separate pending-queue semantics from request-history semantics whenever a stream has multiple consumers.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 57)
+
+- **Problem:** The first frontend observation mapper trusted the typed API response at runtime; malformed nested fields could have crashed the Observe panel.
+- **Cost:** One review/fix cycle and two focused regression cases; no shipped defect because the issue was caught before commit.
+- **Cause:** TypeScript interfaces describe expected payloads but do not validate JSON received over the network.
+- **Workaround / fix:** Added a defensive client-boundary mapper for strings, numbers, arrays, events, and build metadata, plus legacy-null and malformed-payload Vitest coverage.
+- **Prevent next time:** Treat every API response as untrusted at the client boundary and add malformed-payload coverage whenever a new nested response shape is introduced.

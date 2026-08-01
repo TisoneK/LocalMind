@@ -84,3 +84,9 @@ records.
 
 ---
 - **2026-07-31 — Session 55** — Buffy / openai/gpt-5.6-luna — integrated structured observations into the live request lifecycle with full request-event history, pre-drain capture, explicit-workspace baseline isolation, and bounded per-session retention. 39 focused tests passed; frontend build clean; full backend 779 passed / 1 existing todo-plan failure. Product commit `cefd65c`. Detail: `.context/memory/reviews/2026-07-31-review-12.md`.
+
+---
+- **2026-07-31 — Session 56** — Buffy / openai/gpt-5.6-luna — added a bounded public observation projection to the existing observability API, preserved nullable legacy fields, and verified FastAPI wire serialization. 19 focused tests passed; frontend build clean; full backend 786 passed / 1 existing todo-plan failure. Product commit `455b9b9`. Detail: `.context/memory/reviews/2026-07-31-review-13.md`.
+
+---
+- **2026-07-31 — Session 57** — Buffy / openai/gpt-5.6-luna — surfaced the bounded structured observation summary in the frontend Observe panel with typed models, defensive mapping, and a compact read-only Runtime Snapshot. 9 frontend tests passed; production build/typecheck passed; lint 0 errors / 53 warnings; product commit `1dc6a34`. Detail: `.context/memory/reviews/2026-07-31-review-14.md`.

@@ -9,7 +9,7 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
-| Buffy | openai/gpt-5.6-luna | 2026-07-31 | 2026-07-31 | 9 |
+| Buffy | openai/gpt-5.6-luna | 2026-07-31 | 2026-07-31 | 10 |
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 
@@ -121,3 +121,4 @@ Updated registry row:
 - **Buffy / openai/gpt-5.6-luna:** Session 54 added the opt-in `ObservationSnapshot` contract with defensive nested-state ownership, non-draining collector capture, bounded event formatting, and 34 focused tests; final review was ship-ready and existing routing/tool behavior remained untouched. (2026-07-31)
 - **Buffy / openai/gpt-5.6-luna:** Session 55 integrated structured observations into the live chat lifecycle with full request-event history, pre-drain capture, explicit-workspace baseline isolation, bounded per-session retention, and 39 focused tests; final review was ship-ready. (2026-07-31)
 - **Buffy / openai/gpt-5.6-luna:** Session 56 added a bounded public observation projection to the existing observability API, preserved nullable legacy fields, verified FastAPI wire serialization, and passed 19 focused tests; final review was ship-ready. (2026-07-31)
+- **Buffy / openai/gpt-5.6-luna:** Session 57 surfaced the bounded observation summary in the frontend Observe panel with defensive client normalization, legacy compatibility, and 9 focused Vitest tests; production build/typecheck passed and final review was ship-ready. (2026-07-31)
