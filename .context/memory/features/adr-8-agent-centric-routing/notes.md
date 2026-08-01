@@ -751,3 +751,20 @@ The elapsed clock ticks during the full request, cumulative thinking plus
 answer text drives live token estimates, sparse final metrics preserve those
 estimates, and stream completion publishes one synchronously finalized tool
 snapshot to both UI state surfaces. Product commit: `a4ab7c2`.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 59)
+
+Implemented the first explicit worker-to-report handoff at the AgentLoop boundary. The tool execution trace is now a deterministic report contract rather than an implicit context hope.
+
+**Delivered:**
+- `WorkReportEntry` and `WorkReport` in `core/agent/models.py`, derived from `AgentTrace`.
+- Observation-first evidence detection with a two-token threshold for substantive multi-item outputs; side-effect-only `OK` results retain concise confirmations.
+- Report enforcement for normal final text, short streams, forced synthesis, and forced synthesis error/exception paths.
+- Report-before-terminal-marker ordering so SSE consumers cannot finalize before evidence arrives.
+- Trace capture for late MiniMax/XML-intercepted non-search tools while preserving web-search synthesis behavior.
+- Regression coverage for heading-only shell listings, evidence-aware responses, side-effect-only success, forced synthesis ordering, and silent failure paths.
+
+**Validation:** 70 focused tests passed; compile, changed-model Ruff, changed-test import Ruff, and diff checks passed. Full-loop E501 findings and FastAPI/Starlette deprecation warnings are pre-existing baseline noise.
+
+**Design note:** This is intentionally deterministic and does not add another model call. It gives the orchestrator an explicit worker result boundary without introducing another model failure point. Future delegated-agent work can reuse the contract, but should not weaken the current evidence-first and stream-ordering guarantees.

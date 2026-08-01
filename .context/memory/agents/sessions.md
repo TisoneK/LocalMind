@@ -925,3 +925,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** Keep capability metadata descriptive until separate contracts exist for actionable computer interaction, productivity/connectors, data analysis, and other non-coding actions. Continue preserving all developer-agent roles, routing, tools, and SSE behavior. GitHub reported existing Dependabot findings during push; no dependency changes were made.
 - **Report:** `.context/memory/reviews/2026-07-31-review-15.md`
 - **Notes:** Product commit `6f438fc82caf0c61afce1f1f1c49c26440a3f4a1` is pushed to `origin/main`. The capability endpoint is intentionally read-only and descriptive.
+
+---
+## 2026-07-31 — Session 59
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing — explicit worker-to-report handoff
+- **Task:** Make successful tool execution produce a reliable report-back artifact instead of accepting evidence-free model text.
+- **Commits:** 1 product (`83d7477`) + 1 context closeout
+- **Outcome:** done — added deterministic `WorkReport`/`WorkReportEntry` models derived from `AgentTrace`; enforced observation-first evidence reporting across normal, short-stream, forced-synthesis, and forced-error paths; held terminal SSE markers until reports were delivered; traced late MiniMax/XML-intercepted non-search tools; preserved the dedicated web-search path.
+- **Validation:** 70 focused backend tests passed; compile checks passed; changed model Ruff passed; changed-test import Ruff passed; `git diff --check` passed. Existing full-loop E501 long-line findings and FastAPI/Starlette deprecation warnings remain baseline-only. Final blocker review was ship-ready.
+- **Open items:** Consider a shared execution-result protocol for delegated-agent reports later; preserve the deterministic no-extra-model-call fallback and report-before-`done` guarantees.
+- **Report:** `.context/memory/reviews/2026-07-31-review-16.md`
+- **Notes:** Product commit `83d74778608d3fc933a080df4b3b32605cfb0ab5` is pushed to `origin/main`.

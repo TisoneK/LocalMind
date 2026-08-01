@@ -176,3 +176,15 @@ for actionable computer interaction, productivity/connectors, and other
 non-coding tools. GitHub reported existing Dependabot findings during push;
 this slice made no dependency changes.
 
+
+---
+## Handoff Notes (Session 59, 2026-07-31)
+
+Implemented and shipped the deterministic worker-to-report handoff. Product commit `83d74778608d3fc933a080df4b3b32605cfb0ab5`; review `.context/memory/reviews/2026-07-31-review-16.md`; context closeout pending in the next commit.
+
+The normal AgentLoop now derives `WorkReport` evidence from tool traces and appends it when model synthesis is empty or fails to report substantive observation output. Normal, short-stream, forced-synthesis, forced-error, and late MiniMax interception paths are covered. Terminal SSE completion markers are held until report output is delivered. Validation: 70 focused tests passed; compile, Ruff import/model checks, and diff checks passed. Existing E501 and framework deprecation warnings are baseline-only.
+
+- **Session:** none (idle)
+- **Feature:** none
+- **Task:** none
+- **Status:** idle

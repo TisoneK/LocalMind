@@ -101,6 +101,10 @@ Four implementation phases (multi-session):
   public `streamChat()` integration regression, remaining transitional
   AgentLoop wiring, optional SubAgentType consolidation, a live `agent-browser`
   smoke test, and separate contracts for actionable non-coding capabilities.
+  Session 59 also added a deterministic worker-to-report boundary: tool traces
+  now produce evidence-first `WorkReport` output when model synthesis is empty
+  or too weak, including forced-synthesis error paths and late XML-intercepted
+  tools. Stream completion markers are held until the report is delivered.
 
 
 - **No-regression list (must hold after every phase):**
