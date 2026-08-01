@@ -674,6 +674,37 @@ ZEN_API_KEY passed via env var, never persisted, never echoed beyond the
 last-4 check).
 
 ---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 51)
+
+Completed the first autonomy slice built on the ADR-8 agent-centric
+foundation. The implementation adds persisted objectives, a background
+ObjectiveRuntime, lifecycle controls, ownership/lease fencing, explicit
+read-only tool policy propagation, Engine serialization, API routes, and
+frontend objective controls.
+
+**Safety and lifecycle work:**
+- Added an explicit `allowed_tool_names` boundary through BaseAgent,
+  AgentLoop normal/parallel/helper paths, dispatcher retries, Engine fast
+  paths, pending writes, and restricted orchestrator routing.
+- Policy-denied dispatches now report failure instead of allowing callers to
+  treat a blocked mutation as success.
+- Objective storage uses ownership/lease fencing, and runtime finalization
+  cannot overwrite cancellation or pause state from a stale worker.
+- FastAPI startup/shutdown is covered through the real TestClient lifespan.
+
+**Validation:** 19 focused objective tests passed; 718 affected backend tests
+passed; Python compilation and `git diff --check` passed; frontend production
+build/typecheck passed; frontend lint had 0 errors and 53 existing-style
+warnings. Final blocker review marked the slice ship-ready.
+
+**Deferred follow-ups:** replace the conservative global Engine lock with
+keyed/request-scoped locks, add direct Engine fast-path/orchestrator policy
+tests, add the public `streamChat()` integration regression, continue the
+transitional ADR-8 runtime-wiring audit, and decide whether to merge or
+remove the legacy SubAgentType path. The optional `agent-browser` live smoke
+test remains environment-dependent.
+
+---
 ## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 38)
 
 The ADR-8 runtime target was not broadened this session. Instead, the

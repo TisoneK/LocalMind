@@ -85,21 +85,19 @@ Four implementation phases (multi-session):
   alongside other work but every commit touching agent-mode is prefixed
   to make the trail greppable: `refactor(agents):` for Phase 1
   structural moves, `feat(agent-loop):` for Phase 2 wiring, etc.)
-- **Status:** in-progress (Phase 0 = initialization done in Session 34;
-  Phases 1-4 implementation work is present; runtime wiring remains transitional)
-- **Current state:** Phase 1–4 implementation work is present in the
-  repository, but several engine branches still call `AgentLoop` directly.
-  Session 50 also completed the BrowserAgent capability upgrade: the
-  browse tool now exposes DOM/HTML, network-request, and console
-  inspection with bounded output and focused mocked coverage. Sessions
-  37–39 repaired the confirmed chat transport/UI loss paths:
-  typed upload failures, final unterminated SSE events, disconnected
-  Actions/todos, inconsistent active statuses, delayed live metrics, and
-  stream-finalization state races. The next safe work is a public
-  `streamChat()` integration regression, then instrument and close runtime
-  agent wiring gaps one at a time with real-model validation where behavior
-  changes. The optional `agent-browser` CLI still needs a live smoke test
-  on a machine with Chromium installed.
+- **Status:** completed for the ADR-8 phases; autonomy runtime work is an
+  additive first slice and the transitional wiring follow-ups remain open.
+- **Current state:** Phases 1–4 are implemented. Session 51 added the first
+  autonomy slice: persisted objectives, a background ObjectiveRuntime,
+  pause/resume/cancel lifecycle controls, ownership/lease fencing, explicit
+  read-only tool policy propagation, Engine serialization, objective API
+  routes, and frontend objective controls. The implementation is covered by
+  focused lifecycle/policy/API tests and the affected backend/frontend gates.
+  BrowserAgent inspection, chat transport/UI repairs, and workspace feedback
+  remain intact. Deferred work includes keyed Engine locks, direct fast-path
+  policy tests, the public `streamChat()` integration regression, remaining
+  transitional AgentLoop wiring, optional SubAgentType consolidation, and a
+  live `agent-browser` smoke test on a machine with Chromium installed.
 
 - **No-regression list (must hold after every phase):**
   1. Session 31/32 fix: `MAX_ITERATIONS=8` default, configurable via

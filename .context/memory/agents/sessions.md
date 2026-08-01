@@ -821,3 +821,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** Live BrowserAgent smoke test on a machine with `agent-browser install`; B-2026-07-31-9 Observe capability; B-2026-07-31-10 non-coding capability roadmap; ADR-8 runtime-wiring follow-ups.
 - **Report:** `.context/memory/reviews/2026-07-31-review-7.md`
 - **Notes:** none
+
+---
+## 2026-07-31 — Session 51
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** `adr-8-agent-centric-routing`
+- **Task:** Complete and verify the first autonomy slice: persisted objectives, background execution, lifecycle controls, policy fencing, API, and frontend controls.
+- **Commits:** 1 product + 1 context commit; SHAs recorded after closeout
+- **Outcome:** done — added ObjectiveRuntime and ObjectiveStore with migrations, objective API routes and lifespan coverage, explicit read-only policy propagation across AgentLoop/Engine/dispatcher boundaries, cancellation/lease fencing, and frontend objective management with a no-session guard.
+- **Validation:** 19 focused objective tests; 718 affected backend tests; Python compile; `git diff --check`; frontend production build/typecheck; frontend lint 0 errors / 53 warnings; final blocker review ship-ready.
+- **Open items:** replace the conservative global Engine lock with keyed/request-scoped locks; add direct Engine fast-path/orchestrator policy tests; add public `streamChat()` integration coverage; continue transitional ADR-8 runtime-wiring and SubAgentType decisions; optional live `agent-browser` smoke test.
+- **Report:** `.context/memory/reviews/2026-07-31-review-8.md`
+- **Notes:** The working tree was initially uncommitted despite `current.md` being idle; this session reconciled that mismatch, validated the full slice, and separated product/context commits per the two-surface rule.

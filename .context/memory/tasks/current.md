@@ -12,26 +12,27 @@ check its session entry and backlog before starting.
 
 ---
 
-## Handoff Notes (Session 50, 2026-07-31)
+## Handoff Notes (Session 51, 2026-07-31)
 
-B-2026-07-31-4 — BrowserAgent upgrade — is complete in product commit
-`b7f1f98`.
+The first autonomy slice is complete and recorded in
+`.context/memory/reviews/2026-07-31-review-8.md`.
 
 Delivered:
-- `dom` → rendered HTML inspection via `get html`
-- `network` → captured requests with filter/type/method/status/clear options
-- `console` → console messages with JSON/clear options
-- model-facing `browse` schema and JSON dispatch wiring
-- medium-risk classification for sensitive inspection output
-- bounded final browser output and malformed-argument validation
-- mocked regression coverage in `tests/tools/test_browser_agent.py`
+- persisted objectives with SQLite migrations and ownership/lease fencing
+- background ObjectiveRuntime with pause, resume, cancel, and stale-worker protection
+- explicit read-only tool policy through AgentLoop, dispatcher, and Engine boundaries
+- objective API routes plus real FastAPI lifespan coverage
+- frontend objective state, controls, and no-session creation guard
 
-Validation: 50 focused tests, 411 handoff tests, compile/schema checks,
-changed-file Ruff, and diff check all pass; one pre-existing event-loop
-deprecation warning remains. The optional `agent-browser` CLI is not
-installed on this macOS checkout, so live browser smoke testing remains
-open. Review: `.context/memory/reviews/2026-07-31-review-7.md`.
+Validation: 19 focused objective tests, 718 affected backend tests, Python
+compile checks, and `git diff --check` pass. Frontend production
+build/typecheck passes; lint has 0 errors and 53 warnings. Final review is
+ship-ready for this slice.
 
-Next priorities: B-2026-07-31-9 Observe capability, B-2026-07-31-10
-non-coding capability roadmap, and the existing ADR-8 runtime-wiring
-follow-ups.
+Deferred: keyed Engine locks, direct Engine policy tests, public `streamChat()`
+integration coverage, transitional ADR-8 runtime wiring/SubAgentType decisions,
+and optional live `agent-browser` smoke testing. Product and context commit SHAs
+are recorded in the Session 51 entry after closeout.
+
+Previous handoff: Session 50 BrowserAgent upgrade, product commit `b7f1f98`,
+review `.context/memory/reviews/2026-07-31-review-7.md`.
