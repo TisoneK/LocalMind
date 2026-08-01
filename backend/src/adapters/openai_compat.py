@@ -69,6 +69,8 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "deepseek-coder": 64000,
     # Zen (curated models)
     "zen/default": 128000,
+    "deepseek-v4-flash-free": 128000,
+    # Retain the MiniMax entries for explicitly selected legacy models.
     "minimax-m2.5-free": 128000,
     "MiniMax M2.5 Free": 128000,
     # Groq (fast inference)
@@ -218,7 +220,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         display_name="Zen AI",
         base_url="https://opencode.ai/zen/v1",
         api_key=os.getenv("ZEN_API_KEY", ""),
-        default_model="minimax-m2.5-free",
+        default_model="deepseek-v4-flash-free",
         key_env="ZEN_API_KEY",
         model_env="ZEN_MODEL",
         settings_field="zen_model",

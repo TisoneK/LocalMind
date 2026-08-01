@@ -60,12 +60,22 @@ export function CenterPanel({
   memoryCount,
   sessionId,
 }: CenterPanelProps) {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom on new messages
+  // Scroll only the transcript container on new messages. Calling
+  // scrollIntoView() on a nested marker can also scroll outer ancestors,
+  // which may move the entire workspace (including the header) in a flex
+  // layout. Targeting this container keeps the document viewport fixed.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: 'smooth',
+    });
   }, [messages]);
+
 
   const isOnline = health.status === 'online';
   const confidencePercent = currentConfidence
@@ -85,7 +95,7 @@ export function CenterPanel({
     : 'Connecting…';
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0f0a]">
+    <div className="h-full min-h-0 flex flex-col bg-[#0a0f0a]">
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-[#1a2a1a] bg-[#0a0f0a]">
         <div className="flex items-center gap-3">
@@ -140,7 +150,7 @@ export function CenterPanel({
       </div>
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar min-w-0">
+      <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar min-w-0">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
             <div className="w-12 h-12 rounded-xl bg-[#39d353]/10 flex items-center justify-center">
@@ -197,7 +207,7 @@ export function CenterPanel({
           );
         })()}
 
-        <div ref={messagesEndRef} />
+
       </div>
 
       {/* Input */}

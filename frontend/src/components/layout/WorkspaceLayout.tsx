@@ -308,7 +308,7 @@ export function WorkspaceLayout() {
       </div>
 
       {/* Center Panel - flex: 1 */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 min-h-0">
         <CenterPanel
           messages={messages}
           selectedModel={currentModel || { id: effectiveModelId, name: effectiveModelId, provider: modelProvider || '' }}

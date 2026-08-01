@@ -32,7 +32,13 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from adapters.openai_compat import OpenAICompatAdapter
+from adapters.openai_compat import OpenAICompatAdapter, PROVIDER_CONFIGS
+
+
+def test_zen_default_is_free_deepseek_model():
+    """Zen's default must remain on the currently free DeepSeek model."""
+    assert PROVIDER_CONFIGS["zen"].default_model == "deepseek-v4-flash-free"
+
 
 # ── 1. Trailing tool role → synthetic user message appended ──────────────
 

@@ -69,7 +69,7 @@ def _resolve_placeholders() -> dict[str, str]:
     elif active_adapter == "anthropic":
         active_model = settings.anthropic_model or "claude-3-5-sonnet"
     elif active_adapter == "zen":
-        active_model = settings.zen_model or "minimax-m2.5-free"
+        active_model = settings.zen_model or "deepseek-v4-flash-free"
     elif active_adapter == "groq":
         active_model = settings.groq_model or "llama-3.1-70b-versatile"
     elif active_adapter == "openrouter":

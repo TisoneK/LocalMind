@@ -285,9 +285,9 @@ async def list_models(provider: str | None = None):
             except Exception as exc:
                 logger.warning("[models] failed to list models for %s: %s", adapter_name, exc)
 
-        # Zen-specific default when no model is configured
+        # Zen-specific free default when no model is configured
         if adapter_name == "zen" and not current_model:
-            current_model = "minimax-m2.5-free"
+            current_model = "deepseek-v4-flash-free"
 
         # For cloud providers without a listable /models endpoint (DeepSeek,
         # OpenAI, etc.), include the current model so the UI can display it.
