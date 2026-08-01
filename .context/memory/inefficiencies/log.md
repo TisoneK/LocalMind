@@ -181,3 +181,12 @@ if literally nothing slowed you down.
 - **Cause:** Top-level dataclass freezing was initially treated as sufficient snapshot immutability.
 - **Workaround / fix:** Added private owned copies plus defensive-copy accessors and regression tests for source and accessor mutations.
 - **Prevent next time:** Treat nested compatibility objects as mutable unless the ownership boundary is explicit; test both producer-side and consumer-side mutation.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 55)
+
+- **Problem:** A final runtime snapshot initially read only the pending event queue, so events already flushed by the SSE bridge would be missing.
+- **Cost:** One review/fix cycle; no shipped defect because the gap was caught before commit.
+- **Cause:** The existing collector intentionally makes `drain()` destructive, and the first integration reused `all()` without modeling full request history separately.
+- **Workaround / fix:** Added `ObsCollector.history()` while preserving `all()`/`drain()` semantics; snapshots now capture full request history before the final drain.
+- **Prevent next time:** Separate pending-queue semantics from request-history semantics whenever a stream has multiple consumers.

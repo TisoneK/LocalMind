@@ -97,3 +97,25 @@ failure. Final review was ship-ready. Product commit: `89bdd73`.
 
 Next: expose this contract at one controlled runtime boundary with an integration
 test, while preserving current SSE/event behavior and all developer agents.
+
+---
+
+## Handoff Notes (Session 55, 2026-07-31)
+
+Continued autonomously by integrating the structured observation contract into
+the live request lifecycle. Added `Engine.build_observation_snapshot()`, captured
+snapshots before the chat route's final destructive SSE drain, and added a
+request-local `ObsCollector.history()` so already-forwarded events remain in the
+snapshot while `all()`/`drain()` retain their existing meanings. Explicit `cwd`
+captures are baseline-free; per-session snapshots are bounded and cleaned with
+session state.
+
+Validation: 39 focused observation/runtime/workspace/SSE tests passed; compile
+and diff checks passed; changed-file Ruff has only six unchanged legacy E501
+findings; frontend build passed with 0 lint errors / 53 warnings; full backend
+779 passed / 1 existing todo-plan wording assertion failure. Final review was
+ship-ready. Product commit: `cefd65c`.
+
+Next: expose retained structured snapshots through the existing observability
+read path with bounded serialization and regression coverage. Preserve SSE,
+agent, routing, and tool behavior.

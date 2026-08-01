@@ -81,3 +81,6 @@ records.
 
 ---
 - **2026-07-31 — Session 54** — Buffy / openai/gpt-5.6-luna — added the opt-in `ObservationSnapshot` contract, non-draining collector capture, bounded deterministic event formatting, and defensive nested-state ownership. 34 focused tests passed; frontend build clean; full backend 774 passed / 1 existing todo-plan failure. Product commit `89bdd73`. Detail: `.context/memory/reviews/2026-07-31-review-11.md`.
+
+---
+- **2026-07-31 — Session 55** — Buffy / openai/gpt-5.6-luna — integrated structured observations into the live request lifecycle with full request-event history, pre-drain capture, explicit-workspace baseline isolation, and bounded per-session retention. 39 focused tests passed; frontend build clean; full backend 779 passed / 1 existing todo-plan failure. Product commit `cefd65c`. Detail: `.context/memory/reviews/2026-07-31-review-12.md`.

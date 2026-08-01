@@ -862,6 +862,19 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Notes:** review caught and fixed shallow immutability before closeout.
 
 ---
+## 2026-07-31 — Session 55
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — runtime observation integration
+- **Task:** Continue autonomously by integrating structured observations into the live request lifecycle without changing SSE payloads, routing, tools, or developer agents.
+- **Commits:** 1 product (`cefd65c`) + 1 context closeout
+- **Outcome:** done — added the Engine observation boundary, captured snapshots before final SSE drain, preserved full request event history, isolated explicit workspace baselines, and bounded per-session snapshot retention/cleanup.
+- **Validation:** 39 focused tests; compile and diff checks passed; six unchanged legacy E501 findings; frontend build passed with 0 lint errors / 53 warnings; full backend 779 passed / 1 existing todo-plan wording assertion failure; final review ship-ready.
+- **Open items:** expose retained structured snapshots through the existing observability read path with bounded serialization and regression coverage; preserve SSE, agent, routing, and tool behavior.
+- **Report:** `.context/memory/reviews/2026-07-31-review-12.md`
+- **Notes:** review caught that a final snapshot must use full request history, not only events still pending after intermediate SSE drains.
+
+---
 ## 2026-07-31 — Session 52
 
 - **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
