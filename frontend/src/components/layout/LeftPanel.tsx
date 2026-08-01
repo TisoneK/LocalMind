@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Cpu, Trash2, Loader2, CheckCircle2, XCircle, Terminal, Globe, FileEdit, Brain } from 'lucide-react';
-import { Session, ActionItem, FileNode, TodoItem, ModelOption, ToolCall } from '@/types';
+import { Session, ActionItem, FileNode, TodoItem, ModelOption, ToolCall, Objective } from '@/types';
 import { ActionHistory } from '@/components/panels/ActionHistory';
 import { FileExplorer } from '@/components/panels/FileExplorer';
 import { TodoList } from '@/components/panels/TodoList';
+import { ObjectivesPanel } from '@/components/panels/ObjectivesPanel';
 import { isActiveToolStatus } from '@/lib/localmind/progress';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 
@@ -14,6 +15,11 @@ interface LeftPanelProps {
   actions: ActionItem[];
   files: FileNode[];
   todos: TodoItem[];
+  objectives: Objective[];
+  onCreateObjective: (prompt: string) => Promise<void>;
+  onPauseObjective: (id: string) => Promise<void>;
+  onResumeObjective: (id: string) => Promise<void>;
+  onCancelObjective: (id: string) => Promise<void>;
   activeToolCalls: ToolCall[];
   models: ModelOption[];
   selectedModel: string;
@@ -35,6 +41,11 @@ export function LeftPanel({
   actions,
   files,
   todos,
+  objectives,
+  onCreateObjective,
+  onPauseObjective,
+  onResumeObjective,
+  onCancelObjective,
   activeToolCalls,
   models,
   selectedModel,
@@ -312,6 +323,15 @@ export function LeftPanel({
           })}
         </div>
       )}
+
+      <ObjectivesPanel
+        objectives={objectives}
+        currentSessionId={currentSessionId}
+        onCreate={onCreateObjective}
+        onPause={onPauseObjective}
+        onResume={onResumeObjective}
+        onCancel={onCancelObjective}
+      />
 
       {/* Todos — always show so users can add tasks even when the list is empty.
           Previously the `todos.length > 0` condition made it impossible to

@@ -130,6 +130,10 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # Created lazily with adapter in process() so it picks up setting changes.
         self._dispatcher: ThinkingDispatcher | None = None
         self._warmed_up = False
+        # Chat and autonomous objectives share mutable routing/orchestration
+        # state. Serialize complete engine streams until those components are
+        # fully request-scoped.
+        self._process_lock = asyncio.Lock()
         # Reliability bootstrap happens in startup(), not here
         try:
             load_reliability_from_db(self._store.get_reliability())
@@ -721,11 +725,38 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         original_path: Optional[str] = None,
         client_intent: Optional[str] = None,
         client_confidence: float = 0.0,
+        allowed_tool_names: Optional[set[str]] = None,
     ) -> AsyncIterator[StreamChunk]:
-        """
-        Process a user message end-to-end and stream chunks.
-        Emits structured observability events into obs if provided.
-        """
+        """Serialize a complete engine stream against shared mutable state."""
+        async with self._process_lock:
+            async for chunk in self._process_unlocked(
+                message=message,
+                session_id=session_id,
+                file=file,
+                filename=filename,
+                content_type=content_type,
+                obs=obs,
+                original_path=original_path,
+                client_intent=client_intent,
+                client_confidence=client_confidence,
+                allowed_tool_names=allowed_tool_names,
+            ):
+                yield chunk
+
+    async def _process_unlocked(
+        self,
+        message: str,
+        session_id: str,
+        file: Optional[bytes] = None,
+        filename: Optional[str] = None,
+        content_type: Optional[str] = None,
+        obs: Optional[ObsCollector] = None,
+        original_path: Optional[str] = None,
+        client_intent: Optional[str] = None,
+        client_confidence: float = 0.0,
+        allowed_tool_names: Optional[set[str]] = None,
+    ) -> AsyncIterator[StreamChunk]:
+        """Process one request while the caller owns ``_process_lock``."""
         _obs = obs or ObsCollector()
         t0 = time.monotonic()
 
@@ -1322,7 +1353,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # entirely and call _do_write() directly with the stored payload.
         # Any other message cancels the pending write and falls through normally.
         _pending = self._pending_writes.get(session_id)
-        if _pending:
+        if _pending and (allowed_tool_names is None or Intent.FILE_WRITE.value in allowed_tool_names):
             _confirm_words = {
                 "yes",
                 "ok",
@@ -1460,7 +1491,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 )
 
         if (
-            _should_use_orchestrator(message, effective_intent)
+            allowed_tool_names is None
+            and _should_use_orchestrator(message, effective_intent)
             and not _file_task_with_attachment
             and effective_intent not in (Intent.WEB_SEARCH, Intent.WEB_FETCH)
         ):
@@ -1551,7 +1583,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             Intent.MEMORY_OP: "Checking memory",
         }
 
-        if effective_intent == Intent.SYSINFO:
+        if effective_intent == Intent.SYSINFO and (
+            allowed_tool_names is None or effective_intent.value in allowed_tool_names
+        ):
             # FILE_TASK was removed from direct dispatch — it now goes through
             # the agent loop (AGENT_INTENTS). Direct dispatch couldn't handle
             # multi-step file operations like "Read my CV 'C:\\Users\\tison\\Documents'"
@@ -2027,7 +2061,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         #   2. Capture the last code block from the response
         #   3. Write the file directly via _do_write() — no LLM tool-calling needed
         #   4. Append a confirmation line so the UI shows the file link
-        if effective_intent == Intent.FILE_WRITE and _is_small_model(active_adapter._model):
+        if (
+            (allowed_tool_names is None or effective_intent.value in allowed_tool_names)
+            and effective_intent == Intent.FILE_WRITE
+            and _is_small_model(active_adapter._model)
+        ):
             logger.info(
                 "[engine] FILE_WRITE small-model fast-path for %s (model=%s)",
                 session_id[:8],
@@ -2274,7 +2312,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         active_adapter._model,
                     )
                     # dispatch_with_retry imported at module level — do NOT re-import here
-                    code_result, code_failed, _ = await dispatch_with_retry(Intent.CODE_EXEC, message)
+                    code_result, code_failed, _ = await dispatch_with_retry(
+                        Intent.CODE_EXEC,
+                        message,
+                        allowed_tool_names=(
+                            frozenset(allowed_tool_names) if allowed_tool_names is not None else None
+                        ),
+                    )
                     if code_result and not code_failed:
                         safe_output = _filter_code_output(code_result.content)
                         # Stream the raw output + a short LLM explanation
@@ -2332,7 +2376,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         active_adapter._model,
                     )
                     # dispatch_with_retry imported at module level — do NOT re-import here
-                    mem_result, mem_failed, _ = await dispatch_with_retry(Intent.MEMORY_OP, message)
+                    mem_result, mem_failed, _ = await dispatch_with_retry(
+                        Intent.MEMORY_OP,
+                        message,
+                        allowed_tool_names=(
+                            frozenset(allowed_tool_names) if allowed_tool_names is not None else None
+                        ),
+                    )
                     _obs.emit("tool_status", tool="memory_op", label="Checking memory", status="done")
                     if mem_result and not mem_failed:
                         response_text = mem_result.content
@@ -2430,7 +2480,16 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     messages=prompt_messages,
                     intent=effective_intent,
                     initial_tool_result=tool_result,
-                    available_tools=available_tools(),
+                    available_tools=(
+                        [
+                            tool
+                            for tool in available_tools()
+                            if allowed_tool_names is None or tool.get("intent") in allowed_tool_names
+                        ]
+                    ),
+                    allowed_tool_names=(
+                        frozenset(allowed_tool_names) if allowed_tool_names is not None else None
+                    ),
                     confidence=confidence,
                     adapter=active_adapter,
                     intent_history=intent_history,
@@ -2468,7 +2527,16 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     messages=prompt_messages,
                     intent=effective_intent,
                     initial_tool_result=tool_result,
-                    available_tools=available_tools(),
+                    available_tools=(
+                        [
+                            tool
+                            for tool in available_tools()
+                            if allowed_tool_names is None or tool.get("intent") in allowed_tool_names
+                        ]
+                    ),
+                    allowed_tool_names=(
+                        frozenset(allowed_tool_names) if allowed_tool_names is not None else None
+                    ),
                     confidence=confidence,
                     adapter=active_adapter,
                     intent_history=intent_history,

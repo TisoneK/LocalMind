@@ -31,6 +31,7 @@ import type {
   ModelOption,
   ToolCall,
   CompletionSuggestion,
+  Objective,
 } from '@/types';
 
 // ─── useHealth ─────────────────────────────────────────────────────────
@@ -1166,6 +1167,69 @@ export function useFileTree(path?: string) {
 }
 
 // ─── useTodos ──────────────────────────────────────────────────────────
+
+export function useObjectives(sessionId: string | null) {
+  const [objectives, setObjectives] = useState<Objective[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!sessionId) {
+      setObjectives([]);
+      setLoading(false);
+      return;
+    }
+    const data = await localmindClient.getObjectives(sessionId);
+    setObjectives(data);
+    setLoading(false);
+  }, [sessionId]);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!sessionId) {
+        if (mounted) {
+          setObjectives([]);
+          setLoading(false);
+        }
+        return;
+      }
+      const data = await localmindClient.getObjectives(sessionId);
+      if (mounted) {
+        setObjectives(data);
+        setLoading(false);
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => void refresh(), 2000);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [sessionId, refresh]);
+
+  const create = useCallback(async (prompt: string) => {
+    if (!sessionId) return;
+    const created = await localmindClient.createObjective(sessionId, prompt);
+    setObjectives((prev) => [created, ...prev]);
+  }, [sessionId]);
+
+  const pause = useCallback(async (id: string) => {
+    const updated = await localmindClient.pauseObjective(id);
+    setObjectives((prev) => prev.map((item) => item.id === id ? updated : item));
+  }, []);
+
+  const resume = useCallback(async (id: string) => {
+    const updated = await localmindClient.resumeObjective(id);
+    setObjectives((prev) => prev.map((item) => item.id === id ? updated : item));
+  }, []);
+
+  const cancel = useCallback(async (id: string) => {
+    const updated = await localmindClient.cancelObjective(id);
+    setObjectives((prev) => prev.map((item) => item.id === id ? updated : item));
+  }, []);
+
+  return { objectives, loading, refresh, create, pause, resume, cancel };
+}
 
 export function useTodos(sessionId: string | null) {
   const [todos, setTodos] = useState<TodoItem[]>([]);

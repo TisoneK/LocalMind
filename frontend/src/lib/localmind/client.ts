@@ -377,6 +377,76 @@ class LocalMindClient {
     await this.request(`/api/todos/${id}`, { method: 'DELETE' });
   }
 
+  // ── Autonomous objectives ──────────────────────────────────────────
+
+  async getObjectives(sessionId?: string): Promise<import('@/types').Objective[]> {
+    const query = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
+    try {
+      const data = await this.request<{ objectives: any[] }>(`/api/objectives${query}`);
+      return (data.objectives || []).map((item) => ({
+        id: item.id,
+        sessionId: item.session_id,
+        prompt: item.prompt,
+        status: item.status,
+        priority: item.priority ?? 0,
+        result: item.result,
+        error: item.error,
+        approval: item.approval,
+        resumeMessage: item.resume_message,
+        lastEvent: item.last_event,
+        attempts: item.attempts ?? 0,
+        cancelRequested: Boolean(item.cancel_requested),
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        startedAt: item.started_at,
+        completedAt: item.completed_at,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async createObjective(sessionId: string, prompt: string): Promise<import('@/types').Objective> {
+    const item = await this.request<any>('/api/objectives', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, prompt }),
+    });
+    return this._mapObjective(item);
+  }
+
+  async pauseObjective(id: string): Promise<import('@/types').Objective> {
+    return this._mapObjective(await this.request(`/api/objectives/${encodeURIComponent(id)}/pause`, { method: 'POST' }));
+  }
+
+  async resumeObjective(id: string): Promise<import('@/types').Objective> {
+    return this._mapObjective(await this.request(`/api/objectives/${encodeURIComponent(id)}/resume`, { method: 'POST', body: JSON.stringify({}) }));
+  }
+
+  async cancelObjective(id: string): Promise<import('@/types').Objective> {
+    return this._mapObjective(await this.request(`/api/objectives/${encodeURIComponent(id)}/cancel`, { method: 'POST' }));
+  }
+
+  private _mapObjective(item: any): import('@/types').Objective {
+    return {
+      id: item.id,
+      sessionId: item.session_id,
+      prompt: item.prompt,
+      status: item.status,
+      priority: item.priority ?? 0,
+      result: item.result,
+      error: item.error,
+      approval: item.approval,
+      resumeMessage: item.resume_message,
+      lastEvent: item.last_event,
+      attempts: item.attempts ?? 0,
+      cancelRequested: Boolean(item.cancel_requested),
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+      startedAt: item.started_at,
+      completedAt: item.completed_at,
+    };
+  }
+
   // ── Terminal ────────────────────────────────────────────────────────
 
   async getTerminalSessionInfo(sessionId: string): Promise<TerminalSessionInfo> {

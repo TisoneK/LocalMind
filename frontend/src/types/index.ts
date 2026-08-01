@@ -121,6 +121,27 @@ export interface TodoItem {
   subtasks?: TodoItem[];
 }
 
+export type ObjectiveStatus = 'queued' | 'running' | 'paused' | 'blocked' | 'completed' | 'failed' | 'canceled';
+
+export interface Objective {
+  id: string;
+  sessionId: string;
+  prompt: string;
+  status: ObjectiveStatus;
+  priority: number;
+  result?: string | null;
+  error?: string | null;
+  approval?: string | null;
+  resumeMessage?: string | null;
+  lastEvent?: string | null;
+  attempts: number;
+  cancelRequested: boolean;
+  createdAt: number;
+  updatedAt: number;
+  startedAt?: number | null;
+  completedAt?: number | null;
+}
+
 export interface FileNode {
   name: string;
   type: 'file' | 'folder';

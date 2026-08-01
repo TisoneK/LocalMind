@@ -11,6 +11,7 @@ import {
   useActions,
   useFileTree,
   useTodos,
+  useObjectives,
   useTerminal,
   useObservability,
   useMetrics,
@@ -119,6 +120,7 @@ export function WorkspaceLayout() {
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId);
   const { files } = useFileTree();
   const { todos, toggleTodo, addTodo } = useTodos(currentSessionId);
+  const { objectives, create: createObjective, pause: pauseObjective, resume: resumeObjective, cancel: cancelObjective } = useObjectives(currentSessionId);
   const { observation } = useObservability(currentSessionId);
   const { metrics: polledMetrics } = useMetrics(isStreaming);
   const { models, current: currentModelId, provider: modelProvider, selectModel, refresh: refreshModels } = useModels();
@@ -278,6 +280,11 @@ export function WorkspaceLayout() {
           actions={actions}
           files={files}
           todos={todos}
+          objectives={objectives}
+          onCreateObjective={createObjective}
+          onPauseObjective={pauseObjective}
+          onResumeObjective={resumeObjective}
+          onCancelObjective={cancelObjective}
           activeToolCalls={activeToolCalls}
           models={models}
           selectedModel={effectiveModelId}

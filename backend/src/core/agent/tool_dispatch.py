@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextvars import ContextVar
 from typing import Optional
 
 from core.agent.constants import TOOL_MAX_RETRIES, TOOL_RETRY_BASE_DELAY
@@ -16,6 +17,24 @@ from core.models import Intent, ToolResult
 from tools import dispatch
 
 logger = logging.getLogger(__name__)
+
+# Task-local safety fence used by autonomous objective runs. It is separate
+# from model-visible tool filtering so malformed/hallucinated calls are also
+# rejected immediately before dispatch.
+_allowed_tool_names: ContextVar[frozenset[str] | None] = ContextVar(
+    "localmind_allowed_tool_names",
+    default=None,
+)
+
+
+def set_allowed_tool_names(names: frozenset[str] | None):
+    """Set the tool fence for the current asyncio task and return its token."""
+    return _allowed_tool_names.set(names)
+
+
+def reset_allowed_tool_names(token) -> None:
+    """Restore the previous task-local tool fence."""
+    _allowed_tool_names.reset(token)
 
 # Error types where retrying the identical input is guaranteed to produce
 # the same failure.  On these we return immediately rather than burning
@@ -57,6 +76,7 @@ async def dispatch_with_retry(
     max_retries: int = TOOL_MAX_RETRIES,
     base_delay: float = TOOL_RETRY_BASE_DELAY,
     adapter=None,
+    allowed_tool_names: frozenset[str] | None = None,
 ) -> tuple[Optional[ToolResult], bool, int]:
     """
     Dispatch a tool with exponential-backoff retries and a per-tool timeout.
@@ -74,6 +94,20 @@ async def dispatch_with_retry(
         - failed:      True if all attempts failed
         - retry_count: number of retries used (0 = succeeded first try)
     """
+    effective_allowed = allowed_tool_names if allowed_tool_names is not None else _allowed_tool_names.get()
+    if effective_allowed is not None and tool_intent.value not in effective_allowed:
+        return (
+            ToolResult(
+                content=(f"Tool '{tool_intent.value}' is not available in this read-only objective."),
+                source=tool_intent.value,
+                success=False,
+                error_type="permission",
+                error_message="Tool blocked by objective safety policy",
+            ),
+            True,
+            0,
+        )
+
     # ADR-8 Phase 3: set the current adapter so the delegate tool can
     # access it. The set is conditional on `adapter` being provided
     # (some tests call dispatch_with_retry without an adapter).

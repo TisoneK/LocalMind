@@ -870,6 +870,7 @@ class AgentLoop:
         skip_planning: bool = False,
         agent_config=None,
         agent_context: Optional[str] = None,
+        allowed_tool_names: Optional[frozenset[str]] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -958,6 +959,9 @@ class AgentLoop:
         # browser agent sees only 1, etc. Smaller surface = more
         # reliable selection on gemma3:1b-class hardware.
         scoped_tools = agent_config.allowed_tools if agent_config is not None else None
+        effective_allowed = allowed_tool_names
+        if effective_allowed is not None:
+            scoped_tools = frozenset(scoped_tools or AGENT_ALLOWED_TOOLS).intersection(effective_allowed)
         filtered_tools = _filtered_tool_defs(scoped_tools)
         env_context = _build_environment_context()
 
@@ -1262,6 +1266,9 @@ class AgentLoop:
                     _inp = _extract_tool_input(_name, _args)
 
                     # Apply same validations as single-tool path
+                    if effective_allowed is not None and _name not in effective_allowed:
+                        logger.warning(f"[agent.loop] parallel: rejected tool {_name!r} by explicit policy")
+                        continue
                     if _name not in AGENT_ALLOWED_TOOLS:
                         logger.warning(f"[agent.loop] parallel: rejected tool {_name!r}")
                         continue
@@ -1291,7 +1298,11 @@ class AgentLoop:
                     tc_result = None
                     try:
                         tc_intent = Intent(tc_name)
-                        tc_result, tc_failed, _ = await dispatch_with_retry(tc_intent, tc_input)
+                        tc_result, tc_failed, _ = await dispatch_with_retry(
+                            tc_intent,
+                            tc_input,
+                            allowed_tool_names=effective_allowed,
+                        )
                         tc_obs = tc_result.content if tc_result else f"[Tool {tc_name} returned no result]"
                         tc_obs = _filter_tool_injection(tc_obs)
                         # Collect result for post-loop synthesis
@@ -1466,7 +1477,16 @@ class AgentLoop:
                     f"[agent.loop] iter={iteration + 1} tool_call={tool_name} args={json.dumps(tool_args)[:120]}"
                 )
 
-                # Guard: reject tool names not in the explicit allowlist
+                # Guard: reject tool names outside the explicit objective policy.
+                if effective_allowed is not None and tool_name not in effective_allowed:
+                    allowed_list = ", ".join(sorted(effective_allowed))
+                    observation = f"[Tool '{tool_name}' is not available in this objective policy. Allowed tools: {allowed_list}]"
+                    logger.warning(f"[agent.loop] rejected tool name by explicit policy: {tool_name!r}")
+                    last_tool_failed = True
+                    consecutive_failures += 1
+                    observation_log += f"\n[Tool: {tool_name} | Status: BLOCKED (policy)]\n{observation}\n"
+                    continue
+
                 if tool_name not in AGENT_ALLOWED_TOOLS:
                     allowed_list = ", ".join(sorted(AGENT_ALLOWED_TOOLS))
                     observation = f"[Tool '{tool_name}' is not available. Available tools: {allowed_list}]"
@@ -1874,7 +1894,11 @@ class AgentLoop:
                         except KeyError:
                             # Contract not registered — fall back to legacy dispatch
                             logger.warning("[agent.loop] FileWriteContract not in registry, using legacy dispatch")
-                            tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input)
+                            tool_result, tool_failed, retry_count = await dispatch_with_retry(
+                                tool_intent,
+                                tool_input,
+                                allowed_tool_names=effective_allowed,
+                            )
 
                     elif tool_name == "edit_file":
                         # edit_file: use typed contract path (like file_write)
@@ -1889,7 +1913,11 @@ class AgentLoop:
                         except KeyError:
                             # Contract not registered — fall back to legacy dispatch
                             logger.warning("[agent.loop] EditFileContract not in registry, using legacy dispatch")
-                            tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input)
+                            tool_result, tool_failed, retry_count = await dispatch_with_retry(
+                                tool_intent,
+                                tool_input,
+                                allowed_tool_names=effective_allowed,
+                            )
 
                         # Bridge diff metadata from edit_file tool results.
                         # Emit a file_diff obs event so the frontend DiffBlock can
@@ -1907,7 +1935,12 @@ class AgentLoop:
                                 )
 
                     else:
-                        tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input, adapter=active_adapter)
+                        tool_result, tool_failed, retry_count = await dispatch_with_retry(
+                            tool_intent,
+                            tool_input,
+                            adapter=active_adapter,
+                            allowed_tool_names=effective_allowed,
+                        )
 
                     latency_ms = round((time.monotonic() - t_tool) * 1000)
 
@@ -1939,6 +1972,7 @@ class AgentLoop:
                                 trace=trace,
                                 user_question=_user_q,
                                 adapter=active_adapter,
+                                allowed_tool_names=effective_allowed,
                             ):
                                 yield chunk
                             if _obs:
@@ -1970,6 +2004,7 @@ class AgentLoop:
                                 tool_name=tool_name,
                                 tool_args=tool_args,
                                 observation=safe_obs,
+                                allowed_tool_names=effective_allowed,
                             )
                             if verify_obs:
                                 observation += f"\n[VERIFICATION]: {verify_obs}"
@@ -1996,6 +2031,7 @@ class AgentLoop:
                                         Intent.FILE_TASK,
                                         _grounding_path,
                                         max_retries=0,
+                                        allowed_tool_names=effective_allowed,
                                     )
                                     _grounding_ok = (
                                         not _grounding_failed and _grounding_result and _grounding_result.success
@@ -2351,7 +2387,12 @@ class AgentLoop:
                         tool_failed = False
                         try:
                             tool_intent = Intent(tc_name)
-                            tool_result, tool_failed, retry_count = await dispatch_with_retry(tool_intent, tool_input, adapter=active_adapter)
+                            tool_result, tool_failed, retry_count = await dispatch_with_retry(
+                                tool_intent,
+                                tool_input,
+                                adapter=active_adapter,
+                                allowed_tool_names=effective_allowed,
+                            )
                             latency_ms = round((time.monotonic() - t_tool) * 1000)
 
                             if tool_result:
@@ -2382,6 +2423,7 @@ class AgentLoop:
                                         trace=trace,
                                         user_question=_user_q,
                                         adapter=active_adapter,
+                                        allowed_tool_names=effective_allowed,
                                     ):
                                         yield chunk
                                     if _obs:
@@ -2733,7 +2775,11 @@ class AgentLoop:
                                 )
                             t_late = time.monotonic()
                             try:
-                                _late_result, _late_failed, _ = await dispatch_with_retry(Intent(_tc_name), _tc_input)
+                                _late_result, _late_failed, _ = await dispatch_with_retry(
+                                    Intent(_tc_name),
+                                    _tc_input,
+                                    allowed_tool_names=effective_allowed,
+                                )
                                 _late_lat = round((time.monotonic() - t_late) * 1000)
                                 if _late_result:
                                     _late_obs = _filter_tool_injection(_late_result.content)
@@ -2751,6 +2797,7 @@ class AgentLoop:
                                             trace=trace,
                                             user_question=_user_q,
                                             adapter=active_adapter,
+                                            allowed_tool_names=effective_allowed,
                                         ):
                                             yield chunk
                                         return
@@ -2935,6 +2982,7 @@ class AgentLoop:
         trace: AgentTrace,
         user_question: str = "",
         adapter=None,
+        allowed_tool_names: Optional[frozenset[str]] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Synthesize search results into a user-facing answer, with follow-up
@@ -2959,7 +3007,11 @@ class AgentLoop:
         # Fire-and-forget: write the raw results file in the background.
         async def _write_file() -> None:
             try:
-                await dispatch_with_retry(Intent.FILE_WRITE, f"{filename}:\n\n{file_content}")
+                await dispatch_with_retry(
+                    Intent.FILE_WRITE,
+                    f"{filename}:\n\n{file_content}",
+                    allowed_tool_names=allowed_tool_names,
+                )
                 logger.info(f"[agent.loop] web search results written to {filename}")
             except Exception as exc:
                 logger.warning(f"[agent.loop] search result file write failed: {exc}")
@@ -2995,7 +3047,11 @@ class AgentLoop:
                         logger.info(f"[agent.loop] synthesis requests web_fetch for: {followup_url[:80]}")
                         # Emit a status chunk so the user knows we're fetching
                         yield StreamChunk(text="", done=False, status=f"Reading page: {followup_url[:60]}")
-                        fetch_result, fetch_failed, _ = await dispatch_with_retry(Intent.WEB_FETCH, followup_url)
+                        fetch_result, fetch_failed, _ = await dispatch_with_retry(
+                            Intent.WEB_FETCH,
+                            followup_url,
+                            allowed_tool_names=allowed_tool_names,
+                        )
                         if fetch_result and not fetch_failed:
                             # Step 2: Use synthesize_combined() — this is the PRIMARY
                             # synthesis path for web queries. It uses a dedicated prompt
@@ -3234,6 +3290,7 @@ class AgentLoop:
         tool_name: str,
         tool_args: dict,
         observation: str,
+        allowed_tool_names: Optional[frozenset[str]] = None,
     ) -> Optional[str]:
         """
         Verify a tool result after successful execution.
@@ -3263,6 +3320,7 @@ class AgentLoop:
                     Intent.FILE_TASK,
                     path,
                     max_retries=0,  # no retry for verification
+                    allowed_tool_names=allowed_tool_names,
                 )
                 if verify_failed or not verify_result or not verify_result.success:
                     return (

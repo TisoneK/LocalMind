@@ -180,6 +180,7 @@ class BaseAgent(ABC):
         memory_facts: Optional[list[str]] = None,
         orchestrator_context: Optional[str] = None,
         skip_planning: bool = False,
+        allowed_tool_names: Optional[frozenset[str]] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop.
@@ -271,6 +272,7 @@ class BaseAgent(ABC):
             agent_context=agent_context_str,
             agent_config=cfg,  # ADR-6: pass the scoped toolset + caps
             skip_planning=skip_planning,
+            allowed_tool_names=allowed_tool_names,
         ):
             yield chunk
 

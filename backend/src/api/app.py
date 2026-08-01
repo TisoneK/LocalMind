@@ -29,6 +29,7 @@ from api.routes import (
     metrics,
     models,
     observability,
+    objectives,
     ollama,
     sessions,
     terminal,
@@ -76,6 +77,7 @@ def create_app() -> FastAPI:
     app.include_router(todos.router, prefix="/api", tags=["todos"])
     app.include_router(metrics.router, prefix="/api", tags=["metrics"])
     app.include_router(observability.router, prefix="/api", tags=["observability"])
+    app.include_router(objectives.router, prefix="/api", tags=["objectives"])
     app.include_router(terminal.router, prefix="/api", tags=["terminal"])
     app.include_router(config.router, prefix="/api", tags=["settings"])
 
@@ -107,6 +109,13 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def startup():
+        # User-started autonomous objectives share the same Engine and safety
+        # pipeline as chat requests, but continue after the chat HTTP response.
+        from api.routes.chat import _engine as _chat_engine
+        from core.objective_runtime import ObjectiveRuntime
+
+        objective_runtime = ObjectiveRuntime(_chat_engine, settings.localmind_db_path)
+        app.state.objective_runtime = objective_runtime
         # Log the actual active model based on the adapter, not always ollama_model.
         # Previously this always showed settings.ollama_model, which is empty when
         # using a cloud adapter — making it look like no model is configured.
@@ -152,6 +161,7 @@ def create_app() -> FastAPI:
                 "[startup] Cloud adapter '%s' active — skipping Ollama warmup entirely.",
                 settings.localmind_adapter,
             )
+            await objective_runtime.start()
             return
 
         # Single authoritative startup: warms LLM router, embed model,
@@ -160,6 +170,7 @@ def create_app() -> FastAPI:
         from api.routes.chat import _engine as _chat_engine
 
         await _chat_engine.startup()
+        await objective_runtime.start()
         logger.info("[startup] engine ready — accepting requests")
 
         # Background task to pre-warm VectorStore
@@ -248,7 +259,11 @@ def create_app() -> FastAPI:
 
     @app.on_event("shutdown")
     async def shutdown():
-        """Gracefully close all pooled adapter HTTP clients on server shutdown."""
+        """Stop autonomous work before closing pooled adapter clients."""
+        objective_runtime = getattr(app.state, "objective_runtime", None)
+        if objective_runtime is not None:
+            await objective_runtime.stop()
+
         from adapters import close_all_adapters
 
         await close_all_adapters()
