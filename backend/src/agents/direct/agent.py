@@ -2,7 +2,7 @@
 DirectAgent — what Direct Mode becomes per ADR-6.
 
 Per ADR-8 Principle 5: this class lives inside its agent directory
-(`agents/direct/agent.py`) alongside its workflow, context_builder,
+(`agents/direct/agent.py`) alongside its playbook, context_builder,
 tools, is_done, and (Phase 2) persona.
 
 Steps 1-2 only (assemble → model → respond). No tool execution.

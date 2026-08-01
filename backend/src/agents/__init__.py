@@ -9,7 +9,7 @@ Implements ADR-8 Principle 5 (Session 34, Phase 1): agents are
 directories, not modules. Each agent lives in its own subpackage at
 `agents/<name>/` containing `agent.py` (the class), `context_builder.py`,
 `is_done.py`, `tools.py`, `__init__.py` (re-exports the class), and
-(Phase 2) `workflow.md` + `persona.md`. The registry auto-discovers
+(Phase 2) `playbook.md` + `persona.md`. The registry auto-discovers
 directories with `agent.py` — adding a new agent = adding a new
 directory, no manual `register()` call needed.
 

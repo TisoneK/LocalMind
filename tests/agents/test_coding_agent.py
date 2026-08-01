@@ -54,11 +54,11 @@ def test_coding_agent_description_is_concrete():
 
 
 def test_coding_agent_build_context_returns_string():
-    """build_context returns a non-empty string with the coding workflow.
+    """build_context returns a non-empty string with the coding playbook.
 
     ADR-8 Phase 2 (Session 34): build_context() now loads the coding
-    workflow from agents/coding/workflow.md (was a static header in
-    Phase 1). The workflow's "## Coding Workflow" section appears in
+    playbook from agents/coding/playbook.md (was a static header in
+    Phase 1). The playbook's "## Coding Playbook" section appears in
     the context string along with the constraints (read-before-write,
     verify-after-write, follow-conventions, small-verifiable-changes).
     """
@@ -69,9 +69,9 @@ def test_coding_agent_build_context_returns_string():
         memory_facts=["user prefers Python 3.12"],
     )
     assert isinstance(ctx, str)
-    # Phase 2: the workflow file is loaded — its section header appears
-    assert "Coding Workflow" in ctx
-    # Phase 2: the workflow's constraints reach the context
+    # Phase 2: the playbook file is loaded — its section header appears
+    assert "Coding Playbook" in ctx
+    # Phase 2: the playbook's constraints reach the context
     assert "Read before writing" in ctx
     assert "Verify after writing" in ctx
     assert "Python 3.12" in ctx  # memory facts are included

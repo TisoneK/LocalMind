@@ -2,7 +2,7 @@
 Debugger agent context builder.
 
 Gathers debug-specific context before each turn:
-    - The debugger workflow (isolate, trace, reproduce, report)
+    - The debugger playbook (isolate, trace, reproduce, report)
     - Memory facts (passed in by the caller)
     - Orchestrator plan (passed in by the caller)
 
@@ -26,17 +26,17 @@ from core.models import Intent
 
 logger = logging.getLogger(__name__)
 
-_WORKFLOW_PATH = Path(__file__).resolve().parent / "workflow.md"
+_PLAYBOOK_PATH = Path(__file__).resolve().parent / "playbook.md"
 
 
-def _load_workflow() -> str:
+def _load_playbook() -> str:
     try:
-        if not _WORKFLOW_PATH.exists():
-            logger.warning("[debugger.context_builder] workflow file missing at %s", _WORKFLOW_PATH)
+        if not _PLAYBOOK_PATH.exists():
+            logger.warning("[debugger.context_builder] playbook file missing at %s", _PLAYBOOK_PATH)
             return ""
-        return _WORKFLOW_PATH.read_text()
+        return _PLAYBOOK_PATH.read_text()
     except Exception as exc:
-        logger.warning("[debugger.context_builder] failed to read workflow: %s", exc)
+        logger.warning("[debugger.context_builder] failed to read playbook: %s", exc)
         return ""
 
 
@@ -46,17 +46,17 @@ def build_debugger_context(
     memory_facts: Optional[list[str]] = None,
     orchestrator_context: Optional[str] = None,
 ) -> str:
-    workflow_md = _load_workflow()
+    playbook_md = _load_playbook()
 
     lines: list[str] = []
 
-    if workflow_md:
-        workflow_lines = workflow_md.splitlines()
-        while workflow_lines and (workflow_lines[0].startswith("# ") or not workflow_lines[0].strip()):
-            workflow_lines.pop(0)
-        lines.append("## Debugger Workflow")
+    if playbook_md:
+        playbook_lines = playbook_md.splitlines()
+        while playbook_lines and (playbook_lines[0].startswith("# ") or not playbook_lines[0].strip()):
+            playbook_lines.pop(0)
+        lines.append("## Debugger Playbook")
         lines.append("")
-        lines.extend(workflow_lines)
+        lines.extend(playbook_lines)
         lines.append("")
     else:
         lines.extend([

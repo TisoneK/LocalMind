@@ -1,4 +1,4 @@
-# Workflow: Analyst (understand requirements, clarify scope)
+# Playbook: Analyst (understand requirements, clarify scope)
 
 > For requests that involve understanding what needs to be built:
 > analyzing specifications, clarifying requirements, examining project

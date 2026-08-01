@@ -1,4 +1,4 @@
-# Workflow: Research (multi-source lookups)
+# Playbook: Research (multi-source lookups)
 
 > For requests that need information from external sources: web search,
 > web fetch, document reading, multi-source synthesis.

@@ -1,4 +1,4 @@
-# Workflow: Debugger (isolate, trace, reproduce, report)
+# Playbook: Debugger (isolate, trace, reproduce, report)
 
 > For requests that involve diagnosing failures: finding root causes
 > of bugs, errors, crashes, test failures, or unexpected behavior.

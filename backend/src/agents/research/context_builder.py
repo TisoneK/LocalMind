@@ -1,7 +1,7 @@
-"""Research agent context builder — loads the research workflow file.
+"""Research agent context builder — loads the research playbook file.
 
-Per ADR-8 Phase 2 (Session 34): loads agents/research/workflow.md and
-returns it as the agent_context. The workflow governs HOW the Research
+Per ADR-8 Phase 2 (Session 34): loads agents/research/playbook.md and
+returns it as the agent_context. The playbook governs HOW the Research
 Agent uses web_search + web_fetch (enough sources, cross-reference key
 claims, note dates, distinguish facts from opinions, synthesize).
 """
@@ -16,23 +16,23 @@ from core.models import Intent
 
 logger = logging.getLogger(__name__)
 
-_WORKFLOW_PATH = Path(__file__).resolve().parent / "workflow.md"
+_PLAYBOOK_PATH = Path(__file__).resolve().parent / "playbook.md"
 
 
-def _load_workflow() -> str:
+def _load_playbook() -> str:
     try:
-        if not _WORKFLOW_PATH.exists():
+        if not _PLAYBOOK_PATH.exists():
             logger.warning(
-                "[research.context_builder] workflow file missing at %s — "
-                "Phase 2 workflow injection will be empty",
-                _WORKFLOW_PATH,
+                "[research.context_builder] playbook file missing at %s — "
+                "Phase 2 playbook injection will be empty",
+                _PLAYBOOK_PATH,
             )
             return ""
-        return _WORKFLOW_PATH.read_text()
+        return _PLAYBOOK_PATH.read_text()
     except Exception as exc:
         logger.warning(
-            "[research.context_builder] failed to read workflow file %s: %s",
-            _WORKFLOW_PATH, exc,
+            "[research.context_builder] failed to read playbook file %s: %s",
+            _PLAYBOOK_PATH, exc,
         )
         return ""
 
@@ -43,19 +43,19 @@ def build_research_context(
     memory_facts: Optional[list[str]] = None,
     orchestrator_context: Optional[str] = None,
 ) -> str:
-    workflow_md = _load_workflow()
+    playbook_md = _load_playbook()
 
     lines: list[str] = []
 
-    if workflow_md:
-        workflow_lines = workflow_md.splitlines()
-        while workflow_lines and (
-            workflow_lines[0].startswith("# ") or not workflow_lines[0].strip()
+    if playbook_md:
+        playbook_lines = playbook_md.splitlines()
+        while playbook_lines and (
+            playbook_lines[0].startswith("# ") or not playbook_lines[0].strip()
         ):
-            workflow_lines.pop(0)
-        lines.append("## Research Workflow")
+            playbook_lines.pop(0)
+        lines.append("## Research Playbook")
         lines.append("")
-        lines.extend(workflow_lines)
+        lines.extend(playbook_lines)
         lines.append("")
     else:
         lines.extend([

@@ -49,7 +49,7 @@ def test_research_agent_description_concrete():
 
 def test_research_agent_build_context():
     """ADR-8 Phase 2 (Session 34): build_context() loads the research
-    workflow from agents/research/workflow.md. The "## Research Workflow"
+    playbook from agents/research/playbook.md. The "## Research Playbook"
     section header appears, plus the constraints (raw search results are
     NOT the answer, chunk before generating, verify synthesis, etc.).
     """
@@ -57,8 +57,8 @@ def test_research_agent_build_context():
     ctx = agent.build_context(
         messages=[], intent=Intent.WEB_SEARCH, memory_facts=["test fact"]
     )
-    # Phase 2: the workflow file is loaded
-    assert "Research Workflow" in ctx
+    # Phase 2: the playbook file is loaded
+    assert "Research Playbook" in ctx
     assert "Raw search results are NOT the answer" in ctx
     assert "test fact" in ctx
 

@@ -1,4 +1,4 @@
-# Workflow: Reviewer (spec conformance, quality assessment)
+# Playbook: Reviewer (spec conformance, quality assessment)
 
 > For requests that involve reviewing code: checking that implementations
 > satisfy specifications, assessing quality, identifying issues, and

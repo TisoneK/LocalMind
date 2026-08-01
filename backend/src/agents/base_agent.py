@@ -235,11 +235,11 @@ class BaseAgent(ABC):
 
         # ADR-8 Phase 2 (Session 34): call build_context() and pass the
         # result as `agent_context` to AgentLoop.run(). This is the
-        # load-bearing piece — the agent's workflow file
-        # (agents/coding/workflow.md, agents/research/workflow.md) is
+        # load-bearing piece — the agent's playbook file
+        # (agents/coding/playbook.md, agents/research/playbook.md) is
         # loaded by build_context() and reaches the model's system
         # prompt via the `agent_context_section` in
-        # build_agent_system_prompt(). Without this call, the workflow
+        # build_agent_system_prompt(). Without this call, the playbook
         # files sit on disk unused (Session 33 finding); with it, they
         # govern HOW the agent uses its scoped tools.
         try:

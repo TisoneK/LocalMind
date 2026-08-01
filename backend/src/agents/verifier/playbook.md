@@ -1,4 +1,4 @@
-# Workflow: Verifier (test, reproduce, validate)
+# Playbook: Verifier (test, reproduce, validate)
 
 > For requests that involve verifying that code works: running tests,
 > reproducing bugs, checking acceptance criteria, validating CLI/API

@@ -1,4 +1,4 @@
-# Workflow: Coding (file edits, commands, verification)
+# Playbook: Coding (file edits, commands, verification)
 
 > For requests that involve writing code, editing files, running
 > commands, or building/verifying changes. This is LocalMind's

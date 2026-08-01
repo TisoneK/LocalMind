@@ -8,7 +8,7 @@ this keeps the new abstraction non-breaking while establishing the
 structural skeleton.
 
 Per ADR-8 Principle 5: this class lives inside its agent directory
-(`agents/coding/agent.py`) alongside its workflow, context_builder,
+(`agents/coding/agent.py`) alongside its playbook, context_builder,
 tools, is_done, and (Phase 2) persona. The directory IS the agent —
 co-located, extensible, testable.
 

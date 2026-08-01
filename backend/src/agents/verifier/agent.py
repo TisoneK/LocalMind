@@ -6,7 +6,7 @@ verifier-specific context_builder, scoped tools, and is_done(). The
 actual loop execution delegates to the existing AgentLoop (Phase 1).
 
 Per ADR-8 Principle 5: this class lives inside its agent directory
-(`agents/verifier/agent.py`) alongside its workflow, context_builder,
+(`agents/verifier/agent.py`) alongside its playbook, context_builder,
 tools, is_done, and (Phase 2) persona.
 
 The verifier is the agent that PROVES things work — it runs tests,

@@ -921,8 +921,8 @@ class AgentLoop:
             agent_context: Optional agent-specific context string from the
                 selected BaseAgent's build_context() method (ADR-8 Phase 2).
                 When the CodingAgent is selected for SHELL/FILE_*/CODE_EXEC
-                intents, this contains the coding workflow loaded from
-                agents/coding/workflow.md. Passed through to
+                intents, this contains the coding playbook loaded from
+                agents/coding/playbook.md. Passed through to
                 build_agent_system_prompt() and injected as the
                 `agent_context_section` in the system prompt.
         """

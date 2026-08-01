@@ -2,7 +2,7 @@
 Verifier agent context builder.
 
 Gathers verification-specific context before each turn:
-    - The verifier workflow (systematic checking, isolate failures,
+    - The verifier playbook (systematic checking, isolate failures,
       use git/process tools, report clearly)
     - Memory facts (passed in by the caller)
     - Orchestrator plan (passed in by the caller)
@@ -28,29 +28,29 @@ from core.models import Intent
 
 logger = logging.getLogger(__name__)
 
-# Path to the verifier workflow file. Per ADR-8 Phase 2, the workflow
+# Path to the verifier playbook file. Per ADR-8 Phase 2, the playbook
 # is co-located with the agent class.
-_WORKFLOW_PATH = Path(__file__).resolve().parent / "workflow.md"
+_PLAYBOOK_PATH = Path(__file__).resolve().parent / "playbook.md"
 
 
-def _load_workflow() -> str:
-    """Load the verifier workflow markdown file.
+def _load_playbook() -> str:
+    """Load the verifier playbook markdown file.
 
     Returns an empty string if the file is missing or unreadable
-    (best-effort — the workflow is guidance, not a hard requirement).
+    (best-effort — the playbook is guidance, not a hard requirement).
     """
     try:
-        if not _WORKFLOW_PATH.exists():
+        if not _PLAYBOOK_PATH.exists():
             logger.warning(
-                "[verifier.context_builder] workflow file missing at %s",
-                _WORKFLOW_PATH,
+                "[verifier.context_builder] playbook file missing at %s",
+                _PLAYBOOK_PATH,
             )
             return ""
-        return _WORKFLOW_PATH.read_text()
+        return _PLAYBOOK_PATH.read_text()
     except Exception as exc:
         logger.warning(
-            "[verifier.context_builder] failed to read workflow file %s: %s",
-            _WORKFLOW_PATH, exc,
+            "[verifier.context_builder] failed to read playbook file %s: %s",
+            _PLAYBOOK_PATH, exc,
         )
         return ""
 
@@ -64,8 +64,8 @@ def build_verifier_context(
     """
     Build the verifier-agent context string.
 
-    Loads the verifier workflow file (agents/verifier/workflow.md) and
-    returns it as the agent_context section. The workflow contains the
+    Loads the verifier playbook file (agents/verifier/playbook.md) and
+    returns it as the agent_context section. The playbook contains the
     constraints: read before verifying, isolate failures, use git/process
     tools, report clearly.
 
@@ -73,20 +73,20 @@ def build_verifier_context(
     already injected by AgentLoop.run() per Session 16 — this
     context_builder does NOT duplicate it.
     """
-    workflow_md = _load_workflow()
+    playbook_md = _load_playbook()
 
     lines: list[str] = []
 
-    if workflow_md:
-        workflow_lines = workflow_md.splitlines()
+    if playbook_md:
+        playbook_lines = playbook_md.splitlines()
         # Drop the H1 header line and any leading blank lines
-        while workflow_lines and (
-            workflow_lines[0].startswith("# ") or not workflow_lines[0].strip()
+        while playbook_lines and (
+            playbook_lines[0].startswith("# ") or not playbook_lines[0].strip()
         ):
-            workflow_lines.pop(0)
-        lines.append("## Verifier Workflow")
+            playbook_lines.pop(0)
+        lines.append("## Verifier Playbook")
         lines.append("")
-        lines.extend(workflow_lines)
+        lines.extend(playbook_lines)
         lines.append("")
     else:
         lines.extend([

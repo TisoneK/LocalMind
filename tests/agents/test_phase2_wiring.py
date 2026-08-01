@@ -7,16 +7,16 @@ Locks in:
       injects it as an AGENT CONTEXT section in the prompt
     - When agent_context is None, the AGENT CONTEXT section is omitted
       (no leak)
-    - build_coding_context() loads agents/coding/workflow.md and returns
+    - build_coding_context() loads agents/coding/playbook.md and returns
       its constraints (read-before-write, verify-after-write, etc.)
-    - build_research_context() loads agents/research/workflow.md
+    - build_research_context() loads agents/research/playbook.md
     - BaseAgent.run() calls build_context() and passes the result as
       `agent_context` to AgentLoop.run()
     - AgentLoop.run() honors agent_config.max_iterations and
       agent_config.max_wall_clock_secs (was dead code before Phase 2)
 
 Per the Session 31/33 flaw log: these tests verify the WIRING (does
-the workflow file reach the prompt?), not the model's behavior. The
+the playbook file reach the prompt?), not the model's behavior. The
 real-model smoke test (separate script) verifies the model actually
 follows the workflow once it's in the prompt.
 """
@@ -40,10 +40,10 @@ def test_build_agent_system_prompt_injects_agent_context_section():
     prompt = build_agent_system_prompt(
         intent=Intent.SHELL,
         available_tools=[],
-        agent_context="## Coding Workflow\n\nRead before writing.",
+        agent_context="## Coding Playbook\n\nRead before writing.",
     )
     assert "AGENT CONTEXT" in prompt
-    assert "Coding Workflow" in prompt
+    assert "Coding Playbook" in prompt
     assert "Read before writing" in prompt
 
 
@@ -67,48 +67,48 @@ def test_build_agent_system_prompt_omits_section_when_agent_context_is_empty():
     assert "AGENT CONTEXT" not in prompt
 
 
-# ── build_coding_context loads the workflow file ──────────────────────────
+# ── build_coding_context loads the playbook file ──────────────────────────
 
 
-def test_build_coding_context_loads_workflow_constraints():
-    """build_coding_context() returns the coding workflow constraints."""
+def test_build_coding_context_loads_playbook_constraints():
+    """build_coding_context() returns the coding playbook constraints."""
     from agents.coding.context_builder import build_coding_context
 
     ctx = build_coding_context(
         messages=[],
         intent=Intent.SHELL,
     )
-    assert "Coding Workflow" in ctx
+    assert "Coding Playbook" in ctx
     assert "Read before writing" in ctx
     assert "Verify after writing" in ctx
     assert "Follow existing conventions" in ctx
     assert "Small, verifiable changes" in ctx
 
 
-def test_build_research_context_loads_workflow_constraints():
-    """build_research_context() returns the research workflow constraints."""
+def test_build_research_context_loads_playbook_constraints():
+    """build_research_context() returns the research playbook constraints."""
     from agents.research.context_builder import build_research_context
 
     ctx = build_research_context(
         messages=[],
         intent=Intent.WEB_SEARCH,
     )
-    assert "Research Workflow" in ctx
+    assert "Research Playbook" in ctx
     assert "Raw search results are NOT the answer" in ctx
 
 
-def test_build_coding_context_falls_back_when_workflow_missing(tmp_path, monkeypatch):
-    """If the workflow file is missing, build_coding_context falls back gracefully."""
+def test_build_coding_context_falls_back_when_playbook_missing(tmp_path, monkeypatch):
+    """If the playbook file is missing, build_coding_context falls back gracefully."""
     from agents.coding import context_builder as cb
 
-    # Point _WORKFLOW_PATH at a nonexistent file
-    monkeypatch.setattr(cb, "_WORKFLOW_PATH", tmp_path / "does_not_exist.md")
+    # Point _PLAYBOOK_PATH at a nonexistent file
+    monkeypatch.setattr(cb, "_PLAYBOOK_PATH", tmp_path / "does_not_exist.md")
 
     ctx = cb.build_coding_context(messages=[], intent=Intent.SHELL)
     # Falls back to the static header
     assert "Coding Agent" in ctx
-    # No workflow section (the file is missing)
-    assert "Coding Workflow" not in ctx
+    # No playbook section (the file is missing)
+    assert "Coding Playbook" not in ctx
 
 
 # ── BaseAgent.run() calls build_context() and passes it through ───────────
@@ -168,8 +168,8 @@ async def test_base_agent_run_calls_build_context_and_passes_to_loop():
     assert build_context_called["value"], "BaseAgent.run() did not call build_context()"
     # agent_context was passed through to AgentLoop.run()
     assert "agent_context" in captured_kwargs, "agent_context not passed to AgentLoop.run()"
-    # The agent_context contains the coding workflow (loaded from workflow.md)
-    assert "Coding Workflow" in captured_kwargs["agent_context"]
+    # The agent_context contains the coding playbook (loaded from playbook.md)
+    assert "Coding Playbook" in captured_kwargs["agent_context"]
     # agent_config was also passed through (Phase 1 behavior preserved)
     assert "agent_config" in captured_kwargs
     assert captured_kwargs["agent_config"].name == "coding"
@@ -278,10 +278,10 @@ def test_agent_loop_honors_agent_config_caps_when_provided():
     assert resolve_wall(browser_cfg) == 240
 
 
-# ── End-to-end: the coding workflow reaches build_agent_system_prompt ────
+# ── End-to-end: the coding playbook reaches build_agent_system_prompt ────
 
 
-def test_coding_workflow_reaches_system_prompt_via_agent_context():
+def test_coding_playbook_reaches_system_prompt_via_agent_context():
     """End-to-end: CodingAgent.build_context() output, when passed as
     agent_context to build_agent_system_prompt(), appears in the prompt."""
     agent = CodingAgent(adapter=None)
@@ -294,7 +294,7 @@ def test_coding_workflow_reaches_system_prompt_via_agent_context():
         available_tools=[],
         agent_context=agent_context_str,
     )
-    # The workflow constraints appear in the final prompt
+    # The playbook constraints appear in the final prompt
     assert "Read before writing" in prompt
     assert "Verify after writing" in prompt
     assert "Follow existing conventions" in prompt

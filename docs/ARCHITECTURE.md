@@ -82,7 +82,7 @@ Key sub-modules:
 | 7 | Debugger | 12 | 360s | file_task, git, shell, process, delegate | Isolate root causes |
 | 8 | Analyst | 8 | 180s | file_task, git, delegate | Clarify requirements |
 
-Agents live in `agents/<name>/` directories (ADR-8 Principle 5). Each directory contains: `agent.py`, `context_builder.py`, `tools.py`, `is_done.py`, `workflow.md`. The registry auto-discovers directories with `agent.py`.
+Agents live in `agents/<name>/` directories (ADR-8 Principle 5). Each directory contains: `agent.py`, `context_builder.py`, `tools.py`, `is_done.py`, `playbook.md`. The registry auto-discovers directories with `agent.py`.
 
 Intent → agent routing in `agents/selection.py`: `Intent.VERIFY → verifier`, `Intent.REVIEW → reviewer`, etc.
 

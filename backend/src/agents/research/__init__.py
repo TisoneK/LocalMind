@@ -2,7 +2,7 @@
 
 Per ADR-8 Principle 5 (Session 34, Phase 1): the agent class lives INSIDE
 this directory at `agent.py`. Co-located with its context_builder, tools,
-is_done, and (Phase 2) workflow.md + persona.md.
+is_done, and (Phase 2) playbook.md + persona.md.
 """
 
 from agents.research.agent import ResearchAgent

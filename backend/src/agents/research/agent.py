@@ -5,7 +5,7 @@ Per ADR-6: a thin subclass of BaseAgent that supplies research-specific
 context_builder, scoped tools, and is_done().
 
 Per ADR-8 Principle 5: this class lives inside its agent directory
-(`agents/research/agent.py`) alongside its workflow, context_builder,
+(`agents/research/agent.py`) alongside its playbook, context_builder,
 tools, is_done, and (Phase 2) persona.
 
 Scoped toolset: web_search + web_fetch (2 tools). Cannot run shell,

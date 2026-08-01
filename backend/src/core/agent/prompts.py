@@ -425,10 +425,10 @@ def build_agent_system_prompt(
         agent_context:        Optional agent-specific context from the selected
                               BaseAgent subclass's build_context() method (ADR-8
                               Phase 2). When the CodingAgent is selected, this
-                              includes the coding workflow (read-before-write,
+                              includes the coding playbook (read-before-write,
                               verify-after-write, follow-conventions, small-
                               verifiable-changes) loaded from
-                              agents/coding/workflow.md. Same for research /
+                              agents/coding/playbook.md. Same for research /
                               browser / direct agents. When None (Direct Mode
                               or no agent selected), the section is omitted.
     """
@@ -833,25 +833,25 @@ Do NOT re-plan or re-think — just call the tools as described in the plan.
     }
     persona_section = _PERSONA_MAP.get(intent, "")
 
-    # ADR-8 Phase 2: inject the selected BaseAgent's context (workflow +
+    # ADR-8 Phase 2: inject the selected BaseAgent's context (playbook +
     # persona + agent-specific guidance). This is the load-bearing piece
     # — when the CodingAgent is selected for SHELL/FILE_*/CODE_EXEC
-    # intents, its workflow (read-before-write, verify-after-write,
+    # intents, its playbook (read-before-write, verify-after-write,
     # follow-conventions, small-verifiable-changes) reaches the model
     # here. Without this section, the CodingAgent is just a scoped
-    # toolset (Phase 1 behavior); with it, the CodingAgent's workflow
+    # toolset (Phase 1 behavior); with it, the CodingAgent's playbook
     # actually governs tool use (Phase 2 behavior).
     agent_context_section = ""
     if agent_context:
         agent_context_section = f"""
-AGENT CONTEXT — your agent type's workflow + guidance:
+AGENT CONTEXT — your agent type's playbook + guidance:
 {agent_context}
 
-The above is your agent's workflow. Follow it for every tool call in this
+The above is your agent's playbook. Follow it for every tool call in this
 turn — it governs HOW you use your scoped tools (read-before-write,
 verify-after-write, follow-conventions, small-verifiable-changes for
 the Coding Agent; enough-sources + cite-dates for the Research Agent;
-etc.). Your scoped toolset is the WHAT; this workflow is the HOW.
+etc.). Your scoped toolset is the WHAT; this playbook is the HOW.
 """
 
     # Inject orchestrator context if available (three-layer pipeline)

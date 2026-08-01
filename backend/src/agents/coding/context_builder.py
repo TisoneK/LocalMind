@@ -2,9 +2,9 @@
 Coding agent context builder.
 
 Gathers coding-specific context before each turn:
-    - The coding workflow (read-before-write, verify-after-write,
+    - The coding playbook (read-before-write, verify-after-write,
       use-workspace-state, follow-conventions, small-verifiable-changes)
-      loaded from agents/coding/workflow.md
+      loaded from agents/coding/playbook.md
     - Memory facts (passed in by the caller)
     - Orchestrator plan (passed in by the caller)
 
@@ -13,10 +13,10 @@ agent's context is codebase-centric, unlike the browser agent (page-
 state-centric) or the research agent (source-tracking-centric).
 
 Per ADR-8 Phase 2 (Session 34): this function ACTUALLY loads the
-workflow file. Phase 1 returned a static header; Phase 2 makes the
-workflow load-bearing — the file's contents reach the model's system
+playbook file. Phase 1 returned a static header; Phase 2 makes the
+playbook load-bearing — the file's contents reach the model's system
 prompt via the `agent_context` parameter of
-`build_agent_system_prompt()`. This is the "the workflow is the value"
+`build_agent_system_prompt()`. This is the "the playbook is the value"
 piece of ADR-8 Principle 4.
 
 The workspace_state snapshot (git status/diff/build result) is injected
@@ -35,34 +35,34 @@ from core.models import Intent
 
 logger = logging.getLogger(__name__)
 
-# Path to the coding workflow file. Per ADR-8 Phase 2 (Session 34),
-# the workflow file moved from backend/data/workflows/coding.md to
-# agents/coding/workflow.md — co-located with the agent class. The
+# Path to the coding playbook file. Per ADR-8 Phase 2 (Session 34),
+# the playbook file moved from backend/data/playbooks/coding.md to
+# agents/coding/playbook.md — co-located with the agent class. The
 # path is resolved relative to this file so it works regardless of
 # the process CWD.
-_WORKFLOW_PATH = Path(__file__).resolve().parent / "workflow.md"
+_PLAYBOOK_PATH = Path(__file__).resolve().parent / "playbook.md"
 
 
-def _load_workflow() -> str:
-    """Load the coding workflow markdown file.
+def _load_playbook() -> str:
+    """Load the coding playbook markdown file.
 
     Returns an empty string if the file is missing or unreadable
-    (best-effort — the workflow is guidance, not a hard requirement).
+    (best-effort — the playbook is guidance, not a hard requirement).
     Logs a warning on failure so the regression is visible.
     """
     try:
-        if not _WORKFLOW_PATH.exists():
+        if not _PLAYBOOK_PATH.exists():
             logger.warning(
-                "[coding.context_builder] workflow file missing at %s — "
-                "Phase 2 workflow injection will be empty",
-                _WORKFLOW_PATH,
+                "[coding.context_builder] playbook file missing at %s — "
+                "Phase 2 playbook injection will be empty",
+                _PLAYBOOK_PATH,
             )
             return ""
-        return _WORKFLOW_PATH.read_text()
+        return _PLAYBOOK_PATH.read_text()
     except Exception as exc:
         logger.warning(
-            "[coding.context_builder] failed to read workflow file %s: %s",
-            _WORKFLOW_PATH, exc,
+            "[coding.context_builder] failed to read playbook file %s: %s",
+            _PLAYBOOK_PATH, exc,
         )
         return ""
 
@@ -76,9 +76,9 @@ def build_coding_context(
     """
     Build the coding-agent context string.
 
-    Phase 2 (ADR-8, Session 34): loads the coding workflow file
-    (agents/coding/workflow.md) and returns it as the agent_context
-    section. The workflow contains the constraints:
+    Phase 2 (ADR-8, Session 34): loads the coding playbook file
+    (agents/coding/playbook.md) and returns it as the agent_context
+    section. The playbook contains the constraints:
         1. Read before writing
         2. Verify after writing
         3. Use the workspace state (git status/diff injected every turn)
@@ -94,26 +94,26 @@ def build_coding_context(
     context_builder does NOT duplicate it. This keeps the context
     concise for the gemma3:1b-class target hardware.
     """
-    workflow_md = _load_workflow()
+    playbook_md = _load_playbook()
 
     lines: list[str] = []
 
-    if workflow_md:
+    if playbook_md:
         # Strip the H1 header line (it duplicates the AGENT CONTEXT section
         # header that build_agent_system_prompt() adds). Keep the rest.
-        workflow_lines = workflow_md.splitlines()
-        # Drop the first "# Workflow: Coding ..." line and any leading blank lines
-        while workflow_lines and (
-            workflow_lines[0].startswith("# ") or not workflow_lines[0].strip()
+        playbook_lines = playbook_md.splitlines()
+        # Drop the first "# Playbook: Coding ..." line and any leading blank lines
+        while playbook_lines and (
+            playbook_lines[0].startswith("# ") or not playbook_lines[0].strip()
         ):
-            workflow_lines.pop(0)
-        lines.append("## Coding Workflow")
+            playbook_lines.pop(0)
+        lines.append("## Coding Playbook")
         lines.append("")
-        lines.extend(workflow_lines)
+        lines.extend(playbook_lines)
         lines.append("")
     else:
         # Fallback: the static header from Phase 1, so the prompt isn't
-        # empty if the workflow file is missing.
+        # empty if the playbook file is missing.
         lines.extend([
             "## Coding Agent",
             "",
