@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse
 
 from api.routes import (
     actions,
+    capabilities,
     chat,
     config,
     filesystem,
@@ -28,8 +29,8 @@ from api.routes import (
     memory,
     metrics,
     models,
-    observability,
     objectives,
+    observability,
     ollama,
     sessions,
     terminal,
@@ -74,6 +75,7 @@ def create_app() -> FastAPI:
     app.include_router(filesystem.router, prefix="/api", tags=["filesystem"])
     app.include_router(chat.router, prefix="/api", tags=["chat"])
     app.include_router(actions.router, prefix="/api", tags=["actions"])
+    app.include_router(capabilities.router, prefix="/api", tags=["capabilities"])
     app.include_router(todos.router, prefix="/api", tags=["todos"])
     app.include_router(metrics.router, prefix="/api", tags=["metrics"])
     app.include_router(observability.router, prefix="/api", tags=["observability"])

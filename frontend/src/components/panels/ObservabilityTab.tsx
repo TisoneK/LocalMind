@@ -7,10 +7,11 @@ import {
   Brain,
   Activity,
 } from 'lucide-react';
-import { ObservationData } from '@/types';
+import { CapabilitiesData, ObservationData } from '@/types';
 
 interface ObservabilityTabProps {
   observation: ObservationData;
+  capabilities?: CapabilitiesData;
 }
 
 const intentLabels: Record<string, { label: string; color: string }> = {
@@ -58,7 +59,7 @@ function MetricBar({ label, value, max, color, fallback }: { label: string; valu
   );
 }
 
-export function ObservabilityTab({ observation }: ObservabilityTabProps) {
+export function ObservabilityTab({ observation, capabilities = { families: [] } }: ObservabilityTabProps) {
   // Guard all numeric values against NaN/undefined. Track "availability"
   // so we can show "—" instead of "0" when the backend hasn't sent data yet.
   const confidence = Number.isFinite(observation.confidence) ? observation.confidence : 0;
@@ -229,6 +230,9 @@ export function ObservabilityTab({ observation }: ObservabilityTabProps) {
       {observation.observation && (
         <RuntimeSnapshot summary={observation.observation} />
       )}
+      {capabilities.families.length > 0 && (
+        <CapabilityCatalog capabilities={capabilities} />
+      )}
     </div>
   );
 }
@@ -318,4 +322,41 @@ function formatEventData(data: Record<string, unknown>): string {
   } catch {
     return 'Event data unavailable';
   }
+}
+
+function CapabilityCatalog({ capabilities }: { capabilities: CapabilitiesData }) {
+  const families = capabilities.families.filter((family) => family.capabilities.length > 0);
+
+  return (
+    <section aria-labelledby="capability-catalog-heading" className="space-y-2">
+      <div className="flex items-center gap-1.5">
+        <Brain className="h-3 w-3 text-[#e8a420]" aria-hidden="true" />
+        <h2 id="capability-catalog-heading" className="text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
+          Capabilities
+        </h2>
+      </div>
+      <div className="bg-[#0a120a] border border-[#1a2a1a] rounded-md p-2.5 space-y-2">
+        {families.map((family) => (
+          <div key={family.id} className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] text-[#d4e8d4]">{family.label}</span>
+              <span className="text-[9px] text-[#5a7a5a] font-mono">{family.capabilities.length}</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {family.capabilities.map((capability) => (
+                <span
+                  key={capability.id}
+                  className="px-1.5 py-0.5 rounded bg-[#1a2a1a] text-[9px] text-[#8ab08a] font-mono"
+                  title={capability.description}
+                >
+                  <span aria-hidden="true">{capability.id.replace(/_/g, ' ')}</span>
+                  <span className="sr-only">: {capability.description}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }

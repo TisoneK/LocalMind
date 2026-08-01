@@ -266,6 +266,23 @@ export interface ObservationData {
   observation?: ObservationSummary | null;
 }
 
+export interface CapabilityItem {
+  id: string;
+  description: string;
+  toolNames: string[];
+  cognitive: boolean;
+}
+
+export interface CapabilityFamilySummary {
+  id: string;
+  label: string;
+  capabilities: CapabilityItem[];
+}
+
+export interface CapabilitiesData {
+  families: CapabilityFamilySummary[];
+}
+
 export interface MemoryFact {
   id: string;
   content: string;

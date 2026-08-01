@@ -30,6 +30,72 @@ describe('getObservability', () => {
     });
   });
 
+  it('maps grouped capability metadata into the frontend shape', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        families: [{
+          id: 'execution',
+          label: 'Execution',
+          capabilities: [{
+            id: 'shell',
+            description: 'Run a system command',
+            tool_names: ['shell'],
+            cognitive: false,
+          }],
+        }],
+      }),
+    }));
+
+    await expect(localmindClient.getCapabilities()).resolves.toEqual({
+      families: [{
+        id: 'execution',
+        label: 'Execution',
+        capabilities: [{
+          id: 'shell',
+          description: 'Run a system command',
+          toolNames: ['shell'],
+          cognitive: false,
+        }],
+      }],
+    });
+  });
+
+  it('falls back to an empty capability catalog when discovery is unavailable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('backend unavailable')));
+
+    await expect(localmindClient.getCapabilities()).resolves.toEqual({ families: [] });
+  });
+
+  it('skips malformed nested capability entries without losing valid metadata', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        families: [
+          null,
+          {
+            id: 'execution',
+            label: 'Execution',
+            capabilities: [null, { id: 'shell', description: 'Run commands', tool_names: ['shell'] }],
+          },
+        ],
+      }),
+    }));
+
+    await expect(localmindClient.getCapabilities()).resolves.toEqual({
+      families: [{
+        id: 'execution',
+        label: 'Execution',
+        capabilities: [{
+          id: 'shell',
+          description: 'Run commands',
+          toolNames: ['shell'],
+          cognitive: false,
+        }],
+      }],
+    });
+  });
+
   it('normalizes malformed snapshot fields without crashing the UI', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,

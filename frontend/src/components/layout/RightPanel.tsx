@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Terminal, Eye, Brain, PanelRightClose, PanelRight, Settings } from 'lucide-react';
-import { TerminalLine, ObservationData, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion } from '@/types';
+import { TerminalLine, ObservationData, CapabilitiesData, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion } from '@/types';
 import { TerminalPanel } from '@/components/panels/TerminalPanel';
 import { ObservabilityTab } from '@/components/panels/ObservabilityTab';
 import { MemoryTab } from '@/components/panels/MemoryTab';
@@ -20,6 +20,7 @@ interface RightPanelProps {
   onTerminalTabComplete?: (partial: string) => Promise<CompletionSuggestion[]>;
   onTerminalSessionChange?: (sessionId: string) => void;
   observation: ObservationData;
+  capabilities: CapabilitiesData;
   memoryFacts: MemoryFact[];
   onMemoryDelete?: (id: string) => void;
   metrics: PerformanceMetricsType;
@@ -51,6 +52,7 @@ export function RightPanel({
   onTerminalTabComplete,
   onTerminalSessionChange,
   observation,
+  capabilities,
   memoryFacts,
   onMemoryDelete,
   metrics,
@@ -183,7 +185,7 @@ export function RightPanel({
             onSessionChange={onTerminalSessionChange}
           />
         )}
-        {activeTab === 'observability' && <ObservabilityTab observation={observation} />}
+        {activeTab === 'observability' && <ObservabilityTab observation={observation} capabilities={capabilities} />}
         {activeTab === 'memory' && <MemoryTab facts={memoryFacts} onDelete={onMemoryDelete} />}
       </div>
 

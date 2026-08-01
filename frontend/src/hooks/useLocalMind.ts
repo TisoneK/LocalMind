@@ -28,11 +28,32 @@ import type {
   MemoryFact,
   PerformanceMetrics,
   ObservationData,
+  CapabilitiesData,
   ModelOption,
   ToolCall,
   CompletionSuggestion,
   Objective,
 } from '@/types';
+
+// ─── useCapabilities ────────────────────────────────────────────────────
+
+export function useCapabilities() {
+  const [capabilities, setCapabilities] = useState<CapabilitiesData>({ families: [] });
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      const data = await localmindClient.getCapabilities();
+      if (mounted) setCapabilities(data);
+    };
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return capabilities;
+}
 
 // ─── useHealth ─────────────────────────────────────────────────────────
 

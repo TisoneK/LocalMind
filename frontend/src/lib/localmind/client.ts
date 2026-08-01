@@ -23,10 +23,12 @@ import type {
   PerformanceMetrics,
   ObservationData,
   ObservationSummary,
+  CapabilitiesData,
   ModelOption,
   CompletionSuggestion,
 } from '@/types';
 import { createSSEParser } from './sse';
+import type { CapabilitiesResponseWire } from './capabilities-response';
 
 // ─── Types ─────────────────────────────────────────────────────────────
 
@@ -608,6 +610,52 @@ class LocalMindClient {
         latency: 0,
         observation: null,
       };
+    }
+  }
+
+  // ── Capabilities ────────────────────────────────────────────────────
+
+  async getCapabilities(): Promise<CapabilitiesData> {
+    try {
+      const data = await this.request<CapabilitiesResponseWire>('/api/capabilities');
+      const families = Array.isArray(data.families)
+        ? data.families.flatMap((rawFamily) => {
+            if (!rawFamily || typeof rawFamily !== 'object') return [];
+            const family = rawFamily as {
+              id?: unknown;
+              label?: unknown;
+              capabilities?: unknown;
+            };
+            const rawCapabilities = Array.isArray(family.capabilities)
+              ? family.capabilities
+              : [];
+            return [{
+              id: typeof family.id === 'string' ? family.id : '',
+              label: typeof family.label === 'string' ? family.label : '',
+              capabilities: rawCapabilities.flatMap((rawCapability) => {
+                if (!rawCapability || typeof rawCapability !== 'object') return [];
+                const capability = rawCapability as {
+                  id?: unknown;
+                  description?: unknown;
+                  tool_names?: unknown;
+                  cognitive?: unknown;
+                };
+                return [{
+                  id: typeof capability.id === 'string' ? capability.id : '',
+                  description: typeof capability.description === 'string' ? capability.description : '',
+                  toolNames: Array.isArray(capability.tool_names)
+                    ? capability.tool_names.filter((tool): tool is string => typeof tool === 'string')
+                    : [],
+                  cognitive: capability.cognitive === true,
+                }];
+              }),
+            }];
+          })
+        : [];
+
+      return { families };
+    } catch {
+      return { families: [] };
     }
   }
 

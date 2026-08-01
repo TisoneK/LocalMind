@@ -14,6 +14,7 @@ import {
   useObjectives,
   useTerminal,
   useObservability,
+  useCapabilities,
   useMetrics,
   useModels,
   useMemory,
@@ -122,6 +123,7 @@ export function WorkspaceLayout() {
   const { todos, toggleTodo, addTodo } = useTodos(currentSessionId);
   const { objectives, create: createObjective, pause: pauseObjective, resume: resumeObjective, cancel: cancelObjective } = useObjectives(currentSessionId);
   const { observation } = useObservability(currentSessionId);
+  const capabilities = useCapabilities();
   const { metrics: polledMetrics } = useMetrics(isStreaming);
   const { models, current: currentModelId, provider: modelProvider, selectModel, refresh: refreshModels } = useModels();
   const { facts: memoryFacts, deleteFact } = useMemory();
@@ -346,6 +348,7 @@ export function WorkspaceLayout() {
           onTerminalTabComplete={terminal.tabComplete}
           onTerminalSessionChange={terminal.changeSession}
           observation={liveObservation || observation}
+          capabilities={capabilities}
           memoryFacts={memoryFacts}
           onMemoryDelete={deleteFact}
           metrics={metrics}
