@@ -188,3 +188,18 @@ The normal AgentLoop now derives `WorkReport` evidence from tool traces and appe
 - **Feature:** none
 - **Task:** none
 - **Status:** idle
+
+---
+## Handoff Notes (Session 60, 2026-07-31)
+
+Implemented and shipped the structured FreeBuff-style delegation boundary. Product commit `b9b97ff`; review `.context/memory/reviews/2026-07-31-review-17.md`; context closeout is this commit.
+
+Delivered immutable instruction packets, isolated child run IDs with parent correlation, literal child prompts, bounded structured results, forbidden-tool propagation, untrusted evidence delimiters, and structured failure metadata for construction/configuration, timeout, child exception, and empty-response paths. Legacy delegate calls remain compatible.
+
+Validation: 87 focused tests passed; compile/Ruff/diff checks passed; final review was ship-ready. Delegation remains synchronous handoff; parallel workers, child-run frontend observability, and legacy `SubAgent` retirement are deferred.
+
+- **Session:** none (idle)
+- **Feature:** none
+- **Task:** none
+- **Status:** idle
+

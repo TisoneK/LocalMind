@@ -768,3 +768,27 @@ Implemented the first explicit worker-to-report handoff at the AgentLoop boundar
 **Validation:** 70 focused tests passed; compile, changed-model Ruff, changed-test import Ruff, and diff checks passed. Full-loop E501 findings and FastAPI/Starlette deprecation warnings are pre-existing baseline noise.
 
 **Design note:** This is intentionally deterministic and does not add another model call. It gives the orchestrator an explicit worker result boundary without introducing another model failure point. Future delegated-agent work can reuse the contract, but should not weaken the current evidence-first and stream-ordering guarantees.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 60)
+
+The session implemented the first explicit FreeBuff-style delegation contract on the modern `BaseAgent`/`delegate` path without removing the legacy decomposition framework.
+
+**Delivered:**
+- `DelegationInstructionPacket` is immutable and self-contained. It renders literal child instructions rather than inheriting parent conversation history.
+- `AgentRunContext` gives each child invocation a unique ephemeral run ID and records the parent run ID through task-local context state.
+- `DelegationResult` gives the parent a bounded status/report metadata shape for completed, timed-out, failed, and empty child runs.
+- Optional scope, constraints, forbidden tools, selected evidence, and output-contract fields are validated and bounded.
+- Child evidence is marked as untrusted data in the prompt and raw evidence is not copied into returned metadata.
+- Legacy `{target_agent, task}` JSON remains valid, so existing callers do not need migration.
+
+**Review findings resolved before shipping:**
+- Child setup and execution exceptions now become correlated structured failures.
+- Non-standard child agents default to no tools; standardized child allowlists subtract delegated forbidden tools.
+- Timeout handling restores a non-None parent run context.
+- Child output metadata is bounded to a preview and character count.
+
+**Validation:** 87 focused tests passed; compile, Ruff, and diff checks passed. Product commit: `b9b97ff`. Review: `.context/memory/reviews/2026-07-31-review-17.md`.
+
+**Next boundary:** support parallel delegated workers and an explicit parent synthesis/child-run observability surface only as a separate slice. Preserve the fixed instruction, isolation, bounded metadata, and structured failure contracts.
+

@@ -101,10 +101,17 @@ Four implementation phases (multi-session):
   public `streamChat()` integration regression, remaining transitional
   AgentLoop wiring, optional SubAgentType consolidation, a live `agent-browser`
   smoke test, and separate contracts for actionable non-coding capabilities.
-  Session 59 also added a deterministic worker-to-report boundary: tool traces
+  Session 59 added a deterministic worker-to-report boundary: tool traces
   now produce evidence-first `WorkReport` output when model synthesis is empty
   or too weak, including forced-synthesis error paths and late XML-intercepted
   tools. Stream completion markers are held until the report is delivered.
+  Session 60 added the next delegation boundary: immutable instruction packets,
+  isolated child run IDs with parent correlation, bounded structured results,
+  explicit child-tool restrictions, untrusted evidence delimiters, and
+  structured failure metadata for construction/configuration, timeout, child
+  exception, and empty-response paths. Legacy `{target_agent, task}` calls
+  remain compatible. Delegation is still synchronous handoff in this slice;
+  parallel child execution and frontend child-run panels remain deferred.
 
 
 - **No-regression list (must hold after every phase):**

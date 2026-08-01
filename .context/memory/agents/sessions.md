@@ -938,3 +938,18 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** Consider a shared execution-result protocol for delegated-agent reports later; preserve the deterministic no-extra-model-call fallback and report-before-`done` guarantees.
 - **Report:** `.context/memory/reviews/2026-07-31-review-16.md`
 - **Notes:** Product commit `83d74778608d3fc933a080df4b3b32605cfb0ab5` is pushed to `origin/main`.
+
+---
+## 2026-07-31 — Session 60
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing — fixed delegation instruction packets and isolated child runs
+- **Task:** Make delegated agents behave like FreeBuff-style scoped workers: receive literal fixed instructions in isolated contexts and return structured report results.
+- **Commits:** 1 product (`b9b97ff`) + 1 context closeout
+- **Outcome:** done — added immutable `DelegationInstructionPacket` contracts with objective, scope, constraints, forbidden tools, selected evidence, and output requirements; added ephemeral `AgentRunContext` with unique child run IDs and parent correlation; added bounded `DelegationResult` metadata; extended the native delegate schema while preserving legacy `{target_agent, task}` calls; isolated child messages from parent history and mutable trace; enforced child tool restrictions and structured construction/configuration, timeout, child-exception, and empty-response failure paths.
+- **Validation:** 87 focused agent/delegation tests passed; changed files compile; Ruff passed on all changed files; `git diff --check` passed; independent final review was ship-ready with no blockers.
+- **Security/robustness:** delegated packets are bounded; selected parent evidence is explicitly delimited as untrusted data and excluded from returned metadata; child output metadata is capped; parent `ContextVar` state is restored after nested/timeout paths.
+- **Deferred:** delegation remains synchronous handoff; parallel child execution, frontend child-run panels, and legacy `SubAgent` framework retirement require separate parity work.
+- **Report:** `.context/memory/reviews/2026-07-31-review-17.md`
+- **Notes:** Product commit `b9b97ff` pushed successfully. GitHub reported existing Dependabot findings during push; this slice made no dependency changes.
+
