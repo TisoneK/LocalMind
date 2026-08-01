@@ -95,9 +95,13 @@ Four implementation phases (multi-session):
   routes, frontend objective controls, and the first read-only capability
   discovery surface (`GET /api/capabilities` plus an Observe catalog section).
   The capability projection is descriptive only and does not alter routing,
-  tools, agent selection, SSE, or runtime observation behavior. BrowserAgent
-  inspection, chat transport/UI repairs, and workspace feedback remain intact.
+  tools, agent selection, SSE, or runtime observation behavior.  BrowserAgent inspection, chat transport/UI repairs, and workspace feedback remain intact.
+  Session 62 corrected the Zen free-model default to `deepseek-v4-flash-free`
+  and contained CenterPanel transcript scrolling so streaming cannot displace
+  the workspace header/composer. These are additive runtime/UI repairs and do
+  not alter agent routing or delegation contracts.
   Deferred work includes keyed Engine locks, direct fast-path policy tests, the
+
   public `streamChat()` integration regression, remaining transitional
   AgentLoop wiring, optional SubAgentType consolidation, a live `agent-browser`
   smoke test, and separate contracts for actionable non-coding capabilities.

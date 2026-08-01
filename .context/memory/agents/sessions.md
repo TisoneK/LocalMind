@@ -965,3 +965,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Validation:** 191 focused agent tests passed with one existing asyncio deprecation warning; changed Python files compiled; `git diff --check` passed; stale runtime reference audit found no `workflow.md`, `_WORKFLOW_PATH`, or agent-specific `* Workflow` references. Ruff retained known baseline findings (10 existing test import/style findings and 88 existing E501 findings).
 - **Review:** `.context/memory/reviews/2026-07-31-review-18.md` — independent review: ship-ready, no blockers.
 - **Next boundary:** keep runtime playbooks separate from `.context/`; future worker additions should use `playbook.md` and hard programmatic tool/report contracts.
+
+---
+## 2026-08-01 — Session 62
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing — provider/UI reliability slice
+- **Task:** Replace Zen's obsolete paid/unsupported MiniMax free default with `deepseek-v4-flash-free`, and fix the chat streaming layout displacement that moved the header/composer out of position.
+- **Commits:** 1 product (`f985fb9`) + 1 context closeout
+- **Outcome:** done — Zen provider registry, model-list fallback, and knowledge-writer fallback now use `deepseek-v4-flash-free`; explicit legacy MiniMax selections remain compatible. CenterPanel scrolls only its transcript container, and the center flex chain has `min-h-0` containment constraints. Added a regression assertion for the Zen default.
+- **Validation:** 6 focused Zen tests passed; live SSE completed with 27 events and no error; frontend build passed; 12 frontend tests passed; ESLint had 0 errors and 53 existing warnings; `git diff --check` passed; final review was ship-ready. The live backend reported adapter `zen` and current model `deepseek-v4-flash-free`; the local frontend was reachable. `backend/.env` remained Git-ignored and no key was written to tracked files or context.
+- **Review:** `.context/memory/reviews/2026-08-01-review-19.md` — independent review: ship-ready, no blockers.
+- **Notes:** The only remaining `minimax-m2.5-free` source occurrence is a compatibility context-window entry. Optional follow-ups are dedicated API/frontend regression coverage and throttling or switching smooth scrolling to `behavior: "auto"` during long streams.

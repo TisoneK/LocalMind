@@ -807,3 +807,23 @@ Renamed LocalMind's runtime agent instruction files from `workflow.md` to `playb
 **Validation:** 191 focused tests passed; compilation and diff checks passed; no stale runtime `workflow.md` references remain. The independent final review was ship-ready with no blockers. Product commit: `044e140`. Review: `.context/memory/reviews/2026-07-31-review-18.md`.
 
 **Next boundary:** future runtime worker roles should be represented by a co-located `playbook.md`; do not make product agents read the repository `.context/` memory/protocol.
+
+---
+## 2026-08-01 — Buffy / openai/gpt-5.6-luna (Session 62)
+
+The session stayed within the transport/UI and provider-configuration boundary,
+not ADR-8 routing. Zen's previous `minimax-m2.5-free` default had become paid or
+unsupported; the canonical free default is now `deepseek-v4-flash-free` across
+the provider registry, model-list fallback, and knowledge-writer fallback.
+Explicit legacy MiniMax model selections remain recognized. A regression test
+locks the free default.
+
+The chat displacement fix is also contained: CenterPanel now scrolls its own
+transcript element rather than calling unconstrained `scrollIntoView()` on a
+nested marker, and the center flex chain has `min-h-0` constraints. This keeps
+the workspace header and composer in the viewport during streaming.
+
+Validation: 6 focused Zen tests, frontend build, 12 frontend tests, ESLint with
+0 errors, live SSE completion, and diff checks passed. Final review was
+ship-ready with smooth-scroll throttling deferred as a non-blocking follow-up.
+Product commit: `f985fb9`.

@@ -211,6 +211,26 @@ Implemented and shipped the runtime workflow-to-playbook naming boundary. Produc
 
 Six runtime agent instruction files now use `playbook.md`, loaders and injected context use Playbook terminology, and generic/shared workflows remain intentionally named workflows. Validation: 191 focused tests passed, compilation and diff checks passed, stale runtime references are gone, and final review is ship-ready. Known Ruff baseline findings remain unchanged.
 
+---
+## Handoff Notes (Session 62, 2026-08-01)
+
+Corrected Zen's free default from the obsolete `minimax-m2.5-free` to
+`deepseek-v4-flash-free` in the provider registry, model endpoint fallback, and
+knowledge-writer fallback. Explicit legacy MiniMax selections remain supported.
+Also fixed the chat layout displacement by scrolling only the transcript element
+and adding `min-h-0` to the CenterPanel flex chain. Product commit: `f985fb9`;
+review: `.context/memory/reviews/2026-08-01-review-19.md`.
+
+Validation: 6 focused Zen tests passed; live SSE completed successfully;
+frontend build and 12 tests passed; lint has 0 errors / 53 warnings; diff check
+passed; final review is ship-ready. The local runtime is on Zen with
+`deepseek-v4-flash-free`; `backend/.env` remains ignored.
+
+- **Session:** none (idle)
+- **Feature:** none
+- **Task:** none
+- **Status:** idle
+
 - **Session:** none (idle)
 - **Feature:** none
 - **Task:** none
