@@ -228,6 +228,33 @@ export type TerminalFilter = 'all' | 'user' | 'agent';
 
 // ─── Other Types ───────────────────────────────────────────────────────
 
+export interface ObservationWorkspaceSummary {
+  gitAvailable: boolean;
+  gitBranch: string;
+  gitHead: string;
+  gitStatus: string;
+  gitDiffStat: string;
+  lastBuildResult?: {
+    result?: string;
+    command?: string;
+    outputTail?: string;
+    exitCode?: number | null;
+    timestamp?: number | null;
+  } | null;
+  openFiles: string[];
+}
+
+export interface ObservationEventSummary {
+  type: string;
+  data: Record<string, unknown>;
+}
+
+export interface ObservationSummary {
+  timestamp: number;
+  workspace: ObservationWorkspaceSummary;
+  recentEvents: ObservationEventSummary[];
+}
+
 export interface ObservationData {
   intent: IntentType;
   confidence: number;
@@ -235,6 +262,8 @@ export interface ObservationData {
   memoryHits: number;
   contextTokens: number;
   latency: number;
+  /** Structured workspace/runtime state captured after the last completed turn. */
+  observation?: ObservationSummary | null;
 }
 
 export interface MemoryFact {

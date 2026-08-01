@@ -224,6 +224,98 @@ export function ObservabilityTab({ observation }: ObservabilityTabProps) {
           ))}
         </div>
       </div>
+
+      {/* Runtime snapshot — populated only by the structured observation API. */}
+      {observation.observation && (
+        <RuntimeSnapshot summary={observation.observation} />
+      )}
     </div>
   );
+}
+
+function RuntimeSnapshot({ summary }: { summary: NonNullable<ObservationData['observation']> }) {
+  const { workspace, recentEvents } = summary;
+  const build = workspace.lastBuildResult;
+  const eventItems = recentEvents.slice(-20);
+  const workspaceState = workspace.gitStatus.trim() || 'Clean or unavailable';
+  const buildLabel = build?.result || (build ? 'Completed' : 'No build recorded');
+
+  return (
+    <section aria-labelledby="runtime-snapshot-heading" className="space-y-2">
+      <div className="flex items-center gap-1.5">
+        <Activity className="h-3 w-3 text-[#e8a420]" aria-hidden="true" />
+        <h2 id="runtime-snapshot-heading" className="text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
+          Runtime Snapshot
+        </h2>
+      </div>
+
+      <div className="bg-[#0a120a] border border-[#1a2a1a] rounded-md p-2.5 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] text-[#8ab08a]">Workspace</span>
+          <span className={`text-[10px] font-mono ${workspace.gitAvailable ? 'text-[#39d353]' : 'text-[#8ab08a]'}`}>
+            {workspace.gitAvailable ? (workspace.gitBranch || 'git available') : 'git unavailable'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-[10px]">
+          <div className="min-w-0">
+            <div className="text-[#5a7a5a]">Working tree</div>
+            <div className="text-[#d4e8d4] truncate" title={workspaceState}>
+              {workspaceState}
+            </div>
+          </div>
+          <div className="min-w-0">
+            <div className="text-[#5a7a5a]">Open files</div>
+            <div className="text-[#d4e8d4] font-mono">
+              {workspace.openFiles.length || '—'}
+            </div>
+          </div>
+        </div>
+
+        {workspace.gitDiffStat && (
+          <div className="text-[10px] text-[#8ab08a] truncate" title={workspace.gitDiffStat}>
+            diff: <span className="text-[#d4e8d4] font-mono">{workspace.gitDiffStat}</span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-2 border-t border-[#1a2a1a] pt-2">
+          <span className="text-[10px] text-[#8ab08a]">Last build</span>
+          <span className={`text-[10px] font-mono ${build?.result === 'success' ? 'text-[#39d353]' : 'text-[#d4e8d4]'}`}>
+            {buildLabel}
+          </span>
+        </div>
+
+        {eventItems.length > 0 && (
+          <div className="border-t border-[#1a2a1a] pt-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] text-[#8ab08a]">Recent events</span>
+              <span className="text-[9px] text-[#5a7a5a] font-mono">{eventItems.length}</span>
+            </div>
+            <div className="max-h-40 overflow-y-auto space-y-1 pr-1" aria-label="Recent runtime events">
+              {eventItems.map((event, index) => (
+                <div key={`${event.type}-${index}`} className="rounded bg-[#111d11] px-2 py-1.5 min-w-0">
+                  <div className="text-[10px] text-[#39d353] font-mono truncate" title={event.type}>
+                    {event.type}
+                  </div>
+                  <div className="text-[9px] text-[#8ab08a] font-mono break-all line-clamp-2">
+                    {formatEventData(event.data)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function formatEventData(data: Record<string, unknown>): string {
+  try {
+    const serialized = JSON.stringify(data);
+    if (!serialized) return 'No event data';
+    return serialized.length > 240 ? `${serialized.slice(0, 237)}...` : serialized;
+  } catch {
+    return 'Event data unavailable';
+  }
 }

@@ -1606,7 +1606,18 @@ export function useObservability(sessionId: string | null) {
     const load = async () => {
       if (!sessionId) { queueMicrotask(() => { if (mounted) { setObservation(emptyObs); setLoading(false); } }); return; }
       const data = await localmindClient.getObservability(sessionId);
-      if (mounted) { setObservation({ intent: data.intent, confidence: data.confidence, toolsUsed: data.toolsUsed, memoryHits: data.memoryHits, contextTokens: data.contextTokens, latency: data.latency }); setLoading(false); }
+      if (mounted) {
+        setObservation({
+          intent: data.intent,
+          confidence: data.confidence,
+          toolsUsed: data.toolsUsed,
+          memoryHits: data.memoryHits,
+          contextTokens: data.contextTokens,
+          latency: data.latency,
+          observation: data.observation,
+        });
+        setLoading(false);
+      }
     };
     load();
     return () => { mounted = false; };

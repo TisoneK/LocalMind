@@ -22,6 +22,7 @@ import type {
   MemoryFact,
   PerformanceMetrics,
   ObservationData,
+  ObservationSummary,
   ModelOption,
   CompletionSuggestion,
 } from '@/types';
@@ -82,12 +83,91 @@ interface ObservabilityResponse {
   context_tokens: number;
   latency_ms: number;
   tool_timeline: unknown[];
+  observation?: {
+    timestamp: number;
+    workspace: {
+      git_available: boolean;
+      git_branch: string;
+      git_head: string;
+      git_status: string;
+      git_diff_stat: string;
+      last_build_result?: {
+        result?: string;
+        command?: string;
+        output_tail?: string;
+        exit_code?: number | null;
+        timestamp?: number | null;
+      } | null;
+      open_files: string[];
+    };
+    recent_events: Array<{
+      type: string;
+      data: Record<string, unknown>;
+    }>;
+  } | null;
 }
 
 interface PersistedSettings {
   adapter?: string;
   model?: string;
   ollamaUrl?: string;
+}
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function asOptionalNumber(value: unknown): number | null | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : value === null ? null : undefined;
+}
+
+function mapObservationSummary(raw: unknown): ObservationSummary | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const summary = raw as Record<string, unknown>;
+  const rawWorkspace = summary.workspace;
+  const workspace = rawWorkspace && typeof rawWorkspace === 'object'
+    ? rawWorkspace as Record<string, unknown>
+    : {};
+  const rawBuild = workspace.last_build_result;
+  const build = rawBuild && typeof rawBuild === 'object'
+    ? rawBuild as Record<string, unknown>
+    : null;
+  const rawEvents = Array.isArray(summary.recent_events) ? summary.recent_events : [];
+
+  return {
+    timestamp: asOptionalNumber(summary.timestamp) ?? 0,
+    workspace: {
+      gitAvailable: workspace.git_available === true,
+      gitBranch: asString(workspace.git_branch),
+      gitHead: asString(workspace.git_head),
+      gitStatus: asString(workspace.git_status),
+      gitDiffStat: asString(workspace.git_diff_stat),
+      lastBuildResult: build
+        ? {
+            result: asString(build.result),
+            command: asString(build.command),
+            outputTail: asString(build.output_tail),
+            exitCode: asOptionalNumber(build.exit_code),
+            timestamp: asOptionalNumber(build.timestamp),
+          }
+        : null,
+      openFiles: Array.isArray(workspace.open_files)
+        ? workspace.open_files.filter((path): path is string => typeof path === 'string')
+        : [],
+    },
+    recentEvents: rawEvents.flatMap((rawEvent) => {
+      if (!rawEvent || typeof rawEvent !== 'object') return [];
+      const event = rawEvent as Record<string, unknown>;
+      const rawData = event.data;
+      return [{
+        type: asString(event.type) || 'event',
+        data: rawData && typeof rawData === 'object' && !Array.isArray(rawData)
+          ? rawData as Record<string, unknown>
+          : {},
+      }];
+    }),
+  };
 }
 
 // ─── Client ────────────────────────────────────────────────────────────
@@ -504,13 +584,19 @@ class LocalMindClient {
       const data = await this.request<ObservabilityResponse>(
         `/api/observability/${encodeURIComponent(sessionId)}`
       );
+      const observation = mapObservationSummary(data.observation);
+      const toolsUsed = typeof data.tools_used === 'string'
+        ? data.tools_used.split(',').filter(Boolean)
+        : [];
+
       return {
-        intent: (data.intent || 'chat') as ObservationData['intent'],
-        confidence: data.confidence ?? 0,
-        toolsUsed: data.tools_used ? data.tools_used.split(',').filter(Boolean) : [],
-        memoryHits: data.memory_hits || 0,
-        contextTokens: data.context_tokens || 0,
-        latency: data.latency_ms || 0,
+        intent: (typeof data.intent === 'string' ? data.intent : 'chat') as ObservationData['intent'],
+        confidence: typeof data.confidence === 'number' ? data.confidence : 0,
+        toolsUsed,
+        memoryHits: typeof data.memory_hits === 'number' ? data.memory_hits : 0,
+        contextTokens: typeof data.context_tokens === 'number' ? data.context_tokens : 0,
+        latency: typeof data.latency_ms === 'number' ? data.latency_ms : 0,
+        observation,
       };
     } catch {
       return {
@@ -520,6 +606,7 @@ class LocalMindClient {
         memoryHits: 0,
         contextTokens: 0,
         latency: 0,
+        observation: null,
       };
     }
   }
