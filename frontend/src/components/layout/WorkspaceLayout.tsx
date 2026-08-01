@@ -151,6 +151,33 @@ export function WorkspaceLayout() {
     ? lastMetrics
     : polledMetrics;
 
+  // Bridge the live request metrics into observability without changing their
+  // meaning. The stream owns timing, while promptTokens is the only valid
+  // source for Context Tokens; completion/total tokens must not be displayed
+  // as context. Preserve structured observation values when the backend has
+  // already supplied them, and use the live wall clock while it has not.
+  const liveObservationForPanel = (() => {
+    const live = liveObservation;
+    const promptTokens = lastMetrics?.promptTokens || 0;
+    const liveLatency = elapsedMs > 0
+      ? elapsedMs
+      : (lastMetrics?.latency || 0);
+
+    return {
+      ...observation,
+      ...live,
+      // Prefer a positive value from either observation source before using
+      // the stream fallback. This prevents a partial live observation from
+      // hiding valid backend/historical values.
+      contextTokens: isStreaming
+        ? promptTokens || live?.contextTokens || 0
+        : live?.contextTokens || observation.contextTokens || promptTokens,
+      latency: isStreaming && liveLatency > 0
+        ? liveLatency
+        : live?.latency || observation.latency || liveLatency,
+    };
+  })();
+
   // Clear liveActions when switching sessions so the Actions panel doesn't
   // show the previous session's tool calls.
   useEffect(() => {
@@ -347,7 +374,7 @@ export function WorkspaceLayout() {
           terminalHistory={terminal.history}
           onTerminalTabComplete={terminal.tabComplete}
           onTerminalSessionChange={terminal.changeSession}
-          observation={liveObservation || observation}
+          observation={liveObservationForPanel}
           capabilities={capabilities}
           memoryFacts={memoryFacts}
           onMemoryDelete={deleteFact}
