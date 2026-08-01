@@ -72,3 +72,6 @@ records.
 
 ---
 - **2026-07-31 — Session 39** — Buffy / openai/gpt-5.6-luna — connected streamed agent progress to Actions, todos, metrics, elapsed time, and terminal state; unified active statuses and fixed finalization races. Product commit `a4ab7c2`; 7 focused frontend tests/build/backend compile passed; pytest unavailable in Python 3.12. Detail: `.context/memory/sessions/2026-07-31-39/notes.md`.
+
+---
+- **2026-07-31 — Session 52** — Buffy / openai/gpt-5.6-luna — completed kickoff and recorded ADR-10: expand LocalMind through additive capability families and an Observe→Think→Decide→Act→Verify loop while preserving all developer agents. Baseline: 760 backend passed / 1 existing todo-plan failure; frontend build/typecheck clean; no product changes. Detail: `.context/memory/reviews/2026-07-31-review-9.md`.

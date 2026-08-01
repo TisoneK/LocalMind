@@ -834,3 +834,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** replace the conservative global Engine lock with keyed/request-scoped locks; add direct Engine fast-path/orchestrator policy tests; add public `streamChat()` integration coverage; continue transitional ADR-8 runtime-wiring and SubAgentType decisions; optional live `agent-browser` smoke test.
 - **Report:** `.context/memory/reviews/2026-07-31-review-8.md`
 - **Notes:** The working tree was initially uncommitted despite `current.md` being idle; this session reconciled that mismatch, validated the full slice, and separated product/context commits per the two-surface rule.
+
+---
+## 2026-07-31 — Session 52
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — kickoff and capability-direction alignment
+- **Task:** Start `.context/kickoff.md`, complete local protocol/baseline discovery, and capture the additive capability-family direction without removing developer agents.
+- **Commits:** 1 context commit (closeout)
+- **Outcome:** done — core integrity/status verified; repository synchronized; architecture direction recorded as ADR-10; no product files changed.
+- **Validation:** 760 backend tests passed with 1 existing todo-plan assertion failure; frontend build/typecheck passed; frontend lint 0 errors / 53 warnings; Ruff reported 132 E501 plus 3 non-E501 findings; diff check passed.
+- **Open items:** define capability-family and observation contracts; build an incremental Observe vertical slice; reconcile the todo-plan baseline assertion; clean the three non-E501 Ruff findings; preserve all developer-agent roles and toolsets.
+- **Report:** `.context/memory/reviews/2026-07-31-review-9.md`
+- **Notes:** none

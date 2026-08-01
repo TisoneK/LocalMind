@@ -36,3 +36,26 @@ are recorded in the Session 51 entry after closeout.
 
 Previous handoff: Session 50 BrowserAgent upgrade, product commit `b7f1f98`,
 review `.context/memory/reviews/2026-07-31-review-7.md`.
+
+---
+
+## Handoff Notes (Session 52, 2026-07-31)
+
+Kickoff-only architecture alignment session. No product files changed.
+The user confirmed that Coding, Debugger, Reviewer, Verifier, and Analyst
+remain important first-class developer roles; the non-coding expansion is
+additive rather than a replacement. The accepted direction is capability
+families (knowledge, local information, internet, computer interaction,
+productivity, data, connectors) with reusable agents and tools, plus an
+Observe → Think → Decide → Act → Observe → Verify loop.
+
+Baseline: core 0.5.0 integrity and status checks pass; backend 760 passed / 1
+baseline failure (`test_engine_emit_todo_plan` expects the older first-step
+label); frontend build/typecheck passes; frontend lint has 0 errors / 53
+warnings; Ruff has 132 E501 findings and 3 non-E501 findings. Working tree
+was clean and HEAD matched origin/main before context closeout.
+
+Next safe architectural step: define capability-family and observation
+contracts before adding a broad new tool list. Preserve all current developer
+agents and use the existing Capability, TaskProfile, ExecutionGraph, registry,
+delegation, and objective-runtime foundations.

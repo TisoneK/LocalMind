@@ -154,3 +154,12 @@ if literally nothing slowed you down.
 - **Cause:** Browser automation is an optional external CLI dependency and is not installed by default in this environment.
 - **Workaround / fix:** Verified the documented command syntax through authoritative documentation and tested the wrapper at its subprocess boundary with 50 focused mocked tests.
 - **Prevent next time:** Install `agent-browser` and Chromium before a session that requires live browser verification; keep mocked tests as the deterministic regression layer.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 52)
+
+- **Problem:** The kickoff backend baseline is not fully green: one existing todo-plan assertion expects the older first-step label, while the current engine emits `Understand: ...`. Ruff also reports three non-E501 findings among the known line-length backlog.
+- **Cost:** No implementation delay; the issue was documented rather than changed during a context-only kickoff.
+- **Cause:** The test and current plan wording drifted across prior feature work, and safe lint cleanup was not folded into the related commits.
+- **Workaround / fix:** Recorded the exact failing test and Ruff findings in the Session 52 review and environment handoff. No product changes were made.
+- **Prevent next time:** Reconcile the todo-plan UI/test contract and clean the three non-E501 Ruff findings in a dedicated safe-fix session before starting the capability-family implementation.

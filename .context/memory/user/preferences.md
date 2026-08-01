@@ -45,6 +45,12 @@ correction twice.
 - DRY — use shared helpers, don't reinvent (e.g., `human_size` extracted to `core/utils.py`) (approved pattern, 2026-07-11)
 - Follow existing architecture and conventions unless there's a compelling reason to improve them (approved pattern, 2026-07-11)
 
+## Product architecture
+
+- Preserve developer agents such as Coding, Debugger, Reviewer, Verifier, and Analyst as first-class roles; expanding LocalMind for general desktop and knowledge-work tasks must be additive, not a replacement (stated, 2026-07-31)
+- Prefer capability families and reusable agent roles over creating dozens of narrowly specialized agents; keep agents responsible for decisions/workflows and tools responsible for controlled execution (approved direction, 2026-07-31)
+- Treat Observe → Think → Decide → Act → Observe → Verify as the long-term desktop-assistant loop, with screen/system/local-information capabilities added incrementally (approved direction, 2026-07-31)
+
 ## Review depth
 
 - Fix safe issues (typos, doc mismatches, missing validation, dark-mode gaps, type annotations, DRY refactors, accessibility, SSRF hardening) (pre-flight)
