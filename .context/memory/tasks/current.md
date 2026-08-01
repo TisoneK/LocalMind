@@ -78,3 +78,22 @@ review ship-ready. Product commit: `6443cc8`.
 Next: keep the catalog descriptive until stable, then add a separate structured
 observation snapshot contract and later integrate capability metadata into
 runtime discovery/UI. Do not remove or weaken developer agents.
+
+---
+
+## Handoff Notes (Session 54, 2026-07-31)
+
+Continued autonomously with the next additive vertical slice. Added
+`core/observation.py` and focused tests for `ObservationSnapshot`, composing
+existing `WorkspaceSnapshot` state with request-local `ObsEvent` values without
+changing AgentLoop, routing, tools, or developer agents. `from_collector()` uses
+`all()` rather than `drain()`; event context is bounded and deterministic; nested
+state is defensively owned and public accessors return defensive copies.
+
+Validation: 34 focused observation/workspace tests passed; changed-file compile,
+Ruff, and diff checks passed; frontend build passed with 0 lint errors / 53
+warnings; full backend remained at 774 passed / 1 existing todo-plan assertion
+failure. Final review was ship-ready. Product commit: `89bdd73`.
+
+Next: expose this contract at one controlled runtime boundary with an integration
+test, while preserving current SSE/event behavior and all developer agents.

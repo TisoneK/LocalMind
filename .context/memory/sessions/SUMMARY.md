@@ -78,3 +78,6 @@ records.
 
 ---
 - **2026-07-31 — Session 53** — Buffy / openai/gpt-5.6-luna — added the typed immutable capability-family catalog and 64 focused tests without changing routing, tools, or developer agents. Full backend: 767 passed / 1 existing todo-plan failure; frontend build/typecheck clean. Product commit `6443cc8`. Detail: `.context/memory/reviews/2026-07-31-review-10.md`.
+
+---
+- **2026-07-31 — Session 54** — Buffy / openai/gpt-5.6-luna — added the opt-in `ObservationSnapshot` contract, non-draining collector capture, bounded deterministic event formatting, and defensive nested-state ownership. 34 focused tests passed; frontend build clean; full backend 774 passed / 1 existing todo-plan failure. Product commit `89bdd73`. Detail: `.context/memory/reviews/2026-07-31-review-11.md`.

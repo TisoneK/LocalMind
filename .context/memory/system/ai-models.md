@@ -9,7 +9,7 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
-| Buffy | openai/gpt-5.6-luna | 2026-07-31 | 2026-07-31 | 6 |
+| Buffy | openai/gpt-5.6-luna | 2026-07-31 | 2026-07-31 | 7 |
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 
@@ -118,3 +118,4 @@ Updated registry row:
 - **Buffy / openai/gpt-5.6-luna:** Extended a stateful CLI-backed browser wrapper with DOM/network/console inspection, sensitive-output risk classification, final output bounds, malformed-argument validation, and mocked subprocess tests; live CLI testing was blocked because `agent-browser` is not installed locally. (2026-07-31)
 - **Buffy / openai/gpt-5.6-luna:** Session 52 kickoff confirmed the product should preserve all developer agents while expanding additively through capability families and an Observe→Think→Decide→Act→Verify loop. Baseline found 760 backend tests passing with one existing todo-plan assertion failure, frontend build/typecheck clean, and 0 frontend lint errors. (2026-07-31)
 - **Buffy / openai/gpt-5.6-luna:** Session 53 added a typed, immutable capability-family catalog with 64 focused tests and no routing/tool behavior changes; full backend validation remained at 767 passed with the same existing todo-plan assertion failure. (2026-07-31)
+- **Buffy / openai/gpt-5.6-luna:** Session 54 added the opt-in `ObservationSnapshot` contract with defensive nested-state ownership, non-draining collector capture, bounded event formatting, and 34 focused tests; final review was ship-ready and existing routing/tool behavior remained untouched. (2026-07-31)

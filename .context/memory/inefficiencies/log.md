@@ -172,3 +172,12 @@ if literally nothing slowed you down.
 - **Cause:** The test expects older wording than the current engine plan output.
 - **Workaround / fix:** Recorded the failure separately and kept the new capability catalog behavior isolated from todo-plan semantics.
 - **Prevent next time:** Reconcile the todo-plan test/UI contract in a dedicated safe-fix session before expanding runtime capability discovery.
+
+---
+## 2026-07-31 — Buffy / openai/gpt-5.6-luna (Session 54)
+
+- **Problem:** The first observation implementation used a frozen outer dataclass while exposing mutable nested workspace/event objects.
+- **Cost:** One review/fix cycle; no shipped defect because the issue was caught before commit.
+- **Cause:** Top-level dataclass freezing was initially treated as sufficient snapshot immutability.
+- **Workaround / fix:** Added private owned copies plus defensive-copy accessors and regression tests for source and accessor mutations.
+- **Prevent next time:** Treat nested compatibility objects as mutable unless the ownership boundary is explicit; test both producer-side and consumer-side mutation.
