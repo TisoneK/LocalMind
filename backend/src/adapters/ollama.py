@@ -71,6 +71,44 @@ _SMALL_MODEL_TAGS = (":1b", ":3b", "phi3:mini", "phi3.5")
 _MEDIUM_MODEL_TAGS = (":7b", ":8b", ":9b", ":14b", ":12b")
 
 
+def _normalize_ollama_usage(payload: dict) -> dict[str, int]:
+    """Normalize Ollama/OpenAI-compatible usage fields.
+
+    Ollama's native-compatible stream reports ``prompt_eval_count`` and
+    ``eval_count`` on its terminal object, while newer OpenAI-compatible
+    responses may expose a nested ``usage`` object. Accept both shapes so the
+    engine can prefer real provider counts and fall back to estimates only
+    when neither is present.
+    """
+    if not isinstance(payload, dict):
+        return {}
+
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        usage = payload
+
+    def _count(*keys: str) -> int | None:
+        for key in keys:
+            value = usage.get(key)
+            if isinstance(value, (int, float)) and value >= 0:
+                return int(value)
+        return None
+
+    prompt = _count("prompt_tokens", "input_tokens", "prompt_eval_count")
+    completion = _count("completion_tokens", "output_tokens", "eval_count")
+    total = _count("total_tokens")
+    normalized: dict[str, int] = {}
+    if prompt is not None:
+        normalized["prompt_tokens"] = prompt
+    if completion is not None:
+        normalized["completion_tokens"] = completion
+    if total is not None:
+        normalized["total_tokens"] = total
+    elif prompt is not None or completion is not None:
+        normalized["total_tokens"] = (prompt or 0) + (completion or 0)
+    return normalized
+
+
 @dataclass
 class ToolCallResult:
     """Returned by ``chat_with_tools`` when the model invokes a tool."""
@@ -78,6 +116,7 @@ class ToolCallResult:
     tool_name: str
     tool_args: dict
     raw_content: str = ""  # any text content emitted before the tool call
+    usage: dict = None  # provider-reported usage, when available
 
 
 @dataclass
@@ -93,6 +132,7 @@ class MultiToolCallResult:
 
     calls: list[ToolCallResult]  # ordered as the model returned them
     raw_content: str = ""
+    usage: dict = None  # provider-reported usage, when available
 
     @property
     def first(self) -> ToolCallResult:
@@ -290,6 +330,7 @@ class OllamaAdapter(BaseAdapter):
                 # Buffer for parsing Thinking... markers
                 _think_buf = ""
                 _in_think = False
+                usage_metadata: dict[str, int] = {}
 
                 async for line in response.aiter_lines():
                     if not line or not line.startswith("data: "):
@@ -299,13 +340,14 @@ class OllamaAdapter(BaseAdapter):
                         # Flush any remaining buffer
                         if _think_buf:
                             if _in_think:
-                                yield StreamChunk(text="", thinking=_think_buf)
+                                yield StreamChunk(text="", thinking=_think_buf, usage=dict(usage_metadata))
                             else:
-                                yield StreamChunk(text=_think_buf)
-                        yield StreamChunk(text="", done=True)
+                                yield StreamChunk(text=_think_buf, usage=dict(usage_metadata))
+                        yield StreamChunk(text="", done=True, usage=dict(usage_metadata))
                         return
                     try:
                         obj = json.loads(data)
+                        usage_metadata.update(_normalize_ollama_usage(obj))
                         delta = obj["choices"][0]["delta"]
                         text = delta.get("content", "")
                         if not text:
@@ -317,21 +359,21 @@ class OllamaAdapter(BaseAdapter):
                             if not _in_think:
                                 start = _think_buf.find("Thinking...")
                                 if start == -1:
-                                    yield StreamChunk(text=_think_buf)
+                                    yield StreamChunk(text=_think_buf, usage=dict(usage_metadata))
                                     _think_buf = ""
                                     break
                                 # emit text before Thinking...
                                 if start > 0:
-                                    yield StreamChunk(text=_think_buf[:start])
+                                    yield StreamChunk(text=_think_buf[:start], usage=dict(usage_metadata))
                                 _think_buf = _think_buf[start + 10 :]  # "Thinking..." is 10 chars
                                 _in_think = True
                             else:
                                 end = _think_buf.find("...done thinking.")
                                 if end == -1:
-                                    yield StreamChunk(text="", thinking=_think_buf)
+                                    yield StreamChunk(text="", thinking=_think_buf, usage=dict(usage_metadata))
                                     _think_buf = ""
                                     break
-                                yield StreamChunk(text="", thinking=_think_buf[:end])
+                                yield StreamChunk(text="", thinking=_think_buf[:end], usage=dict(usage_metadata))
                                 _think_buf = _think_buf[end + 16 :]  # "...done thinking." is 16 chars
                                 _in_think = False
                     except (json.JSONDecodeError, KeyError, IndexError):
@@ -406,6 +448,7 @@ class OllamaAdapter(BaseAdapter):
             "raw_content_parts": [],  # text emitted before/during tool call
             "text_chunks": [],  # StreamChunks already put on the queue
             "error_msg": "",
+            "usage": {},
         }
 
         async def _reader() -> None:
@@ -459,6 +502,7 @@ class OllamaAdapter(BaseAdapter):
 
                         try:
                             obj = json.loads(data)
+                            state["usage"].update(_normalize_ollama_usage(obj))
                             delta = obj["choices"][0]["delta"]
                         except (json.JSONDecodeError, KeyError, IndexError):
                             continue
@@ -470,7 +514,7 @@ class OllamaAdapter(BaseAdapter):
                             state["raw_content_parts"].append(text)
                             # Only stream text live when no tool call has been detected yet
                             if not state["tool_call_buffers"] and not tc_deltas:
-                                chunk = StreamChunk(text=text, done=False)
+                                chunk = StreamChunk(text=text, done=False, usage=dict(state["usage"]))
                                 state["text_chunks"].append(chunk)
                                 await queue.put(chunk)
 
@@ -562,6 +606,7 @@ class OllamaAdapter(BaseAdapter):
                         tool_name=buf["name"],
                         tool_args=tool_args,
                         raw_content=raw_content_text if idx == sorted(state["tool_call_buffers"].keys())[0] else "",
+                        usage=dict(state["usage"]),
                     )
                 )
 
@@ -574,6 +619,7 @@ class OllamaAdapter(BaseAdapter):
             return MultiToolCallResult(
                 calls=all_calls,
                 raw_content=raw_content_text,
+                usage=dict(state["usage"]),
             )
 
         # ── Streaming text path ───────────────────────────────────────────
@@ -589,7 +635,7 @@ class OllamaAdapter(BaseAdapter):
         async def _text_replay() -> AsyncIterator[StreamChunk]:
             for chunk in state["text_chunks"]:
                 yield chunk
-            yield StreamChunk(text="", done=True)
+            yield StreamChunk(text="", done=True, usage=dict(state["usage"]))
 
         return _text_replay()
 

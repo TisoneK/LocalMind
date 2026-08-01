@@ -228,6 +228,10 @@ class StreamChunk(BaseModel):
     error: Optional[str] = None
     thinking: Optional[str] = None
     metadata: dict = Field(default_factory=dict)
+    # Provider-reported usage, normalized by adapters to OpenAI names.
+    # Providers may omit this on streaming responses, so an empty mapping
+    # means the engine should retain its estimation fallback.
+    usage: dict = Field(default_factory=dict)
     status: Optional[str] = None
     dispatch_steps: list[dict] = Field(default_factory=list)
 

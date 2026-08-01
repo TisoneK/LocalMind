@@ -807,6 +807,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # If a code path doesn't build real prompt_messages, the metrics
         # compute 0 tokens — harmless.
         prompt_messages: list[dict] = []
+        # Provider-reported token usage for the current turn. Adapters update
+        # this through StreamChunk.usage; estimation remains the fallback when
+        # a provider does not emit usage telemetry.
+        _provider_usage: dict[str, int] = {}
 
         # ── 0. Safety gate ────────────────────────────────────────────────
         is_safe, gate_reason = safety_check(message)
@@ -1137,10 +1141,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # hint for truly ambiguous agent intents, not for normal conversation.
             full_response_chunks: list[str] = []
             _dup_filter = DuplicateFilter()
-
             _obs.emit("thinking_start", intent="chat")
             self._metrics.start_request()
             async for chunk in active_adapter.chat(prompt_messages, intent="chat"):
+                if chunk.usage:
+                    _provider_usage.update(chunk.usage)
                 # Propagate adapter errors to the SSE bridge so the frontend
                 # shows a proper error message instead of an empty response.
                 if chunk.error:
@@ -1151,12 +1156,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 filtered = _dup_filter.feed(safe_text)
                 if filtered:
                     full_response_chunks.append(filtered)
-                    yield StreamChunk(text=filtered, done=chunk.done)
-            # Record streaming completion — include prompt and completion token
-            # breakdown so the frontend metrics bar shows real counts instead of 0/0.
+                    yield StreamChunk(text=filtered, done=chunk.done, usage=dict(_provider_usage))
+            # Prefer provider-reported usage; estimate only when the provider
+            # omitted usage metadata.
             response_so_far = _dup_filter.text
-            token_count = _approx_tokens(response_so_far)
-            prompt_token_count = _approx_tokens(
+            token_count = _provider_usage.get("completion_tokens", 0) or _approx_tokens(response_so_far)
+            prompt_token_count = _provider_usage.get("prompt_tokens", 0) or _approx_tokens(
                 "".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict))
             )
             self._metrics.record_streaming_complete(
@@ -1260,7 +1265,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
             total_ms = round((time.monotonic() - t0) * 1000)
             self._metrics.record("chat", latency_ms=total_ms, success=True)
-            _prompt_tok = _approx_tokens("".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict)))
+            _prompt_tok = _provider_usage.get("prompt_tokens", 0) or _approx_tokens(
+                "".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict))
+            )
             _obs.emit(
                 "turn_complete",
                 intent="chat",
@@ -1270,6 +1277,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 total_latency_ms=total_ms,
                 memory_facts=len(memory_facts),
                 agent_mode=False,
+                provider_usage=_provider_usage,
             )
             self._store_observation(
                 session_id,
@@ -1560,7 +1568,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             self._persist_assistant_message(session_id, response_text)
             total_ms = round((time.monotonic() - t0) * 1000)
             self._metrics.record(effective_intent.value, latency_ms=total_ms, success=True)
-            _pt = _approx_tokens(
+            _pt = _provider_usage.get("prompt_tokens", 0) or _approx_tokens(
                 "".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict) and m.get("content"))
             )
             _obs.emit(
@@ -1572,6 +1580,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 total_latency_ms=total_ms,
                 memory_facts=len(memory_facts),
                 agent_mode=True,
+                provider_usage=dict(_provider_usage),
             )
             self._store_observation(
                 session_id,
@@ -1817,15 +1826,17 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             full_response: list[str] = []
             self._metrics.start_request()
             async for chunk in active_adapter.chat(_file_messages, temperature=0.0, intent="file_task"):
+                if chunk.usage:
+                    _provider_usage.update(chunk.usage)
                 if chunk.error:
                     yield StreamChunk(text="", done=True, error=chunk.error)
                     return
                 safe = _filter_system_leaks(chunk.text)
                 full_response.append(safe)
-                yield StreamChunk(text=safe, done=chunk.done)
+                yield StreamChunk(text=safe, done=chunk.done, usage=dict(_provider_usage))
             response_text = "".join(full_response)
-            token_count = _approx_tokens(response_text)
-            _prompt_token_count = _approx_tokens(
+            token_count = _provider_usage.get("completion_tokens", 0) or _approx_tokens(response_text)
+            _prompt_token_count = _provider_usage.get("prompt_tokens", 0) or _approx_tokens(
                 "".join(m.get("content", "") for m in _file_messages if isinstance(m, dict))
             )
             self._metrics.record_streaming_complete(
@@ -1839,7 +1850,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             self._persist_assistant_message(session_id, response_text)
             total_ms = round((time.monotonic() - t0) * 1000)
             self._metrics.record("file_task", latency_ms=total_ms, success=True)
-            _ft_prompt_tok = _approx_tokens(
+            _ft_prompt_tok = _provider_usage.get("prompt_tokens", 0) or _approx_tokens(
                 "".join(m.get("content", "") for m in _file_messages if isinstance(m, dict))
             )
             _obs.emit(
@@ -1851,6 +1862,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 total_latency_ms=total_ms,
                 memory_facts=len(memory_facts),
                 agent_mode=False,
+                provider_usage=_provider_usage,
             )
             self._store_observation(
                 session_id,
@@ -2195,9 +2207,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 intent="file_write",
                 confidence=round(confidence, 2),
                 tokens_approx=_approx_tokens(response_text),
+                prompt_tokens_approx=_provider_usage.get("prompt_tokens", 0),
                 total_latency_ms=total_ms,
                 memory_facts=len(memory_facts),
                 agent_mode=False,
+                provider_usage=dict(_provider_usage),
             )
             self._store_observation(
                 session_id,
@@ -2283,13 +2297,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                                 intent=effective_intent.value,
                                 confidence=round(confidence, 2),
                                 tokens_approx=_approx_tokens(response_text),
-                                prompt_tokens_approx=_approx_tokens(
-                                    "".join(
-                                        m.get("content", "")
-                                        for m in prompt_messages
-                                        if isinstance(m, dict) and m.get("content")
-                                    )
-                                ),
+                                prompt_tokens_approx=_provider_usage.get("prompt_tokens", 0),
+                                provider_usage=dict(_provider_usage),
                                 total_latency_ms=total_ms,
                                 memory_facts=len(memory_facts),
                                 agent_mode=True,
@@ -2388,9 +2397,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         intent="code_exec",
                         confidence=round(confidence, 2),
                         tokens_approx=_approx_tokens(response_text),
+                        prompt_tokens_approx=_provider_usage.get("prompt_tokens", 0),
                         total_latency_ms=total_ms,
                         memory_facts=len(memory_facts),
                         agent_mode=False,
+                        provider_usage=dict(_provider_usage),
                     )
                     self._store_observation(
                         session_id,
@@ -2436,9 +2447,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         intent="memory_op",
                         confidence=round(confidence, 2),
                         tokens_approx=_approx_tokens(response_text),
+                        prompt_tokens_approx=_provider_usage.get("prompt_tokens", 0),
                         total_latency_ms=total_ms,
                         memory_facts=len(memory_facts),
                         agent_mode=False,
+                        provider_usage=dict(_provider_usage),
                     )
                     self._store_observation(
                         session_id,
@@ -2541,7 +2554,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # there's content, yield an error message if not, THEN
                 # yield done. This guarantees SOMETHING always reaches
                 # the user.
+                _provider_usage: dict[str, int] = {}
                 async for chunk in _agent_run:
+                    if chunk.usage:
+                        _provider_usage.update(chunk.usage)
                     safe_text = _filter_system_leaks(chunk.text)
                     if safe_text:
                         full_response_chunks.append(safe_text)
@@ -2557,6 +2573,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         metadata=chunk.metadata,
                         status=chunk.status,
                         dispatch_steps=chunk.dispatch_steps,
+                        usage=dict(_provider_usage),
                     )
             else:
                 async for chunk in self._agent_loop.run(
@@ -2581,6 +2598,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     orchestrator_context=orchestrator_context or None,
                     skip_planning=_skip_planning,
                 ):
+                    if chunk.usage:
+                        _provider_usage.update(chunk.usage)
                     safe_text = _filter_system_leaks(chunk.text)
                     if safe_text:
                         full_response_chunks.append(safe_text)
@@ -2594,6 +2613,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         metadata=chunk.metadata,
                         status=chunk.status,
                         dispatch_steps=chunk.dispatch_steps,
+                        usage=dict(_provider_usage),
                     )
 
             # Session 31: GUARANTEE — if the agent loop produced no text,
@@ -2709,12 +2729,14 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # Emit thinking_start so the UI shows a thinking indicator, then stream.
             _obs.emit("thinking_start", intent=effective_intent.value)
             async for chunk in active_adapter.chat(prompt_messages, intent=effective_intent.value):
+                if chunk.usage:
+                    _provider_usage.update(chunk.usage)
                 if chunk.error:
                     yield StreamChunk(text="", done=True, error=chunk.error)
                     return
                 safe_text = _filter_system_leaks(chunk.text)
                 full_response_chunks.append(safe_text)
-                yield StreamChunk(text=safe_text, done=chunk.done)
+                yield StreamChunk(text=safe_text, done=chunk.done, usage=dict(_provider_usage))
             _obs.emit("thinking_done", intent=effective_intent.value)
 
         response_text = "".join(full_response_chunks)
@@ -2763,8 +2785,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # status bar showing 0 tokens and 0 tok/s.  Compute approximate metrics
         # from the response text now that we have it.
         if effective_intent in AGENT_INTENTS:
-            _agent_token_count = _approx_tokens(response_text)
-            _prompt_tokens_approx = _approx_tokens(
+            _agent_token_count = _provider_usage.get("completion_tokens", 0) or _approx_tokens(response_text)
+            _prompt_tokens_approx = _provider_usage.get("prompt_tokens", 0) or _approx_tokens(
                 "".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict))
             )
             self._metrics.record_streaming_complete(
@@ -2857,8 +2879,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
         total_ms = round((time.monotonic() - t0) * 1000)
         self._metrics.record(effective_intent.value, latency_ms=total_ms, success=True)
-        _final_prompt_tok = _approx_tokens(
-            "".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict))
+        _final_prompt_tok = (
+            _provider_usage.get("prompt_tokens", 0)
+            or _approx_tokens("".join(m.get("content", "") for m in prompt_messages if isinstance(m, dict)))
         )
         _obs.emit(
             "turn_complete",
@@ -2869,6 +2892,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             total_latency_ms=total_ms,
             memory_facts=len(memory_facts),
             agent_mode=effective_intent in AGENT_INTENTS,
+            provider_usage=dict(_provider_usage),
         )
         self._store_observation(
             session_id,

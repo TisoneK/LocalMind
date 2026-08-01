@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `human_size` byte-formatting helper is now shared from `core/utils.py` instead of being duplicated in `shell.py` and `filesystem.py`. A bug fix or new unit will now propagate to all callers automatically
 
 ### Fixed
+- Fixed provider prompt-token telemetry not reaching the Observe panel. OpenAI-compatible and Ollama adapters now normalize real prompt/completion usage, preserve terminal/tool-call usage through AgentLoop and Engine paths, and fall back safely when a provider rejects optional streaming usage fields.
 - Fixed the Observe panel's live performance metrics staying blank during streaming. Latency now follows the active request clock, current prompt-token telemetry is used for Context Tokens when available, and completion tokens are never mislabeled as context.
 - Fixed file-upload failures being silently buried as an empty assistant response. Upload/storage errors now use the same typed streaming events as other chat failures, so the UI displays the error and cleanly ends the response.
 - Fixed the frontend chat stream dropping the final SSE event when a response closes without a trailing newline. The parser now flushes pending decoder and event-buffer state before completing, with regression coverage for unterminated events.

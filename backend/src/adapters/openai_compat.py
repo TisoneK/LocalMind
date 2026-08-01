@@ -433,6 +433,38 @@ PROVIDER_KEY_ENVS: dict[str, str] = {
 # (the actual answer). Never merge them.
 
 
+def _normalize_usage(usage: dict | None) -> dict:
+    """Normalize provider usage fields to the OpenAI-compatible names.
+
+    Providers use both ``prompt_tokens``/``completion_tokens`` and
+    ``input_tokens``/``output_tokens``. Return only positive integer fields so
+    a provider's empty usage heartbeat cannot overwrite real telemetry.
+    """
+    if not isinstance(usage, dict):
+        return {}
+
+    def _positive_int(*keys: str) -> int | None:
+        for key in keys:
+            value = usage.get(key)
+            if isinstance(value, (int, float)) and value >= 0:
+                return int(value)
+        return None
+
+    normalized: dict[str, int] = {}
+    prompt = _positive_int("prompt_tokens", "input_tokens", "prompt_token_count", "input_token_count")
+    completion = _positive_int("completion_tokens", "output_tokens", "completion_token_count", "output_token_count")
+    total = _positive_int("total_tokens", "total_token_count")
+    if prompt is not None:
+        normalized["prompt_tokens"] = prompt
+    if completion is not None:
+        normalized["completion_tokens"] = completion
+    if total is not None:
+        normalized["total_tokens"] = total
+    elif prompt is not None or completion is not None:
+        normalized["total_tokens"] = (prompt or 0) + (completion or 0)
+    return normalized
+
+
 def _extract_content_and_reasoning(delta: dict) -> tuple[str, str]:
     """
     Extract content (the answer) and reasoning_content (internal thinking)
@@ -577,17 +609,39 @@ class OpenAICompatAdapter(BaseAdapter):
         req_headers = headers or self._headers
         req_timeout = timeout if timeout is not None else 120.0
 
+        usage_option_retry = True
+        request_payload = payload
         for attempt in range(3):  # 0, 1, 2 = 3 total attempts
             request = self._client.build_request(
                 "POST",
                 url,
-                json=payload,
+                json=request_payload,
                 headers=req_headers,
                 timeout=req_timeout,
             )
             response = await self._client.send(request, stream=True)
 
             if response.status_code != 429:
+                # Some OpenAI-compatible providers reject the optional
+                # stream_options/include_usage field instead of ignoring it.
+                # Retry that request once without the optional field so
+                # telemetry remains additive and cannot break chat.
+                if (
+                    response.status_code in (400, 422)
+                    and usage_option_retry
+                    and "stream_options" in request_payload
+                ):
+                    body = (await response.aread()).decode(errors="replace").lower()
+                    if "stream_options" in body or "include_usage" in body or "unknown field" in body:
+                        await response.aclose()
+                        request_payload = dict(request_payload)
+                        request_payload.pop("stream_options", None)
+                        usage_option_retry = False
+                        logger.warning(
+                            "[adapter] %s rejected stream usage options; retrying without them",
+                            self._provider_name,
+                        )
+                        continue
                 return response  # success (200) or non-retryable error
 
             # Got 429 — read the body for logging, then close and retry
@@ -621,7 +675,7 @@ class OpenAICompatAdapter(BaseAdapter):
         request = self._client.build_request(
             "POST",
             url,
-            json=payload,
+            json=request_payload,
             headers=req_headers,
             timeout=req_timeout,
         )
@@ -791,6 +845,10 @@ class OpenAICompatAdapter(BaseAdapter):
             "messages": enhanced_messages,
             "temperature": temperature,
             "stream": True,
+            # OpenAI-compatible providers that support streaming usage emit a
+            # final usage-only SSE frame when this is enabled. Providers that
+            # omit it remain supported through the engine's estimation fallback.
+            "stream_options": {"include_usage": True},
         }
         self._add_provider_params(payload)
 
@@ -817,6 +875,7 @@ class OpenAICompatAdapter(BaseAdapter):
         try:
             tool_call_buffers: dict[int, dict] = {}
             raw_content_parts: list[str] = []
+            usage_metadata: dict = {}
             tool_call_detected = False
             # Initial text accumulated during Phase 1 — yielded once Phase 2
             # decides this is a text response (not tool call).
@@ -866,6 +925,7 @@ class OpenAICompatAdapter(BaseAdapter):
 
                 try:
                     obj = json.loads(data)
+                    usage_metadata.update(_normalize_usage(obj.get("usage")))
                     choice = obj.get("choices", [{}])[0]
                     delta = choice.get("delta", {})
                     chunks_read += 1
@@ -889,11 +949,13 @@ class OpenAICompatAdapter(BaseAdapter):
                     _content, _reasoning = _extract_content_and_reasoning(delta)
                     if _reasoning:
                         initial_text_chunks.append(
-                            StreamChunk(text="", thinking=_reasoning, done=False)
+                            StreamChunk(text="", thinking=_reasoning, done=False, usage=dict(usage_metadata))
                         )
                     if _content:
                         raw_content_parts.append(_content)
-                        initial_text_chunks.append(StreamChunk(text=_content, done=False))
+                        initial_text_chunks.append(
+                            StreamChunk(text=_content, done=False, usage=dict(usage_metadata))
+                        )
 
                     # Check finish_reason for tool calls — THIS signals completion
                     finish_reason = choice.get("finish_reason", "")
@@ -1011,8 +1073,7 @@ class OpenAICompatAdapter(BaseAdapter):
             # return ToolCallResult.
             if tool_call_detected:
                 # Drain remaining lines to get full tool call args
-                if not phase1_done:
-                    async for line in response.aiter_lines():
+                async for line in response.aiter_lines():
                         if not line or not line.startswith("data: "):
                             continue
                         data = line[6:]
@@ -1020,6 +1081,7 @@ class OpenAICompatAdapter(BaseAdapter):
                             break
                         try:
                             obj = json.loads(data)
+                            usage_metadata.update(_normalize_usage(obj.get("usage")))
                             choice = obj.get("choices", [{}])[0]
                             delta = choice.get("delta", {})
                             if "tool_calls" in delta:
@@ -1093,6 +1155,7 @@ class OpenAICompatAdapter(BaseAdapter):
                         tool_name=buf["name"],
                         tool_args=tool_args,
                         raw_content="".join(raw_content_parts),
+                        usage=usage_metadata,
                     )
 
                 # Tool call detected but no buffers parsed — treat as text
@@ -1137,6 +1200,7 @@ class OpenAICompatAdapter(BaseAdapter):
                     tool_name=_mm_tool_name,
                     tool_args=_mm_args,
                     raw_content=full_initial_text,
+                    usage=usage_metadata,
                 )
 
             # ── Phase 2b: Text response — stream directly from HTTP ──────
@@ -1147,6 +1211,7 @@ class OpenAICompatAdapter(BaseAdapter):
             _resp = response
             _raw_parts = list(raw_content_parts)  # snapshot for JSON fallback
             _tool_names = tool_names  # captured for mid-stream detection
+            _usage = usage_metadata  # updated by the live stream closure
 
             async def _stream_from_http() -> AsyncIterator[StreamChunk]:
                 """Yield text chunks directly from the live HTTP stream.
@@ -1192,8 +1257,13 @@ class OpenAICompatAdapter(BaseAdapter):
                         filtered_text = _mm_full_pattern.sub("", chunk.text)
                         filtered_text = _mm_prefix_pattern.sub("", filtered_text)
                         filtered_text = _mm_tag_prefix.sub("", filtered_text)
-                        if filtered_text:
-                            yield StreamChunk(text=filtered_text, done=False)
+                        if filtered_text or chunk.thinking or chunk.usage:
+                            yield StreamChunk(
+                                text=filtered_text,
+                                thinking=chunk.thinking,
+                                done=False,
+                                usage=dict(_usage),
+                            )
 
                     # Continue reading from the still-open stream
                     if not phase1_done:
@@ -1208,6 +1278,7 @@ class OpenAICompatAdapter(BaseAdapter):
 
                             try:
                                 obj = json.loads(data)
+                                _usage.update(_normalize_usage(obj.get("usage")))
                                 _choice = obj.get("choices", [{}])[0]
                                 delta = _choice.get("delta", {})
                                 # Session 23: separate reasoning from content
@@ -1216,7 +1287,9 @@ class OpenAICompatAdapter(BaseAdapter):
                                 # Some providers send delta.content="" as keepalives.
                                 # These are not errors — just skip and continue.
                                 if _reasoning:
-                                    yield StreamChunk(text="", thinking=_reasoning, done=False)
+                                    yield StreamChunk(
+                                        text="", thinking=_reasoning, done=False, usage=dict(_usage)
+                                    )
                                 if _content:
                                     text = _content
                                     # v8.2: Filter MiniMax tool_call XML from streaming text.
@@ -1228,7 +1301,9 @@ class OpenAICompatAdapter(BaseAdapter):
                                         full_text_parts.append(text)
                                         continue
                                     full_text_parts.append(text)
-                                    yield StreamChunk(text=filtered_text, done=False)
+                                    yield StreamChunk(
+                                        text=filtered_text, done=False, usage=dict(_usage)
+                                    )
 
                                     # One-time MiniMax proprietary format check.
                                     # MiniMax may send its tool_call as text
@@ -1302,7 +1377,7 @@ class OpenAICompatAdapter(BaseAdapter):
                             except (json.JSONDecodeError, IndexError, KeyError):
                                 continue
 
-                    yield StreamChunk(text="", done=True)
+                    yield StreamChunk(text="", done=True, usage=dict(_usage))
                 finally:
                     await _resp.aclose()
 
@@ -1343,11 +1418,13 @@ class OpenAICompatAdapter(BaseAdapter):
     ) -> AsyncIterator[StreamChunk]:
         """Handle OpenAI-style APIs (OpenAI, OpenRouter, DeepSeek, LiteLLM)."""
         url = f"{self._base_url}/chat/completions"
+        usage_metadata: dict = {}
         payload = {
             "model": self._model,
             "messages": messages,
             "temperature": temperature,
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         self._add_provider_params(payload)
 
@@ -1368,19 +1445,20 @@ class OpenAICompatAdapter(BaseAdapter):
                         continue
                     data = line[6:]
                     if data == "[DONE]":
-                        yield StreamChunk(text="", done=True)
+                        yield StreamChunk(text="", done=True, usage=dict(usage_metadata))
                         return
 
                     try:
                         obj = json.loads(data)
+                        usage_metadata.update(_normalize_usage(obj.get("usage")))
                         choice = obj.get("choices", [{}])[0]
                         delta = choice.get("delta", {})
                         # Session 23: separate reasoning from content
                         _content, _reasoning = _extract_content_and_reasoning(delta)
                         if _reasoning:
-                            yield StreamChunk(text="", thinking=_reasoning, done=False)
+                            yield StreamChunk(text="", thinking=_reasoning, done=False, usage=dict(usage_metadata))
                         if _content:
-                            yield StreamChunk(text=_content, done=False)
+                            yield StreamChunk(text=_content, done=False, usage=dict(usage_metadata))
 
                         # Check finish_reason for safety/content filter blocks.
                         # Gemini returns finish_reason="SAFETY" when its content
@@ -1488,11 +1566,12 @@ class OpenAICompatAdapter(BaseAdapter):
                         continue
                     data = line[6:]
                     if data == "[DONE]":
-                        yield StreamChunk(text="", done=True)
+                        yield StreamChunk(text="", done=True, usage=dict(usage_metadata))
                         return
 
                     try:
                         obj = json.loads(data)
+                        usage_metadata.update(_normalize_usage(obj.get("usage")))
                         evt_type = obj.get("type", "")
 
                         # content_block_delta carries the actual text tokens.
@@ -1504,13 +1583,13 @@ class OpenAICompatAdapter(BaseAdapter):
                             if delta.get("type") == "text_delta":
                                 text = delta.get("text", "")
                                 if text:
-                                    yield StreamChunk(text=text, done=False)
+                                    yield StreamChunk(text=text, done=False, usage=dict(usage_metadata))
 
                         # message_stop signals the end of the streamed message.
                         # Anthropic doesn't send a [DONE] line — we synthesize
                         # the done chunk here so the caller's stream terminates.
                         elif evt_type == "message_stop":
-                            yield StreamChunk(text="", done=True)
+                            yield StreamChunk(text="", done=True, usage=dict(usage_metadata))
                             return
 
                         # message_delta carries stop_reason — surface content

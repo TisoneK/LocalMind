@@ -928,6 +928,9 @@ class AgentLoop:
         """
         active_adapter = adapter or self._adapter
         trace = AgentTrace()
+        # Provider usage is carried through every streamed chunk and tool-call
+        # result so the Engine can report real prompt/completion counts.
+        _provider_usage: dict[str, int] = {}
         _obs = obs  # may be None — all obs.emit() calls guarded below
         _loop_start_time = time.monotonic()  # ADR-5: wall-clock cap baseline
 
@@ -1258,6 +1261,10 @@ class AgentLoop:
             logger.info(f"[agent.loop] iter={iteration + 1} LLM: {llm_ms}ms")
 
             # ── Handle MultiToolCallResult (model invoked multiple tools) ──
+            result_usage = getattr(result, "usage", None)
+            if result_usage:
+                _provider_usage.update(result_usage)
+                yield StreamChunk(text="", done=False, usage=dict(_provider_usage))
             # When the model returns multiple tool calls in a single response,
             # dispatch independent ones concurrently via asyncio.gather().
             # This is safe because independent tool calls (e.g., file_task + sysinfo)
@@ -1469,6 +1476,10 @@ class AgentLoop:
 
             # ── Handle ToolCallResult (model chose to use a tool) ─────
             if isinstance(result, ToolCallResult):
+                result_usage = getattr(result, "usage", None)
+                if result_usage:
+                    _provider_usage.update(result_usage)
+                    yield StreamChunk(text="", done=False, usage=dict(_provider_usage))
                 tool_name = result.tool_name
                 tool_args = result.tool_args
                 tool_input = _extract_tool_input(tool_name, tool_args)
@@ -2278,7 +2289,11 @@ class AgentLoop:
                 async for chunk in result:
                     filtered_text = _filter_system_leaks(chunk.text)
                     _minimax_buffer += filtered_text
-                    _minimax_chunks.append(StreamChunk(text=filtered_text, done=chunk.done))
+                    if chunk.usage:
+                        _provider_usage.update(chunk.usage)
+                    _minimax_chunks.append(
+                        StreamChunk(text=filtered_text, done=chunk.done, usage=dict(_provider_usage))
+                    )
                     if chunk.error:
                         _minimax_error = True
                     if chunk.done:
@@ -2920,13 +2935,15 @@ class AgentLoop:
                                 "emitting worker report"
                             )
                             yield StreamChunk(text="\n\n" + _report_text, done=False)
-                    yield StreamChunk(text="", done=True)
+                    yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                     return
 
                 # Stream remaining chunks — with mid-stream MiniMax detection
                 _mid_stream_minimax_buffer = ""
                 _mid_stream_text = ""
                 async for chunk in result:
+                    if chunk.usage:
+                        _provider_usage.update(chunk.usage)
                     filtered_text = _filter_system_leaks(chunk.text)
                     full_text += filtered_text
                     _mid_stream_text += filtered_text
@@ -2953,7 +2970,7 @@ class AgentLoop:
                         # Keep the terminal marker until report enforcement has
                         # completed below; otherwise the client can finalize
                         # before the worker report is delivered.
-                        yield StreamChunk(text=_chunk_clean, done=False)
+                        yield StreamChunk(text=_chunk_clean, done=False, usage=dict(_provider_usage))
 
                 trace.final_response = full_text
                 trace.steps.append(
@@ -2993,7 +3010,7 @@ class AgentLoop:
                             iteration + 1,
                         )
                         yield StreamChunk(text=_tool_summary, done=False)
-                yield StreamChunk(text="", done=True)
+                yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                 return
 
         # ── MAX_ITERATIONS hit (or wall-clock cap broke the loop) ──────
@@ -3012,6 +3029,7 @@ class AgentLoop:
                 observation_log=observation_log,
                 active_adapter=active_adapter,
                 trace=trace,  # Session 31: pass trace so empty-stream fallback can surface tool outputs
+                provider_usage=_provider_usage,
             ):
                 yield chunk
         except asyncio.TimeoutError:
@@ -3565,6 +3583,7 @@ class AgentLoop:
         observation_log: str,
         active_adapter,
         trace=None,
+        provider_usage: Optional[dict[str, int]] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         After hitting MAX_ITERATIONS, ask the LLM to synthesize a final
@@ -3628,15 +3647,23 @@ class AgentLoop:
         # tool may have failed or returned no useful output." fallback —
         # with zero indication of what actually happened. This is the
         # "Tools execution failure" symptom the user reported.
+        _provider_usage = provider_usage if provider_usage is not None else {}
         _any_text_yielded = False
         _final_chunks: list[StreamChunk] = []
         _final_text_parts: list[str] = []
         try:
             t_final = time.monotonic()
             async for chunk in active_adapter.chat(force_msg, temperature=0.4):
+                if chunk.usage:
+                    _provider_usage.update(chunk.usage)
                 if chunk.error:
                     _error_report = trace.work_report().render() if trace is not None else ""
-                    yield StreamChunk(text=_error_report, done=True, error=chunk.error)
+                    yield StreamChunk(
+                        text=_error_report,
+                        done=True,
+                        error=chunk.error,
+                        usage=dict(_provider_usage),
+                    )
                     return
                 filtered_text = _filter_system_leaks(chunk.text)
                 if filtered_text:
@@ -3644,7 +3671,9 @@ class AgentLoop:
                     _final_text_parts.append(filtered_text)
                 # Hold the terminal marker until the worker report contract
                 # has been enforced below.
-                _final_chunks.append(StreamChunk(text=filtered_text, done=False))
+                _final_chunks.append(
+                    StreamChunk(text=filtered_text, done=False, usage=dict(_provider_usage))
+                )
             logger.info(f"[agent.loop] final synthesis: {round((time.monotonic() - t_final) * 1000)}ms")
         except Exception as exc:
             logger.warning(f"[agent.loop] final synthesis failed: {exc}")
@@ -3655,7 +3684,7 @@ class AgentLoop:
             )
             if _error_report:
                 _exception_text += "\n\n" + _error_report
-            yield StreamChunk(text=_exception_text, done=True)
+            yield StreamChunk(text=_exception_text, done=True, usage=dict(_provider_usage))
             return  # CRITICAL: return after yielding the exception fallback
 
         _final_text = "".join(_final_text_parts)
@@ -3671,7 +3700,7 @@ class AgentLoop:
         if _final_chunks and _any_text_yielded:
             for _final_chunk in _final_chunks:
                 yield _final_chunk
-            yield StreamChunk(text="", done=True)
+            yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
 
         # Session 31 (revised per user feedback): if the model returned an
         # empty stream (or all chunks were filtered out as system-leak XML),
@@ -3697,7 +3726,7 @@ class AgentLoop:
 
             if _evidence_summary:
                 # Trace has tool calls — surface them as evidence.
-                yield StreamChunk(text=_evidence_summary, done=True)
+                yield StreamChunk(text=_evidence_summary, done=True, usage=dict(_provider_usage))
             elif observation_log.strip():
                 # No trace available but observation_log has content (failed
                 # tools). Surface that.
@@ -3711,6 +3740,7 @@ class AgentLoop:
                         "something unexpected, that's likely the real cause."
                     ),
                     done=True,
+                    usage=dict(_provider_usage),
                 )
             else:
                 # No tools ran AND no observation log — this is a genuine
@@ -3728,4 +3758,5 @@ class AgentLoop:
                         "  • Try a simpler phrasing of your request"
                     ),
                     done=True,
+                    usage=dict(_provider_usage),
                 )

@@ -30,14 +30,73 @@ These tests verify both fixes at the unit level (no real API calls).
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import MagicMock, patch
 
-from adapters.openai_compat import OpenAICompatAdapter, PROVIDER_CONFIGS
+from adapters.openai_compat import OpenAICompatAdapter, PROVIDER_CONFIGS, _normalize_usage
+
+
+def test_normalize_usage_prefers_provider_counts():
+    """Provider counts must survive normalization for UI telemetry."""
+    assert _normalize_usage(
+        {"prompt_tokens": 37, "completion_tokens": 11, "total_tokens": 48}
+    ) == {"prompt_tokens": 37, "completion_tokens": 11, "total_tokens": 48}
+
+
+def test_normalize_usage_accepts_input_output_names():
+    """Providers using input/output names should map to the shared schema."""
+    assert _normalize_usage({"input_tokens": 19, "output_tokens": 7}) == {
+        "prompt_tokens": 19,
+        "completion_tokens": 7,
+        "total_tokens": 26,
+    }
 
 
 def test_zen_default_is_free_deepseek_model():
     """Zen's default must remain on the currently free DeepSeek model."""
     assert PROVIDER_CONFIGS["zen"].default_model == "deepseek-v4-flash-free"
+
+
+def test_stream_usage_option_compatibility_retry(monkeypatch):
+    """Unsupported stream usage options must not make a provider unusable."""
+    monkeypatch.setenv("ZEN_API_KEY", "sk-fake-test-key")
+    adapter = OpenAICompatAdapter(provider="zen", model_override="deepseek-v4-flash-free")
+    requests = []
+
+    class FakeResponse:
+        def __init__(self, status_code: int, body: str = ""):
+            self.status_code = status_code
+            self._body = body.encode()
+            self.headers = {}
+
+        async def aread(self):
+            return self._body
+
+        async def aclose(self):
+            return None
+
+    class FakeClient:
+        def build_request(self, method, url, *, json, headers, timeout):
+            requests.append(json)
+            return {"json": json}
+
+        async def send(self, request, stream=True):
+            if len(requests) == 1:
+                return FakeResponse(400, '{"error":"unknown field stream_options"}')
+            return FakeResponse(200)
+
+    adapter._client = FakeClient()
+
+    async def run():
+        return await adapter._send_streaming_with_retry(
+            "https://example.test/chat/completions",
+            {"model": "deepseek-v4-flash-free", "stream_options": {"include_usage": True}},
+        )
+
+    response = asyncio.run(run())
+    assert response.status_code == 200
+    assert "stream_options" in requests[0]
+    assert "stream_options" not in requests[1]
 
 
 # ── 1. Trailing tool role → synthetic user message appended ──────────────

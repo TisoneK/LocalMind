@@ -6,8 +6,30 @@ from __future__ import annotations
 import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from adapters.ollama import OllamaAdapter
+from adapters.ollama import OllamaAdapter, _normalize_ollama_usage
 from core.models import StreamChunk
+
+
+def test_normalize_ollama_native_usage():
+    """Native Ollama terminal counters map to the shared usage schema."""
+    assert _normalize_ollama_usage(
+        {"prompt_eval_count": 23, "eval_count": 9}
+    ) == {
+        "prompt_tokens": 23,
+        "completion_tokens": 9,
+        "total_tokens": 32,
+    }
+
+
+def test_normalize_ollama_nested_usage():
+    """OpenAI-shaped usage nested in an Ollama response is also supported."""
+    assert _normalize_ollama_usage(
+        {"usage": {"prompt_tokens": 12, "completion_tokens": 4, "total_tokens": 16}}
+    ) == {
+        "prompt_tokens": 12,
+        "completion_tokens": 4,
+        "total_tokens": 16,
+    }
 
 
 def _make_sse_line(text: str, done: bool = False) -> str:
@@ -53,6 +75,38 @@ async def test_chat_streams_tokens(adapter):
     texts = [c.text for c in chunks if c.text]
     assert texts == ["Hello", ", ", "world"]
     assert chunks[-1].done is True
+
+
+@pytest.mark.asyncio
+async def test_chat_preserves_terminal_usage(adapter):
+    """Usage on the terminal Ollama frame reaches the done chunk."""
+    lines = [
+        _make_sse_line("Hello"),
+        'data: {"prompt_eval_count": 23, "eval_count": 9}',
+        _make_sse_line("", done=True),
+    ]
+
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+
+    async def fake_aiter_lines():
+        for line in lines:
+            yield line
+
+    mock_response.aiter_lines = fake_aiter_lines
+
+    with patch.object(adapter._client, "stream") as mock_stream:
+        mock_stream.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        chunks = [chunk async for chunk in adapter.chat([{"role": "user", "content": "Hi"}])]
+
+    assert chunks[-1].done is True
+    assert chunks[-1].usage == {
+        "prompt_tokens": 23,
+        "completion_tokens": 9,
+        "total_tokens": 32,
+    }
 
 
 @pytest.mark.asyncio
