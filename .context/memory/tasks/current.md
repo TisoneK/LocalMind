@@ -5,10 +5,10 @@ session start (protocol Step 3), clear it at session end (Step 15). If
 you find a stale in-progress entry here, a prior session died mid-task —
 check its session entry and backlog before starting.
 
-- **Session:** 2026-08-02 — Session 65 (Super Z / GLM-5.2)
-- **Feature:** none — research/comparison session
-- **Task:** Research Codebuff (CodebuffAI/open-codebuff) architecture — agents, tools, orchestration, isolation, parallelization, delegation, memory, safety, models. Compare against LocalMind. Produce borrowing recommendations. No product code changes (purely research).
-- **Status:** in progress — research complete, writing up review + session notes + backlog items
+- **Session:** none (idle)
+- **Feature:** none
+- **Task:** none
+- **Status:** idle
 
 ---
 
