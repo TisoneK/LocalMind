@@ -1003,3 +1003,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Review:** ship-ready after fixing forced-synthesis usage ordering; report `.context/memory/reviews/2026-08-01-review-21.md`.
 - **Open items:** Provider usage remains best-effort where providers omit usage. The unrelated todo-plan wording mismatch remains deferred.
 - **Notes:** No secrets were added to tracked files or logs. Product and context surfaces were kept separate per protocol.
+
+---
+## 2026-08-02 — Session 65
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai) | **Platform:** Z.ai cloud sandbox (Linux container) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — research/comparison session
+- **Task:** Research Codebuff (CodebuffAI/open-codebuff) architecture — agents, tools, orchestration, isolation, parallelization, delegation, memory, safety, models. Compare against LocalMind. Produce borrowing recommendations. No product code changes (purely research, per user instruction).
+- **Commits:** 0 product (research only). 2 context: `docs(review): LocalMind ↔ Codebuff architectural comparison + borrowing roadmap` + `chore(context): log session 2026-08-02 + 12 borrowing backlog items + flaw`.
+- **Outcome:** done — produced 12 borrowing recommendations across 3 tiers (5 Tier A borrow-now, 4 Tier B post-ADR-8, 3 Tier C needs-cloud-routing), filed as `B-2026-08-02-1` through `B-2026-08-02-12` in backlog. Key finding: LocalMind's biggest functional gap is no parallel delegation (Codebuff's `spawn_agents` + `Promise.allSettled` is first-class; LocalMind's `delegate` is strictly handoff). LocalMind's clearest advantages: persistent semantic memory (sqlite-vec) + `.context/` multi-session protocol (Codebuff has neither).
+- **Open items:** 5 open questions for the maintainer (in review §6) gating Tier B/C work. Tier A can proceed without answers.
+- **Report:** .context/memory/reviews/2026-08-02-review-1.md
+- **Notes:** .context/memory/sessions/2026-08-02-1/notes.md (with companion files: codebuff-deep-profile.md, comparison.md, recommendations.md). Caused a flaw this session: created a bogus `kickoff.md` at `/home/z/my-project/download/codebuff-research/kickoff.md` instead of following the existing `.context/kickoff.md`. User caught it ("was kickoff.md read-only or create???"). Deleted the bogus file, re-read the actual kickoff, loaded the cloud edition protocol, followed it properly. Flaw logged in `flaws/log.md` with suggested package fix: the kickoff template's HTML comment should explicitly state "agents READ this file; they do not CREATE it" — the current wording ("THE FRONT DOOR — read this first") is clear in hindsight but ambiguous to an agent that hasn't loaded the protocol yet. Did NOT re-confirm model version with user — carrying GLM-5.2 forward from Session 5 correction (now 15+ sessions; flagged pattern in prior entries).

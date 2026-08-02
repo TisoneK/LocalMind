@@ -108,3 +108,6 @@ records.
 
 ---
 - **2026-08-01 — Session 63** — Buffy / openai/gpt-5.6-luna — shipped the live Observe metrics bridge and completed the previously incomplete product/context closeout. Build passed, 12 frontend tests passed, lint 0 errors / 53 warnings, review ship-ready. Product commit `8f253bf`; detail `.context/memory/reviews/2026-08-01-review-20.md`.
+
+---
+- **2026-08-02 — Session 65** — Super Z / GLM-5.2 — researched Codebuff architecture and produced 12 borrowing recommendations across 3 tiers (Tier A: bounded output buffer, abort signal, delegation diagnosis, context compactor, steering; Tier B: parallel delegation, propose-stage tools, subgoal scratchpad, inline delegation; Tier C: per-agent model routing, best-of-N editor, skills). Key finding: LocalMind's biggest gap is no parallel delegation; clearest advantages are persistent memory + .context protocol. 0 product commits, 2 context commits. Caused + logged a flaw: created bogus kickoff.md instead of following existing one. Detail: `.context/memory/reviews/2026-08-02-review-1.md` + `.context/memory/sessions/2026-08-02-1/notes.md`.

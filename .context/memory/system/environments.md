@@ -36,7 +36,7 @@ block (and its "last verified" date) every time you run on it again.
   - Python is system-wide (no venv isolation required on Windows, but still recommended for backend work)
   - This is a local development machine — persistent storage, full filesystem access
 
-## Z.ai cloud sandbox (last verified 2026-07-15)
+## Z.ai cloud sandbox (last verified 2026-08-02)
 
 - **Identify by:** workspace path `/home/z/my-project/`; env vars `FC_FUNCTION_NAME` / `SIGMA_APP_NAME` present; `CLAWHUB_WORKDIR=/home/z/my-project`
 - **OS:** Linux 6.5 (Ubuntu-based, containerized — `KATA_CONTAINER=true`)
@@ -59,6 +59,13 @@ block (and its "last verified" date) every time you run on it again.
   - Git remote URL is stripped of token after clone; must re-add token for push, then strip again (see protocol Step 12)
   - `npm install` emits `allow-scripts` warnings for `electron@33.4.11` (postinstall: `node install.js`) and `esbuild@0.25.12` (postinstall: `node install.js`). These are dev build-time scripts, safe to defer — the frontend typecheck/lint/build all work without approving them. (Session 7)
   - **File-mode drift after sandbox wipe:** when the sandbox wipes and re-clones a repo, all files come back with mode `100755` (executable) instead of `100644`. This makes `git status` show every file as modified and blocks `git pull` with "Please commit your changes or stash them before you merge." Fix: `git config core.fileMode false && git checkout -- .` then pull. This is a sandbox filesystem artifact, not real changes. (Session 8)
+  - **Verified commands (Session 65, 2026-08-02 — research-only, no venv/baseline re-run):**
+    - `git clone "https://x-access-token:${GITHUB_PAT}@github.com/TisoneK/LocalMind.git"` → succeeded; PAT stripped from `.git/config` via `git remote set-url origin https://github.com/TisoneK/LocalMind.git` immediately after
+    - `git config user.name "Tisone Kironget" && git config user.email "tisonkironget@gmail.com"` → set local git identity (sandbox default is `Z User <z@container>`, must be overridden)
+    - `git pull --ff-only` → "Already up to date." (on `main`)
+    - `sh .context/core/bin/context-sync verify` → "core OK: every file matches MANIFEST.sha256 (0.5.0)"
+    - `sh .context/core/bin/context-sync status` → "core: 0.5.0, locked: 0.5.0, source: none reachable — skipping, this is fine"
+    - `git clone https://github.com/CodebuffAI/open-codebuff.git` → succeeded (public, anonymous HTTPS, no auth needed)
 
 ## Local macOS development machine (last verified 2026-08-01)
 
