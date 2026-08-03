@@ -1,5 +1,28 @@
 # Notes: adr-8-agent-centric-routing (append-only while the feature is alive)
 
+---
+## 2026-08-03 — Buffy / openai/gpt-5.6-luna (ExecutionGraph runtime boundary)
+
+Implemented the first live ExecutionGraph runtime boundary as a narrow additive
+slice. Explicitly planned MULTI_TOOL/MULTI_PHASE graphs may execute only
+read-only WEB_SEARCH, WEB_FETCH, and SYSINFO nodes, with task-local tool-policy
+fencing; invalid or mutating graphs fall back to the established agent path.
+
+The runtime now preserves structured query/url arguments, runs dependency waves,
+records failed ToolResults as failed nodes, preserves provider failure details
+through retries, skips pending dependents after required failures, bounds
+synthesized evidence, and emits graph/node observability. Engine graph mode now
+starts request metrics, emits todos with success/failure/skipped statuses,
+persists the synthesized response, carries provider usage, records failure-aware
+metrics, and falls back to evidence when synthesis is empty.
+
+Validation: 18 focused graph/capability/API tests passed; compile, Ruff import,
+and diff checks passed. Full backend baseline remains 823 passed / 1 pre-existing
+failure in test_engine_emit_todo_plan; HEAD reproduces the same stale wording
+expectation. Review: `.context/memory/reviews/2026-08-03-review-22.md`.
+
+---
+
 Feature-scoped findings, attempts, dead ends — the detail that would
 otherwise bloat the global logs. Facts that outlive the feature go to
 their real domain: architectural decisions → `plans/decisions.md`,

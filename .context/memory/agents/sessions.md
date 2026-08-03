@@ -1028,3 +1028,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** B-2026-08-02-2 through -12 remain deferred; stale todo-plan assertion remains open.
 - **Report:** `.context/memory/reviews/2026-08-03-review.md`
 - **Notes:** none — implementation detail is captured in the review report and feature notes.
+
+---
+## 2026-08-03 — Session 67
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (`/Users/bao/Code/LocalMind`) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Make the planned ExecutionGraph usable as a live, general-purpose read-only runtime boundary without regressing direct chat, existing agent-loop routing, safety policy, or non-coding behavior.
+- **Product files:** `backend/src/core/execution_graph.py`, `backend/src/core/engine/_pipeline.py`, `tests/core/test_execution_graph_runtime.py`
+- **Context file:** `.context/memory/reviews/2026-08-03-review-22.md`
+- **Delivered:** admitted only WEB_SEARCH/WEB_FETCH/SYSINFO graphs; enforced task-local tool policy; preserved query/url args; added dependency-wave execution failure semantics and bounded evidence; integrated explicit graph execution/synthesis into the engine with persistence, observations, provider usage, failure-aware metrics, and todo success/failure/skipped statuses.
+- **Validation:** 18 focused tests passed; compile, Ruff import checks, and diff checks passed. Full backend: 823 passed / 1 pre-existing stale todo-plan wording failure, reproduced on HEAD. Context core verify/status both pass on 0.5.0.
+- **Review:** final review had no blocking safety or routing findings; optional-node semantics and a live pipeline regression test remain deferred follow-ups.
+- **Commits:** pending product commit and separate context closeout commit at session end.

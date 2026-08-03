@@ -1,5 +1,13 @@
 # Current Task (overwrite each session)
 
+- **Session:** none (idle)
+- **Feature:** none
+- **Task:** none
+- **Status:** idle
+
+---
+
+
 Holds exactly one task — the one being worked on right now. Set it at
 session start (protocol Step 3), clear it at session end (Step 15). If
 you find a stale in-progress entry here, a prior session died mid-task —
