@@ -37,6 +37,11 @@ from core.agent.constants import (
 from core.agent.orchestrator import AgentOrchestrator, OrchestrationResult
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.config import settings
+from core.execution_graph import (
+    execute_graph,
+    format_graph_results,
+    graph_runtime_errors,
+)
 from core.filters import _filter_code_output, _filter_system_leaks, _filter_tool_injection
 
 # v4.0: No regex classifier exists. ThinkingDispatcher is the sole router.
@@ -2097,6 +2102,164 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
         # ── 7a/7b. Stream response ─────────────────────────────────────────
         full_response_chunks: list[str] = []
+
+        # ── 7b-graph. Read-only capability graph boundary ─────────────────
+        # ThinkingDispatcher has always produced an ExecutionGraph, but the
+        # legacy path previously ignored it. Admit only explicitly planned
+        # multi-capability graphs here, and only for read-only web/system
+        # intents. Mutating capabilities continue through the established
+        # agent/workspace safety contracts until their graph contracts mature.
+        _graph = _orchestration_plan.graph
+        if (
+            _execution_mode in (ExecutionMode.MULTI_TOOL, ExecutionMode.MULTI_PHASE)
+            and _graph is not None
+            and hasattr(_graph, "nodes")
+        ):
+            _graph_policy = frozenset(allowed_tool_names) if allowed_tool_names is not None else None
+            _graph_errors = graph_runtime_errors(_graph, _graph_policy)
+            if _graph_errors:
+                _obs.emit(
+                    "graph_runtime_skipped",
+                    reason="; ".join(_graph_errors)[:500],
+                    node_count=len(_graph.nodes),
+                )
+                logger.info(
+                    "[engine] graph runtime skipped; falling back to agent loop: %s",
+                    _graph_errors,
+                )
+            else:
+                # Graph mode returns before the standard agent-loop bookkeeping;
+                # keep progress and streaming metrics consistent with that path.
+                self._emit_todo_plan(session_id, effective_intent, message, _obs)
+                self._metrics.start_request()
+                _obs.emit("graph_execution_start", node_count=len(_graph.nodes))
+                executed_graph = await execute_graph(
+                    _graph,
+                    _task_profile.constraints,
+                    _obs,
+                    allowed_tool_names=_graph_policy,
+                )
+                graph_evidence = format_graph_results(executed_graph)
+                graph_failed = executed_graph.has_failed_required()
+                self._update_todo_status(session_id, 0, "done", _obs)
+                self._update_todo_status(
+                    session_id,
+                    1,
+                    "failed" if graph_failed else "done",
+                    _obs,
+                )
+                _obs.emit(
+                    "graph_execution_done",
+                    node_count=len(executed_graph.nodes),
+                    failed=executed_graph.has_failed_required(),
+                )
+
+                synthesis_messages = prompt_messages + [
+                    {
+                        "role": "user",
+                        "content": (
+                            "The planned read-only capability graph has completed. "
+                            "Synthesize an answer from the evidence below. Do not "
+                            "claim actions that are not present in the evidence. "
+                            "If a node failed, say so clearly.\n\n"
+                            f"GRAPH EVIDENCE:\n{graph_evidence}"
+                        ),
+                    }
+                ]
+                graph_response: list[str] = []
+                async for chunk in active_adapter.chat(synthesis_messages, intent="chat"):
+                    if chunk.usage:
+                        _provider_usage.update(chunk.usage)
+                    if chunk.error:
+                        _graph_latency = round((time.monotonic() - t0) * 1000)
+                        self._metrics.record(
+                            effective_intent.value,
+                            latency_ms=_graph_latency,
+                            success=False,
+                        )
+                        self._update_todo_status(session_id, 2, "failed", _obs)
+                        _obs.emit(
+                            "graph_synthesis_failed",
+                            error=chunk.error[:120],
+                            total_latency_ms=_graph_latency,
+                        )
+                        _obs.emit(
+                            "turn_complete",
+                            intent=effective_intent.value,
+                            confidence=round(confidence, 2),
+                            total_latency_ms=_graph_latency,
+                            memory_facts=len(memory_facts),
+                            agent_mode=False,
+                            graph_mode=True,
+                            success=False,
+                        )
+                        self._store_observation(
+                            session_id,
+                            _obs,
+                            intent=effective_intent.value,
+                            confidence=round(confidence, 2),
+                            tools_used=", ".join(node.intent.value for node in executed_graph.nodes),
+                            memory_hits=len(memory_facts),
+                            context_tokens=0,
+                            latency_ms=_graph_latency,
+                        )
+                        yield StreamChunk(text="", done=True, error=chunk.error)
+                        return
+                    safe_text = _filter_system_leaks(chunk.text)
+                    if safe_text:
+                        graph_response.append(safe_text)
+                        yield StreamChunk(text=safe_text, done=False, usage=dict(_provider_usage))
+
+                response_text = "".join(graph_response).strip()
+                if not response_text:
+                    response_text = (
+                        "I completed the planned read-only checks, but the model did not "
+                        "produce a synthesis. Here is the evidence:\n\n" + graph_evidence
+                    )
+                    yield StreamChunk(text=response_text, done=False)
+
+                self._persist_assistant_message(session_id, response_text)
+                self._update_todo_status(
+                    session_id,
+                    2,
+                    "skipped" if graph_failed else "done",
+                    _obs,
+                )
+                total_ms = round((time.monotonic() - t0) * 1000)
+                prompt_tokens = _provider_usage.get("prompt_tokens", 0) or _approx_tokens(
+                    "".join(m.get("content", "") for m in synthesis_messages if isinstance(m, dict))
+                )
+                completion_tokens = _provider_usage.get("completion_tokens", 0) or _approx_tokens(response_text)
+                self._metrics.record(
+                    effective_intent.value,
+                    latency_ms=total_ms,
+                    success=not graph_failed,
+                )
+                _obs.emit(
+                    "turn_complete",
+                    intent=effective_intent.value,
+                    confidence=round(confidence, 2),
+                    tokens_approx=completion_tokens,
+                    prompt_tokens_approx=prompt_tokens,
+                    total_latency_ms=total_ms,
+                    memory_facts=len(memory_facts),
+                    agent_mode=False,
+                    graph_mode=True,
+                    provider_usage=dict(_provider_usage),
+                )
+                self._store_observation(
+                    session_id,
+                    _obs,
+                    intent=effective_intent.value,
+                    confidence=round(confidence, 2),
+                    tools_used=", ".join(node.intent.value for node in executed_graph.nodes),
+                    memory_hits=len(memory_facts),
+                    context_tokens=prompt_tokens,
+                    latency_ms=total_ms,
+                )
+                _safe_task(self._maybe_store_response_facts(response_text, session_id, _obs, user_message=message))
+                yield StreamChunk(text="", done=True)
+                return
 
         # ── 7b. Agent loop (CHAT fast-path exits above) ───────────────────────
 

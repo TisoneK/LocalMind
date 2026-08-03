@@ -34,6 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from core.models import (
     CAPABILITY_TO_INTENT,
+    COGNITIVE_CAPABILITIES,
     Capability,
     ExecutionConstraints,
     Intent,
@@ -41,6 +42,19 @@ from core.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# The first live graph boundary is intentionally read-only. This lets
+# general-purpose plans (for example, system facts + current web data)
+# use the DAG without bypassing the established agent safety/workflow
+# path for file or process mutations. More capabilities can be admitted
+# here as their graph-specific contracts mature.
+GRAPH_RUNTIME_SAFE_INTENTS: frozenset[Intent] = frozenset(
+    {
+        Intent.WEB_SEARCH,
+        Intent.WEB_FETCH,
+        Intent.SYSINFO,
+    }
+)
 
 
 # ── Node Status ──────────────────────────────────────────────────────
@@ -233,6 +247,7 @@ async def execute_graph(
     graph: ExecutionGraph,
     constraints: ExecutionConstraints,
     obs=None,
+    allowed_tool_names: frozenset[str] | None = None,
 ) -> ExecutionGraph:
     """Execute an ExecutionGraph with bounded retries and timeouts.
 
@@ -243,6 +258,8 @@ async def execute_graph(
         graph: The execution graph to run
         constraints: Bounded execution parameters
         obs: Optional observability collector
+        allowed_tool_names: Optional task-local tool fence. When provided,
+            a node outside the fence fails without invoking its tool.
 
     Returns:
         The same graph with nodes updated with results
@@ -251,7 +268,15 @@ async def execute_graph(
     for wave in graph.parallel_groups():
         if constraints.allow_parallel and len(wave) > 1:
             # Execute wave in parallel
-            tasks = [_execute_node(node, constraints, obs) for node in wave]
+            tasks = [
+                _execute_node(
+                    node,
+                    constraints,
+                    obs,
+                    allowed_tool_names=allowed_tool_names,
+                )
+                for node in wave
+            ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for node, result in zip(wave, results):
                 if isinstance(result, Exception):
@@ -268,7 +293,12 @@ async def execute_graph(
             # Execute wave sequentially
             for node in wave:
                 try:
-                    await _execute_node(node, constraints, obs)
+                    await _execute_node(
+                        node,
+                        constraints,
+                        obs,
+                        allowed_tool_names=allowed_tool_names,
+                    )
                 except Exception as e:
                     node.status = NodeStatus.FAILED
                     logger.warning(f"[graph] node {node.id} failed: {e}")
@@ -298,6 +328,7 @@ async def _execute_node(
     node: ExecutionNode,
     constraints: ExecutionConstraints,
     obs=None,
+    allowed_tool_names: frozenset[str] | None = None,
 ) -> ExecutionNode:
     """Execute a single graph node with retry logic.
 
@@ -327,6 +358,17 @@ async def _execute_node(
     if not node.tool_name:
         node.tool_name = _capability_to_tool_name(node.capability)
 
+    if allowed_tool_names is not None and node.intent.value not in allowed_tool_names:
+        node.status = NodeStatus.FAILED
+        node.result = ToolResult(
+            content=(f"Tool '{node.intent.value}' is not available in this execution policy."),
+            source=node.tool_name or node.capability.value,
+            success=False,
+            error_type="permission",
+            error_message="Tool blocked by execution policy",
+        )
+        return node
+
     node.status = NodeStatus.RUNNING
 
     for attempt in range(node.max_retries + 1):
@@ -337,10 +379,33 @@ async def _execute_node(
                 tool_dispatch(node.intent, args_str),
                 timeout=constraints.timeout_per_tool_secs,
             )
-            node.result = result
-            node.status = NodeStatus.COMPLETED
-            node.retry_count = attempt
+            if result is None:
+                result = ToolResult(
+                    content=f"Tool '{node.intent.value}' returned no result",
+                    source=node.tool_name or node.capability.value,
+                    success=False,
+                    error_type="empty_result",
+                    error_message="Tool dispatch returned no result",
+                )
 
+            node.result = result
+            node.retry_count = attempt
+            if not result.success:
+                node.status = NodeStatus.FAILED
+                if obs:
+                    obs.emit(
+                        "node_failed",
+                        node_id=node.id,
+                        error=result.error_message or result.error_type or "tool returned failure",
+                        attempt=attempt,
+                    )
+                if attempt < node.max_retries:
+                    delay = constraints.tool_retry_base_delay * (2**attempt)
+                    await asyncio.sleep(delay)
+                    continue
+                return node
+
+            node.status = NodeStatus.COMPLETED
             if obs:
                 obs.emit(
                     "node_completed",
@@ -370,14 +435,19 @@ async def _execute_node(
             delay = constraints.tool_retry_base_delay * (2**attempt)
             await asyncio.sleep(delay)
 
-    # All retries exhausted
+    # All retries exhausted. Preserve the last provider/tool failure when
+    # available so synthesis can explain the real cause instead of exposing
+    # only a generic retry-limit error.
     node.status = NodeStatus.FAILED
-    node.result = ToolResult(
-        content=f"Node '{node.id}' failed after {node.max_retries + 1} attempts",
-        source=node.tool_name or node.capability.value,
-        success=False,
-        error_type="max_retries_exceeded",
-    )
+    if node.result is None:
+        node.result = ToolResult(
+            content=f"Node '{node.id}' failed after {node.max_retries + 1} attempts",
+            source=node.tool_name or node.capability.value,
+            success=False,
+            error_type="max_retries_exceeded",
+        )
+    else:
+        node.result.metadata["attempts"] = node.max_retries + 1
     return node
 
 
@@ -401,6 +471,61 @@ def _capability_to_tool_name(cap: Capability) -> str:
     return _MAP.get(cap, cap.value)
 
 
+def graph_runtime_errors(
+    graph: ExecutionGraph,
+    allowed_tool_names: frozenset[str] | None = None,
+) -> list[str]:
+    """Return reasons a graph is not eligible for the first live boundary.
+
+    The graph model remains general, but the initial runtime boundary is
+    deliberately limited to read-only internet/system tools. Invalid or
+    policy-blocked graphs fall back to the established AgentLoop instead of
+    silently executing a different contract.
+    """
+    errors = graph.validate()
+    if not graph.nodes:
+        errors.append("Graph contains no executable nodes")
+    for node in graph.nodes:
+        if node.capability in COGNITIVE_CAPABILITIES:
+            continue
+        if node.intent not in GRAPH_RUNTIME_SAFE_INTENTS:
+            errors.append(
+                f"Node '{node.id}' uses intent '{node.intent.value}', "
+                "which is not admitted by the read-only graph runtime"
+            )
+        if allowed_tool_names is not None and node.intent.value not in allowed_tool_names:
+            errors.append(
+                f"Node '{node.id}' is outside the active tool policy"
+            )
+    return errors
+
+
+def format_graph_results(graph: ExecutionGraph, max_chars: int = 12000) -> str:
+    """Render bounded, evidence-first graph output for synthesis/context."""
+    sections: list[str] = []
+    for node in graph.nodes:
+        result = node.result
+        if result is None:
+            content = "No result returned."
+        else:
+            content = result.content or "(empty result)"
+        if len(content) > 3000:
+            content = content[:1500] + "\n...[truncated]...\n" + content[-1500:]
+        sections.append(
+            f"[{node.id} | {node.intent.value} | {node.status.value}]\n{content}"
+        )
+    rendered = "\n\n".join(sections) or "(graph produced no nodes)"
+    if len(rendered) > max_chars:
+        marker = "\n...[graph output truncated]...\n"
+        if max_chars <= len(marker):
+            return rendered[:max_chars]
+        content_budget = max_chars - len(marker)
+        head_chars = content_budget // 2
+        tail_chars = content_budget - head_chars
+        rendered = rendered[:head_chars] + marker + rendered[-tail_chars:]
+    return rendered[:max_chars]
+
+
 def _serialize_tool_args(node: ExecutionNode) -> str:
     """Serialize ExecutionNode args into a string for legacy dispatch.
 
@@ -412,7 +537,7 @@ def _serialize_tool_args(node: ExecutionNode) -> str:
         # For tools that use the message/query as input, fall back to label
         return node.label or ""
     # Use the first string value as the dispatch argument
-    for key in ("query", "action", "goal", "path", "code", "content"):
+    for key in ("query", "url", "action", "goal", "path", "code", "content"):
         if key in node.tool_args:
             return str(node.tool_args[key])
     # Fallback: JSON-serialize the whole dict
