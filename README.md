@@ -16,7 +16,7 @@ LocalMind wraps local LLMs (via [Ollama](https://ollama.com)) in a FastAPI serve
 - **Real-time web search** — DuckDuckGo + SearXNG race in parallel for low latency, with Brave as a premium fallback.
 - **File reading** — PDF, DOCX, CSV, XLSX, code files, and images (OCR via pytesseract if installed). Up to 50 MB.
 - **File writing** — create and save scripts, documents, or any text content directly to disk (with explicit permission gating).
-- **Python code execution** — run real Python and see real output, not a guess. 30-second timeout, 4000-char output cap.
+- **Python code execution** — run real Python and see real output, not a guess. 30-second timeout, bounded 4000-character output that preserves both the beginning and end.
 - **Shell access** — list files, check disk space, run git commands, and more. 20-second timeout.
 - **Browser automation** — navigate, click, fill forms, scroll, screenshot, and execute JavaScript on real web pages via headless Chromium.
 - **System info** — current time, date, OS, CPU, RAM, and disk — instant and accurate, fully offline.

@@ -108,7 +108,7 @@ Chunked at 1500 tokens with 200-token overlap. Max size: 50 MB.
 ### 4. CODE_EXEC (run Python)
 **Registered intent:** `code_exec`
 **Requirement:** code must be in a ```python``` fenced block.
-**Timeout:** 30 s. Output cap: 4000 chars.
+**Timeout:** 30 s. Output cap: 4000 chars, preserving both the beginning and end when truncated.
 
 ### 5. SHELL (system commands)
 **Registered intent:** `shell`

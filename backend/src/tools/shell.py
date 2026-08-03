@@ -38,6 +38,8 @@ import platform
 import re
 import shutil
 import subprocess
+import threading
+import time
 import traceback
 from contextvars import ContextVar
 from pathlib import Path
@@ -45,6 +47,7 @@ from typing import Any, Dict
 
 from core.config import settings
 from core.models import Intent, RiskLevel, ToolResult
+from core.utils import BoundedOutputBuffer
 from tools import register_tool
 from tools.contracts.base import ToolContract, ToolRegistry
 
@@ -178,6 +181,35 @@ def set_session_cwd(cwd: str | None) -> None:
     _session_cwd_var.set(cwd)
 
 
+def _capture_process_output(proc: subprocess.Popen, timeout: int) -> tuple[str, bool]:
+    """Read process streams incrementally without retaining unbounded output."""
+    buffer = BoundedOutputBuffer()
+
+    def _read(stream) -> None:
+        if stream is None:
+            return
+        for chunk in iter(lambda: stream.read(8192), ""):
+            buffer.append(chunk)
+
+    stdout_thread = threading.Thread(target=_read, args=(proc.stdout,), daemon=True)
+    stderr_thread = threading.Thread(target=_read, args=(proc.stderr,), daemon=True)
+    stdout_thread.start()
+    stderr_thread.start()
+
+    deadline = time.monotonic() + timeout
+    timed_out = False
+    while proc.poll() is None:
+        if time.monotonic() >= deadline:
+            timed_out = True
+            proc.kill()
+            break
+        time.sleep(0.01)
+    proc.wait()
+    stdout_thread.join(timeout=1)
+    stderr_thread.join(timeout=1)
+    return buffer.getvalue().strip(), timed_out
+
+
 def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
     """Execute a shell command. Returns {success, message}. Never raises."""
     for blocked in BLOCKED_COMMANDS:
@@ -193,18 +225,18 @@ def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
         )
         effective_cwd = None
     try:
-        result = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             shell=isinstance(cmd, str),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
             cwd=effective_cwd,
         )
-        output = (result.stdout + result.stderr).strip()
-        return (
-            _ok(output) if result.returncode == 0 else _err(output or "Command failed (no output)")
-        )
+        output, timed_out = _capture_process_output(proc, timeout)
+        if timed_out:
+            return _err(f"Command timed out after {timeout}s")
+        return _ok(output) if proc.returncode == 0 else _err(output or "Command failed (no output)")
     except subprocess.TimeoutExpired:
         return _err(f"Command timed out after {timeout}s")
     except FileNotFoundError as exc:

@@ -410,7 +410,8 @@ TOOLS — what you have and exactly when to use each one
 5. CODE_EXEC  (run Python code and return real output)
    Use when: user wants to execute Python — compute something, test a snippet, run an algorithm.
    Requirement: code MUST be in a ```python``` fenced block. Plain text is NOT executed.
-   Timeout: 30 seconds. Output capped at 4000 chars (stdout + stderr combined).
+   Timeout: 30 seconds. Output capped at 4000 chars total (stdout + stderr), preserving both
+   the beginning and end when truncated.
    Security: runs in the same Python environment as LocalMind — full filesystem/network access.
    Never use for: bash/shell commands (use SHELL), file reading (use FILE_TASK).
 

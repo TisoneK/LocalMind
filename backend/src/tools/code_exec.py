@@ -5,7 +5,7 @@ Security model (honest):
 - Runs in the SAME Python environment as LocalMind — full filesystem and
   network access. This is intentional for a local, trusted-user tool.
 - Timeout enforced (default 30s from config) — runaway loops are killed.
-- stdout/stderr captured and truncated to 4000 chars.
+- stdout/stderr captured incrementally with a bounded head+tail buffer (4000 chars total).
 - NOT a sandbox. Do not expose to untrusted users without adding one
   (e.g. Docker, nsjail, or RestrictedPython).
 
@@ -30,11 +30,40 @@ import tempfile
 import textwrap
 
 from core.models import Intent, RiskLevel, ToolResult
+from core.utils import BoundedOutputBuffer, bounded_output
 from tools import register_tool
 
 logger = logging.getLogger(__name__)
 
 OUTPUT_MAX = 4000
+_READ_CHUNK_SIZE = 8192
+
+
+async def _read_stream(stream, buffer: BoundedOutputBuffer) -> None:
+    """Consume a subprocess stream without retaining unbounded output."""
+    while True:
+        chunk = await stream.read(_READ_CHUNK_SIZE)
+        if not chunk:
+            return
+        buffer.append(chunk.decode("utf-8", errors="replace"))
+
+
+async def _collect_output(proc) -> tuple[str, str]:
+    """Read both subprocess streams incrementally until the process exits."""
+    stdout_buffer = BoundedOutputBuffer(OUTPUT_MAX)
+    stderr_buffer = BoundedOutputBuffer(OUTPUT_MAX)
+    stdout_task = asyncio.create_task(_read_stream(proc.stdout, stdout_buffer))
+    stderr_task = asyncio.create_task(_read_stream(proc.stderr, stderr_buffer))
+    try:
+        await proc.wait()
+        await asyncio.gather(stdout_task, stderr_task)
+    finally:
+        for task in (stdout_task, stderr_task):
+            if not task.done():
+                task.cancel()
+    return stdout_buffer.getvalue(), stderr_buffer.getvalue()
+
+
 _CODE_FENCE = re.compile(r"```(?:python|py)?\s*([\s\S]+?)```", re.IGNORECASE)
 
 
@@ -154,9 +183,10 @@ async def code_exec(message: str) -> ToolResult:
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            stdout, stderr = await asyncio.wait_for(_collect_output(proc), timeout=timeout)
         except asyncio.TimeoutError:
             proc.kill()
+            await proc.wait()
             return ToolResult(
                 content=f"Code execution timed out after {timeout}s.",
                 risk=RiskLevel.MEDIUM,
@@ -167,23 +197,21 @@ async def code_exec(message: str) -> ToolResult:
                 error_message=f"Subprocess killed after {timeout}s timeout.",
             )
 
-        out = stdout.decode("utf-8", errors="replace")
-        err = stderr.decode("utf-8", errors="replace")
+        out = stdout
+        err = stderr
         exit_code = proc.returncode
 
         parts = []
         if out:
-            truncated = out[:OUTPUT_MAX]
-            if len(out) > OUTPUT_MAX:
-                truncated += f"\n… (truncated {len(out) - OUTPUT_MAX} chars)"
-            parts.append(f"**stdout:**\n```\n{truncated}\n```")
+            parts.append(f"**stdout:**\n```\n{out}\n```")
         if err:
-            truncated = err[:OUTPUT_MAX]
-            parts.append(f"**stderr:**\n```\n{truncated}\n```")
+            parts.append(f"**stderr:**\n```\n{err}\n```")
         if not parts:
             parts.append("*(no output)*")
 
-        content = "\n".join(parts)
+        # Bound the complete rendered result, not each stream independently,
+        # so stdout + stderr cannot exceed the tool's context budget together.
+        content = bounded_output("\n".join(parts), OUTPUT_MAX)
         risk = RiskLevel.MEDIUM if exit_code != 0 else RiskLevel.LOW
 
         return ToolResult(
