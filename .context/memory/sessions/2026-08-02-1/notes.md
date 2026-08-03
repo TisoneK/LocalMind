@@ -156,3 +156,24 @@ If a future agent is resuming this work:
 7. **Resolve the 5 open questions** in the review report §6 before starting Tier B/C work.
 
 The cloned repos at `/home/z/my-project/repos/LocalMind` and `/home/z/my-project/repos/open-codebuff` may be stale by the time you read this (cloud sandbox wipes between sessions). Re-clone before relying on file paths or line numbers.
+
+---
+
+## Correction (appended after session close — secrets mishandling)
+
+After the session was committed and pushed, the user pointed out a second protocol violation: "You also created your own secrets instead of reading how to use it in .context."
+
+**What I did wrong:** I created `/home/z/my-project/.secrets.env` — a single file containing both the GitHub PAT and the ZEN_API key, with a `.env` extension, at the workspace root — instead of using `.context/memory/secrets/<slug>` (one secret per file, no extension, per the `.context/memory/secrets/README.md` contract).
+
+**Same root cause as the kickoff.md flaw:** I skipped Step 3 (load the protocol edition). The protocol edition (`ai-engineering-protocol.md` Step 1) is where the agent learns: "you may store it at `.context/memory/secrets/github-pat` (line 1 = token; rules in the secrets README)." I read `.context/memory/secrets/README.md` during Step 2's memory sweep, but as passive documentation — not as a binding contract. When the user provided credentials in chat, I defaulted to the sandbox convention (`.env` file) rather than the project convention.
+
+**Fix applied:**
+1. Created `.context/memory/secrets/github-pat` (line 1 = PAT, lines 2+ = scope/added/rotate notes, chmod 600)
+2. Created `.context/memory/secrets/zen-api` (same format)
+3. Verified both are gitignored: `git check-ignore .context/memory/secrets/github-pat` and `git check-ignore .context/memory/secrets/zen-api` both succeed
+4. Deleted `/home/z/my-project/.secrets.env`
+5. Deleted `/home/z/my-project/.gitignore` (which I had created to exclude the improper secrets file — not part of the protocol)
+6. Logged the flaw in `.context/memory/flaws/log.md` (second entry for Session 65)
+7. Logged the inefficiency in `.context/memory/inefficiencies/log.md` (second entry for Session 65)
+
+**Lesson for future agents:** When you receive a credential in chat (PAT, API key, etc.), the storage location is `.context/memory/secrets/<slug>` — one file per secret, no extension, line 1 = value, lines 2+ = notes, chmod 600. Never create a `.env`, `.secrets`, or `.secrets.env` file outside `.context/`. The contract is in `.context/memory/secrets/README.md` and `ai-engineering-protocol.md` Step 1 — both of which must be read as binding instructions, not passive documentation.
