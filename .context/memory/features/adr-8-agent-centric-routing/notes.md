@@ -14,6 +14,11 @@ global logs. Facts that outlive the feature go to their real domain.>
 -->
 
 ---
+## 2026-08-03 — Buffy / openai/gpt-5.6-luna (Session 66)
+
+Implemented the first Tier A recommendation from the Session 65 Codebuff comparison (B-2026-08-02-1). Added a reusable thread-safe `BoundedOutputBuffer` that preserves head + explicit truncation marker + tail within the 4000-character budget. Code execution now reads stdout/stderr incrementally with asyncio readers and bounds the combined rendered result; shell commands use bounded threaded readers with timeout-aware polling and process-kill behavior. Added focused utility and integration tests. Product commit `90fe3d0`; focused validation 66 passed; full backend 816 passed / one known stale todo-plan wording failure. Remaining Codebuff recommendations are deferred in backlog dependency order.
+
+---
 ## 2026-07-27 — Super Z / GLM-5.2 (Session 34)
 
 Feature directory created. No implementation attempted this session —

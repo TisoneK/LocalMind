@@ -111,3 +111,6 @@ records.
 
 ---
 - **2026-08-02 — Session 65** — Super Z / GLM-5.2 — researched Codebuff architecture and produced 12 borrowing recommendations across 3 tiers (Tier A: bounded output buffer, abort signal, delegation diagnosis, context compactor, steering; Tier B: parallel delegation, propose-stage tools, subgoal scratchpad, inline delegation; Tier C: per-agent model routing, best-of-N editor, skills). Key finding: LocalMind's biggest gap is no parallel delegation; clearest advantages are persistent memory + .context protocol. 0 product commits, 2 context commits. Caused + logged a flaw: created bogus kickoff.md instead of following existing one. Detail: `.context/memory/reviews/2026-08-02-review-1.md` + `.context/memory/sessions/2026-08-02-1/notes.md`.
+
+---
+- **2026-08-03 — Session 66** — Buffy / openai/gpt-5.6-luna — implemented B-2026-08-02-1: reusable bounded head+tail output for shell and code execution, incremental stream capture, combined 4000-character code output cap, and regression tests. Product commit `90fe3d0`; 66 focused tests passed; full backend 816 passed / 1 known stale todo-plan wording failure. Detail: `.context/memory/reviews/2026-08-03-review.md`.

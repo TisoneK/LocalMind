@@ -1015,3 +1015,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** 5 open questions for the maintainer (in review §6) gating Tier B/C work. Tier A can proceed without answers.
 - **Report:** .context/memory/reviews/2026-08-02-review-1.md
 - **Notes:** .context/memory/sessions/2026-08-02-1/notes.md (with companion files: codebuff-deep-profile.md, comparison.md, recommendations.md). Caused a flaw this session: created a bogus `kickoff.md` at `/home/z/my-project/download/codebuff-research/kickoff.md` instead of following the existing `.context/kickoff.md`. User caught it ("was kickoff.md read-only or create???"). Deleted the bogus file, re-read the actual kickoff, loaded the cloud edition protocol, followed it properly. Flaw logged in `flaws/log.md` with suggested package fix: the kickoff template's HTML comment should explicitly state "agents READ this file; they do not CREATE it" — the current wording ("THE FRONT DOOR — read this first") is clear in hindsight but ambiguous to an agent that hasn't loaded the protocol yet. Did NOT re-confirm model version with user — carrying GLM-5.2 forward from Session 5 correction (now 15+ sessions; flagged pattern in prior entries).
+
+---
+## 2026-08-03 — Session 66
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS 15.7.7 (`/Users/bao/Code/LocalMind`) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing — Tier A Codebuff borrowing slice
+- **Task:** Pull the Session 65 handoff and implement B-2026-08-02-1, bounded head+tail output for shell and code execution.
+- **Commits:** 1 product (`90fe3d0`) + 1 context closeout (pending)
+- **Outcome:** done — added thread-safe `BoundedOutputBuffer`, incremental asyncio code-exec capture, timeout-aware threaded shell capture, combined 4000-character code result cap, docs, and regression tests. Product commit pushed to `origin/main`.
+- **Validation:** 66 focused tests passed; changed-file compilation, Ruff, and diff checks passed; full backend 816 passed / 1 known stale `test_engine_emit_todo_plan` wording failure.
+- **Open items:** B-2026-08-02-2 through -12 remain deferred; stale todo-plan assertion remains open.
+- **Report:** `.context/memory/reviews/2026-08-03-review.md`
+- **Notes:** none — implementation detail is captured in the review report and feature notes.

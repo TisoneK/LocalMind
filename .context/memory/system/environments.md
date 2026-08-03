@@ -67,7 +67,7 @@ block (and its "last verified" date) every time you run on it again.
     - `sh .context/core/bin/context-sync status` → "core: 0.5.0, locked: 0.5.0, source: none reachable — skipping, this is fine"
     - `git clone https://github.com/CodebuffAI/open-codebuff.git` → succeeded (public, anonymous HTTPS, no auth needed)
 
-## Local macOS development machine (last verified 2026-08-01)
+## Local macOS development machine (last verified 2026-08-03)
 
 - **Identify by:** workspace path `/Users/bao/Code`; macOS host; local project checkout at `/Users/bao/Code/LocalMind`
 - **OS:** macOS 15.7.7
@@ -99,4 +99,6 @@ block (and its "last verified" date) every time you run on it again.
   - `cd frontend && npm run test -- --run` → 9 passed; `npm run build` → passed; `npm run lint` → 0 errors / 53 warnings (2026-07-31)
   - `cd frontend && npm run build` → passed; `npm run lint` → 0 errors / 53 warnings; `npm test -- --run` → 12 passed across 3 files (2026-08-01)
   - `git diff --check` → clean; live backend SSE probe → HTTP 200 (2026-08-01)
+  - `backend/.venv/bin/pytest -q tests/core/test_utils.py tests/tools/test_output_bounds.py tests/api/test_chat.py tests/tools/test_process_tool.py` → 66 passed (2026-08-03)
+  - changed-file `compileall` and Ruff checks → passed; full backend `pytest -q` → 816 passed, 1 known todo-plan wording failure (2026-08-03)
 - **Quirks:** The `python` command is unavailable and system `python3` is 3.9.6, below the backend's `>=3.10` requirement; use `backend/.venv/bin/python` (Python 3.12.13 via uv). Backend Ruff currently reports 132 E501 findings plus 3 non-E501 findings. `npm ci` reported 18 dependency vulnerabilities (17 high, 1 critical) and deprecated transitive packages. Local agent uses the user's existing git credentials and does not need a PAT for this public clone. The optional `agent-browser` CLI is not installed; BrowserAgent tests must mock `_run_browser_cmd` unless the CLI is installed for live smoke testing.

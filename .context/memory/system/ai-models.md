@@ -9,7 +9,7 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
-| Buffy | openai/gpt-5.6-luna | 2026-07-31 | 2026-08-01 | 11 |
+| Buffy | openai/gpt-5.6-luna | 2026-07-31 | 2026-08-03 | 12 |
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 
@@ -123,5 +123,6 @@ Updated registry row:
 - **Buffy / openai/gpt-5.6-luna:** Session 56 added a bounded public observation projection to the existing observability API, preserved nullable legacy fields, verified FastAPI wire serialization, and passed 19 focused tests; final review was ship-ready. (2026-07-31)
 - **Buffy / openai/gpt-5.6-luna:** Session 57 surfaced the bounded observation summary in the frontend Observe panel with defensive client normalization, legacy compatibility, and 9 focused Vitest tests; production build/typecheck passed and final review was ship-ready. (2026-07-31)
 - **Buffy / openai/gpt-5.6-luna:** Session 63 completed the real-time Observe metrics bridge and demonstrated disciplined two-surface closeout after correcting an earlier incomplete closeout. Frontend build and 12 tests passed; lint had 0 errors / 53 warnings; final review was ship-ready. (2026-08-01)
+- **Buffy / openai/gpt-5.6-luna:** Session 66 implemented bounded head+tail output with incremental shell/code-execution capture, caught and fixed a double-decode regression through focused/full testing, and preserved the known baseline todo-plan failure without broadening scope. (2026-08-03)
 
 - **Super Z / GLM-5.2:** Session 65 — research-only session comparing LocalMind against Codebuff (CodebuffAI/open-codebuff). Produced 12 borrowing recommendations across 3 tiers (5 Tier A borrow-now, 4 Tier B post-ADR-8, 3 Tier C needs-cloud-routing), filed as B-2026-08-02-1 through -12. Key finding: LocalMind's biggest functional gap is no parallel delegation (Codebuff's `spawn_agents` + `Promise.allSettled` is first-class; LocalMind's `delegate` is strictly handoff). Clearest LocalMind advantages: persistent semantic memory + `.context/` multi-session protocol (Codebuff has neither). Caused a flaw: created a bogus `kickoff.md` at `/home/z/my-project/download/codebuff-research/kickoff.md` instead of following the existing `.context/kickoff.md` — user caught it ("was kickoff.md read-only or create???"). Root cause: read kickoff.md as a template to fill in rather than an instruction set to follow; never loaded `.context/core/rules/ai-engineering-protocol.md` (Step 3 of the kickoff) until after the user's correction. Flaw logged with suggested package fix: the kickoff template's HTML comment should explicitly state "agents READ this file; they do not CREATE it." Did NOT re-confirm model version with user — carrying GLM-5.2 forward from Session 5 correction (now 15+ sessions; flagged pattern in prior entries). Demonstrated capability: deep cross-codebase architectural comparison with file-cited analysis (~2,300 lines of research output across review + session notes + 3 companion files). (2026-08-02)
