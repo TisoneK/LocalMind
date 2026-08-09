@@ -36,6 +36,21 @@ class ObjectiveRuntime:
     LEASE_SECONDS = 900.0
     MAX_OBJECTIVE_SECONDS = 600.0
 
+    # ADR-16 / B-2026-08-09-13: the specific-task workflow is a LOOP, not a
+    # single engine pass. Each round is one `engine.process()` call on the
+    # SAME execution session (history accumulates). The engine's
+    # `agent_loop_done` obs event with hit_limit=True means the model ran out
+    # of iterations before finishing — continue to the next round. A natural
+    # loop end (agent_loop_done without hit_limit) means the model decided it
+    # was done — mark completed. Cap rounds so a spinning objective can't run
+    # forever; the wall-clock caps above still bound each round.
+    MAX_OBJECTIVE_ROUNDS = 5
+    ROUND_CONTINUATION = (
+        "Continue the autonomous objective. Review what you have done so far "
+        "in this conversation, decide what remains, and complete it. When the "
+        "objective is fully satisfied, give a final summary and stop."
+    )
+
     def __init__(self, engine: Engine, db_path: str):
         self._engine = engine
         self._store = ObjectiveStore(db_path)
@@ -112,6 +127,17 @@ class ObjectiveRuntime:
                 self._active_id = None
 
     async def _execute(self, objective: Objective) -> None:
+        """Run the ADR-16 specific-task loop: plan → execute → observe → decide.
+
+        Each round is one `engine.process()` call on the SAME execution
+        session (so history — and thus "observe what I did" — accumulates).
+        After a round, the engine's `agent_loop_done` obs event tells us
+        whether the model finished naturally (no hit_limit → completed) or
+        ran out of iterations (hit_limit=True → continue to the next round
+        with a continuation nudge). Stops early on a pending write
+        (blocked for approval), on an empty round, or when the user pauses/
+        cancels between rounds. Capped at MAX_OBJECTIVE_ROUNDS.
+        """
         self._store.update_owned(objective.id, self._lease_owner, last_event="objective_started")
         obs = ObsCollector()
         response: list[str] = []
@@ -122,12 +148,30 @@ class ObjectiveRuntime:
         if objective.resume_message:
             prompt = f"{objective.resume_message}\n\nContinue the autonomous objective: {objective.prompt}"
 
-        async def consume() -> None:
+        async def run_round(round_prompt: str) -> bool:
+            """Run one engine pass. Returns True if the model finished
+            naturally (agent_loop_done WITHOUT hit_limit)."""
             nonlocal pending_write
+            natural_end = False
             fence_token = set_allowed_tool_names(self.READ_ONLY_TOOLS)
+
+            def absorb() -> None:
+                """Drain pending obs events into the store + natural_end."""
+                nonlocal natural_end
+                for event in obs.drain():
+                    self._store.update_owned(
+                        objective.id,
+                        self._lease_owner,
+                        last_event=event.type,
+                    )
+                    if event.type == "agent_loop_done" and not event.data.get("hit_limit"):
+                        # Model finished the turn on its own — the
+                        # objective's current phase is complete.
+                        natural_end = True
+
             try:
                 async for chunk in self._engine.process(
-                    message=prompt,
+                    message=round_prompt,
                     session_id=execution_session_id,
                     obs=obs,
                     allowed_tool_names=set(self.READ_ONLY_TOOLS),
@@ -138,23 +182,73 @@ class ObjectiveRuntime:
                         pending = chunk.metadata.get("pending_write")
                         if pending:
                             pending_write = pending
-                    for event in obs.drain():
-                        self._store.update_owned(
-                            objective.id,
-                            self._lease_owner,
-                            last_event=event.type,
-                        )
+                    absorb()
                     if chunk.status:
                         self._store.update_owned(
                             objective.id,
                             self._lease_owner,
                             last_event=chunk.status[:200],
                         )
+                # The engine may emit agent_loop_done AFTER the final chunk
+                # (clarification / web-search paths yield no following chunk)
+                # or without any chunk after the emit. Drain once more so
+                # those events aren't missed.
+                absorb()
             finally:
                 reset_allowed_tool_names(fence_token)
+            return natural_end
 
         try:
-            await asyncio.wait_for(consume(), timeout=self.MAX_OBJECTIVE_SECONDS)
+            for round_index in range(1, self.MAX_OBJECTIVE_ROUNDS + 1):
+                # Between rounds, respect a user pause/cancel without waiting
+                # for the next claim cycle.
+                current = self._store.get(objective.id)
+                if current is None or current.cancel_requested or current.status != "running":
+                    break
+
+                round_prompt = prompt if round_index == 1 else self.ROUND_CONTINUATION
+                try:
+                    natural_end = await asyncio.wait_for(
+                        run_round(round_prompt), timeout=self.MAX_OBJECTIVE_SECONDS
+                    )
+                except asyncio.TimeoutError:
+                    self._store.update_owned(
+                        objective.id,
+                        self._lease_owner,
+                        status="failed",
+                        error=(
+                            f"Objective exceeded the {int(self.MAX_OBJECTIVE_SECONDS)} "
+                            "second runtime limit."
+                        ),
+                        last_event="objective_timeout",
+                        lease_until=None,
+                    )
+                    return
+
+                self._store.update_owned(
+                    objective.id,
+                    self._lease_owner,
+                    last_event=f"objective_round_{round_index}",
+                )
+
+                # Stop when the model says the phase is done or we need
+                # approval — no more rounds needed.
+                if natural_end or pending_write or round_index == self.MAX_OBJECTIVE_ROUNDS:
+                    break
+                logger.info(
+                    "[objectives] objective %s round %d hit iteration limit — continuing",
+                    objective.id[:8],
+                    round_index,
+                )
+
+            # If the user paused/canceled while we were mid-loop, leave the
+            # store's status alone — don't overwrite canceled with failed.
+            current = self._store.get(objective.id)
+            if current is not None and (
+                current.cancel_requested or current.status != "running"
+            ):
+                return
+
             text = "".join(response).strip()
             if not text and not pending_write:
                 self._store.update_owned(
@@ -191,15 +285,6 @@ class ObjectiveRuntime:
                 "[objectives] objective %s finished in %.1fs",
                 objective.id[:8],
                 time.monotonic() - started,
-            )
-        except asyncio.TimeoutError:
-            self._store.update_owned(
-                objective.id,
-                self._lease_owner,
-                status="failed",
-                error=f"Objective exceeded the {int(self.MAX_OBJECTIVE_SECONDS)} second runtime limit.",
-                last_event="objective_timeout",
-                lease_until=None,
             )
         except asyncio.CancelledError:
             current = self._store.get(objective.id)
