@@ -120,3 +120,6 @@ records.
 
 ---
 - **2026-08-09 — Session 68** — Buffy / deepseek-v4-flash — Phase 1 implementation: B-2026-08-09-1 / ADR-11 conversational fast-path. `is_conversational_question()` + single-call `conversational_response()` wired into `_pipeline.py` before the dispatcher; conservative fall-through keeps WEB_SEARCH/SYSINFO/tool routing intact. 11 new tests; full suite 834 passed / 1 known baseline failure; product commit `09cd6bf`. Real-model verification pending user-side.
+
+---
+- **2026-08-09 — Session 69** — Buffy / deepseek-v4-flash — Phase 2 implementation: B-2026-08-09-2 / ADR-12 per-stage timing + truthful pipeline UI. Backend `_StageClock` emits `stage_timing` obs events (real latency, done/skipped) across all completion paths; `_store_observation` + observability route expose `stage_timings`. Frontend renders the pipeline from backend truth (per-stage ms + skipped state) and fixes the heuristic so Tool Select/Execute show "skipped" instead of orange-forever/done-with-no-tools. 11 new tests; full suite 845 passed / 1 known baseline failure; tsc + vite build clean; product commit `59a3dea`. Real-model verification pending user-side.

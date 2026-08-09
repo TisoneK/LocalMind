@@ -1064,3 +1064,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** Real-model live verification of the fast-path (single call, latency drop) pending on the user's next run with a key. Next phase: Session 69 — B-2026-08-09-2 (per-stage timing + truthful pipeline UI, ADR-12).
 - **Report:** none — implementation session (test file + Session 67 review are the references)
 - **Inefficiency (logged):** an `async def` helper that `return`ed an async generator instead of iterating it cost one failed test run (SyntaxError) — caught and fixed in the same pass.
+
+---
+
+- **Session:** 69
+- **Date:** 2026-08-09
+- **Agent:** Buffy / deepseek-v4-flash
+- **Task:** B-2026-08-09-2 / ADR-12 — per-stage timing instrumentation + truthful pipeline UI: backend `_StageClock` emits real `stage_timing` obs events (stage, latency_ms, status done/skipped) on every completion path (trivial/conversational short-circuits, dispatcher intent_classify, tool_select, DIRECT context_build/generate/execute, workspace orchestrator, SYSINFO execute, FILE_TASK fast-path, small-model paths, sub-agents, graph, agent loop, plain-chat fallback); `_store_observation` folds them into the polling snapshot; observability route exposes `stage_timings`. Frontend accumulates stage_timing events live, renders the 5-stage pipeline from backend truth when present (per-stage latency + skipped state) and fixes the fallback heuristic so Tool Select/Execute resolve to "skipped" on completed no-tool turns (no more orange-forever / done-with-no-tools).
+- **Commits:** 1 product (`59a3dea`) + this context closeout commit
+- **Outcome:** done. Validation: 11 new tests in `tests/core/test_stage_timing.py` (clock unit, engine trivial/conversational emission, store fold, route model); focused + tests/core+tests/api suites green; full suite 845 passed / 1 known pre-existing `test_engine_emit_todo_plan` failure; ruff clean on new code (6 pre-existing E501s in `_pipeline.py` remain); frontend tsc + vite build clean, eslint no new warnings. Code review found + fixed two issues: (1) `intent`/`tool_call` SSE handlers clobbered `stageTimings` — now preserved; (2) `context_build` start was inside the file-attachment branch — moved before it so all agent turns get real timing.
+- **Open items:** Real-model verification pending. Next phase: Session 70 — B-2026-08-09-3/4/8 (per-message metrics, latency units, Vector-Store-Hits mislabel, ADR-13).
+- **Report:** none — implementation session (test file + Session 67 review are the references)
+- **Inefficiency (logged):** a graph-block `str_replace` anchored on 12-space indentation left the block de-indented (IndentationError at line ~2299), caught by compile + fixed. Lesson: when inserting into an `if/else` block, match the surrounding indentation exactly and re-compile immediately.

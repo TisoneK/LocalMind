@@ -251,3 +251,12 @@ if literally nothing slowed you down.
 - **Cause:** Two async-generator pitfalls hit in sequence: forgetting `async` on a generator helper, then assuming `return <async generator>` from an `async def` keeps it an async iterator (it doesn't — no `yield` in the body makes it a coroutine function).
 - **Workaround / fix:** Made the helper `async def` with `yield` inside, and both public wrappers iterate it (`async for chunk in helper(...): yield chunk`).
 - **Prevent next time:** When a public `async def` must be an async iterator, the body must contain `yield` (or explicitly iterate a child generator) — `return <agen>` silently converts it into a coroutine function. Add a quick test that does `[c async for c in fn(...)]` for every new streaming helper.
+
+---
+
+- **Session:** 69 (2026-08-09)
+- **Symptom:** `py_compile` failed with `IndentationError: unexpected indent (_pipeline.py, line ~2299)` right after wiring `_StageClock` into the graph-execution branch.
+- **Cost:** One failed compile + one corrective `str_replace` + recompile. ~3 minutes.
+- **Cause:** The `str_replace` oldString for the graph block was written with 12-space leading indentation while the target block sits inside an `else:` at 16 spaces — the edit applied but de-indented the block, breaking Python's block structure.
+- **Workaround / fix:** Re-anchored the replacement on the block's exact surrounding lines (`self._metrics.start_request()` … `executed_graph = await execute_graph(`) preserving 16-space indent; verified with `py_compile`.
+- **Prevent next time:** Before inserting lines into an `if/else` block, copy the exact indentation of the anchor lines (16 spaces inside `else:`, not the 12 of the parent) and always run `py_compile` on the edited module immediately after a multi-line edit — a 1-second check that catches structural breaks before tests.
