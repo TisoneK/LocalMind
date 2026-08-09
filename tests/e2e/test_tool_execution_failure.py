@@ -610,6 +610,52 @@ class TestWorkReport:
 
         assert not trace.work_report().needs_report("Created hello.py successfully.")
 
+    def test_substantive_answer_never_triggers_report(self):
+        # Session 122: the user-reported case — a correct, substantive answer
+        # that does NOT quote raw evidence tokens must never get the
+        # "Worker report — tool execution evidence:" recap appended. The
+        # trace already lives in the inline action cards + Actions tab; the
+        # chat message owns the final answer only.
+        from core.agent.models import AgentStep, AgentTrace
+
+        trace = AgentTrace(
+            steps=[
+                AgentStep(
+                    iteration=1,
+                    thought="",
+                    tool_name="git",
+                    tool_input='{"operation": "status"}',
+                    observation="On branch main\nYour branch is up to date with 'origin/main'.",
+                    tool_failed=False,
+                ),
+            ]
+        )
+
+        assert not trace.work_report().needs_report(
+            "Working tree is clean — no uncommitted changes."
+        )
+
+    def test_terse_filler_after_tool_execution_still_triggers_report(self):
+        # Session 115 silent-stall shape: a terse acknowledgment that names
+        # no evidence is exactly the near-empty stream failure the report
+        # exists for — it must still be caught.
+        from core.agent.models import AgentStep, AgentTrace
+
+        trace = AgentTrace(
+            steps=[
+                AgentStep(
+                    iteration=1,
+                    thought="",
+                    tool_name="shell",
+                    tool_input="git status",
+                    observation="On branch main\nnothing to commit, working tree clean",
+                    tool_failed=False,
+                ),
+            ]
+        )
+
+        assert trace.work_report().needs_report("Got it — working on your request...")
+
 
 # ── 5. _synthesis_failure_fallback: timeout/exception handlers use trace ───
 

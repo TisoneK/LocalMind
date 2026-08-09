@@ -39,6 +39,12 @@ class WorkReportEntry:
     succeeded: bool
 
 
+# Session 122: a final answer at least this long is treated as substantive
+# and NEVER gets the deterministic evidence report appended — the execution
+# trace is already visible via the inline action cards + Actions tab.
+_SUBSTANTIVE_ANSWER_MIN_CHARS = 40
+
+
 @dataclass(frozen=True)
 class WorkReport:
     """Structured worker report used at the tool-to-user boundary.
@@ -68,51 +74,76 @@ class WorkReport:
         )
 
     def needs_report(self, response: str) -> bool:
-        """Return whether a response failed to report tool evidence."""
+        """Return whether a response needs the deterministic evidence report.
+
+        Session 122: the chat message owns the FINAL ANSWER only. The
+        execution trace is already visible to the user via the inline action
+        cards (chat) and the Actions tab — so a substantive answer is never
+        appended with a recap, even if it doesn't quote raw evidence tokens
+        ("Working tree is clean — no uncommitted changes" must NOT become
+        "… Worker report — tool execution evidence: 1. git(status) …").
+
+        The report is reserved for actual silent failures: an empty or
+        trivially short response (the Session 31 fallback contract), or the
+        iteration-limit path where the model may have been cut off mid-work
+        and could have fabricated a conclusion.
+        """
         if not self.entries:
             return False
-        if not response.strip():
+        stripped = response.strip()
+        if not stripped:
             return True
 
-        # Evidence comes from tool observations, not commands. A command such
-        # as ``ls Dev`` should not make a heading like "Here's the result"
-        # appear complete merely because it repeats the command.
+        # Evidence comes from tool observations AND inputs. Observations are
+        # the primary source; inputs are included so an answer naming the
+        # actual written file ("Created hello.py successfully.") counts as
+        # quoting its evidence, while a command echo like ``ls Dev`` still
+        # contributes nothing (2-3 char tokens are below the match floor).
         evidence_tokens: set[str] = set()
         ignored = {
-            "true",
-            "false",
-            "none",
-            "null",
-            "okay",
-            "success",
-            "successful",
-            "status",
-            "result",
-            "output",
-            "tool",
-            "command",
-            "completed",
+            "true", "false", "none", "null", "okay", "success",
+            "successful", "status", "result", "output", "tool",
+            "command", "completed",
         }
         for entry in self.entries:
-            if not entry.observation.strip():
-                continue
-            for token in re.findall(
-                r"[a-z0-9][a-z0-9_.:/\\-]{3,}", entry.observation.lower()
-            ):
-                if token not in ignored:
-                    evidence_tokens.add(token)
+            for source in (entry.observation, entry.tool_input):
+                if not source.strip():
+                    continue
+                for token in re.findall(
+                    r"[a-z0-9][a-z0-9_.:/\\-]{3,}", source.lower()
+                ):
+                    if token not in ignored:
+                        evidence_tokens.add(token)
 
-        # Side-effect-only tools often return only "OK". A normal concise
-        # confirmation is sufficient when there is no substantive evidence to
-        # report; the report is required for listings, search results, etc.
+        if self.hit_limit:
+            # Iteration-limit path: keep the evidence-token check — the model
+            # was cut off and its conclusion may be fabricated.
+            if not evidence_tokens:
+                return False
+            normalized_response = stripped.lower()
+            matched_tokens = sum(
+                token in normalized_response for token in evidence_tokens
+            )
+            required_tokens = min(2, len(evidence_tokens))
+            return matched_tokens < required_tokens
+
+        # Normal completion: a substantive-length answer always stands alone
+        # — the execution trace is already visible via the inline action cards
+        # and Actions tab, so "Working tree is clean — no uncommitted
+        # changes" must NEVER become "… Worker report — …". The threshold is
+        # deliberately conservative: anything this long is a real answer, and
+        # anything shorter only gets the report if it quotes no evidence.
+        if len(stripped) >= _SUBSTANTIVE_ANSWER_MIN_CHARS:
+            return False
+        # Short answers: only acceptable if they actually quote the evidence
+        # that ran. A terse filler like "Got it — working on your request…"
+        # (the Session 115 silent-stall shape) gets the report.
         if not evidence_tokens:
             return False
-        normalized_response = response.lower()
         matched_tokens = sum(
-            token in normalized_response for token in evidence_tokens
+            token in stripped.lower() for token in evidence_tokens
         )
-        required_tokens = min(2, len(evidence_tokens))
-        return matched_tokens < required_tokens
+        return matched_tokens < min(2, len(evidence_tokens))
 
     def render(self) -> str:
         """Render the deterministic report for the user-facing stream."""

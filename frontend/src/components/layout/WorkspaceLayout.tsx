@@ -206,6 +206,7 @@ export function WorkspaceLayout() {
         error: tc.error,
         iteration: tc.iteration,
         todoId: tc.todoId,
+        reasoning: tc.reasoning,
         status: tc.status,
         timestamp: new Date().toLocaleTimeString('en-GB', {
           hour: '2-digit',

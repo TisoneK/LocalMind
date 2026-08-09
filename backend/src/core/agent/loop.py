@@ -107,8 +107,47 @@ def _parse_plan_steps(plan_text: str) -> list[str]:
             # Match numbered steps: "1. Do something" or "1) Do something"
             match = re.match(r"^\d+[\.\)]\s*(.+)", stripped)
             if match:
-                steps.append(match.group(1).strip())
+                step = match.group(1).strip()
+                if not _is_filler_step(step):
+                    steps.append(step)
     return steps
+
+
+def _is_filler_step(step: str) -> bool:
+    """Session 122: drop generic filler steps the planner sometimes emits
+    ("Run the shell action", "Verify the result") that carry no concrete
+    command, path, or tool — they'd pollute the Todos checklist with noise.
+
+    Conditional steps ("If X, then Y") and the final report step are never
+    dropped — they are exactly the goal-level detail a real plan needs."""
+    if len(step) < 15:
+        return True
+    lowered = step.lower()
+    # Exempt conditional / parse / report steps — they carry structure, not
+    # noise, even without a literal command in them.
+    if any(m in lowered for m in (" if ", "→", "otherwise", "unless", "proceed", "empty")):
+        return False
+    generic_prefixes = (
+        "verify the", "verify and", "analyze the output", "analyze and",
+        "run the command", "run the shell", "run the action", "execute the command",
+        "execute the shell", "capture the", "report the result", "report the findings",
+        "provide the requested", "prepare the", "present the information",
+        "present a", "synthesize a", "synthesize the", "done", "check the output",
+    )
+    if lowered.startswith(generic_prefixes):
+        return True
+    # A step with no tool-name/command token is suspect: must reference one
+    # of the concrete tools, a quoted command, or be a final report step.
+    tool_token = re.compile(
+        r"(shell|git|file|web|code|memory|sysinfo|grep|read|write|edit|"
+        r"search|fetch|browse|process|diagnos|`[^`]+`)"
+    )
+    if tool_token.search(lowered):
+        return False
+    report_token = re.compile(r"(return|report|summar|give|tell).{0,40}(user|result|answer|diff|change)")
+    if report_token.search(lowered):
+        return False
+    return True
 
 
 # ── Text-level tool call interception (MiniMax XML) ───────────────────────────
@@ -1449,6 +1488,15 @@ class AgentLoop:
             if _plan_steps and _obs:
                 for i, step in enumerate(_plan_steps):
                     _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
+            elif not _plan_steps:
+                # Session 122: the engine's static fallback is suppressed for
+                # plan-required intents (the LLM plan owns the todo list), so a
+                # planner that produced nothing parseable must be loud — a
+                # silent zero-todo turn would look exactly like the old dead UI.
+                logger.warning(
+                    f"[agent.loop] plan produced 0 steps for intent={intent.value} "
+                    f"(plan_len={len(plan_context)}); no todos emitted"
+                )
         else:
             _plan_steps = []
 
@@ -1910,6 +1958,7 @@ class AgentLoop:
                             tool_args=_inp,
                             iteration=iteration + 1,
                             todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                            thought=result.raw_content or "",
                         )
 
                 # Session 121: a narrated iteration is a step transition —
@@ -1952,6 +2001,7 @@ class AgentLoop:
                             tool_args=_inp,
                             iteration=iteration + 1,
                             todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                            thought=result.raw_content or "",
                         )
                     if tc_failed:
                         any_failed = True
@@ -2364,6 +2414,7 @@ class AgentLoop:
                         tool_args=tool_input,
                         iteration=iteration + 1,
                         todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                        thought=result.raw_content or "",
                     )
 
                 # ── Yield intermediate status to the user so they see real-time ──
@@ -2553,6 +2604,7 @@ class AgentLoop:
                                     tool_args=tool_input,
                                     iteration=iteration + 1,
                                     todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                    thought=result.raw_content or "",
                                 )
                                 _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
                             return  # web search is always terminal in agent loop
@@ -2693,11 +2745,11 @@ class AgentLoop:
                             label=action_label,
                             status="failed",
                             output=_truncate_observation(observation),
-                            latency_ms=latency_ms,
-                            tool_args=tool_input,
-                            iteration=iteration + 1,
-                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                        )
+                            latency_ms=latency_ms,                                            tool_args=tool_input,
+                                            iteration=iteration + 1,
+                                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                            thought=result.raw_content or "",
+                                        )
                         _obs.emit(
                             "fabrication_risk",
                             risk=fabrication_risk,
@@ -2712,11 +2764,11 @@ class AgentLoop:
                             label=action_label,
                             status="done",
                             output=_truncate_observation(observation),
-                            latency_ms=latency_ms,
-                            tool_args=tool_input,
-                            iteration=iteration + 1,
-                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                        )
+                            latency_ms=latency_ms,                                            tool_args=tool_input,
+                                            iteration=iteration + 1,
+                                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                            thought=result.raw_content or "",
+                                        )
 
                 trace.steps.append(
                     AgentStep(
@@ -2957,6 +3009,7 @@ class AgentLoop:
                                 status="started",
                                 iteration=iteration + 1,
                                 todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                thought=result.raw_content or "",
                             )
 
                         # Dispatch the tool
@@ -3011,10 +3064,11 @@ class AgentLoop:
                                             status="done",
                                             output=_truncate_observation(safe_obs),
                                             latency_ms=latency_ms,
-                                            tool_args=tool_input,
-                                            iteration=iteration + 1,
-                                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                                        )
+                                tool_args=tool_input,
+                                iteration=iteration + 1,
+                                todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                thought=result.raw_content or "",
+                            )
                                     return  # web search is terminal
 
                                 observation = safe_obs
@@ -3107,6 +3161,7 @@ class AgentLoop:
                                 latency_ms=latency_ms if "latency_ms" in dir() else 0,
                                 iteration=iteration + 1,
                                 todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                thought=result.raw_content or "",
                             )
 
                         trace.steps.append(
@@ -3392,6 +3447,7 @@ class AgentLoop:
                                     status="started",
                                     iteration=iteration + 1,
                                     todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                    thought=result.raw_content or "",
                                 )
                             t_late = time.monotonic()
                             try:
@@ -3487,6 +3543,7 @@ class AgentLoop:
                                     latency_ms=_late_lat if "_late_lat" in dir() else 0,
                                     iteration=iteration + 1,
                                     todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                    thought=result.raw_content or "",
                                 )
                         continue  # continue the loop so the model can produce a final answer
 

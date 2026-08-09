@@ -152,8 +152,25 @@ function ToolStep({ toolCall, isStreaming }: { toolCall: ToolCall; isStreaming?:
           </span>
         )}
       </button>
+      {/* Session 122: the reasoning that led to this step — visible without
+          expanding, so the trace shows WHY each tool ran. */}
+      {toolCall.reasoning && (
+        <div className="px-2.5 py-1 border-t border-brand-border/40 bg-brand-bg-dark/50">
+          <span className="text-[9px] italic text-brand-green-faint leading-snug block truncate" title={toolCall.reasoning}>
+            why: {toolCall.reasoning}
+          </span>
+        </div>
+      )}
       {expanded && (
         <div className="px-2.5 py-2 border-t border-brand-border/50 bg-brand-bg-dark">
+          {toolCall.reasoning && (
+            <div className="mb-1.5">
+              <div className="text-[10px] text-brand-amber mb-0.5">Why</div>
+              <p className="text-[10px] italic text-brand-green-soft leading-snug whitespace-pre-wrap break-words max-h-24 overflow-y-auto">
+                {toolCall.reasoning}
+              </p>
+            </div>
+          )}
           {isCodeTool && toolCall.input && (
             <>
               <div className="text-[10px] text-brand-green-muted mb-1">Code:</div>

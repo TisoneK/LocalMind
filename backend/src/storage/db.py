@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS actions (
     duration    REAL,
     iteration   INTEGER,
     todo_id     TEXT,   -- plan todo this action serves (one todo → many actions)
+    reasoning   TEXT,   -- Session 122: the model's thought that led to this tool call
     timestamp   REAL    NOT NULL DEFAULT (unixepoch('now'))
 );
 
@@ -198,6 +199,12 @@ class SessionStore:
                 conn.execute("ALTER TABLE actions ADD COLUMN todo_id TEXT")
         except sqlite3.OperationalError:
             pass
+        try:
+            with self._conn() as conn:
+                # Session 122: per-step reasoning (the 'why' of each action).
+                conn.execute("ALTER TABLE actions ADD COLUMN reasoning TEXT")
+        except sqlite3.OperationalError:
+            pass
 
     def _apply_migrations(self, conn):
         """Apply any pending migrations from the migrations directory."""
@@ -289,6 +296,7 @@ class SessionStore:
         action_id: str = "",
         iteration: Optional[int] = None,
         todo_id: Optional[str] = None,
+        reasoning: Optional[str] = None,
     ) -> str:
         """Record a tool action. Returns the action id (stable, reused for updates)."""
         import uuid as _uuid
@@ -299,9 +307,10 @@ class SessionStore:
             # duration if a done event re-created an existing id. Use
             # DO NOTHING so the running-create never clobbers a completed row.
             conn.execute(
-                "INSERT INTO actions (id, session_id, tool_name, status, label, input, iteration, todo_id, timestamp) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
-                (aid, session_id, tool_name, status, label, input, iteration, todo_id, time.time()),
+                "INSERT INTO actions (id, session_id, tool_name, status, label, input, iteration, "
+                "todo_id, reasoning, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+                (aid, session_id, tool_name, status, label, input, iteration, todo_id, reasoning, time.time()),
             )
         return aid
 
@@ -330,12 +339,12 @@ class SessionStore:
         """Return tool actions for a session, newest first."""
         cols = (
             "id", "session_id", "tool_name", "status", "label", "input",
-            "output", "error", "duration", "iteration", "todo_id", "timestamp",
+            "output", "error", "duration", "iteration", "todo_id", "reasoning", "timestamp",
         )
         with self._conn() as conn:
             rows = conn.execute(
                 "SELECT id, session_id, tool_name, status, label, input, output, error, "
-                "duration, iteration, todo_id, timestamp "
+                "duration, iteration, todo_id, reasoning, timestamp "
                 "FROM actions WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?",
                 (session_id, limit),
             ).fetchall()

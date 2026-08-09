@@ -199,9 +199,29 @@ UNDERSTANDING: [what the user ACTUALLY needs — interpret their intent. "Should
 WHAT I KNOW: [relevant facts from context — current date, user location if known, prior conversation]
 WHAT I'LL VERIFY: [what could be wrong with the data and how I'll check]
 STEPS:
-1. [step with tool name and the ACTUAL query/args — not the user's raw message]
+1. [goal-level step: what you're achieving AND the exact command/args that achieves it]
 2. [next step, or "Done" if single step]
 ARGS_PRECHECK: [verify all required args are known]
+
+SESSION 122 STEP QUALITY RULES (CRITICAL):
+- Plan at the GOAL level, not a 1:1 mirror of tool calls. Each step is a goal
+  the user cares about, with the command that achieves it embedded.
+- Include CONDITIONAL branches as separate steps: "If X, then step Y; otherwise
+  step Z" — e.g. "Check git status --short. If output is non-empty, run git diff".
+- The LAST step must be reporting the result to the user ("Return combined
+  result to the user").
+- FORBIDDEN filler steps — never write steps that only say "verify the result",
+  "analyze the output", "run the command", "capture the output", "report the
+  results" without naming the actual tool, path, or command.
+- Every step that runs a tool must contain the literal command/args, e.g.
+  "Run `git status --short` in the repo root" — never "Run the shell action".
+
+Example for "Check git status and if there are uncommitted changes show me the diff":
+1. Locate repo root — resolve the working directory and confirm it's a git repo.
+2. Run `git status --short` in the repo root.
+3. Parse the output — empty → done (no uncommitted changes). Non-empty → proceed.
+4. If changes exist, run `git diff` to show what changed.
+5. Return the combined result (files changed + diff, or "no uncommitted changes").
 
 Keep the plan brief — 3-10 lines max. No code blocks, no markdown.
 

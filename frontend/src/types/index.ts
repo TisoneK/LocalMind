@@ -15,6 +15,8 @@ export interface ToolCall {
   iteration?: number;
   /** Plan todo this tool call serves (one todo → many actions). */
   todoId?: string;
+  /** The model's reasoning that led to this tool call (Session 122). */
+  reasoning?: string;
   /** Timestamp when this tool call was first observed (HH:MM format) */
   timestamp?: string;
 }
@@ -144,6 +146,8 @@ export interface ActionItem {
   iteration?: number;
   /** Plan todo this action serves (one todo → many actions). */
   todoId?: string | null;
+  /** The model's reasoning that led to this action (Session 122). */
+  reasoning?: string | null;
 }
 
 export interface TodoItem {

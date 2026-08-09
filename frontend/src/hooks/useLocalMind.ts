@@ -543,6 +543,7 @@ export function useChat(
                   duration: tc.duration || (tc.latency_ms ? parseInt(tc.latency_ms) : undefined),
                   iteration: tc.iteration !== undefined && tc.iteration !== '' ? Number(tc.iteration) : undefined,
                   todoId: tc.todo_id as string | undefined,
+                  reasoning: tc.thought || tc.reasoning,
                   timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
                 };
                 // Deduplicate by ID: if a tool_call with the same ID already

@@ -156,6 +156,16 @@ function ActionCard({ action }: { action: ActionItem }) {
               {verbatim}
             </span>
           )}
+          {/* Session 122: the reasoning that led to this step — Actions is the
+              trace (what + why), not a second copy of the task list. */}
+          {action.reasoning && (
+            <span
+              className="block text-[9px] italic text-brand-green-faint truncate"
+              title={action.reasoning}
+            >
+              why: {action.reasoning}
+            </span>
+          )}
         </span>
         <span className={status.color} title={status.label}>
           {status.icon}
@@ -174,6 +184,14 @@ function ActionCard({ action }: { action: ActionItem }) {
 
       {expanded && (
         <div className="px-2.5 py-2 border-t border-brand-border/50 bg-brand-bg-dark space-y-1.5">
+          {action.reasoning && (
+            <div>
+              <div className="text-[9px] text-brand-amber uppercase mb-0.5">Why</div>
+              <p className="text-[10px] italic text-brand-green-soft leading-snug whitespace-pre-wrap break-words max-h-24 overflow-y-auto">
+                {action.reasoning}
+              </p>
+            </div>
+          )}
           {action.input && (
             <div>
               <div className="text-[9px] text-brand-green-muted uppercase mb-0.5">

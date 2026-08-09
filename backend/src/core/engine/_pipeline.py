@@ -120,6 +120,10 @@ _PLAN_REQUIRED_INTENTS: frozenset[Intent] = frozenset(
         Intent.CODE_EXEC,
         Intent.FILE_WRITE,
         Intent.FILE_EDIT,
+        # Session 122: git requests chain tools (locate → status → maybe
+        # diff → report); at dispatcher confidence >= 0.7 the planner used to
+        # be skipped, so the Todos panel showed no real plan for them.
+        Intent.GIT,
     }
 )
 
@@ -535,6 +539,14 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         the user immediate visibility into what the agent is doing,
         instead of a dead UI waiting for final output.
         """
+        # Session 122: for intents where the agent loop's LLM planner runs
+        # (SHELL, CODE_EXEC, FILE_WRITE, FILE_EDIT, GIT), the real plan owns
+        # the todo list. A static fallback would collide with — and overwrite
+        # — the model's goal-level plan in the same plan-N id namespace (the
+        # user saw "Run the shell action" clobber "Run `git status`…").
+        if intent in _PLAN_REQUIRED_INTENTS:
+            return
+
         plan = self._INTENT_TODO_PLANS.get(intent)
         if not plan:
             return  # single-step intents (CHAT, SYSINFO) don't get a plan
