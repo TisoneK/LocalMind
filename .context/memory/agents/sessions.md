@@ -1154,3 +1154,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** Real-model verification pending. Next phase: Session 76 — next open backlog item.
 - **Report:** none — implementation session (Session 65 Codebuff comparison + B-3 backlog are the references)
 - **Inefficiency (logged):** none new — the stale backlog premise (the four modes already existed) cost one investigation round-trip before the actual gaps were identified; the verification-first approach avoided shipping a duplicate implementation.
+
+---
+
+## 2026-08-09 — Session 76
+- **Session:** 76
+- **Date:** 2026-08-09
+- **Agent:** Buffy / deepseek-v4-flash
+- **Task:** B-2026-07-31 (Session 37) — Chat SSE client final-event drop. VERIFICATION FINDING (recorded): the fix ALREADY landed — `fa9ec4b fix(chat): flush final SSE event` (Session 38) extracted `createSSEParser` into `sse.ts` (with a `flush()` for unterminated final lines) and `streamChat()` already calls `decoder.decode()` + `parser.flush()` + guarded `finish()` after the read loop; `sse.test.ts` already covered the basic no-trailing-newline + `[DONE]` cases. The genuinely outstanding piece was the Session 38 note's follow-up: **public `streamChat()` integration coverage** (client.test.ts had zero streamChat tests). Also discovered a DUPLICATE backlog entry: the same item existed as `[x]` (line 84, Session 38-fixed) AND `[ ]` (line 81) — closed both (append-only: no deletion, noted here).
+- **Commits:** 2 product (`ead7a5f`, `b4f8417`) + this context closeout commit
+- **Outcome:** done. Commit 1 (`ead7a5f`): 2 parser-level corner tests in `sse.test.ts` — `[DONE]` flushed without a trailing newline (hidden-done case, onDone fires exactly once) + a `data:` line split across network chunks buffered and delivered on flush. Commit 2 (`b4f8417`): 3 public `streamChat()` integration tests in `client.test.ts` (stubbed global fetch + ReadableStream) — no-trailing-newline stream end delivers the final payload + onDone once; trailing `[DONE]` without newline fires onDone exactly once (finish() dedupe); non-OK response propagates to onError (no onDone/onChunk). Validation: 24 frontend tests pass (19 → 24), tsc clean, eslint 0 errors, vite build clean. No production code changed (the fix pre-existed). Test-only session; skipped formal code review per guidelines (extremely straightforward, validated).
+- **Open items:** Real-model verification pending. Next phase: Session 77 — next open backlog item.
+- **Report:** none — implementation session (Session 37 backlog + Session 38 follow-up note are the references)
+- **Inefficiency (logged):** none new — the duplicate backlog entry (lines 81 + 84) meant the item appeared open despite being fixed in Session 38; flagged here so the next backlog sweep can dedupe.

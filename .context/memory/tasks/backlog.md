@@ -78,7 +78,7 @@ don't remove the line.
 
 ---
 ---
-- [ ] **[High] Chat SSE client drops a final unterminated event** (added 2026-07-31 by Buffy, Session 37) — `frontend/src/lib/localmind/client.ts::streamChat()` retains the final partial line in `buffer` but never parses it when `reader.read()` returns `done`. A proxy/server close without a trailing newline can hide the final response token, `done`, or error event. Add a small parser helper, flush the buffer after the read loop, and add a frontend regression test before changing other SSE contracts.
+- [x] **[High] Chat SSE client drops a final unterminated event** (added 2026-07-31 by Buffy, Session 37) — `frontend/src/lib/localmind/client.ts::streamChat()` retains the final partial line in `buffer` but never parses it when `reader.read()` returns `done`. A proxy/server close without a trailing newline can hide the final response token, `done`, or error event. Add a small parser helper, flush the buffer after the read loop, and add a frontend regression test before changing other SSE contracts.
 
 ---
 - [x] **[High] Chat SSE client drops a final unterminated event** (added 2026-07-31 by Buffy, Session 37; fixed 2026-07-31 Session 38) — Extracted a parser helper, flushed pending decoder/parser state on stream close, and added Vitest regression coverage. Product commit pending in Session 38 closeout; next follow-up is public `streamChat()` integration coverage.

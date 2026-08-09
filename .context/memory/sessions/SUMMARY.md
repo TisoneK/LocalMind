@@ -141,3 +141,6 @@ records.
 
 ---
 - **2026-08-09 — Session 75** — Buffy / deepseek-v4-flash — B-2026-08-02-3: verified the four delegation failure modes (construction_failed/timeout/child_exception/empty_response) already existed since `b9b97ff` (stale backlog premise); closed the real gaps — added Session 32-style "Suggested next step:" guidance to all four failure messages and added the missing `construction_failed` + `empty_response` tests (+ locked the assertion into the timeout test). 2 new tests; full suite 856 passed / 1 known baseline failure; product commit `85b63ba`. Real-model verification pending user-side.
+
+---
+- **2026-08-09 — Session 76** — Buffy / deepseek-v4-flash — B-2026-07-31 (SSE final-event drop): verified the fix already landed (`fa9ec4b`, Session 38 — `createSSEParser` + `flush()`); closed the outstanding Session 38 follow-up (public `streamChat()` integration coverage) with 3 integration tests (no-trailing-newline end, hidden `[DONE]` without newline, non-OK → onError) + 2 parser corner tests (`[DONE]` flushed, split-line buffering). Also closed a DUPLICATE open backlog entry (line 81 vs the line 84 `[x]`). 5 new frontend tests (24 total); tsc + build clean; test-only session (no production change); commits `ead7a5f` + `b4f8417`. Real-model verification pending user-side.
