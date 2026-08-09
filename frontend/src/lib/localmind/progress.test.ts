@@ -4,6 +4,7 @@ import {
   applyTodoCreated,
   applyTodoUpdated,
   estimateTokens,
+  formatLatency,
   normalizeTodoEvent,
   isActiveToolStatus,
 } from './progress';
@@ -77,5 +78,26 @@ describe('streamed progress helpers', () => {
     expect(estimateTokens('')).toBe(0);
     expect(estimateTokens('12345678')).toBe(2);
     expect(estimateTokens('  hello world  ')).toBe(3);
+  });
+});
+
+describe('formatLatency (B-2026-08-09-4 / ADR-13)', () => {
+  it('renders sub-second values as whole milliseconds', () => {
+    expect(formatLatency(340)).toBe('340ms');
+    expect(formatLatency(0.5)).toBe('1ms');
+    expect(formatLatency(999)).toBe('999ms');
+  });
+
+  it('switches to one-decimal seconds at 1s and above', () => {
+    expect(formatLatency(1000)).toBe('1.0s');
+    expect(formatLatency(1200)).toBe('1.2s');
+    expect(formatLatency(39900)).toBe('39.9s');
+  });
+
+  it('returns an em-dash for missing, zero, or non-finite values', () => {
+    expect(formatLatency(0)).toBe('—');
+    expect(formatLatency(-5)).toBe('—');
+    expect(formatLatency(NaN)).toBe('—');
+    expect(formatLatency(Infinity)).toBe('—');
   });
 });

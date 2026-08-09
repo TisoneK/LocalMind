@@ -1,6 +1,7 @@
 'use client';
 
 import { Activity, Clock, Hash } from 'lucide-react';
+import { formatLatency } from '@/lib/localmind/progress';
 
 interface PerformanceMetricsType {
   tokensPerSecond?: number;
@@ -57,7 +58,7 @@ export function PerformanceMetrics({ metrics, lastMetrics, elapsedMs = 0 }: Perf
         <Clock className="h-3 w-3 text-[#e8a420] shrink-0" />
         <span className="text-[9px] text-[#8ab08a] uppercase tracking-wider shrink-0" title="Response latency">Latency</span>
         <span className="text-[11px] text-[#d4e8d4] font-mono font-medium whitespace-nowrap">
-          {latency > 0 ? (latency >= 1000 ? `${(latency / 1000).toFixed(1)}s` : `${Math.round(latency)}ms`) : '—'}
+          {latency > 0 ? formatLatency(latency) : '—'}
         </span>
       </div>
 

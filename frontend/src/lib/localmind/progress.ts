@@ -74,3 +74,16 @@ export function estimateTokens(text: string): number {
   const trimmed = text.trim();
   return trimmed ? Math.ceil(trimmed.length / 4) : 0;
 }
+
+/**
+ * Adaptive latency formatting shared by every surface that shows time:
+ * sub-second → whole ms ("340ms"), ≥1s → one-decimal seconds ("1.2s",
+ * "39.9s"). B-2026-08-09-4: the Observe panel previously showed a raw
+ * unlabeled millisecond number; every surface now uses this formatter so
+ * units are consistent across the bottom bar, Observe panel, and chat.
+ */
+export function formatLatency(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}

@@ -45,6 +45,15 @@ export interface ChatMessage {
    * (e.g., "Let me search the web...", "Understanding your request...").
    * Distinct from `thinking` which is the model's actual reasoning trace. */
   statusText?: string;
+  /** Per-message performance metadata (B-2026-08-09-3 / ADR-13), attached
+   * when the turn completes. Optional — messages without it render as before.
+   * Latency/tokens are per-TURN, not session-global. */
+  performance?: {
+    latencyMs?: number;
+    promptTokens?: number;
+    completionTokens?: number;
+    tokensPerSecond?: number;
+  };
 }
 
 /** Structured diff data for rendering DiffBlock in chat messages */

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { User, Copy, Check, FileEdit, FilePlus, FileMinus } from 'lucide-react';
+import { User, Copy, Check, FileEdit, FilePlus, FileMinus, Activity } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -49,6 +49,7 @@ SyntaxHighlighter.registerLanguage('xml', html);
 SyntaxHighlighter.registerLanguage('shell', shell);
 SyntaxHighlighter.registerLanguage('shell-session', shell);
 import { ChatMessage as ChatMessageType, FileResult, PendingWrite } from '@/types';
+import { formatLatency } from '@/lib/localmind/progress';
 import { ThinkingBlock } from './ThinkingBlock';
 import { DiffBlock, type DiffHunk } from '@/components/shared/DiffBlock';
 
@@ -461,6 +462,31 @@ function MarkdownContent({ text }: { text: string }) {
   );
 }
 
+// ── MessageMetrics — per-message latency/token line (B-2026-08-09-3 / ADR-13) ──
+// Renders a small muted line under each assistant reply, e.g. `39.9s · 0/321 tok`.
+// Backward-compatible: messages without `performance` (old history, user turns)
+// render exactly as before.
+function MessageMetrics({ performance }: { performance: NonNullable<ChatMessageType['performance']> }) {
+  const parts: string[] = [];
+  if (performance.latencyMs) parts.push(formatLatency(performance.latencyMs));
+  const prompt = performance.promptTokens ?? 0;
+  const completion = performance.completionTokens ?? 0;
+  if (prompt > 0 || completion > 0) {
+    parts.push(`${prompt.toLocaleString()}/${completion.toLocaleString()} tok`);
+  }
+  if (performance.tokensPerSecond) parts.push(`${performance.tokensPerSecond} tok/s`);
+  if (parts.length === 0) return null;
+  return (
+    <div
+      className="mt-1.5 flex items-center gap-1.5 text-[9px] text-[#5a7a5a] font-mono select-none"
+      title="This reply's performance: latency · prompt/completion tokens · speed"
+    >
+      <Activity className="h-2.5 w-2.5 opacity-70 shrink-0" />
+      <span>{parts.join(' · ')}</span>
+    </div>
+  );
+}
+
 // ── PermissionGate — confirm/deny buttons for pending file writes ──────────
 
 function PermissionGate({ pending, onResolved }: { pending: PendingWrite; onResolved: (result: 'confirmed' | 'denied') => void }) {
@@ -605,6 +631,9 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
               ))}
             </div>
           )}
+
+          {/* Per-message performance line — only on assistant replies with metrics */}
+          {!isUser && message.performance && <MessageMetrics performance={message.performance} />}
 
           {/* Permission gate for pending writes */}
           {message.pendingWrite && (

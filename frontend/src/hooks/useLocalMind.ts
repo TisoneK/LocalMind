@@ -210,6 +210,35 @@ export function useChat(
     return () => window.clearInterval(timer);
   }, [isStreaming]);
 
+  // B-2026-08-09-3 (ADR-13): when a turn completes with real metrics, attach
+  // them to the assistant message that produced them so each reply shows its
+  // own latency/token line — not the session-global last-turn values.
+  // send() clears lastMetrics at turn start, so the values observed here
+  // always belong to the turn that just ended. The effect re-runs if a late
+  // metrics event arrives after the done callback, upgrading a live estimate
+  // to the exact final numbers.
+  useEffect(() => {
+    if (isStreaming) return;
+    const m = lastMetrics;
+    if (!m || (m.latency <= 0 && m.totalTokens <= 0)) return;
+    setMessages((prev) => {
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last && last.role === 'assistant') {
+        updated[updated.length - 1] = {
+          ...last,
+          performance: {
+            latencyMs: m.latency > 0 ? m.latency : undefined,
+            promptTokens: m.promptTokens > 0 ? m.promptTokens : undefined,
+            completionTokens: m.completionTokens > 0 ? m.completionTokens : undefined,
+            tokensPerSecond: m.tokensPerSecond > 0 ? m.tokensPerSecond : undefined,
+          },
+        };
+      }
+      return updated;
+    });
+  }, [isStreaming, lastMetrics, setMessages]);
+
   // SAFETY: If isStreaming stays true for more than 120s, force-reset it.
   // This prevents the "second message hangs forever" bug where a stream
   // error or backend hang leaves isStreaming stuck true, causing all
@@ -274,6 +303,9 @@ export function useChat(
           setCurrentIntent(undefined);
           setCurrentConfidence(undefined);
           setActiveToolCalls([]);
+          // B-2026-08-09-3: don't let the previous session's metrics attach
+          // to a different session's messages on the next turn.
+          setLastMetrics(null);
         }
         return;
       }
@@ -285,6 +317,10 @@ export function useChat(
         setCurrentIntent(undefined);
         setCurrentConfidence(undefined);
         setActiveToolCalls([]);
+        // B-2026-08-09-3: clearing lastMetrics on session switch prevents the
+        // attach-on-complete effect from stamping the OLD session's turn
+        // metrics onto the newly loaded history's last message (review fix).
+        setLastMetrics(null);
       }
       // Skip if we're actively streaming to this session — the messages
       // are already in local state and the DB may not have them yet.
@@ -628,9 +664,20 @@ export function useChat(
                   setLiveObservation((prev) => ({
                     intent: (obsData.intent || obs.intent || prev?.intent || 'chat') as any,
                     confidence: Number(obsData.confidence || obs.confidence || prev?.confidence || 0),
-                    toolsUsed: obsData.tools_used ? obsData.tools_used.split(',') : (prev?.toolsUsed ?? []),
-                    // Backend sends 'memory_facts' in turn_complete, not 'memory_hits'
-                    memoryHits: Number(obsData.memory_facts || obsData.memory_hits || prev?.memoryHits || 0),
+                    // B-2026-08-09-8: an empty tools_used on turn_complete is REAL
+                    // (no tools ran this turn) — reset instead of inheriting the
+                    // previous turn's tools forever.
+                    toolsUsed: obsData.tools_used !== undefined
+                      ? (obsData.tools_used ? obsData.tools_used.split(',') : [])
+                      : (prev?.toolsUsed ?? []),
+                    // Backend sends 'memory_facts' in turn_complete, not 'memory_hits'.
+                    // B-2026-08-09-8: a real 0 (fresh session, nothing retrieved)
+                    // must not fall through to the previous turn's count.
+                    memoryHits: obsData.memory_facts !== undefined
+                      ? Number(obsData.memory_facts)
+                      : (obsData.memory_hits !== undefined
+                        ? Number(obsData.memory_hits)
+                        : (prev?.memoryHits ?? 0)),
                     // 'prompt_tokens_approx' is the context/input token count.
                     // 'tokens_approx' is the completion/output token count.
                     // Use prompt_tokens_approx for the Context Tokens display.

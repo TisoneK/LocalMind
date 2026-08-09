@@ -8,6 +8,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { CapabilitiesData, ObservationData } from '@/types';
+import { formatLatency } from '@/lib/localmind/progress';
 
 interface ObservabilityTabProps {
   observation: ObservationData;
@@ -135,21 +136,9 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
     }
   }
 
-  // Adaptive latency formatting: sub-second → ms, above → s (1 decimal).
-  function formatLatency(ms: number): string {
-    if (!Number.isFinite(ms) || ms <= 0) return '';
-    if (ms < 1000) return `${Math.round(ms)}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function stepSuffix(status: string) {
-    switch (status) {
-      case 'done': return '\u2713';    // checkmark
-      case 'running': return '\u25CF'; // filled circle
-      default: return '\u25CB';        // empty circle
-    }
-  }
+  // B-2026-08-09-4: latency formatting is shared (progress.ts formatLatency)
+  // so every surface — bottom bar, Observe panel, chat chip — renders the
+  // same adaptive s/ms units.
 
   return (
     <div className="space-y-4 p-3">
@@ -190,7 +179,15 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
         <div className="space-y-2">
           <MetricBar label="Confidence" value={hasData ? Math.round(confidence * 100) : 0} max={100} color="bg-[#39d353]" fallback="—" />
           <MetricBar label="Context Tokens" value={contextTokens} max={32768} color="bg-[#e8a420]" fallback="—" />
-          <MetricBar label="Latency" value={latency} max={10000} color="bg-[#e05555]" fallback="—" />
+          {/* B-2026-08-09-4: latency has no meaningful fixed scale — the old
+              max={10000} bar saturated on any >10s turn. Show the adaptive
+              s/ms value instead of a misleading full bar. */}
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[#8ab08a]">Latency</span>
+            <span className="text-[10px] text-[#d4e8d4] font-mono">
+              {latency > 0 ? formatLatency(latency) : '—'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -227,8 +224,12 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
         </div>
         <div className="bg-[#0a120a] border border-[#1a2a1a] rounded-md px-3 py-2">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-[#8ab08a]">Vector Store Hits</span>
-            <span className="text-[11px] text-[#d4e8d4] font-mono">{memoryHits > 0 ? memoryHits : '—'}</span>
+            {/* B-2026-08-09-8: this counts memory_facts injected into the
+                prompt, not vector-DB hits — renamed accordingly. '—' only when
+                the session truly has no observation; a real 0 (fresh session)
+                renders as 0. */}
+            <span className="text-[10px] text-[#8ab08a]">Memory Facts</span>
+            <span className="text-[11px] text-[#d4e8d4] font-mono">{hasData ? memoryHits : '—'}</span>
           </div>
         </div>
       </div>
