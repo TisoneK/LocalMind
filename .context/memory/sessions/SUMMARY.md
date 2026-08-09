@@ -204,3 +204,6 @@ records.
 
 ---
 - **2026-08-09 — Session 98** — Buffy / deepseek-v4-flash — Backlog B-15 / ADR-15 §1: specific sub-agents existed as dirs; missing piece was the FIXED output schema. Added `AgentConfig.output_schema` + `render_output_contract()` wired into `BaseAgent.run()` (gated to delegated child runs via `get_current_run_id()` — top-level queries keep prose), reviewer adopts code-review schema {issues, verdict, summary}, delegation packet defers to agent-level contract. 5 new tests, **1016 passed / 0 failed**. Commit `1348a4c`.
+
+---
+- **2026-08-09 — Session 99** — Buffy / deepseek-v4-flash — Backlog B-16 / ADR-15 §4: built the tool-vs-subagent measurement surface — `tool_timings` (per-tool calls/total/avg/max/last_status) folded from the agent loop's `tool_call` obs events into the stored observation + observability endpoint. Verified all 11 emit sites use `tool=`; per-event latency coercion; decision recorded (no tool → sub-agent until data shows tool's own execution is the cost driver). 5 new tests, **1021 passed / 0 failed**. Commit `a2c9ee5`.
