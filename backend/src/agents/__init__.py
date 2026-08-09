@@ -36,12 +36,15 @@ Legacy path (still supported via backward-compat shims):
 
 from __future__ import annotations
 
+from agents.analyst.agent import AnalystAgent
 from agents.base_agent import DEFAULT_MAX_ITERATIONS, DEFAULT_MAX_WALL_CLOCK_SECS, AgentConfig, BaseAgent
 from agents.browser.agent import BrowserAgent
 from agents.coding.agent import CodingAgent
+from agents.debugger.agent import DebuggerAgent
 from agents.direct.agent import DirectAgent
 from agents.registry import auto_discover_agents, get_agent, is_registered, list_agents, register
 from agents.research.agent import ResearchAgent
+from agents.reviewer.agent import ReviewerAgent
 from agents.selection import (
     intent_to_agent_name,
     list_intent_mappings,
@@ -50,9 +53,6 @@ from agents.selection import (
     select_agent_by_task_profile,
 )
 from agents.verifier.agent import VerifierAgent
-from agents.reviewer.agent import ReviewerAgent
-from agents.debugger.agent import DebuggerAgent
-from agents.analyst.agent import AnalystAgent
 
 # Auto-register all built-in agents via directory discovery (ADR-8
 # Principle 5, Session 34 Phase 1). Scans agents/* for subdirectories

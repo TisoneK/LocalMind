@@ -1,0 +1,25 @@
+# Pre-commit hooks for LocalMind.
+#
+# The repo is private (no GitHub Actions minutes), so a local pre-commit hook
+# IS the CI. It runs the same checks a CI workflow would: backend ruff +
+# pytest, frontend tsc + eslint. The full suite takes ~60s.
+#
+# Install (one-time):
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run on demand without committing:
+#   pre-commit run --all-files
+#
+# Skip for a single commit (e.g. mid-refactor with known-wip):
+#   git commit --no-verify
+repos:
+  - repo: local
+    hooks:
+      - id: localmind-ci
+        name: LocalMind CI (ruff + pytest + tsc + eslint)
+        entry: scripts/ci-check.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]

@@ -89,6 +89,22 @@ from ._reflection_mixin import _ReflectionMixin
 logger = logging.getLogger(__name__)
 
 
+def _fallback_todo_plan(intent: Intent, message: str) -> list[str]:
+    """Fallback todo plan for multi-step intents (Understand → Run → Verify).
+
+    Kept as a module-level factory (not inline in Engine._emit_todo_plan) so
+    tests/e2e/test_todo_system.py derives its expectations from the SAME
+    source — pinning the strings in the test caused a long-lived baseline
+    failure whenever the template changed (fixed Session 90).
+    """
+    intent_label = intent.value.replace('_', ' ')
+    return [
+        f"Understand: {message.strip()[:72]}",
+        f"Run the {intent_label} action",
+        "Verify the result and explain what changed",
+    ]
+
+
 def get_adapter(*args, **kwargs):
     """Deferred-lookup wrapper for adapters.get_adapter.
 
@@ -492,13 +508,10 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
         # Keep the fallback useful even when the model's richer plan is not
         # available: describe this request rather than showing a generic,
-        # unrelated checklist.
-        intent_label = intent.value.replace('_', ' ')
-        plan = [
-            f"Understand: {message.strip()[:72]}",
-            f"Run the {intent_label} action",
-            "Verify the result and explain what changed",
-        ]
+        # unrelated checklist. The template lives in _fallback_todo_plan so
+        # the e2e test (test_engine_emit_todo_plan) derives its expectations
+        # from the same source instead of pinning brittle strings.
+        plan = _fallback_todo_plan(intent, message)
 
         try:
             import sqlite3

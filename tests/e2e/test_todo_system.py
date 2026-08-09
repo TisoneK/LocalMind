@@ -239,9 +239,14 @@ def test_engine_emit_todo_plan(tmp_path, monkeypatch):
     conn.close()
 
     assert len(rows) == 3
-    assert rows[0]["content"] == "Search the web for relevant results"
-    assert rows[1]["content"] == "Analyze and filter the search results"
-    assert rows[2]["content"] == "Synthesize a clear answer from the findings"
+    # Derive expectations from the SAME fallback factory the engine uses, so
+    # a template edit cannot silently re-break this test (this exact staleness
+    # caused the long-lived '1 known baseline' failure, fixed Session 90).
+    from core.engine._pipeline import _fallback_todo_plan
+
+    expected = _fallback_todo_plan(Intent.WEB_SEARCH, "trending stories")
+    for i, content in enumerate(expected):
+        assert rows[i]["content"] == content
 
     # Verify obs events were emitted
     events = obs.drain()

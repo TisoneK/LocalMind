@@ -1561,6 +1561,11 @@ class OpenAICompatAdapter(BaseAdapter):
                 # NON-STREAMING response shape — streaming deltas never have a
                 # top-level `content` array, so every chunk was silently dropped
                 # and the user saw a blank response.
+                # B-2026-08-09-14 (Session 90): usage_metadata is populated
+                # from message_delta usage frames; it must be initialized here —
+                # a missing init was a latent NameError that would crash every
+                # Anthropic streaming request (found by the new CI check).
+                usage_metadata: dict = {}
                 async for line in response.aiter_lines():
                     if not line or not line.startswith("data: "):
                         continue
