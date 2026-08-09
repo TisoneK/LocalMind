@@ -207,3 +207,6 @@ records.
 
 ---
 - **2026-08-09 — Session 99** — Buffy / deepseek-v4-flash — Backlog B-16 / ADR-15 §4: built the tool-vs-subagent measurement surface — `tool_timings` (per-tool calls/total/avg/max/last_status) folded from the agent loop's `tool_call` obs events into the stored observation + observability endpoint. Verified all 11 emit sites use `tool=`; per-event latency coercion; decision recorded (no tool → sub-agent until data shows tool's own execution is the cost driver). 5 new tests, **1021 passed / 0 failed**. Commit `a2c9ee5`.
+
+---
+- **2026-08-09 — Session 100** — Buffy / deepseek-v4-flash — Health-check burst fix: 20+ identical `GET opencode.ai/zen/v1/models` at startup. Root cause: OpenAICompatAdapter.health_check() and list_models() fired UNCACHED /models GETs, and routes/models.py uses throwaway adapters (bypassing get_adapter()). Fix: class-level per-provider TTL cache (30s) with a shared _fetch_models_cached() helper, per-provider asyncio.Lock (concurrent startup polls collapse to one fetch), failures uncached, clear_models_cache() wired into clear_adapter_cache(). 9 new tests, **1030 passed / 0 failed**. Commit `7968997`.
