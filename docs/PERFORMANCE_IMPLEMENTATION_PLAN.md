@@ -4,6 +4,23 @@
 **Source:** `docs/PERFORMANCE_BOTTLENECK_REPORT.md`
 **Generated:** 2026-05-15
 
+> ## ⚠️ STATUS: HISTORICAL RECORD (snapshot 2026-05-15)
+>
+> This plan is kept as a historical record. Several items are now DONE or
+> SUPERSEDED — see `docs/PERFORMANCE_BOTTLENECK_REPORT.md` for the full
+> banner. The two most important corrections:
+>
+> - **§1.2 (Reduce MAX_ITERATIONS 8→5) is SUPERSEDED.** Per the Session 32
+>   contract, `MAX_ITERATIONS` defaults to 8 (configurable via
+>   `LOCALMIND_MAX_ITERATIONS`) and must NOT be lowered below 8 — multi-step
+>   tasks (recon + work + verify) need the room.
+> - **§1.1 (DISPATCHER_HIGH_CONFIDENCE_SKIP 0.7→0.6) is DONE/removed.** The
+>   threshold was set to 0.6, and B-2026-08-09-11 removed the constant from
+>   `agent/constants.py` entirely (the skip logic lives in `_pipeline.py`).
+> - **Phase 2+ recommendations were NOT status-checked** (async httpx
+>   embedding, SQLite connection pooling, Chat Agent response caching) —
+>   verify against the current code before acting on them.
+
 ---
 
 ## Executive Summary
@@ -27,6 +44,10 @@ This document provides a prioritized implementation plan to address the 7 perfor
 ## Phase 1: Quick Wins (Configuration Changes Only)
 
 ### 1.1 Optimize DISPATCHER_HIGH_CONFIDENCE_SKIP (Bottleneck 1)
+
+> ✅ **DONE (superseded by later refactors).** The threshold was set to 0.6,
+> and the skip logic moved into `_pipeline.py`; B-2026-08-09-11 removed the
+> now-dead constant from `agent/constants.py`. Retained as history.
 
 **Problem:** High-confidence classifications still route through Orchestrator + Planning phases.
 
@@ -69,6 +90,11 @@ The dispatcher already classified intent with high confidence, but runs two addi
 ---
 
 ### 1.2 Reduce MAX_ITERATIONS (Bottleneck 6)
+
+> ⛔ **SUPERSEDED (Session 32 contract).** Do NOT reduce MAX_ITERATIONS
+> below 8 — see the banner at the top of this file. Multi-step tasks need
+> the room; the wall-clock cap (`LOCALMIND_MAX_WALL_CLOCK_SECS`, default
+> 180s) is the real safety net. This section is retained only as history.
 
 **Problem:** Agent loop allows 8 iterations, but typical tasks complete in 2-3.
 

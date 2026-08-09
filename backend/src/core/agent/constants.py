@@ -199,16 +199,17 @@ SYNTHESIS_INTENTS: frozenset[Intent] = frozenset(
 SYNTHESIS_TEMPLATE_FALLBACK: bool = True
 
 # ── Legacy DEPRECATED constants ──────────────────────────────────────────────
-# These are kept ONLY for import compatibility during migration.
-# They are NOT used in the v3.0 pipeline.
-
-THINKING_DISPATCH_ENABLED: bool = True
-THINKING_DISPATCH_TIMEOUT_SECS: float = 12.0
-DISPATCHER_HIGH_CONFIDENCE_SKIP: float = 0.6
+# Kept ONLY for import compatibility during migration. Still referenced by
+# the v3.0 pipeline: CHAT_AGENT_ENABLED, CHAT_AGENT_MIN_COMPLEXITY,
+# CHAT_AGENT_SKIP_PATTERNS, CHAT_AGENT_TIMEOUT_SECS. Removed as dead
+# (B-2026-08-09-11): THINKING_DISPATCH_ENABLED, THINKING_DISPATCH_TIMEOUT_SECS,
+# DISPATCHER_HIGH_CONFIDENCE_SKIP, CHAT_AGENT_MAX_TOKENS. The dispatcher
+# timeout now lives in thinking_dispatcher.py as DISPATCHER_TIMEOUT_SECS =
+# 30.0 (the single source of truth — chosen because GLM/Z.ai dispatches in
+# ~18s typical).
 
 CHAT_AGENT_ENABLED: bool = True
 CHAT_AGENT_MIN_COMPLEXITY: float = 0.4
-CHAT_AGENT_MAX_TOKENS: int = 300
 CHAT_AGENT_TIMEOUT_SECS: float = 8.0
 CHAT_AGENT_SKIP_PATTERNS: list[str] = [
     r"^(hi|hello|hey|howdy|greetings)\s*$",

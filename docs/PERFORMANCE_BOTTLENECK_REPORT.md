@@ -1,5 +1,32 @@
 # LocalMind Performance Bottleneck Report
 
+> ## ⚠️ STATUS: HISTORICAL RECORD (snapshot 2026-05-15)
+>
+> This document is a performance-analysis snapshot and is kept as a
+> historical record. Several claims are now OUT OF DATE — do not act on
+> them without checking the current code:
+>
+> - **File paths:** `core/engine.py` is now `core/engine/_pipeline.py`
+>   (the engine was split into mixins in v0.7).
+> - **Trivial inputs no longer hit the dispatcher:** since Session 21 the
+>   `is_trivial_input()` short-circuit (greetings/thanks/farewells) skips
+>   the ThinkingDispatcher entirely, and Session 68 / ADR-11 added the
+>   `is_conversational_question()` fast-path (one direct chat call, no
+>   dispatcher). A simple "Hi" no longer pays the full dispatch cycle
+>   described below.
+> - **Memory retrieval runs in parallel** with the dispatcher.
+> - **`DISPATCHER_HIGH_CONFIDENCE_SKIP` is 0.6** in code; since
+>   B-2026-08-09-11 the constant was removed from `agent/constants.py`
+>   (the skip logic lives in `_pipeline.py`).
+> - **`MAX_ITERATIONS`: the 8→5 recommendation below is SUPERSEDED.** Per
+>   the Session 32 contract, `MAX_ITERATIONS` defaults to 8 (configurable
+>   via `LOCALMIND_MAX_ITERATIONS`) and must NOT be lowered below 8 —
+>   multi-step tasks (recon + work + verify) need the room. See
+>   `AGENTS.md` → "Iteration limit + check-before-acting contract".
+> - **The dispatcher timeout that is actually used** is
+>   `thinking_dispatcher.DISPATCHER_TIMEOUT_SECS = 30.0` (chosen because
+>   GLM/Z.ai dispatches in ~18s typical).
+
 ## Executive Summary
 
 Seven major bottlenecks identified across the pipeline, ranging from critical (LLM latency on every turn) to minor (SQLite connection management). The most impactful issues are **Bottlenecks 1, 3, and 4** which together account for 70-90% of end-to-end latency.
@@ -211,9 +238,9 @@ While parallel tool calls ARE handled (lines 669-761), the **LLM call is serial*
 ## Recommendations Priority
 
 ### Short-term (Low Effort, High Impact)
-1. **Enable `DISPATCHER_HIGH_CONFIDENCE_SKIP`** — Skip orchestrator for high-confidence classifications
+1. ~~**Enable `DISPATCHER_HIGH_CONFIDENCE_SKIP`**~~ — ✅ DONE: threshold is 0.6 and the skip logic lives in `_pipeline.py` (see banner)
 2. **Enable `skip_planning` more aggressively** — When dispatcher already reformulated
-3. **Reduce `MAX_ITERATIONS`** in AgentLoop from 8 to 5 (default iterations usually finish in 2-3)
+3. ~~**Reduce `MAX_ITERATIONS`** in AgentLoop from 8 to 5~~ — ⛔ SUPERSEDED by the Session 32 contract: keep the default at 8 (configurable via `LOCALMIND_MAX_ITERATIONS`), never below 8. See the banner above.
 
 ### Medium-term (Moderate Effort)
 1. **Convert embedding to async httpx** — Replace `run_in_executor` with `httpx.AsyncClient`
