@@ -189,3 +189,6 @@ records.
 
 ---
 - **2026-08-09 — Session 93** — Buffy / deepseek-v4-flash — Backlog L47: rewrote stale `docs/shell_tool_fix_analysis.md` as a Historical Record (all bugs fixed Session 31, verified again Session 93). 248→39 lines. Commit `8d6a5cf`.
+
+---
+- **2026-08-09 — Session 94** — Buffy / deepseek-v4-flash — Backlog L50: closed WITHOUT a separate tool_history list (trace.steps already covers it). Fixed the real gap — timeout/exception handlers around `_force_final_answer` dumped FAILED-only observation_log (empty when all tools succeeded). New `_synthesis_failure_fallback` surfaces trace evidence first + reason-aware wording. 4 new tests, **1004 passed / 0 failed**. Commit `608d2e0`.
