@@ -409,7 +409,15 @@ export function useChat(
         (rawData: string) => {
           try {
             const parsed = JSON.parse(rawData);
-            const eventType = parsed.type;
+            // The backend emits structured obs events as {"obs_event": {...}}
+            // with NO top-level "type" (obs.py ObsEvent.to_sse_dict). Without
+            // this fallback the case 'obs_event' below was dead code — every
+            // stage_timing / turn_complete / intent_classified event was
+            // silently dropped, so the Observe panel confidence + context
+            // tokens stayed "—" (fed only by a stale one-shot poll + the
+            // fallback pipeline heuristic + the separately-wrapped metrics
+            // event). Route obs payloads to the handler that owns them.
+            const eventType = parsed.type ?? (parsed.obs_event ? 'obs_event' : undefined);
 
             switch (eventType) {
               case 'token': {
@@ -684,7 +692,20 @@ export function useChat(
                     // 'prompt_tokens_approx' is the context/input token count.
                     // 'tokens_approx' is the completion/output token count.
                     // Use prompt_tokens_approx for the Context Tokens display.
-                    contextTokens: Number(obsData.prompt_tokens_approx || obsData.context_tokens || obsData.tokens_approx || prev?.contextTokens || 0),
+                    // Context Tokens = prompt/input tokens ONLY. tokens_approx
+                    // is the COMPLETION count and must never masquerade as
+                    // context (a fast-path "Hi" would otherwise show its 9
+                    // completion tokens as 9 context tokens). When the backend
+                    // doesn't report a prompt count for this turn
+                    // (trivial/conversational short-circuit), show a truthful
+                    // 0 instead of inheriting a stale value.
+                    contextTokens: Number(
+                      obsData.prompt_tokens_approx !== undefined && Number(obsData.prompt_tokens_approx) > 0
+                        ? obsData.prompt_tokens_approx
+                        : obsData.context_tokens !== undefined && Number(obsData.context_tokens) > 0
+                          ? obsData.context_tokens
+                          : 0
+                    ),
                     latency: Number(obsData.total_latency_ms || obsData.latency_ms || obsData.latency || prev?.latency || 0),
                     stageTimings: prev?.stageTimings,
                   }));

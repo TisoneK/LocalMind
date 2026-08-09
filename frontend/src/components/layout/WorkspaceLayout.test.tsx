@@ -49,6 +49,8 @@ interface SetupOverrides {
   currentModel?: string | null;
   provider?: string;
   persistedSettings?: Record<string, unknown>;
+  liveObservation?: Record<string, unknown> | null;
+  observation?: Record<string, unknown>;
 }
 
 vi.mock('./LeftPanel', () => ({
@@ -111,7 +113,7 @@ function setup(overrides: SetupOverrides = {}) {
     currentIntent: 'CONVERSATION',
     currentConfidence: 0.98,
     activeToolCalls: overrides.activeToolCalls ?? [],
-    liveObservation: null,
+    liveObservation: overrides.liveObservation !== undefined ? overrides.liveObservation : null,
     lastMetrics: null,
     elapsedMs: 0,
     send: fns.send,
@@ -151,7 +153,7 @@ function setup(overrides: SetupOverrides = {}) {
     addToolOutput: fns.addToolOutput,
   });
   mockHooks.useObservability.mockReturnValue({
-    observation: { contextTokens: 0, latency: 0, stages: [], vectorHits: 0, status: 'idle' },
+    observation: overrides.observation ?? { contextTokens: 0, latency: 0, stages: [], vectorHits: 0, status: 'idle' },
     loading: false,
   });
   mockHooks.useCapabilities.mockReturnValue({ families: [] });
@@ -313,5 +315,36 @@ describe('WorkspaceLayout', () => {
     expect(left.selectedModel).toBe('m2');
     const center = mockPanelProps.center;
     expect(center.selectedModel).toMatchObject({ id: 'm2', name: 'm2', provider: '' });
+  });
+
+  // Regression: the live per-turn contextTokens (including a truthful 0 from
+  // a fast-path turn that built no context) must win over a stale polled
+  // value — the old `||` chain let the polled observation mask the current
+  // turn's number.
+  it('prefers live per-turn contextTokens over a stale polled observation', () => {
+    setup({
+      observation: { contextTokens: 3500, latency: 0, stages: [], vectorHits: 0, status: 'idle' },
+      liveObservation: {
+        intent: 'chat',
+        confidence: 0.99,
+        toolsUsed: [],
+        memoryHits: 0,
+        contextTokens: 0,
+        latency: 2300,
+      },
+    });
+    const right = mockPanelProps.right;
+    const obs = right.observation as { contextTokens: number };
+    expect(obs.contextTokens).toBe(0);
+  });
+
+  it('falls back to the polled observation when the stream has not reported a turn yet', () => {
+    setup({
+      observation: { contextTokens: 3500, latency: 2900, stages: [], vectorHits: 0, status: 'idle' },
+      liveObservation: null,
+    });
+    const right = mockPanelProps.right;
+    const obs = right.observation as { contextTokens: number };
+    expect(obs.contextTokens).toBe(3500);
   });
 });

@@ -169,9 +169,16 @@ export function WorkspaceLayout() {
       // Prefer a positive value from either observation source before using
       // the stream fallback. This prevents a partial live observation from
       // hiding valid backend/historical values.
-      contextTokens: isStreaming
-        ? promptTokens || live?.contextTokens || 0
-        : live?.contextTokens || observation.contextTokens || promptTokens,
+      // Prefer the live per-turn value whenever the stream has populated it
+      // (including a truthful 0 from a fast-path turn that built no context) —
+      // a `||` chain here would let a stale polled value mask the current
+      // turn's number. Fall back to the polled observation, then the metric
+      // stream, only when the stream hasn't reported this turn yet.
+      contextTokens: live?.contextTokens !== undefined
+        ? live.contextTokens
+        : isStreaming
+          ? promptTokens || 0
+          : observation.contextTokens || promptTokens || 0,
       latency: isStreaming && liveLatency > 0
         ? liveLatency
         : live?.latency || observation.latency || liveLatency,
