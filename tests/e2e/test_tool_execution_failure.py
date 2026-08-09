@@ -29,10 +29,10 @@ These tests verify all three fix points + the end-to-end behavior.
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from core.agent.loop import AgentLoop
 from core.models import Intent, StreamChunk
 
@@ -609,3 +609,129 @@ class TestWorkReport:
         )
 
         assert not trace.work_report().needs_report("Created hello.py successfully.")
+
+
+# ── 5. _synthesis_failure_fallback: timeout/exception handlers use trace ───
+
+
+class TestSynthesisFailureFallback:
+    """Session 94 (backlog L50): the timeout/exception handlers around
+    _force_final_answer previously dumped observation_log[:2000] — which is
+    empty when ALL tools succeeded. _synthesis_failure_fallback uses the
+    trace summary first (it lists every call, success + failure)."""
+
+    def test_trace_evidence_surfaced_when_observation_log_empty(self):
+        from core.agent.loop import AgentStep, AgentTrace
+
+        loop = AgentLoop(adapter=MagicMock())
+        trace = AgentTrace(
+            steps=[
+                AgentStep(
+                    iteration=1,
+                    thought="",
+                    tool_name="shell",
+                    tool_input="mkdir project",
+                    observation="Directory created",
+                    tool_failed=False,
+                ),
+                AgentStep(
+                    iteration=2,
+                    thought="",
+                    tool_name="file_write",
+                    tool_input="hello.py",
+                    observation="File written",
+                    tool_failed=False,
+                ),
+            ]
+        )
+
+        text = loop._synthesis_failure_fallback(trace, observation_log="", timed_out=True)
+
+        # All-success scenario: MUST name the tools, NOT say "no evidence".
+        assert "shell" in text.lower()
+        assert "file_write" in text.lower()
+        assert "mkdir project" in text
+        assert "no tool evidence" not in text
+
+    def test_observation_log_fallback_when_no_trace_steps(self):
+        loop = AgentLoop(adapter=MagicMock())
+        text = loop._synthesis_failure_fallback(
+            trace=None, observation_log="[Tool: shell | Status: BLOCKED]", timed_out=False
+        )
+        assert "BLOCKED" in text
+
+    def test_generic_message_when_no_evidence_at_all(self):
+        loop = AgentLoop(adapter=MagicMock())
+        text = loop._synthesis_failure_fallback(trace=None, observation_log="", timed_out=False)
+        assert "tell me to continue" in text
+
+
+# ── 6. Timeout/exception handlers yield trace evidence (Session 94) ───────
+
+
+class TestSynthesisFailureHandler:
+    """The except handlers around _force_final_answer must yield the
+    evidence-based fallback (via _synthesis_failure_fallback) — NOT the old
+    observation_log[:2000] dump that was empty when all tools succeeded."""
+
+    @pytest.mark.asyncio
+    async def test_timeout_handler_yields_trace_evidence(self):
+        from adapters.ollama import ToolCallResult
+        from core.models import RiskLevel, ToolResult
+
+        loop = AgentLoop(adapter=MagicMock())
+        call_count = {"n": 0}
+
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+            call_count["n"] += 1
+            tool_name = "shell" if call_count["n"] == 1 else "file_write"
+            return ToolCallResult(
+                tool_name=tool_name,
+                tool_args={"command": "mkdir project", "path": "hello.py", "content": "print('hi')"},
+                raw_content="Let me help",
+            )
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_with_tools = chat_with_tools
+
+        successful_result = ToolResult(
+            content="OK", risk=RiskLevel.LOW, source="shell", success=True,
+        )
+
+        # Force the synthesis step to time out; the handler must fall back
+        # to evidence from the trace (which lists ALL tools, success included).
+        async def _boom(self, *args, **kwargs):
+            raise asyncio.TimeoutError()
+
+        with patch("core.agent.loop.dispatch_with_retry") as mock_dispatch, \
+             patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+             patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), \
+             patch.object(AgentLoop, "_force_final_answer", _boom):
+            mock_dispatch.return_value = (successful_result, False, 0)
+
+            chunks = []
+            async for chunk in loop.run(
+                messages=[{"role": "user", "content": "Create hello world repo"}],
+                intent=Intent.SHELL,
+                initial_tool_result=None,
+                available_tools=[],
+                adapter=mock_adapter,
+            ):
+                chunks.append(chunk)
+
+        full_text = "".join(c.text for c in chunks)
+        # The handler MUST surface the tools that ran (from trace.steps),
+        # not the old "Here's what I did:" prefix with nothing after it.
+        assert "shell" in full_text.lower(), (
+            "Timeout handler must surface the tools that ran. Got: " + full_text[:400]
+        )
+        assert "mkdir project" in full_text or "mkdir" in full_text.lower(), (
+            "Timeout handler must show actual tool input. Got: " + full_text[:400]
+        )
+        # Must NOT misdiagnose as an empty model response (the Session 31/32
+        # bug class) — the timeout path should say so or use the hit-limit
+        # messaging, never "the model returned an empty response".
+        assert "empty response" not in full_text.lower(), (
+            "Timeout handler must not blame an empty model response. Got: "
+            + full_text[:400]
+        )

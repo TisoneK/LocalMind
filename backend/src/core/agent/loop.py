@@ -3539,15 +3539,15 @@ class AgentLoop:
             ):
                 yield chunk
         except asyncio.TimeoutError:
-            logger.warning("[agent.loop] final synthesis timed out — yielding observation log")
+            logger.warning("[agent.loop] final synthesis timed out — yielding evidence fallback")
             yield StreamChunk(
-                text="I completed the tool calls but ran out of time to synthesize a final answer. Here's what I did:\n\n" + observation_log[:2000],  # noqa: E501
+                text=self._synthesis_failure_fallback(trace, observation_log, timed_out=True),
                 done=True,
             )
         except Exception as e:
             logger.warning(f"[agent.loop] final synthesis failed: {e}")
             yield StreamChunk(
-                text="I completed the tool calls but couldn't generate a final summary. Here's what I did:\n\n" + observation_log[:2000],  # noqa: E501
+                text=self._synthesis_failure_fallback(trace, observation_log, timed_out=False),
                 done=True,
             )
 
@@ -3965,7 +3965,9 @@ class AgentLoop:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _summarize_trace_for_user(trace, observation_log: str) -> str:
+    def _summarize_trace_for_user(
+        trace, observation_log: str, synthesis_failure_reason: Optional[str] = None
+    ) -> str:
         """
         Build a user-facing summary of what tools actually ran, for the
         silent-failure fallback path. Returns an empty string if no tools
@@ -4000,13 +4002,21 @@ class AgentLoop:
             # model-overload suggestion in _force_final_answer.
             return ""
 
-        lines = [
-            "I ran the requested tools but the model couldn't summarize "
-            "what happened (it returned an empty response). Instead of "
-            "guessing why, here's the raw evidence — each tool I called, "
-            "what I sent it, and what it returned:",
-            "",
-        ]
+        if synthesis_failure_reason:
+            intro = (
+                f"I ran the requested tools but couldn't synthesize a final "
+                f"answer ({synthesis_failure_reason}). Instead of guessing "
+                f"why, here's the raw evidence — each tool I called, what I "
+                f"sent it, and what it returned:"
+            )
+        else:
+            intro = (
+                "I ran the requested tools but the model couldn't summarize "
+                "what happened (it returned an empty response). Instead of "
+                "guessing why, here's the raw evidence — each tool I called, "
+                "what I sent it, and what it returned:"
+            )
+        lines = [intro, ""]
         # Session 32: if the iteration limit was hit, say so explicitly.
         # The previous fallback guessed "overload" — that was a wrong
         # diagnosis. The real cause was almost always the iteration cap
@@ -4082,6 +4092,47 @@ class AgentLoop:
     # ------------------------------------------------------------------
     # Forced final answer after iteration limit
     # ------------------------------------------------------------------
+
+    def _synthesis_failure_fallback(
+        self, trace, observation_log: str, timed_out: bool
+    ) -> str:
+        """Build the user-facing text when final synthesis times out or crashes.
+
+        Session 94 (backlog L50): the timeout/exception handlers around
+        `_force_final_answer` previously dumped `observation_log[:2000]` — but
+        that log only records FAILED tool calls, so when ALL tools succeeded
+        the user got "Here's what I did:" followed by nothing. Use the trace
+        summary first (it lists every tool call, success + failure, from
+        `trace.steps`); fall back to the observation log; then to a generic
+        note. Mirrors the parity already achieved for the empty-stream path.
+        """
+        _evidence = ""
+        if trace is not None:
+            _evidence = self._summarize_trace_for_user(
+                trace,
+                observation_log,
+                synthesis_failure_reason=(
+                    "it timed out" if timed_out else "it failed"
+                ),
+            )
+        if _evidence:
+            return _evidence
+        if observation_log.strip():
+            return (
+                "I completed the tool calls but couldn't synthesize a final "
+                "answer. Here's what I did:\n\n" + observation_log[:2000]
+            )
+        if timed_out:
+            return (
+                "I ran the tool calls but ran out of time to synthesize a final "
+                "answer, and no tool evidence was captured to show you. Please "
+                "tell me to continue or re-run the request."
+            )
+        return (
+            "I ran the tool calls but couldn't generate a final summary, and no "
+            "tool evidence was captured to show you. Please tell me to continue "
+            "or re-run the request."
+        )
 
     async def _force_final_answer(
         self,
