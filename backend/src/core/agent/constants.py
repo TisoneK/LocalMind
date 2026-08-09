@@ -25,8 +25,9 @@ from core.models import Intent
 # can't solve, even with 8 iterations available.
 #
 # Configurable via LOCALMIND_MAX_ITERATIONS env var (must be >= 1).
-# config.py also has localmind_agent_max_iterations (default 6) but that
-# value was never read — this env var is the actual source of truth.
+# The old config.py localmind_agent_max_iterations (default 6) was dead
+# code — removed. This env var is the generic-loop default; the selected
+# agent's AgentConfig.max_iterations overrides it per ADR-8 Phase 2.
 _MAX_ITERATIONS_DEFAULT = 8
 try:
     _env_max_iter = int(os.getenv("LOCALMIND_MAX_ITERATIONS", str(_MAX_ITERATIONS_DEFAULT)))

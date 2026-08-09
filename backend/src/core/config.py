@@ -198,8 +198,11 @@ class Settings(BaseSettings):
     ollama_timeout_default: int = 180
 
     # Agent loop
+    # (Note: localmind_agent_max_iterations was REMOVED — it was dead code
+    # never read by anything. The loop's iteration cap comes from
+    # LOCALMIND_MAX_ITERATIONS (constants.py) or the selected agent's
+    # AgentConfig.max_iterations per ADR-8 Phase 2.)
     localmind_agent_enabled: bool = True
-    localmind_agent_max_iterations: int = 6
 
     # Permission gates — require user confirmation before write/delete
     localmind_require_write_permission: bool = False
