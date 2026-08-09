@@ -186,3 +186,6 @@ records.
 
 ---
 - **2026-08-09 — Session 92** — Buffy / deepseek-v4-flash — Backlog L1 (E501 debt, 142 errors): `ruff format` tried then REVERTED (82-file churn, 21 fixes, readability regressions). Surgical: file-level noqa on prompts.py, inline noqa on ~137 genuine long strings, dropped CI's global `--ignore E501` — **E501 now enforced project-wide**. Review narrowed loop.py to inline noqa. 1000 passed / 0 failed; CI gate exit 0. Commit `559ce44`.
+
+---
+- **2026-08-09 — Session 93** — Buffy / deepseek-v4-flash — Backlog L47: rewrote stale `docs/shell_tool_fix_analysis.md` as a Historical Record (all bugs fixed Session 31, verified again Session 93). 248→39 lines. Commit `8d6a5cf`.
