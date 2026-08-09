@@ -569,11 +569,20 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 plan_ids = [f"plan-{i}" for i in range(len(plan))]
                 for i, content in enumerate(plan):
                     todo_id = plan_ids[i]
+                    # Session 120: ON CONFLICT DO UPDATE — the SSE bridge can
+                    # concurrently upsert the same plan-{i} ids (from the loop's
+                    # todo_created events), so a plain INSERT can race into a
+                    # UNIQUE violation. DO UPDATE is idempotent (vs OR REPLACE
+                    # which would clobber an already-completed todo's state).
                     conn.execute(
                         """INSERT INTO todos
                            (id, session_id, content, completed, status,
                             priority, "order", created_at, updated_at)
-                           VALUES (?, ?, ?, 0, 'pending', 'medium', ?, ?, ?)""",
+                           VALUES (?, ?, ?, 0, 'pending', 'medium', ?, ?, ?)
+                           ON CONFLICT(id) DO UPDATE SET
+                             content = excluded.content,
+                             "order" = excluded."order",
+                             updated_at = excluded.updated_at""",
                         (todo_id, session_id, content, i, now, now),
                     )
 

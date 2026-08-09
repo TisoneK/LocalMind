@@ -13,6 +13,8 @@ export interface ToolCall {
   duration?: number;
   /** Agent loop step number — used to chain actions into a sequence. */
   iteration?: number;
+  /** Plan todo this tool call serves (one todo → many actions). */
+  todoId?: string;
   /** Timestamp when this tool call was first observed (HH:MM format) */
   timestamp?: string;
 }
@@ -140,6 +142,8 @@ export interface ActionItem {
   error?: string;
   /** Agent loop step number — used to chain actions into a sequence. */
   iteration?: number;
+  /** Plan todo this action serves (one todo → many actions). */
+  todoId?: string | null;
 }
 
 export interface TodoItem {

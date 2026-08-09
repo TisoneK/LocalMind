@@ -156,6 +156,8 @@ async def _event_stream(
                     _iteration = evt.data.get("iteration", "")
                     _latency_ms = evt.data.get("latency_ms", "")
                     _output = evt.data.get("output", "")
+                    # Session 120: which plan todo this action serves.
+                    _todo_id = evt.data.get("todo_id") or None
                     # Generate a stable ID from tool name + iteration so the
                     # frontend can match "started" and "done" events for the
                     # same tool call and UPDATE instead of appending duplicates.
@@ -187,6 +189,7 @@ async def _event_stream(
                                 input=_args_str,
                                 action_id=_tc_id,
                                 iteration=int(_iteration) if str(_iteration).isdigit() else None,
+                                todo_id=_todo_id,
                             )
                         elif _status in ("done", "failed"):
                             _engine._store.update_action(
@@ -210,13 +213,28 @@ async def _event_stream(
                                 "output": _output,
                                 "tool_args": _args_str,
                                 "arguments": _args_str,
+                                "todo_id": _todo_id,
                             },
                         }
                     )
 
                 # Session 27: Bridge todo events to SSE so the frontend's
                 # TodoList panel can display the plan + progress.
+                # Session 120: also persist them — todos are now the persistent
+                # high-level checklist, actions hang off them via todo_id.
                 if evt.type in ("todo_added", "todo_updated", "todo_cleared"):
+                    try:
+                        if evt.type == "todo_cleared":
+                            _engine._store.clear_todos(session_id)
+                        elif evt.type == "todo_added":
+                            _engine._store.upsert_todo(
+                                session_id,
+                                evt.data.get("id", ""),
+                                text=evt.data.get("text") or evt.data.get("content"),
+                                completed=bool(evt.data.get("completed", False)),
+                            )
+                    except Exception as _exc:
+                        logger.warning(f"[todos] record failed: {_exc}")
                     yield _sse(
                         {
                             "type": evt.type,
@@ -238,6 +256,15 @@ async def _event_stream(
                 # Todos panel shows the agent's execution plan in real-time.
                 # The agent loop emits these after parsing the plan steps.
                 if evt.type == "todo_created":
+                    try:
+                        _engine._store.upsert_todo(
+                            session_id,
+                            evt.data.get("id", ""),
+                            text=evt.data.get("text", ""),
+                            completed=bool(evt.data.get("completed", False)),
+                        )
+                    except Exception as _exc:
+                        logger.warning(f"[todos] persist failed: {_exc}")
                     yield _sse(
                         {
                             "type": "todo_created",
@@ -252,6 +279,14 @@ async def _event_stream(
                 # Bridge todo_completed obs events — when a tool finishes,
                 # the corresponding plan todo is marked complete.
                 if evt.type == "todo_completed":
+                    try:
+                        _engine._store.upsert_todo(
+                            session_id,
+                            evt.data.get("id", ""),
+                            completed=bool(evt.data.get("completed", True)),
+                        )
+                    except Exception as _exc:
+                        logger.warning(f"[todos] persist failed: {_exc}")
                     yield _sse(
                         {
                             "type": "todo_completed",

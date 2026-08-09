@@ -1891,6 +1891,7 @@ class AgentLoop:
                             status="started",
                             tool_args=_inp,
                             iteration=iteration + 1,
+                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                         )
 
                 # Run all dispatches concurrently
@@ -1927,6 +1928,7 @@ class AgentLoop:
                             latency_ms=tc_lat,
                             tool_args=_inp,
                             iteration=iteration + 1,
+                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                         )
                     if tc_failed:
                         any_failed = True
@@ -2335,6 +2337,7 @@ class AgentLoop:
                         status="started",
                         tool_args=tool_input,
                         iteration=iteration + 1,
+                        todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                     )
 
                 # ── Yield intermediate status to the user so they see real-time ──
@@ -2523,6 +2526,7 @@ class AgentLoop:
                                     latency_ms=latency_ms,
                                     tool_args=tool_input,
                                     iteration=iteration + 1,
+                                    todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                                 )
                                 _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
                             return  # web search is always terminal in agent loop
@@ -2636,13 +2640,6 @@ class AgentLoop:
                                 status=f"Done — {action_label} ({latency_ms}ms)",
                             )
 
-                            # Mark the corresponding plan todo as complete.
-                            # Each successful tool execution advances the cursor
-                            # so the Todos panel shows progress through the plan.
-                            if _plan_steps and _plan_step_cursor < len(_plan_steps) and _obs:
-                                _obs.emit("todo_completed", id=f"plan-{_plan_step_cursor}", completed=True)
-                                _plan_step_cursor += 1
-
                         if retry_count > 0:
                             yield StreamChunk(
                                 text=f"*(succeeded after {retry_count} retr{'y' if retry_count == 1 else 'ies'})*\n",
@@ -2673,6 +2670,7 @@ class AgentLoop:
                             latency_ms=latency_ms,
                             tool_args=tool_input,
                             iteration=iteration + 1,
+                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                         )
                         _obs.emit(
                             "fabrication_risk",
@@ -2691,7 +2689,16 @@ class AgentLoop:
                             latency_ms=latency_ms,
                             tool_args=tool_input,
                             iteration=iteration + 1,
+                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                         )
+                        # Mark the corresponding plan todo as complete AFTER the
+                        # done emit (Session 120 review): the cursor advance used
+                        # to run before the emit, so done events drifted to the
+                        # NEXT todo's id. Each successful tool still advances the
+                        # cursor so the Todos panel shows plan progress.
+                        if _plan_steps and _plan_step_cursor < len(_plan_steps):
+                            _obs.emit("todo_completed", id=f"plan-{_plan_step_cursor}", completed=True)
+                            _plan_step_cursor += 1
 
                 trace.steps.append(
                     AgentStep(
@@ -2931,6 +2938,7 @@ class AgentLoop:
                                 label=action_label,
                                 status="started",
                                 iteration=iteration + 1,
+                                todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                             )
 
                         # Dispatch the tool
@@ -2987,6 +2995,7 @@ class AgentLoop:
                                             latency_ms=latency_ms,
                                             tool_args=tool_input,
                                             iteration=iteration + 1,
+                                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                                         )
                                     return  # web search is terminal
 
@@ -3079,6 +3088,7 @@ class AgentLoop:
                                 status="done" if not tool_failed else "failed",
                                 latency_ms=latency_ms if "latency_ms" in dir() else 0,
                                 iteration=iteration + 1,
+                                todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                             )
 
                         trace.steps.append(
@@ -3363,6 +3373,7 @@ class AgentLoop:
                                     label=_tc_label,
                                     status="started",
                                     iteration=iteration + 1,
+                                    todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                                 )
                             t_late = time.monotonic()
                             try:
@@ -3457,6 +3468,7 @@ class AgentLoop:
                                     output=_truncate_observation(safe_late_obs),
                                     latency_ms=_late_lat if "_late_lat" in dir() else 0,
                                     iteration=iteration + 1,
+                                    todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                                 )
                         continue  # continue the loop so the model can produce a final answer
 

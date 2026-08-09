@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS actions (
     error       TEXT,
     duration    REAL,
     iteration   INTEGER,
+    todo_id     TEXT,   -- plan todo this action serves (one todo → many actions)
     timestamp   REAL    NOT NULL DEFAULT (unixepoch('now'))
 );
 
@@ -183,9 +184,18 @@ class SessionStore:
         # Session 119: ensure the actions table has the iteration column.
         # Fresh installs get it from _SCHEMA; existing DBs need a defensive
         # ALTER (idempotent — a second run raises duplicate-column, ignored).
+        # Separate try blocks: the first ALTER raising (column already exists
+        # on a real DB) must not skip the second. Session 119/120: iteration
+        # then todo_id.
         try:
             with self._conn() as conn:
                 conn.execute("ALTER TABLE actions ADD COLUMN iteration INTEGER")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            with self._conn() as conn:
+                # Session 120: link each action to the plan todo it serves.
+                conn.execute("ALTER TABLE actions ADD COLUMN todo_id TEXT")
         except sqlite3.OperationalError:
             pass
 
@@ -278,6 +288,7 @@ class SessionStore:
         input: str = "",
         action_id: str = "",
         iteration: Optional[int] = None,
+        todo_id: Optional[str] = None,
     ) -> str:
         """Record a tool action. Returns the action id (stable, reused for updates)."""
         import uuid as _uuid
@@ -288,9 +299,9 @@ class SessionStore:
             # duration if a done event re-created an existing id. Use
             # DO NOTHING so the running-create never clobbers a completed row.
             conn.execute(
-                "INSERT INTO actions (id, session_id, tool_name, status, label, input, iteration, timestamp) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
-                (aid, session_id, tool_name, status, label, input, iteration, time.time()),
+                "INSERT INTO actions (id, session_id, tool_name, status, label, input, iteration, todo_id, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+                (aid, session_id, tool_name, status, label, input, iteration, todo_id, time.time()),
             )
         return aid
 
@@ -319,16 +330,73 @@ class SessionStore:
         """Return tool actions for a session, newest first."""
         cols = (
             "id", "session_id", "tool_name", "status", "label", "input",
-            "output", "error", "duration", "iteration", "timestamp",
+            "output", "error", "duration", "iteration", "todo_id", "timestamp",
         )
         with self._conn() as conn:
             rows = conn.execute(
                 "SELECT id, session_id, tool_name, status, label, input, output, error, "
-                "duration, iteration, timestamp "
+                "duration, iteration, todo_id, timestamp "
                 "FROM actions WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?",
                 (session_id, limit),
             ).fetchall()
         return [dict(zip(cols, r)) for r in rows]
+
+    def upsert_todo(
+        self,
+        session_id: str,
+        todo_id: str,
+        text: Optional[str] = None,
+        completed: Optional[bool] = None,
+    ) -> None:
+        """Create or update a plan todo (migration 006 schema). Only non-None
+        fields are written, so a todo_completed event (id + completed only)
+        never wipes the todo's text."""
+        with self._conn() as conn:
+            now = time.time()
+            row = conn.execute("SELECT id FROM todos WHERE id = ?", (todo_id,)).fetchone()
+            if row is None:
+                conn.execute(
+                    'INSERT INTO todos (id, session_id, content, completed, status, '
+                    'priority, "order", created_at, updated_at) VALUES (?, ?, ?, ?, ?, '
+                    "'medium', 0, ?, ?)",
+                    (
+                        todo_id,
+                        session_id,
+                        text or "",
+                        1 if completed else 0,
+                        "done" if completed else "pending",
+                        now,
+                        now,
+                    ),
+                )
+            else:
+                updates: dict[str, object] = {"updated_at": now}
+                if text is not None:
+                    updates["content"] = text
+                if completed is not None:
+                    updates["completed"] = 1 if completed else 0
+                    updates["status"] = "done" if completed else "pending"
+                set_clause = ", ".join(f"{k} = ?" for k in updates)
+                conn.execute(
+                    f"UPDATE todos SET {set_clause} WHERE id = ?",
+                    list(updates.values()) + [todo_id],
+                )
+
+    def list_todos(self, session_id: str) -> list[dict]:
+        """Return plan todos for a session, in display order."""
+        cols = ("id", "session_id", "content", "completed", "status", "priority", "order", "timestamp")
+        with self._conn() as conn:
+            rows = conn.execute(
+                'SELECT id, session_id, content, completed, status, priority, "order", created_at '
+                'FROM todos WHERE session_id = ? ORDER BY "order", created_at',
+                (session_id,),
+            ).fetchall()
+        return [dict(zip(cols, r)) for r in rows]
+
+    def clear_todos(self, session_id: str) -> None:
+        """Delete all plan todos for a session (new request / new chat)."""
+        with self._conn() as conn:
+            conn.execute("DELETE FROM todos WHERE session_id = ?", (session_id,))
 
     def get_history(self, session_id: str, limit: int = 100) -> list[Message]:
         with self._conn() as conn:

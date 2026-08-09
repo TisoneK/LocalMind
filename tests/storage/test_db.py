@@ -1,8 +1,9 @@
 """Tests for the SQLite session store."""
-import pytest
 import time
-from storage.db import SessionStore
+
+import pytest
 from core.models import Message, Role
+from storage.db import SessionStore
 
 
 @pytest.fixture
@@ -77,3 +78,63 @@ def test_clear_all(store):
     store.append("s2", Message(role=Role.USER, content="B"))
     store.clear_all()
     assert store.list_sessions() == []
+
+
+# ── Session 120: todo <-> action hierarchy ─────────────────────────────────
+# Todos are the high-level plan checklist; actions hang off them via todo_id.
+# These tests lock the two bugs the real-model smoke found: the defensive
+# ALTER must add todo_id even when iteration already exists, and upserts must
+# be idempotent (never UNIQUE-violate against the engine's plan write).
+
+
+def test_actions_have_todo_id_column_after_init(tmp_path):
+    # Simulate a pre-Session-120 DB (actions table without todo_id), then a
+    # SessionStore init must re-add it — even when the iteration column already
+    # exists (the bug: one try-block around both ALTERs skipped the second).
+    import sqlite3
+
+    from storage.db import SessionStore as SS
+
+    if sqlite3.sqlite_version_info < (3, 35, 0):
+        pytest.skip("DROP COLUMN requires SQLite >= 3.35")
+
+    db = str(tmp_path / "alt.db")
+    SS(db)  # fresh init: schema already includes todo_id
+    conn = sqlite3.connect(db)
+    conn.execute("ALTER TABLE actions DROP COLUMN todo_id")  # downgrade to old DB
+    conn.commit()
+    conn.close()
+    store2 = SS(db)  # re-init must re-add todo_id via the defensive ALTER
+    store2.ensure_session("s1")
+    store2.create_action("s1", "git", action_id="a1", iteration=1, todo_id="plan-0")
+    row = store2.list_actions("s1")[0]
+    assert row["todo_id"] == "plan-0"
+    assert row["iteration"] == 1
+
+
+def test_create_action_stores_todo_id(store):
+    store.ensure_session("s1")
+    store.create_action("s1", "git", action_id="a1", iteration=2, todo_id="plan-1")
+    row = store.list_actions("s1")[0]
+    assert row["todo_id"] == "plan-1"
+    assert row["iteration"] == 2
+
+
+def test_upsert_todo_create_update_clear(store):
+    store.ensure_session("s1")
+    # create
+    store.upsert_todo("s1", "plan-0", text="Review backend code", completed=False)
+    rows = store.list_todos("s1")
+    assert len(rows) == 1
+    assert rows[0]["content"] == "Review backend code"
+    assert rows[0]["completed"] == 0
+    # update (completed-only must NOT wipe the text)
+    store.upsert_todo("s1", "plan-0", completed=True)
+    rows = store.list_todos("s1")
+    assert rows[0]["content"] == "Review backend code"
+    assert rows[0]["completed"] == 1
+    # idempotent re-create (same id) never raises
+    store.upsert_todo("s1", "plan-0", text="Review backend code", completed=False)
+    # clear
+    store.clear_todos("s1")
+    assert store.list_todos("s1") == []

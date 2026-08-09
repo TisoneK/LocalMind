@@ -349,7 +349,7 @@ export function LeftPanel({
               </span>
             )}
           </div>
-          <TodoList todos={todos} onToggle={onToggleTodo} onAdd={onAddTodo} />
+          <TodoList todos={todos} actions={actions} onToggle={onToggleTodo} onAdd={onAddTodo} />
         </div>
       )}
     </div>

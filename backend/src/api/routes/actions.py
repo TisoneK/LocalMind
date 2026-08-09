@@ -34,6 +34,7 @@ class ActionItem(BaseModel):
     output: Optional[str] = None
     error: Optional[str] = None
     iteration: Optional[int] = None  # agent loop step number (for chaining)
+    todo_id: Optional[str] = None  # plan todo this action serves (Session 120)
 
 
 def _to_action_item(row: dict) -> ActionItem:
@@ -54,6 +55,7 @@ def _to_action_item(row: dict) -> ActionItem:
         output=row.get("output"),
         error=row.get("error"),
         iteration=row.get("iteration"),
+        todo_id=row.get("todo_id"),
     )
 
 
@@ -73,6 +75,7 @@ class CreateActionRequest(BaseModel):
     input: Optional[str] = None
     label: Optional[str] = None
     action_id: Optional[str] = None
+    todo_id: Optional[str] = None
 
 
 @router.post("/actions", response_model=ActionItem)
@@ -85,6 +88,7 @@ async def create_action(request: CreateActionRequest):
         label=request.label or "",
         input=request.input or "",
         action_id=request.action_id or "",
+        todo_id=request.todo_id,
     )
     return _to_action_item(
         {
@@ -98,6 +102,7 @@ async def create_action(request: CreateActionRequest):
             "error": None,
             "duration": None,
             "iteration": None,
+            "todo_id": request.todo_id,
             "timestamp": time.time(),
         }
     )
