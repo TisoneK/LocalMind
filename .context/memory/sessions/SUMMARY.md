@@ -222,3 +222,6 @@ records.
 
 ---
 - **2026-08-09 — Session 104** — Buffy / deepseek-v4-flash — "Add frontend tests" progress: component-test infra (jsdom + RTL + jest-dom + user-event devDeps, vite.config test block, src/test/setup.ts stubs) + 4 SettingsModal component tests (render providers, close, adapter switch, URL section). 37 vitest tests, tsc 0, build ok. Commits `7721d33` + `18ed822`.
+
+---
+- **2026-08-09 — Session 105** — Buffy / deepseek-v4-flash — "Add frontend tests" progress: ChatInput component tests (5): send on Enter + clear, empty rejection, explicit tool hint (shell), streaming abort, steer injection. 42 vitest tests, tsc 0.
