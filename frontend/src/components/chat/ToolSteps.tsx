@@ -14,7 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ToolCall } from '@/types';
 
 interface ToolStepsProps {
@@ -23,6 +23,10 @@ interface ToolStepsProps {
    *  (icon + label + status) instead of full expandable blocks.
    *  Used in chat messages where full details belong in Actions tab. */
   compact?: boolean;
+  /** Whether the parent message is still streaming. When true, the step
+   *  currently in a running state auto-expands so the user watches it work
+   *  in realtime (Session 118). */
+  isStreaming?: boolean;
 }
 
 const toolIcons: Record<string, React.ReactNode> = {
@@ -74,10 +78,17 @@ const statusConfig: Record<string, { icon: React.ReactNode; color: string; bg: s
   },
 };
 
-function ToolStep({ toolCall }: { toolCall: ToolCall }) {
+function ToolStep({ toolCall, isStreaming }: { toolCall: ToolCall; isStreaming?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const status = statusConfig[toolCall.status] || statusConfig.pending;
   const icon = toolIcons[toolCall.name] || <Terminal className="h-3 w-3" />;
+  const isRunning = toolCall.status === 'running';
+  // Realtime: while the parent message streams, keep the running step
+  // expanded so the user watches it execute. It stays expanded on
+  // completion so the result remains visible (the user can collapse it).
+  useEffect(() => {
+    if (isRunning && isStreaming) setExpanded(true);
+  }, [isRunning, isStreaming]);
    // FIX 2: Prefer the human-readable label from the LLM 'description' field.
   // Fall back to the toolLabels map, then to a cleaned-up tool name.
   const label = toolCall.label || toolLabels[toolCall.name] || toolCall.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
@@ -91,7 +102,7 @@ function ToolStep({ toolCall }: { toolCall: ToolCall }) {
   const filePath = isFileWrite ? toolCall.input : null;
 
   return (
-    <div className={`border rounded-md overflow-hidden ${status.bg} mb-1.5`}>
+    <div className={`border rounded-md overflow-hidden mb-1.5 ${status.bg} ${isRunning ? 'border-brand-amber/40 shadow-[0_0_0_1px_rgba(255,196,0,0.15)]' : ''}`}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 w-full px-2.5 py-1.5 hover:bg-white/[0.02] transition-colors text-left"
@@ -101,10 +112,16 @@ function ToolStep({ toolCall }: { toolCall: ToolCall }) {
         ) : (
           <ChevronRight className="h-3 w-3 text-brand-green-muted shrink-0" />
         )}
-        <span className={status.color}>{icon}</span>
+        <span className={`${status.color} ${isRunning ? 'animate-pulse' : ''}`}>{icon}</span>
         <span className="text-[11px] text-brand-green-soft font-mono shrink-0">
           {label}
         </span>
+        {isRunning && (
+          <span className="inline-flex items-center gap-1 text-[9px] text-brand-amber shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-amber animate-ping" />
+            working…
+          </span>
+        )}
         {inputStr && !isCodeTool && (
           <span className="text-[11px] text-brand-green-muted font-mono truncate flex-1 min-w-0 break-all" title={inputStr}>
             {inputStr}
@@ -169,7 +186,7 @@ function ToolStep({ toolCall }: { toolCall: ToolCall }) {
   );
 }
 
-export function ToolSteps({ toolCalls, compact }: ToolStepsProps) {
+export function ToolSteps({ toolCalls, compact, isStreaming }: ToolStepsProps) {
   // v0.7: Compact mode — minimal inline chips showing tool status
   if (compact) {
     return (
@@ -196,7 +213,7 @@ export function ToolSteps({ toolCalls, compact }: ToolStepsProps) {
   return (
     <div className="space-y-0">
       {toolCalls.map((tc) => (
-        <ToolStep key={tc.id} toolCall={tc} />
+        <ToolStep key={tc.id} toolCall={tc} isStreaming={isStreaming} />
       ))}
     </div>
   );

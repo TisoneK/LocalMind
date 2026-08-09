@@ -51,6 +51,7 @@ SyntaxHighlighter.registerLanguage('shell-session', shell);
 import { ChatMessage as ChatMessageType, FileResult, PendingWrite } from '@/types';
 import { formatLatency } from '@/lib/localmind/progress';
 import { ThinkingBlock } from './ThinkingBlock';
+import { ToolSteps } from './ToolSteps';
 import { DiffBlock, type DiffHunk } from '@/components/shared/DiffBlock';
 
 interface ChatMessageProps {
@@ -650,9 +651,18 @@ export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps)
             <span className="text-[9px] text-brand-green-muted">{message.timestamp}</span>
           </div>
 
-          {/* Thinking block — includes tool call steps for clean UX */}
+          {/* Thinking block — the model's reasoning, auto-expanded while streaming */}
           {message.thinking && message.isAgent && (
             <ThinkingBlock thinking={message.thinking} thinkMs={message.thinkMs} isStreaming={isStreaming} />
+          )}
+
+          {/* Live agent trace — every tool the agent ran, with verbatim input,
+              realtime status (running → done/failed), duration and collapsible
+              output. Previously the toolCalls array was populated by the SSE
+              handler but never rendered, so the user saw only a spinner and
+              then a wall of text — the agent's work was invisible. */}
+          {message.toolCalls && message.toolCalls.length > 0 && (
+            <ToolSteps toolCalls={message.toolCalls} isStreaming={isStreaming} />
           )}
 
           {/* Content — rendered as Markdown for assistant, plain for user */}

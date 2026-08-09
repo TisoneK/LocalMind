@@ -308,3 +308,13 @@ code:not(pre code) {
   max-width: 100%;
   overflow: hidden;
 }
+
+/* Session 118: agent activity bar sweep */
+@keyframes slide-x {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}

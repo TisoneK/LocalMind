@@ -155,6 +155,7 @@ async def _event_stream(
                     _status = evt.data.get("status", "running")
                     _iteration = evt.data.get("iteration", "")
                     _latency_ms = evt.data.get("latency_ms", "")
+                    _output = evt.data.get("output", "")
                     # Generate a stable ID from tool name + iteration so the
                     # frontend can match "started" and "done" events for the
                     # same tool call and UPDATE instead of appending duplicates.
@@ -169,6 +170,32 @@ async def _event_stream(
 
                         _args_hash = "-" + hashlib.md5(_args_str.encode()).hexdigest()[:6]
                     _tc_id = f"tc-{_tool}-iter{_iteration}{_args_hash}"
+                    # Session 118: persist to the actions store so the Actions
+                    # panel shows real history across reloads (was a stub that
+                    # returned []). Best-effort — never break the stream.
+                    try:
+                        # Session 118 review: only create rows for EXPLICIT
+                        # started-like statuses. Events with a defaulted
+                        # "running" status (no status field) and empty input
+                        # are phantom — recording them created junk rows.
+                        if _status in ("started", "pending", "in_progress"):
+                            _engine._store.create_action(
+                                session_id=session_id,
+                                tool_name=_tool,
+                                status="running",
+                                label=_label,
+                                input=_args_str,
+                                action_id=_tc_id,
+                            )
+                        elif _status in ("done", "failed"):
+                            _engine._store.update_action(
+                                action_id=_tc_id,
+                                status="done" if _status == "done" else "failed",
+                                output=_output or None,
+                                duration=float(_latency_ms) / 1000.0 if _latency_ms else None,
+                            )
+                    except Exception as _exc:
+                        logger.warning(f"[actions] record failed: {_exc}")
                     yield _sse(
                         {
                             "type": "tool_call",
@@ -179,6 +206,7 @@ async def _event_stream(
                                 "status": _status,
                                 "iteration": _iteration,
                                 "latency_ms": _latency_ms,
+                                "output": _output,
                                 "tool_args": _args_str,
                                 "arguments": _args_str,
                             },

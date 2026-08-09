@@ -118,7 +118,7 @@ export function WorkspaceLayout() {
   const { sessions, refresh: refreshSessions, deleteSession } = useSessions();
   const { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, elapsedMs, send, abort, steer, setMessages } =
     useChat(currentSessionId, handleTerminalEvent);
-  const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId);
+  const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files } = useFileTree();
   const { todos, toggleTodo, addTodo } = useTodos(currentSessionId);
   const { objectives, create: createObjective, pause: pauseObjective, resume: resumeObjective, cancel: cancelObjective } = useObjectives(currentSessionId);
@@ -201,6 +201,9 @@ export function WorkspaceLayout() {
         type: tc.name as ActionItem['type'],
         label: tc.label || tc.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()),
         detail: tc.input || '',
+        input: tc.input,
+        output: tc.output,
+        error: tc.error,
         status: tc.status,
         timestamp: new Date().toLocaleTimeString('en-GB', {
           hour: '2-digit',

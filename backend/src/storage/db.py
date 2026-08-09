@@ -18,7 +18,7 @@ import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator
+from typing import Generator, Optional
 
 from core.models import Message, Role
 
@@ -50,6 +50,24 @@ CREATE TABLE IF NOT EXISTS tool_stats (
     failure_count   INTEGER NOT NULL DEFAULT 0,
     total_latency_ms INTEGER NOT NULL DEFAULT 0
 );
+
+-- Tool call history for the Actions panel (Session 118: real store,
+-- replacing the placeholder that returned []).
+CREATE TABLE IF NOT EXISTS actions (
+    id          TEXT    PRIMARY KEY,
+    session_id  TEXT    NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    tool_name   TEXT    NOT NULL,
+    status      TEXT    NOT NULL DEFAULT 'running',
+    label       TEXT,
+    input       TEXT,
+    output      TEXT,
+    error       TEXT,
+    duration    REAL,
+    timestamp   REAL    NOT NULL DEFAULT (unixepoch('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_actions_session
+ON actions(session_id, timestamp);
 
 -- Migration tracking
 CREATE TABLE IF NOT EXISTS migration_history (
@@ -241,6 +259,62 @@ class SessionStore:
                     )
                 else:
                     raise
+
+    def create_action(
+        self,
+        session_id: str,
+        tool_name: str,
+        status: str = "running",
+        label: str = "",
+        input: str = "",
+        action_id: str = "",
+    ) -> str:
+        """Record a tool action. Returns the action id (stable, reused for updates)."""
+        import uuid as _uuid
+
+        aid = action_id or str(_uuid.uuid4())
+        with self._conn() as conn:
+            # Session 118 review: INSERT OR REPLACE would wipe output/error/
+            # duration if a done event re-created an existing id. Use
+            # DO NOTHING so the running-create never clobbers a completed row.
+            conn.execute(
+                "INSERT INTO actions (id, session_id, tool_name, status, label, input, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+                (aid, session_id, tool_name, status, label, input, time.time()),
+            )
+        return aid
+
+    def update_action(
+        self,
+        action_id: str,
+        status: Optional[str] = None,
+        output: Optional[str] = None,
+        error: Optional[str] = None,
+        duration: Optional[float] = None,
+    ) -> None:
+        """Update a tool action's status/output/duration by its stable id."""
+        fields: list[str] = []
+        values: list[object] = []
+        for key, val in (("status", status), ("output", output), ("error", error), ("duration", duration)):
+            if val is not None:
+                fields.append(f"{key} = ?")
+                values.append(val)
+        if not fields:
+            return
+        values.append(action_id)
+        with self._conn() as conn:
+            conn.execute(f"UPDATE actions SET {', '.join(fields)} WHERE id = ?", values)
+
+    def list_actions(self, session_id: str, limit: int = 100) -> list[dict]:
+        """Return tool actions for a session, newest first."""
+        cols = ("id", "session_id", "tool_name", "status", "label", "input", "output", "error", "duration", "timestamp")
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT id, session_id, tool_name, status, label, input, output, error, duration, timestamp "
+                "FROM actions WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?",
+                (session_id, limit),
+            ).fetchall()
+        return [dict(zip(cols, r)) for r in rows]
 
     def get_history(self, session_id: str, limit: int = 100) -> list[Message]:
         with self._conn() as conn:

@@ -9,6 +9,7 @@ export interface ToolCall {
   status: ToolStatus;
   input: string;
   output?: string;
+  error?: string;
   duration?: number;
   /** Timestamp when this tool call was first observed (HH:MM format) */
   timestamp?: string;
@@ -129,6 +130,12 @@ export interface ActionItem {
   status: ToolStatus;
   timestamp: string;
   duration?: number;
+  /** Verbatim command/args sent to the tool. */
+  input?: string;
+  /** Actual tool output (truncated by backend bounds). */
+  output?: string;
+  /** Error/status message when the tool failed. */
+  error?: string;
 }
 
 export interface TodoItem {

@@ -1269,7 +1269,7 @@ function _buildToolInputPreview(toolName: string, args: any): string {
 
 // ─── useActions ────────────────────────────────────────────────────────
 
-export function useActions(sessionId: string | null) {
+export function useActions(sessionId: string | null, live = false) {
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1291,6 +1291,16 @@ export function useActions(sessionId: string | null) {
     if (!sessionId) return;
     try { const data = await localmindClient.getActions(sessionId); setActions(data); } catch { /* keep */ }
   }, [sessionId]);
+
+  // Session 118: realtime — while a turn is streaming, poll the backend
+  // actions store so newly completed tools appear live in the panel. Gated
+  // on `live` (the parent's isStreaming) so we don't re-render the panel
+  // every 2.5s when idle (review fix: unconditional polling was wasteful).
+  useEffect(() => {
+    if (!sessionId || !live) return;
+    const timer = window.setInterval(() => void refresh(), 2500);
+    return () => window.clearInterval(timer);
+  }, [sessionId, refresh, live]);
 
   return { actions, loading, refresh };
 }

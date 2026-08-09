@@ -1084,7 +1084,7 @@ _TOOL_TALK_PATTERNS = [
     re.compile(r"(searching|fetching|looking up|checking).{0,30}(for|on|in|about)\b", re.IGNORECASE),
     re.compile(r"let me (search|look|check|find|fetch|browse)", re.IGNORECASE),
     re.compile(r"i('ll| will) (search|look|check|find|fetch) (the |online |the web |on )?", re.IGNORECASE),
-    re.compile(r"\[tool_call\]|\[search\]|\[tool\]", re.IGNORECASE),
+    re.compile(r"\[tool_call\]|\[search\]|\[tool\]|\[shell\]|\[bash\]|\[cmd\]|\[powershell\]", re.IGNORECASE),
     re.compile(r"\bsearching\.{3,}\b", re.IGNORECASE),  # "Searching..." theatrical animation
     re.compile(r"\bfetching\.{3,}\b", re.IGNORECASE),
     re.compile(r"\blooking up\.{3,}\b", re.IGNORECASE),
@@ -1889,6 +1889,7 @@ class AgentLoop:
                             tool=call.tool_name,
                             label=_label,
                             status="started",
+                            tool_args=_inp,
                             iteration=iteration + 1,
                         )
 
@@ -1921,7 +1922,10 @@ class AgentLoop:
                             "tool_call",
                             tool=tc_name,
                             label="",
-                            status="done",
+                            status="failed" if tc_failed else "done",
+                            output=_truncate_observation(tc_obs),
+                            latency_ms=tc_lat,
+                            tool_args=_inp,
                             iteration=iteration + 1,
                         )
                     if tc_failed:
@@ -2329,6 +2333,7 @@ class AgentLoop:
                         tool=tool_name,
                         label=action_label,
                         status="started",
+                        tool_args=tool_input,
                         iteration=iteration + 1,
                     )
 
@@ -2514,7 +2519,9 @@ class AgentLoop:
                                     tool=tool_name,
                                     label=action_label,
                                     status="done",
+                                    output=_truncate_observation(safe_obs),
                                     latency_ms=latency_ms,
+                                    tool_args=tool_input,
                                     iteration=iteration + 1,
                                 )
                                 _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
@@ -2662,7 +2669,9 @@ class AgentLoop:
                             tool=tool_name,
                             label=action_label,
                             status="failed",
+                            output=_truncate_observation(observation),
                             latency_ms=latency_ms,
+                            tool_args=tool_input,
                             iteration=iteration + 1,
                         )
                         _obs.emit(
@@ -2678,7 +2687,9 @@ class AgentLoop:
                             tool=tool_name,
                             label=action_label,
                             status="done",
+                            output=_truncate_observation(observation),
                             latency_ms=latency_ms,
+                            tool_args=tool_input,
                             iteration=iteration + 1,
                         )
 
@@ -2972,7 +2983,9 @@ class AgentLoop:
                                             tool=tc_name,
                                             label=action_label,
                                             status="done",
+                                            output=_truncate_observation(safe_obs),
                                             latency_ms=latency_ms,
+                                            tool_args=tool_input,
                                             iteration=iteration + 1,
                                         )
                                     return  # web search is terminal
@@ -3441,6 +3454,7 @@ class AgentLoop:
                                     tool=_tc_name,
                                     label=_tc_label,
                                     status="done",
+                                    output=_truncate_observation(safe_late_obs),
                                     latency_ms=_late_lat if "_late_lat" in dir() else 0,
                                     iteration=iteration + 1,
                                 )

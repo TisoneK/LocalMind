@@ -97,3 +97,28 @@ def test_unix_names_never_mislabeled_as_nl():
     assert not _looks_like_natural_language('cat file.txt')
     assert not _looks_like_natural_language('cp -r src dst')
     assert not _looks_like_natural_language('rm -rf build')
+
+
+# ── Session 118: [shell]-wrapped garbage (the real-world failure) ───────────
+# The live app showed the model emitting commands like
+#   "[shell] Locate the localmind repository and confirm it's a git repo"
+# as if that were shell syntax. The NL guard must reject bracket-wrapped
+# tool markers regardless of the rest of the string.
+
+
+def test_bracket_shell_marker_is_natural_language():
+    assert _looks_like_natural_language(
+        "[shell] Locate the localmind repository and confirm it's a git repo"
+    )
+    assert _looks_like_natural_language(
+        "[shell] Run git status to check for uncommitted changes[shell] Show the diff"
+    )
+    assert _looks_like_natural_language("[tool] check disk space")
+    assert _looks_like_natural_language("[bash] list files in Documents")
+    assert _looks_like_natural_language("[cmd] show the diff if uncommitted changes exist")
+
+
+def test_real_commands_still_pass_with_bracket_guard():
+    assert not _looks_like_natural_language("git status")
+    assert not _looks_like_natural_language("git diff --stat")
+    assert not _looks_like_natural_language("ls -la | head")

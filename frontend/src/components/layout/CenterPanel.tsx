@@ -232,6 +232,10 @@ export function CenterPanel({
                   <span className="w-1 h-1 bg-brand-green rounded-full animate-bounce [animation-delay:300ms]" />
                 </span>
               </div>
+              {/* Session 118: animated activity bar — the agent is working */}
+              <div className="mt-2 h-0.5 w-full max-w-[260px] rounded-full bg-brand-border/60 overflow-hidden">
+                <div className="h-full w-1/3 rounded-full bg-brand-green animate-[slide-x_1.2s_ease-in-out_infinite]" />
+              </div>
             </div>
           );
         })()}

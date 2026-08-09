@@ -406,6 +406,11 @@ def _looks_like_natural_language(command: str) -> bool:
     cmd = (command or "").strip()
     if not cmd:
         return False
+    # Bracket-wrapped tool markers ([shell], [tool], [bash], [cmd]) mean the
+    # model narrated tool intent as text instead of emitting a real command.
+    # Strong NL signal — reject regardless of the rest of the string.
+    if re.search(r"\[\s*(shell|tool|bash|cmd|powershell)\s*\]", cmd, re.IGNORECASE):
+        return True
     # Shell structure ⇒ a real command — never guess.
     if re.search(r"[|&;<>`$()]", cmd):
         return False
