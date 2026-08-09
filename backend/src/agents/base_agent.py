@@ -73,6 +73,14 @@ class AgentConfig:
     # Whether this agent executes tools at all. DirectAgent sets this to False
     # — it's steps 1-2 only (assemble → model → respond), no tool execution.
     tools_enabled: bool = True
+    # B-2026-08-02-10 (C1) — per-agent model routing. When set, this agent
+    # runs on its own model/adapter instead of the shared one. Both fields
+    # are OPTIONAL overrides: the LOCALMIND_AGENT_MODEL_<NAME> env var wins
+    # over these, and unset fields fall back to the caller's adapter (the
+    # pre-C1 behavior — every agent on the shared model). Mixing local +
+    # cloud adapters is explicit opt-in only; nothing egresses by default.
+    model: Optional[str] = None  # e.g. "llama3.1:70b" (uses `adapter` or the current one)
+    adapter: Optional[str] = None  # e.g. "zen", "ollama" (uses the provider's configured model)
 
 
 class BaseAgent(ABC):
@@ -221,6 +229,33 @@ class BaseAgent(ABC):
             cfg.max_wall_clock_secs,
         )
 
+        # B-2026-08-02-10 (C1) — per-agent model routing. Resolve this
+        # agent's adapter: LOCALMIND_AGENT_MODEL_<NAME> env override, then
+        # AgentConfig.model/adapter, else the caller's adapter (unchanged
+        # behavior). Applies to the TOP-LEVEL agent and, because every
+        # delegated child runs through BaseAgent.run() too, to delegated
+        # children automatically. The delegate tools also construct
+        # children with the routed adapter directly (belt-and-suspenders;
+        # get_adapter() caches per (name, model), so both resolve to the
+        # same instance).
+        fallback_adapter = adapter or self._adapter
+        # resolve_agent_adapter never raises (get_adapter_for_agent catches
+        # construction failures and returns None) — no try/except needed.
+        from core.model_router import resolve_agent_adapter
+
+        effective_adapter = resolve_agent_adapter(
+            cfg.name,
+            config_model=cfg.model,
+            config_adapter=cfg.adapter,
+            fallback=fallback_adapter,
+        )
+        if effective_adapter is not fallback_adapter:
+            logger.info(
+                "[base_agent] %s routed to per-agent adapter (model=%s)",
+                cfg.name,
+                getattr(effective_adapter, "_model", "?"),
+            )
+
         if not cfg.tools_enabled:
             # DirectAgent path: steps 1-2 only (assemble → model → respond).
             # No tool execution. The existing AgentLoop isn't invoked.
@@ -233,7 +268,7 @@ class BaseAgent(ABC):
                 cfg.name,
             )
 
-        loop = AgentLoop(adapter=adapter or self._adapter)
+        loop = AgentLoop(adapter=effective_adapter)
 
         # ADR-8 Phase 2 (Session 34): call build_context() and pass the
         # result as `agent_context` to AgentLoop.run(). This is the
@@ -266,7 +301,7 @@ class BaseAgent(ABC):
             initial_tool_result=initial_tool_result,
             available_tools=available_tools,
             confidence=confidence,
-            adapter=adapter,
+            adapter=effective_adapter,
             intent_history=intent_history,
             obs=obs,
             memory_facts=memory_facts,

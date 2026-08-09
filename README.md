@@ -160,6 +160,7 @@ Key settings:
 | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Embedding model for memory |
 | `LOCALMIND_CODE_EXEC_ENABLED` | `true` | Enable Python code execution tool |
 | `LOCALMIND_SHELL_ENABLED` | `false` | Enable shell command tool (disabled by default for safety) |
+| `LOCALMIND_AGENT_MODEL_<NAME>` | _(unset)_ | Per-agent model routing — `adapter:model` or bare model for one agent (e.g. `LOCALMIND_AGENT_MODEL_CODING=zen:deepseek-v4-pro`). Opt-in only: all agents share the default model unless set. Note: a local model whose base name matches a provider (`mistral:7b`) is parsed as the provider — prefix `ollama:` to force local. |
 | `LOCALMIND_MAX_FILE_SIZE_MB` | `50` | Max upload file size |
 | `LOCALMIND_CODE_EXEC_TIMEOUT` | `30` | Code execution timeout (seconds) |
 | `LOCALMIND_SHELL_TIMEOUT` | `20` | Shell command timeout (seconds) |

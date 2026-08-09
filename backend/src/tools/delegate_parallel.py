@@ -109,8 +109,25 @@ async def _run_child(packet: DelegationInstructionPacket, adapter, depth: int) -
             error_type="not_found",
         )
 
+    # B-2026-08-02-10 (C1): per-agent model routing — each child uses its
+    # LOCALMIND_AGENT_MODEL_<NAME> override when configured (AgentConfig-
+    # declared models resolve inside BaseAgent.run()); else the parent's
+    # adapter. Never raises — a bad override falls back to the parent.
+    child_adapter = adapter
     try:
-        sub_agent = agent_class(adapter=adapter)
+        from core.model_router import get_adapter_for_agent as _router
+
+        _routed = _router(agent_name)
+        if _routed is not None:
+            child_adapter = _routed
+    except Exception as _routing_exc:
+        logger.warning(
+            "[delegate_parallel] per-agent routing lookup failed for %s: %s — using parent adapter",
+            agent_name, _routing_exc,
+        )
+
+    try:
+        sub_agent = agent_class(adapter=child_adapter)
     except Exception as exc:
         logger.warning("[delegate_parallel] could not construct %s: %s", agent_name, exc)
         return DelegationResult(

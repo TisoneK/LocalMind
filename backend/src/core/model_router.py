@@ -31,11 +31,128 @@ available one — never fails, always falls back to the main model.
 from __future__ import annotations
 
 import logging
+import os
 
 from core.config import settings
 from core.models import Intent
 
 logger = logging.getLogger(__name__)
+
+# B-2026-08-02-10 (C1) — per-agent model routing
+# ------------------------------------------------
+# Every agent used to share the single configured model. Per-agent routing
+# lets a CodingAgent run a stronger local model, DirectAgent a tiny one,
+# and ResearchAgent a cloud model — while DEFAULT behavior stays exactly
+# as before (all agents use the configured adapter/model unless the user
+# opts in). Mixing local + cloud in one run is explicit opt-in via env
+# vars (never the default) — see get_adapter_for_agent.
+#
+# Format: LOCALMIND_AGENT_MODEL_<NAME> = 'adapter:model' or 'model'.
+#   LOCALMIND_AGENT_MODEL_CODING=llama3.1:70b          # same adapter, bigger local model
+#   LOCALMIND_AGENT_MODEL_DIRECT=qwen2.5:1.5b          # same adapter, tiny model
+#   LOCALMIND_AGENT_MODEL_RESEARCH=zen:deepseek-v4-pro  # different adapter entirely
+AGENT_MODEL_ENV_PREFIX: str = "LOCALMIND_AGENT_MODEL_"
+
+
+def parse_agent_spec(spec: str) -> tuple[str, str] | None:
+    """Parse a `LOCALMIND_AGENT_MODEL_*` value into (adapter_name, model).
+
+    Accepts either ``adapter:model`` (e.g. ``zen:deepseek-v4-pro``) or a
+    bare model name (e.g. ``llama3.1:70b``) which uses the currently
+    configured adapter. Ollama model names contain ``:`` too
+    (``llama3.1:70b``), so a spec only splits on the first ``:`` when the
+    prefix before it is a KNOWN adapter name (ollama or a cloud provider).
+    Returns None for blank input.
+
+    KNOWN COLLISION: local Ollama models whose base name is also a cloud
+    provider name (``mistral:7b``, ``deepseek-coder:6.7b``, ``gemini:*``,
+    ``cohere:*``) parse as the PROVIDER, not the local model. There is no
+    purely syntactic way to distinguish ``mistral:7b`` (local) from
+    ``zen:deepseek-v4-pro`` (cloud). Escape hatch: prefix with ``ollama:``
+    to force the local model — ``ollama:mistral:7b`` parses to
+    ("ollama", "mistral:7b").
+    """
+    spec = (spec or "").strip()
+    if not spec:
+        return None
+    if ":" in spec:
+        prefix, _, rest = spec.partition(":")
+        # Lazy import — adapters.openai_compat is heavy and pulls API keys.
+        from adapters.openai_compat import CLOUD_PROVIDER_NAMES
+
+        if prefix == "ollama" or prefix in CLOUD_PROVIDER_NAMES:
+            return prefix, rest
+    return settings.localmind_adapter, spec
+
+
+def get_adapter_for_agent(
+    agent_name: str,
+    config_model: str | None = None,
+    config_adapter: str | None = None,
+):
+    """Return the per-agent adapter for ``agent_name``, or None for default.
+
+    Priority:
+      1. ``LOCALMIND_AGENT_MODEL_<NAME>`` env var (adapter:model or bare
+         model). E.g. ``LOCALMIND_AGENT_MODEL_CODING=zen:deepseek-v4-pro``.
+      2. AgentConfig-declared fields (``config_adapter`` / ``config_model``,
+         resolved by BaseAgent.run()).
+
+    Returns None when neither is configured — the caller keeps its default
+    adapter. Never raises: a misconfigured override (unknown provider,
+    missing API key) logs a warning and falls back to None, honoring the
+    router's "never fails, always falls back" rule.
+
+    Adapter instances are cached by ``adapters.get_adapter`` keyed on
+    (name, model_override), so repeated lookups (top-level agent + every
+    delegated child of the same type) share one instance.
+    """
+    env_value = os.getenv(f"{AGENT_MODEL_ENV_PREFIX}{agent_name.upper()}") or ""
+    adapter_name: str | None = None
+    model: str = ""
+    if env_value.strip():
+        parsed = parse_agent_spec(env_value)
+        if parsed is None:
+            return None
+        adapter_name, model = parsed
+    elif config_adapter or config_model:
+        adapter_name = config_adapter or settings.localmind_adapter
+        model = config_model or ""
+    else:
+        return None
+
+    try:
+        from adapters import get_adapter
+
+        return get_adapter(adapter_name, model_override=model or "")
+    except Exception as exc:
+        logger.warning(
+            "[model_router] per-agent adapter for %r failed to build "
+            "(%s): %s — falling back to the default adapter",
+            agent_name, adapter_name, exc,
+        )
+        return None
+
+
+def resolve_agent_adapter(
+    agent_name: str,
+    config_model: str | None = None,
+    config_adapter: str | None = None,
+    fallback=None,
+):
+    """Per-agent adapter with fallback — the single call site for agents.
+
+    Used by ``BaseAgent.run()`` (and, indirectly, by the delegate tools via
+    ``get_adapter_for_agent``) so the top-level agent and every delegated
+    child resolve their model identically. Returns ``fallback`` when no
+    per-agent override is configured.
+    """
+    routed = get_adapter_for_agent(
+        agent_name,
+        config_model=config_model,
+        config_adapter=config_adapter,
+    )
+    return routed if routed is not None else fallback
 
 # Intent → ordered list of preferred models (best first)
 # Models are checked against what's actually pulled — first match wins.

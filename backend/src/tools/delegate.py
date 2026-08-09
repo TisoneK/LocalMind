@@ -214,6 +214,25 @@ async def delegate(message: str) -> ToolResult:
     # Construct the sub-agent with the current adapter. The adapter is
     # passed via a thread-local / context var set by the calling agent
     # loop. If no adapter is available, we can't run the sub-agent.
+    # B-2026-08-02-10 (C1): per-agent model routing — the child uses its
+    # LOCALMIND_AGENT_MODEL_<NAME> override when one is configured (an
+    # AgentConfig-declared model is resolved inside BaseAgent.run(), the
+    # single source of truth). Falls back to the parent's adapter.
+    try:
+        from core.model_router import get_adapter_for_agent as _router
+
+        _routed = _router(target_agent)
+        if _routed is not None:
+            adapter = _routed
+            logger.info(
+                "[delegate] %s → per-agent adapter (model=%s)",
+                target_agent, getattr(_routed, "_model", "?"),
+            )
+    except Exception as _routing_exc:
+        logger.warning(
+            "[delegate] per-agent routing lookup failed for %s: %s — using parent adapter",
+            target_agent, _routing_exc,
+        )
     try:
         # Lazy import to avoid circular dependency
         from adapters.base import BaseAdapter  # noqa: F401  (type-only)

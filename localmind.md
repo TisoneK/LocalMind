@@ -89,6 +89,30 @@ Agents are selected by intent (`Intent.VERIFY → verifier`) or by task type
 to another agent. All agents share a common `BaseAgent` with a 5-step loop
 (assemble → call → parse → execute → observe) and hard iteration + wall-clock caps.
 
+### Per-Agent Model Routing
+
+By default every agent uses the single configured model (`OLLAMA_MODEL` / the
+selected cloud provider). For setups with multiple models, an agent can run on
+its own model — or even its own adapter — via env vars (explicit opt-in; the
+local-first default is unchanged and nothing egresses unless you configure it):
+
+```
+LOCALMIND_AGENT_MODEL_CODING=llama3.1:70b          # same adapter, stronger local model
+LOCALMIND_AGENT_MODEL_DIRECT=qwen2.5:1.5b          # same adapter, tiny model
+LOCALMIND_AGENT_MODEL_RESEARCH=zen:deepseek-v4-pro  # different adapter entirely
+```
+
+Each value is `adapter:model` (e.g. `ollama:qwen2.5:7b`, `zen:deepseek-v4-pro`)
+or a bare model name (which uses the currently configured adapter). The
+override applies to the top-level agent AND to that agent when invoked via
+`delegate` / `delegate_parallel`. A misconfigured override (unknown provider,
+missing API key) logs a warning and falls back to the default adapter.
+
+Collision note: a local Ollama model whose base name is also a cloud provider
+name (e.g. `mistral:7b`, `deepseek-coder:6.7b`, `gemini:*`) is parsed as the
+PROVIDER, not the local model. Prefix with `ollama:` to force the local
+model: `LOCALMIND_AGENT_MODEL_CODING=ollama:mistral:7b`.
+
 ## Tool Reference
 
 ### 1. WEB_SEARCH
