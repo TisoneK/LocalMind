@@ -219,3 +219,6 @@ records.
 
 ---
 - **2026-08-09 — Session 103** — Buffy / deepseek-v4-flash — Theming: user chose DARK-ONLY. Removed light palette + `.dark` block + `@custom-variant dark` from globals.css (dark palette now the :root default); stripped all `dark:` variants from 16 shadcn components (cn() last-wins preserves appearance); removed `class="dark"` from index.html; added ~40 `--brand-*` tokens and migrated EVERY hardcoded hex in custom components (SettingsModal, ChatMessage, ChatInput, ToolSteps, ThinkingBlock, layout/panels/shared) to brand tokens; chart.tsx THEMES flattened. tsc 0, 33/33 vitest, build ok. Commit `9701262`. Closes both theming backlog items.
+
+---
+- **2026-08-09 — Session 104** — Buffy / deepseek-v4-flash — "Add frontend tests" progress: component-test infra (jsdom + RTL + jest-dom + user-event devDeps, vite.config test block, src/test/setup.ts stubs) + 4 SettingsModal component tests (render providers, close, adapter switch, URL section). 37 vitest tests, tsc 0, build ok. Commits `7721d33` + `18ed822`.
