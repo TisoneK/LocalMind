@@ -180,3 +180,6 @@ records.
 
 ---
 - **2026-08-09 — Session 90** — Buffy / deepseek-v4-flash — Backlog L20 (CI disabled): option (b) local checks. `scripts/ci-check.sh` (ruff --ignore E501, pytest, tsc -b, eslint --max-warnings 60, venv guard) + `.pre-commit-config.yaml`. Bonus: ruff full-backend pass exposed a REAL latent bug — `usage_metadata` undefined in `_chat_anthropic` (Anthropic streaming would NameError); fixed. Cleared the todo-plan baseline by extracting `_fallback_todo_plan` as a shared module-level factory and deriving test expectations from it. **1000 passed / 0 failed** — first fully green suite. Commit `a869eae`.
+
+---
+- **2026-08-09 — Session 91** — Buffy / deepseek-v4-flash — Backlog L17 (High): **Dependabot remediation** — `electron` 33→43.3.0 (pinned), `electron-builder` 25→26.15.3, `npm audit fix` (postcss 8.5.26, shell-quote 1.9.0). **102 vulns → 0**. Verified: electron v43 boots the app clean, all JS syntax-OK, `--dir` pack succeeds (review caught that builder 26 requires a fixed electron version — range rejected), frontend tsc/build clean, CI gate exit 0, lockfile churn scoped (react/vite/ts untouched). Commit `8c66aec`.
