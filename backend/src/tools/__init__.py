@@ -69,10 +69,18 @@ async def dispatch(intent: Intent, message: str) -> ToolResult | None:
     if validator:
         error = validator(message)
         if error:
+            # success=False + error_type=invalid_input so a rejection is
+            # never mistaken for a successful tool call (the previous
+            # default success=True hid rejections from retry/error
+            # handling and made the loop feed the message to the model as
+            # if the tool had run).
             return ToolResult(
                 content=error,
                 risk=RiskLevel.LOW,
                 source="validator",
+                success=False,
+                error_type="invalid_input",
+                error_message=error,
             )
 
     entry = _REGISTRY.get(intent)

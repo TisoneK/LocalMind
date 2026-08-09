@@ -117,9 +117,14 @@ def _extract_code(message: str) -> str:
         # is short enough to be code, treat it as code
         has_indicator = any(first_line.startswith(ind) for ind in _PYTHON_INDICATORS)
         # Also check if it's a simple expression (e.g., "2 + 2" or "psutil.cpu_count()")
+        # The char class alone would match plain prose like "hello world"
+        # (word chars + spaces), so require at least one code-ish token
+        # (paren, bracket, operator, '=', ',' or ':') — otherwise the input
+        # is prose and gets rejected instead of spawning a confusing subprocess.
         looks_like_expr = (
             bool(re.match(r'^[\w\s\.\(\)\[\]\+\-\*/%=<>!,":]+$', first_line))
             and len(first_line) < 200
+            and any(ch in first_line for ch in "()[]=+-*/%<>,:")
         )
         if has_indicator or looks_like_expr:
             return message.strip()
@@ -254,16 +259,26 @@ register_tool(
 
 
 # -- Pre-dispatch validator ----------------------------------------------------
-# Registered after the tool so _CODE_FENCE is already in scope.
+# Registered after the tool so _extract_code is already in scope.
 # This surfaces a clear user-facing message before any subprocess is spawned.
 
 
 def _validate_code_exec(message: str) -> str | None:
-    """Reject early if no code fence is present -- avoids a confusing tool error."""
-    if not _CODE_FENCE.search(message):
+    """
+    Reject early when no executable code can be extracted.
+
+    Accepts BOTH forms the tool handles: a ```python fenced block AND bare
+    Python code. The agent loop passes the model's raw tool_call 'code'
+    argument (see _extract_tool_input in core/agent/loop.py) which is
+    unfenced by contract — the schema says "code: verbatim, no fences". The
+    previous version demanded a fence unconditionally, so every raw-code
+    call was rejected with a "wrap your code in a fence" nag (success=True),
+    and _extract_code's raw-code heuristic was unreachable via dispatch.
+    """
+    if not _extract_code(message):
         return (
-            "Please wrap your code in a ```python``` block so I can run it. "
-            "Example:\n```python\nprint('hello')\n```"
+            "I couldn't find executable Python code in that input. "
+            "Please provide code in a ```python``` block."
         )
     return None
 
