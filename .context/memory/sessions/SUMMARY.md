@@ -210,3 +210,6 @@ records.
 
 ---
 - **2026-08-09 — Session 100** — Buffy / deepseek-v4-flash — Health-check burst fix: 20+ identical `GET opencode.ai/zen/v1/models` at startup. Root cause: OpenAICompatAdapter.health_check() and list_models() fired UNCACHED /models GETs, and routes/models.py uses throwaway adapters (bypassing get_adapter()). Fix: class-level per-provider TTL cache (30s) with a shared _fetch_models_cached() helper, per-provider asyncio.Lock (concurrent startup polls collapse to one fetch), failures uncached, clear_models_cache() wired into clear_adapter_cache(). 9 new tests, **1030 passed / 0 failed**. Commit `7968997`.
+
+---
+- **2026-08-09 — Session 101** — Buffy / deepseek-v4-flash — Backlog B-17 [Low]: wrote `docs/prior-art-codebuff-freebuff-architecture.md` — the full web-verified Codebuff/Freebuff production architecture (roster, per-agent model routing, thin dispatcher, final-output-only, three-tier tool model) mapped to ADR-14/15/16 + shipped B-items, so future agents never re-research it. Docs-only change.
