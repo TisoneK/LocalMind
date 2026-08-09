@@ -54,6 +54,18 @@ export interface ChatMessage {
     completionTokens?: number;
     tokensPerSecond?: number;
   };
+  /** Best-of-N editor candidates (B-2026-08-09-12 / C2 spec step 7), rendered
+   * as an expandable section in the message. Populated from the tool result
+   * metadata when the backend sends a best_of_n_edit tool result. */
+  candidates?: BestOfNCandidate[];
+}
+
+/** A single candidate in a best-of-N edit result (B-2026-08-09-12). */
+export interface BestOfNCandidate {
+  index: number;
+  strategy: string;
+  rationale: string;
+  isWinner: boolean;
 }
 
 /** Structured diff data for rendering DiffBlock in chat messages */

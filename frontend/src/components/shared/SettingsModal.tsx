@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
+import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
 
 // ── Provider definitions ──
@@ -81,6 +81,13 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const [status, setStatus] = useState<Status>('idle');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [bestOfNEnabled, setBestOfNEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('localmind-best-of-n-editor') === '1';
+    } catch {
+      return false;
+    }
+  });
 
   // Load current settings on mount
   useEffect(() => {
@@ -587,6 +594,40 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               </div>
             </section>
           )}
+
+          {/* ── Best-of-N Editor (C2 spec step 7) ── */}
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-[#d4e8d4]">
+              <FileEdit className="h-4 w-4 text-[#39d353]" />
+              Best-of-N Editor
+            </h3>
+            <p className="mb-3 text-xs text-[#8ab08a]">
+              When enabled, coding edits can use the best-of-N pattern: the
+              agent produces multiple candidate fixes under different strategies,
+              picks the best one via a selector agent, and applies it. The
+              candidates are shown in the chat so you can review the runner-up
+              strategies. Requires a strong model for the selector agent
+              (configure via <code className="text-[#d4e8d4]">LOCALMIND_AGENT_MODEL_EDITOR_SELECTOR</code>).
+            </p>
+            <button
+              onClick={() => {
+                const newVal = !bestOfNEnabled;
+                setBestOfNEnabled(newVal);
+                try {
+                  localStorage.setItem('localmind-best-of-n-editor', newVal ? '1' : '0');
+                } catch {
+                  // localStorage may be unavailable
+                }
+              }}
+              className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                bestOfNEnabled
+                  ? 'border-[#39d353] bg-[#39d353]/10 text-[#39d353]'
+                  : 'border-[#1a2a1a] text-[#8ab08a] hover:border-[#39d353]/30 hover:text-[#d4e8d4]'
+              }`}
+            >
+              {bestOfNEnabled ? 'Enabled' : 'Disabled'}
+            </button>
+          </section>
 
           {/* ── Footer ── */}
           <div className="flex justify-end border-t border-[#1a2a1a] pt-4">
