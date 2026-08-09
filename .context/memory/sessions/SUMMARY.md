@@ -201,3 +201,6 @@ records.
 
 ---
 - **2026-08-09 — Session 97** — Buffy / deepseek-v4-flash — Backlog B-14 / ADR-15 §3: verified final-output-only ALREADY held (child gets exactly 1 packet message; parent gets 1 concatenated ToolResult). Reshaped `to_prompt()` to explicit DO/DO NOT/RETURN bounded contract + 3 regression tests (bare-packet contract, empty-section fallback, child-sees-only-packet). Fixed 6 pre-existing ruff violations in the test file. **1011 passed / 0 failed**. Commit `ac6abd8`.
+
+---
+- **2026-08-09 — Session 98** — Buffy / deepseek-v4-flash — Backlog B-15 / ADR-15 §1: specific sub-agents existed as dirs; missing piece was the FIXED output schema. Added `AgentConfig.output_schema` + `render_output_contract()` wired into `BaseAgent.run()` (gated to delegated child runs via `get_current_run_id()` — top-level queries keep prose), reviewer adopts code-review schema {issues, verdict, summary}, delegation packet defers to agent-level contract. 5 new tests, **1016 passed / 0 failed**. Commit `1348a4c`.
