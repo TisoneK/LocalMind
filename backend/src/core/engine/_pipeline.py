@@ -878,6 +878,57 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # pipeline. Never block on this.
             logger.warning("[engine] trivial-input check failed: %s — falling through", _trivial_exc)
 
+        # ── 0.6. Conversational-question short-circuit (Session 68 / ADR-11) ─
+        # Same idea as the trivial path: obviously-conversational questions
+        # ("What can you do?", "Who are you?") skip the ThinkingDispatcher's
+        # capability-inference LLM call — they need a plain chat answer, not
+        # JSON-schema planning. Verified root-cause fix for ~40s latency on a
+        # simple conversational query (two sequential LLM calls before).
+        # Conservative: the detector only fires on interrogative openers with
+        # NO tool/realtime/system keywords, so "what is today's EPL games?",
+        # "what time is it", "how much RAM do I have" still reach the
+        # dispatcher for correct routing (WEB_SEARCH / SYSINFO / etc.).
+        try:
+            from core.trivial_input import (
+                conversational_intent,
+                conversational_response,
+                is_conversational_question,
+            )
+
+            if is_conversational_question(message):
+                _conv_kind = conversational_intent(message)
+                logger.info(
+                    "[engine] conversational-question short-circuit: %r → %s (skipping dispatcher)",
+                    message[:40],
+                    _conv_kind,
+                )
+                _obs.emit(
+                    "conversational_short_circuit",
+                    message_preview=message[:40],
+                    kind=_conv_kind,
+                )
+                _conv_adapter = self._adapter_for(Intent.CHAT)
+                async for _chunk in conversational_response(message, _conv_adapter, history=None):
+                    yield _chunk
+                # Same best-effort cleanup pattern as the trivial path — must
+                # not prevent the return (duplicate-response protection).
+                try:
+                    self._store.add_message(session_id, "user", message)
+                    _obs.emit(
+                        "conversational_short_circuit_done",
+                        elapsed_secs=time.monotonic() - t0,
+                    )
+                except Exception:
+                    pass
+                return
+        except Exception as _conv_exc:
+            # If the conversational-question check fails, fall through to
+            # the normal pipeline. Never block on this.
+            logger.warning(
+                "[engine] conversational-question check failed: %s — falling through",
+                _conv_exc,
+            )
+
         # ── 1. History ────────────────────────────────────────────────────
         history = self._store.get_history(session_id)
 
