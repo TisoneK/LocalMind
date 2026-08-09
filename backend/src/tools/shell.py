@@ -330,8 +330,132 @@ def _find_files(path: Path, file_type: str) -> tuple[str, RiskLevel]:
         return f"No permission to search {path}.", RiskLevel.LOW
 
 
+# ── Natural-language command guard (Session 113) ─────────────────────────────
+# The agent loop feeds whatever the model emits as run_command straight into
+# the shell. Free-tier models sometimes pass the user's raw sentence as the
+# command (e.g. "Check git status in the localmind repo") instead of
+# translating it into a real command. Running that as-is produces a confusing
+# "command not found" failure — or worse, lets the model fabricate a result.
+# This deterministic guard (no LLM) rejects commands that are almost certainly
+# natural language and returns a corrective error so the loop retries with a
+# real command — "dispatch only fully-specified instructions", enforced here.
+
+# First tokens that are legitimately NOT on PATH (shell/cmd builtins).
+_SHELL_BUILTINS: set[str] = {
+    # POSIX / bash builtins
+    "cd", "echo", "export", "unset", "set", "shift", "alias", "unalias",
+    "read", "exit", "pwd", "source", "true", "false", "type", "command",
+    "exec", "eval", "test", "umask", "wait", "jobs", "fg", "bg", "kill",
+    "trap", "printf", "readonly", "local", "declare", "times", "help",
+    # Windows cmd builtins
+    "dir", "type", "copy", "move", "del", "md", "mkdir", "rd", "rmdir",
+    "ren", "cls", "color", "date", "time", "ver", "vol", "where", "start",
+    "pushd", "popd", "title", "pause", "call", "goto", "if", "for", "rem",
+}
+
+# English words that are NEVER valid command names. Checked BEFORE the
+# executable lookup so sentences like "What is my current directory" are
+# rejected even when the first word coincidentally resolves to a system
+# utility (macOS ships /usr/bin/what and its filesystem is case-insensitive,
+# so shutil.which("What") finds it — but it is not a command the user meant).
+_NL_STOPWORDS: set[str] = {
+    "what", "how", "why", "when", "who", "whose",
+    "please", "kindly", "show", "tell", "give", "get", "check", "list",
+    "create", "delete", "run", "can", "could", "would", "should", "will",
+    "does", "did", "is", "are", "was", "were", "do", "don't",
+    "need", "want", "my", "the", "a", "an", "i", "you", "we", "they",
+    "there", "its", "it", "this", "that", "these", "those", "explain",
+    "summarize", "describe", "let", "about",
+}
+
+# Well-known command names that may legitimately be absent from the current
+# PATH (e.g. `python` on macOS — only python3 is installed) but are clearly
+# commands, not natural language.
+_KNOWN_COMMAND_NAMES: set[str] = {
+    "python", "python3", "node", "npm", "npx", "yarn", "pnpm", "bun",
+    "deno", "git", "curl", "wget", "docker", "docker-compose", "kubectl",
+    "pip", "pip3", "pytest", "cargo", "go", "rustc", "gcc", "clang",
+    "make", "cmake", "ruby", "perl", "php", "java", "javac", "mvn",
+    "gradle", "conda", "poetry", "uv", "powershell", "pwsh", "cmd",
+    "sh", "bash", "zsh", "fish", "code", "vi", "vim", "nano", "less",
+    "more", "head", "tail", "grep", "awk", "sed", "sort", "uniq", "wc",
+    "find", "xargs", "tar", "zip", "unzip", "gzip", "gunzip", "ssh",
+    "scp", "rsync", "ping", "traceroute", "netstat", "top", "htop", "ps",
+    "pkill", "chmod", "chown", "ln", "mount", "df", "du", "free",
+    # Unix staples — kept here so Windows (cmd) users get a clear "not
+    # recognized" error instead of a confusing "natural language" rejection.
+    "ls", "cat", "rm", "cp", "mv", "mkdir", "pwd", "touch", "sudo", "apt",
+    "brew",
+}
+
+# Union used by the legacy shell_exec raw-command gate: a first token that
+# is a builtin or a well-known command name routes straight to run_command.
+_RAW_CMD_TOKENS: set[str] = _SHELL_BUILTINS | _KNOWN_COMMAND_NAMES
+
+
+def _looks_like_natural_language(command: str) -> bool:
+    """True when the command is almost certainly natural language, not a shell command.
+
+    Deterministic heuristic (no LLM). A command is treated as REAL when it has
+    shell structure (operators/redirection/pipes), starts with a path, an env
+    assignment, a known builtin, a well-known command name, or a resolvable
+    executable. It is treated as natural language when its first token is a
+    plain English word ("what", "check", "show"...) or when the first token
+    is unknown AND there are multiple words ("Check git status in the repo").
+    """
+    cmd = (command or "").strip()
+    if not cmd:
+        return False
+    # Shell structure ⇒ a real command — never guess.
+    if re.search(r"[|&;<>`$()]", cmd):
+        return False
+    first = cmd.split(None, 1)[0]
+    lowered = first.lower()
+    # Plain-English first words are natural language — EXCEPT when the word
+    # is also a real executable and the command is a single word (e.g. `who`
+    # lists logged-in users; macOS ships /usr/bin/what). Multi-word sentences
+    # like "What is my current directory" are always NL, whatever the word
+    # resolves to (macOS's filesystem is case-insensitive, so which("What")
+    # finds /usr/bin/what — but the user meant a question, not the utility).
+    if lowered in _NL_STOPWORDS:
+        if len(cmd.split()) >= 2 or not (shutil.which(lowered) or shutil.which(first)):
+            return True
+        return False
+    if lowered in _SHELL_BUILTINS:
+        return False
+    if "/" in first or "\\" in first or ":" in first:
+        return False  # path / ./script.sh / C:\\... / drive-relative
+    if "=" in first:
+        return False  # env assignment or --flag=value
+    if lowered in _KNOWN_COMMAND_NAMES:
+        return False
+    if shutil.which(lowered) or shutil.which(first):
+        return False  # real executable on PATH
+    # Unknown first token with more words — "check git status please"-style
+    # sentences. A single unknown word is left alone (bash will error).
+    return len(cmd.split()) >= 2
+
+
+class _NLCommandError(ValueError):
+    """Raised when a run_command payload is natural language, not a command."""
+
+
+def _guard_nl_command(command: str) -> None:
+    """Reject natural-language commands before they reach the shell."""
+    if _looks_like_natural_language(command):
+        first = command.strip().split(None, 1)[0]
+        raise _NLCommandError(
+            f"The 'command' you provided looks like natural language, not a shell "
+            f"command (first token {first!r} is not a known executable or builtin). "
+            f"Translate the user's request into a real shell command (e.g. "
+            f"'git status', 'ls -la') and call the shell tool again with that "
+            f"exact command."
+        )
+
+
 def _run_command(command: str, cwd: str | None = None) -> tuple[str, RiskLevel]:
     """Execute a raw shell command. command must be a literal command string."""
+    _guard_nl_command(command)
     result = _run(command, cwd=cwd)
     if result["success"]:
         output = result["message"].strip() or "(command completed with no output)"
@@ -585,6 +709,19 @@ class ShellContract(ToolContract):
                 error_type="missing_field",
                 error_message=str(exc),
             )
+        except _NLCommandError as exc:
+            # Session 113: the model passed natural language as the command
+            # (e.g. "Check git status in the localmind repo" instead of
+            # "git status"). Reject with a corrective error so the agent
+            # loop retries with a real command — never run NL as-is.
+            return ToolResult(
+                content=str(exc),
+                risk=RiskLevel.LOW,
+                source="shell",
+                success=False,
+                error_type="nl_command_rejected",
+                error_message=str(exc),
+            )
         except Exception as exc:
             return ToolResult(
                 content=f"[TOOL ERROR] Unexpected shell failure: {exc}",
@@ -651,40 +788,10 @@ async def shell_exec(message: str) -> ToolResult:
     except (_json.JSONDecodeError, ValueError):
         pass
 
-    # Case 2 — raw shell command (deterministic gate, no heuristics)
-    _RAW_CMD_TOKENS = {
-        "&&",
-        "||",
-        ">>",
-        ">",
-        ";",
-        "|",
-        "echo",
-        "mkdir",
-        "touch",
-        "cp",
-        "mv",
-        "rm",
-        "cat",
-        "type",
-        "copy",
-        "move",
-        "del",
-        "md",
-        "rd",
-        "cd",
-        "ls",
-        "dir",
-        "pwd",
-        "chmod",
-        "chown",
-        "python",
-        "python3",
-        "node",
-        "npm",
-        "git",
-        "pip",
-    }
+    # Case 2 — raw shell command (deterministic gate, no heuristics).
+    # _RAW_CMD_TOKENS is the module-level union of builtins and known
+    # command names (see the Session 113 guard above) — operators are
+    # checked explicitly so "a | b" routes even with an unknown first token.
     first_token = message.strip().split()[0].lower() if message.strip() else ""
     has_operator = any(op in message for op in {"&&", "||", ">>", ">", ";", "|"})
     if has_operator or first_token in _RAW_CMD_TOKENS:
