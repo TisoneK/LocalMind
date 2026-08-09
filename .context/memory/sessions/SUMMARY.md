@@ -216,3 +216,6 @@ records.
 
 ---
 - **2026-08-09 — Session 102** — Buffy / deepseek-v4-flash — Incremental "Add frontend tests" progress: `src/lib/utils.test.ts` — 6 tests for the shared cn() Tailwind class-merge helper (conflict resolution, falsy filtering, conditional/array inputs, dedup). 33 vitest tests pass, tsc + eslint clean. Commit `ade31be`.
+
+---
+- **2026-08-09 — Session 103** — Buffy / deepseek-v4-flash — Theming: user chose DARK-ONLY. Removed light palette + `.dark` block + `@custom-variant dark` from globals.css (dark palette now the :root default); stripped all `dark:` variants from 16 shadcn components (cn() last-wins preserves appearance); removed `class="dark"` from index.html; added ~40 `--brand-*` tokens and migrated EVERY hardcoded hex in custom components (SettingsModal, ChatMessage, ChatInput, ToolSteps, ThinkingBlock, layout/panels/shared) to brand tokens; chart.tsx THEMES flattened. tsc 0, 33/33 vitest, build ok. Commit `9701262`. Closes both theming backlog items.
