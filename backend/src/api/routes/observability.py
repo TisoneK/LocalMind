@@ -1,4 +1,9 @@
-"""Observability endpoint - intent, confidence, tool timeline for right panel."""
+"""Observability endpoint - intent, confidence, tool timeline for right panel.
+
+B-2026-08-09-5: the per-session observation cache is the ONLY source of
+intent/latency data. The old session-agnostic MetricsStore aggregate fallback
+was removed because it leaked another session's data.
+"""
 
 from __future__ import annotations
 
@@ -69,8 +74,9 @@ async def get_observability(session_id: str):
     """Get observability data for a session.
 
     Returns real data from the engine's per-session observation cache,
-    populated on every turn_complete event. Falls back to aggregated
-    MetricsStore data if no observation has been stored yet.
+    populated on every turn_complete event (including trivial/conversational
+    short-circuits since B-2026-08-09-5). Sessions without a stored
+    observation return the empty response — no cross-session aggregate.
     """
     engine = _get_engine()
 
@@ -95,27 +101,11 @@ async def get_observability(session_id: str):
             stage_timings=obs_data.get("stage_timings"),
         )
 
-    # Fallback: aggregate from MetricsStore for this session's intent
-    # (provides at least latency and request count if a turn completed
-    # but the observation cache was pruned)
-    all_metrics = engine._metrics.get_all_metrics()
-    best_intent = None
-    best_latency = 0.0
-    for key, data in all_metrics.items():
-        if data.get("total_requests", 0) > 0:
-            best_intent = key
-            best_latency = float(data.get("p50_latency_ms", 0))
-
-    if best_intent:
-        return ObservabilityData(
-            session_id=session_id,
-            intent=best_intent,
-            confidence=0,
-            tools_used=best_intent,
-            memory_hits=0,
-            context_tokens=0,
-            latency_ms=best_latency,
-        )
-
-    # No data at all — return empty observation
+    # B-2026-08-09-5: no per-session observation → return the honest empty
+    # response. The previous fallback aggregated MetricsStore by INTENT and
+    # returned the first intent with any requests — which could show ANOTHER
+    # session's intent/latency in this session's Observe panel. MetricsStore is
+    # intent-keyed (no session scope), so a truthful per-session fallback is
+    # impossible. With every turn (incl. trivial "Hi") now storing an
+    # observation, this branch only fires for pruned sessions (>200).
     return ObservabilityData(session_id=session_id)

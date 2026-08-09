@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from api.routes import observability
 from core.obs import ObsCollector
 from core.observation import ObservationSnapshot
 from core.workspace_state import WorkspaceSnapshot
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 
 class _Metrics:
@@ -121,3 +120,32 @@ async def test_observability_without_any_data_returns_empty_optional_field(monke
     assert response.session_id == "unknown"
     assert response.observation is None
     assert response.intent is None
+
+
+@pytest.mark.asyncio
+async def test_fallback_never_leaks_cross_session_metrics(monkeypatch):
+    """B-2026-08-09-5: with no per-session observation, the endpoint must NOT
+    return another session's intent/latency from the intent-keyed MetricsStore
+    aggregate (the old fallback returned the first intent with any requests)."""
+    class _Metrics:
+        def get_all_metrics(self):
+            # Intent-keyed aggregate that WOULD have leaked under the old fallback.
+            return {"web_search": {"total_requests": 5, "p50_latency_ms": 1234.0}}
+
+    class _Engine:
+        def __init__(self):
+            self._last_observation = {}
+            self._last_observation_snapshots = {}
+            self._metrics = _Metrics()
+
+    engine = _Engine()
+    monkeypatch.setattr(observability, "_get_engine", lambda: engine)
+
+    response = await observability.get_observability("some-session")
+
+    assert response.session_id == "some-session"
+    assert response.intent is None
+    assert response.confidence is None
+    assert response.tools_used == ""
+    assert response.latency_ms == 0
+    assert response.memory_hits == 0

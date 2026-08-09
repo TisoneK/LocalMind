@@ -928,16 +928,21 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 _clock.skip("tool_select")
                 _clock.start("generate")
                 _trivial_adapter = self._adapter_for(Intent.CHAT)
+                _trivial_chunks: list[str] = []
                 async for _chunk in trivial_response(message, _trivial_adapter, history=None):
                     yield _chunk
+                    _chunk_text = getattr(_chunk, "text", None)
+                    if _chunk_text:
+                        _trivial_chunks.append(_chunk_text)
                 _clock.end("generate")
                 _clock.skip("execute")
                 # Session 24: return IMMEDIATELY after streaming completes.
                 # Cleanup is best-effort — must not prevent the return
                 # (which would cause a duplicate response from the normal
                 # pipeline running after the short-circuit).
+                _trivial_total_ms = round((time.monotonic() - t0) * 1000)
                 try:
-                    self._store.add_message(session_id, "user", message)
+                    self._persist_user_message(session_id, message)
                     _obs.emit(
                         "trivial_short_circuit_done",
                         kind=_trivial_kind,
@@ -945,6 +950,34 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     )
                 except Exception:
                     pass  # cleanup failure must not cause a duplicate
+                # B-2026-08-09-5: observability must NOT depend on persistence
+                # succeeding — emit turn_complete + store the per-session
+                # observation in their own best-effort block so a "Hi" turn
+                # shows real data in the Observe panel + polling endpoint
+                # instead of nothing (or, previously, the session-agnostic
+                # MetricsStore aggregate of another session).
+                try:
+                    _obs.emit(
+                        "turn_complete",
+                        intent="chat",
+                        confidence=0.99,
+                        tokens_approx=_approx_tokens("".join(_trivial_chunks)),
+                        total_latency_ms=_trivial_total_ms,
+                        memory_facts=0,
+                        agent_mode=False,
+                    )
+                    self._store_observation(
+                        session_id,
+                        _obs,
+                        intent="chat",
+                        confidence=0.99,
+                        tools_used="",
+                        memory_hits=0,
+                        context_tokens=0,
+                        latency_ms=_trivial_total_ms,
+                    )
+                except Exception:
+                    pass  # observability must never break the short-circuit
                 return
         except Exception as _trivial_exc:
             # If the trivial detector fails, fall through to the normal
@@ -985,20 +1018,51 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 _clock.skip("tool_select")
                 _clock.start("generate")
                 _conv_adapter = self._adapter_for(Intent.CHAT)
+                _conv_chunks: list[str] = []
                 async for _chunk in conversational_response(message, _conv_adapter, history=None):
                     yield _chunk
+                    _chunk_text = getattr(_chunk, "text", None)
+                    if _chunk_text:
+                        _conv_chunks.append(_chunk_text)
                 _clock.end("generate")
                 _clock.skip("execute")
                 # Same best-effort cleanup pattern as the trivial path — must
                 # not prevent the return (duplicate-response protection).
+                _conv_total_ms = round((time.monotonic() - t0) * 1000)
                 try:
-                    self._store.add_message(session_id, "user", message)
+                    self._persist_user_message(session_id, message)
                     _obs.emit(
                         "conversational_short_circuit_done",
                         elapsed_secs=time.monotonic() - t0,
                     )
                 except Exception:
-                    pass
+                    pass  # cleanup failure must not cause a duplicate
+                # B-2026-08-09-5: mirror the trivial path — emit turn_complete
+                # + store the per-session observation independently of
+                # persistence so conversational fast-path turns populate the
+                # Observe panel.
+                try:
+                    _obs.emit(
+                        "turn_complete",
+                        intent="chat",
+                        confidence=0.99,
+                        tokens_approx=_approx_tokens("".join(_conv_chunks)),
+                        total_latency_ms=_conv_total_ms,
+                        memory_facts=0,
+                        agent_mode=False,
+                    )
+                    self._store_observation(
+                        session_id,
+                        _obs,
+                        intent="chat",
+                        confidence=0.99,
+                        tools_used="",
+                        memory_hits=0,
+                        context_tokens=0,
+                        latency_ms=_conv_total_ms,
+                    )
+                except Exception:
+                    pass  # observability must never break the short-circuit
                 return
         except Exception as _conv_exc:
             # If the conversational-question check fails, fall through to
