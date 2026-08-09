@@ -216,6 +216,7 @@ from core.agent.prompts import build_agent_system_prompt, build_planning_prompt
 from core.agent.synthesizer import AnswerSynthesizer
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.context_builder import _build_environment_context
+from core.context_compactor import simplify_tool_results
 from core.workspace_state import format_snapshot, mark_turn_start
 from core.workspace_state import snapshot as workspace_snapshot
 
@@ -1215,6 +1216,18 @@ class AgentLoop:
                     trimmed_log = "…[earlier observations truncated]\n" + observation_log[-_OBS_LOG_TOTAL_CAP:]
                 context_content = f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{_effective_max_iter}. "
                 iteration_messages.append({"role": "user", "content": context_content})
+
+            # B-2026-08-02-4 (A4): deterministic tool-result simplification.
+            # When the accumulated conversation has more than the newest few
+            # tool results, stub the older oversized ones (head + omission
+            # marker + tail) to keep the window in budget WITHOUT an LLM
+            # call. Preserves tool_call_id (protocol validity) and never
+            # touches the newest results the model still needs. Idempotent.
+            # Deliberately unconditional — the keep_last window preserves
+            # what the model still needs; old results it already acted on
+            # are exactly what frees the most context (see
+            # context_compactor.simplify_tool_results docstring).
+            iteration_messages = simplify_tool_results(iteration_messages)
 
             # ── LLM call with tools ───────────────────────────────────
             # Session 25/31: wrap with a hard timeout to prevent "thinking
