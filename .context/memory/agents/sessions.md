@@ -1141,3 +1141,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** Real-model verification pending. Next phase: Session 75 — next open backlog item.
 - **Report:** none — implementation session (Session 67 review + B-9 backlog are the references)
 - **Inefficiency (logged):** none new — the reviewer's catch of the residual `_adapter` races is the review process working as designed (the initial investigation checked the per-session dicts but not the three shared orchestrator instances).
+
+---
+
+## 2026-08-09 — Session 75
+- **Session:** 75
+- **Date:** 2026-08-09
+- **Agent:** Buffy / deepseek-v4-flash
+- **Task:** B-2026-08-02-3 — hit-limit-aware delegation diagnosis. VERIFICATION FINDING (recorded per review): the four delegation failure modes (`construction_failed`, `timeout`, `child_exception`, `empty_response`) were ALREADY distinguished with structured `error_type` + `DelegationResult` metadata since `b9b97ff` (isolated instruction packets + child run contracts) — the backlog's premise ("parent gets a generic timeout error") was stale. The genuine gaps this session closed: (1) the failure messages lacked Session 32-style actionable next-step guidance (the standing hit-limit-aware contract: name the cause + suggest concrete next steps) — added a "Suggested next step:" tail to ALL FOUR messages (timeout → delegate a smaller focused sub-task or handle directly; empty → retry with a more specific task or handle directly; child_exception → retry once with a narrower task or handle directly; construction_failed → handle directly); (2) test gaps: `construction_failed` and `empty_response` had NO tests (timeout + child_exception were covered) — added both, plus locked the "Suggested next step" assertion into the pre-existing timeout test.
+- **Commits:** 1 product (`85b63ba`) + this context closeout commit
+- **Outcome:** done. Validation: 30 tests pass in `tests/agents/test_phase3_delegation.py` (28 pre-existing + 2 new); full suite 856 passed / 1 known pre-existing `test_engine_emit_todo_plan` failure; ruff clean on the changed lines (the 2 findings in the test file — I001 import sort, B017 blind Exception assert — are pre-existing, verified via stash). Code review passed with 3 minor nits, all applied: dropped the odd "report this framework error to the user" clause from construction_failed (model consumer phrasing), added the guidance assertion to the timeout test, and this closeout explicitly records that the four modes pre-existed so future readers don't misattribute the whole feature to this session.
+- **Open items:** Real-model verification pending. Next phase: Session 76 — next open backlog item.
+- **Report:** none — implementation session (Session 65 Codebuff comparison + B-3 backlog are the references)
+- **Inefficiency (logged):** none new — the stale backlog premise (the four modes already existed) cost one investigation round-trip before the actual gaps were identified; the verification-first approach avoided shipping a duplicate implementation.
