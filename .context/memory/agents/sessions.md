@@ -1180,3 +1180,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** Real-model verification pending. Next phase: Session 78 — next genuinely-open backlog item (B-2026-07-26-2 context compaction is the natural pick).
 - **Report:** none — verification + cleanup session (Sessions 15-34 work + line-68 backlog are the references)
 - **Inefficiency (logged):** none new — the 5 stale ADR items cost one verification round-trip each; the backlog now reflects reality (Sessions 33-34 items were filed BEFORE the ADR-8 implementation sessions, so the premise was outdated, not wrong).
+
+---
+
+## 2026-08-09 — Session 78
+- **Session:** 78
+- **Date:** 2026-08-09
+- **Agent:** Buffy / deepseek-v4-flash
+- **Task:** B-2026-08-02-4 (A4 — tool-result simplification under memory pressure) + verify-close B-2026-07-26-2. VERIFICATION FINDING: B-2026-07-26-2 (explicit context compaction step) was ALREADY implemented via `maybe_compress_history` in `core/summarizer.py` (summarizes oldest 50% of conversation turns — including embedded tool outputs — into a single system message when the window exceeds 75% of budget; wired at 3 call sites in `_pipeline.py`). Closed as done. The genuinely-open complement was B-2026-08-02-4: built `core/context_compactor.py` — `simplify_tool_results(messages, keep_last=4, max_chars=600)`, a deterministic, synchronous, idempotent pass that keeps the NEWEST 4 tool results verbatim and stubs older oversized ones as head + marker + tail, preserving every `tool_call_id` (OpenAI tool-calling protocol validity). Wired into `AgentLoop.run()` per-iteration: `iteration_messages = simplify_tool_results(iteration_messages)` right before `chat_with_tools` — on a fresh copy, so in-flight results can never be stubbed and `loop_messages` is never corrupted. Complements (not replaces) `_truncate_observation` (per-message) and `maybe_compress_history` (whole-turn LLM summarization).
+- **Commits:** 1 product (`06e009c`) + this context closeout commit
+- **Outcome:** done. Validation: 10 new tests in `tests/core/test_context_compactor.py` (newest preserved verbatim; tool_call_id preserved on stubs; head+tail survive; small results untouched; idempotent; non-tool messages untouched; fewer-than-keep_last returns same object; empty input; keep_last=0; other keys survive stubbing); full suite 866 passed / 1 known pre-existing `test_engine_emit_todo_plan` failure; ruff clean on new files + no new findings in loop.py. Code review passed with 3 non-blocking nits, all applied: marker reworded to signal SUCCESS ("tool succeeded — output truncated for length") so verify-after-write models don't misread the stub as failure; documented the deliberate unconditional design (keep_last window preserves what the model still needs; gating on a token estimate adds complexity for little gain); added keep_last=0 + key-preservation tests.
+- **Open items:** Real-model verification pending. Next phase: Session 79 — next genuinely-open backlog item.
+- **Report:** none — implementation session (Session 65 Codebuff comparison + B-4 backlog are the references)
+- **Inefficiency (logged):** none new — the B-2026-07-26-2 premise was stale (maybe_compress_history predated the backlog by a full cycle, same pattern as Sessions 75/77); the verification-first approach caught it before duplicating the summarizer.
