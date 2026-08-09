@@ -39,21 +39,21 @@ export function ModelSelector({ selectedModel, onModelChange, models }: ModelSel
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-[#8ab08a] hover:text-[#d4e8d4] hover:bg-[#1a2a1a] transition-colors w-full"
+        className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-brand-green-muted hover:text-brand-green-soft hover:bg-brand-border transition-colors w-full"
       >
         <span className="truncate flex-1 text-left">{current.name}</span>
         <ChevronsUpDown className="h-3 w-3 shrink-0" />
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-[#111a11] border border-[#1a2a1a] rounded-md shadow-xl z-50 overflow-hidden">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-brand-bg-rail border border-brand-border rounded-md shadow-xl z-50 overflow-hidden">
           <div className="p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
-            <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">
               Models
             </div>
 
             {modelList.length === 0 && (
-              <div className="px-2 py-2 text-xs text-[#8ab08a]">
+              <div className="px-2 py-2 text-xs text-brand-green-muted">
                 Loading models…
               </div>
             )}
@@ -65,23 +65,23 @@ export function ModelSelector({ selectedModel, onModelChange, models }: ModelSel
                   onModelChange(model.id);
                   setOpen(false);
                 }}
-                className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs hover:bg-[#1a2a1a] transition-colors"
+                className="flex items-center gap-2 w-full px-2 py-1.5 rounded text-xs hover:bg-brand-border transition-colors"
               >
                 <span className="w-3.5 flex items-center justify-center">
                   {model.id === selectedModel && (
-                    <Check className="h-3 w-3 text-[#39d353]" />
+                    <Check className="h-3 w-3 text-brand-green" />
                   )}
                 </span>
-                <span className="flex-1 text-left text-[#d4e8d4] truncate">
+                <span className="flex-1 text-left text-brand-green-soft truncate">
                   {model.name}
                 </span>
-                <span className="text-[#8ab08a] text-[10px]">{model.size}</span>
+                <span className="text-brand-green-muted text-[10px]">{model.size}</span>
               </button>
             ))}
           </div>
-          <div className="border-t border-[#1a2a1a] px-2 py-1.5">
-            <div className="text-[10px] text-[#8ab08a]">
-              Provider: <span className="text-[#d4e8d4]">{current.provider}</span>
+          <div className="border-t border-brand-border px-2 py-1.5">
+            <div className="text-[10px] text-brand-green-muted">
+              Provider: <span className="text-brand-green-soft">{current.provider}</span>
             </div>
           </div>
         </div>

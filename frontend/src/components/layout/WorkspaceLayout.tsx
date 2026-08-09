@@ -301,7 +301,7 @@ export function WorkspaceLayout() {
   );
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-[#0a0f0a]">
+    <div className="h-screen w-screen flex overflow-hidden bg-brand-bg-base">
       {/* Left Panel */}
       <div style={{ width: leftPanelWidth }} className="shrink-0 relative">
         <LeftPanel
@@ -329,7 +329,7 @@ export function WorkspaceLayout() {
         />
         {/* Left resize handle */}
         <div
-          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#39d353]/30 transition-colors"
+          className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-brand-green/30 transition-colors"
           onMouseDown={() => setIsResizingLeft(true)}
         />
       </div>
@@ -361,7 +361,7 @@ export function WorkspaceLayout() {
         {/* Right resize handle */}
         {!rightPanelCollapsed && (
           <div
-            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-[#39d353]/30 transition-colors z-10"
+            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-brand-green/30 transition-colors z-10"
             onMouseDown={() => setIsResizingRight(true)}
           />
         )}

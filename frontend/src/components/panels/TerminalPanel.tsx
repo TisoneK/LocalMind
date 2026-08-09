@@ -16,12 +16,12 @@ import {
 // ─── Color Map ─────────────────────────────────────────────────────────
 
 const lineColors: Record<TerminalLine['type'], string> = {
-  command: 'text-[#39d353]',
-  output: 'text-[#c9d1d9]',
-  error: 'text-[#f85149]',
-  info: 'text-[#d29922]',
-  system: 'text-[#58a6ff]',
-  success: 'text-[#3fb950]',
+  command: 'text-brand-green',
+  output: 'text-brand-gh-text',
+  error: 'text-brand-gh-red',
+  info: 'text-brand-gh-amber',
+  system: 'text-brand-gh-blue',
+  success: 'text-brand-gh-green',
 };
 
 const linePrefixes: Record<TerminalLine['type'], string> = {
@@ -395,9 +395,9 @@ export function TerminalPanel({
   const shortCwd = cwd.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
 
   return (
-    <div className={`font-mono text-[11px] leading-relaxed flex flex-col ${isMaximized ? 'fixed inset-0 z-50 bg-[#080d08]' : ''}`}>
+    <div className={`font-mono text-[11px] leading-relaxed flex flex-col ${isMaximized ? 'fixed inset-0 z-50 bg-brand-bg-dark' : ''}`}>
       {/* ── Tab Bar ── */}
-      <div className="flex items-center bg-[#0d120d] border-b border-[#1a2a1a]">
+      <div className="flex items-center bg-brand-bg-panel-alt border-b border-brand-border">
         {tabs.map((tab) => (
           <div
             key={tab.id}
@@ -405,10 +405,10 @@ export function TerminalPanel({
               setActiveTabId(tab.id);
               onSessionChange?.(tab.sessionId);
             }}
-            className={`group flex items-center gap-1.5 px-3 py-1.5 cursor-pointer border-r border-[#1a2a1a] text-[10px] transition-colors ${
+            className={`group flex items-center gap-1.5 px-3 py-1.5 cursor-pointer border-r border-brand-border text-[10px] transition-colors ${
               activeTabId === tab.id
-                ? 'bg-[#080d08] text-[#d4e8d4] border-t-2 border-t-[#39d353]'
-                : 'text-[#8ab08a] hover:text-[#d4e8d4] hover:bg-[#080d08]/50 border-t-2 border-t-transparent'
+                ? 'bg-brand-bg-dark text-brand-green-soft border-t-2 border-t-brand-green'
+                : 'text-brand-green-muted hover:text-brand-green-soft hover:bg-brand-bg-dark/50 border-t-2 border-t-transparent'
             }`}
           >
             <span className="truncate max-w-[80px]">{tab.label}</span>
@@ -418,7 +418,7 @@ export function TerminalPanel({
                   e.stopPropagation();
                   removeTab(tab.id);
                 }}
-                className="opacity-0 group-hover:opacity-100 hover:text-[#f85149] transition-opacity"
+                className="opacity-0 group-hover:opacity-100 hover:text-brand-gh-red transition-opacity"
               >
                 <X className="h-2.5 w-2.5" />
               </button>
@@ -427,7 +427,7 @@ export function TerminalPanel({
         ))}
         <button
           onClick={addTab}
-          className="px-2 py-1.5 text-[#8ab08a] hover:text-[#39d353] transition-colors"
+          className="px-2 py-1.5 text-brand-green-muted hover:text-brand-green transition-colors"
           title="New terminal tab"
         >
           <Plus className="h-3 w-3" />
@@ -441,8 +441,8 @@ export function TerminalPanel({
               onClick={() => setLineFilter(f)}
               className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${
                 lineFilter === f
-                  ? 'bg-[#1a2a1a] text-[#d4e8d4]'
-                  : 'text-[#8ab08a] hover:text-[#d4e8d4]'
+                  ? 'bg-brand-border text-brand-green-soft'
+                  : 'text-brand-green-muted hover:text-brand-green-soft'
               }`}
             >
               {f === 'all' ? 'All' : f === 'user' ? 'Mine' : 'Agent'}
@@ -455,7 +455,7 @@ export function TerminalPanel({
           <button
             onClick={() => setShowSearch(!showSearch)}
             className={`p-1 rounded transition-colors ${
-              showSearch ? 'text-[#39d353] bg-[#1a2a1a]' : 'text-[#8ab08a] hover:text-[#d4e8d4]'
+              showSearch ? 'text-brand-green bg-brand-border' : 'text-brand-green-muted hover:text-brand-green-soft'
             }`}
             title="Search (Ctrl+F)"
           >
@@ -463,21 +463,21 @@ export function TerminalPanel({
           </button>
           <button
             onClick={copyAll}
-            className="p-1 rounded text-[#8ab08a] hover:text-[#d4e8d4] transition-colors"
+            className="p-1 rounded text-brand-green-muted hover:text-brand-green-soft transition-colors"
             title="Copy all output"
           >
             <Copy className="h-3 w-3" />
           </button>
           <button
             onClick={onClear}
-            className="p-1 rounded text-[#8ab08a] hover:text-[#d4e8d4] transition-colors"
+            className="p-1 rounded text-brand-green-muted hover:text-brand-green-soft transition-colors"
             title="Clear (Ctrl+L)"
           >
             <RotateCcw className="h-3 w-3" />
           </button>
           <button
             onClick={() => setIsMaximized(!isMaximized)}
-            className="p-1 rounded text-[#8ab08a] hover:text-[#d4e8d4] transition-colors"
+            className="p-1 rounded text-brand-green-muted hover:text-brand-green-soft transition-colors"
             title={isMaximized ? 'Minimize' : 'Maximize'}
           >
             {isMaximized ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
@@ -487,19 +487,19 @@ export function TerminalPanel({
 
       {/* ── Search Bar ── */}
       {showSearch && (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-[#0d120d] border-b border-[#1a2a1a]">
-          <Search className="h-3 w-3 text-[#8ab08a] shrink-0" />
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-bg-panel-alt border-b border-brand-border">
+          <Search className="h-3 w-3 text-brand-green-muted shrink-0" />
           <input
             ref={searchInputRef}
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search output..."
-            className="flex-1 bg-[#080d08] text-[11px] text-[#d4e8d4] placeholder:text-[#8ab08a] outline-none border border-[#1a2a1a] rounded px-2 py-0.5 focus:border-[#39d353]/50"
+            className="flex-1 bg-brand-bg-dark text-[11px] text-brand-green-soft placeholder:text-brand-green-muted outline-none border border-brand-border rounded px-2 py-0.5 focus:border-brand-green/50"
             autoFocus
           />
           {searchQuery && (
-            <span className="text-[9px] text-[#8ab08a]">
+            <span className="text-[9px] text-brand-green-muted">
               {searchMatchCount} match{searchMatchCount !== 1 ? 'es' : ''}
             </span>
           )}
@@ -508,7 +508,7 @@ export function TerminalPanel({
               setShowSearch(false);
               setSearchQuery('');
             }}
-            className="text-[#8ab08a] hover:text-[#d4e8d4]"
+            className="text-brand-green-muted hover:text-brand-green-soft"
           >
             <X className="h-3 w-3" />
           </button>
@@ -516,20 +516,20 @@ export function TerminalPanel({
       )}
 
       {/* ── Terminal Header ── */}
-      <div className="flex items-center gap-2 px-3 py-1 bg-[#080d08] border-b border-[#1a2a1a]">
+      <div className="flex items-center gap-2 px-3 py-1 bg-brand-bg-dark border-b border-brand-border">
         <div className="flex gap-1">
-          <div className="w-2 h-2 rounded-full bg-[#f85149]" />
-          <div className="w-2 h-2 rounded-full bg-[#d29922]" />
-          <div className="w-2 h-2 rounded-full bg-[#3fb950]" />
+          <div className="w-2 h-2 rounded-full bg-brand-gh-red" />
+          <div className="w-2 h-2 rounded-full bg-brand-gh-amber" />
+          <div className="w-2 h-2 rounded-full bg-brand-gh-green" />
         </div>
-        <div className="flex items-center gap-1 text-[10px] text-[#8ab08a] ml-1">
+        <div className="flex items-center gap-1 text-[10px] text-brand-green-muted ml-1">
           <FolderOpen className="h-2.5 w-2.5" />
           <span className="truncate max-w-[150px]" title={cwd}>{shortCwd}</span>
         </div>
         {isRunning && (
           <div className="flex items-center gap-1 ml-auto">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#39d353] animate-pulse" />
-            <span className="text-[9px] text-[#39d353]">running</span>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse" />
+            <span className="text-[9px] text-brand-green">running</span>
           </div>
         )}
       </div>
@@ -537,20 +537,20 @@ export function TerminalPanel({
       {/* ── Terminal Output ── */}
       <div
         ref={scrollRef}
-        className="flex-1 p-2 space-y-0 overflow-y-auto custom-scrollbar bg-[#080d08] min-h-0"
+        className="flex-1 p-2 space-y-0 overflow-y-auto custom-scrollbar bg-brand-bg-dark min-h-0"
         style={{ maxHeight: isMaximized ? 'calc(100vh - 120px)' : '288px' }}
         onClick={() => inputRef.current?.focus()}
       >
         {filteredLines.length === 0 && !searchQuery && (
           <div className="space-y-2 py-3 px-1">
-            <div className="text-[10px] text-[#8ab08a]">
+            <div className="text-[10px] text-brand-green-muted">
               Type a command and press Enter to execute...
             </div>
-            <div className="text-[9px] text-[#6a8a6a] space-y-0.5">
-              <div><span className="text-[#58a6ff]">↑/↓</span> Navigate history</div>
-              <div><span className="text-[#58a6ff]">Tab</span> Autocomplete</div>
-              <div><span className="text-[#58a6ff]">Ctrl+L</span> Clear screen</div>
-              <div><span className="text-[#58a6ff]">Ctrl+C</span> Cancel command</div>
+            <div className="text-[9px] text-brand-green-deleted space-y-0.5">
+              <div><span className="text-brand-gh-blue">↑/↓</span> Navigate history</div>
+              <div><span className="text-brand-gh-blue">Tab</span> Autocomplete</div>
+              <div><span className="text-brand-gh-blue">Ctrl+L</span> Clear screen</div>
+              <div><span className="text-brand-gh-blue">Ctrl+C</span> Cancel command</div>
             </div>
           </div>
         )}
@@ -562,23 +562,23 @@ export function TerminalPanel({
           return (
             <div
               key={line.id}
-              className={`group flex items-start hover:bg-[#0d120d] rounded-sm transition-colors ${
-                isSearchMatch ? 'bg-[#1a2a1a]/50' : ''
+              className={`group flex items-start hover:bg-brand-bg-panel-alt rounded-sm transition-colors ${
+                isSearchMatch ? 'bg-brand-border/50' : ''
               }`}
             >
-              <span className="text-[9px] text-[#6a8a6a] w-16 shrink-0 select-none pt-px">
+              <span className="text-[9px] text-brand-green-deleted w-16 shrink-0 select-none pt-px">
                 {line.timestamp}
               </span>
               {/* Tool badge for agent lines */}
               {line.source === 'agent' && line.toolName && (
-                <span className="text-[8px] px-1 rounded bg-[#1a2a1a] text-[#58a6ff] shrink-0 select-none mr-1">
+                <span className="text-[8px] px-1 rounded bg-brand-border text-brand-gh-blue shrink-0 select-none mr-1">
                   {line.toolName}
                 </span>
               )}
               <span className={`flex-1 break-all [overflow-wrap:anywhere] ${lineColors[line.type]}`}>
                 {linePrefixes[line.type]}
                 {line.source === 'agent' && (
-                  <span className="text-[#a371f7] mr-1">&#9883;</span>
+                  <span className="text-brand-gh-purple mr-1">&#9883;</span>
                 )}
                 {isSearchMatch
                   ? highlightSearch(displayContent, searchQuery)
@@ -590,14 +590,14 @@ export function TerminalPanel({
                   e.stopPropagation();
                   copyLine(line.id, line.content);
                 }}
-                className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 text-[#6a8a6a] hover:text-[#8ab08a] transition-opacity shrink-0"
+                className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 text-brand-green-deleted hover:text-brand-green-muted transition-opacity shrink-0"
                 title="Copy line"
               >
                 <Copy className="h-2.5 w-2.5" />
               </button>
               {/* Copied indicator */}
               {copiedLineId === line.id && (
-                <span className="text-[8px] text-[#3fb950] ml-1 shrink-0">Copied!</span>
+                <span className="text-[8px] text-brand-gh-green ml-1 shrink-0">Copied!</span>
               )}
             </div>
           );
@@ -608,7 +608,7 @@ export function TerminalPanel({
       {showSuggestions && suggestions.length > 0 && (
         <div
           ref={suggestionsRef}
-          className="border-t border-[#1a2a1a] bg-[#0d120d] max-h-32 overflow-y-auto"
+          className="border-t border-brand-border bg-brand-bg-panel-alt max-h-32 overflow-y-auto"
         >
           {suggestions.map((s, i) => (
             <div
@@ -620,16 +620,16 @@ export function TerminalPanel({
               }}
               className={`flex items-center gap-2 px-3 py-1 cursor-pointer transition-colors ${
                 i === selectedSuggestion
-                  ? 'bg-[#1a2a1a] text-[#d4e8d4]'
-                  : 'text-[#8ab08a] hover:bg-[#1a2a1a]/50'
+                  ? 'bg-brand-border text-brand-green-soft'
+                  : 'text-brand-green-muted hover:bg-brand-border/50'
               }`}
             >
-              <span className="text-[9px] px-1 rounded bg-[#1a2a1a] text-[#58a6ff] shrink-0">
+              <span className="text-[9px] px-1 rounded bg-brand-border text-brand-gh-blue shrink-0">
                 {s.type === 'command' ? 'cmd' : s.type === 'path' ? 'dir' : 'file'}
               </span>
               <span className="truncate text-[11px]">{s.text}</span>
               {s.description && (
-                <span className="ml-auto text-[9px] text-[#6a8a6a] shrink-0">{s.description}</span>
+                <span className="ml-auto text-[9px] text-brand-green-deleted shrink-0">{s.description}</span>
               )}
             </div>
           ))}
@@ -638,8 +638,8 @@ export function TerminalPanel({
 
       {/* ── Command Input ── */}
       {onExecute && (
-        <div className="flex items-center gap-1 px-2 py-1.5 bg-[#080d08] border-t border-[#1a2a1a]">
-          <span className="text-[#39d353] text-[11px] shrink-0">$</span>
+        <div className="flex items-center gap-1 px-2 py-1.5 bg-brand-bg-dark border-t border-brand-border">
+          <span className="text-brand-green text-[11px] shrink-0">$</span>
           <div className="relative flex-1">
             <input
               ref={inputRef}
@@ -652,7 +652,7 @@ export function TerminalPanel({
               onKeyDown={handleKeyDown}
               placeholder={isRunning ? 'Running...' : 'Enter command... (↑ history, Tab autocomplete)'}
               disabled={isRunning}
-              className="w-full bg-transparent text-[11px] text-[#d4e8d4] placeholder:text-[#6a8a6a] outline-none font-mono caret-[#39d353]"
+              className="w-full bg-transparent text-[11px] text-brand-green-soft placeholder:text-brand-green-deleted outline-none font-mono caret-brand-green"
               spellCheck={false}
               autoComplete="off"
               autoCorrect="off"
@@ -662,7 +662,7 @@ export function TerminalPanel({
           {isRunning && (
             <button
               onClick={() => onAbort?.()}
-              className="px-1.5 py-0.5 text-[9px] text-[#f85149] hover:bg-[#1a2a1a] rounded transition-colors shrink-0"
+              className="px-1.5 py-0.5 text-[9px] text-brand-gh-red hover:bg-brand-border rounded transition-colors shrink-0"
               title="Cancel (Ctrl+C)"
             >
               Cancel
@@ -672,16 +672,16 @@ export function TerminalPanel({
       )}
 
       {/* ── Status Bar ── */}
-      <div className="flex items-center justify-between px-3 py-0.5 bg-[#0d120d] border-t border-[#1a2a1a]">
-        <div className="flex items-center gap-3 text-[9px] text-[#6a8a6a]">
+      <div className="flex items-center justify-between px-3 py-0.5 bg-brand-bg-panel-alt border-t border-brand-border">
+        <div className="flex items-center gap-3 text-[9px] text-brand-green-deleted">
           <span>{shortCwd}</span>
           <span>{lines.length} lines</span>
           {history.length > 0 && <span>{history.length} cmds</span>}
           {lines.filter(l => l.source === 'agent').length > 0 && (
-            <span className="text-[#a371f7]">{lines.filter(l => l.source === 'agent').length} agent</span>
+            <span className="text-brand-gh-purple">{lines.filter(l => l.source === 'agent').length} agent</span>
           )}
         </div>
-        <div className="flex items-center gap-2 text-[9px] text-[#6a8a6a]">
+        <div className="flex items-center gap-2 text-[9px] text-brand-green-deleted">
           <span>{shellName}</span>
           <span>{terminalDims}</span>
         </div>
@@ -705,7 +705,7 @@ function highlightSearch(text: string, query: string): React.ReactNode {
       parts.push(text.slice(lastIndex, index));
     }
     parts.push(
-      <mark key={index} className="bg-[#d29922]/30 text-[#d29922] rounded-sm px-px">
+      <mark key={index} className="bg-brand-gh-amber/30 text-brand-gh-amber rounded-sm px-px">
         {text.slice(index, index + query.length)}
       </mark>
     );

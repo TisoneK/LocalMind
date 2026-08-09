@@ -29,7 +29,7 @@ const toolIcons: Record<string, React.ReactNode> = {
   file_write: <FileEdit className="h-3 w-3" />,
   file_read: <FileSearch className="h-3 w-3" />,
   file_task: <FileSearch className="h-3 w-3" />,
-  edit_file: <FileEdit className="h-3 w-3 text-[#e8a420]" />,
+  edit_file: <FileEdit className="h-3 w-3 text-brand-amber" />,
   grep: <Search className="h-3 w-3" />,
   code_exec: <Terminal className="h-3 w-3" />,
   shell: <Terminal className="h-3 w-3" />,
@@ -54,23 +54,23 @@ const toolLabels: Record<string, string> = {
 const statusConfig: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
   running: {
     icon: <Loader2 className="h-3 w-3 animate-spin" />,
-    color: 'text-[#e8a420]',
-    bg: 'bg-[#e8a420]/5 border-[#e8a420]/20',
+    color: 'text-brand-amber',
+    bg: 'bg-brand-amber/5 border-brand-amber/20',
   },
   done: {
     icon: <CheckCircle2 className="h-3 w-3" />,
-    color: 'text-[#39d353]',
-    bg: 'bg-[#39d353]/5 border-[#39d353]/20',
+    color: 'text-brand-green',
+    bg: 'bg-brand-green/5 border-brand-green/20',
   },
   failed: {
     icon: <XCircle className="h-3 w-3" />,
-    color: 'text-[#e05555]',
-    bg: 'bg-[#e05555]/5 border-[#e05555]/20',
+    color: 'text-brand-red',
+    bg: 'bg-brand-red/5 border-brand-red/20',
   },
   pending: {
     icon: <Clock className="h-3 w-3" />,
-    color: 'text-[#8ab08a]',
-    bg: 'bg-[#8ab08a]/5 border-[#8ab08a]/20',
+    color: 'text-brand-green-muted',
+    bg: 'bg-brand-green-muted/5 border-brand-green-muted/20',
   },
 };
 
@@ -97,43 +97,43 @@ function ToolStep({ toolCall }: { toolCall: ToolCall }) {
         className="flex items-center gap-2 w-full px-2.5 py-1.5 hover:bg-white/[0.02] transition-colors text-left"
       >
         {expanded ? (
-          <ChevronDown className="h-3 w-3 text-[#8ab08a] shrink-0" />
+          <ChevronDown className="h-3 w-3 text-brand-green-muted shrink-0" />
         ) : (
-          <ChevronRight className="h-3 w-3 text-[#8ab08a] shrink-0" />
+          <ChevronRight className="h-3 w-3 text-brand-green-muted shrink-0" />
         )}
         <span className={status.color}>{icon}</span>
-        <span className="text-[11px] text-[#d4e8d4] font-mono shrink-0">
+        <span className="text-[11px] text-brand-green-soft font-mono shrink-0">
           {label}
         </span>
         {inputStr && !isCodeTool && (
-          <span className="text-[11px] text-[#8ab08a] font-mono truncate flex-1 min-w-0 break-all" title={inputStr}>
+          <span className="text-[11px] text-brand-green-muted font-mono truncate flex-1 min-w-0 break-all" title={inputStr}>
             {inputStr}
           </span>
         )}
         <span className={status.color}>{status.icon}</span>
         {(toolCall.status === 'done' || toolCall.status === 'failed' || toolCall.duration !== undefined) && (
-          <span className="text-[9px] text-[#8ab08a] shrink-0">
+          <span className="text-[9px] text-brand-green-muted shrink-0">
             {toolCall.duration !== undefined
               ? (toolCall.duration >= 1000 ? `${(toolCall.duration / 1000).toFixed(1)}s` : `${toolCall.duration}ms`)
               : (toolCall.status === 'done' ? '0ms' : '')}
           </span>
         )}
         {toolCall.timestamp && (
-          <span className="text-[9px] text-[#5a7a5a] shrink-0 ml-auto">
+          <span className="text-[9px] text-brand-green-faint shrink-0 ml-auto">
             {toolCall.timestamp}
           </span>
         )}
       </button>
       {expanded && (
-        <div className="px-2.5 py-2 border-t border-[#1a2a1a]/50 bg-[#080d08]">
+        <div className="px-2.5 py-2 border-t border-brand-border/50 bg-brand-bg-dark">
           {isCodeTool && toolCall.input && (
             <>
-              <div className="text-[10px] text-[#8ab08a] mb-1">Code:</div>
-              <div className="rounded-md border border-[#1a2a1a] overflow-hidden mb-1.5">
-                <div className="flex items-center justify-between px-3 py-1 bg-[#0a120a] border-b border-[#1a2a1a]">
-                  <span className="text-[9px] font-mono text-[#39d353] uppercase">python</span>
+              <div className="text-[10px] text-brand-green-muted mb-1">Code:</div>
+              <div className="rounded-md border border-brand-border overflow-hidden mb-1.5">
+                <div className="flex items-center justify-between px-3 py-1 bg-brand-bg-code border-b border-brand-border">
+                  <span className="text-[9px] font-mono text-brand-green uppercase">python</span>
                 </div>
-                <pre className="p-2.5 overflow-x-auto text-[11px] leading-relaxed font-mono text-[#a8d8a8] bg-[#040804] whitespace-pre max-h-60 max-w-full">
+                <pre className="p-2.5 overflow-x-auto text-[11px] leading-relaxed font-mono text-brand-green-code bg-brand-bg-deep whitespace-pre max-h-60 max-w-full">
                   {toolCall.input}
                 </pre>
               </div>
@@ -141,24 +141,24 @@ function ToolStep({ toolCall }: { toolCall: ToolCall }) {
           )}
           {isFileWrite && filePath && (
             <>
-              <div className="text-[10px] text-[#8ab08a] mb-1">File:</div>
-              <div className="text-[11px] text-[#39d353] font-mono bg-[#0a0f0a] rounded px-2 py-1 mb-1.5 break-all overflow-hidden">
+              <div className="text-[10px] text-brand-green-muted mb-1">File:</div>
+              <div className="text-[11px] text-brand-green font-mono bg-brand-bg-base rounded px-2 py-1 mb-1.5 break-all overflow-hidden">
                 {filePath}
               </div>
             </>
           )}
           {!isCodeTool && !isFileWrite && toolCall.input && (
             <>
-              <div className="text-[10px] text-[#8ab08a] mb-1">Input:</div>
-              <div className="text-[11px] text-[#d4e8d4] font-mono bg-[#0a0f0a] rounded px-2 py-1 mb-1.5 break-all overflow-hidden">
+              <div className="text-[10px] text-brand-green-muted mb-1">Input:</div>
+              <div className="text-[11px] text-brand-green-soft font-mono bg-brand-bg-base rounded px-2 py-1 mb-1.5 break-all overflow-hidden">
                 {toolCall.input}
               </div>
             </>
           )}
           {toolCall.output && (
             <>
-              <div className="text-[10px] text-[#8ab08a] mb-1">Output:</div>
-              <div className={`text-[11px] font-mono bg-[#0a0f0a] rounded px-2 py-1 ${toolCall.status === 'failed' ? 'text-[#e05555]' : 'text-[#39d353]'} max-h-40 overflow-y-auto overflow-x-auto max-w-full whitespace-pre-wrap break-all`}>
+              <div className="text-[10px] text-brand-green-muted mb-1">Output:</div>
+              <div className={`text-[11px] font-mono bg-brand-bg-base rounded px-2 py-1 ${toolCall.status === 'failed' ? 'text-brand-red' : 'text-brand-green'} max-h-40 overflow-y-auto overflow-x-auto max-w-full whitespace-pre-wrap break-all`}>
                 {toolCall.output}
               </div>
             </>

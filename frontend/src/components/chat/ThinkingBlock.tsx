@@ -26,19 +26,19 @@ function parseDispatchSteps(text: string): string {
 
 function getIntentColor(intent: string): string {
   const colors: Record<string, string> = {
-    chat: 'text-[#8ab08a]',
-    web_search: 'text-[#4a9eff]',
-    web_fetch: 'text-[#9b8afb]',
-    code_exec: 'text-[#39d353]',
-    shell: 'text-[#e8a420]',
-    file_task: 'text-[#f5a623]',
-    file_write: 'text-[#f5a623]',
-    file_edit: 'text-[#f5a623]',
-    sysinfo: 'text-[#8ab08a]',
-    memory_op: 'text-[#d4a8ff]',
-    followup: 'text-[#e8a420]',
+    chat: 'text-brand-green-muted',
+    web_search: 'text-brand-blue',
+    web_fetch: 'text-brand-purple',
+    code_exec: 'text-brand-green',
+    shell: 'text-brand-amber',
+    file_task: 'text-brand-amber-warm',
+    file_write: 'text-brand-amber-warm',
+    file_edit: 'text-brand-amber-warm',
+    sysinfo: 'text-brand-green-muted',
+    memory_op: 'text-brand-purple-soft',
+    followup: 'text-brand-amber',
   };
-  return colors[intent] || 'text-[#8ab08a]';
+  return colors[intent] || 'text-brand-green-muted';
 }
 
 interface ThinkingBlockProps {
@@ -75,28 +75,28 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
   const stepColor = stepLabel ? getIntentColor(stepLabel.replace(/\s+/g, '_').toLowerCase()) : '';
 
   return (
-    <div className="mb-2 border border-[#1a2a1a] rounded-md overflow-hidden">
+    <div className="mb-2 border border-brand-border rounded-md overflow-hidden">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center gap-2 w-full px-3 py-1.5 bg-[#0a120a] hover:bg-[#111a11] transition-colors text-left"
+        className="flex items-center gap-2 w-full px-3 py-1.5 bg-brand-bg-code hover:bg-brand-bg-rail transition-colors text-left"
       >
         <ChevronRight
-          className={`h-3 w-3 text-[#8ab08a] transition-transform shrink-0 ${
+          className={`h-3 w-3 text-brand-green-muted transition-transform shrink-0 ${
             !collapsed ? 'rotate-90' : ''
           }`}
         />
-        <Brain className={`h-3 w-3 shrink-0 ${stepColor || 'text-[#e8a420]'}`} />
-        <span className={`text-[10px] uppercase tracking-wider font-medium ${stepColor || 'text-[#8ab08a]'}`}>
+        <Brain className={`h-3 w-3 shrink-0 ${stepColor || 'text-brand-amber'}`} />
+        <span className={`text-[10px] uppercase tracking-wider font-medium ${stepColor || 'text-brand-green-muted'}`}>
           {stepLabel || 'Thinking'}
         </span>
         {duration !== undefined && duration > 0 && (
-          <span className="text-[9px] text-[#e8a420] ml-auto">
+          <span className="text-[9px] text-brand-amber ml-auto">
             {duration >= 1000 ? `${(duration / 1000).toFixed(1)}s` : `${duration}ms`}
           </span>
         )}
       </button>
       {!collapsed && (
-        <div className="px-3 py-2 text-[11px] text-[#8ab08a] whitespace-pre-wrap leading-relaxed border-t border-[#1a2a1a] bg-[#080d08] break-words overflow-hidden">
+        <div className="px-3 py-2 text-[11px] text-brand-green-muted whitespace-pre-wrap leading-relaxed border-t border-brand-border bg-brand-bg-dark break-words overflow-hidden">
           {stepLabel ? (
             <div className="flex items-start gap-2">
               <Terminal className={`h-3 w-3 mt-0.5 shrink-0 ${stepColor}`} />

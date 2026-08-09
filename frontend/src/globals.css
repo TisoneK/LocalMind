@@ -1,8 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -41,44 +39,59 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* ── LocalMind brand palette (dark-only, formerly hardcoded hex) ────── */
+  --color-brand-green: var(--brand-green);
+  --color-brand-green-soft: var(--brand-green-soft);
+  --color-brand-green-bright: var(--brand-green-bright);
+  --color-brand-green-muted: var(--brand-green-muted);
+  --color-brand-green-faint: var(--brand-green-faint);
+  --color-brand-green-line: var(--brand-green-line);
+  --color-brand-green-inline: var(--brand-green-inline);
+  --color-brand-green-deleted: var(--brand-green-deleted);
+  --color-brand-green-code: var(--brand-green-code);
+  --color-brand-green-table-border: var(--brand-green-table-border);
+  --color-brand-amber: var(--brand-amber);
+  --color-brand-amber-warm: var(--brand-amber-warm);
+  --color-brand-amber-soft: var(--brand-amber-soft);
+  --color-brand-red: var(--brand-red);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-purple: var(--brand-purple);
+  --color-brand-purple-soft: var(--brand-purple-soft);
+  --color-brand-border: var(--brand-border);
+  --color-brand-border-strong: var(--brand-border-strong);
+  --color-brand-border-soft: var(--brand-border-soft);
+  --color-brand-bg-deep: var(--brand-bg-deep);
+  --color-brand-bg-dark: var(--brand-bg-dark);
+  --color-brand-bg-base: var(--brand-bg-base);
+  --color-brand-bg-code: var(--brand-bg-code);
+  --color-brand-bg-panel: var(--brand-bg-panel);
+  --color-brand-bg-panel-alt: var(--brand-bg-panel-alt);
+  --color-brand-bg-chat-input: var(--brand-bg-chat-input);
+  --color-brand-bg-table: var(--brand-bg-table);
+  --color-brand-bg-rail: var(--brand-bg-rail);
+  --color-brand-bg-vsc-track: var(--brand-bg-vsc-track);
+  --color-brand-bg-vsc-thumb: var(--brand-bg-vsc-thumb);
+  --color-brand-bg-vsc-hover: var(--brand-bg-vsc-hover);
+  /* GitHub-dark syntax palette (TerminalPanel) */
+  --color-brand-gh-blue: var(--brand-gh-blue);
+  --color-brand-gh-red: var(--brand-gh-red);
+  --color-brand-gh-amber: var(--brand-gh-amber);
+  --color-brand-gh-green: var(--brand-gh-green);
+  --color-brand-gh-purple: var(--brand-gh-purple);
+  --color-brand-gh-text: var(--brand-gh-text);
+  --color-brand-gh-red-soft: var(--brand-gh-red-soft);
+  --color-brand-gh-green-soft: var(--brand-gh-green-soft);
+  --color-brand-gh-red-bg: var(--brand-gh-red-bg);
+  --color-brand-gh-green-bg: var(--brand-gh-green-bg);
+  --color-brand-gh-green-border: var(--brand-gh-green-border);
 }
 
+/* LocalMind is dark-only by design: the dark palette is the default.
+   (Light theme variables and the `.dark` variant machinery were removed —
+   see the theming decision, Session 103.) */
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -110,6 +123,53 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* ── LocalMind brand palette (dark-only) ── */
+  --brand-green: #39d353;
+  --brand-green-soft: #d4e8d4;
+  --brand-green-bright: #5af75a;
+  --brand-green-muted: #8ab08a;
+  --brand-green-faint: #5a7a5a;
+  --brand-green-line: #3a5a3a;
+  --brand-green-inline: #7ddf7d;
+  --brand-green-deleted: #6a8a6a;
+  --brand-green-code: #a8d8a8;
+  --brand-green-table-border: #27622e;
+  --brand-amber: #e8a420;
+  --brand-amber-warm: #f5a623;
+  --brand-amber-soft: #f5e0a0;
+  --brand-red: #e05555;
+  --brand-blue: #4a9eff;
+  --brand-purple: #9b8afb;
+  --brand-purple-soft: #d4a8ff;
+  --brand-border: #1a2a1a;
+  --brand-border-strong: #2a3a2a;
+  --brand-border-soft: #1a3d1a;
+  --brand-bg-deep: #040804;
+  --brand-bg-dark: #080d08;
+  --brand-bg-base: #0a0f0a;
+  --brand-bg-code: #0a120a;
+  --brand-bg-panel: #0d140d;
+  --brand-bg-panel-alt: #0d120d;
+  --brand-bg-chat-input: #0d150d;
+  --brand-bg-table: #0d110d;
+  --brand-bg-rail: #111a11;
+  --brand-bg-vsc-track: #0d1117;
+  --brand-bg-vsc-thumb: #30363d;
+  --brand-bg-vsc-hover: #484f58;
+
+  /* GitHub-dark syntax palette */
+  --brand-gh-blue: #58a6ff;
+  --brand-gh-red: #f85149;
+  --brand-gh-amber: #d29922;
+  --brand-gh-green: #3fb950;
+  --brand-gh-purple: #a371f7;
+  --brand-gh-text: #c9d1d9;
+  --brand-gh-red-soft: #df7d7d;
+  --brand-gh-green-soft: #a8c8a8;
+  --brand-gh-red-bg: #3a1a1a;
+  --brand-gh-green-bg: #111d11;
+  --brand-gh-green-border: #1a3a1a;
 }
 
 @layer base {
@@ -128,22 +188,22 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #0a0f0a;
+  background: var(--brand-bg-base);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #1a2a1a;
+  background: var(--brand-border);
   border-radius: 3px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #2a3a2a;
+  background: var(--brand-border-strong);
 }
 
 /* Firefox scrollbar */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #1a2a1a #0a0f0a;
+  scrollbar-color: var(--brand-border) var(--brand-bg-base);
 }
 
 /* Global scrollbar for the page */
@@ -153,27 +213,27 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #0a0f0a;
+  background: var(--brand-bg-base);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1a2a1a;
+  background: var(--brand-border);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2a3a2a;
+  background: var(--brand-border-strong);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #1a2a1a #0a0f0a;
+  scrollbar-color: var(--brand-border) var(--brand-bg-base);
 }
 
 /* Prevent body scroll */
 html, body {
   overflow: hidden;
-  background: #0a0f0a;
+  background: var(--brand-bg-base);
 }
 
 /* Fix: Long words/URLs pushing containers wider */
@@ -207,7 +267,7 @@ code:not(pre code) {
 
 /* Smooth focus transitions */
 *:focus-visible {
-  outline: 1px solid #39d353;
+  outline: 1px solid var(--brand-green);
   outline-offset: 1px;
   border-radius: 2px;
 }
@@ -215,7 +275,7 @@ code:not(pre code) {
 /* Selection color */
 ::selection {
   background: rgba(57, 211, 83, 0.2);
-  color: #d4e8d4;
+  color: var(--brand-green-soft);
 }
 
 /* Custom scrollbar for VS Code-style code blocks */
@@ -225,21 +285,21 @@ code:not(pre code) {
 }
 
 .custom-scrollbar-vsc::-webkit-scrollbar-track {
-  background: #0d1117;
+  background: var(--brand-bg-vsc-track);
 }
 
 .custom-scrollbar-vsc::-webkit-scrollbar-thumb {
-  background: #30363d;
+  background: var(--brand-bg-vsc-thumb);
   border-radius: 4px;
 }
 
 .custom-scrollbar-vsc::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: var(--brand-bg-vsc-hover);
 }
 
 .custom-scrollbar-vsc {
   scrollbar-width: thin;
-  scrollbar-color: #30363d #0d1117;
+  scrollbar-color: var(--brand-bg-vsc-thumb) var(--brand-bg-vsc-track);
 }
 
 /* Ensure flex children respect overflow constraints */

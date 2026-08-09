@@ -311,7 +311,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="flex items-center gap-3 text-[#8ab08a]">
+        <div className="flex items-center gap-3 text-brand-green-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span>Loading settings...</span>
         </div>
@@ -330,17 +330,17 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         aria-modal="true"
         aria-labelledby="settings-modal-title"
         tabIndex={-1}
-        className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl border border-[#1a2a1a] bg-[#0d140d] shadow-2xl outline-none"
+        className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl border border-brand-border bg-brand-bg-panel shadow-2xl outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#1a2a1a] bg-[#0d140d] px-6 py-4">
-          <h2 id="settings-modal-title" className="text-lg font-semibold text-[#d4e8d4]">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-brand-border bg-brand-bg-panel px-6 py-4">
+          <h2 id="settings-modal-title" className="text-lg font-semibold text-brand-green-soft">
             Settings
           </h2>
           <button
             onClick={onClose}
-            className="rounded-md p-1.5 text-[#8ab08a] hover:bg-[#1a2a1a] hover:text-[#d4e8d4] transition-colors"
+            className="rounded-md p-1.5 text-brand-green-muted hover:bg-brand-border hover:text-brand-green-soft transition-colors"
             title="Close"
             aria-label="Close settings"
           >
@@ -354,10 +354,10 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
             <div
               className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
                 status === 'saving'
-                  ? 'border-[#e8a420]/30 bg-[#e8a420]/5 text-[#e8a420]'
+                  ? 'border-brand-amber/30 bg-brand-amber/5 text-brand-amber'
                   : status === 'success'
-                  ? 'border-[#39d353]/30 bg-[#39d353]/5 text-[#39d353]'
-                  : 'border-[#e05555]/30 bg-[#e05555]/5 text-[#e05555]'
+                  ? 'border-brand-green/30 bg-brand-green/5 text-brand-green'
+                  : 'border-brand-red/30 bg-brand-red/5 text-brand-red'
               }`}
             >
               {status === 'saving' && <Loader2 className="h-4 w-4 animate-spin shrink-0" />}
@@ -369,11 +369,11 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
 
           {/* ── Adapter Selection ── */}
           <section>
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-[#d4e8d4]">
-              <Server className="h-4 w-4 text-[#39d353]" />
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <Server className="h-4 w-4 text-brand-green" />
               AI Provider
             </h3>
-            <p className="mb-3 text-xs text-[#8ab08a]">
+            <p className="mb-3 text-xs text-brand-green-muted">
               Choose between local Ollama or a cloud provider. Cloud providers require an API key below.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
@@ -381,8 +381,8 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                 onClick={() => handleAdapterSwitch('ollama')}
                 className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                   adapter === 'ollama'
-                    ? 'border-[#39d353] bg-[#39d353]/10 text-[#39d353]'
-                    : 'border-[#1a2a1a] text-[#8ab08a] hover:border-[#39d353]/30 hover:text-[#d4e8d4]'
+                    ? 'border-brand-green bg-brand-green/10 text-brand-green'
+                    : 'border-brand-border text-brand-green-muted hover:border-brand-green/30 hover:text-brand-green-soft'
                 }`}
               >
                 Ollama (Local)
@@ -393,8 +393,8 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                   onClick={() => handleAdapterSwitch(p.id)}
                   className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
                     adapter === p.id
-                      ? 'border-[#39d353] bg-[#39d353]/10 text-[#39d353]'
-                      : 'border-[#1a2a1a] text-[#8ab08a] hover:border-[#39d353]/30 hover:text-[#d4e8d4]'
+                      ? 'border-brand-green bg-brand-green/10 text-brand-green'
+                      : 'border-brand-border text-brand-green-muted hover:border-brand-green/30 hover:text-brand-green-soft'
                   }`}
                 >
                   {p.name}
@@ -402,8 +402,8 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               ))}
             </div>
             {adapter !== 'ollama' && (
-              <p className="mt-2 text-xs text-[#8ab08a]">
-                Current model: <span className="font-mono text-[#d4e8d4]">{model || 'default'}</span>
+              <p className="mt-2 text-xs text-brand-green-muted">
+                Current model: <span className="font-mono text-brand-green-soft">{model || 'default'}</span>
               </p>
             )}
           </section>
@@ -411,11 +411,11 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           {/* ── Ollama URL Configuration ── */}
           {adapter === 'ollama' && (
             <section>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-[#d4e8d4]">
-                <Server className="h-4 w-4 text-[#39d353]" />
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+                <Server className="h-4 w-4 text-brand-green" />
                 Ollama Server URL
               </h3>
-              <p className="mb-3 text-xs text-[#8ab08a]">
+              <p className="mb-3 text-xs text-brand-green-muted">
                 Point LocalMind at a local or remote Ollama instance. The URL is validated before saving.
               </p>
               <div className="flex gap-2">
@@ -424,19 +424,19 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                   value={ollamaUrl}
                   onChange={(e) => setOllamaUrl(e.target.value)}
                   placeholder="http://localhost:11434"
-                  className="flex-1 rounded-lg border border-[#1a2a1a] bg-[#0a0f0a] px-3 py-2 text-sm text-[#d4e8d4] font-mono focus:border-[#39d353] outline-none"
+                  className="flex-1 rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
                 />
                 <button
                   onClick={handleSaveOllamaUrl}
                   disabled={status === 'saving'}
-                  className="rounded-lg border border-[#39d353]/30 bg-[#39d353]/10 px-4 py-2 text-sm font-medium text-[#39d353] hover:bg-[#39d353]/20 transition-colors disabled:opacity-50"
+                  className="rounded-lg border border-brand-green/30 bg-brand-green/10 px-4 py-2 text-sm font-medium text-brand-green hover:bg-brand-green/20 transition-colors disabled:opacity-50"
                 >
                   Save
                 </button>
                 <button
                   onClick={handleResetOllamaUrl}
                   disabled={status === 'saving'}
-                  className="rounded-lg border border-[#1a2a1a] px-3 py-2 text-sm text-[#8ab08a] hover:text-[#d4e8d4] hover:border-[#39d353]/30 transition-colors disabled:opacity-50"
+                  className="rounded-lg border border-brand-border px-3 py-2 text-sm text-brand-green-muted hover:text-brand-green-soft hover:border-brand-green/30 transition-colors disabled:opacity-50"
                   title="Reset to localhost"
                 >
                   Reset
@@ -448,12 +448,12 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           {/* ── API Key Management ── */}
           {adapter !== 'ollama' && (
             <section>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-[#d4e8d4]">
-                <Key className="h-4 w-4 text-[#39d353]" />
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+                <Key className="h-4 w-4 text-brand-green" />
                 API Keys
               </h3>
-              <p className="mb-3 text-xs text-[#8ab08a]">
-                Keys are stored locally in <code className="text-[#d4e8d4]">~/LocalMind/settings.json</code> with
+              <p className="mb-3 text-xs text-brand-green-muted">
+                Keys are stored locally in <code className="text-brand-green-soft">~/LocalMind/settings.json</code> with
                 restricted file permissions. They never leave your machine. Click "Add Key" or "Update" on any provider to enter its key inline.
               </p>
 
@@ -464,18 +464,18 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                   const hasKey = providerKeys[p.id];
                   const isEditing = newKeyProvider === p.id;
                   return (
-                    <div key={p.id} className="rounded-lg border border-[#1a2a1a] overflow-hidden">
+                    <div key={p.id} className="rounded-lg border border-brand-border overflow-hidden">
                       {/* Provider row */}
                       <div className="flex items-center justify-between px-3 py-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-[#d4e8d4]">{p.name}</span>
+                          <span className="text-sm text-brand-green-soft">{p.name}</span>
                           {hasKey ? (
-                            <span className="flex items-center gap-1 text-xs text-[#39d353]">
+                            <span className="flex items-center gap-1 text-xs text-brand-green">
                               <CheckCircle2 className="h-3 w-3" />
                               Key set
                             </span>
                           ) : (
-                            <span className="text-xs text-[#8ab08a]">No key</span>
+                            <span className="text-xs text-brand-green-muted">No key</span>
                           )}
                         </div>
                         <div className="flex items-center gap-1">
@@ -487,7 +487,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                                 setNewKeyModel('');
                               }}
                               disabled={status === 'saving'}
-                              className="rounded px-2 py-1 text-xs text-[#8ab08a] hover:bg-[#1a2a1a] hover:text-[#d4e8d4] transition-colors disabled:opacity-50"
+                              className="rounded px-2 py-1 text-xs text-brand-green-muted hover:bg-brand-border hover:text-brand-green-soft transition-colors disabled:opacity-50"
                               title={`Update ${p.name} API key`}
                             >
                               Update
@@ -497,7 +497,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                             <button
                               onClick={() => handleDeleteKey(p.id)}
                               disabled={status === 'saving'}
-                              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[#e05555] hover:bg-[#e05555]/10 transition-colors disabled:opacity-50"
+                              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-brand-red hover:bg-brand-red/10 transition-colors disabled:opacity-50"
                               title={`Remove ${p.name} API key`}
                               aria-label={`Remove ${p.name} API key`}
                             >
@@ -513,7 +513,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                                 setNewKeyModel('');
                               }}
                               disabled={status === 'saving'}
-                              className="rounded px-2 py-1 text-xs text-[#39d353] hover:bg-[#39d353]/10 transition-colors disabled:opacity-50"
+                              className="rounded px-2 py-1 text-xs text-brand-green hover:bg-brand-green/10 transition-colors disabled:opacity-50"
                             >
                               + Add Key
                             </button>
@@ -523,13 +523,13 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
 
                       {/* Inline key form — expands when this provider is selected */}
                       {isEditing && (
-                        <div className="border-t border-[#1a2a1a] bg-[#0a0f0a] p-3 space-y-2">
+                        <div className="border-t border-brand-border bg-brand-bg-base p-3 space-y-2">
                           <input
                             type="password"
                             value={newKeyValue}
                             onChange={(e) => setNewKeyValue(e.target.value)}
                             placeholder="API key"
-                            className="w-full rounded-lg border border-[#1a2a1a] bg-[#0d140d] px-3 py-2 text-sm text-[#d4e8d4] font-mono focus:border-[#39d353] outline-none"
+                            className="w-full rounded-lg border border-brand-border bg-brand-bg-panel px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
                           />
                           <input
                             type="text"
@@ -538,7 +538,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                             placeholder={`Model (optional, default: ${
                               providerDefaults[p.id] || 'provider default'
                             })`}
-                            className="w-full rounded-lg border border-[#1a2a1a] bg-[#0d140d] px-3 py-2 text-sm text-[#d4e8d4] focus:border-[#39d353] outline-none"
+                            className="w-full rounded-lg border border-brand-border bg-brand-bg-panel px-3 py-2 text-sm text-brand-green-soft focus:border-brand-green outline-none"
                           />
                           {/* Live model chips — populated from GET /api/models?provider=... */}
                           {providerModels.length > 0 && (
@@ -550,8 +550,8 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                                   onClick={() => setNewKeyModel(m.id)}
                                   className={`rounded px-2 py-1 text-[11px] font-mono transition-colors ${
                                     newKeyModel === m.id
-                                      ? 'border border-[#39d353] bg-[#39d353]/10 text-[#39d353]'
-                                      : 'border border-[#1a2a1a] text-[#8ab08a] hover:border-[#39d353]/30 hover:text-[#d4e8d4]'
+                                      ? 'border border-brand-green bg-brand-green/10 text-brand-green'
+                                      : 'border border-brand-border text-brand-green-muted hover:border-brand-green/30 hover:text-brand-green-soft'
                                   }`}
                                   title={`Use ${m.id}`}
                                 >
@@ -561,7 +561,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                             </div>
                           )}
                           {providerModelsLoading && (
-                            <div className="flex items-center gap-1.5 text-[11px] text-[#8ab08a]">
+                            <div className="flex items-center gap-1.5 text-[11px] text-brand-green-muted">
                               <Loader2 className="h-3 w-3 animate-spin" />
                               Loading models…
                             </div>
@@ -570,7 +570,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                             <button
                               onClick={handleSaveKey}
                               disabled={status === 'saving' || !newKeyValue.trim()}
-                              className="flex-1 rounded-lg border border-[#39d353]/30 bg-[#39d353]/10 px-4 py-2 text-sm font-medium text-[#39d353] hover:bg-[#39d353]/20 transition-colors disabled:opacity-50"
+                              className="flex-1 rounded-lg border border-brand-green/30 bg-brand-green/10 px-4 py-2 text-sm font-medium text-brand-green hover:bg-brand-green/20 transition-colors disabled:opacity-50"
                             >
                               {status === 'saving' ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Save'}
                             </button>
@@ -581,7 +581,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                                 setNewKeyModel('');
                               }}
                               disabled={status === 'saving'}
-                              className="rounded-lg border border-[#1a2a1a] px-4 py-2 text-sm text-[#8ab08a] hover:text-[#d4e8d4] hover:border-[#39d353]/30 transition-colors disabled:opacity-50"
+                              className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-green-muted hover:text-brand-green-soft hover:border-brand-green/30 transition-colors disabled:opacity-50"
                             >
                               Cancel
                             </button>
@@ -597,17 +597,17 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
 
           {/* ── Best-of-N Editor (C2 spec step 7) ── */}
           <section>
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-[#d4e8d4]">
-              <FileEdit className="h-4 w-4 text-[#39d353]" />
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <FileEdit className="h-4 w-4 text-brand-green" />
               Best-of-N Editor
             </h3>
-            <p className="mb-3 text-xs text-[#8ab08a]">
+            <p className="mb-3 text-xs text-brand-green-muted">
               When enabled, coding edits can use the best-of-N pattern: the
               agent produces multiple candidate fixes under different strategies,
               picks the best one via a selector agent, and applies it. The
               candidates are shown in the chat so you can review the runner-up
               strategies. Requires a strong model for the selector agent
-              (configure via <code className="text-[#d4e8d4]">LOCALMIND_AGENT_MODEL_EDITOR_SELECTOR</code>).
+              (configure via <code className="text-brand-green-soft">LOCALMIND_AGENT_MODEL_EDITOR_SELECTOR</code>).
             </p>
             <button
               onClick={() => {
@@ -621,8 +621,8 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               }}
               className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                 bestOfNEnabled
-                  ? 'border-[#39d353] bg-[#39d353]/10 text-[#39d353]'
-                  : 'border-[#1a2a1a] text-[#8ab08a] hover:border-[#39d353]/30 hover:text-[#d4e8d4]'
+                  ? 'border-brand-green bg-brand-green/10 text-brand-green'
+                  : 'border-brand-border text-brand-green-muted hover:border-brand-green/30 hover:text-brand-green-soft'
               }`}
             >
               {bestOfNEnabled ? 'Enabled' : 'Disabled'}
@@ -630,10 +630,10 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           </section>
 
           {/* ── Footer ── */}
-          <div className="flex justify-end border-t border-[#1a2a1a] pt-4">
+          <div className="flex justify-end border-t border-brand-border pt-4">
             <button
               onClick={onClose}
-              className="rounded-lg border border-[#1a2a1a] px-4 py-2 text-sm text-[#8ab08a] hover:text-[#d4e8d4] hover:border-[#39d353]/30 transition-colors"
+              className="rounded-lg border border-brand-border px-4 py-2 text-sm text-brand-green-muted hover:text-brand-green-soft hover:border-brand-green/30 transition-colors"
             >
               Done
             </button>

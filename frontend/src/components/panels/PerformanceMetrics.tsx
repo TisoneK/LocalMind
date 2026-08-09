@@ -45,27 +45,27 @@ export function PerformanceMetrics({ metrics, lastMetrics, elapsedMs = 0 }: Perf
   const hasTokenBreakdown = totalTokens > 0 || promptTokens > 0 || completionTokens > 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1.5 bg-[#080d08] border-t border-[#1a2a1a] min-w-0">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-1.5 bg-brand-bg-dark border-t border-brand-border min-w-0">
       <div className="flex items-center gap-1.5">
-        <Activity className="h-3 w-3 text-[#39d353] shrink-0" />
-        <span className="text-[9px] text-[#8ab08a] uppercase tracking-wider shrink-0" title="Tokens per second">Speed</span>
-        <span className="text-[11px] text-[#d4e8d4] font-mono font-medium whitespace-nowrap">
+        <Activity className="h-3 w-3 text-brand-green shrink-0" />
+        <span className="text-[9px] text-brand-green-muted uppercase tracking-wider shrink-0" title="Tokens per second">Speed</span>
+        <span className="text-[11px] text-brand-green-soft font-mono font-medium whitespace-nowrap">
           {tokensPerSecond > 0 ? `${tokensPerSecond} tok/s` : '—'}
         </span>
       </div>
 
       <div className="flex items-center gap-1.5">
-        <Clock className="h-3 w-3 text-[#e8a420] shrink-0" />
-        <span className="text-[9px] text-[#8ab08a] uppercase tracking-wider shrink-0" title="Response latency">Latency</span>
-        <span className="text-[11px] text-[#d4e8d4] font-mono font-medium whitespace-nowrap">
+        <Clock className="h-3 w-3 text-brand-amber shrink-0" />
+        <span className="text-[9px] text-brand-green-muted uppercase tracking-wider shrink-0" title="Response latency">Latency</span>
+        <span className="text-[11px] text-brand-green-soft font-mono font-medium whitespace-nowrap">
           {latency > 0 ? formatLatency(latency) : '—'}
         </span>
       </div>
 
       <div className="flex items-center gap-1.5">
-        <Hash className="h-3 w-3 text-[#8ab08a] shrink-0" />
-        <span className="text-[9px] text-[#8ab08a] uppercase tracking-wider shrink-0" title="Total tokens used">Tokens</span>
-        <span className="text-[11px] text-[#d4e8d4] font-mono font-medium whitespace-nowrap">
+        <Hash className="h-3 w-3 text-brand-green-muted shrink-0" />
+        <span className="text-[9px] text-brand-green-muted uppercase tracking-wider shrink-0" title="Total tokens used">Tokens</span>
+        <span className="text-[11px] text-brand-green-soft font-mono font-medium whitespace-nowrap">
           {totalTokens > 0 ? totalTokens.toLocaleString() : '—'}
         </span>
       </div>
@@ -73,12 +73,12 @@ export function PerformanceMetrics({ metrics, lastMetrics, elapsedMs = 0 }: Perf
       {hasTokenBreakdown && (
         <div className="flex items-center gap-2 shrink-0">
           <div className="flex items-center gap-1">
-            <span className="text-[9px] text-[#8ab08a]">prompt:</span>
-            <span className="text-[10px] text-[#d4e8d4] font-mono">{fmtTok(promptTokens)}</span>
+            <span className="text-[9px] text-brand-green-muted">prompt:</span>
+            <span className="text-[10px] text-brand-green-soft font-mono">{fmtTok(promptTokens)}</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[9px] text-[#8ab08a]">completion:</span>
-            <span className="text-[10px] text-[#d4e8d4] font-mono">{fmtTok(completionTokens)}</span>
+            <span className="text-[9px] text-brand-green-muted">completion:</span>
+            <span className="text-[10px] text-brand-green-soft font-mono">{fmtTok(completionTokens)}</span>
           </div>
         </div>
       )}

@@ -31,19 +31,19 @@ export function TodoList({ todos, onToggle, onAdd }: TodoListProps) {
       {/* Header — always show so the + button is accessible even with 0 todos */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-medium text-[#d4e8d4]">Tasks</span>
+          <span className="text-[11px] font-medium text-brand-green-soft">Tasks</span>
           {total > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#1a2a1a] text-[#39d353] font-mono">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-border text-brand-green font-mono">
               {completed}/{total}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {total > 0 && <span className="text-[10px] text-[#8ab08a]">{percentage}%</span>}
+          {total > 0 && <span className="text-[10px] text-brand-green-muted">{percentage}%</span>}
           {onAdd && (
             <button
               onClick={() => setShowInput(!showInput)}
-              className="p-0.5 rounded text-[#8ab08a] hover:text-[#39d353] hover:bg-[#1a2a1a] transition-colors"
+              className="p-0.5 rounded text-brand-green-muted hover:text-brand-green hover:bg-brand-border transition-colors"
               title="Add task"
             >
               <Plus className="h-3 w-3" />
@@ -54,9 +54,9 @@ export function TodoList({ todos, onToggle, onAdd }: TodoListProps) {
 
       {/* Progress bar — only show when there are tasks */}
       {total > 0 && (
-        <div className="h-1 bg-[#1a2a1a] rounded-full overflow-hidden">
+        <div className="h-1 bg-brand-border rounded-full overflow-hidden">
           <div
-            className="h-full bg-[#39d353] rounded-full transition-all duration-500"
+            className="h-full bg-brand-green rounded-full transition-all duration-500"
             style={{ width: `${percentage}%` }}
           />
         </div>
@@ -77,12 +77,12 @@ export function TodoList({ todos, onToggle, onAdd }: TodoListProps) {
               }
             }}
             placeholder="New task..."
-            className="flex-1 bg-[#111a11] border border-[#1a2a1a] rounded px-2 py-1 text-[11px] text-[#d4e8d4] placeholder:text-[#8ab08a] outline-none focus:border-[#39d353]/30"
+            className="flex-1 bg-brand-bg-rail border border-brand-border rounded px-2 py-1 text-[11px] text-brand-green-soft placeholder:text-brand-green-muted outline-none focus:border-brand-green/30"
             autoFocus
           />
           <button
             onClick={handleAddTodo}
-            className="px-2 py-1 rounded bg-[#39d353]/10 text-[#39d353] text-[10px] hover:bg-[#39d353]/20 transition-colors"
+            className="px-2 py-1 rounded bg-brand-green/10 text-brand-green text-[10px] hover:bg-brand-green/20 transition-colors"
           >
             Add
           </button>
@@ -92,28 +92,28 @@ export function TodoList({ todos, onToggle, onAdd }: TodoListProps) {
       {/* Todo items */}
       <div className="space-y-0.5 max-h-48 overflow-y-auto custom-scrollbar">
         {todos.length === 0 && !showInput && (
-          <div className="text-[10px] text-[#5a7a5a] px-1.5 py-1 italic">
+          <div className="text-[10px] text-brand-green-faint px-1.5 py-1 italic">
             No tasks yet — click + to add one
           </div>
         )}
         {todos.map((todo) => (
           <div
             key={todo.id}
-            className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-[#1a2a1a]/30 transition-colors group cursor-pointer"
+            className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-brand-border/30 transition-colors group cursor-pointer"
             onClick={() => onToggle?.(todo.id, !todo.completed)}
           >
             {todo.completed ? (
-              <div className="w-3.5 h-3.5 rounded border border-[#39d353] bg-[#39d353]/20 flex items-center justify-center shrink-0">
-                <Check className="h-2.5 w-2.5 text-[#39d353]" />
+              <div className="w-3.5 h-3.5 rounded border border-brand-green bg-brand-green/20 flex items-center justify-center shrink-0">
+                <Check className="h-2.5 w-2.5 text-brand-green" />
               </div>
             ) : (
-              <div className="w-3.5 h-3.5 rounded border border-[#1a2a1a] bg-transparent group-hover:border-[#8ab08a] transition-colors shrink-0" />
+              <div className="w-3.5 h-3.5 rounded border border-brand-border bg-transparent group-hover:border-brand-green-muted transition-colors shrink-0" />
             )}
             <span
               className={`text-[11px] leading-tight ${
                 todo.completed
-                  ? 'text-[#8ab08a] line-through'
-                  : 'text-[#d4e8d4]'
+                  ? 'text-brand-green-muted line-through'
+                  : 'text-brand-green-soft'
               }`}
             >
               {todo.text}

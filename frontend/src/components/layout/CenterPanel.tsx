@@ -97,16 +97,16 @@ export function CenterPanel({
     : 'Connecting…';
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-[#0a0f0a]">
+    <div className="h-full min-h-0 flex flex-col bg-brand-bg-base">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-[#1a2a1a] bg-[#0a0f0a]">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-brand-border bg-brand-bg-base">
         <div className="flex items-center gap-3">
-          <h1 className="text-[12px] font-medium text-[#d4e8d4]">
+          <h1 className="text-[12px] font-medium text-brand-green-soft">
             LocalMind Assistant
           </h1>
           {/* Model badge — green pill showing the active model */}
           <span
-            className="text-[9px] px-2 py-0.5 rounded-full bg-[#39d353]/15 text-[#39d353] border border-[#39d353]/20 font-mono truncate max-w-[180px]"
+            className="text-[9px] px-2 py-0.5 rounded-full bg-brand-green/15 text-brand-green border border-brand-green/20 font-mono truncate max-w-[180px]"
             title={`Model: ${selectedModel?.name || selectedModel?.id}`}
           >
             {displayModelName}
@@ -117,36 +117,36 @@ export function CenterPanel({
           {/* Confidence badge */}
           {confidencePercent !== null && (
             <div className="flex items-center gap-1.5" title={`Confidence: ${confidencePercent}%`}>
-              <Zap className="h-3 w-3 text-[#39d353]" />
-              <span className="text-[10px] text-[#8ab08a]">{confidencePercent}%</span>
+              <Zap className="h-3 w-3 text-brand-green" />
+              <span className="text-[10px] text-brand-green-muted">{confidencePercent}%</span>
             </div>
           )}
           {/* Memory badge */}
           <div className="flex items-center gap-1.5" title={`Memory: ${memoryCount} facts loaded`}>
-            <Brain className="h-3 w-3 text-[#e8a420]" />
-            <span className="text-[10px] text-[#8ab08a]">{memoryCount}</span>
+            <Brain className="h-3 w-3 text-brand-amber" />
+            <span className="text-[10px] text-brand-green-muted">{memoryCount}</span>
           </div>
           {/* Intent badge */}
           {currentIntent && (
             <div className="flex items-center gap-1.5" title={`Intent: ${currentIntent}`}>
-              <Wrench className="h-3 w-3 text-[#8ab08a]" />
-              <span className="text-[10px] text-[#8ab08a]">
+              <Wrench className="h-3 w-3 text-brand-green-muted" />
+              <span className="text-[10px] text-brand-green-muted">
                 {INTENT_LABELS[currentIntent] || currentIntent}
               </span>
             </div>
           )}
-          <div className="w-px h-3 bg-[#1a2a1a]" />
+          <div className="w-px h-3 bg-brand-border" />
           {/* Online/offline status */}
           <div className="flex items-center gap-1" title={isOnline ? 'Online' : 'Offline'}>
             {isOnline ? (
-              <Wifi className="h-3 w-3 text-[#39d353]" />
+              <Wifi className="h-3 w-3 text-brand-green" />
             ) : (
-              <WifiOff className="h-3 w-3 text-[#e05555]" />
+              <WifiOff className="h-3 w-3 text-brand-red" />
             )}
           </div>
           <div className="flex items-center gap-1" title="Local execution">
-            <Shield className="h-3 w-3 text-[#39d353]" />
-            <span className="text-[9px] text-[#8ab08a]">Local</span>
+            <Shield className="h-3 w-3 text-brand-green" />
+            <span className="text-[9px] text-brand-green-muted">Local</span>
           </div>
         </div>
       </div>
@@ -155,14 +155,14 @@ export function CenterPanel({
       <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar min-w-0">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
-            <div className="w-12 h-12 rounded-xl bg-[#39d353]/10 flex items-center justify-center">
-              <Cpu className="h-6 w-6 text-[#39d353]" />
+            <div className="w-12 h-12 rounded-xl bg-brand-green/10 flex items-center justify-center">
+              <Cpu className="h-6 w-6 text-brand-green" />
             </div>
             <div>
-              <h2 className="text-sm font-medium text-[#d4e8d4] mb-1">
+              <h2 className="text-sm font-medium text-brand-green-soft mb-1">
                 Welcome to LocalMind
               </h2>
-              <p className="text-[11px] text-[#8ab08a] max-w-sm">
+              <p className="text-[11px] text-brand-green-muted max-w-sm">
                 Your local AI assistant. Ask me to build, debug, explain, or refactor code.
                 I can read files, run commands, search code, and more.
               </p>
@@ -170,7 +170,7 @@ export function CenterPanel({
           </div>
         )}
 
-        <div className="divide-y divide-[#1a2a1a]/50 overflow-hidden">
+        <div className="divide-y divide-brand-border/50 overflow-hidden">
           {messages.map((msg) => (
             <ChatMessage key={msg.id} message={msg} isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'} />
           ))}
@@ -197,12 +197,12 @@ export function CenterPanel({
           return (
             <div className="px-4 py-3">
               <div className="flex items-center gap-2">
-                <Loader2 className="h-3 w-3 text-[#39d353] animate-spin" />
-                <span className="text-[10px] text-[#8ab08a]">{statusText}</span>
+                <Loader2 className="h-3 w-3 text-brand-green animate-spin" />
+                <span className="text-[10px] text-brand-green-muted">{statusText}</span>
                 <span className="flex gap-0.5">
-                  <span className="w-1 h-1 bg-[#39d353] rounded-full animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1 h-1 bg-[#39d353] rounded-full animate-bounce [animation-delay:150ms]" />
-                  <span className="w-1 h-1 bg-[#39d353] rounded-full animate-bounce [animation-delay:300ms]" />
+                  <span className="w-1 h-1 bg-brand-green rounded-full animate-bounce [animation-delay:0ms]" />
+                  <span className="w-1 h-1 bg-brand-green rounded-full animate-bounce [animation-delay:150ms]" />
+                  <span className="w-1 h-1 bg-brand-green rounded-full animate-bounce [animation-delay:300ms]" />
                 </span>
               </div>
             </div>

@@ -20,11 +20,11 @@ interface FileExplorerProps {
 
 function getFileIcon(name: string) {
   const ext = name.split('.').pop() || '';
-  if (['ts', 'tsx', 'js', 'jsx'].includes(ext)) return <FileCode className="h-3.5 w-3.5 text-[#39d353]" />;
-  if (['json'].includes(ext)) return <FileJson className="h-3.5 w-3.5 text-[#e8a420]" />;
-  if (['md', 'txt'].includes(ext)) return <FileText className="h-3.5 w-3.5 text-[#8ab08a]" />;
-  if (['env', 'example'].includes(ext)) return <File className="h-3.5 w-3.5 text-[#e8a420]" />;
-  return <File className="h-3.5 w-3.5 text-[#8ab08a]" />;
+  if (['ts', 'tsx', 'js', 'jsx'].includes(ext)) return <FileCode className="h-3.5 w-3.5 text-brand-green" />;
+  if (['json'].includes(ext)) return <FileJson className="h-3.5 w-3.5 text-brand-amber" />;
+  if (['md', 'txt'].includes(ext)) return <FileText className="h-3.5 w-3.5 text-brand-green-muted" />;
+  if (['env', 'example'].includes(ext)) return <File className="h-3.5 w-3.5 text-brand-amber" />;
+  return <File className="h-3.5 w-3.5 text-brand-green-muted" />;
 }
 
 function FileTreeNode({ node, depth = 0, onFileOpen }: { node: FileNode; depth?: number; onFileOpen?: (path: string) => void }) {
@@ -33,13 +33,13 @@ function FileTreeNode({ node, depth = 0, onFileOpen }: { node: FileNode; depth?:
   if (node.type === 'file') {
     return (
       <div
-        className="flex items-center gap-1.5 px-2 py-0.5 hover:bg-[#1a2a1a]/50 cursor-pointer rounded transition-colors group"
+        className="flex items-center gap-1.5 px-2 py-0.5 hover:bg-brand-border/50 cursor-pointer rounded transition-colors group"
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={() => onFileOpen?.(node.path)}
         title={node.path}
       >
         {getFileIcon(node.name)}
-        <span className="text-[11px] text-[#d4e8d4] truncate group-hover:text-white transition-colors">
+        <span className="text-[11px] text-brand-green-soft truncate group-hover:text-white transition-colors">
           {node.name}
         </span>
       </div>
@@ -49,21 +49,21 @@ function FileTreeNode({ node, depth = 0, onFileOpen }: { node: FileNode; depth?:
   return (
     <div>
       <div
-        className="flex items-center gap-1 px-2 py-0.5 hover:bg-[#1a2a1a]/50 cursor-pointer rounded transition-colors group"
+        className="flex items-center gap-1 px-2 py-0.5 hover:bg-brand-border/50 cursor-pointer rounded transition-colors group"
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={() => setExpanded(!expanded)}
       >
         {expanded ? (
-          <ChevronDown className="h-3 w-3 text-[#8ab08a] shrink-0" />
+          <ChevronDown className="h-3 w-3 text-brand-green-muted shrink-0" />
         ) : (
-          <ChevronRight className="h-3 w-3 text-[#8ab08a] shrink-0" />
+          <ChevronRight className="h-3 w-3 text-brand-green-muted shrink-0" />
         )}
         {expanded ? (
-          <FolderOpen className="h-3.5 w-3.5 text-[#e8a420] shrink-0" />
+          <FolderOpen className="h-3.5 w-3.5 text-brand-amber shrink-0" />
         ) : (
-          <Folder className="h-3.5 w-3.5 text-[#e8a420] shrink-0" />
+          <Folder className="h-3.5 w-3.5 text-brand-amber shrink-0" />
         )}
-        <span className="text-[11px] text-[#d4e8d4] truncate font-medium group-hover:text-white transition-colors">
+        <span className="text-[11px] text-brand-green-soft truncate font-medium group-hover:text-white transition-colors">
           {node.name}
         </span>
       </div>
@@ -75,7 +75,7 @@ function FileTreeNode({ node, depth = 0, onFileOpen }: { node: FileNode; depth?:
             ))}
           </div>
         ) : (
-          <div className="text-[10px] text-[#5a7a5a] italic px-2 py-0.5" style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}>
+          <div className="text-[10px] text-brand-green-faint italic px-2 py-0.5" style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}>
             Empty
           </div>
         )

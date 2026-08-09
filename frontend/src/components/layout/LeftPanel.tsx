@@ -97,15 +97,15 @@ export function LeftPanel({
   ];
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0f0a] border-r border-[#1a2a1a]">
+    <div className="h-full flex flex-col bg-brand-bg-base border-r border-brand-border">
       {/* Header */}
-      <div className="px-3 py-3 border-b border-[#1a2a1a]">
+      <div className="px-3 py-3 border-b border-brand-border">
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-6 h-6 rounded bg-[#39d353]/10 flex items-center justify-center">
-            <Cpu className="h-3.5 w-3.5 text-[#39d353]" />
+          <div className="w-6 h-6 rounded bg-brand-green/10 flex items-center justify-center">
+            <Cpu className="h-3.5 w-3.5 text-brand-green" />
           </div>
-          <span className="text-sm font-bold text-[#d4e8d4] tracking-tight">LocalMind</span>
-          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#39d353]/10 text-[#39d353] font-mono">
+          <span className="text-sm font-bold text-brand-green-soft tracking-tight">LocalMind</span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-green/10 text-brand-green font-mono">
             v0.5
           </span>
         </div>
@@ -120,7 +120,7 @@ export function LeftPanel({
       <div className="px-3 py-2">
         <button
           onClick={onNewChat}
-          className="flex items-center gap-2 w-full px-3 py-1.5 rounded-md bg-[#39d353]/10 border border-[#39d353]/20 text-[#39d353] text-[11px] font-medium hover:bg-[#39d353]/20 transition-colors"
+          className="flex items-center gap-2 w-full px-3 py-1.5 rounded-md bg-brand-green/10 border border-brand-green/20 text-brand-green text-[11px] font-medium hover:bg-brand-green/20 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
           New Chat
@@ -129,15 +129,15 @@ export function LeftPanel({
       </div>
 
       {/* Tab switcher */}
-      <div className={`flex justify-center px-1 gap-2 border-b border-[#1a2a1a]`}>
+      <div className={`flex justify-center px-1 gap-2 border-b border-brand-border`}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center ${isCompact ? 'p-2.5' : 'gap-1.5 px-2.5 py-1.5'} text-[10px] font-medium transition-colors border-b-2 -mb-px ${
               activeTab === tab.id
-                ? 'text-[#39d353] border-[#39d353]'
-                : 'text-[#8ab08a] border-transparent hover:text-[#d4e8d4]'
+                ? 'text-brand-green border-brand-green'
+                : 'text-brand-green-muted border-transparent hover:text-brand-green-soft'
             }`}
             title={isCompact ? tab.label : undefined}
           >
@@ -152,7 +152,7 @@ export function LeftPanel({
         {activeTab === 'chat' && (
           <div className="p-2 space-y-0.5">
             {(!sessions || sessions.length === 0) && (
-              <div className="px-2.5 py-4 text-center text-[10px] text-[#8ab08a]">
+              <div className="px-2.5 py-4 text-center text-[10px] text-brand-green-muted">
                 No sessions yet. Start a new chat!
               </div>
             )}
@@ -162,13 +162,13 @@ export function LeftPanel({
                 onClick={() => onSelectSession(session.id)}
                 className={`px-2.5 py-2 rounded cursor-pointer transition-colors group ${
                   session.id === currentSessionId
-                    ? 'bg-[#1a2a1a] border border-[#39d353]/20'
-                    : 'hover:bg-[#1a2a1a]/50'
+                    ? 'bg-brand-border border border-brand-green/20'
+                    : 'hover:bg-brand-border/50'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-0.5">
-                  <MessageSquare className="h-3 w-3 text-[#8ab08a] shrink-0" />
-                  <span className="text-[11px] text-[#d4e8d4] font-medium truncate flex-1 min-w-0" title={session.title}>
+                  <MessageSquare className="h-3 w-3 text-brand-green-muted shrink-0" />
+                  <span className="text-[11px] text-brand-green-soft font-medium truncate flex-1 min-w-0" title={session.title}>
                     {session.title}
                   </span>
                   <button
@@ -176,15 +176,15 @@ export function LeftPanel({
                       e.stopPropagation();
                       setConfirmDeleteId(session.id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-[#e05555]/10 text-[#8ab08a] hover:text-[#e05555] transition-all"
+                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-brand-red/10 text-brand-green-muted hover:text-brand-red transition-all"
                     title="Delete session"
                   >
                     <Trash2 className="h-2.5 w-2.5" />
                   </button>
                 </div>
                 {confirmDeleteId === session.id && (
-                  <div className="mt-2 p-2 rounded bg-[#1a2a1a] border border-[#e05555]/30">
-                    <div className="text-[10px] text-[#d4e8d4] mb-2">Delete this chat?</div>
+                  <div className="mt-2 p-2 rounded bg-brand-border border border-brand-red/30">
+                    <div className="text-[10px] text-brand-green-soft mb-2">Delete this chat?</div>
                     <div className="flex justify-end gap-2">
                       <button
                         onClick={(e) => {
@@ -192,7 +192,7 @@ export function LeftPanel({
                           onDeleteSession(session.id);
                           setConfirmDeleteId(null);
                         }}
-                        className="px-2 py-1 text-[10px] rounded bg-[#e05555]/10 text-[#e05555] hover:bg-[#e05555]/20"
+                        className="px-2 py-1 text-[10px] rounded bg-brand-red/10 text-brand-red hover:bg-brand-red/20"
                       >
                         Delete
                       </button>
@@ -201,7 +201,7 @@ export function LeftPanel({
                           e.stopPropagation();
                           setConfirmDeleteId(null);
                         }}
-                        className="px-2 py-1 text-[10px] rounded hover:bg-[#1a2a1a] text-[#8ab08a] hover:text-[#d4e8d4]"
+                        className="px-2 py-1 text-[10px] rounded hover:bg-brand-border text-brand-green-muted hover:text-brand-green-soft"
                       >
                         Cancel
                       </button>
@@ -209,13 +209,13 @@ export function LeftPanel({
                   </div>
                 )}
                 <div className="pl-5 flex items-center gap-2">
-                  <span className="text-[10px] text-[#8ab08a] truncate flex-1 min-w-0" title={session.lastMessage}>
+                  <span className="text-[10px] text-brand-green-muted truncate flex-1 min-w-0" title={session.lastMessage}>
                     {session.lastMessage}
                   </span>
-                  <span className="text-[9px] text-[#8ab08a] shrink-0">{formatTimestamp(session.timestamp, session.formattedDate)}</span>
+                  <span className="text-[9px] text-brand-green-muted shrink-0">{formatTimestamp(session.timestamp, session.formattedDate)}</span>
                 </div>
                 <div className="pl-5 mt-0.5">
-                  <span className="text-[9px] text-[#8ab08a]">{session.messageCount} msgs</span>
+                  <span className="text-[9px] text-brand-green-muted">{session.messageCount} msgs</span>
                 </div>
               </div>
             ))}
@@ -239,22 +239,22 @@ export function LeftPanel({
                     sysinfo: <Zap className="h-3 w-3" />,
                   };
                   const statusIcon = isActiveToolStatus(tc.status)
-                    ? <Loader2 className="h-3 w-3 animate-spin text-[#e8a420]" />
+                    ? <Loader2 className="h-3 w-3 animate-spin text-brand-amber" />
                     : tc.status === 'done'
-                      ? <CheckCircle2 className="h-3 w-3 text-[#39d353]" />
-                      : <XCircle className="h-3 w-3 text-[#e05555]" />;
+                      ? <CheckCircle2 className="h-3 w-3 text-brand-green" />
+                      : <XCircle className="h-3 w-3 text-brand-red" />;
                   const displayLabel = tc.label || tc.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
                   const durationStr = tc.duration !== undefined
                     ? (tc.duration >= 1000 ? `${(tc.duration / 1000).toFixed(1)}s` : `${tc.duration}ms`)
                     : '';
                   return (
-                    <div key={tc.id} className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-[#1a2a1a]/50">
-                      <span className="text-[#8ab08a]">{iconMap[tc.name] || <Terminal className="h-3 w-3" />}</span>
-                      <span className="text-[10px] text-[#d4e8d4] font-mono truncate flex-1 min-w-0" title={displayLabel}>
+                    <div key={tc.id} className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-brand-border/50">
+                      <span className="text-brand-green-muted">{iconMap[tc.name] || <Terminal className="h-3 w-3" />}</span>
+                      <span className="text-[10px] text-brand-green-soft font-mono truncate flex-1 min-w-0" title={displayLabel}>
                         {displayLabel}
                       </span>
-                      {tc.timestamp && <span className="text-[8px] text-[#8ab08a]/60 shrink-0">{tc.timestamp}</span>}
-                      {durationStr && <span className="text-[9px] text-[#8ab08a] shrink-0">{durationStr}</span>}
+                      {tc.timestamp && <span className="text-[8px] text-brand-green-muted/60 shrink-0">{tc.timestamp}</span>}
+                      {durationStr && <span className="text-[9px] text-brand-green-muted shrink-0">{durationStr}</span>}
                       {statusIcon}
                     </div>
                   );
@@ -263,7 +263,7 @@ export function LeftPanel({
             ) : actions.length > 0 ? (
               <ActionHistory actions={actions} />
             ) : (
-              <div className="px-2.5 py-4 text-center text-[10px] text-[#8ab08a]">
+              <div className="px-2.5 py-4 text-center text-[10px] text-brand-green-muted">
                 Actions will appear here during execution.
               </div>
             )}
@@ -273,7 +273,7 @@ export function LeftPanel({
         {activeTab === 'files' && (
           <div className="p-2">
             {files.length === 0 ? (
-              <div className="px-2.5 py-4 text-center text-[10px] text-[#8ab08a]">
+              <div className="px-2.5 py-4 text-center text-[10px] text-brand-green-muted">
                 Loading file tree...
               </div>
             ) : (
@@ -285,16 +285,16 @@ export function LeftPanel({
 
       {/* Running tasks indicator — compact, with cancel button */}
       {activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length > 0 && (
-        <div className="border-t border-[#1a2a1a] px-3 py-2">
+        <div className="border-t border-brand-border px-3 py-2">
           <div className="flex items-center gap-1.5 mb-1.5">
-            <Loader2 className="h-3 w-3 animate-spin text-[#e8a420]" />
-            <span className="text-[10px] text-[#e8a420] font-medium">
+            <Loader2 className="h-3 w-3 animate-spin text-brand-amber" />
+            <span className="text-[10px] text-brand-amber font-medium">
               {activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length} task{activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length > 1 ? 's' : ''} running
             </span>
             {onAbort && (
               <button
                 onClick={onAbort}
-                className="ml-auto text-[9px] px-1.5 py-0.5 rounded border border-[#e05555]/30 bg-[#e05555]/10 text-[#e05555] hover:bg-[#e05555]/20 transition-colors"
+                className="ml-auto text-[9px] px-1.5 py-0.5 rounded border border-brand-red/30 bg-brand-red/10 text-brand-red hover:bg-brand-red/20 transition-colors"
                 title="Cancel running tasks"
               >
                 Cancel
@@ -314,8 +314,8 @@ export function LeftPanel({
               || tc.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
             return (
               <div key={tc.id} className="flex items-center gap-1.5 px-1 py-0.5">
-                <span className="text-[#e8a420]">{iconMap[tc.name] || <Terminal className="h-3 w-3" />}</span>
-                <span className="text-[10px] text-[#d4e8d4] font-mono truncate" title={displayLabel}>
+                <span className="text-brand-amber">{iconMap[tc.name] || <Terminal className="h-3 w-3" />}</span>
+                <span className="text-[10px] text-brand-green-soft font-mono truncate" title={displayLabel}>
                   {displayLabel}
                 </span>
               </div>
@@ -337,14 +337,14 @@ export function LeftPanel({
           Previously the `todos.length > 0` condition made it impossible to
           create the first todo via the UI (chicken-and-egg). */}
       {activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length === 0 && (
-        <div className="border-t border-[#1a2a1a] p-3">
+        <div className="border-t border-brand-border p-3">
           <div className="flex items-center gap-1.5 mb-2">
-            <CheckSquare className="h-3 w-3 text-[#e8a420]" />
-            <span className="text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
+            <CheckSquare className="h-3 w-3 text-brand-amber" />
+            <span className="text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">
               Todos
             </span>
             {todos.length > 0 && (
-              <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-[#1a2a1a] text-[#8ab08a] font-mono">
+              <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-brand-border text-brand-green-muted font-mono">
                 {todos.filter(t => t.completed).length}/{todos.length}
               </span>
             )}

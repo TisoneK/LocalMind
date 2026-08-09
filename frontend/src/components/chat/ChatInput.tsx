@@ -93,15 +93,15 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
   };
 
   return (
-    <div className="border-t border-[#1a2a1a] bg-[#0a0f0a]">
+    <div className="border-t border-brand-border bg-brand-bg-base">
       {/* Input area */}
       <div className="px-4 pt-3 pb-2">
         {/* B-2026-08-02-5 (A5): steering without aborting — while the agent
             is running, inject a message at the next step boundary instead of
             abort + re-run. The backend drains it at the next loop iteration. */}
         {isStreaming && onSteer && (
-          <div className="flex items-center gap-2 mb-2 bg-[#0d150d] border border-[#1a2a1a] rounded-lg px-3 py-1.5 focus-within:border-[#39d353]/40 transition-colors">
-            <Navigation className="h-3 w-3 text-[#39d353] shrink-0" />
+          <div className="flex items-center gap-2 mb-2 bg-brand-bg-chat-input border border-brand-border rounded-lg px-3 py-1.5 focus-within:border-brand-green/40 transition-colors">
+            <Navigation className="h-3 w-3 text-brand-green shrink-0" />
             <input
               value={steerInput}
               onChange={(e) => setSteerInput(e.target.value)}
@@ -112,21 +112,21 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
                 }
               }}
               placeholder="Steer the agent at the next step… (no abort)"
-              className="flex-1 bg-transparent text-[11px] text-[#d4e8d4] placeholder:text-[#8ab08a] outline-none font-mono"
+              className="flex-1 bg-transparent text-[11px] text-brand-green-soft placeholder:text-brand-green-muted outline-none font-mono"
             />
             <button
               onClick={handleSteer}
               disabled={!steerInput.trim()}
-              className="p-1 rounded transition-colors disabled:opacity-40 text-[#39d353] hover:bg-[#1a2a1a]"
+              className="p-1 rounded transition-colors disabled:opacity-40 text-brand-green hover:bg-brand-border"
               title="Inject steering message at next step"
             >
               <Send className="h-3 w-3" />
             </button>
           </div>
         )}
-        <div className="relative flex items-end gap-2 bg-[#111a11] border border-[#1a2a1a] rounded-lg px-3 py-2 focus-within:border-[#39d353]/30 transition-colors">
+        <div className="relative flex items-end gap-2 bg-brand-bg-rail border border-brand-border rounded-lg px-3 py-2 focus-within:border-brand-green/30 transition-colors">
           {/* Prompt symbol */}
-          <span className="text-[#39d353] text-sm font-mono pb-0.5 shrink-0">&gt;</span>
+          <span className="text-brand-green text-sm font-mono pb-0.5 shrink-0">&gt;</span>
 
           {/* Textarea */}
           <textarea
@@ -134,7 +134,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask LocalMind to build, debug, or explain..."
-            className="flex-1 bg-transparent text-[12px] text-[#d4e8d4] placeholder:text-[#8ab08a] resize-none outline-none min-h-[20px] max-h-[120px] font-mono leading-relaxed"
+            className="flex-1 bg-transparent text-[12px] text-brand-green-soft placeholder:text-brand-green-muted resize-none outline-none min-h-[20px] max-h-[120px] font-mono leading-relaxed"
             rows={1}
             disabled={isStreaming}
             onKeyDown={(e) => {
@@ -151,7 +151,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
             <div className="relative" ref={toolMenuRef}>
               <button
                 onClick={() => setToolMenuOpen(!toolMenuOpen)}
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-[#8ab08a] hover:text-[#d4e8d4] hover:bg-[#1a2a1a] transition-colors"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-brand-green-muted hover:text-brand-green-soft hover:bg-brand-border transition-colors"
                 disabled={isStreaming}
               >
                 {currentTool.icon}
@@ -159,7 +159,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
                 <ChevronDown className="h-2.5 w-2.5" />
               </button>
               {toolMenuOpen && (
-                <div className="absolute bottom-full right-0 mb-1 w-36 bg-[#111a11] border border-[#1a2a1a] rounded-md shadow-xl z-50 overflow-hidden">
+                <div className="absolute bottom-full right-0 mb-1 w-36 bg-brand-bg-rail border border-brand-border rounded-md shadow-xl z-50 overflow-hidden">
                   <div className="p-1">
                     {toolOptions.map((tool) => (
                       <button
@@ -168,12 +168,12 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
                           setSelectedTool(tool.id);
                           setToolMenuOpen(false);
                         }}
-                        className="flex items-center gap-2 w-full px-2 py-1 rounded text-[10px] hover:bg-[#1a2a1a] transition-colors text-[#d4e8d4]"
+                        className="flex items-center gap-2 w-full px-2 py-1 rounded text-[10px] hover:bg-brand-border transition-colors text-brand-green-soft"
                       >
                         {tool.icon}
                         <span>{tool.label}</span>
                         {tool.id === selectedTool && (
-                          <span className="ml-auto text-[#39d353]">✓</span>
+                          <span className="ml-auto text-brand-green">✓</span>
                         )}
                       </button>
                     ))}
@@ -186,7 +186,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
             {isStreaming ? (
               <button
                 onClick={handleAbort}
-                className="p-1.5 rounded bg-[#e05555] text-white hover:bg-[#e05555]/80 transition-colors"
+                className="p-1.5 rounded bg-brand-red text-white hover:bg-brand-red/80 transition-colors"
                 title="Stop generating"
               >
                 <Square className="h-3.5 w-3.5" />
@@ -197,8 +197,8 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
                 disabled={!input.trim()}
                 className={`p-1.5 rounded transition-colors ${
                   input.trim()
-                    ? 'bg-[#39d353] text-[#0a0f0a] hover:bg-[#39d353]/80'
-                    : 'bg-[#1a2a1a] text-[#8ab08a]'
+                    ? 'bg-brand-green text-brand-bg-base hover:bg-brand-green/80'
+                    : 'bg-brand-border text-brand-green-muted'
                 }`}
                 title="Send message"
               >
@@ -212,18 +212,18 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
       {/* Footer hints */}
       <div className="flex items-center justify-between px-4 pb-2">
         <div className="flex items-center gap-3">
-          <span className="text-[9px] text-[#8ab08a]">
-            <kbd className="px-1 py-0.5 rounded bg-[#1a2a1a] text-[#8ab08a] mr-0.5">⌘</kbd>
-            <kbd className="px-1 py-0.5 rounded bg-[#1a2a1a] text-[#8ab08a]">Enter</kbd>
+          <span className="text-[9px] text-brand-green-muted">
+            <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted mr-0.5">⌘</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted">Enter</kbd>
             {' '}to send
           </span>
-          <span className="text-[9px] text-[#8ab08a]">
-            <kbd className="px-1 py-0.5 rounded bg-[#1a2a1a] text-[#8ab08a] mr-0.5">Shift</kbd>
-            <kbd className="px-1 py-0.5 rounded bg-[#1a2a1a] text-[#8ab08a]">Enter</kbd>
+          <span className="text-[9px] text-brand-green-muted">
+            <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted mr-0.5">Shift</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-brand-border text-brand-green-muted">Enter</kbd>
             {' '}new line
           </span>
         </div>
-        <span className="text-[9px] text-[#8ab08a]">
+        <span className="text-[9px] text-brand-green-muted">
           {modelName || 'Loading…'} · {modelProvider || '—'}
         </span>
       </div>

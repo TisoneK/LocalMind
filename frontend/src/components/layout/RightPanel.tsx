@@ -102,22 +102,22 @@ export function RightPanel({
 
   if (collapsed) {
     return (
-      <div className="h-full bg-[#0a0f0a] border-l border-[#1a2a1a] flex flex-col items-center py-3 gap-3">
+      <div className="h-full bg-brand-bg-base border-l border-brand-border flex flex-col items-center py-3 gap-3">
         <button
           onClick={() => setShowSettings(true)}
-          className="p-1.5 rounded hover:bg-[#1a2a1a] text-[#8ab08a] hover:text-[#d4e8d4] transition-colors"
+          className="p-1.5 rounded hover:bg-brand-border text-brand-green-muted hover:text-brand-green-soft transition-colors"
           title="Settings"
         >
           <Settings className="h-4 w-4" />
         </button>
         <button
           onClick={onToggleCollapse}
-          className="p-1.5 rounded hover:bg-[#1a2a1a] text-[#8ab08a] hover:text-[#d4e8d4] transition-colors"
+          className="p-1.5 rounded hover:bg-brand-border text-brand-green-muted hover:text-brand-green-soft transition-colors"
           title="Expand panel"
         >
           <PanelRight className="h-4 w-4" />
         </button>
-        <div className="w-px flex-1 bg-[#1a2a1a]" />
+        <div className="w-px flex-1 bg-brand-border" />
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -125,7 +125,7 @@ export function RightPanel({
               setActiveTab(tab.id);
               onToggleCollapse();
             }}
-            className="p-1.5 rounded hover:bg-[#1a2a1a] text-[#8ab08a] hover:text-[#d4e8d4] transition-colors"
+            className="p-1.5 rounded hover:bg-brand-border text-brand-green-muted hover:text-brand-green-soft transition-colors"
             title={tab.label}
           >
             {tab.icon}
@@ -136,17 +136,17 @@ export function RightPanel({
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0f0a] border-l border-[#1a2a1a]">
+    <div className="h-full flex flex-col bg-brand-bg-base border-l border-brand-border">
       {/* Header */}
-      <div className="flex items-center justify-center gap-2 px-2 py-2 border-b border-[#1a2a1a]">
+      <div className="flex items-center justify-center gap-2 px-2 py-2 border-b border-brand-border">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center ${isCompact ? 'p-2.5' : 'gap-1 px-2 py-1'} rounded text-[10px] font-medium transition-colors ${
               activeTab === tab.id
-                ? 'bg-[#1a2a1a] text-[#d4e8d4]'
-                : 'text-[#8ab08a] hover:text-[#d4e8d4] hover:bg-[#1a2a1a]/50'
+                ? 'bg-brand-border text-brand-green-soft'
+                : 'text-brand-green-muted hover:text-brand-green-soft hover:bg-brand-border/50'
             }`}
             title={isCompact ? tab.label : undefined}
           >
@@ -156,14 +156,14 @@ export function RightPanel({
         ))}
         <button
           onClick={() => setShowSettings(true)}
-          className="p-2.5 rounded hover:bg-[#1a2a1a] text-[#8ab08a] hover:text-[#d4e8d4] transition-colors"
+          className="p-2.5 rounded hover:bg-brand-border text-brand-green-muted hover:text-brand-green-soft transition-colors"
           title="Settings"
         >
           <Settings className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={onToggleCollapse}
-          className="p-2.5 rounded hover:bg-[#1a2a1a] text-[#8ab08a] hover:text-[#d4e8d4] transition-colors"
+          className="p-2.5 rounded hover:bg-brand-border text-brand-green-muted hover:text-brand-green-soft transition-colors"
           title="Collapse panel"
         >
           <PanelRightClose className="h-3.5 w-3.5" />

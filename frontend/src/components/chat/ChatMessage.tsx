@@ -61,9 +61,9 @@ interface ChatMessageProps {
 
 function FileResultChip({ result }: { result: FileResult }) {
   const statusConfig = {
-    created: { icon: <FilePlus className="h-3 w-3" />, color: 'text-[#39d353] border-[#39d353]/30 bg-[#39d353]/5' },
-    modified: { icon: <FileEdit className="h-3 w-3" />, color: 'text-[#e8a420] border-[#e8a420]/30 bg-[#e8a420]/5' },
-    deleted: { icon: <FileMinus className="h-3 w-3" />, color: 'text-[#e05555] border-[#e05555]/30 bg-[#e05555]/5' },
+    created: { icon: <FilePlus className="h-3 w-3" />, color: 'text-brand-green border-brand-green/30 bg-brand-green/5' },
+    modified: { icon: <FileEdit className="h-3 w-3" />, color: 'text-brand-amber border-brand-amber/30 bg-brand-amber/5' },
+    deleted: { icon: <FileMinus className="h-3 w-3" />, color: 'text-brand-red border-brand-red/30 bg-brand-red/5' },
   };
   // Defensive: fall back to 'created' if the backend sends an unexpected status
   // (e.g. 'renamed', 'moved'). Previously this would crash with TypeError.
@@ -94,17 +94,17 @@ function CodeBlockComponent({ code, language, filename }: { code: string; langua
 
   const customStyle = useMemo(() => {
     const style = { ...vscDarkPlus };
-    style['pre[class*="language-"]'] = { ...style['pre[class*="language-"]'], background: 'none', margin: 0, padding: 0, fontSize: '12px', lineHeight: '1.6', color: '#d4e8d4' };
-    style['code[class*="language-"]'] = { ...style['code[class*="language-"]'], background: 'none', fontSize: '12px', lineHeight: '1.6', color: '#d4e8d4' };
+    style['pre[class*="language-"]'] = { ...style['pre[class*="language-"]'], background: 'none', margin: 0, padding: 0, fontSize: '12px', lineHeight: '1.6', color: 'var(--brand-green-soft)' };
+    style['code[class*="language-"]'] = { ...style['code[class*="language-"]'], background: 'none', fontSize: '12px', lineHeight: '1.6', color: 'var(--brand-green-soft)' };
     return style;
   }, []);
 
   return (
-    <div className="rounded-md border border-[#1a2a1a] overflow-hidden mb-2 max-w-full shadow-lg shadow-black/20">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#0a120a] border-b border-[#1a2a1a]">
+    <div className="rounded-md border border-brand-border overflow-hidden mb-2 max-w-full shadow-lg shadow-black/20">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-brand-bg-code border-b border-brand-border">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[10px] font-mono text-[#8ab08a] uppercase shrink-0">{language || 'text'}</span>
-          {filename && <span className="text-[10px] text-[#8ab08a] truncate">— {filename}</span>}
+          <span className="text-[10px] font-mono text-brand-green-muted uppercase shrink-0">{language || 'text'}</span>
+          {filename && <span className="text-[10px] text-brand-green-muted truncate">— {filename}</span>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isRunnable && (
@@ -116,7 +116,7 @@ function CodeBlockComponent({ code, language, filename }: { code: string; langua
                 }));
                 window.dispatchEvent(new CustomEvent('localmind:activate-terminal'));
               }}
-              className="flex items-center gap-1 text-[10px] text-[#39d353] hover:text-[#5af75a] transition-colors border border-[#39d353]/20 rounded px-1.5 py-0.5 hover:bg-[#39d353]/5"
+              className="flex items-center gap-1 text-[10px] text-brand-green hover:text-brand-green-bright transition-colors border border-brand-green/20 rounded px-1.5 py-0.5 hover:bg-brand-green/5"
               title="Run in terminal"
             >
               <span>▶</span><span>Run</span>
@@ -124,17 +124,17 @@ function CodeBlockComponent({ code, language, filename }: { code: string; langua
           )}
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 text-[10px] text-[#5a7a5a] hover:text-[#8ab08a] transition-colors"
+            className="flex items-center gap-1 text-[10px] text-brand-green-faint hover:text-brand-green-muted transition-colors"
           >
-            {copied ? <><Check className="h-3 w-3 text-[#39d353]" /><span className="text-[#39d353]">Copied</span></> : <><Copy className="h-3 w-3" /><span>Copy</span></>}
+            {copied ? <><Check className="h-3 w-3 text-brand-green" /><span className="text-brand-green">Copied</span></> : <><Copy className="h-3 w-3" /><span>Copy</span></>}
           </button>
         </div>
       </div>
-      <div className="bg-[#080d08] overflow-x-auto max-w-full">
+      <div className="bg-brand-bg-dark overflow-x-auto max-w-full">
         <div className="flex">
-          <div className="shrink-0 border-r border-[#111a11] bg-[#080d08] py-2 pr-3 pl-3 text-right select-none">
+          <div className="shrink-0 border-r border-brand-bg-rail bg-brand-bg-dark py-2 pr-3 pl-3 text-right select-none">
             {code.split('\n').map((_, i) => (
-              <div key={i} className="text-[11px] font-mono leading-[1.6] text-[#3a5a3a]">{i + 1}</div>
+              <div key={i} className="text-[11px] font-mono leading-[1.6] text-brand-green-line">{i + 1}</div>
             ))}
           </div>
           <div className="flex-1 py-2 pl-4 pr-4 overflow-x-auto">
@@ -142,7 +142,7 @@ function CodeBlockComponent({ code, language, filename }: { code: string; langua
               language={language || 'text'}
               style={customStyle}
               customStyle={{ background: 'none', margin: 0, padding: 0 }}
-              codeTagProps={{ style: { fontSize: '12px', lineHeight: '1.6', fontFamily: 'var(--font-geist-mono), "Cascadia Code", "Fira Code", Consolas, monospace', color: '#d4e8d4' } }}
+              codeTagProps={{ style: { fontSize: '12px', lineHeight: '1.6', fontFamily: 'var(--font-geist-mono), "Cascadia Code", "Fira Code", Consolas, monospace', color: 'var(--brand-green-soft)' } }}
             >
               {code}
             </SyntaxHighlighter>
@@ -183,24 +183,24 @@ function MarkdownPreBlock({ children, ..._props }: React.ComponentPropsWithoutRe
 
   const customStyle = useMemo(() => {
     const style = { ...vscDarkPlus };
-    style['pre[class*="language-"]'] = { ...style['pre[class*="language-"]'], background: 'none', margin: 0, padding: 0, fontSize: '12px', lineHeight: '1.6', color: '#d4e8d4' };
-    style['code[class*="language-"]'] = { ...style['code[class*="language-"]'], background: 'none', fontSize: '12px', lineHeight: '1.6', color: '#d4e8d4' };
+    style['pre[class*="language-"]'] = { ...style['pre[class*="language-"]'], background: 'none', margin: 0, padding: 0, fontSize: '12px', lineHeight: '1.6', color: 'var(--brand-green-soft)' };
+    style['code[class*="language-"]'] = { ...style['code[class*="language-"]'], background: 'none', fontSize: '12px', lineHeight: '1.6', color: 'var(--brand-green-soft)' };
     return style;
   }, []);
 
   // Single-line, no language → render as inline code
   if (!lang && !codeText.includes('\n')) {
     return (
-      <code className="font-mono text-[11.5px] bg-[#0a120a] px-[5px] py-[1px] rounded-[3px] text-[#7ddf7d] border border-[#1a2a1a]">
+      <code className="font-mono text-[11.5px] bg-brand-bg-code px-[5px] py-[1px] rounded-[3px] text-brand-green-inline border border-brand-border">
         {codeText}
       </code>
     );
   }
 
   return (
-    <div className="rounded-md border border-[#1a2a1a] overflow-hidden my-2 font-mono max-w-full shadow-lg shadow-black/20">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#0a120a] border-b border-[#1a2a1a]">
-        <span className="text-[10px] font-mono text-[#8ab08a] uppercase tracking-wider shrink-0">
+    <div className="rounded-md border border-brand-border overflow-hidden my-2 font-mono max-w-full shadow-lg shadow-black/20">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-brand-bg-code border-b border-brand-border">
+        <span className="text-[10px] font-mono text-brand-green-muted uppercase tracking-wider shrink-0">
           {lang || 'text'}
         </span>
         <div className="flex items-center gap-2 shrink-0">
@@ -213,7 +213,7 @@ function MarkdownPreBlock({ children, ..._props }: React.ComponentPropsWithoutRe
                 }));
                 window.dispatchEvent(new CustomEvent('localmind:activate-terminal'));
               }}
-              className="text-[10px] font-mono text-[#39d353] hover:text-[#5af75a] border border-[#39d353]/20 rounded px-1.5 py-0.5 cursor-pointer transition-colors hover:bg-[#39d353]/5"
+              className="text-[10px] font-mono text-brand-green hover:text-brand-green-bright border border-brand-green/20 rounded px-1.5 py-0.5 cursor-pointer transition-colors hover:bg-brand-green/5"
               title="Run in terminal"
             >
               ▶ Run
@@ -221,17 +221,17 @@ function MarkdownPreBlock({ children, ..._props }: React.ComponentPropsWithoutRe
           )}
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1 text-[10px] font-mono text-[#5a7a5a] hover:text-[#8ab08a] transition-colors"
+            className="flex items-center gap-1 text-[10px] font-mono text-brand-green-faint hover:text-brand-green-muted transition-colors"
           >
-            {copied ? <><Check className="h-3 w-3 text-[#39d353]" /><span className="text-[#39d353]">Copied</span></> : <><Copy className="h-3 w-3" /><span>Copy</span></>}
+            {copied ? <><Check className="h-3 w-3 text-brand-green" /><span className="text-brand-green">Copied</span></> : <><Copy className="h-3 w-3" /><span>Copy</span></>}
           </button>
         </div>
       </div>
-      <div className="bg-[#080d08] overflow-x-auto max-w-full">
+      <div className="bg-brand-bg-dark overflow-x-auto max-w-full">
         <div className="flex">
-          <div className="shrink-0 border-r border-[#111a11] bg-[#080d08] py-2 pr-3 pl-3 text-right select-none">
+          <div className="shrink-0 border-r border-brand-bg-rail bg-brand-bg-dark py-2 pr-3 pl-3 text-right select-none">
             {rawCode.split('\n').map((_, i) => (
-              <div key={i} className="text-[11px] font-mono leading-[1.6] text-[#3a5a3a]">{i + 1}</div>
+              <div key={i} className="text-[11px] font-mono leading-[1.6] text-brand-green-line">{i + 1}</div>
             ))}
           </div>
           <div className="flex-1 py-2 pl-4 pr-4 overflow-x-auto">
@@ -239,7 +239,7 @@ function MarkdownPreBlock({ children, ..._props }: React.ComponentPropsWithoutRe
               language={lang || 'text'}
               style={customStyle}
               customStyle={{ background: 'none', margin: 0, padding: 0 }}
-              codeTagProps={{ style: { fontSize: '12px', lineHeight: '1.6', fontFamily: 'var(--font-geist-mono), "Cascadia Code", "Fira Code", Consolas, monospace', color: '#d4e8d4' } }}
+              codeTagProps={{ style: { fontSize: '12px', lineHeight: '1.6', fontFamily: 'var(--font-geist-mono), "Cascadia Code", "Fira Code", Consolas, monospace', color: 'var(--brand-green-soft)' } }}
             >
               {codeText}
             </SyntaxHighlighter>
@@ -254,7 +254,7 @@ function MarkdownPreBlock({ children, ..._props }: React.ComponentPropsWithoutRe
 function MarkdownInlineCode({ children, ...props }: React.ComponentPropsWithoutRef<'code'>) {
   return (
     <code
-      className="font-mono text-[11.5px] bg-[#0a120a] px-[5px] py-[1px] rounded-[3px] text-[#7ddf7d] border border-[#1a2a1a]"
+      className="font-mono text-[11.5px] bg-brand-bg-code px-[5px] py-[1px] rounded-[3px] text-brand-green-inline border border-brand-border"
       {...props}
     >
       {children}
@@ -277,7 +277,7 @@ function MarkdownLink({ href, children, ...props }: React.ComponentPropsWithoutR
     <a
       href={href}
       onClick={handleClick}
-      className="text-[#4a9eff] underline decoration-dotted underline-offset-2"
+      className="text-[brand-blue] underline decoration-dotted underline-offset-2"
       title={href}
       {...props}
     >
@@ -299,7 +299,7 @@ function MarkdownTable({ children, ...props }: React.ComponentPropsWithoutRef<'t
 
 function MarkdownTableHead({ children, ...props }: React.ComponentPropsWithoutRef<'thead'>) {
   return (
-    <thead className="border-b-2 border-[#27622e]" {...props}>
+    <thead className="border-b-2 border-brand-green-table-border" {...props}>
       {children}
     </thead>
   );
@@ -307,7 +307,7 @@ function MarkdownTableHead({ children, ...props }: React.ComponentPropsWithoutRe
 
 function MarkdownTableRow({ children, ...props }: React.ComponentPropsWithoutRef<'tr'>) {
   return (
-    <tr className="border-b border-[#1a2a1a]" {...props}>
+    <tr className="border-b border-brand-border" {...props}>
       {children}
     </tr>
   );
@@ -316,13 +316,13 @@ function MarkdownTableRow({ children, ...props }: React.ComponentPropsWithoutRef
 function MarkdownTableCell({ isHeader, children, ...props }: React.ComponentPropsWithoutRef<'th' | 'td'> & { isHeader?: boolean }) {
   if (isHeader) {
     return (
-      <th className="px-2.5 py-1.5 text-left font-semibold text-[#39d353] text-[11px] tracking-wider uppercase bg-[#0d110d]" {...props}>
+      <th className="px-2.5 py-1.5 text-left font-semibold text-brand-green text-[11px] tracking-wider uppercase bg-brand-bg-table" {...props}>
         {children}
       </th>
     );
   }
   return (
-    <td className="px-2.5 py-1 text-[#d4e8d4]" {...props}>
+    <td className="px-2.5 py-1 text-brand-green-soft" {...props}>
       {children}
     </td>
   );
@@ -335,7 +335,7 @@ function MarkdownHeading({ level, children, ...props }: React.ComponentPropsWith
   const sz = sizes[level] || 'text-[13px]';
   const fw = weights[level] || 'font-[600]';
   return (
-    <div className={`${sz} ${fw} text-[#d4e8d4] mt-2.5 mb-1 font-sans`}{...props}>
+    <div className={`${sz} ${fw} text-brand-green-soft mt-2.5 mb-1 font-sans`}{...props}>
       {children}
     </div>
   );
@@ -362,7 +362,7 @@ function MarkdownOl({ children, ...props }: React.ComponentPropsWithoutRef<'ol'>
 /** Styled list item */
 function MarkdownLi({ children, ...props }: React.ComponentPropsWithoutRef<'li'>) {
   return (
-    <li className="mb-0.5 leading-[1.65] text-[#d4e8d4]" {...props}>
+    <li className="mb-0.5 leading-[1.65] text-brand-green-soft" {...props}>
       {children}
     </li>
   );
@@ -371,7 +371,7 @@ function MarkdownLi({ children, ...props }: React.ComponentPropsWithoutRef<'li'>
 /** Styled paragraph */
 function MarkdownP({ children, ...props }: React.ComponentPropsWithoutRef<'p'>) {
   return (
-    <p className="my-0.5 leading-[1.7] text-[#d4e8d4]" {...props}>
+    <p className="my-0.5 leading-[1.7] text-brand-green-soft" {...props}>
       {children}
     </p>
   );
@@ -380,7 +380,7 @@ function MarkdownP({ children, ...props }: React.ComponentPropsWithoutRef<'p'>) 
 /** Styled blockquote */
 function MarkdownBlockquote({ children, ...props }: React.ComponentPropsWithoutRef<'blockquote'>) {
   return (
-    <blockquote className="my-1.5 py-1.5 px-3 border-l-2 border-[#1a3d1a] bg-[#0d110d] text-[#8ab08a] rounded-r-[4px]" {...props}>
+    <blockquote className="my-1.5 py-1.5 px-3 border-l-2 border-brand-border-soft bg-brand-bg-table text-brand-green-muted rounded-r-[4px]" {...props}>
       {children}
     </blockquote>
   );
@@ -389,23 +389,23 @@ function MarkdownBlockquote({ children, ...props }: React.ComponentPropsWithoutR
 /** Styled horizontal rule */
 function MarkdownHr({ ...props }: React.ComponentPropsWithoutRef<'hr'>) {
   return (
-    <hr className="border-none border-t border-[#1a2a1a] my-1.5" {...props} />
+    <hr className="border-none border-t border-brand-border my-1.5" {...props} />
   );
 }
 
 /** Styled strong text */
 function MarkdownStrong({ children, ...props }: React.ComponentPropsWithoutRef<'strong'>) {
-  return <strong className="text-[#d4e8d4] font-[650]" {...props}>{children}</strong>;
+  return <strong className="text-brand-green-soft font-[650]" {...props}>{children}</strong>;
 }
 
 /** Styled emphasis text */
 function MarkdownEm({ children, ...props }: React.ComponentPropsWithoutRef<'em'>) {
-  return <em className="text-[#8ab08a]" {...props}>{children}</em>;
+  return <em className="text-brand-green-muted" {...props}>{children}</em>;
 }
 
 /** Styled strikethrough (from remark-gfm) */
 function MarkdownDel({ children, ...props }: React.ComponentPropsWithoutRef<'del'>) {
-  return <del className="text-[#6a8a6a] line-through" {...props}>{children}</del>;
+  return <del className="text-brand-green-deleted line-through" {...props}>{children}</del>;
 }
 
 // ── MarkdownContent — renders markdown via ReactMarkdown ────────────────────
@@ -414,7 +414,7 @@ function MarkdownContent({ text }: { text: string }) {
   if (!text) return null;
 
   return (
-    <div className="text-[12px] text-[#d4e8d4] leading-relaxed overflow-hidden max-w-full break-words">
+    <div className="text-[12px] text-brand-green-soft leading-relaxed overflow-hidden max-w-full break-words">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -478,7 +478,7 @@ function MessageMetrics({ performance }: { performance: NonNullable<ChatMessageT
   if (parts.length === 0) return null;
   return (
     <div
-      className="mt-1.5 flex items-center gap-1.5 text-[9px] text-[#5a7a5a] font-mono select-none"
+      className="mt-1.5 flex items-center gap-1.5 text-[9px] text-brand-green-faint font-mono select-none"
       title="This reply's performance: latency · prompt/completion tokens · speed"
     >
       <Activity className="h-2.5 w-2.5 opacity-70 shrink-0" />
@@ -515,23 +515,23 @@ function PermissionGate({ pending, onResolved }: { pending: PendingWrite; onReso
   };
 
   return (
-    <div className="mt-2 rounded-md border border-[#e8a420]/30 bg-[#e8a420]/5 px-3 py-2">
+    <div className="mt-2 rounded-md border border-brand-amber/30 bg-brand-amber/5 px-3 py-2">
       {status === 'pending' && (
         <>
-          <div className="text-[11px] text-[#d4e8d4] mb-1.5">
-            Allow LocalMind to write <strong className="text-[#e8a420]">{pending.filename || 'file'}</strong>?
+          <div className="text-[11px] text-brand-green-soft mb-1.5">
+            Allow LocalMind to write <strong className="text-brand-amber">{pending.filename || 'file'}</strong>?
           </div>
-          <div className="font-mono text-[10px] text-[#8ab08a] mb-2 break-all">{pending.path}</div>
+          <div className="font-mono text-[10px] text-brand-green-muted mb-2 break-all">{pending.path}</div>
           <div className="flex gap-2">
             <button
               onClick={handleConfirm}
-              className="px-2.5 py-1 text-[11px] font-medium rounded border border-[#39d353]/30 bg-[#39d353]/10 text-[#39d353] hover:bg-[#39d353]/20 transition-colors"
+              className="px-2.5 py-1 text-[11px] font-medium rounded border border-brand-green/30 bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
             >
               ✓ Yes, write it
             </button>
             <button
               onClick={handleDeny}
-              className="px-2.5 py-1 text-[11px] font-medium rounded border border-[#e05555]/30 bg-[#e05555]/10 text-[#e05555] hover:bg-[#e05555]/20 transition-colors"
+              className="px-2.5 py-1 text-[11px] font-medium rounded border border-brand-red/30 bg-brand-red/10 text-brand-red hover:bg-brand-red/20 transition-colors"
             >
               ✕ Cancel
             </button>
@@ -539,16 +539,16 @@ function PermissionGate({ pending, onResolved }: { pending: PendingWrite; onReso
         </>
       )}
       {status === 'writing' && (
-        <div className="text-[11px] text-[#e8a420] animate-pulse">Writing file…</div>
+        <div className="text-[11px] text-brand-amber animate-pulse">Writing file…</div>
       )}
       {status === 'done' && (
-        <div className="text-[11px] text-[#39d353]">✓ Written successfully</div>
+        <div className="text-[11px] text-brand-green">✓ Written successfully</div>
       )}
       {status === 'error' && (
-        <div className="text-[11px] text-[#e05555]">Write failed. Try again or write manually.</div>
+        <div className="text-[11px] text-brand-red">Write failed. Try again or write manually.</div>
       )}
       {status === 'denied' && (
-        <div className="text-[11px] text-[#8ab08a]">Write cancelled.</div>
+        <div className="text-[11px] text-brand-green-muted">Write cancelled.</div>
       )}
     </div>
   );
@@ -568,7 +568,7 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
   }, [message.diffData]);
 
   return (
-    <div className={`px-4 py-3 overflow-hidden ${isUser ? 'justify-end' : 'justify-start border-l-2 border-l-[#39d353]/30'}`}>
+    <div className={`px-4 py-3 overflow-hidden ${isUser ? 'justify-end' : 'justify-start border-l-2 border-l-brand-green/30'}`}>
       <div className={`flex items-start gap-3 max-w-full ${isUser ? 'flex-row-reverse' : ''}`}>
         <div className={`flex-1 min-w-0 max-w-full overflow-hidden ${isUser ? 'items-end flex flex-col' : ''}`}>
           {/* Header */}
@@ -576,15 +576,15 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
             {/* Avatar for user messages */}
             {isUser && (
               <div
-                className="w-6 h-6 rounded flex items-center justify-center shrink-0 mt-0.5 bg-[#e8a420]/10 text-[#e8a420]"
+                className="w-6 h-6 rounded flex items-center justify-center shrink-0 mt-0.5 bg-brand-amber/10 text-brand-amber"
               >
                 <User className="h-3.5 w-3.5" />
               </div>
             )}
-            <span className={`text-[11px] font-medium ${isUser ? 'text-[#e8a420]' : 'text-[#39d353]'}`}>
+            <span className={`text-[11px] font-medium ${isUser ? 'text-brand-amber' : 'text-brand-green'}`}>
               {isUser ? 'You' : 'LocalMind'}
             </span>
-            <span className="text-[9px] text-[#8ab08a]">{message.timestamp}</span>
+            <span className="text-[9px] text-brand-green-muted">{message.timestamp}</span>
           </div>
 
           {/* Thinking block — includes tool call steps for clean UX */}
@@ -595,7 +595,7 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
           {/* Content — rendered as Markdown for assistant, plain for user */}
           {message.content && (
             isUser ? (
-              <div className="text-[12px] text-[#f5e0a0] leading-relaxed whitespace-pre-wrap break-words overflow-wrap-anywhere">
+              <div className="text-[12px] text-brand-amber-soft leading-relaxed whitespace-pre-wrap break-words overflow-wrap-anywhere">
                 {message.content}
               </div>
             ) : (

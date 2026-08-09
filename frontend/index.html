@@ -1,12 +1,10 @@
 <!DOCTYPE html>
 <!--
-  The .dark class is applied at the HTML root so the app renders in dark
-  mode by default. LocalMind is a dark-only app — the light theme variables
-  in globals.css are kept for future theming support but are not currently
-  activated. shadcn/ui components use `dark:` variants that require this
-  class to be present on a parent element.
+  LocalMind is a dark-only app: the dark palette is defined as the default
+  in globals.css :root (light variables and the `.dark` variant machinery
+  were removed in the theming decision, Session 103).
 -->
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

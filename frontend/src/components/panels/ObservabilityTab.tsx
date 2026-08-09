@@ -16,12 +16,12 @@ interface ObservabilityTabProps {
 }
 
 const intentLabels: Record<string, { label: string; color: string }> = {
-  code: { label: 'Code Generation', color: 'text-[#39d353]' },
-  file: { label: 'File Operation', color: 'text-[#e8a420]' },
-  chat: { label: 'Conversation', color: 'text-[#8ab08a]' },
-  search: { label: 'Web Search', color: 'text-[#e8a420]' },
-  shell: { label: 'Shell Command', color: 'text-[#39d353]' },
-  memory: { label: 'Memory Operation', color: 'text-[#8ab08a]' },
+  code: { label: 'Code Generation', color: 'text-brand-green' },
+  file: { label: 'File Operation', color: 'text-brand-amber' },
+  chat: { label: 'Conversation', color: 'text-brand-green-muted' },
+  search: { label: 'Web Search', color: 'text-brand-amber' },
+  shell: { label: 'Shell Command', color: 'text-brand-green' },
+  memory: { label: 'Memory Operation', color: 'text-brand-green-muted' },
 };
 
 // Human-readable labels for raw tool names displayed in "Tools Used" section
@@ -47,10 +47,10 @@ function MetricBar({ label, value, max, color, fallback }: { label: string; valu
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-[#8ab08a]">{label}</span>
-        <span className="text-[10px] text-[#d4e8d4] font-mono">{displayValue}</span>
+        <span className="text-[10px] text-brand-green-muted">{label}</span>
+        <span className="text-[10px] text-brand-green-soft font-mono">{displayValue}</span>
       </div>
-      <div className="h-1 bg-[#1a2a1a] rounded-full overflow-hidden">
+      <div className="h-1 bg-brand-border rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full ${color}`}
           style={{ width: `${percentage}%` }}
@@ -75,7 +75,7 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
   const hasData = observation.confidence > 0 || toolsUsed.length > 0 || latency > 0;
 
   const intentConfig = hasData
-    ? (intentLabels[observation.intent] || { label: observation.intent || 'Unknown', color: 'text-[#8ab08a]', bg: 'bg-[#1a2a1a]' })
+    ? (intentLabels[observation.intent] || { label: observation.intent || 'Unknown', color: 'text-brand-green-muted', bg: 'bg-brand-border' })
     : intentLabels.chat;
 
   // ADR-12 (B-2026-08-09-2): pipeline status. Backend `stageTimings`
@@ -120,19 +120,19 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
 
   function stepIcon(status: string) {
     switch (status) {
-      case 'done': return 'bg-[#39d353]';
-      case 'running': return 'bg-[#e8a420]';
-      case 'skipped': return 'bg-[#2a3a2a]';
-      default: return 'bg-[#8ab08a]';
+      case 'done': return 'bg-brand-green';
+      case 'running': return 'bg-brand-amber';
+      case 'skipped': return 'bg-brand-border-strong';
+      default: return 'bg-brand-green-muted';
     }
   }
 
   function stepTextClass(status: string) {
     switch (status) {
-      case 'done': return 'text-[#d4e8d4]';
-      case 'running': return 'text-[#e8a420]';
-      case 'skipped': return 'text-[#5a7a5a]';
-      default: return 'text-[#8ab08a]';
+      case 'done': return 'text-brand-green-soft';
+      case 'running': return 'text-brand-amber';
+      case 'skipped': return 'text-brand-green-faint';
+      default: return 'text-brand-green-muted';
     }
   }
 
@@ -145,23 +145,23 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
       {/* Intent Classification */}
       <div>
         <div className="flex items-center gap-1.5 mb-2">
-          <Target className="h-3 w-3 text-[#e8a420]" />
-          <span className="text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
+          <Target className="h-3 w-3 text-brand-amber" />
+          <span className="text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">
             Intent Classification
           </span>
         </div>
-        <div className="bg-[#0a120a] border border-[#1a2a1a] rounded-md px-3 py-2">
+        <div className="bg-brand-bg-code border border-brand-border rounded-md px-3 py-2">
           <div className="flex items-center justify-between">
             <span className={`text-[11px] font-medium ${intentConfig.color}`}>
               {hasData ? intentConfig.label : '—'}
             </span>
-            <span className="text-[10px] text-[#d4e8d4] font-mono">
+            <span className="text-[10px] text-brand-green-soft font-mono">
               {confidence > 0 ? `${Math.round(confidence * 100)}%` : '—'}
             </span>
           </div>
-          <div className="h-1 bg-[#1a2a1a] rounded-full overflow-hidden mt-1.5">
+          <div className="h-1 bg-brand-border rounded-full overflow-hidden mt-1.5">
             <div
-              className="h-full bg-[#39d353] rounded-full"
+              className="h-full bg-brand-green rounded-full"
               style={{ width: `${confidence * 100}%` }}
             />
           </div>
@@ -171,20 +171,20 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
       {/* Performance */}
       <div>
         <div className="flex items-center gap-1.5 mb-2">
-          <Gauge className="h-3 w-3 text-[#e8a420]" />
-          <span className="text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
+          <Gauge className="h-3 w-3 text-brand-amber" />
+          <span className="text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">
             Performance
           </span>
         </div>
         <div className="space-y-2">
-          <MetricBar label="Confidence" value={hasData ? Math.round(confidence * 100) : 0} max={100} color="bg-[#39d353]" fallback="—" />
-          <MetricBar label="Context Tokens" value={contextTokens} max={32768} color="bg-[#e8a420]" fallback="—" />
+          <MetricBar label="Confidence" value={hasData ? Math.round(confidence * 100) : 0} max={100} color="bg-brand-green" fallback="—" />
+          <MetricBar label="Context Tokens" value={contextTokens} max={32768} color="bg-brand-amber" fallback="—" />
           {/* B-2026-08-09-4: latency has no meaningful fixed scale — the old
               max={10000} bar saturated on any >10s turn. Show the adaptive
               s/ms value instead of a misleading full bar. */}
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-[#8ab08a]">Latency</span>
-            <span className="text-[10px] text-[#d4e8d4] font-mono">
+            <span className="text-[10px] text-brand-green-muted">Latency</span>
+            <span className="text-[10px] text-brand-green-soft font-mono">
               {latency > 0 ? formatLatency(latency) : '—'}
             </span>
           </div>
@@ -194,8 +194,8 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
       {/* Tools Used */}
       <div>
         <div className="flex items-center gap-1.5 mb-2">
-          <Wrench className="h-3 w-3 text-[#e8a420]" />
-          <span className="text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
+          <Wrench className="h-3 w-3 text-brand-amber" />
+          <span className="text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">
             Tools Used
           </span>
         </div>
@@ -203,13 +203,13 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
           {toolsUsed.length > 0 ? toolsUsed.map((tool) => (
             <span
               key={tool}
-              className="px-1.5 py-0.5 rounded bg-[#1a2a1a] text-[10px] text-[#39d353] font-mono"
+              className="px-1.5 py-0.5 rounded bg-brand-border text-[10px] text-brand-green font-mono"
               title={tool}
             >
               {toolDisplayLabels[tool] || tool.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}
             </span>
           )) : (
-            <span className="text-[10px] text-[#8ab08a]">{hasData ? 'None' : '—'}</span>
+            <span className="text-[10px] text-brand-green-muted">{hasData ? 'None' : '—'}</span>
           )}
         </div>
       </div>
@@ -217,19 +217,19 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
       {/* Memory Hits */}
       <div>
         <div className="flex items-center gap-1.5 mb-2">
-          <Brain className="h-3 w-3 text-[#e8a420]" />
-          <span className="text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
+          <Brain className="h-3 w-3 text-brand-amber" />
+          <span className="text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">
             Memory
           </span>
         </div>
-        <div className="bg-[#0a120a] border border-[#1a2a1a] rounded-md px-3 py-2">
+        <div className="bg-brand-bg-code border border-brand-border rounded-md px-3 py-2">
           <div className="flex items-center justify-between">
             {/* B-2026-08-09-8: this counts memory_facts injected into the
                 prompt, not vector-DB hits — renamed accordingly. '—' only when
                 the session truly has no observation; a real 0 (fresh session)
                 renders as 0. */}
-            <span className="text-[10px] text-[#8ab08a]">Memory Facts</span>
-            <span className="text-[11px] text-[#d4e8d4] font-mono">{hasData ? memoryHits : '—'}</span>
+            <span className="text-[10px] text-brand-green-muted">Memory Facts</span>
+            <span className="text-[11px] text-brand-green-soft font-mono">{hasData ? memoryHits : '—'}</span>
           </div>
         </div>
       </div>
@@ -237,8 +237,8 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
       {/* Pipeline — dynamic status based on observation data */}
       <div>
         <div className="flex items-center gap-1.5 mb-2">
-          <Activity className="h-3 w-3 text-[#e8a420]" />
-          <span className="text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
+          <Activity className="h-3 w-3 text-brand-amber" />
+          <span className="text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">
             Agent Pipeline
           </span>
         </div>
@@ -250,22 +250,22 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
                 {step.name}
               </span>
               {step.latencyMs !== undefined && step.latencyMs > 0 && (
-                <span className="text-[9px] text-[#5a7a5a] font-mono">
+                <span className="text-[9px] text-brand-green-faint font-mono">
                   {formatLatency(step.latencyMs)}
                 </span>
               )}
               {step.status === 'skipped' && (
-                <span className="text-[9px] text-[#5a7a5a]">skipped</span>
+                <span className="text-[9px] text-brand-green-faint">skipped</span>
               )}
               {i < pipelineSteps.length - 1 && (
-                <span className="text-[9px] text-[#5a7a5a] ml-auto">
+                <span className="text-[9px] text-brand-green-faint ml-auto">
                   →
                 </span>
               )}
             </div>
           ))}
           {hasBackendStages && (
-            <div className="text-[9px] text-[#5a7a5a] pt-1 border-t border-[#1a2a1a]">
+            <div className="text-[9px] text-brand-green-faint pt-1 border-t border-brand-border">
               Real stage timings from engine
             </div>
           )}
@@ -293,61 +293,61 @@ function RuntimeSnapshot({ summary }: { summary: NonNullable<ObservationData['ob
   return (
     <section aria-labelledby="runtime-snapshot-heading" className="space-y-2">
       <div className="flex items-center gap-1.5">
-        <Activity className="h-3 w-3 text-[#e8a420]" aria-hidden="true" />
-        <h2 id="runtime-snapshot-heading" className="text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
+        <Activity className="h-3 w-3 text-brand-amber" aria-hidden="true" />
+        <h2 id="runtime-snapshot-heading" className="text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">
           Runtime Snapshot
         </h2>
       </div>
 
-      <div className="bg-[#0a120a] border border-[#1a2a1a] rounded-md p-2.5 space-y-2">
+      <div className="bg-brand-bg-code border border-brand-border rounded-md p-2.5 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] text-[#8ab08a]">Workspace</span>
-          <span className={`text-[10px] font-mono ${workspace.gitAvailable ? 'text-[#39d353]' : 'text-[#8ab08a]'}`}>
+          <span className="text-[10px] text-brand-green-muted">Workspace</span>
+          <span className={`text-[10px] font-mono ${workspace.gitAvailable ? 'text-brand-green' : 'text-brand-green-muted'}`}>
             {workspace.gitAvailable ? (workspace.gitBranch || 'git available') : 'git unavailable'}
           </span>
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-[10px]">
           <div className="min-w-0">
-            <div className="text-[#5a7a5a]">Working tree</div>
-            <div className="text-[#d4e8d4] truncate" title={workspaceState}>
+            <div className="text-brand-green-faint">Working tree</div>
+            <div className="text-brand-green-soft truncate" title={workspaceState}>
               {workspaceState}
             </div>
           </div>
           <div className="min-w-0">
-            <div className="text-[#5a7a5a]">Open files</div>
-            <div className="text-[#d4e8d4] font-mono">
+            <div className="text-brand-green-faint">Open files</div>
+            <div className="text-brand-green-soft font-mono">
               {workspace.openFiles.length || '—'}
             </div>
           </div>
         </div>
 
         {workspace.gitDiffStat && (
-          <div className="text-[10px] text-[#8ab08a] truncate" title={workspace.gitDiffStat}>
-            diff: <span className="text-[#d4e8d4] font-mono">{workspace.gitDiffStat}</span>
+          <div className="text-[10px] text-brand-green-muted truncate" title={workspace.gitDiffStat}>
+            diff: <span className="text-brand-green-soft font-mono">{workspace.gitDiffStat}</span>
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2 border-t border-[#1a2a1a] pt-2">
-          <span className="text-[10px] text-[#8ab08a]">Last build</span>
-          <span className={`text-[10px] font-mono ${build?.result === 'success' ? 'text-[#39d353]' : 'text-[#d4e8d4]'}`}>
+        <div className="flex items-center justify-between gap-2 border-t border-brand-border pt-2">
+          <span className="text-[10px] text-brand-green-muted">Last build</span>
+          <span className={`text-[10px] font-mono ${build?.result === 'success' ? 'text-brand-green' : 'text-brand-green-soft'}`}>
             {buildLabel}
           </span>
         </div>
 
         {eventItems.length > 0 && (
-          <div className="border-t border-[#1a2a1a] pt-2">
+          <div className="border-t border-brand-border pt-2">
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] text-[#8ab08a]">Recent events</span>
-              <span className="text-[9px] text-[#5a7a5a] font-mono">{eventItems.length}</span>
+              <span className="text-[10px] text-brand-green-muted">Recent events</span>
+              <span className="text-[9px] text-brand-green-faint font-mono">{eventItems.length}</span>
             </div>
             <div className="max-h-40 overflow-y-auto space-y-1 pr-1" aria-label="Recent runtime events">
               {eventItems.map((event, index) => (
-                <div key={`${event.type}-${index}`} className="rounded bg-[#111d11] px-2 py-1.5 min-w-0">
-                  <div className="text-[10px] text-[#39d353] font-mono truncate" title={event.type}>
+                <div key={`${event.type}-${index}`} className="rounded bg-brand-gh-green-bg px-2 py-1.5 min-w-0">
+                  <div className="text-[10px] text-brand-green font-mono truncate" title={event.type}>
                     {event.type}
                   </div>
-                  <div className="text-[9px] text-[#8ab08a] font-mono break-all line-clamp-2">
+                  <div className="text-[9px] text-brand-green-muted font-mono break-all line-clamp-2">
                     {formatEventData(event.data)}
                   </div>
                 </div>
@@ -376,23 +376,23 @@ function CapabilityCatalog({ capabilities }: { capabilities: CapabilitiesData })
   return (
     <section aria-labelledby="capability-catalog-heading" className="space-y-2">
       <div className="flex items-center gap-1.5">
-        <Brain className="h-3 w-3 text-[#e8a420]" aria-hidden="true" />
-        <h2 id="capability-catalog-heading" className="text-[10px] uppercase tracking-wider text-[#8ab08a] font-medium">
+        <Brain className="h-3 w-3 text-brand-amber" aria-hidden="true" />
+        <h2 id="capability-catalog-heading" className="text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">
           Capabilities
         </h2>
       </div>
-      <div className="bg-[#0a120a] border border-[#1a2a1a] rounded-md p-2.5 space-y-2">
+      <div className="bg-brand-bg-code border border-brand-border rounded-md p-2.5 space-y-2">
         {families.map((family) => (
           <div key={family.id} className="space-y-1">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] text-[#d4e8d4]">{family.label}</span>
-              <span className="text-[9px] text-[#5a7a5a] font-mono">{family.capabilities.length}</span>
+              <span className="text-[10px] text-brand-green-soft">{family.label}</span>
+              <span className="text-[9px] text-brand-green-faint font-mono">{family.capabilities.length}</span>
             </div>
             <div className="flex flex-wrap gap-1">
               {family.capabilities.map((capability) => (
                 <span
                   key={capability.id}
-                  className="px-1.5 py-0.5 rounded bg-[#1a2a1a] text-[9px] text-[#8ab08a] font-mono"
+                  className="px-1.5 py-0.5 rounded bg-brand-border text-[9px] text-brand-green-muted font-mono"
                   title={capability.description}
                 >
                   <span aria-hidden="true">{capability.id.replace(/_/g, ' ')}</span>
