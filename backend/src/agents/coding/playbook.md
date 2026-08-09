@@ -36,6 +36,21 @@ The requested change is:
    verification over one large edit. If something breaks, small
    changes are easier to debug.
 
+## Subgoal scratchpad (multi-step tasks)
+
+When a task has several distinct steps (e.g. "build a hello world
+repo" → create dir → write hello.py → git init → git add → git
+commit), track them in the per-run subgoal scratchpad so you keep
+accurate working memory across tool calls:
+
+1. `create_plan` with the ordered steps when the task is clear up
+   front — or `add_subgoal` one at a time as steps emerge mid-task.
+2. `update_subgoal(id, status="in_progress")` when you start a step,
+   `status="completed"` when it's done, `status="blocked"` when
+   something is in the way (note what).
+3. Keep 3-7 well-named subgoals — not one per tool call. The
+   scratchpad is your working memory, not a log.
+
 ## What you must NOT do
 
 - Don't blind-write files without reading them first.

@@ -719,6 +719,74 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "add_subgoal",
+            "description": (
+                "Record a single subgoal in the current run's subgoal scratchpad. "
+                "Use for multi-step tasks to track progress across iterations: add a "
+                "step, mark it in_progress/completed as you work, and keep notes. "
+                "Prefer create_plan when you know several steps up front. Returns the "
+                "full current scratchpad."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "description": {"type": "string", "description": "The subgoal to track"},
+                },
+                "required": ["description"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_subgoal",
+            "description": (
+                "Update a subgoal's status ('pending' | 'in_progress' | 'completed' | "
+                "'blocked') and/or attach notes. Ids come from add_subgoal / "
+                "create_plan (e.g. 'sg-1'). Returns the full current scratchpad."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Subgoal id to update (e.g. 'sg-1')"},
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "in_progress", "completed", "blocked"],
+                        "description": "New lifecycle status",
+                    },
+                    "notes": {"type": "string", "description": "Optional note about progress/learnings"},
+                },
+                "required": ["id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_plan",
+            "description": (
+                "Create multiple subgoals at once for a multi-step task. Pass a JSON "
+                "array of steps ({\"steps\": [\"create dir\", \"write hello.py\", ...]}) "
+                "or a markdown list ('1. create dir\\n2. write hello.py'). The plan is "
+                "tracked in the current run's scratchpad so you can check off each step "
+                "as you complete it. Returns the full current scratchpad."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "steps": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Ordered list of steps for the plan",
+                    },
+                },
+                "required": ["steps"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "git",
             "description": (
                 "Structured Git version control operations. Use this instead of "
@@ -994,6 +1062,15 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
     elif tool_name == "apply_proposed_edit":
         # apply_proposed_edit takes a single path argument.
         return tool_args.get("path", "")
+    elif tool_name == "add_subgoal":
+        # add_subgoal takes a single description argument.
+        return tool_args.get("description", "")
+    elif tool_name == "update_subgoal":
+        # update_subgoal dispatcher expects JSON-encoded args (id/status/notes).
+        return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "create_plan":
+        # create_plan dispatcher expects JSON-encoded args (steps array or plan).
+        return json.dumps(tool_args, ensure_ascii=False)
     elif tool_name == "git":
         # git dispatcher expects JSON-encoded args (operation + params)
         # — same pattern as delegate/edit_file. The git tool parses it back.
@@ -1113,6 +1190,11 @@ class AgentLoop:
         # Lazy import to avoid a circular import at registration time.
         from tools.proposals import reset_proposals
         reset_proposals()
+        # B-2026-08-02-8 (B3): fresh subgoal scratchpad per run — a previous
+        # run's subgoals must never leak into this one (same fresh-per-turn
+        # pattern as the proposal registry / A5 steering queue / A2 abort).
+        from core.subgoal import reset_subgoals
+        reset_subgoals()
 
         # ADR-8 Phase 2 (Session 34): honor agent_config.max_iterations
         # and agent_config.max_wall_clock_secs when provided. Previously
@@ -1435,6 +1517,21 @@ class AgentLoop:
             # context_compactor.simplify_tool_results docstring).
             iteration_messages = simplify_tool_results(iteration_messages)
 
+            # B-2026-08-02-8 (B3): surface the subgoal scratchpad directly in
+            # the system message each iteration — tool results alone aren't
+            # reliable working memory (the A4 compactor stubs older tool
+            # results, so a plan created early could vanish mid-run). The
+            # registry is small (3-7 subgoals); empty → skip. iteration_messages
+            # is a fresh copy per iteration, so the append never accumulates.
+            from core.subgoal import get_registry
+            _scratchpad = get_registry().as_markdown()
+            if iteration_messages and _scratchpad != "(no subgoals yet)":
+                iteration_messages[0]["content"] = (
+                    iteration_messages[0]["content"]
+                    + "\n\n## Current subgoal scratchpad\n"
+                    + _scratchpad
+                )
+
             # ── LLM call with tools ───────────────────────────────────
             # Session 25/31: wrap with a hard timeout to prevent "thinking
             # forever" when the model hangs. Uses PER_CALL_TIMEOUT_SECS
@@ -1606,6 +1703,11 @@ class AgentLoop:
                         "propose_str_replace": f"Staging edit: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Staging edit proposal",
                         "propose_write_file": f"Staging write: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Staging write proposal",
                         "apply_proposed_edit": f"Applying edit: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Applying staged edit",
+                        "add_subgoal": "Adding subgoal",
+                        "update_subgoal": (f"Updating subgoal: {call.tool_args.get('id', '')[:40]}"
+                                            if call.tool_args.get('id') else "Updating subgoal"),
+                        "create_plan": (f"Creating plan ({len(call.tool_args.get('steps') or [])} steps)"
+                                         if call.tool_args.get('steps') else "Creating plan"),
                     }
                     _label = _label_map.get(call.tool_name, f"Running {call.tool_name}")
                     yield StreamChunk(text="", done=False, status=_label)

@@ -40,14 +40,14 @@ def test_list_intent_mappings_covers_all_intents():
     """list_intent_mappings() returns one entry per ROUTING Intent.
 
     ADR-8 Phase 3 (Session 34) + B-2026-08-02-6 (Session 81) +
-    B-2026-08-02-7 (Session 82): Intent.DELEGATE, Intent.DELEGATE_PARALLEL,
-    Intent.PROPOSE_EDIT, Intent.PROPOSE_WRITE, and Intent.APPLY_PROPOSED
-    are meta-tool intents (the agent calls the `delegate` /
-    `delegate_parallel` / `propose_str_replace` / `propose_write_file` /
-    `apply_proposed_edit` tools, which are then dispatched by the agent
-    loop). They are NOT routing intents — the intent classifier never
-    produces them; they're only invoked when the model calls the tools.
-    So they're excluded from the routing map.
+    B-2026-08-02-7 (Session 82) + B-2026-08-02-8 (Session 83): the
+    DELEGATE / DELEGATE_PARALLEL / PROPOSE_EDIT / PROPOSE_WRITE /
+    APPLY_PROPOSED / ADD_SUBGOAL / UPDATE_SUBGOAL / CREATE_PLAN intents
+    are meta-tool intents (the agent calls the corresponding tools,
+    which are then dispatched by the agent loop). They are NOT routing
+    intents — the intent classifier never produces them; they're only
+    invoked when the model calls the tools. So they're excluded from
+    the routing map.
     """
     mappings = list_intent_mappings()
     mapped_intents = {intent for intent, _ in mappings}
@@ -58,6 +58,9 @@ def test_list_intent_mappings_covers_all_intents():
         Intent.PROPOSE_EDIT,
         Intent.PROPOSE_WRITE,
         Intent.APPLY_PROPOSED,
+        Intent.ADD_SUBGOAL,
+        Intent.UPDATE_SUBGOAL,
+        Intent.CREATE_PLAN,
     )
     routing_intents = {i for i in Intent if i not in meta_tool_intents}
     for intent in routing_intents:
@@ -84,6 +87,18 @@ def test_list_intent_mappings_covers_all_intents():
     assert Intent.APPLY_PROPOSED not in mapped_intents, (
         "Intent.APPLY_PROPOSED should not be in the routing map — it's a "
         "meta-tool intent (the model calls the apply_proposed_edit tool)."
+    )
+    assert Intent.ADD_SUBGOAL not in mapped_intents, (
+        "Intent.ADD_SUBGOAL should not be in the routing map — it's a "
+        "meta-tool intent (the model calls the add_subgoal tool)."
+    )
+    assert Intent.UPDATE_SUBGOAL not in mapped_intents, (
+        "Intent.UPDATE_SUBGOAL should not be in the routing map — it's a "
+        "meta-tool intent (the model calls the update_subgoal tool)."
+    )
+    assert Intent.CREATE_PLAN not in mapped_intents, (
+        "Intent.CREATE_PLAN should not be in the routing map — it's a "
+        "meta-tool intent (the model calls the create_plan tool)."
     )
 
 

@@ -61,6 +61,9 @@ class Intent(str, Enum):
     PROPOSE_EDIT = "propose_str_replace"  # B-2026-08-02-7: stage an edit proposal (no write)
     PROPOSE_WRITE = "propose_write_file"  # B-2026-08-02-7: stage a write proposal (no write)
     APPLY_PROPOSED = "apply_proposed_edit"  # B-2026-08-02-7: write a staged proposal to disk
+    ADD_SUBGOAL = "add_subgoal"  # B-2026-08-02-8: add a subgoal to the scratchpad
+    UPDATE_SUBGOAL = "update_subgoal"  # B-2026-08-02-8: update a subgoal's status/notes
+    CREATE_PLAN = "create_plan"  # B-2026-08-02-8: create multiple subgoals from a plan
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -61,6 +61,9 @@ CODING_TOOLS: frozenset[str] = frozenset(
         "propose_str_replace",  # B-2026-08-02-7: stage an edit proposal (no write)
         "propose_write_file",  # B-2026-08-02-7: stage a write proposal (no write)
         "apply_proposed_edit",  # B-2026-08-02-7: write a staged proposal to disk
+        "add_subgoal",  # B-2026-08-02-8: subgoal scratchpad
+        "update_subgoal",  # B-2026-08-02-8: subgoal scratchpad
+        "create_plan",  # B-2026-08-02-8: subgoal scratchpad
         "diagnostics",  # Session 49: structured failure analysis
     }
 )

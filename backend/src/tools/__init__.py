@@ -161,6 +161,7 @@ from tools import (
     propose_edit,  # noqa: E402, F401 -- B-2026-08-02-7: stage an edit proposal (no write)
     propose_write,  # noqa: E402, F401 -- B-2026-08-02-7: stage a write proposal (no write)
     shell,  # noqa: E402, F401 -- registers SHELL
+    subgoal,  # noqa: E402, F401 -- B-2026-08-02-8: subgoal scratchpad tools
     sysinfo,  # noqa: E402, F401 -- registers SYSINFO (offline: time, date, specs)
     web_fetch,  # noqa: E402, F401 -- registers WEB_FETCH (follow-up URL fetching)
     web_search,  # noqa: E402, F401 -- registers WEB_SEARCH
