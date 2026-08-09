@@ -77,27 +77,51 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
     ? (intentLabels[observation.intent] || { label: observation.intent || 'Unknown', color: 'text-[#8ab08a]', bg: 'bg-[#1a2a1a]' })
     : intentLabels.chat;
 
-  // FIX: Dynamic pipeline status — previously the pipeline was hardcoded
-  // with steps 3/5 done. Now we infer status from the observation data:
-  // - "done" = a turn_complete or tool dispatch was observed
-  // - "running" = we have an intent but no completion yet
-  // - "pending" = no data yet
+  // ADR-12 (B-2026-08-09-2): pipeline status. Backend `stageTimings`
+  // (from the engine's _StageClock) are AUTHORITATIVE when present — real
+  // latency + truthful done/skipped status. The fallback heuristic below
+  // is only for turns where the backend hasn't reported stage timings yet,
+  // and it now resolves completed no-tool stages to "skipped" instead of
+  // leaving "Tool Select" orange forever / "Execute" done with no tools.
+  const stageTimings = observation.stageTimings ?? {};
+  const hasBackendStages = Object.keys(stageTimings).length > 0;
   const hasIntent = !!observation.intent;
   const hasToolCall = (observation.toolsUsed ?? []).length > 0;
   const hasCompletion = observation.latency !== undefined && observation.latency > 0;
 
-  const pipelineSteps = [
-    { name: 'Intent Classify', status: hasIntent ? 'done' : 'pending' },
-    { name: 'Context Build', status: hasIntent ? (hasToolCall || hasCompletion ? 'done' : 'running') : 'pending' },
-    { name: 'Tool Select', status: hasToolCall ? 'done' : hasIntent ? 'running' : 'pending' },
-    { name: 'Generate', status: hasCompletion ? 'done' : hasToolCall ? 'running' : 'pending' },
-    { name: 'Execute', status: hasCompletion ? 'done' : 'pending' },
-  ];
+  // Canonical pipeline stages — keys match the engine's _StageClock names.
+  const STAGE_KEYS = ['intent_classify', 'context_build', 'tool_select', 'generate', 'execute'] as const;
+  const STAGE_LABELS: Record<string, string> = {
+    intent_classify: 'Intent Classify',
+    context_build: 'Context Build',
+    tool_select: 'Tool Select',
+    generate: 'Generate',
+    execute: 'Execute',
+  };
+
+  function fallbackStatus(key: string): string {
+    switch (key) {
+      case 'intent_classify': return hasIntent ? 'done' : 'pending';
+      case 'context_build': return hasIntent ? (hasToolCall || hasCompletion ? 'done' : 'running') : 'pending';
+      // No tools used + turn complete → the stage never ran → skipped.
+      case 'tool_select': return hasToolCall ? 'done' : hasCompletion ? 'skipped' : hasIntent ? 'running' : 'pending';
+      case 'generate': return hasCompletion ? 'done' : hasIntent ? 'running' : 'pending';
+      case 'execute': return hasToolCall ? 'done' : hasCompletion ? 'skipped' : 'pending';
+      default: return 'pending';
+    }
+  }
+
+  const pipelineSteps = STAGE_KEYS.map((key) => {
+    const backend = stageTimings[key];
+    const status = backend ? backend.status : fallbackStatus(key);
+    return { name: STAGE_LABELS[key] || key, status, latencyMs: backend ? backend.latencyMs : undefined };
+  });
 
   function stepIcon(status: string) {
     switch (status) {
       case 'done': return 'bg-[#39d353]';
       case 'running': return 'bg-[#e8a420]';
+      case 'skipped': return 'bg-[#2a3a2a]';
       default: return 'bg-[#8ab08a]';
     }
   }
@@ -106,8 +130,16 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
     switch (status) {
       case 'done': return 'text-[#d4e8d4]';
       case 'running': return 'text-[#e8a420]';
+      case 'skipped': return 'text-[#5a7a5a]';
       default: return 'text-[#8ab08a]';
     }
+  }
+
+  // Adaptive latency formatting: sub-second → ms, above → s (1 decimal).
+  function formatLatency(ms: number): string {
+    if (!Number.isFinite(ms) || ms <= 0) return '';
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -216,6 +248,14 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
               <span className={`text-[10px] ${stepTextClass(step.status)}`}>
                 {step.name}
               </span>
+              {step.latencyMs !== undefined && step.latencyMs > 0 && (
+                <span className="text-[9px] text-[#5a7a5a] font-mono">
+                  {formatLatency(step.latencyMs)}
+                </span>
+              )}
+              {step.status === 'skipped' && (
+                <span className="text-[9px] text-[#5a7a5a]">skipped</span>
+              )}
               {i < pipelineSteps.length - 1 && (
                 <span className="text-[9px] text-[#5a7a5a] ml-auto">
                   →
@@ -223,6 +263,11 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
               )}
             </div>
           ))}
+          {hasBackendStages && (
+            <div className="text-[9px] text-[#5a7a5a] pt-1 border-t border-[#1a2a1a]">
+              Real stage timings from engine
+            </div>
+          )}
         </div>
       </div>
 

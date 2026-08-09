@@ -255,6 +255,14 @@ export interface ObservationSummary {
   recentEvents: ObservationEventSummary[];
 }
 
+/** A single pipeline stage's real timing, reported by the engine's
+ * _StageClock (ADR-12). `status` is authoritative: "done" or "skipped"
+ * (the stage never ran — e.g. Tool Select on a no-tool turn). */
+export interface StageTiming {
+  latencyMs: number;
+  status: 'done' | 'skipped' | 'running' | 'pending';
+}
+
 export interface ObservationData {
   intent: IntentType;
   confidence: number;
@@ -264,6 +272,9 @@ export interface ObservationData {
   latency: number;
   /** Structured workspace/runtime state captured after the last completed turn. */
   observation?: ObservationSummary | null;
+  /** Real per-stage timings from the backend (keyed by stage name). When
+   * present, the pipeline panel renders these instead of a heuristic. */
+  stageTimings?: Record<string, StageTiming>;
 }
 
 export interface CapabilityItem {

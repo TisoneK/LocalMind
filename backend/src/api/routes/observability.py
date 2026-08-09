@@ -48,6 +48,10 @@ class ObservabilityData(BaseModel):
     latency_ms: float = 0
     tool_timeline: List[ToolEvent] = Field(default_factory=list)
     observation: Optional[ObservationSummary] = None
+    # ADR-12 (B-2026-08-09-2): real per-stage timings from the engine's
+    # _StageClock, folded into the stored observation on turn_complete.
+    # Shape: {stage: {"latency_ms": int, "status": "done"|"skipped"|...}}
+    stage_timings: Optional[dict] = None
 
 
 def _get_engine():
@@ -88,6 +92,7 @@ async def get_observability(session_id: str):
                 if snapshot is not None
                 else None
             ),
+            stage_timings=obs_data.get("stage_timings"),
         )
 
     # Fallback: aggregate from MetricsStore for this session's intent

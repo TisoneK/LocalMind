@@ -102,6 +102,52 @@ def get_adapter(*args, **kwargs):
     return _real(*args, **kwargs)
 
 
+class _StageClock:
+    """Per-request pipeline stage timing for the Observe panel (ADR-12).
+
+    The frontend's "Agent Pipeline" section previously derived stage status
+    from a heuristic (intent present / tool call seen / latency > 0), which
+    left "Tool Select" orange forever on completed no-tool turns and showed
+    "Execute" as done with no tools. This clock records REAL wall-clock
+    latency per stage and emits ``stage_timing`` obs events so the panel can
+    render truthful statuses (done / skipped) with real timings.
+
+    Stages: intent_classify, context_build, tool_select, generate, execute.
+    Stages that never ran are emitted as "skipped" so the UI never shows a
+    stuck "running" state for work that didn't happen.
+    """
+
+    def __init__(self, obs: ObsCollector):
+        self._obs = obs
+        self._marks: dict[str, float] = {}
+        self.timings: dict[str, dict] = {}
+
+    def start(self, stage: str) -> None:
+        self._marks[stage] = time.monotonic()
+
+    def end(self, stage: str, status: str = "done") -> None:
+        t0 = self._marks.pop(stage, None)
+        if t0 is None:
+            return
+        latency_ms = round((time.monotonic() - t0) * 1000)
+        self._timing(stage, latency_ms, status)
+
+    def mark(self, stage: str, latency_ms: int, status: str = "done") -> None:
+        """Record a stage that completed outside start()/end() (e.g. skipped
+        or folded into another stage) with an explicit latency."""
+        self._timing(stage, latency_ms, status)
+
+    def skip(self, stage: str) -> None:
+        self._timing(stage, 0, "skipped")
+
+    def snapshot(self) -> dict:
+        return dict(self.timings)
+
+    def _timing(self, stage: str, latency_ms: int, status: str) -> None:
+        self.timings[stage] = {"latency_ms": latency_ms, "status": status}
+        self._obs.emit("stage_timing", stage=stage, latency_ms=latency_ms, status=status)
+
+
 class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
     def __init__(self):
         self._store = SessionStore(settings.localmind_db_path)
@@ -482,6 +528,23 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # turn_complete doesn't include them.
         existing = self._last_observation.get(session_id, {})
         merged = {**existing, **data}
+
+        # ADR-12 (B-2026-08-09-2): fold stage_timing obs events emitted
+        # during this request into the stored observation so the polling
+        # observability endpoint returns truthful per-stage timings too.
+        try:
+            stage_timings = {}
+            for evt in obs.history():
+                if evt.type == "stage_timing":
+                    stage_timings[evt.data.get("stage", "")] = {
+                        "latency_ms": evt.data.get("latency_ms", 0),
+                        "status": evt.data.get("status", "done"),
+                    }
+            if stage_timings:
+                merged = {**merged, "stage_timings": stage_timings}
+        except Exception:
+            pass  # Observability must never break the pipeline
+
         self._last_observation[session_id] = merged
 
     # _persist_user_message and _persist_assistant_message are defined in
@@ -800,6 +863,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         """Process one request while the caller owns ``_process_lock``."""
         _obs = obs or ObsCollector()
         t0 = time.monotonic()
+        # ADR-12 (B-2026-08-09-2): per-request stage clock — emits real
+        # per-stage timings so the Observe panel shows truth, not a guess.
+        _clock = _StageClock(_obs)
+        _clock.start("intent_classify")
 
         # Session 24: initialize prompt_messages early so it's always bound.
         # Previously, prompt_messages was only assigned inside the DIRECT
@@ -856,9 +923,15 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     message_preview=message[:40],
                     kind=_trivial_kind,
                 )
+                _clock.end("intent_classify")
+                _clock.skip("context_build")
+                _clock.skip("tool_select")
+                _clock.start("generate")
                 _trivial_adapter = self._adapter_for(Intent.CHAT)
                 async for _chunk in trivial_response(message, _trivial_adapter, history=None):
                     yield _chunk
+                _clock.end("generate")
+                _clock.skip("execute")
                 # Session 24: return IMMEDIATELY after streaming completes.
                 # Cleanup is best-effort — must not prevent the return
                 # (which would cause a duplicate response from the normal
@@ -907,9 +980,15 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     message_preview=message[:40],
                     kind=_conv_kind,
                 )
+                _clock.end("intent_classify")
+                _clock.skip("context_build")
+                _clock.skip("tool_select")
+                _clock.start("generate")
                 _conv_adapter = self._adapter_for(Intent.CHAT)
                 async for _chunk in conversational_response(message, _conv_adapter, history=None):
                     yield _chunk
+                _clock.end("generate")
+                _clock.skip("execute")
                 # Same best-effort cleanup pattern as the trivial path — must
                 # not prevent the return (duplicate-response protection).
                 try:
@@ -1082,6 +1161,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 )
                 _orchestration_plan = OrchestrationPlan(profile=_task_profile)
 
+        _clock.end("intent_classify")
+        # Tool selection is decided by the dispatcher's capability inference.
+        if _task_profile.required_tools():
+            _clock.mark("tool_select", 0, "done")
+        else:
+            _clock.skip("tool_select")
+
         # ── 3. Derive routing from TaskProfile ─────────────────────────────
         # The TaskProfile is the source of truth. We derive:
         #   - effective_intent (for backward compat with tool dispatch)
@@ -1126,6 +1212,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # The EPL-style misrouting ("What is today's EPL games?" → CHAT)
         # is now caught by the capability correction in Step 3.
         if _execution_mode == ExecutionMode.DIRECT:
+            _clock.start("context_build")
             # Memory retrieval: skip embedding for short messages, but use
             # warm-start facts as a fallback. Short messages like "hi" or
             # "help" can't produce meaningful embedding matches, but the agent
@@ -1189,6 +1276,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             prompt_messages = await maybe_compress_history(
                 prompt_messages, active_adapter, active_adapter.effective_context_window
             )
+            _clock.end("context_build")
+            _clock.start("generate")
 
             # Red-zone preamble for uncertain routing — REMOVED for CHAT path.
             # The Chat Agent's system prompt handles uncertainty naturally
@@ -1226,6 +1315,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 completion_tokens=token_count,
             )
             _obs.emit("thinking_done", intent="chat")
+            _clock.end("generate")
+            _clock.skip("execute")
 
             response_text = "".join(full_response_chunks)
 
@@ -1365,6 +1456,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # retrieval was already started in parallel with the dispatcher call.
         # Re-use that task instead of starting a new one, saving another
         # 0.5-3s of sequential waiting.
+        # ADR-12: context_build covers memory retrieval (+ file parsing when
+        # attached) for ALL agent turns — start unconditionally so non-file
+        # turns also get a real timing, not just the heuristic fallback.
+        _clock.start("context_build")
         _file_attach_coro = None
         if file and filename:
 
@@ -1436,6 +1531,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     memory_facts.append(wf)
                     existing.add(wf.lower().strip())
 
+        _clock.end("context_build")
+
         # ── 5b. Workspace orchestrator — parallel track ───────────────────
         # Routes tool-bearing intents (SHELL, SYSINFO, FILE_WRITE,
         # CODE_EXEC, MEMORY_OP, FILE_TASK without attachment) through the
@@ -1476,6 +1573,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
 
                 del self._pending_writes[session_id]
                 _obs.emit("workspace_orchestrator_start", intent="file_write")
+                _clock.mark("execute", 0, "done")
+                _clock.skip("generate")
                 _obs.emit("workspace_tool_start", task_id="t1", tool="file_write")
                 _filepath = Path(_pending["path"])
                 _result = await _do_write(_filepath, _pending["content"])
@@ -1598,6 +1697,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         ):
             _obs.emit("workspace_orchestrator_start", intent=effective_intent.value)
             full_response_chunks: list[str] = []
+            _clock.start("generate")
             # Get fresh adapter for orchestrator
             orch_adapter = get_adapter(settings.localmind_adapter)
             self._orchestrator._adapter = orch_adapter
@@ -1620,6 +1720,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     )
                 yield StreamChunk(text=safe, done=chunk.done, metadata=chunk.metadata)
 
+            _clock.end("generate")
+            _clock.mark("execute", 0, "done")
             response_text = "".join(full_response_chunks)
             self._persist_assistant_message(session_id, response_text)
             total_ms = round((time.monotonic() - t0) * 1000)
@@ -1698,6 +1800,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # disappears when the response arrives. Never touches the text content stream.
             label = _TOOL_LABELS.get(effective_intent, effective_intent.value)
             _obs.emit("tool_status", tool=effective_intent.value, label=label, status="running")
+            _clock.start("execute")
             # Session 28: mark todo step 0 (tool execution) as in_progress
             self._update_todo_status(session_id, 0, "in_progress", _obs)
             logger.info("[engine] Direct tool dispatch for %s", effective_intent.value)
@@ -1744,6 +1847,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     )
 
                 tool_latency = round((time.monotonic() - t_tool) * 1000)
+                _clock.end("execute")
+                _clock.skip("generate")
                 _obs.emit(
                     "tool_dispatched",
                     tool=effective_intent.value,
@@ -1880,6 +1985,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # Pass intent so the per-intent timeout (OLLAMA_TIMEOUT_FILE_TASK) is used.
             # Without intent=, the adapter falls back to the default 120s client timeout.
             full_response: list[str] = []
+            _clock.start("generate")
             self._metrics.start_request()
             async for chunk in active_adapter.chat(_file_messages, temperature=0.0, intent="file_task"):
                 if chunk.usage:
@@ -1902,6 +2008,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             )
 
             response_text = "".join(full_response)
+            _clock.end("generate")
+            _clock.skip("execute")
             _obs.emit("tool_status", tool="file_task", label="Reading file", status="done")
             self._persist_assistant_message(session_id, response_text)
             total_ms = round((time.monotonic() - t0) * 1000)
@@ -2183,6 +2291,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # keep progress and streaming metrics consistent with that path.
                 self._emit_todo_plan(session_id, effective_intent, message, _obs)
                 self._metrics.start_request()
+                _clock.mark("execute", 0, "done")
                 _obs.emit("graph_execution_start", node_count=len(_graph.nodes))
                 executed_graph = await execute_graph(
                     _graph,
@@ -2205,6 +2314,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     failed=executed_graph.has_failed_required(),
                 )
 
+                _clock.start("generate")
                 synthesis_messages = prompt_messages + [
                     {
                         "role": "user",
@@ -2261,6 +2371,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         graph_response.append(safe_text)
                         yield StreamChunk(text=safe_text, done=False, usage=dict(_provider_usage))
 
+                _clock.end("generate")
                 response_text = "".join(graph_response).strip()
                 if not response_text:
                     response_text = (
@@ -2335,6 +2446,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             )
             _obs.emit("tool_status", tool="file_write", label="Writing file", status="running")
 
+            _clock.start("generate")
             # Use CHAT adapter and CHAT-intent context (no tool_result injection)
             ctx_sm = EngineContext(
                 session_id=session_id,
@@ -2359,6 +2471,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 full_response_chunks.append(safe_text)
                 yield StreamChunk(text=safe_text, done=False)
             _obs.emit("thinking_done", intent="file_write")
+            _clock.end("generate")
+            _clock.mark("execute", 0, "done")
 
             response_text = "".join(full_response_chunks)
 
@@ -2495,6 +2609,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         )
                         if execution.success and execution.final_output:
                             response_text = execution.final_output
+                            _clock.mark("generate", 0, "done")
+                            _clock.mark("execute", 0, "done")
                             yield StreamChunk(text=response_text, done=False)
                             yield StreamChunk(text="", done=True)
 
@@ -2582,6 +2698,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         safe_output = _filter_code_output(code_result.content)
                         # Stream the raw output + a short LLM explanation
                         _obs.emit("tool_status", tool="code_exec", label="Running code", status="done")
+                        _clock.mark("execute", 0, "done")
+                        _clock.start("generate")
                         explanation_messages = prompt_messages + [
                             {
                                 "role": "user",
@@ -2597,6 +2715,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                             full_response_chunks.append(safe)
                             yield StreamChunk(text=safe, done=chunk.done)
                         response_text = "".join(full_response_chunks)
+                        _clock.end("generate")
                     else:
                         response_text = (
                             f"Code execution failed: {code_result.content if code_result else 'unknown error'}"
@@ -2645,6 +2764,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         ),
                     )
                     _obs.emit("tool_status", tool="memory_op", label="Checking memory", status="done")
+                    _clock.mark("execute", 0, "done")
+                    _clock.skip("generate")
                     if mem_result and not mem_failed:
                         response_text = mem_result.content
                     else:
@@ -2738,6 +2859,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         _sel_exc,
                     )
 
+            _clock.start("generate")
+
             if _use_agent and _agent_instance is not None:
                 _agent_run = _agent_instance.run(
                     messages=prompt_messages,
@@ -2829,6 +2952,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         dispatch_steps=chunk.dispatch_steps,
                         usage=dict(_provider_usage),
                     )
+
+            # The agent loop interleaves model calls and tool execution.
+            # Report the loop as generate (the loop's own tool_status events
+            # carry per-tool latency); execute is done because tools ran.
+            _clock.end("generate")
+            _clock.mark("execute", 0, "done")
 
             # Session 31: GUARANTEE — if the agent loop produced no text,
             # yield an error message BEFORE the done signal. This is the
@@ -2941,6 +3070,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         else:
             # CHAT and other non-agent intents: direct stream, no loop overhead.
             # Emit thinking_start so the UI shows a thinking indicator, then stream.
+            _clock.start("generate")
             _obs.emit("thinking_start", intent=effective_intent.value)
             async for chunk in active_adapter.chat(prompt_messages, intent=effective_intent.value):
                 if chunk.usage:
@@ -2952,6 +3082,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 full_response_chunks.append(safe_text)
                 yield StreamChunk(text=safe_text, done=chunk.done, usage=dict(_provider_usage))
             _obs.emit("thinking_done", intent=effective_intent.value)
+            _clock.end("generate")
+            _clock.skip("execute")
 
         response_text = "".join(full_response_chunks)
 

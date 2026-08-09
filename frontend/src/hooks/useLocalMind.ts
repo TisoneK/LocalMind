@@ -530,6 +530,8 @@ export function useChat(
                   memoryHits: prev?.memoryHits ?? 0,
                   contextTokens: prev?.contextTokens ?? 0,
                   latency: prev?.latency ?? 0,
+                  // Preserve accumulated stage timings across tool_call events
+                  stageTimings: prev?.stageTimings,
                 }));
                 setMessages((prev) => {
                   const updated = [...prev];
@@ -588,6 +590,8 @@ export function useChat(
                   memoryHits: prev?.memoryHits ?? 0,
                   contextTokens: prev?.contextTokens ?? 0,
                   latency: prev?.latency ?? 0,
+                  // Preserve accumulated stage timings across intent events
+                  stageTimings: prev?.stageTimings,
                 }));
                 break;
               }
@@ -599,6 +603,28 @@ export function useChat(
                 // Update live observation from obs_event data
                 const obsData = obs.data || obs;
                 if (obsData) {
+                  // ADR-12 (B-2026-08-09-2): the engine's _StageClock emits
+                  // stage_timing obs events with real per-stage latency +
+                  // authoritative status (done/skipped). Accumulate them so
+                  // the Observe pipeline renders truth instead of a guess.
+                  if (obs.type === 'stage_timing' && obsData.stage) {
+                    setLiveObservation((prev) => ({
+                      intent: (prev?.intent || 'chat') as any,
+                      confidence: prev?.confidence ?? 0,
+                      toolsUsed: prev?.toolsUsed ?? [],
+                      memoryHits: prev?.memoryHits ?? 0,
+                      contextTokens: prev?.contextTokens ?? 0,
+                      latency: prev?.latency ?? 0,
+                      stageTimings: {
+                        ...(prev?.stageTimings ?? {}),
+                        [String(obsData.stage)]: {
+                          latencyMs: Number(obsData.latency_ms || 0),
+                          status: (obsData.status === 'skipped' || obsData.status === 'running' ? obsData.status : 'done') as any,
+                        },
+                      },
+                    }));
+                    break;
+                  }
                   setLiveObservation((prev) => ({
                     intent: (obsData.intent || obs.intent || prev?.intent || 'chat') as any,
                     confidence: Number(obsData.confidence || obs.confidence || prev?.confidence || 0),
@@ -610,6 +636,7 @@ export function useChat(
                     // Use prompt_tokens_approx for the Context Tokens display.
                     contextTokens: Number(obsData.prompt_tokens_approx || obsData.context_tokens || obsData.tokens_approx || prev?.contextTokens || 0),
                     latency: Number(obsData.total_latency_ms || obsData.latency_ms || obsData.latency || prev?.latency || 0),
+                    stageTimings: prev?.stageTimings,
                   }));
                   // FIX: When tool_status=done obs event arrives, mark matching
                   // tool calls as done in the frontend. This fixes the stuck
@@ -1636,6 +1663,7 @@ export function useObservability(sessionId: string | null) {
           contextTokens: data.contextTokens,
           latency: data.latency,
           observation: data.observation,
+          stageTimings: data.stageTimings,
         });
         setLoading(false);
       }

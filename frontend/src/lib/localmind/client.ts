@@ -23,6 +23,7 @@ import type {
   PerformanceMetrics,
   ObservationData,
   ObservationSummary,
+  StageTiming,
   CapabilitiesData,
   ModelOption,
   CompletionSuggestion,
@@ -85,6 +86,7 @@ interface ObservabilityResponse {
   context_tokens: number;
   latency_ms: number;
   tool_timeline: unknown[];
+  stage_timings?: Record<string, { latency_ms: number; status: string }> | null;
   observation?: {
     timestamp: number;
     workspace: {
@@ -121,6 +123,20 @@ function asString(value: unknown): string {
 
 function asOptionalNumber(value: unknown): number | null | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : value === null ? null : undefined;
+}
+
+function mapStageTimings(raw: unknown): Record<string, StageTiming> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out: Record<string, StageTiming> = {};
+  for (const [stage, entry] of Object.entries(raw as Record<string, unknown>)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    out[stage] = {
+      latencyMs: typeof e.latency_ms === 'number' ? e.latency_ms : 0,
+      status: (e.status === 'skipped' ? 'skipped' : e.status === 'running' ? 'running' : 'done') as StageTiming['status'],
+    };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function mapObservationSummary(raw: unknown): ObservationSummary | null {
@@ -599,6 +615,7 @@ class LocalMindClient {
         contextTokens: typeof data.context_tokens === 'number' ? data.context_tokens : 0,
         latency: typeof data.latency_ms === 'number' ? data.latency_ms : 0,
         observation,
+        stageTimings: mapStageTimings(data.stage_timings),
       };
     } catch {
       return {
