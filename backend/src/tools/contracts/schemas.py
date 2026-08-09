@@ -18,7 +18,13 @@ Migration status (Phase 3 progress):
     🔲 file_task   — schema registered, execute() delegates to legacy fn
     ✅ file_write  — bypasses legacy bridge; calls _do_write() directly
     ✅ edit_file   — bypasses legacy bridge; calls _edit_from_payload() directly (v7)
-    🔲 code_exec   — schema registered, execute() delegates to legacy fn
+    ✅ code_exec   — full ToolContract; execute() calls the sandboxed runner
+                     (tools.code_executor.runner.run_code) directly (Session 107).
+                     The legacy bridge was BROKEN for code_exec: it serialised
+                     the payload to JSON and dispatched to the string-based
+                     legacy tool, whose pre-dispatch validator demands a
+                     ```python fence — a clean planner payload has no fence,
+                     so execution was silently rejected with success=True.
     🔲 memory_op   — schema registered, execute() delegates to legacy fn
 
 When a tool moves to ✅, replace its LegacyBridgeContract subclass with a
@@ -407,18 +413,44 @@ class EditFileContract(ToolContract):
         return await _edit_from_payload(payload)
 
 
-class CodeExecContract(_LegacyBridgeContract):
+class CodeExecContract(ToolContract):
+    """
+    Contract for the code_exec tool — sandboxed code execution.
+
+    Bypasses the legacy bridge entirely. Calls the sandboxed runner
+    (tools.code_executor.runner.run_code) directly with the validated typed
+    payload. This fixes a real breakage: the legacy bridge serialised the
+    payload to JSON and dispatched to the string-based legacy tool, whose
+    pre-dispatch validator demands a ```python fence — a clean planner
+    payload has no fence, so code was silently NEVER executed (the caller
+    got a "wrap your code in a fence" error while success stayed True).
+
+    Required fields:
+      - code: the code to execute — verbatim, no fences.
+    Optional:
+      - language: "python" | "javascript" — defaults to "python" (small
+        models often omit it; python covers >95% of real usage).
+    """
+
     name = "code_exec"
     schema = TOOL_SCHEMAS["code_exec"]
-    _intent = Intent.CODE_EXEC
 
-    async def execute(self, payload: Dict[str, Any]) -> "ToolResult":
-        # Normalise: small models often omit `language`.
-        # Default to "python" — covers >95% of real usage.
-        if "language" not in payload:
-            logger.debug("[code_exec] missing 'language' field — defaulting to 'python'")
-            payload = {**payload, "language": "python"}
-        return await super().execute(payload)
+    async def execute(self, payload: Dict[str, Any]) -> ToolResult:
+        code = payload.get("code", "")
+        if not code or not code.strip():
+            return ToolResult(
+                content="No code provided in the payload ('code' field is empty).",
+                risk=RiskLevel.LOW,
+                source="code_exec",
+                success=False,
+                error_type="invalid_input",
+                error_message="code_exec payload missing 'code'.",
+            )
+        language = payload.get("language") or "python"
+        # Import here to avoid a circular import at module load time.
+        from tools.code_executor.runner import run_code  # noqa: PLC0415
+
+        return await run_code(code, language)
 
 
 class MemoryOpContract(_LegacyBridgeContract):
