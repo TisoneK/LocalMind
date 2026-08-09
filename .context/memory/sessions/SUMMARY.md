@@ -183,3 +183,6 @@ records.
 
 ---
 - **2026-08-09 — Session 91** — Buffy / deepseek-v4-flash — Backlog L17 (High): **Dependabot remediation** — `electron` 33→43.3.0 (pinned), `electron-builder` 25→26.15.3, `npm audit fix` (postcss 8.5.26, shell-quote 1.9.0). **102 vulns → 0**. Verified: electron v43 boots the app clean, all JS syntax-OK, `--dir` pack succeeds (review caught that builder 26 requires a fixed electron version — range rejected), frontend tsc/build clean, CI gate exit 0, lockfile churn scoped (react/vite/ts untouched). Commit `8c66aec`.
+
+---
+- **2026-08-09 — Session 92** — Buffy / deepseek-v4-flash — Backlog L1 (E501 debt, 142 errors): `ruff format` tried then REVERTED (82-file churn, 21 fixes, readability regressions). Surgical: file-level noqa on prompts.py, inline noqa on ~137 genuine long strings, dropped CI's global `--ignore E501` — **E501 now enforced project-wide**. Review narrowed loop.py to inline noqa. 1000 passed / 0 failed; CI gate exit 0. Commit `559ce44`.
