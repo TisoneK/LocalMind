@@ -574,6 +574,46 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "delegate_parallel",
+            "description": (
+                "Delegate MULTIPLE independent sub-tasks to specialized agents "
+                "IN PARALLEL. Use this when a task splits into pieces that can "
+                "proceed simultaneously (research several topics at once, get "
+                "multiple perspectives, draft multiple variants for best-of-N). "
+                "All sub-agents run concurrently; the result is a summary of "
+                "EVERY output so you can compare and combine them. For a single "
+                "dependent sub-task use 'delegate' (handoff) instead."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "targets": {
+                        "type": "array",
+                        "description": "Up to 5 independent sub-tasks. Each object requires 'agent' and 'task'; optional scope/constraints/forbidden_tools/output_requirements.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "agent": {
+                                    "type": "string",
+                                    "enum": ["research", "coding", "browser", "direct", "verifier", "reviewer", "debugger", "analyst"],
+                                    "description": "The agent to delegate this sub-task to.",
+                                },
+                                "task": {
+                                    "type": "string",
+                                    "description": "A clear, self-contained sub-task instruction.",
+                                },
+                            },
+                            "required": ["agent", "task"],
+                        },
+                    }
+                },
+                "required": ["targets"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "git",
             "description": (
                 "Structured Git version control operations. Use this instead of "
@@ -832,6 +872,10 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
     elif tool_name == "delegate":
         # delegate dispatcher expects JSON-encoded args (target_agent + task)
         # — same pattern as edit_file. The delegate tool parses it back.
+        return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "delegate_parallel":
+        # delegate_parallel dispatcher expects JSON-encoded args (targets
+        # array) — same pattern as delegate. The tool parses it back.
         return json.dumps(tool_args, ensure_ascii=False)
     elif tool_name == "git":
         # git dispatcher expects JSON-encoded args (operation + params)
@@ -1433,6 +1477,8 @@ class AgentLoop:
                         "process": f"Process: {call.tool_args.get('operation', '')} {call.tool_args.get('name', '')}" if call.tool_args.get('operation') else "Process operation",
                         "diagnostics": f"Diagnostics: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Analyzing failure",
                         "browse": f"Browser: {call.tool_args.get('action', '')}" if call.tool_args.get('action') else "Using browser",
+                        "delegate": f"Delegating to {call.tool_args.get('target_agent', '')}" if call.tool_args.get('target_agent') else "Delegating sub-task",
+                        "delegate_parallel": f"Delegating {len(call.tool_args.get('targets') or [])} sub-agents in parallel" if call.tool_args.get('targets') else "Delegating sub-agents in parallel",
                     }
                     _label = _label_map.get(call.tool_name, f"Running {call.tool_name}")
                     yield StreamChunk(text="", done=False, status=_label)

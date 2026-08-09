@@ -33,7 +33,7 @@ def test_coding_agent_config():
     assert cfg.allowed_tools == CODING_TOOLS
     assert cfg.allowed_tools == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
-         "git", "process", "delegate", "diagnostics"}
+         "git", "process", "delegate", "delegate_parallel", "diagnostics"}
     )
     assert cfg.allowed_tools.issubset(AGENT_ALLOWED_TOOLS)
     # Coding tasks need more iterations than browser tasks
@@ -111,11 +111,12 @@ def test_coding_agent_scoped_tools_filters_non_coding():
         {"intent": "memory_op", "description": "memory"},
         {"intent": "sysinfo", "description": "sysinfo"},
         {"intent": "delegate", "description": "delegate"},  # ADR-8 Phase 3
+        {"intent": "delegate_parallel", "description": "delegate parallel"},  # B-2026-08-02-6
     ]
     scoped = agent.scoped_tools(all_tools)
     scoped_intents = {t["intent"] for t in scoped}
     assert scoped_intents == CODING_TOOLS
-    assert len(scoped) == 9  # 5 coding + git + process + delegate + diagnostics
+    assert len(scoped) == 10  # 5 coding + git + process + delegate + delegate_parallel + diagnostics
     # Must NOT include web/browser/memory/sysinfo tools
     assert "web_search" not in scoped_intents
     assert "web_fetch" not in scoped_intents
@@ -159,15 +160,16 @@ def test_coding_tools_is_subset_of_agent_allowed():
     assert CODING_TOOLS.issubset(AGENT_ALLOWED_TOOLS)
 
 
-def test_coding_tools_has_nine_tools():
-    """The coding agent's scoped toolset is exactly 9 tools.
+def test_coding_tools_has_ten_tools():
+    """The coding agent's scoped toolset is exactly 10 tools.
 
-    Sessions 41-49 added git, process, and diagnostics tools.
+    Sessions 41-49 added git, process, and diagnostics; Session 81 added
+    delegate_parallel (B-2026-08-02-6).
     """
-    assert len(CODING_TOOLS) == 9
+    assert len(CODING_TOOLS) == 10
     assert CODING_TOOLS == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
-         "git", "process", "delegate", "diagnostics"}
+         "git", "process", "delegate", "delegate_parallel", "diagnostics"}
     )
 
 

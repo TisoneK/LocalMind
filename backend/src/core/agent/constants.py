@@ -182,6 +182,7 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
         "memory_op",
         "sysinfo",
         "delegate",  # ADR-8 Phase 3: agent-initiated delegation
+        "delegate_parallel",  # B-2026-08-02-6: parallel delegation fan-out
     }
 )
 

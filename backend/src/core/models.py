@@ -57,6 +57,7 @@ class Intent(str, Enum):
     DIAGNOSTICS = "diagnostics"  # Diagnostics (inspect errors, analyze tracebacks, inspect logs)
     CHAT = "chat"
     DELEGATE = "delegate"  # ADR-8 Phase 3: agent-initiated delegation
+    DELEGATE_PARALLEL = "delegate_parallel"  # B-2026-08-02-6: parallel delegation fan-out
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
