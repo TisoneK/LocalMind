@@ -1115,3 +1115,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Report:** none — implementation session (Session 67 review + B-6 backlog are the references)
 - **Inefficiency (logged):** one bad `str_replace` anchor in `client.test.ts` duplicated the tail of an existing test (fixed immediately); see inefficiencies/log.md.
 - **Inefficiency (logged):** a graph-block `str_replace` anchored on 12-space indentation left the block de-indented (IndentationError at line ~2299), caught by compile + fixed. Lesson: when inserting into an `if/else` block, match the surrounding indentation exactly and re-compile immediately.
+
+---
+
+## 2026-08-09 — Session 73
+- **Session:** 73
+- **Date:** 2026-08-09
+- **Agent:** Buffy / deepseek-v4-flash
+- **Task:** B-2026-08-09-7 + B-2026-08-09-11 — cleanup + docs. B-11: removed the four dead constants from `backend/src/core/agent/constants.py` — `THINKING_DISPATCH_ENABLED`, `THINKING_DISPATCH_TIMEOUT_SECS` (12.0, conflicting with the real value), `DISPATCHER_HIGH_CONFIDENCE_SKIP` (0.6) AND (found by review) `CHAT_AGENT_MAX_TOKENS` — the live timeout is `thinking_dispatcher.DISPATCHER_TIMEOUT_SECS = 30.0` (30 chosen because GLM/Z.ai was ~18s typical; 10.0 was too short). Fixed the stale section-header comment (claimed the whole block was "NOT used in the v3.0 pipeline" but CHAT_AGENT_* ARE referenced — now says only CHAT_AGENT_* remain referenced). B-7: marked `docs/PERFORMANCE_BOTTLENECK_REPORT.md` + `docs/PERFORMANCE_IMPLEMENTATION_PLAN.md` as **STATUS: HISTORICAL RECORD** — banner lists the file-path moves (`core/engine.py` → `core/engine/_pipeline.py`), the Session 21 trivial short-circuit, Session 68 conversational fast-path, parallel memory, and annotates each superseded claim inline: the MAX_ITERATIONS 8→5 recommendation is SUPERSEDED by the Session 32 contract ("do NOT lower below 8"), the `DISPATCHER_HIGH_CONFIDENCE_SKIP=0.7` claim corrected (it's 0.6 — now removed entirely), the real dispatcher timeout is 30.0, and §1.1 of the plan is marked done.
+- **Commits:** 1 product (`0a87581`) + this context closeout commit
+- **Outcome:** done. Validation: py_compile ok; ruff clean on constants.py; full suite 849 passed / 1 known pre-existing `test_engine_emit_todo_plan` failure. Dead-constant removal verified safe: zero name references across `backend/src` + `tests` + `scripts`, no dynamic references (`getattr`/`vars`/star-import/`__all__`), full suite passes (no import-time breakage). Code review found + fixed: (1) `CHAT_AGENT_MAX_TOKENS` was also dead — removed with the trio; (2) the legacy-block header comment was stale; (3) the docs banner must reference `agent/constants.py` (not the dead `core/constants.py`) and state the real 30.0 timeout — both corrected.
+- **Open items:** Real-model verification pending. Next phase: Session 74 — next open backlog item.
+- **Report:** none — implementation session (Session 67 review + B-7/B-11 backlog are the references)
+- **Inefficiency (logged):** none new — this session's product commit landed but the closeout+push was cut mid-turn by the harness (maxAgentSteps); resumed and completed cleanly, no work lost.
