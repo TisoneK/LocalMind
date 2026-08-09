@@ -213,3 +213,6 @@ records.
 
 ---
 - **2026-08-09 — Session 101** — Buffy / deepseek-v4-flash — Backlog B-17 [Low]: wrote `docs/prior-art-codebuff-freebuff-architecture.md` — the full web-verified Codebuff/Freebuff production architecture (roster, per-agent model routing, thin dispatcher, final-output-only, three-tier tool model) mapped to ADR-14/15/16 + shipped B-items, so future agents never re-research it. Docs-only change.
+
+---
+- **2026-08-09 — Session 102** — Buffy / deepseek-v4-flash — Incremental "Add frontend tests" progress: `src/lib/utils.test.ts` — 6 tests for the shared cn() Tailwind class-merge helper (conflict resolution, falsy filtering, conditional/array inputs, dedup). 33 vitest tests pass, tsc + eslint clean. Commit `ade31be`.
