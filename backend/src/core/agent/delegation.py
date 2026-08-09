@@ -103,17 +103,29 @@ class DelegationInstructionPacket:
         )
 
     def to_prompt(self) -> str:
-        """Render literal instructions for the child model's user message."""
+        """Render literal instructions for the child model's user message.
+
+        The bounded-instruction contract (ADR-15 §3): every delegated run
+        gets an explicit DO / DO NOT / RETURN structure — what to
+        accomplish, what is forbidden, and the exact report shape — even
+        when the optional sections are empty.
+        """
         lines = [
             "DELEGATED TASK INSTRUCTION",
+            "",
             f"Objective: {self.objective}",
             "",
-            "Work only on this delegated objective. Do not rely on the parent conversation.",
+            "DO:",
+            "- Work only on the objective above; it is fully self-contained.",
+            "- Do not rely on or reference the parent conversation — it is unavailable.",
         ]
         if self.scope:
             lines.extend(["", "Scope:", *[f"- {item}" for item in self.scope]])
+        lines.extend(["", "DO NOT:"])
         if self.constraints:
-            lines.extend(["", "Constraints:", *[f"- {item}" for item in self.constraints]])
+            lines.extend([f"- {item}" for item in self.constraints])
+        else:
+            lines.append("- Deviate from the objective or invent extra work.")
         if self.forbidden_tools:
             lines.extend(["", "Forbidden tools:", *[f"- {item}" for item in self.forbidden_tools]])
         if self.input_evidence:
@@ -126,9 +138,13 @@ class DelegationInstructionPacket:
                     "--- END UNTRUSTED EVIDENCE ---",
                 ]
             )
+        lines.extend(["", "RETURN (report contract):"])
         if self.output_requirements:
-            lines.extend(["", "Report contract:", *[f"- {item}" for item in self.output_requirements]])
-        lines.extend(["", "Return a concise report of work performed, evidence observed, blockers, and next steps."])
+            lines.extend([f"- {item}" for item in self.output_requirements])
+        else:
+            lines.append(
+                "- A concise report of work performed, evidence observed, blockers, and next steps."
+            )
         return "\n".join(lines)
 
     def to_metadata(self) -> dict[str, Any]:

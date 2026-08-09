@@ -26,10 +26,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import ClassVar
 from unittest.mock import MagicMock
 
 import pytest
-
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 from core.agent.delegation import (
     AgentRunContext,
@@ -39,7 +39,7 @@ from core.agent.delegation import (
     reset_current_run_id,
     set_current_run_id,
 )
-from core.models import Intent
+from core.models import Intent, StreamChunk
 
 # ── Fixed instruction packet and isolated run contracts ────────────────────
 
@@ -84,7 +84,7 @@ def test_delegation_packet_is_immutable_and_run_context_is_scoped():
     token = set_current_run_id(context.run_id)
     try:
         assert get_current_run_id() == context.run_id
-        with pytest.raises(Exception):
+        with pytest.raises((AttributeError, TypeError)):
             packet.objective = "mutated"  # frozen contract
     finally:
         reset_current_run_id(token)
@@ -355,10 +355,8 @@ async def test_dispatch_with_retry_accepts_adapter_kwarg():
     fake_adapter = MagicMock()
     token = _current_adapter.set(None)
     try:
-        # Use a non-existent intent so dispatch returns None quickly
-        # (we're testing the adapter-setting behavior, not the dispatch)
         # Use Intent.SYSINFO which is registered and fast
-        result, failed, retries = await dispatch_with_retry(
+        _result, _failed, _retries = await dispatch_with_retry(
             Intent.SYSINFO, "test query", adapter=fake_adapter
         )
         # The adapter should now be set
@@ -626,7 +624,7 @@ async def test_delegate_runs_sub_agent_and_returns_its_response(monkeypatch):
 
     # Mock the ResearchAgent to return a canned response
     class _FakeResearchAgent:
-        received_messages = []
+        received_messages: ClassVar[list] = []
 
         def __init__(self, adapter=None):
             self.adapter = adapter
@@ -674,5 +672,101 @@ async def test_delegate_runs_sub_agent_and_returns_its_response(monkeypatch):
             delegate_mod._current_depth.reset(depth_token)
             delegate_mod._current_adapter.reset(adapter_token)
     finally:
+        _REGISTRY.clear()
+        _REGISTRY.update(saved_registry)
+
+
+# ── ADR-15 §3: bounded-instruction contract + final-output-only ─────────────
+
+
+def test_delegation_packet_renders_explicit_do_do_not_return_contract():
+    """Even a BARE {target_agent, task} delegation carries the bounded
+    instruction: explicit DO / DO NOT / RETURN framing, so the child knows
+    what to accomplish, what is forbidden, and the exact report shape."""
+    packet = DelegationInstructionPacket.from_payload(
+        {"target_agent": "research", "task": "find the current weather"}
+    )
+    prompt = packet.to_prompt()
+    assert "DELEGATED TASK INSTRUCTION" in prompt
+    assert "Objective: find the current weather" in prompt
+    assert "DO:" in prompt
+    assert "DO NOT:" in prompt
+    assert "Do not rely on or reference the parent conversation" in prompt
+    assert "RETURN (report contract):" in prompt
+    # The default return shape is spelled out even with no explicit contract.
+    assert "concise report of work performed" in prompt
+
+
+def test_delegation_packet_renders_contract_when_sections_empty():
+    """The DO NOT / RETURN sections fall back to safe defaults when the
+    caller provided no constraints or output contract."""
+    packet = DelegationInstructionPacket.from_payload(
+        {"target_agent": "coding", "task": "refactor the module"}
+    )
+    prompt = packet.to_prompt()
+    assert "- Deviate from the objective or invent extra work." in prompt
+    assert "RETURN (report contract):" in prompt
+    # No accidental empty labels.
+    assert "Constraints:" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_delegate_child_sees_only_packet_not_parent_history():
+    """ADR-15 §3 (final-output-only): the child receives EXACTLY ONE user
+    message — the bounded instruction packet — never the parent's message
+    history. And the parent receives only the child's concatenated final
+    output, not the child's internal message list."""
+    from tools import delegate as delegate_mod
+    from tools.delegate import delegate
+
+    class _RecordingAgent:
+        received_messages: ClassVar[list] = []
+
+        def __init__(self, adapter=None):
+            self.adapter = adapter
+
+        async def run(self, **kwargs):
+            _RecordingAgent.received_messages.append(kwargs["messages"])
+            # Simulate a child that internally produced MANY messages.
+            for i in range(5):
+                yield StreamChunk(text=f"internal step {i}\n", done=False)
+            yield StreamChunk(text="final report", done=False)
+            yield StreamChunk(text="", done=True)
+
+    from agents.registry import _REGISTRY
+    saved_registry = dict(_REGISTRY)
+    _REGISTRY.clear()
+    _REGISTRY["research"] = _RecordingAgent
+    adapter_token = delegate_mod._current_adapter.set(MagicMock())
+    depth_token = delegate_mod._current_depth.set(0)
+    try:
+        _RecordingAgent.received_messages = []
+        result = await delegate(
+            json.dumps(
+                {
+                    "target_agent": "research",
+                    "task": "summarize the docs",
+                    "output_contract": {"format": "bullets"},
+                }
+            )
+        )
+        assert result.success is True
+        # The child's message list is exactly ONE user message (the packet).
+        assert len(_RecordingAgent.received_messages) == 1
+        child_messages = _RecordingAgent.received_messages[0]
+        assert len(child_messages) == 1
+        assert child_messages[0]["role"] == "user"
+        assert "DELEGATED TASK INSTRUCTION" in child_messages[0]["content"]
+        assert "Objective: summarize the docs" in child_messages[0]["content"]
+        # The parent got back the child's final output as ONE result — the
+        # child's 5 internal messages never bloat the parent context.
+        assert "internal step 3" in result.content
+        assert "final report" in result.content
+        assert result.metadata["response_length"] == len(
+            "internal step 0\ninternal step 1\ninternal step 2\ninternal step 3\ninternal step 4\nfinal report"
+        )
+    finally:
+        delegate_mod._current_depth.reset(depth_token)
+        delegate_mod._current_adapter.reset(adapter_token)
         _REGISTRY.clear()
         _REGISTRY.update(saved_registry)
