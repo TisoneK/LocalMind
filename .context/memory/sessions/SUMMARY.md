@@ -195,3 +195,6 @@ records.
 
 ---
 - **2026-08-09 — Session 95** — Buffy / deepseek-v4-flash — **Context recording** (user's architecture thread → ADRs). Read the 209-line reviewer thread (`/Users/bao/Desktop/Buffy - LocalMind Chat.txt`) and recorded its NEW insights as **ADR-14** (single front door + thin routing dispatcher — never a full pipeline pass), **ADR-15** (sub-agent contract: bounded-instruction in / fixed structured result out; general vs specific sub-agents; three-tier tool model; two-factor tool-vs-subagent test), **ADR-16** (two workflows as DISTINCT entry points: general single-pass vs specific objective loop for the "Autonomous Work" panel). Backlog **B-2026-08-09-13..17**. Cross-checked: ADR-11/12/13 + B-2026-08-09-1..8 already covered the latency/observability findings. .context only — no product code.
+
+---
+- **2026-08-09 — Session 96** — Buffy / deepseek-v4-flash — Backlog B-13 / ADR-16: objectives system was already wired end-to-end; real gap was single-shot `_execute`. Rewrote as multi-round specific-task loop (up to 5 rounds, same execution session, `agent_loop_done`/hit_limit continuation, cancel-between-rounds, approval-blocked, empty→failed, per-round timeout). Code review caught obs-drain ordering bug (3 real emit paths fire after/no chunk — would be missed) → added post-stream drain. 6 loop tests, **1008 passed / 0 failed**. Commit `42ed756`.
