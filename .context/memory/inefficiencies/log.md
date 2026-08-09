@@ -260,3 +260,12 @@ if literally nothing slowed you down.
 - **Cause:** The `str_replace` oldString for the graph block was written with 12-space leading indentation while the target block sits inside an `else:` at 16 spaces — the edit applied but de-indented the block, breaking Python's block structure.
 - **Workaround / fix:** Re-anchored the replacement on the block's exact surrounding lines (`self._metrics.start_request()` … `executed_graph = await execute_graph(`) preserving 16-space indent; verified with `py_compile`.
 - **Prevent next time:** Before inserting lines into an `if/else` block, copy the exact indentation of the anchor lines (16 spaces inside `else:`, not the 12 of the parent) and always run `py_compile` on the edited module immediately after a multi-line edit — a 1-second check that catches structural breaks before tests.
+
+---
+## 2026-08-09 — Buffy / deepseek-v4-flash (Session 70)
+
+- **Problem:** (1) Two `spawn_agents` calls for `code-searcher` failed with "Invalid params: expected array" — the `searchQueries` array was omitted from params, so each failure cost a wasted round-trip. (2) The B-8 `toolsUsed` staleness fix in `useLocalMind.ts` took real verification effort to confirm it is defensive-only: SSE `turn_complete` obs events never carry `tools_used` (only `_store_observation` does), so the streaming panel's tools are driven by `tool_call` events + the send()-time reset; the `!== undefined` fix is correct semantics but changes nothing observable today.
+- **Cost:** 2 failed spawns (~1 min) + ~5 min verifying backend obs-event key semantics across 5 `turn_complete` emit sites.
+- **Cause:** (1) Tool schema slipped while batching parallel spawns. (2) The B-8 backlog line pointed at `useLocalMind.ts` ~L605 without noting that the SSE obs payload omits `tools_used`, so the "stale tools" symptom is not reachable via the streaming path.
+- **Workaround / fix:** (1) Re-issued spawns with explicit `searchQueries`. (2) Kept the frontend fix (harmless, future-proof) and recorded the backend reality here + in sessions.md.
+- **Prevent next time:** Always include `params.searchQueries` when spawning code-searcher. Before implementing a frontend fix that reads an obs-event field, grep the backend `_obs.emit(...)` call sites for that exact kwarg — if it only appears in `_store_observation`, the streaming path never sees it.
