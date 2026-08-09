@@ -1009,8 +1009,16 @@ class OpenAICompatAdapter(BaseAdapter):
                     delta = choice.get("delta", {})
                     chunks_read += 1
 
-                    # Check for tool calls in the delta
-                    if "tool_calls" in delta:
+                    # Check for tool calls in the delta. Session 116 (real-
+                    # model smoke test): providers commonly emit a first
+                    # assistant delta with `tool_calls: null` (or an empty
+                    # list). The old `"tool_calls" in delta` guard treated
+                    # that as a tool call and iterated None -> TypeError
+                    # 'NoneType' object is not iterable, which escaped the
+                    # inner except (JSONDecodeError/IndexError/KeyError) and
+                    # killed the whole turn via the outer handler. Truthy
+                    # .get() skips null/empty deltas and keeps reading.
+                    if delta.get("tool_calls"):
                         tool_call_detected = True
                         for tc in delta["tool_calls"]:
                             idx = tc.get("index", 0)
@@ -1151,8 +1159,18 @@ class OpenAICompatAdapter(BaseAdapter):
             # Continue reading to collect full tool call arguments, then
             # return ToolCallResult.
             if tool_call_detected:
-                # Drain remaining lines to get full tool call args
-                async for line in response.aiter_lines():
+                # Drain remaining lines to get full tool call args.
+                # Session 116 (real-model smoke test): the httpx stream is
+                # ONE-SHOT — Phase 1 already consumed it (it only exits via
+                # finish_reason=tool_calls, [DONE], or exhaustion, which all
+                # mean the args are COMPLETE). Re-iterating raises
+                # RuntimeError("content has already been streamed"), which
+                # previously escaped to the outer handler and killed the
+                # whole turn. The drain only exists to consume the tail +
+                # usage frame; the args are already fully buffered, so
+                # swallowing the one-shot error is correct.
+                try:
+                    async for line in response.aiter_lines():
                         if not line or not line.startswith("data: "):
                             continue
                         data = line[6:]
@@ -1163,7 +1181,7 @@ class OpenAICompatAdapter(BaseAdapter):
                             usage_metadata.update(_normalize_usage(obj.get("usage")))
                             choice = obj.get("choices", [{}])[0]
                             delta = choice.get("delta", {})
-                            if "tool_calls" in delta:
+                            if delta.get("tool_calls"):
                                 for tc in delta["tool_calls"]:
                                     idx = tc.get("index", 0)
                                     if idx not in tool_call_buffers:
@@ -1186,6 +1204,12 @@ class OpenAICompatAdapter(BaseAdapter):
                                 break
                         except (json.JSONDecodeError, IndexError, KeyError):
                             continue
+                except RuntimeError:
+                    logger.debug(
+                        "[adapter] %s: stream already consumed after Phase 1 — "
+                        "skipping drain (tool args complete)",
+                        self._provider_name,
+                    )
 
                 await response.aclose()
 
@@ -1344,8 +1368,14 @@ class OpenAICompatAdapter(BaseAdapter):
                                 usage=dict(_usage),
                             )
 
-                    # Continue reading from the still-open stream
-                    if not phase1_done:
+                    # Continue reading from the still-open stream. Session
+                    # 116 (real-model smoke test): httpx streams are ONE-SHOT.
+                    # When Phase 1 consumed the response (it ended without a
+                    # [DONE] line — phase1_done stays False — or broke after
+                    # [DONE]), re-iterating raises RuntimeError("content has
+                    # already been streamed"). Everything was already buffered
+                    # into _initial/_raw_parts, so skip the re-iteration.
+                    if not phase1_done and not _resp.is_stream_consumed:
                         async for line in _resp.aiter_lines():
                             if not line or not line.startswith("data: "):
                                 # Empty lines or non-data lines are SSE

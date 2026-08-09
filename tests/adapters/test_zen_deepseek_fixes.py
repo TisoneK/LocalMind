@@ -426,3 +426,144 @@ def test_litellm_baked_dummy_default_survives_live_resolution(monkeypatch):
     monkeypatch.delenv("LITELLM_API_KEY", raising=False)
     adapter = OpenAICompatAdapter(provider="lite-llm")
     assert adapter._headers["Authorization"] == "Bearer dummy"
+
+
+# ── 3. null tool_calls delta (Session 116, real-model smoke test) ────────
+# A live Zen/DeepSeek-v4-flash-free run crashed with "Unexpected error
+# calling zen: 'NoneType' object is not iterable" on the agent loop's
+# first LLM call. Root cause: providers commonly emit a first assistant
+# delta with `tool_calls: null`; the Phase 1 / Phase 2a loops iterated
+# delta["tool_calls"] unconditionally, and the inner except only caught
+# JSONDecodeError/IndexError/KeyError, so the TypeError escaped to the
+# outer handler and killed the whole turn (no tool ever ran).
+
+
+class TestNullToolCallsDelta:
+    def test_null_tool_calls_delta_is_skipped_and_tool_still_detected(self, monkeypatch):
+        """A delta with `tool_calls: null` (common first assistant chunk)
+        must be skipped - not iterated - and a later real tool_call delta
+        must still be detected."""
+        monkeypatch.setenv("ZEN_API_KEY", "sk-fake-test-key")
+        adapter = OpenAICompatAdapter(provider="zen", model_override="deepseek-v4-flash-free")
+        import json as _json
+
+        def make_sse_lines():
+            # The null tool_calls delta the live provider actually sent.
+            yield "data: " + _json.dumps({"choices": [{"delta": {"role": "assistant", "tool_calls": None}, "finish_reason": None}]})
+            # The real tool call that followed.
+            yield "data: " + _json.dumps({"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "call_1", "type": "function", "function": {"name": "shell", "arguments": '{"command": "ls"}'}}]}, "finish_reason": None}]})
+            yield "data: " + _json.dumps({"choices": [{"delta": {}, "finish_reason": "tool_calls"}]})
+            yield "data: [DONE]"
+
+        messages = [{"role": "user", "content": "List files"}]
+        tools = [
+            {"type": "function", "function": {"name": "shell", "description": "Run", "parameters": {"type": "object", "properties": {"command": {"type": "string"}}}}},
+        ]
+
+        async def fake_send_streaming(url, payload, headers=None, timeout=None):
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            # Session 116: enforce httpx ONE-SHOT stream semantics so the
+            # test catches the double-read bug (Phase 2 re-iterating an
+            # already-consumed response). Permissive mocks let the old
+            # broken code pass.
+            mock_resp.is_stream_consumed = False
+            iterated = {"n": 0}
+
+            async def aiter_lines():
+                iterated["n"] += 1
+                if iterated["n"] > 1:
+                    raise RuntimeError(
+                        "Attempted to read or stream some content, but the content "
+                        "has already been streamed."
+                    )
+                for line in make_sse_lines():
+                    yield line
+                mock_resp.is_stream_consumed = True
+
+            mock_resp.aiter_lines = aiter_lines
+
+            async def aclose():
+                pass
+            mock_resp.aclose = aclose
+            return mock_resp
+
+        with patch.object(adapter, "_send_streaming_with_retry", new=fake_send_streaming):
+            from adapters.ollama import ToolCallResult
+            result = asyncio.run(adapter.chat_with_tools(messages=messages, tools=tools, temperature=0.3, intent="shell"))
+
+        assert isinstance(result, ToolCallResult), (
+            f"null tool_calls delta must not kill the call; expected ToolCallResult, got {type(result).__name__}"
+        )
+        assert result.tool_name == "shell"
+        assert "ls" in result.tool_args.get("command", "")
+
+
+class TestTextStreamWithoutDone:
+    """A text response whose stream ends WITHOUT a [DONE] line (provider
+    closes the connection) previously crashed: Phase 1 exhausted the
+    one-shot httpx stream, then Phase 2b re-iterated it and raised
+    RuntimeError('content has already been streamed') - the exact error
+    seen in the Session 116 real-model smoke test. The Phase 2b guard
+    (not phase1_done and not is_stream_consumed) must skip the
+    re-iteration and yield the already-buffered text."""
+
+    def test_text_stream_ending_without_done_still_streams(self, monkeypatch):
+        monkeypatch.setenv("ZEN_API_KEY", "sk-fake-test-key")
+        adapter = OpenAICompatAdapter(provider="zen", model_override="deepseek-v4-flash-free")
+        import json as _json
+
+        def make_sse_lines():
+            # 8 text chunks (below the 15-chunk break) then the stream ends
+            # abruptly - no [DONE] line.
+            for i in range(8):
+                yield "data: " + _json.dumps(
+                    {"choices": [{"delta": {"content": f"text chunk {i} "}, "finish_reason": None}]}
+                )
+
+        messages = [{"role": "user", "content": "Tell me a story"}]
+        tools = [
+            {"type": "function", "function": {"name": "shell", "description": "Run", "parameters": {"type": "object", "properties": {"command": {"type": "string"}}}}},
+        ]
+
+        async def fake_send_streaming(url, payload, headers=None, timeout=None):
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.is_stream_consumed = False
+            iterated = {"n": 0}
+
+            async def aiter_lines():
+                iterated["n"] += 1
+                if iterated["n"] > 1:
+                    raise RuntimeError(
+                        "Attempted to read or stream some content, but the content "
+                        "has already been streamed."
+                    )
+                for line in make_sse_lines():
+                    yield line
+                mock_resp.is_stream_consumed = True
+
+            mock_resp.aiter_lines = aiter_lines
+
+            async def aclose():
+                pass
+            mock_resp.aclose = aclose
+            return mock_resp
+
+        with patch.object(adapter, "_send_streaming_with_retry", new=fake_send_streaming):
+            result = asyncio.run(adapter.chat_with_tools(messages=messages, tools=tools, temperature=0.3, intent="chat"))
+
+        assert not hasattr(result, "tool_name"), "text path must return an async generator"
+
+        async def consume():
+            chunks = []
+            async for chunk in result:
+                chunks.append(chunk)
+            return chunks
+
+        chunks = asyncio.run(consume())
+        text = "".join(c.text for c in chunks)
+        assert "text chunk 0" in text and "text chunk 7" in text, (
+            f"all buffered text must be yielded despite the missing [DONE], got {text!r}"
+        )
+        assert any(c.done for c in chunks), "a done chunk must be yielded"
