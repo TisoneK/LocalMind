@@ -199,3 +199,73 @@ describe('classifyClientIntent (B-2026-08-09-6 / ADR-11)', () => {
     expect(classifyClientIntent('a completely random statement')).toBeUndefined();
   });
 });
+
+describe('streamChat SSE integration (B-2026-07-31 follow-up)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubSseResponse(bodyChunks: string[]): void {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of bodyChunks) {
+          controller.enqueue(new TextEncoder().encode(chunk));
+        }
+        controller.close();
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: stream }));
+  }
+
+  it('delivers the final event and completes when the stream ends without a trailing newline', async () => {
+    // Simulates a proxy/server close mid-event: the last `data:` line has no
+    // trailing newline, so it is only parseable via the end-of-stream flush.
+    stubSseResponse(['data: {"content":"final chunk"}']);
+
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    const abort = localmindClient.streamChat('hello', 'sess-sse-1', onChunk, onDone, onError);
+    await vi.waitFor(() => expect(onDone).toHaveBeenCalled());
+
+    expect(onChunk).toHaveBeenCalledOnce();
+    expect(onChunk).toHaveBeenCalledWith('{"content":"final chunk"}');
+    expect(onDone).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+    expect(abort).toBeTypeOf('function');
+  });
+
+  it('fires done exactly once when a trailing [DONE] has no newline', async () => {
+    // The hidden-done-event case: `[DONE]` arrives as the final buffered
+    // line with no trailing newline. flush() must terminate the stream and
+    // onDone must fire exactly once (finish() dedupes).
+    stubSseResponse(['data: {"content":"almost"}\n\ndata: [DONE]']);
+
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    localmindClient.streamChat('hello', 'sess-sse-2', onChunk, onDone, onError);
+    await vi.waitFor(() => expect(onDone).toHaveBeenCalled());
+
+    expect(onChunk).toHaveBeenCalledOnce();
+    expect(onChunk).toHaveBeenCalledWith('{"content":"almost"}');
+    expect(onDone).toHaveBeenCalledOnce();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('propagates a non-OK response to onError', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, body: null }));
+
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    localmindClient.streamChat('hello', 'sess-sse-3', onChunk, onDone, onError);
+    await vi.waitFor(() => expect(onError).toHaveBeenCalled());
+
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onChunk).not.toHaveBeenCalled();
+  });
+});
