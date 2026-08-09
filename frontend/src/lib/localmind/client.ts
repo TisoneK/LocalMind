@@ -31,6 +31,92 @@ import type {
 import { createSSEParser } from './sse';
 import type { CapabilitiesResponseWire } from './capabilities-response';
 
+// ─── Client-side intent hint (B-2026-08-09-6 / ADR-11 client half) ──────
+// Deterministic, strictly-conservative classifier that suggests a 'chat'
+// intent hint for OBVIOUS conversational sends (greetings, thanks, short
+// non-tool questions) so the backend can skip the dispatcher LLM call.
+//
+// Deliberately a SUBSET of the server's own detectors (trivial_input.py):
+// the engine's trivial + conversational short-circuits run first and would
+// catch the same messages anyway, so the hint must NEVER claim 'chat' for
+// anything that needs tools/live data/system info — a wrong hint would
+// bypass the dispatcher's correct routing. When in doubt, return undefined
+// (no hint → normal pipeline).
+
+const _HINT_GREETING_RE = /^(?:hi|hello|hey|heya|howdy|yo|sup|good\s*(?:morning|afternoon|evening|day)|greetings|nice to (?:meet you|see you)|what'?s up|how'?s it going|how are you)\b[!.?]*$/i;
+const _HINT_FAREWELL_RE = /^(?:bye|goodbye|see you(?:\s+(?:later|soon|tomorrow))?|later|cya|good night|take care|farewell)\b[!.?]*$/i;
+const _HINT_THANKS_RE = /^(?:thanks|thank you|thx|ty|appreciate it|much obliged|grateful|cheers)\b[!.?]*$/i;
+const _HINT_ACK_RE = /^(?:ok|okay|got it|understood|sure|will do|roger|acknowledged|makes sense|gotcha|i see)\b[!.?]*$/i;
+const _HINT_YES_NO_RE = /^(?:yes|no|yep|nope|yeah|nah|yup)\b[!.?]*$/i;
+
+const _HINT_OPENER_RE = /^(?:what'?s|whats|what|who'?s|whos|who|how'?s|hows|how|why|when|which|can you|can i|could you|do you|are you|is it|is there|will you|would you|should i|tell me|explain|describe|define)\b/i;
+
+// Mirror of trivial_input.py's _CONVERSATIONAL_BLOCKED_KEYWORDS — any
+// tool/realtime/system keyword forces the full pipeline so the dispatcher
+// routes correctly ("what time is it" → SYSINFO, "what is today's weather"
+// → WEB_SEARCH, "who wrote app.py" → tools).
+// ⚠ KEEP IN SYNC with backend/src/core/trivial_input.py: if a keyword is
+// added there, add it here too — otherwise a message like "what's my IP"
+// gets a chat hint that bypasses the dispatcher once the server starts
+// routing it to a tool.
+const _HINT_BLOCKED_WORDS = [
+  'weather', 'forecast', 'temperature', 'today', 'tomorrow', 'tonight',
+  'latest', 'current', 'news', 'score', 'scores', 'match', 'matches',
+  'game', 'games', 'price', 'prices', 'cost', 'exchange', 'stock',
+  'shares', 'election', 'time', 'date', 'what day', 'day of the week',
+  'ram', 'cpu', 'memory', 'disk', 'storage', 'specs', 'hardware',
+  'installed', 'processor', 'gpu', 'search', 'fetch', 'web', 'browse',
+  'url', 'http', 'download', 'open', 'read', 'write', 'create', 'edit',
+  'delete', 'save', 'file', 'files', 'folder', 'directory', 'code',
+  'script', 'program', 'function', 'bug', 'error', 'exception', 'crash',
+  'run', 'execute', 'install', 'command', 'terminal', 'shell', 'python',
+  'node', 'git', 'pdf', 'doc', 'docx', 'xlsx', 'csv', 'json', 'database',
+  'api', 'test', 'tests', 'show', 'list', 'find', 'fix', 'debug', 'log', 'logs',
+];
+const _HINT_BLOCKED_RE = new RegExp(`\\b(?:${_HINT_BLOCKED_WORDS.join('|')})\\b`, 'i');
+const _HINT_FILE_EXT_RE = /\b\w+\.(?:py|js|ts|tsx|jsx|md|json|txt|pdf|docx?|xlsx?|csv|html?|css|sh|sql)\b/i;
+const _HINT_URL_RE = /https?:\/\//i;
+
+const _HINT_MAX_CHARS = 140;
+const _HINT_MAX_WORDS = 20;
+
+/**
+ * Deterministic client-side intent hint (B-2026-08-09-6 / ADR-11).
+ *
+ * Returns 'chat' only for obvious conversational sends, else undefined
+ * (no hint → the backend runs its normal pipeline). NEVER returns a tool
+ * intent — explicit tool selection is passed separately by the caller.
+ */
+export function classifyClientIntent(message: string): string | undefined {
+  const trimmed = (message || '').trim();
+  if (!trimmed) return undefined;
+
+  const cleaned = trimmed.replace(/[!.?.,;:]+$/, '').trim();
+
+  // Trivial inputs (greetings / farewells / thanks / acknowledgments / yes-no).
+  if (cleaned.length <= 40 && cleaned.split(/\s+/).length <= 5) {
+    if (
+      _HINT_GREETING_RE.test(cleaned) ||
+      _HINT_FAREWELL_RE.test(cleaned) ||
+      _HINT_THANKS_RE.test(cleaned) ||
+      _HINT_ACK_RE.test(cleaned) ||
+      _HINT_YES_NO_RE.test(cleaned)
+    ) {
+      return 'chat';
+    }
+  }
+
+  // Conversational questions: interrogative opener, no tool/realtime/system
+  // keywords, reasonably short.
+  if (cleaned.length > _HINT_MAX_CHARS) return undefined;
+  if (cleaned.split(/\s+/).length > _HINT_MAX_WORDS) return undefined;
+  if (!_HINT_OPENER_RE.test(cleaned)) return undefined;
+  if (_HINT_BLOCKED_RE.test(cleaned)) return undefined;
+  if (_HINT_FILE_EXT_RE.test(cleaned)) return undefined;
+  if (_HINT_URL_RE.test(cleaned)) return undefined;
+  return 'chat';
+}
+
 // ─── Types ─────────────────────────────────────────────────────────────
 
 interface HealthResponse {

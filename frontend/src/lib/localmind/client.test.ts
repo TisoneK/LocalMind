@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { localmindClient } from './client';
+import { classifyClientIntent, localmindClient } from './client';
 
 describe('getObservability', () => {
   afterEach(() => {
@@ -156,5 +156,46 @@ describe('getObservability', () => {
         ],
       },
     });
+  });
+});
+
+describe('classifyClientIntent (B-2026-08-09-6 / ADR-11)', () => {
+  it('hints chat for greetings, farewells, thanks, and acknowledgments', () => {
+    expect(classifyClientIntent('hi')).toBe('chat');
+    expect(classifyClientIntent('Hello!')).toBe('chat');
+    expect(classifyClientIntent('good morning')).toBe('chat');
+    expect(classifyClientIntent('thanks')).toBe('chat');
+    expect(classifyClientIntent('thank you!')).toBe('chat');
+    expect(classifyClientIntent('bye')).toBe('chat');
+    expect(classifyClientIntent('ok')).toBe('chat');
+    expect(classifyClientIntent('got it')).toBe('chat');
+  });
+
+  it('hints chat for short non-tool conversational questions', () => {
+    expect(classifyClientIntent('What can you do?')).toBe('chat');
+    expect(classifyClientIntent('Who are you?')).toBe('chat');
+    expect(classifyClientIntent('how are you?')).toBe('chat');
+    expect(classifyClientIntent('What is the capital of France?')).toBe('chat');
+    expect(classifyClientIntent('can you explain recursion')).toBe('chat');
+  });
+
+  it('never hints chat for tool, realtime, or system queries', () => {
+    expect(classifyClientIntent('what time is it')).toBeUndefined();
+    expect(classifyClientIntent('what is today\'s weather')).toBeUndefined();
+    expect(classifyClientIntent('how much RAM do I have')).toBeUndefined();
+    expect(classifyClientIntent('who wrote app.py')).toBeUndefined();
+    expect(classifyClientIntent('can you fix my code')).toBeUndefined();
+    expect(classifyClientIntent('what is the latest news')).toBeUndefined();
+    expect(classifyClientIntent('search the web for LocalMind')).toBeUndefined();
+    expect(classifyClientIntent('what day is it')).toBeUndefined();
+    expect(classifyClientIntent('how do you run code')).toBeUndefined();
+    expect(classifyClientIntent('who wrote the file')).toBeUndefined();
+  });
+
+  it('returns undefined for empty, long, or non-interrogative inputs', () => {
+    expect(classifyClientIntent('')).toBeUndefined();
+    expect(classifyClientIntent('   ')).toBeUndefined();
+    expect(classifyClientIntent('please create a python script that prints hello world and then run it')).toBeUndefined();
+    expect(classifyClientIntent('a completely random statement')).toBeUndefined();
   });
 });

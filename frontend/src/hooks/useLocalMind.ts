@@ -16,7 +16,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { localmindClient } from '@/lib/localmind/client';
+import { classifyClientIntent, localmindClient } from '@/lib/localmind/client';
 import { applyTodoCreated, applyTodoUpdated, estimateTokens, isActiveToolStatus } from '@/lib/localmind/progress';
 import type {
   ChatMessage,
@@ -1057,8 +1057,12 @@ export function useChat(
             return updated;
           });
         },
-        // toolHint — passed as X-LocalMind-Intent header
-        tool
+        // B-2026-08-09-6 (ADR-11 client half): toolHint is passed as the
+        // X-LocalMind-Intent header so the backend can skip the dispatcher.
+        // An explicitly-picked tool always wins; otherwise a deterministic
+        // classifier hints 'chat' for obvious conversational sends. It never
+        // invents a tool intent the user didn't pick.
+        tool || classifyClientIntent(message)
       );
 
       abortRef.current = abortFn;
