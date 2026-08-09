@@ -146,7 +146,7 @@ class ProviderConfig:
     """
     name: str  # "openai", "anthropic", "openrouter", etc.
     base_url: str  # e.g. "https://api.openai.com/v1"
-    api_key: str  # from env var (resolved at import time)
+    api_key: str  # baked default only (LiteLLM's "dummy"); live value resolved in __init__ via key_env
     default_model: str  # fallback if none specified
     key_env: str  # env var name for the API key (e.g. "OPENAI_API_KEY")
     model_env: str  # env var name for the model override (e.g. "OPENAI_MODEL")
@@ -165,7 +165,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="openai",
         display_name="OpenAI",
         base_url="https://api.openai.com/v1",
-        api_key=os.getenv("OPENAI_API_KEY", ""),
+        api_key="",
         default_model="gpt-4o-mini",
         key_env="OPENAI_API_KEY",
         model_env="OPENAI_MODEL",
@@ -175,21 +175,21 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="anthropic",
         display_name="Anthropic",
         base_url="https://api.anthropic.com/v1",
-        api_key=os.getenv("ANTHROPIC_API_KEY", ""),
+        api_key="",
         default_model="claude-3-5-sonnet-20241022",
         key_env="ANTHROPIC_API_KEY",
         model_env="ANTHROPIC_MODEL",
         settings_field="anthropic_model",
         headers={
             "anthropic-version": "2023-06-01",
-            "x-api-key": os.getenv("ANTHROPIC_API_KEY", ""),
+            "x-api-key": "",
         },
     ),
     "openrouter": ProviderConfig(
         name="openrouter",
         display_name="OpenRouter",
         base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY", ""),
+        api_key="",
         default_model="openrouter/auto",
         key_env="OPENROUTER_API_KEY",
         model_env="OPENROUTER_MODEL",
@@ -199,7 +199,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="deepseek",
         display_name="DeepSeek",
         base_url="https://api.deepseek.com/v1",
-        api_key=os.getenv("DEEPSEEK_API_KEY", ""),
+        api_key="",
         default_model="deepseek-chat",
         key_env="DEEPSEEK_API_KEY",
         model_env="DEEPSEEK_MODEL",
@@ -209,7 +209,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="lite-llm",
         display_name="LiteLLM",
         base_url=os.getenv("LITELLM_BASE_URL", "http://localhost:4000"),
-        api_key=os.getenv("LITELLM_API_KEY", "dummy"),
+        api_key="dummy",
         default_model=os.getenv("LITELLM_MODEL", "gpt-4"),
         key_env="LITELLM_API_KEY",
         model_env="LITELLM_MODEL",
@@ -219,7 +219,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="zen",
         display_name="Zen AI",
         base_url="https://opencode.ai/zen/v1",
-        api_key=os.getenv("ZEN_API_KEY", ""),
+        api_key="",
         default_model="deepseek-v4-flash-free",
         key_env="ZEN_API_KEY",
         model_env="ZEN_MODEL",
@@ -241,7 +241,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="zenmux",
         display_name="ZenMux (paid — API access requires subscription)",
         base_url="https://zenmux.ai/api/v1",
-        api_key=os.getenv("ZENMUX_API_KEY", ""),
+        api_key="",
         default_model="x-ai/grok-4.5",  # currently free on paid plans per web research
         key_env="ZENMUX_API_KEY",
         model_env="ZENMUX_MODEL",
@@ -252,7 +252,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="groq",
         display_name="Groq",
         base_url="https://api.groq.com/openai/v1",
-        api_key=os.getenv("GROQ_API_KEY", ""),
+        api_key="",
         default_model="llama-3.1-70b-versatile",
         key_env="GROQ_API_KEY",
         model_env="GROQ_MODEL",
@@ -262,7 +262,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="together",
         display_name="Together AI",
         base_url="https://api.together.ai/v1",
-        api_key=os.getenv("TOGETHER_API_KEY", ""),
+        api_key="",
         default_model="meta-llama/Llama-3.1-70B-Instruct-Turbo",
         key_env="TOGETHER_API_KEY",
         model_env="TOGETHER_MODEL",
@@ -272,7 +272,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="fireworks",
         display_name="Fireworks AI",
         base_url="https://api.fireworks.ai/v1",
-        api_key=os.getenv("FIREWORKS_API_KEY", ""),
+        api_key="",
         default_model="accounts/fireworks/models/llama-v3-70b-instruct",
         key_env="FIREWORKS_API_KEY",
         model_env="FIREWORKS_MODEL",
@@ -282,7 +282,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="deepinfra",
         display_name="DeepInfra",
         base_url="https://api.deepinfra.com/v1",
-        api_key=os.getenv("DEEPINFRA_API_KEY", ""),
+        api_key="",
         default_model="meta-llama/Llama-3.1-70B-Instruct",
         key_env="DEEPINFRA_API_KEY",
         model_env="DEEPINFRA_MODEL",
@@ -293,7 +293,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="mistral",
         display_name="Mistral AI",
         base_url="https://api.mistral.ai/v1",
-        api_key=os.getenv("MISTRAL_API_KEY", ""),
+        api_key="",
         default_model="mistral-large-latest",
         key_env="MISTRAL_API_KEY",
         model_env="MISTRAL_MODEL",
@@ -303,7 +303,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="cohere",
         display_name="Cohere",
         base_url="https://api.cohere.ai/v1",
-        api_key=os.getenv("COHERE_API_KEY", ""),
+        api_key="",
         default_model="command-r-plus",
         key_env="COHERE_API_KEY",
         model_env="COHERE_MODEL",
@@ -314,7 +314,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="vercel",
         display_name="Vercel AI Gateway",
         base_url=os.getenv("VERCEL_AI_GATEWAY_URL", "https://gateway.ai.vercel.sh"),
-        api_key=os.getenv("VERCEL_API_KEY", ""),
+        api_key="",
         default_model="gpt-4o-mini",
         key_env="VERCEL_API_KEY",
         model_env="VERCEL_MODEL",
@@ -324,7 +324,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="cloudflare",
         display_name="Cloudflare AI Gateway",
         base_url=os.getenv("CLOUDFLARE_GATEWAY_URL", "https://gateway.ai.cloudflare.com"),
-        api_key=os.getenv("CLOUDFLARE_API_KEY", ""),
+        api_key="",
         default_model="@cf/meta/llama-3.1-70b-instruct",
         key_env="CLOUDFLARE_API_KEY",
         model_env="CLOUDFLARE_MODEL",
@@ -335,7 +335,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="cerebras",
         display_name="Cerebras",
         base_url="https://api.cerebras.ai/v1",
-        api_key=os.getenv("CEREBRAS_API_KEY", ""),
+        api_key="",
         # gpt-oss-120b is the current production model. llama-3.3-70b and
         # qwen-3-32b were deprecated — see inference-docs.cerebras.ai/support/deprecation
         default_model="gpt-oss-120b",
@@ -347,7 +347,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="sambanova",
         display_name="SambaNova",
         base_url="https://api.sambanova.ai/v1",
-        api_key=os.getenv("SAMBANOVA_API_KEY", ""),
+        api_key="",
         default_model="Meta-Llama-3.3-70B-Instruct",
         key_env="SAMBANOVA_API_KEY",
         model_env="SAMBANOVA_MODEL",
@@ -358,7 +358,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         display_name="Google Gemini",
         # Google's official OpenAI-compatible endpoint
         base_url="https://generativelanguage.googleapis.com/v1beta/openai",
-        api_key=os.getenv("GEMINI_API_KEY", ""),
+        api_key="",
         default_model="gemini-2.5-flash",
         key_env="GEMINI_API_KEY",
         model_env="GEMINI_MODEL",
@@ -371,7 +371,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         # All current Chutes models are TEE-suffixed (e.g. deepseek-ai/DeepSeek-V3.2-TEE).
         # See https://llm.chutes.ai/v1/models for the live list.
         base_url="https://llm.chutes.ai/v1",
-        api_key=os.getenv("CHUTES_API_KEY", ""),
+        api_key="",
         default_model="deepseek-ai/DeepSeek-V3.2-TEE",
         key_env="CHUTES_API_KEY",
         model_env="CHUTES_MODEL",
@@ -384,7 +384,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         # GLM-5.1, GLM-5, GLM-5-Turbo, GLM-4.7 (limited-time free) and
         # GLM-4.5-Flash (always free). Get a key at z.ai/manage-apikey/billing
         base_url="https://api.z.ai/api/paas/v4",
-        api_key=os.getenv("ZAI_API_KEY", ""),
+        api_key="",
         default_model="glm-4.5-flash",
         key_env="ZAI_API_KEY",
         model_env="ZAI_MODEL",
@@ -588,8 +588,19 @@ class OpenAICompatAdapter(BaseAdapter):
         if not cfg:
             raise ValueError(f"Unknown provider: {provider}. Available: {list(PROVIDER_CONFIGS.keys())}")
 
-        # Try runtime API key first, then fall back to env var
-        api_key = settings.get_api_key(provider) or cfg.api_key
+        # Resolve the API key LIVE: runtime settings (Settings UI) -> env
+        # var at construction time -> provider baked default (LiteLLM's
+        # "dummy" placeholder). Never rely on cfg.api_key's import-time
+        # value: freezing the env var into the config at import meant a
+        # module imported while a key was set (e.g. tests/api collection
+        # importing openai_compat) kept using the stale key even after the
+        # env var was removed — defeating runtime key changes and making
+        # env manipulation in tests ineffective.
+        api_key = (
+            settings.get_api_key(provider)
+            or os.getenv(cfg.key_env, "")
+            or cfg.api_key
+        )
         if not api_key:
             raise ValueError(f"API key not set for provider '{provider}'. Set it in settings or .env.")
 

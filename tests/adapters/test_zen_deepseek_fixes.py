@@ -33,7 +33,12 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock, patch
 
-from adapters.openai_compat import OpenAICompatAdapter, PROVIDER_CONFIGS, _normalize_usage
+import pytest
+from adapters.openai_compat import (
+    PROVIDER_CONFIGS,
+    OpenAICompatAdapter,
+    _normalize_usage,
+)
 
 
 def test_normalize_usage_prefers_provider_counts():
@@ -361,7 +366,7 @@ class TestPhase1ReasoningOnlyFix:
 
         # Should be a streaming response (not a ToolCallResult) — Phase 1
         # correctly identified this as text after seeing content
-        assert not isinstance(result, type(None)), "Result should not be None"
+        assert not (result is None), "Result should not be None"
         # result is an async iterator (generator) for text streaming
         # Consume it to verify we get text
         async def consume():
@@ -375,3 +380,49 @@ class TestPhase1ReasoningOnlyFix:
         assert "text chunk" in text, (
             f"Should have streamed the text content. Got: {text!r}"
         )
+
+
+# ── API-key live resolution (Session 112) ─────────────────────────────────
+# ProviderConfig.api_key is a BAKED DEFAULT only — the env value is resolved
+# at CONSTRUCTION time via key_env. The old import-time freeze made the
+# adapter keep using a stale key after the env var was deleted (the root
+# cause of the flaky test_missing_api_key_falls_back_to_none: importing
+# openai_compat while ZEN_API_KEY was set froze the real key into the
+# config, so monkeypatch.delenv later had no effect).
+
+
+def test_adapter_resolves_api_key_live_not_frozen_at_import(monkeypatch):
+    """The API key must be read at CONSTRUCTION time, not frozen at import.
+
+    Regression: the old code froze the env value into PROVIDER_CONFIGS at
+    import time, so if openai_compat was imported while ZEN_API_KEY was set
+    (e.g. tests/api collection), deleting the env var later had no effect —
+    construction still succeeded with the stale key.
+    """
+    from core.config import settings
+
+    # Defensive: a runtime-stored key (from another test's save_api_key)
+    # would win before the env path — clear it so the env is authoritative.
+    settings._runtime_api_keys.pop("zen", None)
+
+    monkeypatch.setenv("ZEN_API_KEY", "sk-live")
+    adapter = OpenAICompatAdapter(provider="zen")
+    assert adapter._headers["Authorization"] == "Bearer sk-live"
+
+    # Delete the key AFTER the module is already imported — construction
+    # must now FAIL (live resolution), not reuse a frozen import-time key.
+    monkeypatch.delenv("ZEN_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="API key not set"):
+        OpenAICompatAdapter(provider="zen")
+
+
+def test_litellm_baked_dummy_default_survives_live_resolution(monkeypatch):
+    """LiteLLM's baked 'dummy' placeholder default must still construct.
+
+    Guard: the baked cfg.api_key fallback is load-bearing for LiteLLM (its
+    local proxy needs no key) — do not remove it while switching to live
+    env resolution.
+    """
+    monkeypatch.delenv("LITELLM_API_KEY", raising=False)
+    adapter = OpenAICompatAdapter(provider="lite-llm")
+    assert adapter._headers["Authorization"] == "Bearer dummy"
