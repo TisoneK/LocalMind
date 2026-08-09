@@ -1101,4 +1101,17 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** Real-model verification pending. Next phase: Session 72 — B-2026-08-09-6 (wire automatic client-side intent hints for simple queries, ADR-11 client half).
 - **Report:** none — implementation session (Session 67 review + B-5 backlog are the references)
 - **Inefficiency (logged):** none new — the `add_message` AttributeError is a pre-existing silent-failure flaw found during this work, logged in inefficiencies/log.md.
+
+---
+
+## 2026-08-09 — Session 72
+- **Session:** 72
+- **Date:** 2026-08-09
+- **Agent:** Buffy / deepseek-v4-flash
+- **Task:** B-2026-08-09-6 / ADR-11 client half — deterministic client-side intent hint. New `classifyClientIntent(message)` in `client.ts` (exported, unit-tested): returns 'chat' for obvious conversational sends (trivial greetings/farewells/thanks/acknowledgments/yes-no ≤40 chars ≤5 words; short interrogative questions ≤140 chars ≤20 words with NO tool/realtime/system keyword, file extension, or URL) and undefined otherwise. `send()` now passes `tool || classifyClientIntent(message)` as the X-LocalMind-Intent header — an explicitly-picked tool always wins and the classifier never invents a tool intent. Verified the server `_client_intent` fast-path accepts 'chat' (Intent('chat') → ExecutionMode.DIRECT, requires_tools=False, dispatcher skipped) and the route already reads both headers.
+- **Commits:** 1 product (`e5a31c1`) + this context closeout commit
+- **Outcome:** done. Validation: 6 new `classifyClientIntent` vitest tests (19 total frontend tests pass); tsc clean; eslint 0 errors; vite build clean. IMPORTANT FINDING (recorded): the classifier is a PROVABLE strict subset of the server's B-1 detectors (opener list ⊂ server's, blocked list byte-identical, caps identical), and the server's trivial + conversational detectors run BEFORE the `client_intent` fast-path in `_pipeline.py` — so the hint is BEHAVIOR-NEUTRAL today (it never changes routing; any message it hints is already fast-pathed server-side). Its value is architectural (completes ADR-11, exercises `client_preclassified` obs) and as a safety net if the server detectors are ever removed. Mitigated the main risk — keyword-list drift (a server-side addition like 'ip' would make stale client hints bypass the dispatcher) — with a keep-in-sync comment and tuple+join list style mirroring trivial_input.py. Code review passed with no fixes required beyond those.
+- **Open items:** Real-model verification pending. Next phase: Session 73 — next open backlog item.
+- **Report:** none — implementation session (Session 67 review + B-6 backlog are the references)
+- **Inefficiency (logged):** one bad `str_replace` anchor in `client.test.ts` duplicated the tail of an existing test (fixed immediately); see inefficiencies/log.md.
 - **Inefficiency (logged):** a graph-block `str_replace` anchored on 12-space indentation left the block de-indented (IndentationError at line ~2299), caught by compile + fixed. Lesson: when inserting into an `if/else` block, match the surrounding indentation exactly and re-compile immediately.

@@ -278,3 +278,12 @@ if literally nothing slowed you down.
 - **Cause:** The trivial path used a nonexistent `SessionStore.add_message` API instead of the persistence mixin's `_persist_user_message(session_id, message)` used by every other completion path.
 - **Workaround / fix:** Switched both short-circuit paths to `self._persist_user_message`. Also restructured so `turn_complete`/`_store_observation` run in their OWN best-effort try — observability must never depend on persistence succeeding.
 - **Prevent next time:** When adding a test that asserts an obs event fires, first confirm nothing earlier in the same try block can raise — a swallowed exception in a best-effort try silently skips every following emit. Grep for the correct persistence API (`_persist_*` mixin) rather than assuming `SessionStore` has a method with a guessed name.
+
+---
+## 2026-08-09 — Buffy / deepseek-v4-flash (Session 72)
+
+- **Problem:** One `str_replace` in `client.test.ts` used an oldString that was a PREFIX of an existing test's body (3 lines of a larger assertion) instead of a unique whole-block anchor. The replacement inserted a copy of that block's ending + the new describe block, and the original continuation was left orphaned — the file temporarily had a duplicated `observation` matcher and a stray dangling block.
+- **Cost:** One inspection + one corrective `str_replace` + re-run (~3 min).
+- **Cause:** The oldString matched the first 3 lines of the last test's `toMatchObject` call — not unique/self-contained — so the edit duplicated instead of replacing cleanly.
+- **Workaround / fix:** Re-read the file, identified the orphaned duplicate at EOF, and removed exactly that block with a targeted replacement.
+- **Prevent next time:** When appending a new describe/test block to an existing test file, anchor the insertion on a UNIQUE, self-contained boundary (e.g. the final `});` of the file, or a complete statement) — never on a partial line sequence that could be a prefix of larger content. After any multi-line edit to a test file, run the test suite immediately (a SyntaxError or duplicate-assertion failure surfaces within seconds).
