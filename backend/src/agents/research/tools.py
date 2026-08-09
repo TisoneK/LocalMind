@@ -13,7 +13,9 @@ from core.agent.constants import AGENT_ALLOWED_TOOLS
 # to the coding agent (e.g., "parse this downloaded CSV and return the
 # row count") instead of trying to do file analysis itself (which it
 # can't — it has no file tools).
-RESEARCH_TOOLS: frozenset[str] = frozenset({"web_search", "web_fetch", "delegate"})
+RESEARCH_TOOLS: frozenset[str] = frozenset(
+    {"web_search", "web_fetch", "delegate", "skill"}  # B-2026-08-02-12: universal skill tool
+)
 
 assert RESEARCH_TOOLS.issubset(AGENT_ALLOWED_TOOLS), (
     f"RESEARCH_TOOLS ({RESEARCH_TOOLS}) must be a subset of "

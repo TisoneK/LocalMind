@@ -35,7 +35,7 @@ def test_research_agent_config():
     assert cfg.name == "research"
     assert cfg.tools_enabled is True
     assert cfg.allowed_tools == RESEARCH_TOOLS
-    assert cfg.allowed_tools == frozenset({"web_search", "web_fetch", "delegate"})
+    assert cfg.allowed_tools == frozenset({"web_search", "web_fetch", "delegate", "skill"})
     assert cfg.allowed_tools.issubset(AGENT_ALLOWED_TOOLS)
 
 
@@ -183,17 +183,21 @@ def test_all_four_toolsets_disjoint():
     ADR-8 Phase 3 (Session 34): the `delegate` tool is intentionally
     shared across multiple agents (it's the universal delegation
     primitive — any agent with `delegate` in its toolset can delegate
-    to any other agent). The PRIMARY tools (the non-delegate tools)
-    remain pairwise disjoint: browser has browse, coding has shell +
-    file tools, research has web_search + web_fetch, direct has none.
+    to any other agent). B-2026-08-02-12 (Session 84): `skill` is the
+    other intentionally-shared universal tool (any agent may pull a
+    skill into context). The PRIMARY tools (excluding both shared
+    tools) remain pairwise disjoint: browser has browse, coding has
+    shell + file tools, research has web_search + web_fetch, direct
+    has none.
     """
     toolsets = [BROWSER_TOOLS, CODING_TOOLS, RESEARCH_TOOLS, DIRECT_TOOLS]
     for i, ts1 in enumerate(toolsets):
         for j, ts2 in enumerate(toolsets):
             if i < j:
-                # Strip 'delegate' from both sides before checking disjoint
-                ts1_primary = ts1 - {"delegate"}
-                ts2_primary = ts2 - {"delegate"}
+                # Strip the shared universal tools before checking disjoint
+                _shared = {"delegate", "skill"}
+                ts1_primary = ts1 - _shared
+                ts2_primary = ts2 - _shared
                 assert ts1_primary.isdisjoint(ts2_primary), (
                     f"toolsets {i} and {j} primary tools overlap: "
                     f"{ts1_primary & ts2_primary}"

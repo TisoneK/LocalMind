@@ -64,6 +64,7 @@ class Intent(str, Enum):
     ADD_SUBGOAL = "add_subgoal"  # B-2026-08-02-8: add a subgoal to the scratchpad
     UPDATE_SUBGOAL = "update_subgoal"  # B-2026-08-02-8: update a subgoal's status/notes
     CREATE_PLAN = "create_plan"  # B-2026-08-02-8: create multiple subgoals from a plan
+    SKILL = "skill"  # B-2026-08-02-12: load a skill (markdown playbook) into context
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

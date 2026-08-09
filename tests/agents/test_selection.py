@@ -40,14 +40,14 @@ def test_list_intent_mappings_covers_all_intents():
     """list_intent_mappings() returns one entry per ROUTING Intent.
 
     ADR-8 Phase 3 (Session 34) + B-2026-08-02-6 (Session 81) +
-    B-2026-08-02-7 (Session 82) + B-2026-08-02-8 (Session 83): the
-    DELEGATE / DELEGATE_PARALLEL / PROPOSE_EDIT / PROPOSE_WRITE /
-    APPLY_PROPOSED / ADD_SUBGOAL / UPDATE_SUBGOAL / CREATE_PLAN intents
-    are meta-tool intents (the agent calls the corresponding tools,
-    which are then dispatched by the agent loop). They are NOT routing
-    intents — the intent classifier never produces them; they're only
-    invoked when the model calls the tools. So they're excluded from
-    the routing map.
+    B-2026-08-02-7 (Session 82) + B-2026-08-02-8 (Session 83) +
+    B-2026-08-02-12 (Session 84): the DELEGATE / DELEGATE_PARALLEL /
+    PROPOSE_EDIT / PROPOSE_WRITE / APPLY_PROPOSED / ADD_SUBGOAL /
+    UPDATE_SUBGOAL / CREATE_PLAN / SKILL intents are meta-tool intents
+    (the agent calls the corresponding tools, which are then dispatched
+    by the agent loop). They are NOT routing intents — the intent
+    classifier never produces them; they're only invoked when the model
+    calls the tools. So they're excluded from the routing map.
     """
     mappings = list_intent_mappings()
     mapped_intents = {intent for intent, _ in mappings}
@@ -61,6 +61,7 @@ def test_list_intent_mappings_covers_all_intents():
         Intent.ADD_SUBGOAL,
         Intent.UPDATE_SUBGOAL,
         Intent.CREATE_PLAN,
+        Intent.SKILL,
     )
     routing_intents = {i for i in Intent if i not in meta_tool_intents}
     for intent in routing_intents:
@@ -99,6 +100,10 @@ def test_list_intent_mappings_covers_all_intents():
     assert Intent.CREATE_PLAN not in mapped_intents, (
         "Intent.CREATE_PLAN should not be in the routing map — it's a "
         "meta-tool intent (the model calls the create_plan tool)."
+    )
+    assert Intent.SKILL not in mapped_intents, (
+        "Intent.SKILL should not be in the routing map — it's a "
+        "meta-tool intent (the model calls the skill tool)."
     )
 
 

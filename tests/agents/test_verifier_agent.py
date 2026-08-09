@@ -14,15 +14,12 @@ Verifies:
 
 from __future__ import annotations
 
-import pytest
-
 from agents import VerifierAgent, get_agent, list_agents, select_agent
 from agents.verifier.context_builder import build_verifier_context
 from agents.verifier.is_done import is_verifier_done
 from agents.verifier.tools import VERIFIER_TOOLS
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 from core.models import Intent
-
 
 # ── AgentConfig tests ─────────────────────────────────────────────────
 
@@ -209,8 +206,9 @@ def test_verifier_tools_exclude_sysinfo():
     assert "sysinfo" not in VERIFIER_TOOLS
 
 
-def test_verifier_tools_has_exactly_7():
-    assert len(VERIFIER_TOOLS) == 7
+def test_verifier_tools_has_exactly_8():
+    # 7 + skill (B-2026-08-02-12, universal)
+    assert len(VERIFIER_TOOLS) == 8
 
 
 # ── Registry integration tests ───────────────────────────────────────
@@ -283,7 +281,6 @@ def test_verifier_has_fewer_tools_than_coding():
 
 
 def test_verifier_more_iterations_than_research():
-    from agents.research.tools import RESEARCH_TOOLS
     from agents.research.agent import ResearchAgent
     v_agent = VerifierAgent(adapter=None)
     r_agent = ResearchAgent(adapter=None)

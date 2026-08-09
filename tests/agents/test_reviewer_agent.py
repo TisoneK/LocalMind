@@ -14,15 +14,12 @@ Verifies:
 
 from __future__ import annotations
 
-import pytest
-
 from agents import ReviewerAgent, get_agent, list_agents, select_agent
 from agents.reviewer.context_builder import build_reviewer_context
 from agents.reviewer.is_done import is_reviewer_done
 from agents.reviewer.tools import REVIEWER_TOOLS
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 from core.models import Intent
-
 
 # ── AgentConfig tests ─────────────────────────────────────────────────
 
@@ -168,8 +165,9 @@ def test_reviewer_tools_exclude_process():
     assert "process" not in REVIEWER_TOOLS
 
 
-def test_reviewer_tools_has_exactly_4():
-    assert len(REVIEWER_TOOLS) == 4
+def test_reviewer_tools_has_exactly_5():
+    # 4 + skill (B-2026-08-02-12, universal)
+    assert len(REVIEWER_TOOLS) == 5
 
 
 # ── Registry integration tests ───────────────────────────────────────

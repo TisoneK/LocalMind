@@ -27,6 +27,7 @@ REVIEWER_TOOLS: frozenset[str] = frozenset(
         "git",
         "shell",
         "delegate",  # ADR-8 Phase 3: hand off findings to other agents
+        "skill",  # B-2026-08-02-12: universal skill tool
     }
 )
 

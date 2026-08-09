@@ -14,15 +14,12 @@ Verifies:
 
 from __future__ import annotations
 
-import pytest
-
 from agents import DebuggerAgent, get_agent, list_agents, select_agent
 from agents.debugger.context_builder import build_debugger_context
 from agents.debugger.is_done import is_debugger_done
 from agents.debugger.tools import DEBUGGER_TOOLS
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 from core.models import Intent
-
 
 # ── AgentConfig tests ─────────────────────────────────────────────────
 
@@ -166,8 +163,9 @@ def test_debugger_tools_exclude_edit_file():
     assert "edit_file" not in DEBUGGER_TOOLS
 
 
-def test_debugger_tools_has_exactly_6():
-    assert len(DEBUGGER_TOOLS) == 6
+def test_debugger_tools_has_exactly_7():
+    # 6 + skill (B-2026-08-02-12, universal)
+    assert len(DEBUGGER_TOOLS) == 7
 
 
 # ── Registry integration tests ───────────────────────────────────────

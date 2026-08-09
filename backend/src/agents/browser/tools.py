@@ -31,6 +31,7 @@ BROWSER_TOOLS: frozenset[str] = frozenset(
     {
         Intent.BROWSE.value,  # the browser_agent tool
         "delegate",  # ADR-8 Phase 3: agent-initiated delegation
+        "skill",  # B-2026-08-02-12: universal skill tool
     }
 )
 

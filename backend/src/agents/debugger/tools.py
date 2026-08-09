@@ -30,6 +30,7 @@ DEBUGGER_TOOLS: frozenset[str] = frozenset(
         "process",
         "delegate",
         "diagnostics",  # Session 49: structured failure analysis
+        "skill",  # B-2026-08-02-12: universal skill tool
     }
 )
 

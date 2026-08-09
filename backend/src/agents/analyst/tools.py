@@ -25,6 +25,7 @@ ANALYST_TOOLS: frozenset[str] = frozenset(
         "file_task",
         "git",
         "delegate",
+        "skill",  # B-2026-08-02-12: universal skill tool
     }
 )
 

@@ -14,15 +14,12 @@ Verifies:
 
 from __future__ import annotations
 
-import pytest
-
 from agents import AnalystAgent, get_agent, list_agents, select_agent
 from agents.analyst.context_builder import build_analyst_context
 from agents.analyst.is_done import is_analyst_done
 from agents.analyst.tools import ANALYST_TOOLS
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 from core.models import Intent
-
 
 # ── AgentConfig tests ─────────────────────────────────────────────────
 
@@ -151,16 +148,17 @@ def test_analyst_tools_exclude_process():
     assert "process" not in ANALYST_TOOLS
 
 
-def test_analyst_tools_has_exactly_3():
-    assert len(ANALYST_TOOLS) == 3
+def test_analyst_tools_has_exactly_4():
+    # 3 + skill (B-2026-08-02-12, universal)
+    assert len(ANALYST_TOOLS) == 4
 
 
 def test_analyst_has_tightest_toolset():
     """Analyst has the fewest tools of any agent — just read and delegate."""
     from agents.coding.tools import CODING_TOOLS
-    from agents.verifier.tools import VERIFIER_TOOLS
-    from agents.reviewer.tools import REVIEWER_TOOLS
     from agents.debugger.tools import DEBUGGER_TOOLS
+    from agents.reviewer.tools import REVIEWER_TOOLS
+    from agents.verifier.tools import VERIFIER_TOOLS
     assert len(ANALYST_TOOLS) < len(REVIEWER_TOOLS)  # 3 < 4
     assert len(ANALYST_TOOLS) < len(DEBUGGER_TOOLS)  # 3 < 5
     assert len(ANALYST_TOOLS) < len(VERIFIER_TOOLS)  # 3 < 6

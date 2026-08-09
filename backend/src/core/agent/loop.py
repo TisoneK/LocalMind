@@ -217,6 +217,7 @@ from core.agent.synthesizer import AnswerSynthesizer
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.context_builder import _build_environment_context
 from core.context_compactor import simplify_tool_results
+from core.skills import available_skills_summary
 from core.workspace_state import format_snapshot, mark_turn_start
 from core.workspace_state import snapshot as workspace_snapshot
 
@@ -787,6 +788,28 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "skill",
+            "description": (
+                "Load a specialized playbook (a 'skill' — markdown instructions) "
+                "into your context when the task matches its domain (e.g. Python "
+                "testing, git workflows, code review). Skills are read-only prompt "
+                f"fragments. Available skills: {available_skills_summary()}."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "skill_name": {
+                        "type": "string",
+                        "description": "The skill to load (e.g. 'python-testing')",
+                    },
+                },
+                "required": ["skill_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "git",
             "description": (
                 "Structured Git version control operations. Use this instead of "
@@ -1071,6 +1094,9 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
     elif tool_name == "create_plan":
         # create_plan dispatcher expects JSON-encoded args (steps array or plan).
         return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "skill":
+        # skill takes a single skill_name argument.
+        return tool_args.get("skill_name", "")
     elif tool_name == "git":
         # git dispatcher expects JSON-encoded args (operation + params)
         # — same pattern as delegate/edit_file. The git tool parses it back.
@@ -1708,6 +1734,8 @@ class AgentLoop:
                                             if call.tool_args.get('id') else "Updating subgoal"),
                         "create_plan": (f"Creating plan ({len(call.tool_args.get('steps') or [])} steps)"
                                          if call.tool_args.get('steps') else "Creating plan"),
+                        "skill": (f"Loading skill: {call.tool_args.get('skill_name', '')[:40]}"
+                                  if call.tool_args.get('skill_name') else "Loading skill"),
                     }
                     _label = _label_map.get(call.tool_name, f"Running {call.tool_name}")
                     yield StreamChunk(text="", done=False, status=_label)

@@ -64,6 +64,7 @@ CODING_TOOLS: frozenset[str] = frozenset(
         "add_subgoal",  # B-2026-08-02-8: subgoal scratchpad
         "update_subgoal",  # B-2026-08-02-8: subgoal scratchpad
         "create_plan",  # B-2026-08-02-8: subgoal scratchpad
+        "skill",  # B-2026-08-02-12: load a skill into context
         "diagnostics",  # Session 49: structured failure analysis
     }
 )

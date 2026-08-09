@@ -28,15 +28,15 @@ def test_coding_agent_config():
     cfg = agent.config()
     assert cfg.name == "coding"
     assert cfg.tools_enabled is True
-    # Scoped toolset: 16 coding tools (5 core + git + process + delegate +
-    # delegate_parallel + diagnostics + 3 propose-stage + 3 subgoal), not
-    # the full AGENT_ALLOWED_TOOLS
+    # Scoped toolset: 17 coding tools (5 core + git + process + delegate +
+    # delegate_parallel + diagnostics + 3 propose-stage + 3 subgoal + skill),
+    # not the full AGENT_ALLOWED_TOOLS
     assert cfg.allowed_tools == CODING_TOOLS
     assert cfg.allowed_tools == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
          "git", "process", "delegate", "delegate_parallel", "diagnostics",
          "propose_str_replace", "propose_write_file", "apply_proposed_edit",
-         "add_subgoal", "update_subgoal", "create_plan"}
+         "add_subgoal", "update_subgoal", "create_plan", "skill"}
     )
     assert cfg.allowed_tools.issubset(AGENT_ALLOWED_TOOLS)
     # Coding tasks need more iterations than browser tasks
@@ -120,11 +120,12 @@ def test_coding_agent_scoped_tools_filters_non_coding():
             {"intent": "add_subgoal", "description": "add subgoal"},  # B-2026-08-02-8
             {"intent": "update_subgoal", "description": "update subgoal"},  # B-2026-08-02-8
             {"intent": "create_plan", "description": "create plan"},  # B-2026-08-02-8
+            {"intent": "skill", "description": "load skill"},  # B-2026-08-02-12
         ]
     scoped = agent.scoped_tools(all_tools)
     scoped_intents = {t["intent"] for t in scoped}
     assert scoped_intents == CODING_TOOLS
-    assert len(scoped) == 16  # 13 (S82) + 3 subgoal scratchpad (B-2026-08-02-8)
+    assert len(scoped) == 17  # 16 (S83) + skill (B-2026-08-02-12)
     # Must NOT include web/browser/memory/sysinfo tools
     assert "web_search" not in scoped_intents
     assert "web_fetch" not in scoped_intents
@@ -169,19 +170,20 @@ def test_coding_tools_is_subset_of_agent_allowed():
 
 
 def test_coding_tools_has_ten_tools():
-    """The coding agent's scoped toolset is exactly 16 tools.
+    """The coding agent's scoped toolset is exactly 17 tools.
 
     Sessions 41-49 added git, process, and diagnostics; Session 81 added
     delegate_parallel (B-2026-08-02-6); Session 82 added the three
     propose-stage tools (B-2026-08-02-7); Session 83 added the three
-    subgoal scratchpad tools (B-2026-08-02-8).
+    subgoal scratchpad tools (B-2026-08-02-8); Session 84 added skill
+    (B-2026-08-02-12, universal).
     """
-    assert len(CODING_TOOLS) == 16
+    assert len(CODING_TOOLS) == 17
     assert CODING_TOOLS == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
          "git", "process", "delegate", "delegate_parallel", "diagnostics",
          "propose_str_replace", "propose_write_file", "apply_proposed_edit",
-         "add_subgoal", "update_subgoal", "create_plan"}
+         "add_subgoal", "update_subgoal", "create_plan", "skill"}
     )
 
 
@@ -241,9 +243,10 @@ def test_coding_and_browser_have_different_toolsets():
 
     coding = CodingAgent(adapter=None)
     assert coding.config().allowed_tools != BROWSER_TOOLS
-    # Primary tools (excluding shared 'delegate') are disjoint
-    coding_primary = coding.config().allowed_tools - {"delegate"}
-    browser_primary = BROWSER_TOOLS - {"delegate"}
+    # Primary tools (excluding the shared universal 'delegate' + 'skill') are disjoint
+    _shared = {"delegate", "skill"}
+    coding_primary = coding.config().allowed_tools - _shared
+    browser_primary = BROWSER_TOOLS - _shared
     assert coding_primary.isdisjoint(browser_primary)
 
 
