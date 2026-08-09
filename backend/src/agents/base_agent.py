@@ -182,6 +182,7 @@ class BaseAgent(ABC):
         skip_planning: bool = False,
         allowed_tool_names: Optional[frozenset[str]] = None,
         steering_queue=None,  # B-2026-08-02-5 (A5): per-session asyncio.Queue
+        abort_signal=None,  # B-2026-08-02-2 (A2): per-session asyncio.Event
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop.
@@ -275,6 +276,7 @@ class BaseAgent(ABC):
             skip_planning=skip_planning,
             allowed_tool_names=allowed_tool_names,
             steering_queue=steering_queue,  # B-2026-08-02-5 (A5)
+            abort_signal=abort_signal,  # B-2026-08-02-2 (A2)
         ):
             yield chunk
 

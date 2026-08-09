@@ -1081,6 +1081,12 @@ export function useChat(
   }, []);
 
   const abort = useCallback(() => {
+    // B-2026-08-02-2 (A2): also tell the backend to stop — closing the SSE
+    // stream alone left the AgentLoop running until the wall-clock cap.
+    const target = streamingSessionRef.current;
+    if (target) {
+      void localmindClient.abort(target);
+    }
     abortRef.current?.();
     abortRef.current = null;
     streamingSessionRef.current = null;

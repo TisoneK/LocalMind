@@ -51,6 +51,7 @@ from core.metrics import MetricsStore  # NEW: aggregated p50/p95 per intent + to
 from core.model_router import best_model_for, update_pulled_models
 from core.models import (
     CAPABILITY_TO_INTENT,
+    AgentAbortedError,
     EngineContext,
     ExecutionMode,
     Intent,
@@ -204,6 +205,12 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # (never mid-tool). Bounded per session; pruned with the other
         # per-session dicts below.
         self._steering_queues: dict[str, asyncio.Queue] = {}
+        # B-2026-08-02-2 (A2): per-session abort events. Set via
+        # POST /api/chat/{session_id}/abort (or client disconnect);
+        # AgentLoop.run() raises AgentAbortedError at the next iteration
+        # boundary when set. Fresh (unset) event per turn — a stale abort
+        # from an idle moment must not kill the next turn.
+        self._abort_events: dict[str, asyncio.Event] = {}
         # Reliability bootstrap happens in startup(), not here
         try:
             load_reliability_from_db(self._store.get_reliability())
@@ -312,6 +319,22 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             session_id, asyncio.Queue(maxsize=STEERING_QUEUE_MAX)
         )
 
+    def _abort_event_for(self, session_id: str) -> asyncio.Event:
+        """Return the per-session abort event, creating it on demand."""
+        return self._abort_events.setdefault(session_id, asyncio.Event())
+
+    def abort(self, session_id: str) -> bool:
+        """Request cancellation of a session's in-flight agent turn.
+
+        B-2026-08-02-2 (A2): sets the session's abort event; AgentLoop.run()
+        raises AgentAbortedError at the next iteration boundary and the
+        engine yields a clean "stopped" response. Each process() turn
+        starts with a FRESH (unset) event, so an abort requested while idle
+        is a no-op for the next turn. Returns True.
+        """
+        self._abort_event_for(session_id).set()
+        return True
+
     def steer(self, session_id: str, message: str) -> bool:
         """Queue a steering message for a session's in-flight agent turn.
 
@@ -371,6 +394,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             self._last_observation_snapshots,
             self._session_locks,
             self._steering_queues,
+            self._abort_events,
         ):
             if session_id in d:
                 del d[session_id]
@@ -908,19 +932,36 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # queue (put_nowait via steer()) and are drained at the next
             # agent-loop iteration boundary.
             self._steering_queues[session_id] = asyncio.Queue(maxsize=STEERING_QUEUE_MAX)
-            async for chunk in self._process_unlocked(
-                message=message,
-                session_id=session_id,
-                file=file,
-                filename=filename,
-                content_type=content_type,
-                obs=obs,
-                original_path=original_path,
-                client_intent=client_intent,
-                client_confidence=client_confidence,
-                allowed_tool_names=allowed_tool_names,
-            ):
-                yield chunk
+            # B-2026-08-02-2 (A2): fresh (unset) abort event per turn — a
+            # stale abort requested while idle must not kill the next turn.
+            self._abort_events[session_id] = asyncio.Event()
+            try:
+                async for chunk in self._process_unlocked(
+                    message=message,
+                    session_id=session_id,
+                    file=file,
+                    filename=filename,
+                    content_type=content_type,
+                    obs=obs,
+                    original_path=original_path,
+                    client_intent=client_intent,
+                    client_confidence=client_confidence,
+                    allowed_tool_names=allowed_tool_names,
+                ):
+                    yield chunk
+            except AgentAbortedError:
+                # B-2026-08-02-2 (A2): clean cancellation — the loop raised
+                # AgentAbortedError at an iteration boundary after the user
+                # (or the client disconnect) aborted. Yield a clear marker
+                # so the SSE stream ends gracefully instead of running to
+                # the wall-clock cap with no client listening.
+                # Best-effort: close the todo step so an aborted turn doesn't
+                # leave a permanently in_progress item.
+                try:
+                    self._update_todo_status(session_id, 0, "done", obs or ObsCollector())
+                except Exception:
+                    pass
+                yield StreamChunk(text="⏹ Stopped by user.", done=True)
 
     async def _process_unlocked(
         self,
@@ -3029,6 +3070,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     orchestrator_context=orchestrator_context or None,
                     skip_planning=_skip_planning,
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
+                    abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
                 )
                 # Session 31: CRITICAL FIX — intercept done=True from the
                 # agent loop. If the loop produced NO text, the done signal
@@ -3080,7 +3122,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     memory_facts=memory_facts,
                     orchestrator_context=orchestrator_context or None,
                     skip_planning=_skip_planning,
-                    steering_queue=self._steering_queue_for(session_id),
+                    steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
+                    abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
                 ):
                     if chunk.usage:
                         _provider_usage.update(chunk.usage)

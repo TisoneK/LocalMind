@@ -123,6 +123,13 @@ async def _event_stream(
         ):
             if disconnect and await disconnect():
                 logger.info(f"Client disconnected for session {session_id}")
+                # B-2026-08-02-2 (A2): the client closed the stream — stop
+                # the backend work too (previously the AgentLoop kept running
+                # until the wall-clock/iteration cap). Best-effort.
+                try:
+                    _engine.abort(session_id)
+                except Exception:
+                    pass
                 break
 
             # Flush buffered obs events before each text chunk
@@ -442,6 +449,21 @@ async def _event_stream(
         logger.warning(f"[title] should_refine_title check failed: {_title_exc} — using is_first fallback")
         if is_first:
             asyncio.create_task(refine_title_async(session_id, message))
+
+
+@router.post("/chat/{session_id}/abort")
+async def abort_session(session_id: str):
+    """Request cancellation of a session's in-flight agent turn.
+
+    B-2026-08-02-2 (A2): sets the session's abort event; AgentLoop.run()
+    raises AgentAbortedError at the next iteration boundary and the engine
+    yields a clean "⏹ Stopped by user." response. The frontend Stop button
+    already closes the SSE stream (AbortController) — this endpoint makes
+    the backend actually stop instead of running to the wall-clock cap.
+    Safe to call when idle: each turn starts with a fresh (unset) event.
+    """
+    _engine.abort(session_id)
+    return {"aborted": True}
 
 
 @router.post("/chat/{session_id}/steer")

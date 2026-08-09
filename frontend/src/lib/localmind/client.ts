@@ -519,6 +519,25 @@ class LocalMindClient {
     }
   }
 
+  /**
+   * Request cancellation of a session's in-flight agent turn (B-2026-08-02-2/A2).
+   *
+   * The backend sets the session's abort event; the agent loop raises at
+   * the next iteration boundary and streams a clean "stopped" response —
+   * instead of running to the wall-clock cap after the SSE stream closed.
+   */
+  async abort(sessionId: string): Promise<boolean> {
+    try {
+      await this.request<{ aborted: boolean }>(
+        `/api/chat/${encodeURIComponent(sessionId)}/abort`,
+        { method: 'POST' }
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // ── Actions ─────────────────────────────────────────────────────────
 
   async getActions(sessionId: string): Promise<ActionItem[]> {

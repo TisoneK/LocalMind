@@ -501,6 +501,17 @@ class OrchestrationPlan(BaseModel):
         self.graph = graph
 
 
+class AgentAbortedError(Exception):
+    """Raised inside AgentLoop.run() when the user aborts the turn.
+
+    B-2026-08-02-2 (A2): an asyncio.Event is threaded through
+    AgentLoop.run() / BaseAgent.run(); when it is set, the loop raises
+    this at the next iteration boundary so the engine can yield a clean
+    "stopped" response instead of letting the backend run to the
+    wall-clock/iteration cap after the client closed the stream.
+    """
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # EngineContext — prompt assembly input
 # ═══════════════════════════════════════════════════════════════════════════════

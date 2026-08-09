@@ -76,7 +76,7 @@ from core.agent.constants import (
     WORKSPACE_STATE_ENABLED,
 )
 from core.agent.models import AgentStep, AgentTrace
-from core.models import Intent, StreamChunk, ToolResult
+from core.models import AgentAbortedError, Intent, StreamChunk, ToolResult
 
 
 def _parse_plan_steps(plan_text: str) -> list[str]:
@@ -897,6 +897,7 @@ class AgentLoop:
         agent_context: Optional[str] = None,
         allowed_tool_names: Optional[frozenset[str]] = None,
         steering_queue: Optional[asyncio.Queue] = None,
+        abort_signal: Optional[asyncio.Event] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -931,6 +932,11 @@ class AgentLoop:
                 messages injected mid-turn (B-2026-08-02-5/A5). Drained at
                 each iteration boundary — the agent sees them as new user
                 prompts and continues its turn without being aborted.
+            abort_signal: Optional per-session asyncio.Event (B-2026-08-02-2/A2).
+                When set (POST /api/chat/{session_id}/abort), the loop raises
+                AgentAbortedError at the next check point so the engine can
+                yield a clean "stopped" response instead of running to the
+                wall-clock/iteration cap after the client closed the stream.
         """
         active_adapter = adapter or self._adapter
         trace = AgentTrace()
@@ -1036,6 +1042,10 @@ class AgentLoop:
         plan_context = ""
         iteration_offset = 0  # how many iterations the planning phase consumed
         if PLAN_ENABLED and intent in AGENT_INTENTS and not initial_tool_result and not skip_planning:
+            # B-2026-08-02-2 (A2): check abort before the planning phase — it
+            # can take a full model call.
+            if abort_signal is not None and abort_signal.is_set():
+                raise AgentAbortedError("aborted by user before planning")
             # Stream the plan in real-time as thinking tokens so the user
             # sees the model's reasoning (UNDERSTANDING, STEPS, ARGS_PRECHECK)
             # as it happens — not after the full plan is generated.
@@ -1215,6 +1225,15 @@ class AgentLoop:
                     _steer_msg = await steering_queue.get()
                     _steer_msg.setdefault("steering", True)
                     loop_messages.append(_steer_msg)
+
+            # B-2026-08-02-2 (A2): abort check at each iteration boundary.
+            # Set via POST /api/chat/{session_id}/abort (or client
+            # disconnect) — the loop raises and the engine yields a clean
+            # "stopped" response. Granularity is one step boundary, matching
+            # the steering design: a mid-tool abort lands here after the
+            # current tool finishes.
+            if abort_signal is not None and abort_signal.is_set():
+                raise AgentAbortedError("aborted by user")
 
             # Build iteration-specific context hint
             failure_hint = ""
@@ -2319,6 +2338,9 @@ class AgentLoop:
                 _minimax_partial_seen = False  # track if we've seen start of XML
 
                 async for chunk in result:
+                    # B-2026-08-02-2 (A2): abort check during stream buffering.
+                    if abort_signal is not None and abort_signal.is_set():
+                        raise AgentAbortedError("aborted during streaming")
                     filtered_text = _filter_system_leaks(chunk.text)
                     _minimax_buffer += filtered_text
                     if chunk.usage:
@@ -2974,6 +2996,11 @@ class AgentLoop:
                 _mid_stream_minimax_buffer = ""
                 _mid_stream_text = ""
                 async for chunk in result:
+                    # B-2026-08-02-2 (A2): respond to abort DURING streaming —
+                    # the longest phase (up to PER_CALL_TIMEOUT_SECS). is_set()
+                    # is a flag read; checked per chunk.
+                    if abort_signal is not None and abort_signal.is_set():
+                        raise AgentAbortedError("aborted during streaming")
                     if chunk.usage:
                         _provider_usage.update(chunk.usage)
                     filtered_text = _filter_system_leaks(chunk.text)
