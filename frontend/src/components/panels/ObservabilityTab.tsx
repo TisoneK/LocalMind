@@ -6,6 +6,7 @@ import {
   Wrench,
   Brain,
   Activity,
+  AlertTriangle,
 } from 'lucide-react';
 import { CapabilitiesData, ObservationData } from '@/types';
 import { formatLatency } from '@/lib/localmind/progress';
@@ -68,6 +69,7 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
   const latency = Number.isFinite(observation.latency) ? observation.latency : 0;
   const memoryHits = Number.isFinite(observation.memoryHits) ? observation.memoryHits : 0;
   const toolsUsed = observation.toolsUsed ?? [];
+  const anomalies = observation.anomalies ?? [];
 
   // Whether real data has been received (vs. initial zeros).
   // Don't check observation.intent — the default state has intent='chat',
@@ -142,6 +144,50 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
 
   return (
     <div className="space-y-4 p-3">
+      {/* Session 123: anomaly alerts — the panel ALERTS instead of silently
+          displaying bad numbers. Backend emits these on stall (>60s with
+          near-zero output) and token leak (fresh session inheriting the
+          previous session's context count). */}
+      {anomalies.length > 0 && (
+        <div>
+          <div className="flex items-center gap-1.5 mb-2">
+            <AlertTriangle className="h-3 w-3 text-brand-red" />
+            <span className="text-[10px] uppercase tracking-wider text-brand-red font-medium">
+              Alerts
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {anomalies.map((a) => (
+              <div
+                key={a.kind}
+                className="bg-brand-red/5 border border-brand-red/30 rounded-md px-2.5 py-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-medium text-brand-red">
+                    {a.title}
+                  </span>
+                  <span className="text-[9px] uppercase text-brand-red/70 font-mono">
+                    {a.severity}
+                  </span>
+                </div>
+                <p className="text-[10px] text-brand-green-soft/90 mt-1 leading-relaxed">
+                  {a.detail}
+                </p>
+                {a.metrics && Object.keys(a.metrics).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {Object.entries(a.metrics).map(([k, v]) => (
+                      <span key={k} className="text-[9px] text-brand-green-faint font-mono">
+                        {k.replace(/_/g, ' ')}: <span className="text-brand-green-soft">{v}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Intent Classification */}
       <div>
         <div className="flex items-center gap-1.5 mb-2">

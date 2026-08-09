@@ -28,6 +28,7 @@ import type {
   MemoryFact,
   PerformanceMetrics,
   ObservationData,
+  AnomalyData,
   CapabilitiesData,
   ModelOption,
   ToolCall,
@@ -642,12 +643,63 @@ export function useChat(
                   latency: prev?.latency ?? 0,
                   // Preserve accumulated stage timings across intent events
                   stageTimings: prev?.stageTimings,
+                  anomalies: prev?.anomalies,
                 }));
+                break;
+              }
+
+              case 'anomaly': {
+                // Session 123: the backend detected an anomaly on this turn
+                // (stall / token leak). Accumulate into the observation so
+                // the Observe panel renders alert cards. Dedupe by kind — a
+                // re-detected anomaly replaces the earlier one; cap at 5.
+                const anomaly = parsed.anomaly;
+                if (anomaly && typeof anomaly === 'object' && typeof anomaly.kind === 'string') {
+                  setLiveObservation((prev) => {
+                    const rest = (prev?.anomalies ?? []).filter(
+                      (a) => a.kind !== anomaly.kind
+                    );
+                    return {
+                      intent: prev?.intent ?? ('chat' as any),
+                      confidence: prev?.confidence ?? 0,
+                      toolsUsed: prev?.toolsUsed ?? [],
+                      memoryHits: prev?.memoryHits ?? 0,
+                      contextTokens: prev?.contextTokens ?? 0,
+                      latency: prev?.latency ?? 0,
+                      stageTimings: prev?.stageTimings,
+                      anomalies: [anomaly as AnomalyData, ...rest].slice(0, 5),
+                    };
+                  });
+                }
                 break;
               }
 
               case 'obs_event': {
                 const obs = parsed.obs_event || parsed;
+                // Session 123: an anomaly may also arrive wrapped as an
+                // obs_event (the bridge drains every obs event to SSE). Treat
+                // it the same as the top-level 'anomaly' case.
+                if (obs.type === 'anomaly') {
+                  const obsAnomaly = obs.data || obs;
+                  if (obsAnomaly && typeof obsAnomaly === 'object' && typeof obsAnomaly.kind === 'string') {
+                    setLiveObservation((prev) => {
+                      const rest = (prev?.anomalies ?? []).filter(
+                        (a) => a.kind !== obsAnomaly.kind
+                      );
+                      return {
+                        intent: prev?.intent ?? ('chat' as any),
+                        confidence: prev?.confidence ?? 0,
+                        toolsUsed: prev?.toolsUsed ?? [],
+                        memoryHits: prev?.memoryHits ?? 0,
+                        contextTokens: prev?.contextTokens ?? 0,
+                        latency: prev?.latency ?? 0,
+                        stageTimings: prev?.stageTimings,
+                        anomalies: [obsAnomaly as AnomalyData, ...rest].slice(0, 5),
+                      };
+                    });
+                  }
+                  break;
+                }
                 // Session 115: the dispatcher used to emit thinking_done with
                 // the internal routing placeholder intent="dispatch", which
                 // clobbered the real classification in the Observe panel.
@@ -680,6 +732,7 @@ export function useChat(
                           status: (obsData.status === 'skipped' || obsData.status === 'running' ? obsData.status : 'done') as any,
                         },
                       },
+                      anomalies: prev?.anomalies,
                     }));
                     break;
                   }
@@ -723,6 +776,7 @@ export function useChat(
                     ),
                     latency: Number(obsData.total_latency_ms || obsData.latency_ms || obsData.latency || prev?.latency || 0),
                     stageTimings: prev?.stageTimings,
+                    anomalies: prev?.anomalies,
                   }));
                   // FIX: When tool_status=done obs event arrives, mark matching
                   // tool calls as done in the frontend. This fixes the stuck

@@ -24,6 +24,7 @@ import type {
   ObservationData,
   ObservationSummary,
   StageTiming,
+  AnomalyData,
   CapabilitiesData,
   ModelOption,
   CompletionSuggestion,
@@ -173,6 +174,13 @@ interface ObservabilityResponse {
   latency_ms: number;
   tool_timeline: unknown[];
   stage_timings?: Record<string, { latency_ms: number; status: string }> | null;
+  anomalies?: Array<{
+    kind: string;
+    severity: string;
+    title: string;
+    detail: string;
+    metrics?: Record<string, number>;
+  }> | null;
   observation?: {
     timestamp: number;
     workspace: {
@@ -748,6 +756,11 @@ class LocalMindClient {
         latency: typeof data.latency_ms === 'number' ? data.latency_ms : 0,
         observation,
         stageTimings: mapStageTimings(data.stage_timings),
+        // Session 123: anomalies from the stored observation (array of
+        // {kind, severity, title, detail, metrics} — defensive mapping).
+        anomalies: Array.isArray(data.anomalies)
+          ? data.anomalies.filter((a): a is AnomalyData => !!a && typeof a === 'object' && typeof a.kind === 'string')
+          : undefined,
       };
     } catch {
       return {
@@ -758,6 +771,7 @@ class LocalMindClient {
         contextTokens: 0,
         latency: 0,
         observation: null,
+        anomalies: undefined,
       };
     }
   }

@@ -232,6 +232,11 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # Stored on every turn_complete so the /api/observability endpoint
         # can return real data instead of hardcoded zeros.
         self._last_observation: dict[str, dict] = {}
+        # Session 123: last turn's prompt-token count + its session, tracked
+        # across the whole app (not per session) so the token-leak detector
+        # can spot a NEW session inheriting the PREVIOUS session's context.
+        self._last_turn_prompt_tokens: int = 0
+        self._last_turn_session_id: str = ""
         # Latest structured workspace-plus-events snapshot per session.
         # Captured opt-in by the chat/SSE boundary without replacing the
         # existing serializable observability cache above.
@@ -458,6 +463,12 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 session_id[:8],
                 len(removed),
             )
+        # Session 123: if the deleted session is the one the cross-session
+        # token-leak tracker references, reset it — comparing a fresh
+        # session against a deleted session's count would be a false alarm.
+        if session_id == self._last_turn_session_id:
+            self._last_turn_prompt_tokens = 0
+            self._last_turn_session_id = ""
         # Clean up session context (CWD tracking)
         try:
             self._session_ctx.clear_session(session_id)
@@ -733,6 +744,49 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 merged = {**merged, "tool_timings": tool_timings}
         except Exception:
             pass  # Observability must never break the pipeline
+
+        # Session 123: anomaly detection — the Observe panel must ALERT, not
+        # just display. Runs on every turn_complete (this is the single
+        # choke point all completion paths share). Best-effort: observability
+        # must never break the pipeline. Completion tokens come from this
+        # request's turn_complete obs event (tokens_approx); context tokens
+        # and latency come from the merged data. A fresh session (not yet in
+        # _last_observation) with a large prompt matching the previous turn's
+        # is the cross-session token-leak shape the user reported.
+        try:
+            from core.anomalies import detect_turn_anomalies
+
+            _completion = 0
+            for _evt in reversed(obs.history()):
+                if _evt.type == "turn_complete":
+                    _completion = _evt.data.get("tokens_approx", 0) or 0
+                    break
+            _anomalies = detect_turn_anomalies(
+                session_id=session_id,
+                latency_ms=merged.get("latency_ms", 0) or 0,
+                completion_tokens=_completion,
+                context_tokens=merged.get("context_tokens", 0) or 0,
+                is_first_turn=session_id not in self._last_observation,
+                prev_prompt_tokens=self._last_turn_prompt_tokens,
+                prev_session_id=self._last_turn_session_id,
+            )
+            if _anomalies:
+                merged = {**merged, "anomalies": _anomalies}
+                for _a in _anomalies:
+                    obs.emit("anomaly", **_a)
+                    logger.warning(
+                        "[engine] anomaly: %s — %s",
+                        _a.get("kind"),
+                        _a.get("detail", "")[:160],
+                    )
+        except Exception:
+            pass  # Observability must never break the pipeline
+
+        # Tracker update lives OUTSIDE the try — a detection hiccup must not
+        # freeze the cross-session reference at a stale count. (Plain dict
+        # reads cannot raise, so this is always safe.)
+        self._last_turn_prompt_tokens = merged.get("context_tokens", 0) or 0
+        self._last_turn_session_id = session_id
 
         self._last_observation[session_id] = merged
 

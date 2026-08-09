@@ -303,6 +303,19 @@ export interface StageTiming {
   status: 'done' | 'skipped' | 'running' | 'pending';
 }
 
+/** A detected anomaly on a completed turn (Session 123). The backend's
+ * engine detects these (stall: >60s with near-zero output; token leak:
+ * a fresh session inheriting the previous session's context count) and
+ * emits them so the Observe panel can ALERT instead of silently showing
+ * bad numbers. */
+export interface AnomalyData {
+  kind: string;
+  severity: 'high' | 'medium' | 'low';
+  title: string;
+  detail: string;
+  metrics?: Record<string, number>;
+}
+
 export interface ObservationData {
   intent: IntentType;
   confidence: number;
@@ -315,6 +328,8 @@ export interface ObservationData {
   /** Real per-stage timings from the backend (keyed by stage name). When
    * present, the pipeline panel renders these instead of a heuristic. */
   stageTimings?: Record<string, StageTiming>;
+  /** Alerts from the last completed turn, newest first. */
+  anomalies?: AnomalyData[];
 }
 
 export interface CapabilityItem {

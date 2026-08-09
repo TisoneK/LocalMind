@@ -342,6 +342,25 @@ async def _event_stream(
                         }
                     )
 
+                # Session 123: bridge anomaly obs events to a top-level SSE
+                # event so the Observe panel can ALERT (stall / token leak)
+                # instead of silently displaying bad numbers. The frontend
+                # accumulates these into the observation's `anomalies` list.
+                if evt.type == "anomaly":
+                    yield _sse(
+                        {
+                            "type": "anomaly",
+                            "anomaly": {
+                                "kind": evt.data.get("kind", "unknown"),
+                                "severity": evt.data.get("severity", "medium"),
+                                "title": evt.data.get("title", "Anomaly detected"),
+                                "detail": evt.data.get("detail", ""),
+                                "metrics": evt.data.get("metrics", {}),
+                            },
+                        }
+                    )
+                    _last_sent_time = time.monotonic()
+
                 # Bridge diff events from edit_file tool results.
                 # When the agent loop edits a file, the edit_file tool produces
                 # structured diff hunks in its ToolResult metadata. The engine

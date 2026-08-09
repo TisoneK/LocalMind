@@ -177,4 +177,57 @@ describe('useChat SSE obs_event routing', () => {
     act(() => onDone());
     unmount();
   });
+
+  it('surfaces backend anomaly events in liveObservation.anomalies (Session 123)', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      // The bridge emits anomalies as a top-level typed event.
+      onChunk()(JSON.stringify({
+        type: 'anomaly',
+        anomaly: {
+          kind: 'stall',
+          severity: 'high',
+          title: 'Turn stalled',
+          detail: '108s of work produced only 23 output tokens',
+          metrics: { latency_ms: 108600, completion_tokens: 23 },
+        },
+      }));
+    });
+
+    expect(result.current.liveObservation?.anomalies).toHaveLength(1);
+    expect(result.current.liveObservation?.anomalies?.[0].kind).toBe('stall');
+    expect(result.current.liveObservation?.anomalies?.[0].severity).toBe('high');
+    expect(result.current.liveObservation?.anomalies?.[0].metrics?.latency_ms).toBe(108600);
+
+    act(() => onDone());
+    unmount();
+  });
+
+  it('dedupes anomaly events by kind, newest wins (Session 123)', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        type: 'anomaly',
+        anomaly: { kind: 'stall', severity: 'high', title: 'Turn stalled', detail: 'first' },
+      }));
+      onChunk()(JSON.stringify({
+        type: 'anomaly',
+        anomaly: { kind: 'token_leak', severity: 'high', title: 'Context leaked', detail: 'second' },
+      }));
+      // Re-emitted stall (a later turn re-detected it) replaces the first.
+      onChunk()(JSON.stringify({
+        type: 'anomaly',
+        anomaly: { kind: 'stall', severity: 'high', title: 'Turn stalled', detail: 'third' },
+      }));
+    });
+
+    expect(result.current.liveObservation?.anomalies).toHaveLength(2);
+    const stall = result.current.liveObservation?.anomalies?.find((a) => a.kind === 'stall');
+    expect(stall?.detail).toBe('third');
+
+    act(() => onDone());
+    unmount();
+  });
 });

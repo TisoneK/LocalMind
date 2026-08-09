@@ -63,6 +63,11 @@ class ObservabilityData(BaseModel):
     # Answers the tool-vs-subagent question: is a tool's OWN execution
     # slow, or is the model round-trip around it the real cost?
     tool_timings: Optional[dict] = None
+    # Session 123: anomalies detected on the last completed turn (stall /
+    # token leak). Shape: [{kind, severity, title, detail, metrics}]. The
+    # Observe panel renders these as alert cards instead of silently
+    # displaying the bad numbers.
+    anomalies: Optional[list] = None
 
 
 def _get_engine():
@@ -106,6 +111,7 @@ async def get_observability(session_id: str):
             ),
             stage_timings=obs_data.get("stage_timings"),
             tool_timings=obs_data.get("tool_timings"),
+            anomalies=obs_data.get("anomalies"),
         )
 
     # B-2026-08-09-5: no per-session observation → return the honest empty
