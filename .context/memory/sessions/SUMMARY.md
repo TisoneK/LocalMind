@@ -198,3 +198,6 @@ records.
 
 ---
 - **2026-08-09 — Session 96** — Buffy / deepseek-v4-flash — Backlog B-13 / ADR-16: objectives system was already wired end-to-end; real gap was single-shot `_execute`. Rewrote as multi-round specific-task loop (up to 5 rounds, same execution session, `agent_loop_done`/hit_limit continuation, cancel-between-rounds, approval-blocked, empty→failed, per-round timeout). Code review caught obs-drain ordering bug (3 real emit paths fire after/no chunk — would be missed) → added post-stream drain. 6 loop tests, **1008 passed / 0 failed**. Commit `42ed756`.
+
+---
+- **2026-08-09 — Session 97** — Buffy / deepseek-v4-flash — Backlog B-14 / ADR-15 §3: verified final-output-only ALREADY held (child gets exactly 1 packet message; parent gets 1 concatenated ToolResult). Reshaped `to_prompt()` to explicit DO/DO NOT/RETURN bounded contract + 3 regression tests (bare-packet contract, empty-section fallback, child-sees-only-packet). Fixed 6 pre-existing ruff violations in the test file. **1011 passed / 0 failed**. Commit `ac6abd8`.
