@@ -54,6 +54,22 @@ class ReviewerAgent(BaseAgent):
             max_wall_clock_secs=300,  # 5 minutes
             allowed_tools=REVIEWER_TOOLS,
             tools_enabled=True,
+            # B-2026-08-09-15 (ADR-15 §1): SPECIFIC sub-agent with a FIXED
+            # output schema. The reviewer must return JSON in exactly this
+            # shape — issues with severity/file/line/description plus a
+            # verdict — so the parent can parse it without re-reading prose.
+            output_schema={
+                "issues": [
+                    {
+                        "severity": "critical | major | minor | nit",
+                        "file": "path/to/file.py",
+                        "line": 42,
+                        "description": "What's wrong and the suggested fix direction",
+                    }
+                ],
+                "verdict": "approved | changes_requested",
+                "summary": "One-paragraph assessment",
+            },
         )
 
     def build_context(

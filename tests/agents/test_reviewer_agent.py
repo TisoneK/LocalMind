@@ -14,6 +14,7 @@ Verifies:
 
 from __future__ import annotations
 
+import pytest
 from agents import ReviewerAgent, get_agent, list_agents, select_agent
 from agents.reviewer.context_builder import build_reviewer_context
 from agents.reviewer.is_done import is_reviewer_done
@@ -236,3 +237,111 @@ def test_select_by_task_profile_review():
     from agents.selection import select_agent_by_task_profile
     agent_cls = select_agent_by_task_profile("review", Intent.CHAT)
     assert agent_cls is ReviewerAgent
+
+
+# ── B-2026-08-09-15 / ADR-15 §1: fixed output schema ───────────────────────
+
+
+def test_reviewer_config_has_fixed_output_schema():
+    """The reviewer is a SPECIFIC sub-agent: its config declares a FIXED
+    output schema (issues + verdict) so the parent can parse the result."""
+    schema = ReviewerAgent(adapter=None).config().output_schema
+    assert schema is not None
+    assert "issues" in schema
+    issue = schema["issues"][0]
+    for key in ("severity", "file", "line", "description"):
+        assert key in issue, f"issues[0] must have {key!r}"
+    assert "verdict" in schema
+    assert "summary" in schema
+
+
+def test_render_output_contract_renders_schema_as_json():
+    """The contract must be literal JSON the model can mirror exactly."""
+    from agents.base_agent import render_output_contract
+
+    schema = ReviewerAgent(adapter=None).config().output_schema
+    rendered = render_output_contract(schema)
+    assert "OUTPUT CONTRACT" in rendered
+    assert '"issues"' in rendered
+    assert '"severity"' in rendered
+    assert '"verdict"' in rendered
+    # The embedded shape parses as valid JSON (mirror-able, not prose).
+    import json as _json
+
+    _json.loads(_json.dumps(schema))
+    assert rendered.count("{") >= 2
+
+
+def test_render_output_contract_empty_for_general_agents():
+    """General agents (no schema) get no contract section."""
+    from agents.base_agent import render_output_contract
+
+    assert render_output_contract(None) == ""
+    assert render_output_contract({}) == ""
+
+
+def test_reviewer_context_contains_output_contract():
+    """BaseAgent.run() appends the contract to the agent context so it
+    reaches the model's system prompt (ADR-8 Phase 2 wiring)."""
+    from agents import ReviewerAgent
+    from agents.base_agent import render_output_contract
+
+    agent = ReviewerAgent(adapter=None)
+    ctx = agent.build_context(messages=[], intent=Intent.CHAT)
+    ctx += render_output_contract(agent.config().output_schema)
+    assert "OUTPUT CONTRACT" in ctx
+    assert '"verdict"' in ctx
+
+
+@pytest.mark.asyncio
+async def test_output_contract_reaches_loop_only_for_delegated_run(monkeypatch):
+    """The schema must reach the model ONLY on delegated child runs (where
+    the parent needs to parse the result) — a top-level user query routed
+    to the reviewer must keep a readable prose answer, not a JSON blob."""
+    from agents import ReviewerAgent
+    from core.agent.delegation import (
+        reset_current_run_id,
+        set_current_run_id,
+    )
+
+    captured = {}
+
+    class _FakeLoop:
+        def __init__(self, adapter=None):
+            pass
+
+        async def run(self, **kwargs):
+            captured["agent_context"] = kwargs.get("agent_context", "")
+            if False:
+                yield None
+
+    monkeypatch.setattr("core.agent.loop.AgentLoop", _FakeLoop)
+    agent = ReviewerAgent(adapter=None)
+
+    # 1) Top-level run (no current run id) → NO output contract.
+    captured.clear()
+    async for _ in agent.run(
+        messages=[],
+        intent=Intent.CHAT,
+        initial_tool_result=None,
+        available_tools=[],
+    ):
+        pass
+    assert "OUTPUT CONTRACT" not in captured.get("agent_context", "")
+
+    # 2) Delegated child run (current run id set by the delegate tools) →
+    #    the contract IS appended.
+    token = set_current_run_id("run_test_child")
+    try:
+        captured.clear()
+        async for _ in agent.run(
+            messages=[],
+            intent=Intent.CHAT,
+            initial_tool_result=None,
+            available_tools=[],
+        ):
+            pass
+    finally:
+        reset_current_run_id(token)
+    assert "OUTPUT CONTRACT" in captured.get("agent_context", "")
+    assert '"verdict"' in captured.get("agent_context", "")

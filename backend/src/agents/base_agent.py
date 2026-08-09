@@ -50,6 +50,25 @@ from core.models import Intent, StreamChunk, ToolResult
 logger = logging.getLogger(__name__)
 
 
+# B-2026-08-09-15 (ADR-15 §1): render an AgentConfig.output_schema as a
+# literal "return EXACTLY this JSON shape" contract for the model's system
+# prompt. Returns "" when no schema is configured (general agents).
+def render_output_contract(output_schema: Optional[dict]) -> str:
+    if not output_schema:
+        return ""
+    import json as _json
+
+    schema_json = _json.dumps(output_schema, ensure_ascii=False, indent=2)
+    return (
+        "\n"
+        "OUTPUT CONTRACT — return your final answer as a SINGLE JSON object "
+        "matching EXACTLY this shape (no prose wrapper, no markdown fence):\n"
+        f"{schema_json}\n"
+        "Every field in the shape is required. Omit optional fields (or use "
+        "null) rather than inventing fields the shape does not list."
+    )
+
+
 # ── Hard caps (ADR-5 requirement: "repeat until done, blocked, OR limit") ────
 # These prevent a small model from spinning forever on a task it can't solve.
 # Configured here so per-agent subclasses can override if they need more
@@ -87,6 +106,15 @@ class AgentConfig:
     # the strict delegation isolation invariant). Defaults to False; the
     # only built-in opt-in is ContextPrunerAgent.
     allow_inline_mutation: bool = False
+    # B-2026-08-09-15 (ADR-15 §1) — SPECIFIC sub-agent fixed output schema.
+    # When set, this agent's FINAL answer must be JSON matching exactly
+    # this shape (e.g. reviewer: {"issues": [{"severity", "file", "line",
+    # "description"}], "verdict"}). The schema is rendered into the agent
+    # context (system prompt) so the model returns a machine-parseable
+    # fixed shape instead of free-form prose — the "specific sub-agent
+    # with a fixed output contract" pattern from the architecture thread.
+    # Leave None for general-purpose agents (prose answers are fine).
+    output_schema: Optional[dict] = None
 
 
 class BaseAgent(ABC):
@@ -300,6 +328,19 @@ class BaseAgent(ABC):
                 cfg.name, exc,
             )
             agent_context_str = ""
+
+        # B-2026-08-09-15 (ADR-15 §1): append the fixed output contract so
+        # the model's system prompt demands the JSON shape. Gated to
+        # DELEGATED child runs only (the delegate tools set a current run
+        # id via core.agent.delegation): a top-level user query routed to
+        # e.g. the reviewer must still get a readable prose answer, not a
+        # JSON blob — the fixed schema is for machine-parseable sub-agent
+        # handoff. No-op for general agents (output_schema=None) and for
+        # top-level runs.
+        from core.agent.delegation import get_current_run_id
+
+        if cfg.output_schema and get_current_run_id() is not None:
+            agent_context_str += render_output_contract(cfg.output_schema)
 
         async for chunk in loop.run(
             messages=messages,

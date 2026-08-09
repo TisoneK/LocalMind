@@ -145,6 +145,19 @@ class DelegationInstructionPacket:
             lines.append(
                 "- A concise report of work performed, evidence observed, blockers, and next steps."
             )
+        # B-2026-08-09-15 (ADR-15 §1): a SPECIFIC sub-agent (e.g. reviewer)
+        # may declare an OUTPUT CONTRACT in its system prompt that demands
+        # a fixed JSON shape. That contract is authoritative — it exists
+        # so the parent can parse the child's result — so the generic
+        # prose-report line above yields to it.
+        lines.extend(
+            [
+                "",
+                "If your agent configuration declares an OUTPUT CONTRACT in "
+                "your system prompt, return EXACTLY that JSON shape instead "
+                "of the prose report above.",
+            ]
+        )
         return "\n".join(lines)
 
     def to_metadata(self) -> dict[str, Any]:
