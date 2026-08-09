@@ -57,6 +57,12 @@ class ObservabilityData(BaseModel):
     # _StageClock, folded into the stored observation on turn_complete.
     # Shape: {stage: {"latency_ms": int, "status": "done"|"skipped"|...}}
     stage_timings: Optional[dict] = None
+    # B-2026-08-09-16 (ADR-15 §4): per-tool latency summary folded from
+    # the agent loop's tool_call obs events. Shape:
+    # {tool_name: {"calls", "total_ms", "avg_ms", "max_ms", "last_status"}}.
+    # Answers the tool-vs-subagent question: is a tool's OWN execution
+    # slow, or is the model round-trip around it the real cost?
+    tool_timings: Optional[dict] = None
 
 
 def _get_engine():
@@ -99,6 +105,7 @@ async def get_observability(session_id: str):
                 else None
             ),
             stage_timings=obs_data.get("stage_timings"),
+            tool_timings=obs_data.get("tool_timings"),
         )
 
     # B-2026-08-09-5: no per-session observation → return the honest empty

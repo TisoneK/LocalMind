@@ -228,3 +228,115 @@ class TestObservabilityStageTimings:
         assert response.stage_timings is not None
         assert response.stage_timings["tool_select"]["status"] == "skipped"
         assert response.stage_timings["generate"]["latency_ms"] == 20
+
+
+# ── B-2026-08-09-16: per-tool timings (tool-vs-subagent measurement) ───────
+
+class TestStoreObservationToolTimings:
+    """tool_call obs events (real per-tool latency_ms from the agent loop)
+    must be folded into the stored observation so the tool-vs-subagent
+    question can be answered from data: is the tool's OWN execution slow,
+    or is the model round-trip around it the real cost?"""
+
+    def test_store_observation_folds_tool_timings(self):
+        from core.engine import Engine
+
+        engine = Engine()
+        engine._last_observation = {}
+
+        obs = ObsCollector()
+        obs.emit("tool_call", tool="shell", status="done", latency_ms=120)
+        obs.emit("tool_call", tool="shell", status="done", latency_ms=80)
+        obs.emit("tool_call", tool="file_task", status="done", latency_ms=5)
+        obs.emit("tool_call", tool="shell", status="failed", latency_ms=40)
+
+        engine._store_observation("sess-tools", obs, intent="shell", latency_ms=300)
+
+        stored = engine._last_observation["sess-tools"]
+        assert stored["tool_timings"]["shell"]["calls"] == 3
+        assert stored["tool_timings"]["shell"]["total_ms"] == 240
+        assert stored["tool_timings"]["shell"]["avg_ms"] == 80
+        assert stored["tool_timings"]["shell"]["max_ms"] == 120
+        assert stored["tool_timings"]["shell"]["last_status"] == "failed"
+        assert stored["tool_timings"]["file_task"]["calls"] == 1
+        assert stored["tool_timings"]["file_task"]["total_ms"] == 5
+
+    def test_store_observation_without_tool_events_keeps_shape(self):
+        """Turns without tool_call events must not gain an empty key."""
+        from core.engine import Engine
+
+        engine = Engine()
+        engine._last_observation = {}
+
+        obs = ObsCollector()
+        engine._store_observation("sess-plain", obs, intent="chat", latency_ms=10)
+
+        stored = engine._last_observation["sess-plain"]
+        assert "tool_timings" not in stored
+
+    def test_malformed_latency_drops_only_that_event(self):
+        """A tool_call with a non-numeric latency must not discard the
+        whole turn's tool_timings — only that event is skipped."""
+        from core.engine import Engine
+
+        engine = Engine()
+        engine._last_observation = {}
+
+        obs = ObsCollector()
+        obs.emit("tool_call", tool="shell", status="done", latency_ms="not-a-number")
+        obs.emit("tool_call", tool="shell", status="done", latency_ms=50)
+
+        engine._store_observation("sess-bad", obs, intent="shell", latency_ms=100)
+
+        stored = engine._last_observation["sess-bad"]
+        # The valid event is still folded; the malformed one is dropped.
+        assert stored["tool_timings"]["shell"]["calls"] == 1
+        assert stored["tool_timings"]["shell"]["total_ms"] == 50
+
+
+class TestObservabilityToolTimings:
+    def test_observability_data_model_accepts_tool_timings(self):
+        from api.routes.observability import ObservabilityData
+
+        data = ObservabilityData(
+            session_id="s1",
+            intent="shell",
+            tool_timings={"shell": {"calls": 2, "total_ms": 200, "avg_ms": 100, "max_ms": 120, "last_status": "done"}},
+        )
+        dumped = data.model_dump()
+        assert dumped["tool_timings"]["shell"]["avg_ms"] == 100
+
+    @pytest.mark.asyncio
+    async def test_observability_route_returns_tool_timings(self, monkeypatch):
+        from api.routes import observability
+
+        class _Metrics:
+            def get_all_metrics(self):
+                return {}
+
+        class _Engine:
+            def __init__(self):
+                self._last_observation = {
+                    "session-1": {
+                        "intent": "shell",
+                        "confidence": 0.9,
+                        "tools_used": "shell",
+                        "memory_hits": 0,
+                        "context_tokens": 10,
+                        "latency_ms": 300,
+                        "tool_timings": {
+                            "shell": {"calls": 3, "total_ms": 240, "avg_ms": 80, "max_ms": 120, "last_status": "failed"}
+                        },
+                    }
+                }
+                self._last_observation_snapshots = {}
+                self._metrics = _Metrics()
+
+        engine = _Engine()
+        monkeypatch.setattr(observability, "_get_engine", lambda: engine)
+
+        response = await observability.get_observability("session-1")
+
+        assert response.tool_timings is not None
+        assert response.tool_timings["shell"]["calls"] == 3
+        assert response.tool_timings["shell"]["avg_ms"] == 80

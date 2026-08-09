@@ -643,6 +643,43 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         except Exception:
             pass  # Observability must never break the pipeline
 
+        # B-2026-08-09-16 (ADR-15 §4): fold tool_call obs events (emitted
+        # by the agent loop with real per-tool latency_ms) into a per-tool
+        # timing summary. This is the measurement surface for the
+        # tool-vs-subagent question: does shell-as-inline-tool cost real
+        # latency (its own execution) vs the model round-trips around it?
+        # Shape: {tool_name: {"calls", "total_ms", "avg_ms", "max_ms",
+        # "last_status"}}. NO tool is converted to a sub-agent until this
+        # data shows the tool's own execution is a real cost driver.
+        try:
+            tool_timings: dict[str, dict] = {}
+            for evt in obs.history():
+                if evt.type != "tool_call":
+                    continue
+                tool = str(evt.data.get("tool", ""))
+                if not tool:
+                    continue
+                # Per-event coercion: one malformed latency must drop only
+                # itself, not the whole turn's measurement (the obs collector
+                # stringifies non-numeric values).
+                try:
+                    latency_ms = int(evt.data.get("latency_ms", 0) or 0)
+                except (TypeError, ValueError):
+                    continue
+                status = str(evt.data.get("status", "done"))
+                entry = tool_timings.setdefault(
+                    tool, {"calls": 0, "total_ms": 0, "avg_ms": 0, "max_ms": 0, "last_status": status}
+                )
+                entry["calls"] += 1
+                entry["total_ms"] += latency_ms
+                entry["max_ms"] = max(entry["max_ms"], latency_ms)
+                entry["avg_ms"] = round(entry["total_ms"] / entry["calls"])
+                entry["last_status"] = status
+            if tool_timings:
+                merged = {**merged, "tool_timings": tool_timings}
+        except Exception:
+            pass  # Observability must never break the pipeline
+
         self._last_observation[session_id] = merged
 
     # _persist_user_message and _persist_assistant_message are defined in
