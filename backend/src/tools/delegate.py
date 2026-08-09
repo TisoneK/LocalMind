@@ -57,8 +57,10 @@ from core.agent.delegation import (
     DelegationInstructionPacket,
     DelegationResult,
     get_current_run_id,
+    get_inline_mutation_scope,
     reset_current_run_id,
     set_current_run_id,
+    set_inline_mutation_scope,
 )
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
@@ -302,6 +304,11 @@ async def delegate(message: str) -> ToolResult:
     # delegation from consuming the entire turn budget. The sub-agent's
     # own max_iterations / max_wall_clock_secs also apply (via its
     # AgentConfig, honored per ADR-8 Phase 2).
+    # B-2026-08-02-9 (B4): the child runs its OWN AgentLoop, which publishes
+    # its own inline-mutation scope (overwriting the parent's in this
+    # context). Restore the parent's scope when the child exits so a later
+    # delegate_inline in the parent still targets the parent's history.
+    _parent_inline_scope = get_inline_mutation_scope()
     child_run_token = set_current_run_id(child_context.run_id)
     _current_depth.set(current_depth + 1)
     try:
@@ -460,6 +467,7 @@ async def delegate(message: str) -> ToolResult:
     finally:
         _current_depth.set(current_depth)
         reset_current_run_id(child_run_token)
+        set_inline_mutation_scope(_parent_inline_scope)  # B4: restore parent's scope
 
 
 # ── Adapter + recursion-depth context vars ─────────────────────────────────

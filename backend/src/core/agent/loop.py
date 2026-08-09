@@ -212,6 +212,12 @@ def _has_minimax_tool_call(text: str) -> bool:
     return bool(_MINIMAX_TOOL_CALL_RE.search(text) or _STANDALONE_INVOKE_RE.search(text))
 
 
+from core.agent.delegation import (
+    InlineMutationScope,
+    set_inline_mutation_scope,
+    snapshot_messages,
+    validate_rewritten_history,
+)
 from core.agent.prompts import build_agent_system_prompt, build_planning_prompt
 from core.agent.synthesizer import AnswerSynthesizer
 from core.agent.tool_dispatch import dispatch_with_retry
@@ -609,6 +615,38 @@ TOOL_DEFINITIONS = [
                     }
                 },
                 "required": ["targets"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delegate_inline",
+            "description": (
+                "Delegate an INLINE transformation to a special agent that can "
+                "REWRITE this conversation's history in place. Only agents "
+                "explicitly marked inline-capable accept this (currently only "
+                "'context_pruner', which summarizes/compacts the message "
+                "history when it grows too long). The pre-mutation history is "
+                "snapshotted to disk for debugging. Use sparingly — it changes "
+                "what you will see in subsequent steps. Payload: "
+                '{"target_agent": "context_pruner", "task": "summarize the '
+                "tool results and older turns, keep the user's latest message "
+                'verbatim"}.'
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target_agent": {
+                        "type": "string",
+                        "description": "The inline-capable agent to delegate to (context_pruner)",
+                    },
+                    "task": {
+                        "type": "string",
+                        "description": "The rewrite/prune instruction for the inline agent",
+                    },
+                },
+                "required": ["target_agent", "task"],
             },
         },
     },
@@ -1106,6 +1144,11 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         # delegate_parallel dispatcher expects JSON-encoded args (targets
         # array) — same pattern as delegate. The tool parses it back.
         return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "delegate_inline":
+        # delegate_inline dispatcher expects JSON-encoded args
+        # (target_agent + task) — same pattern as delegate. The tool
+        # parses it back.
+        return json.dumps(tool_args, ensure_ascii=False)
     elif tool_name == "propose_str_replace":
         # propose_str_replace dispatcher expects JSON-encoded args
         # (path/action/search/replace) — same pattern as edit_file.
@@ -1498,6 +1541,66 @@ class AgentLoop:
         # retry, defeating the exact-match dedup.
         _file_write_paths: set[str] = set()
 
+        # ── B-2026-08-02-9 (B4): inline-delegation scope ──────────────
+        # Publish this loop's live message list (BY REFERENCE) plus a
+        # validated in-place mutate callback into a contextvar. The
+        # delegate_inline tool reads this scope and hands it to an
+        # inline-capable child (ContextPrunerAgent), which can rewrite the
+        # parent's history in place. Fail-safe: the callback structurally
+        # validates the rewritten history (roles, tool_call_id pairing,
+        # size bounds, no trailing tool role) and refuses invalid rewrites;
+        # the pre-mutation history is snapshotted to disk; the mutation is
+        # emitted via obs. Each nested agent loop republishes its own scope
+        # and the delegation tools restore the parent's scope around child
+        # runs, so a child can never leave its scope in the parent's place.
+        _inline_run_id = f"inline_{uuid.uuid4().hex[:12]}"
+        _inline_original_len = len(loop_messages)
+        _inline_system_msg = (
+            loop_messages[0]
+            if (loop_messages and loop_messages[0].get("role") == "system")
+            else None
+        )
+        _inline_scope = InlineMutationScope(
+            run_id=_inline_run_id,
+            messages=loop_messages,
+            mutate=lambda _m: False,  # placeholder, replaced below
+        )
+
+        def _mutate_inline(new_messages: list[dict]) -> bool:
+            """Validate, snapshot, and apply an inline rewrite in place."""
+            # The child model never rewrites the system prompt — always
+            # restore the original system message (if one was present).
+            # Note: if the child dropped it, this +1 can push a rewrite that
+            # was exactly at the size bound to "grew" — rejected fail-safe
+            # (no mutation); the child sees the reason in the tool result.
+            if _inline_system_msg is not None:
+                _filtered = [m for m in new_messages if m.get("role") != "system"]
+                new_messages = [_inline_system_msg] + _filtered
+            ok, reason = validate_rewritten_history(new_messages, _inline_original_len)
+            if not ok:
+                logger.warning("[agent_loop] inline mutation rejected: %s", reason)
+                return False
+            _snap = snapshot_messages(loop_messages, _inline_run_id)
+            _before = len(loop_messages)
+            loop_messages[:] = new_messages
+            _inline_scope.applied = True
+            logger.info(
+                "[agent_loop] inline mutation applied: %d → %d messages (snapshot %s)",
+                _before, len(loop_messages), _snap or "none",
+            )
+            if _obs:
+                _obs.emit(
+                    "inline_mutation",
+                    run_id=_inline_run_id,
+                    before=_before,
+                    after=len(loop_messages),
+                    snapshot=_snap or "",
+                )
+            return True
+
+        _inline_scope.mutate = _mutate_inline
+        set_inline_mutation_scope(_inline_scope)
+
         # ── Main loop ──────────────────────────────────────────────────
         # ADR-8 Phase 2: use _effective_max_iter / _effective_max_wall
         # (agent_config overrides when provided; module-level defaults
@@ -1763,6 +1866,7 @@ class AgentLoop:
                         "browse": f"Browser: {call.tool_args.get('action', '')}" if call.tool_args.get('action') else "Using browser",
                         "delegate": f"Delegating to {call.tool_args.get('target_agent', '')}" if call.tool_args.get('target_agent') else "Delegating sub-task",
                         "delegate_parallel": f"Delegating {len(call.tool_args.get('targets') or [])} sub-agents in parallel" if call.tool_args.get('targets') else "Delegating sub-agents in parallel",
+                        "delegate_inline": f"Inline: {call.tool_args.get('target_agent', '')}" if call.tool_args.get('target_agent') else "Inline delegation",
                         "propose_str_replace": f"Staging edit: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Staging edit proposal",
                         "propose_write_file": f"Staging write: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Staging write proposal",
                         "apply_proposed_edit": f"Applying edit: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Applying staged edit",

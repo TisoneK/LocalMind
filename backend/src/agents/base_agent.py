@@ -81,6 +81,12 @@ class AgentConfig:
     # cloud adapters is explicit opt-in only; nothing egresses by default.
     model: Optional[str] = None  # e.g. "llama3.1:70b" (uses `adapter` or the current one)
     adapter: Optional[str] = None  # e.g. "zen", "ollama" (uses the provider's configured model)
+    # B-2026-08-02-9 (B4) — inline delegation. ONLY agents with this flag
+    # set to True may be spawned via the delegate_inline tool (which lets
+    # the child rewrite the PARENT's message history in place — it breaks
+    # the strict delegation isolation invariant). Defaults to False; the
+    # only built-in opt-in is ContextPrunerAgent.
+    allow_inline_mutation: bool = False
 
 
 class BaseAgent(ABC):

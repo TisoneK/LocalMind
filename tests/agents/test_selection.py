@@ -56,6 +56,7 @@ def test_list_intent_mappings_covers_all_intents():
     meta_tool_intents = (
         Intent.DELEGATE,
         Intent.DELEGATE_PARALLEL,
+        Intent.DELEGATE_INLINE,
         Intent.PROPOSE_EDIT,
         Intent.PROPOSE_WRITE,
         Intent.APPLY_PROPOSED,
@@ -78,6 +79,11 @@ def test_list_intent_mappings_covers_all_intents():
     assert Intent.DELEGATE_PARALLEL not in mapped_intents, (
         "Intent.DELEGATE_PARALLEL should not be in the routing map — it's "
         "a meta-tool intent like DELEGATE, not a routing intent."
+    )
+    assert Intent.DELEGATE_INLINE not in mapped_intents, (
+        "Intent.DELEGATE_INLINE should not be in the routing map — it's a "
+        "meta-tool intent (the model calls the delegate_inline tool inside "
+        "an agent loop); the intent classifier never produces it."
     )
     assert Intent.PROPOSE_EDIT not in mapped_intents, (
         "Intent.PROPOSE_EDIT should not be in the routing map — it's a "

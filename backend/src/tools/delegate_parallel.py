@@ -46,8 +46,10 @@ from core.agent.delegation import (
     DelegationInstructionPacket,
     DelegationResult,
     get_current_run_id,
+    get_inline_mutation_scope,
     reset_current_run_id,
     set_current_run_id,
+    set_inline_mutation_scope,
 )
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
@@ -137,6 +139,10 @@ async def _run_child(packet: DelegationInstructionPacket, adapter, depth: int) -
             error_type="construction_failed",
         )
 
+    # B-2026-08-02-9 (B4): each child runs its OWN AgentLoop, which publishes
+    # its own inline-mutation scope (overwriting the parent's in this
+    # context). Restore the parent's scope when the child exits.
+    _parent_inline_scope = get_inline_mutation_scope()
     child_run_token = set_current_run_id(child_context.run_id)
     _current_depth.set(depth + 1)
     try:
@@ -178,6 +184,7 @@ async def _run_child(packet: DelegationInstructionPacket, adapter, depth: int) -
     finally:
         _current_depth.set(depth)
         reset_current_run_id(child_run_token)
+        set_inline_mutation_scope(_parent_inline_scope)  # B4: restore parent's scope
 
     if not output:
         return DelegationResult(

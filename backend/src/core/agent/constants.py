@@ -183,6 +183,7 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
         "sysinfo",
         "delegate",  # ADR-8 Phase 3: agent-initiated delegation
         "delegate_parallel",  # B-2026-08-02-6: parallel delegation fan-out
+        "delegate_inline",  # B-2026-08-02-9: inline delegation (child rewrites parent history)
         "propose_str_replace",  # B-2026-08-02-7: stage an edit proposal (no write)
         "propose_write_file",  # B-2026-08-02-7: stage a write proposal (no write)
         "apply_proposed_edit",  # B-2026-08-02-7: write a staged proposal to disk
