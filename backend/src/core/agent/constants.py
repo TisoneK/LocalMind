@@ -190,6 +190,7 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
         "update_subgoal",  # B-2026-08-02-8: subgoal scratchpad
         "create_plan",  # B-2026-08-02-8: subgoal scratchpad
         "skill",  # B-2026-08-02-12: load a skill into context (universal tool)
+        "best_of_n_edit",  # B-2026-08-02-11: N candidate edits → selector → apply winner
     }
 )
 

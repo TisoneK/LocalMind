@@ -720,6 +720,39 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "best_of_n_edit",
+            "description": (
+                "Produce N candidate edits for one file under different strategies, "
+                "pick the best via a selector agent, and apply it. Use for "
+                "high-stakes edits where you want the best of several attempts "
+                "(refactors, tricky bug fixes). Payload: "
+                '{"file_path": "src/foo.py", "instruction": "make the parser strict", '
+                '"n": 2, "strategies": ["conservative", "refactor"]}. n defaults to 2 '
+                "(max 5); strategies optional. The winner is applied via "
+                "apply_proposed_edit (same permission gating as file_write). "
+                "Expensive — spawns N+1 sub-agents. Note: the selector sees "
+                "search/replace truncated to 600 chars, so large edits are "
+                "judged partly on the candidate rationale."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Path of the file to edit (must exist)"},
+                    "instruction": {"type": "string", "description": "What the edit must achieve"},
+                    "n": {"type": "integer", "description": "Number of candidates (default 2, max 5)"},
+                    "strategies": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional strategy names for the candidates",
+                    },
+                },
+                "required": ["file_path", "instruction"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "add_subgoal",
             "description": (
                 "Record a single subgoal in the current run's subgoal scratchpad. "
@@ -1097,6 +1130,10 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
     elif tool_name == "skill":
         # skill takes a single skill_name argument.
         return tool_args.get("skill_name", "")
+    elif tool_name == "best_of_n_edit":
+        # best_of_n_edit dispatcher expects JSON-encoded args
+        # (file_path/instruction/n/strategies).
+        return json.dumps(tool_args, ensure_ascii=False)
     elif tool_name == "git":
         # git dispatcher expects JSON-encoded args (operation + params)
         # — same pattern as delegate/edit_file. The git tool parses it back.
@@ -1736,6 +1773,9 @@ class AgentLoop:
                                          if call.tool_args.get('steps') else "Creating plan"),
                         "skill": (f"Loading skill: {call.tool_args.get('skill_name', '')[:40]}"
                                   if call.tool_args.get('skill_name') else "Loading skill"),
+                        "best_of_n_edit": (f"Best-of-N edit: {call.tool_args.get('file_path', '')[:60]}"
+                                            if call.tool_args.get('file_path')
+                                            else "Best-of-N edit (N candidates)"),
                     }
                     _label = _label_map.get(call.tool_name, f"Running {call.tool_name}")
                     yield StreamChunk(text="", done=False, status=_label)

@@ -28,15 +28,16 @@ def test_coding_agent_config():
     cfg = agent.config()
     assert cfg.name == "coding"
     assert cfg.tools_enabled is True
-    # Scoped toolset: 17 coding tools (5 core + git + process + delegate +
-    # delegate_parallel + diagnostics + 3 propose-stage + 3 subgoal + skill),
-    # not the full AGENT_ALLOWED_TOOLS
+    # Scoped toolset: 18 coding tools (5 core + git + process + delegate +
+    # delegate_parallel + diagnostics + 3 propose-stage + 3 subgoal + skill
+    # + best_of_n_edit), not the full AGENT_ALLOWED_TOOLS
     assert cfg.allowed_tools == CODING_TOOLS
     assert cfg.allowed_tools == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
          "git", "process", "delegate", "delegate_parallel", "diagnostics",
          "propose_str_replace", "propose_write_file", "apply_proposed_edit",
-         "add_subgoal", "update_subgoal", "create_plan", "skill"}
+         "add_subgoal", "update_subgoal", "create_plan", "skill",
+         "best_of_n_edit"}
     )
     assert cfg.allowed_tools.issubset(AGENT_ALLOWED_TOOLS)
     # Coding tasks need more iterations than browser tasks
@@ -121,11 +122,12 @@ def test_coding_agent_scoped_tools_filters_non_coding():
             {"intent": "update_subgoal", "description": "update subgoal"},  # B-2026-08-02-8
             {"intent": "create_plan", "description": "create plan"},  # B-2026-08-02-8
             {"intent": "skill", "description": "load skill"},  # B-2026-08-02-12
+            {"intent": "best_of_n_edit", "description": "best-of-N edit"},  # B-2026-08-02-11
         ]
     scoped = agent.scoped_tools(all_tools)
     scoped_intents = {t["intent"] for t in scoped}
     assert scoped_intents == CODING_TOOLS
-    assert len(scoped) == 17  # 16 (S83) + skill (B-2026-08-02-12)
+    assert len(scoped) == 18  # 17 (S84) + best_of_n_edit (B-2026-08-02-11)
     # Must NOT include web/browser/memory/sysinfo tools
     assert "web_search" not in scoped_intents
     assert "web_fetch" not in scoped_intents
@@ -170,20 +172,22 @@ def test_coding_tools_is_subset_of_agent_allowed():
 
 
 def test_coding_tools_has_ten_tools():
-    """The coding agent's scoped toolset is exactly 17 tools.
+    """The coding agent's scoped toolset is exactly 18 tools.
 
     Sessions 41-49 added git, process, and diagnostics; Session 81 added
     delegate_parallel (B-2026-08-02-6); Session 82 added the three
     propose-stage tools (B-2026-08-02-7); Session 83 added the three
     subgoal scratchpad tools (B-2026-08-02-8); Session 84 added skill
-    (B-2026-08-02-12, universal).
+    (B-2026-08-02-12, universal); Session 86 added best_of_n_edit
+    (B-2026-08-02-11).
     """
-    assert len(CODING_TOOLS) == 17
+    assert len(CODING_TOOLS) == 18
     assert CODING_TOOLS == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
          "git", "process", "delegate", "delegate_parallel", "diagnostics",
          "propose_str_replace", "propose_write_file", "apply_proposed_edit",
-         "add_subgoal", "update_subgoal", "create_plan", "skill"}
+         "add_subgoal", "update_subgoal", "create_plan", "skill",
+         "best_of_n_edit"}
     )
 
 

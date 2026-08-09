@@ -102,7 +102,7 @@ def test_shim_identity_matches_canonical(shim_path, canonical_path, agent_class_
 
 
 def test_registry_auto_discovers_all_built_in_agents():
-    """The auto_discover_agents() helper registers all 5 built-in agents."""
+    """The auto_discover_agents() helper registers all 9 built-in agents."""
     from agents import list_agents
     from agents.registry import auto_discover_agents
 
@@ -110,14 +110,15 @@ def test_registry_auto_discovers_all_built_in_agents():
     # The auto_discover helper is idempotent — re-running it on the same
     # package is a no-op (same class registered under same name).
     count = auto_discover_agents()
-    assert count == 8, (
-        f"auto_discover_agents should find 8 agents (coding, research, "
-        f"browser, direct, verifier, reviewer, debugger, analyst); found {count}"
+    assert count == 9, (
+        f"auto_discover_agents should find 9 agents (coding, research, "
+        f"browser, direct, verifier, reviewer, debugger, analyst, "
+        f"editor_selector); found {count}"
     )
 
     registered_names = {name for name, _ in list_agents()}
-    assert {"coding", "research", "browser", "direct", "verifier", "reviewer", "debugger", "analyst"}.issubset(registered_names), (
-        f"all 8 built-in agent names should be in registry; got {registered_names}"
+    assert {"coding", "research", "browser", "direct", "verifier", "reviewer", "debugger", "analyst", "editor_selector"}.issubset(registered_names), (
+        f"all 9 built-in agent names should be in registry; got {registered_names}"
     )
 
 
@@ -155,7 +156,6 @@ def test_auto_discover_picks_up_new_directory_agent(tmp_path, monkeypatch):
     up under its directory name.
     """
     import sys
-    from pathlib import Path
 
     # Create a fake agents package on tmp_path
     fake_pkg = tmp_path / "fake_agents_pkg"
@@ -183,7 +183,7 @@ def test_auto_discover_picks_up_new_directory_agent(tmp_path, monkeypatch):
             # importlib.import_module will reload on next import
 
     # Run auto_discover against the fake package
-    from agents.registry import auto_discover_agents, get_agent, _REGISTRY
+    from agents.registry import _REGISTRY, auto_discover_agents, get_agent
 
     # Save registry state and clear for this test
     saved = dict(_REGISTRY)

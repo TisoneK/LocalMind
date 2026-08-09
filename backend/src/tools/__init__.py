@@ -147,6 +147,9 @@ def available_tools() -> list[dict]:
 # Import order matters: file_reader must be before engine uses parse_file
 from tools import (
     apply_proposed,  # noqa: E402, F401 -- B-2026-08-02-7: write a staged proposal to disk
+    # Last: best_of_n_edit module-level-imports delegate/delegate_parallel/
+    # edit_file — importing it here guarantees those are loaded first.
+    best_of_n_edit,  # noqa: E402, F401 -- B-2026-08-02-11: N candidate edits → selector → apply
     browser_agent,  # noqa: E402, F401 -- BROWSE (real browser interaction)
     code_exec,  # noqa: E402, F401 -- registers CODE_EXEC
     delegate,  # noqa: E402, F401 -- ADR-8 Phase 3: agent-initiated delegation
