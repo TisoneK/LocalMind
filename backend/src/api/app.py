@@ -2,12 +2,19 @@
 FastAPI application factory — v0.3
 
 Serves the single-file UI from ui/index.html directly (no build step needed).
+
+v0.4: migrated from the deprecated ``@app.on_event("startup"/"shutdown")``
+handlers to a single ``lifespan`` async context manager (B-2026-08-09-13 /
+backlog "FastAPI on_event deprecation"). ``on_event`` was deprecated by
+FastAPI in favor of ``lifespan``; the migration is behavior-preserving and
+clears the ~81 pytest deprecation warnings caused by the old handlers.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -43,6 +50,190 @@ logger = logging.getLogger(__name__)
 UI_HTML = Path(__file__).parent.parent / "ui" / "index.html"
 
 
+async def _shutdown(app: FastAPI) -> None:
+    """Stop autonomous work before closing pooled adapter clients."""
+    objective_runtime = getattr(app.state, "objective_runtime", None)
+    if objective_runtime is not None:
+        await objective_runtime.stop()
+
+    from adapters import close_all_adapters
+
+    await close_all_adapters()
+    logger.info("[shutdown] all adapter connections closed")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifecycle — replaces the deprecated ``on_event`` handlers.
+
+    Startup:
+        - Boots the autonomous ObjectiveRuntime (shares the chat Engine).
+        - Logs the ACTIVE model (adapter-aware, not always ollama_model).
+        - Writes live config into localmind.md (self-knowledge for the model).
+        - For the ollama adapter: warms the engine, LLM models, and
+          VectorStore in the background. Cloud adapters skip warmup.
+    Shutdown:
+        - Stops autonomous work before pooled adapter clients close.
+    """
+    # ── Startup ────────────────────────────────────────────────────────
+    # User-started autonomous objectives share the same Engine and safety
+    # pipeline as chat requests, but continue after the chat HTTP response.
+    from api.routes.chat import _engine as _chat_engine
+    from core.objective_runtime import ObjectiveRuntime
+
+    objective_runtime = ObjectiveRuntime(_chat_engine, settings.localmind_db_path)
+    app.state.objective_runtime = objective_runtime
+    # Log the actual active model based on the adapter, not always ollama_model.
+    # Previously this always showed settings.ollama_model, which is empty when
+    # using a cloud adapter — making it look like no model is configured.
+    _adapter = settings.localmind_adapter
+    _model_map = {
+        "ollama": settings.ollama_model,
+        "openai": settings.openai_model,
+        "anthropic": settings.anthropic_model,
+        "openrouter": settings.openrouter_model,
+        "deepseek": settings.deepseek_model,
+        "lite-llm": settings.litellm_model,
+        "zen": settings.zen_model,
+        "groq": settings.groq_model,
+        "together": settings.together_model,
+        "fireworks": settings.fireworks_model,
+        "deepinfra": settings.deepinfra_model,
+        "mistral": settings.mistral_model,
+        "cohere": settings.cohere_model,
+        "vercel": settings.vercel_model,
+        "cloudflare": settings.cloudflare_model,
+        "cerebras": settings.cerebras_model,
+        "sambanova": settings.sambanova_model,
+        "gemini": settings.gemini_model,
+        "chutes": settings.chutes_model,
+        "zai": settings.zai_model,
+    }
+    _active_model = _model_map.get(_adapter, "") or "(default)"
+    logger.info(f"LocalMind — adapter: {_adapter} | model: {_active_model} | ui: {UI_HTML.exists()}")
+
+    # Write live config values into localmind.md so the model always reads
+    # accurate self-knowledge. Runs before any LLM call so the first request
+    # already sees the updated doc. Fails silently if the file is missing.
+    from core.knowledge_writer import update_knowledge_doc
+
+    update_knowledge_doc()
+
+    from api.routes.health import set_engine_ready
+
+    set_engine_ready()
+
+    if settings.localmind_adapter != "ollama":
+        logger.info(
+            "[startup] Cloud adapter '%s' active — skipping Ollama warmup entirely.",
+            settings.localmind_adapter,
+        )
+        await objective_runtime.start()
+        try:
+            yield
+        finally:
+            await _shutdown(app)
+        return
+
+    # Single authoritative startup: warms LLM router, embed model,
+    # RiskAwareRouter, and FlywheelLogger on the exact engine instance
+    # that handles requests.
+    from api.routes.chat import _engine as _chat_engine
+
+    await _chat_engine.startup()
+    await objective_runtime.start()
+    logger.info("[startup] engine ready — accepting requests")
+
+    # Background task to pre-warm VectorStore
+    async def warm_vector_store():
+        try:
+            from storage.vector import VectorStore
+
+            logger.info("[startup] pre-warming VectorStore...")
+            vector_store = VectorStore()
+            if vector_store._ready:
+                count = await vector_store.count()
+                logger.info(f"[startup] VectorStore ready — {count} facts stored")
+                # Warm up the embedding model. This is Ollama-based even
+                # when using a cloud LLM adapter, because embeddings are
+                # always local (nomic-embed-text). Skip silently when
+                # Ollama isn't running — memory search will fall back to
+                # keyword matching until Ollama is started.
+                if settings.localmind_adapter == "ollama":
+                    await vector_store.warmup()
+                else:
+                    logger.info("[startup] skipping embedding warmup — cloud adapter active")
+            else:
+                logger.info("[startup] VectorStore not ready")
+        except Exception as e:
+            logger.warning(f"[startup] VectorStore warm-up failed: {e}")
+
+    async def warm_llm_models():
+        """
+        Pre-load every configured LLM into Ollama VRAM before the first request.
+
+        Ollama lazy-loads models on first use — that initial load costs 30–90 s of
+        dead wait on the first user message.  Sending an empty /api/generate prompt
+        forces the load at server startup instead, so every subsequent request starts
+        generating within 1–2 s.
+
+        Models are warmed concurrently (asyncio.gather) so total startup cost is
+        bounded by the slowest model, not the sum of all models.
+
+        SKIPPED entirely when the active adapter is not Ollama — cloud providers
+        don't need VRAM pre-loading, and running this would overwrite the cloud
+        model list (fetched by engine.startup) with an empty Ollama list.
+        """
+        if settings.localmind_adapter != "ollama":
+            logger.info(
+                "[startup] skipping Ollama LLM warmup — active adapter is '%s'",
+                settings.localmind_adapter,
+            )
+            return
+
+        from adapters.ollama import OllamaAdapter
+        from core.model_router import update_pulled_models
+
+        # Collect every distinct model name from config
+        model_names: list[str] = [settings.ollama_model]
+        for extra in (settings.ollama_model_fast, settings.ollama_model_code):
+            if extra and extra not in model_names:
+                model_names.append(extra)
+
+        # Refresh router first (cheap /api/tags call)
+        try:
+            base_adapter = OllamaAdapter()
+            pulled = await base_adapter.list_models()
+            update_pulled_models(pulled)
+            logger.info(f"[startup] model router ready — {len(pulled)} models available")
+        except Exception as e:
+            logger.warning(f"[startup] model router refresh failed: {e}")
+            pulled = []
+
+        # Warm every model that is actually pulled locally
+        async def _warm_one(model_name: str):
+            if pulled and model_name not in pulled:
+                logger.info(f"[startup] skipping warmup for '{model_name}' — not pulled locally")
+                return
+            adapter = OllamaAdapter(model_override=model_name)
+            await adapter.warmup()
+
+        await asyncio.gather(*[_warm_one(m) for m in model_names], return_exceptions=True)
+
+    background_tasks = set()
+
+    if settings.localmind_adapter == "ollama":
+        for coro in (warm_vector_store(), warm_llm_models()):
+            task = asyncio.create_task(coro)
+            background_tasks.add(task)
+            task.add_done_callback(background_tasks.discard)
+
+    try:
+        yield
+    finally:
+        await _shutdown(app)
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="LocalMind",
@@ -50,6 +241,7 @@ def create_app() -> FastAPI:
         version="0.4.0-dev",
         docs_url="/api/docs",
         redoc_url=None,
+        lifespan=lifespan,
     )
 
     app.add_middleware(
@@ -108,167 +300,5 @@ def create_app() -> FastAPI:
         @app.get("/", include_in_schema=False)
         async def no_ui():
             return {"status": "LocalMind API running", "docs": "/api/docs"}
-
-    @app.on_event("startup")
-    async def startup():
-        # User-started autonomous objectives share the same Engine and safety
-        # pipeline as chat requests, but continue after the chat HTTP response.
-        from api.routes.chat import _engine as _chat_engine
-        from core.objective_runtime import ObjectiveRuntime
-
-        objective_runtime = ObjectiveRuntime(_chat_engine, settings.localmind_db_path)
-        app.state.objective_runtime = objective_runtime
-        # Log the actual active model based on the adapter, not always ollama_model.
-        # Previously this always showed settings.ollama_model, which is empty when
-        # using a cloud adapter — making it look like no model is configured.
-        _adapter = settings.localmind_adapter
-        _model_map = {
-            "ollama": settings.ollama_model,
-            "openai": settings.openai_model,
-            "anthropic": settings.anthropic_model,
-            "openrouter": settings.openrouter_model,
-            "deepseek": settings.deepseek_model,
-            "lite-llm": settings.litellm_model,
-            "zen": settings.zen_model,
-            "groq": settings.groq_model,
-            "together": settings.together_model,
-            "fireworks": settings.fireworks_model,
-            "deepinfra": settings.deepinfra_model,
-            "mistral": settings.mistral_model,
-            "cohere": settings.cohere_model,
-            "vercel": settings.vercel_model,
-            "cloudflare": settings.cloudflare_model,
-            "cerebras": settings.cerebras_model,
-            "sambanova": settings.sambanova_model,
-            "gemini": settings.gemini_model,
-            "chutes": settings.chutes_model,
-            "zai": settings.zai_model,
-        }
-        _active_model = _model_map.get(_adapter, "") or "(default)"
-        logger.info(f"LocalMind — adapter: {_adapter} | model: {_active_model} | ui: {UI_HTML.exists()}")
-
-        # Write live config values into localmind.md so the model always reads
-        # accurate self-knowledge. Runs before any LLM call so the first request
-        # already sees the updated doc. Fails silently if the file is missing.
-        from core.knowledge_writer import update_knowledge_doc
-
-        update_knowledge_doc()
-
-        from api.routes.health import set_engine_ready
-
-        set_engine_ready()
-
-        if settings.localmind_adapter != "ollama":
-            logger.info(
-                "[startup] Cloud adapter '%s' active — skipping Ollama warmup entirely.",
-                settings.localmind_adapter,
-            )
-            await objective_runtime.start()
-            return
-
-        # Single authoritative startup: warms LLM router, embed model,
-        # RiskAwareRouter, and FlywheelLogger on the exact engine instance
-        # that handles requests.
-        from api.routes.chat import _engine as _chat_engine
-
-        await _chat_engine.startup()
-        await objective_runtime.start()
-        logger.info("[startup] engine ready — accepting requests")
-
-        # Background task to pre-warm VectorStore
-        async def warm_vector_store():
-            try:
-                from storage.vector import VectorStore
-
-                logger.info("[startup] pre-warming VectorStore...")
-                vector_store = VectorStore()
-                if vector_store._ready:
-                    count = await vector_store.count()
-                    logger.info(f"[startup] VectorStore ready — {count} facts stored")
-                    # Warm up the embedding model. This is Ollama-based even
-                    # when using a cloud LLM adapter, because embeddings are
-                    # always local (nomic-embed-text). Skip silently when
-                    # Ollama isn't running — memory search will fall back to
-                    # keyword matching until Ollama is started.
-                    if settings.localmind_adapter == "ollama":
-                        await vector_store.warmup()
-                    else:
-                        logger.info("[startup] skipping embedding warmup — cloud adapter active")
-                else:
-                    logger.info("[startup] VectorStore not ready")
-            except Exception as e:
-                logger.warning(f"[startup] VectorStore warm-up failed: {e}")
-
-        async def warm_llm_models():
-            """
-            Pre-load every configured LLM into Ollama VRAM before the first request.
-
-            Ollama lazy-loads models on first use — that initial load costs 30–90 s of
-            dead wait on the first user message.  Sending an empty /api/generate prompt
-            forces the load at server startup instead, so every subsequent request starts
-            generating within 1–2 s.
-
-            Models are warmed concurrently (asyncio.gather) so total startup cost is
-            bounded by the slowest model, not the sum of all models.
-
-            SKIPPED entirely when the active adapter is not Ollama — cloud providers
-            don't need VRAM pre-loading, and running this would overwrite the cloud
-            model list (fetched by engine.startup) with an empty Ollama list.
-            """
-            if settings.localmind_adapter != "ollama":
-                logger.info(
-                    "[startup] skipping Ollama LLM warmup — active adapter is '%s'",
-                    settings.localmind_adapter,
-                )
-                return
-
-            from adapters.ollama import OllamaAdapter
-            from core.model_router import update_pulled_models
-
-            # Collect every distinct model name from config
-            model_names: list[str] = [settings.ollama_model]
-            for extra in (settings.ollama_model_fast, settings.ollama_model_code):
-                if extra and extra not in model_names:
-                    model_names.append(extra)
-
-            # Refresh router first (cheap /api/tags call)
-            try:
-                base_adapter = OllamaAdapter()
-                pulled = await base_adapter.list_models()
-                update_pulled_models(pulled)
-                logger.info(f"[startup] model router ready — {len(pulled)} models available")
-            except Exception as e:
-                logger.warning(f"[startup] model router refresh failed: {e}")
-                pulled = []
-
-            # Warm every model that is actually pulled locally
-            async def _warm_one(model_name: str):
-                if pulled and model_name not in pulled:
-                    logger.info(f"[startup] skipping warmup for '{model_name}' — not pulled locally")
-                    return
-                adapter = OllamaAdapter(model_override=model_name)
-                await adapter.warmup()
-
-            await asyncio.gather(*[_warm_one(m) for m in model_names], return_exceptions=True)
-
-        background_tasks = set()
-
-        if settings.localmind_adapter == "ollama":
-            for coro in (warm_vector_store(), warm_llm_models()):
-                task = asyncio.create_task(coro)
-                background_tasks.add(task)
-                task.add_done_callback(background_tasks.discard)
-
-    @app.on_event("shutdown")
-    async def shutdown():
-        """Stop autonomous work before closing pooled adapter clients."""
-        objective_runtime = getattr(app.state, "objective_runtime", None)
-        if objective_runtime is not None:
-            await objective_runtime.stop()
-
-        from adapters import close_all_adapters
-
-        await close_all_adapters()
-        logger.info("[shutdown] all adapter connections closed")
 
     return app
