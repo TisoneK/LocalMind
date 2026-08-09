@@ -1286,3 +1286,7 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 ## 2026-08-09 — Session 88
 - **Agent:** Buffy / deepseek-v4-flash
 - **Task:** B-2026-08-09-12 (C2 step 7 — Best-of-N Editor UI, Part 1: Settings toggle). Added a "Best-of-N Editor" toggle in SettingsModal (localStorage: `localmind-best-of-n-editor`), plus `BestOfNCandidate` interface + `candidates` field on `ChatMessage` type in `types/index.ts`. Part 2 ("View all candidates" expandable in ChatMessage) deferred — needs SSE metadata plumbing. TypeScript clean, eslint clean (1 pre-existing warning). Commit `b01fcc6`.
+
+## 2026-08-09 — Session 89
+- **Agent:** Buffy / deepseek-v4-flash
+- **Task:** FastAPI `on_event` deprecation migration (backlog line 35). Replaced `@app.on_event("startup")` + `@app.on_event("shutdown")` in `backend/src/api/app.py` with a single `@asynccontextmanager lifespan(app)` (passed via `FastAPI(lifespan=lifespan)`) + a shared `_shutdown(app)` helper (dedupes the cloud/ollama paths). Behavior-preserving: ObjectiveRuntime boot, adapter-aware model logging, knowledge_doc write, engine_ready, engine.startup + background VectorStore/LLM warmup (ollama only), shutdown stops objectives + closes adapters. Cleared 156 of 158 pytest warnings (2 remaining = Starlette's own httpx test-client deprecation, not our code). `test_objectives_lifespan.py` confirms start/stop wiring. **999 passed / 1 known baseline, 2 warnings** (was 158). Commit `b342a4f`.
