@@ -146,6 +146,7 @@ def available_tools() -> list[dict]:
 # -- Auto-register all built-in tools -----------------------------------------
 # Import order matters: file_reader must be before engine uses parse_file
 from tools import (
+    apply_proposed,  # noqa: E402, F401 -- B-2026-08-02-7: write a staged proposal to disk
     browser_agent,  # noqa: E402, F401 -- BROWSE (real browser interaction)
     code_exec,  # noqa: E402, F401 -- registers CODE_EXEC
     delegate,  # noqa: E402, F401 -- ADR-8 Phase 3: agent-initiated delegation
@@ -157,6 +158,8 @@ from tools import (
     git_tool,  # noqa: E402, F401 -- GIT (structured git operations)
     memory_tool,  # noqa: E402, F401 -- registers MEMORY_OP
     process_tool,  # noqa: E402, F401 -- PROCESS (long-running process management)
+    propose_edit,  # noqa: E402, F401 -- B-2026-08-02-7: stage an edit proposal (no write)
+    propose_write,  # noqa: E402, F401 -- B-2026-08-02-7: stage a write proposal (no write)
     shell,  # noqa: E402, F401 -- registers SHELL
     sysinfo,  # noqa: E402, F401 -- registers SYSINFO (offline: time, date, specs)
     web_fetch,  # noqa: E402, F401 -- registers WEB_FETCH (follow-up URL fetching)

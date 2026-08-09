@@ -39,18 +39,26 @@ def test_every_intent_is_mapped():
 def test_list_intent_mappings_covers_all_intents():
     """list_intent_mappings() returns one entry per ROUTING Intent.
 
-    ADR-8 Phase 3 (Session 34) + B-2026-08-02-6 (Session 81):
-    Intent.DELEGATE and Intent.DELEGATE_PARALLEL are meta-tool intents
-    (the agent calls the `delegate` / `delegate_parallel` tools, which
-    are then dispatched by the agent loop). They are NOT routing
-    intents — the intent classifier never produces them; they're only
-    invoked when the model calls the tools. So they're excluded from
-    the routing map.
+    ADR-8 Phase 3 (Session 34) + B-2026-08-02-6 (Session 81) +
+    B-2026-08-02-7 (Session 82): Intent.DELEGATE, Intent.DELEGATE_PARALLEL,
+    Intent.PROPOSE_EDIT, Intent.PROPOSE_WRITE, and Intent.APPLY_PROPOSED
+    are meta-tool intents (the agent calls the `delegate` /
+    `delegate_parallel` / `propose_str_replace` / `propose_write_file` /
+    `apply_proposed_edit` tools, which are then dispatched by the agent
+    loop). They are NOT routing intents — the intent classifier never
+    produces them; they're only invoked when the model calls the tools.
+    So they're excluded from the routing map.
     """
     mappings = list_intent_mappings()
     mapped_intents = {intent for intent, _ in mappings}
     # All routing intents must be mapped
-    meta_tool_intents = (Intent.DELEGATE, Intent.DELEGATE_PARALLEL)
+    meta_tool_intents = (
+        Intent.DELEGATE,
+        Intent.DELEGATE_PARALLEL,
+        Intent.PROPOSE_EDIT,
+        Intent.PROPOSE_WRITE,
+        Intent.APPLY_PROPOSED,
+    )
     routing_intents = {i for i in Intent if i not in meta_tool_intents}
     for intent in routing_intents:
         assert intent in mapped_intents, f"routing intent {intent.value} not in mappings"
@@ -64,6 +72,18 @@ def test_list_intent_mappings_covers_all_intents():
     assert Intent.DELEGATE_PARALLEL not in mapped_intents, (
         "Intent.DELEGATE_PARALLEL should not be in the routing map — it's "
         "a meta-tool intent like DELEGATE, not a routing intent."
+    )
+    assert Intent.PROPOSE_EDIT not in mapped_intents, (
+        "Intent.PROPOSE_EDIT should not be in the routing map — it's a "
+        "meta-tool intent (the model calls the propose_str_replace tool)."
+    )
+    assert Intent.PROPOSE_WRITE not in mapped_intents, (
+        "Intent.PROPOSE_WRITE should not be in the routing map — it's a "
+        "meta-tool intent (the model calls the propose_write_file tool)."
+    )
+    assert Intent.APPLY_PROPOSED not in mapped_intents, (
+        "Intent.APPLY_PROPOSED should not be in the routing map — it's a "
+        "meta-tool intent (the model calls the apply_proposed_edit tool)."
     )
 
 

@@ -614,6 +614,111 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "propose_str_replace",
+            "description": (
+                "Stage a search/replace-style edit as a PROPOSAL without touching disk. "
+                "Takes the same arguments as edit_file (path, action, search, replace, etc.) "
+                "and returns a diff preview; the modified content is stored in a per-run "
+                "proposal registry. Use this for best-of-N editing: stage 2-3 candidate "
+                "fixes for the same file, compare the previews, then apply the winner with "
+                "apply_proposed_edit. Nothing is written until you apply."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the file to edit"},
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "replace",
+                            "regex_replace",
+                            "insert",
+                            "delete",
+                            "append",
+                            "prepend",
+                        ],
+                        "description": "The edit action to stage (default: replace)",
+                    },
+                    "search": {
+                        "type": "string",
+                        "description": "Text to search for (for replace/regex_replace/delete actions)",
+                    },
+                    "replace": {
+                        "type": "string",
+                        "description": "Replacement text (for replace/regex_replace actions)",
+                    },
+                    "insert_text": {
+                        "type": "string",
+                        "description": "Text to insert (for insert/append/prepend actions)",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "Line number for insert action (1-based)",
+                    },
+                    "start_line": {
+                        "type": "integer",
+                        "description": "Start line for delete action (1-based, inclusive)",
+                    },
+                    "end_line": {
+                        "type": "integer",
+                        "description": "End line for delete action (1-based, inclusive)",
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": "Regex pattern for regex_replace action",
+                    },
+                    "all": {
+                        "type": "boolean",
+                        "description": "If true, replace all occurrences (default: false)",
+                    },
+                },
+                "required": ["path", "search", "replace"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_write_file",
+            "description": (
+                "Stage a full-file write as a PROPOSAL without touching disk. Takes the "
+                "same arguments as file_write (path + content). The content is stored in "
+                "a per-run proposal registry; call apply_proposed_edit to write it. Use "
+                "with propose_str_replace for best-of-N editing: stage multiple candidate "
+                "versions of a file, compare, then apply the winner."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path where the file would be written"},
+                    "content": {"type": "string", "description": "The exact file content to stage"},
+                },
+                "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "apply_proposed_edit",
+            "description": (
+                "Write a staged proposal to disk. Applies the content staged by "
+                "propose_str_replace or propose_write_file for the given path. Inherits "
+                "the same permission gating as file_write — nothing is written without "
+                "confirmation when write permission is required."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path of the staged proposal to apply"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "git",
             "description": (
                 "Structured Git version control operations. Use this instead of "
@@ -877,6 +982,18 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         # delegate_parallel dispatcher expects JSON-encoded args (targets
         # array) — same pattern as delegate. The tool parses it back.
         return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "propose_str_replace":
+        # propose_str_replace dispatcher expects JSON-encoded args
+        # (path/action/search/replace) — same pattern as edit_file.
+        return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "propose_write_file":
+        # propose_write_file expects "path:\n\ncontent" — same as file_write.
+        path = tool_args.get("path", "")
+        content = tool_args.get("content", "")
+        return f"{path}:\n\n{content}"
+    elif tool_name == "apply_proposed_edit":
+        # apply_proposed_edit takes a single path argument.
+        return tool_args.get("path", "")
     elif tool_name == "git":
         # git dispatcher expects JSON-encoded args (operation + params)
         # — same pattern as delegate/edit_file. The git tool parses it back.
@@ -989,6 +1106,13 @@ class AgentLoop:
         _provider_usage: dict[str, int] = {}
         _obs = obs  # may be None — all obs.emit() calls guarded below
         _loop_start_time = time.monotonic()  # ADR-5: wall-clock cap baseline
+
+        # B-2026-08-02-7 (B2): fresh proposal scope per run — staged edits
+        # from a previous run must never leak into this one (same
+        # fresh-per-turn pattern as the A5 steering queue / A2 abort event).
+        # Lazy import to avoid a circular import at registration time.
+        from tools.proposals import reset_proposals
+        reset_proposals()
 
         # ADR-8 Phase 2 (Session 34): honor agent_config.max_iterations
         # and agent_config.max_wall_clock_secs when provided. Previously
@@ -1479,6 +1603,9 @@ class AgentLoop:
                         "browse": f"Browser: {call.tool_args.get('action', '')}" if call.tool_args.get('action') else "Using browser",
                         "delegate": f"Delegating to {call.tool_args.get('target_agent', '')}" if call.tool_args.get('target_agent') else "Delegating sub-task",
                         "delegate_parallel": f"Delegating {len(call.tool_args.get('targets') or [])} sub-agents in parallel" if call.tool_args.get('targets') else "Delegating sub-agents in parallel",
+                        "propose_str_replace": f"Staging edit: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Staging edit proposal",
+                        "propose_write_file": f"Staging write: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Staging write proposal",
+                        "apply_proposed_edit": f"Applying edit: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Applying staged edit",
                     }
                     _label = _label_map.get(call.tool_name, f"Running {call.tool_name}")
                     yield StreamChunk(text="", done=False, status=_label)

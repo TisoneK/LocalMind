@@ -24,7 +24,7 @@ import os
 import re
 import shutil
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from core.config import settings
 from core.models import Intent, RiskLevel, ToolResult
@@ -354,6 +354,227 @@ def _apply_edit(
         )
 
 
+# ── Shared no-write edit preparation (B-2026-08-02-7 / B2) ────────────────────
+#
+# edit_file writes the result of an edit to disk; propose_str_replace stages
+# the SAME result as a proposal (no write). Both must run the identical
+# validation, permission, size, and encoding gates — so they share
+# prepare_edit(). Never duplicate these gates in propose_edit.py: if the
+# safety rules change, they change here only.
+
+
+class PreparedEdit:
+    """A validated, computed file edit that has NOT been written to disk.
+
+    Attributes:
+        filepath: Resolved absolute Path of the file.
+        original: The file's current content.
+        modified: The content after applying the requested edit action.
+    """
+
+    __slots__ = ("filepath", "original", "modified")
+
+    def __init__(self, filepath: Path, original: str, modified: str) -> None:
+        self.filepath = filepath
+        self.original = original
+        self.modified = modified
+
+
+def prepare_edit(
+    payload: Dict[str, Any],
+    source: str = "edit_file",
+) -> tuple[Optional[ToolResult], Optional[PreparedEdit]]:
+    """
+    Validate an edit payload and compute the modified content WITHOUT
+    touching disk (no backup created, nothing written).
+
+    Shared by edit_file() (which then writes) and propose_str_replace()
+    (which stages the proposal). The permission gates, size limits, and
+    error messages are identical to the original edit_file flow — this is
+    the single source of truth for "is this edit even allowed".
+
+    Args:
+        payload: The edit parameters (path, action, search, replace, ...).
+        source:  ToolResult.source to tag error results with. Defaults to
+                 "edit_file"; propose_str_replace passes its own name.
+
+    Returns:
+        (None, prepared) on success — the caller is responsible for the
+        "no change" check (prepared.modified == prepared.original) and
+        the actual write.
+        (error_result, None) on any validation/read/apply failure — the
+        returned ToolResult can be returned to the user as-is.
+    """
+    raw_path = payload.get("path", "")
+    action = payload.get("action", "")
+
+    if not raw_path:
+        return (
+            ToolResult(
+                content="'path' is required for edit_file",
+                risk=RiskLevel.LOW,
+                source=source,
+                success=False,
+                error_type="validation_error",
+                error_message="Missing required field 'path'",
+            ),
+            None,
+        )
+
+    if not action:
+        return (
+            ToolResult(
+                content="'action' is required for edit_file",
+                risk=RiskLevel.LOW,
+                source=source,
+                success=False,
+                error_type="validation_error",
+                error_message="Missing required field 'action'",
+            ),
+            None,
+        )
+
+    valid_actions = {"replace", "regex_replace", "insert", "delete", "append", "prepend"}
+    if action not in valid_actions:
+        return (
+            ToolResult(
+                content=f"Unknown action '{action}'. Valid: {', '.join(sorted(valid_actions))}",
+                risk=RiskLevel.LOW,
+                source=source,
+                success=False,
+                error_type="validation_error",
+                error_message=f"Invalid action '{action}'",
+            ),
+            None,
+        )
+
+    # Resolve path
+    filepath = _resolve_path(raw_path)
+
+    # SECURITY: Only allow editing files within user-approved folders.
+    # Without this check, the agent could edit ~/.ssh/authorized_keys,
+    # ~/.bashrc, ~/.aws/credentials, or the LocalMind DB itself.
+    if not settings.is_path_allowed(filepath):
+        return (
+            ToolResult(
+                content=(
+                    f"Access denied: '{filepath}' is outside the allowed folders. "
+                    f"File editing is restricted to your user directories for safety."
+                ),
+                risk=RiskLevel.HIGH,
+                source=source,
+                success=False,
+                error_type="permission_denied",
+                error_message=f"Path not in allowed read paths: {filepath}",
+            ),
+            None,
+        )
+
+    # Check file exists
+    if not filepath.exists():
+        return (
+            ToolResult(
+                content=f"File not found: {filepath}",
+                risk=RiskLevel.LOW,
+                source=source,
+                success=False,
+                error_type="file_not_found",
+                error_message=f"File does not exist: {filepath}",
+            ),
+            None,
+        )
+
+    # Check file is not too large
+    try:
+        file_size = filepath.stat().st_size
+    except OSError as exc:
+        return (
+            ToolResult(
+                content=f"Cannot stat file: {exc}",
+                risk=RiskLevel.MEDIUM,
+                source=source,
+                success=False,
+                error_type="io_error",
+                error_message=str(exc),
+            ),
+            None,
+        )
+
+    if file_size > _MAX_FILE_SIZE:
+        return (
+            ToolResult(
+                content=f"File too large to edit ({file_size} bytes, max {_MAX_FILE_SIZE}). "
+                f"Use file_write to overwrite instead.",
+                risk=RiskLevel.MEDIUM,
+                source=source,
+                success=False,
+                error_type="file_too_large",
+                error_message=f"File size {file_size} exceeds max edit size {_MAX_FILE_SIZE}",
+            ),
+            None,
+        )
+
+    # Read original content
+    try:
+        original = filepath.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        try:
+            original = filepath.read_text(encoding="latin-1")
+        except Exception as exc:
+            return (
+                ToolResult(
+                    content=f"Cannot read file (encoding error): {exc}",
+                    risk=RiskLevel.MEDIUM,
+                    source=source,
+                    success=False,
+                    error_type="encoding_error",
+                    error_message=str(exc),
+                ),
+                None,
+            )
+    except Exception as exc:
+        return (
+            ToolResult(
+                content=f"Cannot read file: {exc}",
+                risk=RiskLevel.MEDIUM,
+                source=source,
+                success=False,
+                error_type="io_error",
+                error_message=str(exc),
+            ),
+            None,
+        )
+
+    # Apply the edit (compute only — no disk write)
+    try:
+        modified = _apply_edit(
+            content=original,
+            action=action,
+            search=payload.get("search", ""),
+            replace=payload.get("replace", ""),
+            insert_text=payload.get("insert_text", ""),
+            line=int(payload.get("line", 0)),
+            start_line=int(payload.get("start_line", 0)),
+            end_line=int(payload.get("end_line", 0)),
+            pattern=payload.get("pattern", ""),
+            replace_all=bool(payload.get("all", False)),
+        )
+    except ValueError as exc:
+        return (
+            ToolResult(
+                content=f"Edit failed: {exc}",
+                risk=RiskLevel.LOW,
+                source=source,
+                success=False,
+                error_type="edit_error",
+                error_message=str(exc),
+            ),
+            None,
+        )
+
+    return None, PreparedEdit(filepath=filepath, original=original, modified=modified)
+
+
 # ── Public entry point (legacy dispatch) ───────────────────────────────────────
 
 
@@ -404,145 +625,17 @@ async def _edit_from_payload(payload: Dict[str, Any]) -> ToolResult:
       - pattern: regex pattern for regex_replace action
       - all: if true, replace all occurrences (default false)
     """
-    raw_path = payload.get("path", "")
+    error, prepared = prepare_edit(payload)
+    if error is not None:
+        return error
+
     action = payload.get("action", "")
+    filepath = prepared.filepath
+    original = prepared.original
+    modified = prepared.modified
 
-    if not raw_path:
-        return ToolResult(
-            content="'path' is required for edit_file",
-            risk=RiskLevel.LOW,
-            source="edit_file",
-            success=False,
-            error_type="validation_error",
-            error_message="Missing required field 'path'",
-        )
-
-    if not action:
-        return ToolResult(
-            content="'action' is required for edit_file",
-            risk=RiskLevel.LOW,
-            source="edit_file",
-            success=False,
-            error_type="validation_error",
-            error_message="Missing required field 'action'",
-        )
-
-    valid_actions = {"replace", "regex_replace", "insert", "delete", "append", "prepend"}
-    if action not in valid_actions:
-        return ToolResult(
-            content=f"Unknown action '{action}'. Valid: {', '.join(sorted(valid_actions))}",
-            risk=RiskLevel.LOW,
-            source="edit_file",
-            success=False,
-            error_type="validation_error",
-            error_message=f"Invalid action '{action}'",
-        )
-
-    # Resolve path
-    filepath = _resolve_path(raw_path)
-
-    # SECURITY: Only allow editing files within user-approved folders.
-    # Without this check, the agent could edit ~/.ssh/authorized_keys,
-    # ~/.bashrc, ~/.aws/credentials, or the LocalMind DB itself.
-    if not settings.is_path_allowed(filepath):
-        return ToolResult(
-            content=(
-                f"Access denied: '{filepath}' is outside the allowed folders. "
-                f"File editing is restricted to your user directories for safety."
-            ),
-            risk=RiskLevel.HIGH,
-            source="edit_file",
-            success=False,
-            error_type="permission_denied",
-            error_message=f"Path not in allowed read paths: {filepath}",
-        )
-
-    # Check file exists
-    if not filepath.exists():
-        return ToolResult(
-            content=f"File not found: {filepath}",
-            risk=RiskLevel.LOW,
-            source="edit_file",
-            success=False,
-            error_type="file_not_found",
-            error_message=f"File does not exist: {filepath}",
-        )
-
-    # Check file is not too large
-    try:
-        file_size = filepath.stat().st_size
-    except OSError as exc:
-        return ToolResult(
-            content=f"Cannot stat file: {exc}",
-            risk=RiskLevel.MEDIUM,
-            source="edit_file",
-            success=False,
-            error_type="io_error",
-            error_message=str(exc),
-        )
-
-    if file_size > _MAX_FILE_SIZE:
-        return ToolResult(
-            content=f"File too large to edit ({file_size} bytes, max {_MAX_FILE_SIZE}). "
-            f"Use file_write to overwrite instead.",
-            risk=RiskLevel.MEDIUM,
-            source="edit_file",
-            success=False,
-            error_type="file_too_large",
-            error_message=f"File size {file_size} exceeds max edit size {_MAX_FILE_SIZE}",
-        )
-
-    # Read original content
-    try:
-        original = filepath.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        try:
-            original = filepath.read_text(encoding="latin-1")
-        except Exception as exc:
-            return ToolResult(
-                content=f"Cannot read file (encoding error): {exc}",
-                risk=RiskLevel.MEDIUM,
-                source="edit_file",
-                success=False,
-                error_type="encoding_error",
-                error_message=str(exc),
-            )
-    except Exception as exc:
-        return ToolResult(
-            content=f"Cannot read file: {exc}",
-            risk=RiskLevel.MEDIUM,
-            source="edit_file",
-            success=False,
-            error_type="io_error",
-            error_message=str(exc),
-        )
-
-    # Create backup before editing
+    # Create backup before editing (propose_str_replace skips this — it never writes)
     backup_path = _create_backup(filepath)
-
-    # Apply the edit
-    try:
-        modified = _apply_edit(
-            content=original,
-            action=action,
-            search=payload.get("search", ""),
-            replace=payload.get("replace", ""),
-            insert_text=payload.get("insert_text", ""),
-            line=int(payload.get("line", 0)),
-            start_line=int(payload.get("start_line", 0)),
-            end_line=int(payload.get("end_line", 0)),
-            pattern=payload.get("pattern", ""),
-            replace_all=bool(payload.get("all", False)),
-        )
-    except ValueError as exc:
-        return ToolResult(
-            content=f"Edit failed: {exc}",
-            risk=RiskLevel.LOW,
-            source="edit_file",
-            success=False,
-            error_type="edit_error",
-            error_message=str(exc),
-        )
 
     # Check if anything actually changed
     if modified == original:

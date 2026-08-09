@@ -76,7 +76,7 @@ LocalMind uses 8 specialized agents (ADR-6), each with a scoped toolset:
 | Agent | Tools | Role |
 |---|---|---|
 | Browser | browse, delegate | Drive a headless browser |
-| Coding | shell, file_task, file_write, edit_file, code_exec, git, process, delegate, delegate_parallel | Build, edit, and manage code |
+| Coding | shell, file_task, file_write, edit_file, code_exec, git, process, delegate, delegate_parallel, propose_str_replace, propose_write_file, apply_proposed_edit | Build, edit, and manage code |
 | Research | web_search, web_fetch, delegate | Search and fetch web content |
 | Direct | (none) | Single model call, no tools |
 | Verifier | shell, process, git, file_task, edit_file, delegate | Run tests, reproduce bugs, validate |
