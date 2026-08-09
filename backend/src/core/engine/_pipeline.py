@@ -1095,11 +1095,15 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 _clock.start("generate")
                 _trivial_adapter = self._adapter_for(Intent.CHAT)
                 _trivial_chunks: list[str] = []
+                _trivial_usage: dict[str, int] = {}
+                self._metrics.start_request()
                 async for _chunk in trivial_response(message, _trivial_adapter, history=None):
                     yield _chunk
                     _chunk_text = getattr(_chunk, "text", None)
                     if _chunk_text:
                         _trivial_chunks.append(_chunk_text)
+                    if getattr(_chunk, "usage", None):
+                        _trivial_usage.update(_chunk.usage)
                 _clock.end("generate")
                 _clock.skip("execute")
                 # Session 24: return IMMEDIATELY after streaming completes.
@@ -1123,11 +1127,23 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # instead of nothing (or, previously, the session-agnostic
                 # MetricsStore aggregate of another session).
                 try:
+                    # Prefer provider-reported usage; estimate only when the
+                    # provider omitted it (same pattern as the full chat path).
+                    _trivial_comp_tok = _trivial_usage.get("completion_tokens", 0) or _approx_tokens(
+                        "".join(_trivial_chunks)
+                    )
+                    _trivial_prompt_tok = _trivial_usage.get("prompt_tokens", 0) or _approx_tokens(message)
+                    self._metrics.record_streaming_complete(
+                        total_tokens=_trivial_prompt_tok + _trivial_comp_tok,
+                        prompt_tokens=_trivial_prompt_tok,
+                        completion_tokens=_trivial_comp_tok,
+                    )
                     _obs.emit(
                         "turn_complete",
                         intent="chat",
                         confidence=0.99,
-                        tokens_approx=_approx_tokens("".join(_trivial_chunks)),
+                        tokens_approx=_trivial_comp_tok,
+                        prompt_tokens_approx=_trivial_prompt_tok,
                         total_latency_ms=_trivial_total_ms,
                         memory_facts=0,
                         agent_mode=False,
@@ -1139,7 +1155,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         confidence=0.99,
                         tools_used="",
                         memory_hits=0,
-                        context_tokens=0,
+                        context_tokens=_trivial_prompt_tok,
                         latency_ms=_trivial_total_ms,
                     )
                 except Exception:
@@ -1185,11 +1201,15 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 _clock.start("generate")
                 _conv_adapter = self._adapter_for(Intent.CHAT)
                 _conv_chunks: list[str] = []
+                _conv_usage: dict[str, int] = {}
+                self._metrics.start_request()
                 async for _chunk in conversational_response(message, _conv_adapter, history=None):
                     yield _chunk
                     _chunk_text = getattr(_chunk, "text", None)
                     if _chunk_text:
                         _conv_chunks.append(_chunk_text)
+                    if getattr(_chunk, "usage", None):
+                        _conv_usage.update(_chunk.usage)
                 _clock.end("generate")
                 _clock.skip("execute")
                 # Same best-effort cleanup pattern as the trivial path — must
@@ -1208,11 +1228,19 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # persistence so conversational fast-path turns populate the
                 # Observe panel.
                 try:
+                    _conv_comp_tok = _conv_usage.get("completion_tokens", 0) or _approx_tokens("".join(_conv_chunks))
+                    _conv_prompt_tok = _conv_usage.get("prompt_tokens", 0) or _approx_tokens(message)
+                    self._metrics.record_streaming_complete(
+                        total_tokens=_conv_prompt_tok + _conv_comp_tok,
+                        prompt_tokens=_conv_prompt_tok,
+                        completion_tokens=_conv_comp_tok,
+                    )
                     _obs.emit(
                         "turn_complete",
                         intent="chat",
                         confidence=0.99,
-                        tokens_approx=_approx_tokens("".join(_conv_chunks)),
+                        tokens_approx=_conv_comp_tok,
+                        prompt_tokens_approx=_conv_prompt_tok,
                         total_latency_ms=_conv_total_ms,
                         memory_facts=0,
                         agent_mode=False,
@@ -1224,7 +1252,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         confidence=0.99,
                         tools_used="",
                         memory_hits=0,
-                        context_tokens=0,
+                        context_tokens=_conv_prompt_tok,
                         latency_ms=_conv_total_ms,
                     )
                 except Exception:

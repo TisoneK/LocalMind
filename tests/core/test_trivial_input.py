@@ -335,6 +335,74 @@ async def test_conversational_response_fallback_on_adapter_error():
     assert any(getattr(c, "done", False) for c in chunks)
 
 
+@pytest.mark.asyncio
+async def test_conversational_response_forwards_provider_usage():
+    """Provider-reported usage flows through the fast path so the engine can
+    emit real prompt/completion token counts (Session 111 — Context Tokens
+    and the bottom-bar prompt count were stuck at 0 on fast-path turns)."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(
+            text="I can help with code, files, and more!",
+            done=False,
+            usage={"prompt_tokens": 84, "completion_tokens": 12},
+        )
+        yield MagicMock(
+            text="",
+            done=True,
+            usage={"prompt_tokens": 84, "completion_tokens": 12},
+        )
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    chunks = [c async for c in conversational_response("What can you do?", mock_adapter)]
+    streamed_usage = [getattr(c, "usage", None) for c in chunks if getattr(c, "text", "")]
+    assert streamed_usage, "streamed chunks must forward usage"
+    assert streamed_usage[0].get("prompt_tokens") == 84
+    assert streamed_usage[0].get("completion_tokens") == 12
+
+
+@pytest.mark.asyncio
+async def test_conversational_response_prompt_estimate_fallback():
+    """When the provider omits usage metadata, the fast path still reports a
+    nonzero prompt-token estimate (system prompt + user message), so Context
+    Tokens is never a misleading 0 for a real generation."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(text="I can help with code, files, and more!", done=False)
+        yield MagicMock(text="", done=True)
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    chunks = [c async for c in conversational_response("What can you do?", mock_adapter)]
+    done = next(c for c in chunks if getattr(c, "done", False))
+    assert done.usage.get("prompt_tokens", 0) > 0
+    assert done.usage.get("completion_tokens", 0) == 0  # no completion estimate
+
+
+@pytest.mark.asyncio
+async def test_conversational_response_does_not_override_provider_prompt_count():
+    """The local estimate must never override a real provider prompt count."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(text="Hi there", done=False, usage={"prompt_tokens": 300, "completion_tokens": 5})
+        yield MagicMock(text="", done=True, usage={"prompt_tokens": 300, "completion_tokens": 5})
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    chunks = [c async for c in conversational_response("Hi", mock_adapter)]
+    done = next(c for c in chunks if getattr(c, "done", False))
+    streamed = [c for c in chunks if getattr(c, "text", "")]
+    # Provider's 300 flows through both the streamed chunks AND the done
+    # chunk (authoritative final usage); the local estimate must not leak in.
+    assert streamed[0].usage.get("prompt_tokens") == 300
+    assert done.usage.get("prompt_tokens") == 300
+    assert done.usage.get("completion_tokens") == 5
+
+
 # ── Engine wiring (Session 68 / ADR-11) ────────────────────────────────────
 
 
@@ -361,3 +429,46 @@ async def test_engine_conversational_question_skips_dispatcher():
     mock_dispatch.assert_not_called()
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert "help" in text.lower()
+
+
+@pytest.mark.asyncio
+async def test_engine_conversational_question_emits_prompt_tokens():
+    """End-to-end: the conversational fast-path turn_complete must carry
+    prompt_tokens_approx (provider-reported, not 0) so the Observe panel
+    Context Tokens and the bottom-bar prompt count populate (Session 111 —
+    both were stuck at 0 / "—" on fast-path turns)."""
+    from core.engine import Engine
+    from core.obs import ObsCollector
+
+    engine = Engine()
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(
+            text="I can help you with code, files, and more!",
+            done=False,
+            error=None,
+            usage={"prompt_tokens": 84, "completion_tokens": 12},
+        )
+        yield MagicMock(
+            text="",
+            done=True,
+            error=None,
+            usage={"prompt_tokens": 84, "completion_tokens": 12},
+        )
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    obs = ObsCollector()
+    with patch("core.engine.get_adapter", return_value=mock_adapter):
+        chunks = [c async for c in engine.process("What can you do?", "sess-conv-usage", obs=obs)]
+
+    assert any(getattr(c, "text", "") for c in chunks), "expected a streamed reply"
+    turn_completes = [e for e in obs.history() if e.type == "turn_complete"]
+    assert turn_completes, "conversational fast path must emit turn_complete"
+    data = turn_completes[0].data
+    assert data.get("prompt_tokens_approx") == 84
+    assert data.get("tokens_approx") == 12
+    # The stored per-session observation carries the same prompt count.
+    stored = engine._last_observation.get("sess-conv-usage")
+    assert stored and stored.get("context_tokens") == 84

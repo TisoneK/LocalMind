@@ -47,6 +47,7 @@ from __future__ import annotations
 import re
 from typing import AsyncIterator, Optional
 
+from core.engine._helpers import _approx_tokens
 from core.models import StreamChunk
 
 # ── Trivial input patterns ───────────────────────────────────────────────────
@@ -393,11 +394,35 @@ async def _direct_chat_response(
 
     messages.append({"role": "user", "content": message})
 
+    # Local prompt-token estimate for the exact prompt we send, used as a
+    # fallback when the provider omits usage metadata on the streaming
+    # response (mirrors the engine's _approx_tokens fallback on the full
+    # pipeline path). Without this, prompt/context token accounting on the
+    # trivial/conversational short-circuit stays 0 — completion tokens were
+    # populated but prompt tokens never were.
+    _prompt_est = _approx_tokens(
+        "\n".join(str(m.get("content", "")) for m in messages if isinstance(m, dict))
+    )
+
     try:
+        _usage_agg: dict[str, int] = {}
         async for chunk in adapter.chat(messages, intent="chat"):
+            # Only forward real usage dicts — MagicMock-based fake adapters in
+            # tests auto-create truthy usage attributes that aren't dicts.
+            _u = chunk.usage if isinstance(getattr(chunk, "usage", None), dict) else {}
+            _usage_agg.update(_u)
             if hasattr(chunk, "text") and chunk.text:
-                yield StreamChunk(text=chunk.text, done=False)
-        yield StreamChunk(text="", done=True)
+                yield StreamChunk(text=chunk.text, done=False, usage=dict(_u))
+        # Forward the authoritative final usage on the done chunk — streaming
+        # providers often report usage only on the final, text-less delta, so
+        # per-chunk forwarding alone would drop it. The pipeline's `.update()`
+        # merge makes the done chunk the final word. The local estimate is used
+        # ONLY when the provider reported nothing at all — never overriding a
+        # real prompt count.
+        _done_usage: dict[str, int] = dict(_usage_agg)
+        if not _usage_agg and _prompt_est:
+            _done_usage["prompt_tokens"] = _prompt_est
+        yield StreamChunk(text="", done=True, usage=_done_usage)
     except Exception:
         # If the direct chat fails, yield a minimal fallback and done.
         # Do NOT fall through to the full pipeline — that would defeat
