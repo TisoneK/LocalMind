@@ -480,6 +480,7 @@ async def test_delegate_timeout_returns_structured_failure_and_restores_parent(m
         )
         assert result.success is False
         assert result.error_type == "timeout"
+        assert "Suggested next step" in result.content
         assert result.metadata["delegation"]["status"] == "timed_out"
         assert result.metadata["run"]["parent_run_id"] == "run_parent"
         assert get_current_run_id() == "run_parent"
@@ -530,6 +531,87 @@ async def test_delegate_setup_exception_returns_structured_failure():
         assert get_current_run_id() == "run_parent"
     finally:
         reset_current_run_id(parent_token)
+        delegate_mod._current_depth.reset(depth_token)
+        delegate_mod._current_adapter.reset(adapter_token)
+        _REGISTRY.clear()
+        _REGISTRY.update(saved_registry)
+
+
+@pytest.mark.asyncio
+async def test_delegate_construction_failure_returns_structured_failure():
+    """If the sub-agent's constructor raises, delegate returns construction_failed.
+
+    B-2026-08-02-3: construction failure must be distinguishable from
+    timeout / child_exception / empty_response so the parent model gets
+    the actual cause (not a generic error) plus a suggested next step.
+    """
+    from tools import delegate as delegate_mod
+    from tools.delegate import delegate
+
+    class _ConstructorExplodesAgent:
+        def __init__(self, adapter=None):
+            raise RuntimeError("cannot build agent")
+
+    from agents.registry import _REGISTRY
+    saved_registry = dict(_REGISTRY)
+    _REGISTRY.clear()
+    _REGISTRY["research"] = _ConstructorExplodesAgent
+    adapter_token = delegate_mod._current_adapter.set(MagicMock())
+    depth_token = delegate_mod._current_depth.set(0)
+    try:
+        result = await delegate(
+            json.dumps({"target_agent": "research", "task": "construct safely"})
+        )
+        assert result.success is False
+        assert result.error_type == "construction_failed"
+        assert result.metadata["delegation"]["status"] == "failed"
+        assert result.metadata["delegation"]["error_type"] == "construction_failed"
+        assert "Suggested next step" in result.content
+        assert get_current_run_id() is None
+    finally:
+        delegate_mod._current_depth.reset(depth_token)
+        delegate_mod._current_adapter.reset(adapter_token)
+        _REGISTRY.clear()
+        _REGISTRY.update(saved_registry)
+
+
+@pytest.mark.asyncio
+async def test_delegate_empty_response_returns_structured_failure():
+    """If the sub-agent finishes with no text, delegate returns empty_response.
+
+    B-2026-08-02-3: the empty-response path must be a distinct, actionable
+    diagnostic — not a silent success and not a generic failure.
+    """
+    from tools import delegate as delegate_mod
+    from tools.delegate import delegate
+
+    class _SilentAgent:
+        def __init__(self, adapter=None):
+            self.adapter = adapter
+
+        async def run(self, **kwargs):
+            # Finishes immediately, yielding only empty text chunks.
+            yield type("Chunk", (), {"text": ""})()
+            yield type("Chunk", (), {"text": ""})()
+
+    from agents.registry import _REGISTRY
+    saved_registry = dict(_REGISTRY)
+    _REGISTRY.clear()
+    _REGISTRY["research"] = _SilentAgent
+    adapter_token = delegate_mod._current_adapter.set(MagicMock())
+    depth_token = delegate_mod._current_depth.set(0)
+    try:
+        result = await delegate(
+            json.dumps({"target_agent": "research", "task": "stay silent"})
+        )
+        assert result.success is False
+        assert result.error_type == "empty_response"
+        assert result.metadata["delegation"]["status"] == "failed"
+        assert result.metadata["delegation"]["error_type"] == "empty_response"
+        assert "returned an empty response" in result.content
+        assert "Suggested next step" in result.content
+        assert get_current_run_id() is None
+    finally:
         delegate_mod._current_depth.reset(depth_token)
         delegate_mod._current_adapter.reset(adapter_token)
         _REGISTRY.clear()

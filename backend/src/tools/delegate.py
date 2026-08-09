@@ -258,7 +258,11 @@ async def delegate(message: str) -> ToolResult:
             error_type="construction_failed",
         )
         return ToolResult(
-            content=f"ERROR: could not construct sub-agent {target_agent!r}: {exc}",
+            content=(
+                f"ERROR: could not construct sub-agent {target_agent!r}: {exc}. "
+                "Suggested next step: the sub-agent failed to initialize — "
+                "handle the task directly with your own tools."
+            ),
             risk=RiskLevel.HIGH,
             source="delegate",
             success=False,
@@ -338,7 +342,9 @@ async def delegate(message: str) -> ToolResult:
                 content=(
                     f"ERROR: delegation to {target_agent!r} timed out after "
                     f"{DELEGATION_WALL_CLOCK_SECS}s. The sub-agent output is "
-                    "not available."
+                    "not available. Suggested next step: the sub-agent hit "
+                    "its wall-clock cap — delegate a smaller, more focused "
+                    "sub-task, or handle the task directly with your own tools."
                 ),
                 risk=RiskLevel.MEDIUM,
                 source="delegate",
@@ -359,7 +365,12 @@ async def delegate(message: str) -> ToolResult:
                 error_type="child_exception",
             )
             return ToolResult(
-                content=f"ERROR: delegated {target_agent!r} agent failed: {exc}",
+                content=(
+                    f"ERROR: delegated {target_agent!r} agent failed: {exc}. "
+                    "Suggested next step: the sub-agent raised an exception — "
+                    "retry once with a narrower task, or handle the task "
+                    "directly with your own tools."
+                ),
                 risk=RiskLevel.MEDIUM,
                 source="delegate",
                 success=False,
@@ -382,7 +393,9 @@ async def delegate(message: str) -> ToolResult:
             return ToolResult(
                 content=(
                     f"Sub-agent {target_agent!r} returned an empty response "
-                    f"for task: {task[:200]!r}."
+                    f"for task: {task[:200]!r}. Suggested next step: the "
+                    "sub-agent produced no output — retry with a more specific "
+                    "task, or handle the task directly with your own tools."
                 ),
                 risk=RiskLevel.MEDIUM,
                 source="delegate",
