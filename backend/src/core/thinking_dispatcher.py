@@ -531,7 +531,12 @@ class ThinkingDispatcher:
                 dispatch_steps=[],
             )
         yield StreamChunk(text="", thinking="end", dispatch_steps=[])
-        obs.emit("thinking_done", intent="dispatch")
+        # Session 115: 'dispatch' is an internal routing marker, NOT a
+        # classified intent. Emitting it as `intent` made the Observe panel
+        # show "dispatch" (with no confidence) and clobber the real
+        # classification. The real intent arrives via the intent_classified /
+        # dispatcher_complete events that follow — drop the placeholder field.
+        obs.emit("thinking_done")
 
         latency_ms = round((time.monotonic() - t0) * 1000)
         # Emit intent_classified so the SSE bridge sends an 'intent' event

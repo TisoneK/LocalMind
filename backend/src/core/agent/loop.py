@@ -3255,6 +3255,44 @@ class AgentLoop:
                     fabrication_risk += 2  # Heavy penalty for fabricated data
                     continue  # retry with forced tool call
 
+                # ── Empty-response guard (Session 115) ────────────────────
+                # The model produced NO usable text AND no tool call (e.g.
+                # the free-tier model returns an empty stream, or every chunk
+                # was filtered out as a system-leak). Previously this fell
+                # through to "stream the answer" with an empty buffer — the
+                # user saw a spinner for 60-120s, then a blank/near-empty
+                # reply and no explanation (the silent-stall failure mode).
+                # Honest fast-fail instead: say what happened and STOP, so we
+                # never burn another PER_CALL_TIMEOUT_SECS call on the same
+                # empty output.
+                if not (initial_buffer or "").strip():
+                    if _obs:
+                        _obs.emit(
+                            "agent_loop_empty_response",
+                            intent=intent.value,
+                            iteration=iteration + 1,
+                        )
+                    if not stream_ended_early:
+                        async for _drain in result:
+                            pass
+                    _empty_summary = self._summarize_trace_for_user(trace, observation_log)
+                    if _empty_summary:
+                        _empty_msg = (
+                            "The model returned an empty response for this step. "
+                            "Here is what actually ran:\n\n" + _empty_summary
+                        )
+                    else:
+                        _empty_msg = (
+                            "The model returned an empty response (no text and no "
+                            "tool call) for this request. This usually means the "
+                            "free-tier model is overloaded or hit its context "
+                            "limit. Please try again, or switch to a larger/faster "
+                            "model."
+                        )
+                    yield StreamChunk(text=_empty_msg, done=False)
+                    yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
+                    return
+
                 # Phase 2: No tool-talk detected — stream the answer
                 # incrementally. First yield the initial buffer, then
                 # stream remaining chunks directly from the adapter.

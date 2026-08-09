@@ -645,8 +645,16 @@ export function useChat(
 
               case 'obs_event': {
                 const obs = parsed.obs_event || parsed;
-                if (obs.intent) setCurrentIntent(obs.intent);
-                if (obs.confidence) setCurrentConfidence(obs.confidence);
+                // Session 115: the dispatcher used to emit thinking_done with
+                // the internal routing placeholder intent="dispatch", which
+                // clobbered the real classification in the Observe panel.
+                // Ignore that literal placeholder value only — legitimate
+                // thinking_done intents (chat/file_write/shell) still pass
+                // through for paths that skip the ThinkingDispatcher and
+                // rely on this event as their only intent source.
+                const isPlaceholderIntent = obs.intent === 'dispatch';
+                if (obs.intent && !isPlaceholderIntent) setCurrentIntent(obs.intent);
+                if (obs.confidence && !isPlaceholderIntent) setCurrentConfidence(obs.confidence);
                 // Update live observation from obs_event data
                 const obsData = obs.data || obs;
                 if (obsData) {
@@ -673,8 +681,12 @@ export function useChat(
                     break;
                   }
                   setLiveObservation((prev) => ({
-                    intent: (obsData.intent || obs.intent || prev?.intent || 'chat') as any,
-                    confidence: Number(obsData.confidence || obs.confidence || prev?.confidence || 0),
+                    intent: (isPlaceholderIntent
+                      ? (prev?.intent || 'chat')
+                      : (obsData.intent || obs.intent || prev?.intent || 'chat')) as any,
+                    confidence: Number(isPlaceholderIntent
+                      ? (prev?.confidence || 0)
+                      : (obsData.confidence || obs.confidence || prev?.confidence || 0)),
                     // B-2026-08-09-8: an empty tools_used on turn_complete is REAL
                     // (no tools ran this turn) — reset instead of inheriting the
                     // previous turn's tools forever.
