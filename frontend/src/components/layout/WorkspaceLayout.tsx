@@ -116,7 +116,7 @@ export function WorkspaceLayout() {
   // Hook data — useChat receives the terminal event callback
   const health = useHealth();
   const { sessions, refresh: refreshSessions, deleteSession } = useSessions();
-  const { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, elapsedMs, send, abort, setMessages } =
+  const { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, elapsedMs, send, abort, steer, setMessages } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId);
   const { files } = useFileTree();
@@ -343,6 +343,7 @@ export function WorkspaceLayout() {
           health={health}
           onSend={handleSend}
           onAbort={abort}
+          onSteer={steer}
           currentIntent={currentIntent}
           currentConfidence={currentConfidence}
           memoryCount={memoryFacts.length}

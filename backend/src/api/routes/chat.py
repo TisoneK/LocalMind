@@ -32,7 +32,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 from core.config import settings
@@ -442,6 +442,31 @@ async def _event_stream(
         logger.warning(f"[title] should_refine_title check failed: {_title_exc} — using is_first fallback")
         if is_first:
             asyncio.create_task(refine_title_async(session_id, message))
+
+
+@router.post("/chat/{session_id}/steer")
+async def steer_session(session_id: str, message: str = Body(..., embed=True)):
+    """Queue a steering message for a session's in-flight agent turn.
+
+    B-2026-08-02-5 (A5): the message is drained by AgentLoop.run() at the
+    next iteration boundary of the running turn — the agent sees it as a
+    new user prompt and continues instead of being aborted and re-run. If
+    no turn is currently running, the message waits for the next one.
+
+    Body: {"message": "..."}
+    Returns 200 {"accepted": true}; 400 for a blank message; 409 when the
+    session's steering queue is full (agent is too far ahead — retry after
+    the next step boundary).
+    """
+    text = (message or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Steering message cannot be empty")
+    if not _engine.steer(session_id, text):
+        raise HTTPException(
+            status_code=409,
+            detail="Steering queue full — wait for the agent to finish a step and retry",
+        )
+    return {"accepted": True}
 
 
 @router.post("/chat")

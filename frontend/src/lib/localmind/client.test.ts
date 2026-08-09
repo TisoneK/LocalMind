@@ -269,3 +269,38 @@ describe('streamChat SSE integration (B-2026-07-31 follow-up)', () => {
     expect(onChunk).not.toHaveBeenCalled();
   });
 });
+
+describe('steer', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('posts a trimmed message to the session steer endpoint and resolves true', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ accepted: true }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(localmindClient.steer('sess-1', '  go left  ')).resolves.toBe(true);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/chat/sess-1/steer');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ message: 'go left' });
+  });
+
+  it('returns false when the backend rejects (queue full / blank)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 409 }));
+
+    await expect(localmindClient.steer('sess-2', 'more!')).resolves.toBe(false);
+  });
+
+  it('returns false for a blank message without calling fetch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(localmindClient.steer('sess-3', '   ')).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

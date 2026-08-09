@@ -42,6 +42,7 @@ interface CenterPanelProps {
   health: HealthState;
   onSend: (message: string, tool?: string) => void;
   onAbort: () => void;
+  onSteer?: (message: string) => void;
   currentIntent?: string;
   currentConfidence?: number;
   memoryCount: number;
@@ -55,6 +56,7 @@ export function CenterPanel({
   health,
   onSend,
   onAbort,
+  onSteer,
   currentIntent,
   currentConfidence,
   memoryCount,
@@ -214,6 +216,7 @@ export function CenterPanel({
       <ChatInput
         onSend={onSend}
         onAbort={onAbort}
+        onSteer={onSteer}
         isStreaming={isStreaming}
         modelName={selectedModel.name}
         modelProvider={selectedModel.provider}

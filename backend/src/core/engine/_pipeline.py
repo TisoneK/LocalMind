@@ -148,6 +148,11 @@ class _StageClock:
         self._obs.emit("stage_timing", stage=stage, latency_ms=latency_ms, status=status)
 
 
+# B-2026-08-02-5 (A5): max queued steering messages per session before the
+# POST /api/chat/{session_id}/steer endpoint returns 409.
+STEERING_QUEUE_MAX = 10
+
+
 class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
     def __init__(self):
         self._store = SessionStore(settings.localmind_db_path)
@@ -193,6 +198,12 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # demand and pruned beyond a cap, mirroring the other per-session
         # dicts below.
         self._session_locks: dict[str, asyncio.Lock] = {}
+        # B-2026-08-02-5 (A5): per-session steering queues. Messages put via
+        # POST /api/chat/{session_id}/steer are drained by AgentLoop.run()
+        # at the next iteration boundary of that session's in-flight turn
+        # (never mid-tool). Bounded per session; pruned with the other
+        # per-session dicts below.
+        self._steering_queues: dict[str, asyncio.Queue] = {}
         # Reliability bootstrap happens in startup(), not here
         try:
             load_reliability_from_db(self._store.get_reliability())
@@ -291,6 +302,39 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 del self._session_locks[sid]
         return self._session_locks.setdefault(session_id, asyncio.Lock())
 
+    def _steering_queue_for(self, session_id: str) -> asyncio.Queue:
+        """Return the per-session steering queue, creating it on demand.
+
+        Bounded (STEERING_QUEUE_MAX) so a flood of steer calls can't grow
+        memory without bound; pruned with the other per-session dicts.
+        """
+        return self._steering_queues.setdefault(
+            session_id, asyncio.Queue(maxsize=STEERING_QUEUE_MAX)
+        )
+
+    def steer(self, session_id: str, message: str) -> bool:
+        """Queue a steering message for a session's in-flight agent turn.
+
+        B-2026-08-02-5 (A5): the message is drained by AgentLoop.run() at
+        the next iteration boundary — the agent continues its turn instead
+        of being aborted and re-run. Returns True when queued; False when
+        the queue is full (the API maps that to 409) or the message is
+        blank. Each process() turn starts with a FRESH queue, so a steer
+        that was never drained (e.g. sent during a WorkspaceOrchestrator
+        turn, which doesn't thread the queue) is dropped at the next turn
+        instead of leaking into it.
+        """
+        text = (message or "").strip()
+        if not text:
+            return False
+        try:
+            self._steering_queue_for(session_id).put_nowait(
+                {"role": "user", "content": text, "steering": True}
+            )
+            return True
+        except asyncio.QueueFull:
+            return False
+
     def _update_intent_history(self, session_id: str, intent: Intent) -> list[str]:
         """Track a rolling window of intent values per session."""
         # Prune old sessions to prevent unbounded memory growth
@@ -326,6 +370,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             self._last_observation,
             self._last_observation_snapshots,
             self._session_locks,
+            self._steering_queues,
         ):
             if session_id in d:
                 del d[session_id]
@@ -854,6 +899,15 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         corrupt that session's history/observations.
         """
         async with self._lock_for(session_id):
+            # B-2026-08-02-5 (A5): fresh steering queue per turn. Only the
+            # agent-loop path drains the queue (WorkspaceOrchestrator runs
+            # don't), so a steer that was never drained — e.g. sent during
+            # an orchestrator turn or just before the turn ended — must be
+            # DROPPED here rather than leaking into a future turn as its
+            # most-recent user message. Mid-turn steers land on this fresh
+            # queue (put_nowait via steer()) and are drained at the next
+            # agent-loop iteration boundary.
+            self._steering_queues[session_id] = asyncio.Queue(maxsize=STEERING_QUEUE_MAX)
             async for chunk in self._process_unlocked(
                 message=message,
                 session_id=session_id,
@@ -1785,6 +1839,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             _clock.start("generate")
             # Get fresh adapter for orchestrator
             orch_adapter = get_adapter(settings.localmind_adapter)
+            # NOTE (B-2026-08-02-5): WorkspaceOrchestrator runs are NOT
+            # steering-enabled — steers queued during one are dropped at the
+            # next turn's fresh queue (process() replaces it). Intentional.
             async for chunk in self._orchestrator.run(
                 message=message,
                 session_id=session_id,
@@ -2971,6 +3028,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     memory_facts=memory_facts,
                     orchestrator_context=orchestrator_context or None,
                     skip_planning=_skip_planning,
+                    steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                 )
                 # Session 31: CRITICAL FIX — intercept done=True from the
                 # agent loop. If the loop produced NO text, the done signal
@@ -3022,6 +3080,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     memory_facts=memory_facts,
                     orchestrator_context=orchestrator_context or None,
                     skip_planning=_skip_planning,
+                    steering_queue=self._steering_queue_for(session_id),
                 ):
                     if chunk.usage:
                         _provider_usage.update(chunk.usage)

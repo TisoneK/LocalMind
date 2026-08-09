@@ -896,6 +896,7 @@ class AgentLoop:
         agent_config=None,
         agent_context: Optional[str] = None,
         allowed_tool_names: Optional[frozenset[str]] = None,
+        steering_queue: Optional[asyncio.Queue] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -926,6 +927,10 @@ class AgentLoop:
                 agents/coding/playbook.md. Passed through to
                 build_agent_system_prompt() and injected as the
                 `agent_context_section` in the system prompt.
+            steering_queue: Optional per-session asyncio.Queue of user
+                messages injected mid-turn (B-2026-08-02-5/A5). Drained at
+                each iteration boundary — the agent sees them as new user
+                prompts and continues its turn without being aborted.
         """
         active_adapter = adapter or self._adapter
         trace = AgentTrace()
@@ -1196,6 +1201,20 @@ class AgentLoop:
                         iteration=iteration + 1,
                     )
                 break
+
+            # B-2026-08-02-5 (A5): steering without aborting. Drain any
+            # user messages queued via POST /api/chat/{session_id}/steer
+            # at the NEXT iteration boundary — never mid-tool. The agent
+            # sees the steering message as a new user prompt and continues
+            # its turn instead of being aborted and re-run. Messages are
+            # tagged "steering": True so compaction passes can identify
+            # them; they are user-role, so the A4 compactor
+            # (simplify_tool_results — tool-role only) never stubs them.
+            if steering_queue is not None:
+                while not steering_queue.empty():
+                    _steer_msg = await steering_queue.get()
+                    _steer_msg.setdefault("steering", True)
+                    loop_messages.append(_steer_msg)
 
             # Build iteration-specific context hint
             failure_hint = ""

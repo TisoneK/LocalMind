@@ -8,6 +8,7 @@ import {
   Zap,
   Command,
   Square,
+  Navigation,
 } from 'lucide-react';
 
 const toolOptions = [
@@ -22,14 +23,16 @@ const toolOptions = [
 interface ChatInputProps {
   onSend: (message: string, tool?: string) => void;
   onAbort: () => void;
+  onSteer?: (message: string) => void;
   isStreaming: boolean;
   modelName?: string;
   modelProvider?: string;
   sessionId?: string;
 }
 
-export function ChatInput({ onSend, onAbort, isStreaming, modelName, modelProvider, sessionId }: ChatInputProps) {
+export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, modelProvider, sessionId }: ChatInputProps) {
   const [input, setInput] = useState('');
+  const [steerInput, setSteerInput] = useState('');
   const [selectedTool, setSelectedTool] = useState('auto');
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -82,10 +85,45 @@ export function ChatInput({ onSend, onAbort, isStreaming, modelName, modelProvid
     onAbort();
   };
 
+  const handleSteer = () => {
+    const msg = steerInput.trim();
+    if (!msg || !onSteer) return;
+    onSteer(msg);
+    setSteerInput('');
+  };
+
   return (
     <div className="border-t border-[#1a2a1a] bg-[#0a0f0a]">
       {/* Input area */}
       <div className="px-4 pt-3 pb-2">
+        {/* B-2026-08-02-5 (A5): steering without aborting — while the agent
+            is running, inject a message at the next step boundary instead of
+            abort + re-run. The backend drains it at the next loop iteration. */}
+        {isStreaming && onSteer && (
+          <div className="flex items-center gap-2 mb-2 bg-[#0d150d] border border-[#1a2a1a] rounded-lg px-3 py-1.5 focus-within:border-[#39d353]/40 transition-colors">
+            <Navigation className="h-3 w-3 text-[#39d353] shrink-0" />
+            <input
+              value={steerInput}
+              onChange={(e) => setSteerInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSteer();
+                }
+              }}
+              placeholder="Steer the agent at the next step… (no abort)"
+              className="flex-1 bg-transparent text-[11px] text-[#d4e8d4] placeholder:text-[#8ab08a] outline-none font-mono"
+            />
+            <button
+              onClick={handleSteer}
+              disabled={!steerInput.trim()}
+              className="p-1 rounded transition-colors disabled:opacity-40 text-[#39d353] hover:bg-[#1a2a1a]"
+              title="Inject steering message at next step"
+            >
+              <Send className="h-3 w-3" />
+            </button>
+          </div>
+        )}
         <div className="relative flex items-end gap-2 bg-[#111a11] border border-[#1a2a1a] rounded-lg px-3 py-2 focus-within:border-[#39d353]/30 transition-colors">
           {/* Prompt symbol */}
           <span className="text-[#39d353] text-sm font-mono pb-0.5 shrink-0">&gt;</span>

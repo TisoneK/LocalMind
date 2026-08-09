@@ -492,6 +492,33 @@ class LocalMindClient {
     return () => controller.abort();
   }
 
+  /**
+   * Queue a steering message for an in-flight agent turn (B-2026-08-02-5/A5).
+   *
+   * The backend drains it at the next agent-loop iteration boundary — the
+   * agent sees it as a new user prompt and continues its turn instead of
+   * being aborted and re-run.
+   *
+   * @returns true when accepted; false on 400 (blank message) or 409
+   *          (queue full — the agent is mid-step, retry shortly).
+   */
+  async steer(sessionId: string, message: string): Promise<boolean> {
+    const text = message.trim();
+    if (!text) return false;
+    try {
+      await this.request<{ accepted: boolean }>(
+        `/api/chat/${encodeURIComponent(sessionId)}/steer`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ message: text }),
+        }
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // ── Actions ─────────────────────────────────────────────────────────
 
   async getActions(sessionId: string): Promise<ActionItem[]> {

@@ -162,6 +162,9 @@ interface ChatState {
   elapsedMs: number;
   send: (message: string, sessionIdOverride?: string, tool?: string) => void;
   abort: () => void;
+  /** B-2026-08-02-5 (A5): inject a user message at the next step boundary
+   *  of the in-flight agent turn without aborting it. No-op when idle. */
+  steer: (message: string) => void;
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   onTerminalEvent?: (event: TerminalEventData) => void;
 }
@@ -1070,6 +1073,13 @@ export function useChat(
     [sessionId]  // isStreaming is read via isStreamingRef to avoid stale closures
   );
 
+  const steer = useCallback((message: string) => {
+    const text = message.trim();
+    const target = streamingSessionRef.current;
+    if (!text || !isStreamingRef.current || !target) return;
+    void localmindClient.steer(target, text);
+  }, []);
+
   const abort = useCallback(() => {
     abortRef.current?.();
     abortRef.current = null;
@@ -1088,7 +1098,7 @@ export function useChat(
     });
   }, []);
 
-  return { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, elapsedMs, send, abort, setMessages, onTerminalEvent };
+  return { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, elapsedMs, send, abort, steer, setMessages, onTerminalEvent };
 }
 
 // ─── Prompt leak detection (FIX 1) ────────────────────────────────────
