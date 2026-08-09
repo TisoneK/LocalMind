@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { User, Copy, Check, FileEdit, FilePlus, FileMinus, Activity } from 'lucide-react';
+import { User, Copy, Check, FileEdit, FilePlus, FileMinus, Activity, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -57,6 +57,9 @@ interface ChatMessageProps {
   message: ChatMessageType;
   /** Whether this message is currently being streamed (affects ThinkingBlock expansion) */
   isStreaming?: boolean;
+  /** Re-send the user prompt that produced this assistant reply (regenerate).
+   *  Only provided for assistant messages that have a preceding user prompt. */
+  onRetry?: () => void;
 }
 
 function FileResultChip({ result }: { result: FileResult }) {
@@ -556,7 +559,65 @@ function PermissionGate({ pending, onResolved }: { pending: PendingWrite; onReso
 
 // ── ChatMessage component ──────────────────────────────────────────────────
 
-export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
+// ── MessageActions — hover-reveal copy/retry row (auto-hides) ─────────────
+// Standard chat UX: a small action chip floats at the bottom of the message
+// and is revealed only while the message is hovered (group-hover), so the
+// transcript stays uncluttered. Copy works on both roles; Retry (regenerate
+// the response to the preceding prompt) exists only on assistant messages.
+function MessageActions({
+  isUser,
+  content,
+  isStreaming,
+  onRetry,
+}: {
+  isUser: boolean;
+  content: string;
+  isStreaming: boolean;
+  onRetry?: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    if (!content) return;
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard unavailable (e.g. non-secure context) — stay quiet.
+    }
+  }, [content]);
+
+  return (
+    <div
+      data-testid="message-actions"
+      className={`absolute bottom-1 ${isUser ? 'left-2' : 'right-2'} z-10 flex items-center gap-0.5 rounded-md border border-brand-border bg-brand-bg-code/95 backdrop-blur px-1 py-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 select-none shadow-lg shadow-black/20`}
+    >
+      <button
+        onClick={handleCopy}
+        disabled={!content}
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-brand-green-muted hover:text-brand-green hover:bg-brand-green/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        title={copied ? 'Copied!' : 'Copy message'}
+      >
+        {copied ? <Check className="h-3 w-3 text-brand-green" /> : <Copy className="h-3 w-3" />}
+        <span>{copied ? 'Copied' : 'Copy'}</span>
+      </button>
+      {!isUser && onRetry && (
+        <button
+          onClick={onRetry}
+          disabled={isStreaming}
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-brand-green-muted hover:text-brand-green hover:bg-brand-green/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          title={isStreaming ? 'LocalMind is busy' : 'Regenerate this response'}
+        >
+          <RefreshCw className="h-3 w-3" />
+          <span>Retry</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   // Check if this message has diff data (from edit_file tool results)
@@ -568,7 +629,9 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
   }, [message.diffData]);
 
   return (
-    <div className={`px-4 py-3 overflow-hidden ${isUser ? 'justify-end' : 'justify-start border-l-2 border-l-brand-green/30'}`}>
+    <div className={`px-4 py-3 overflow-hidden group relative ${isUser ? 'justify-end' : 'justify-start border-l-2 border-l-brand-green/30'}`}>
+      {/* Hover action row — auto-hides, revealed on message hover */}
+      <MessageActions isUser={isUser} content={message.content || ''} isStreaming={!!isStreaming} onRetry={onRetry} />
       <div className={`flex items-start gap-3 max-w-full ${isUser ? 'flex-row-reverse' : ''}`}>
         <div className={`flex-1 min-w-0 max-w-full overflow-hidden ${isUser ? 'items-end flex flex-col' : ''}`}>
           {/* Header */}

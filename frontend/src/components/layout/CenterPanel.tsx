@@ -35,6 +35,23 @@ interface HealthState {
   uptime?: number;
 }
 
+/**
+ * Find the user prompt that precedes an assistant message so Retry can
+ * re-send it (regenerate semantics: append a new turn with the same prompt;
+ * there is no backend replace/regenerate endpoint). Returns undefined for
+ * user messages or when no preceding user message has content.
+ */
+export function findRetryPrompt(messages: ChatMessageType[], index: number): string | undefined {
+  if (messages[index]?.role !== 'assistant') return undefined;
+  for (let j = index - 1; j >= 0; j--) {
+    const prev = messages[j];
+    if (prev.role === 'user' && prev.content) {
+      return prev.content;
+    }
+  }
+  return undefined;
+}
+
 interface CenterPanelProps {
   messages: ChatMessageType[];
   selectedModel: ModelOption;
@@ -171,9 +188,19 @@ export function CenterPanel({
         )}
 
         <div className="divide-y divide-brand-border/50 overflow-hidden">
-          {messages.map((msg) => (
-            <ChatMessage key={msg.id} message={msg} isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'} />
-          ))}
+          {messages.map((msg, i) => {
+            // Retry = regenerate the response to the user message that
+            // precedes this assistant reply (re-sends that exact prompt).
+            const prompt = findRetryPrompt(messages, i);
+            return (
+              <ChatMessage
+                key={msg.id}
+                message={msg}
+                isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'}
+                onRetry={prompt ? () => onSend(prompt) : undefined}
+              />
+            );
+          })}
         </div>
 
         {/* Streaming indicator — only show when assistant content is still empty */}
