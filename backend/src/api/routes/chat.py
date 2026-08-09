@@ -186,6 +186,7 @@ async def _event_stream(
                                 label=_label,
                                 input=_args_str,
                                 action_id=_tc_id,
+                                iteration=int(_iteration) if str(_iteration).isdigit() else None,
                             )
                         elif _status in ("done", "failed"):
                             _engine._store.update_action(

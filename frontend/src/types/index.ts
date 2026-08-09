@@ -11,6 +11,8 @@ export interface ToolCall {
   output?: string;
   error?: string;
   duration?: number;
+  /** Agent loop step number — used to chain actions into a sequence. */
+  iteration?: number;
   /** Timestamp when this tool call was first observed (HH:MM format) */
   timestamp?: string;
 }
@@ -136,6 +138,8 @@ export interface ActionItem {
   output?: string;
   /** Error/status message when the tool failed. */
   error?: string;
+  /** Agent loop step number — used to chain actions into a sequence. */
+  iteration?: number;
 }
 
 export interface TodoItem {

@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  Zap,
 } from 'lucide-react';
 import { useState } from 'react';
 import { ActionItem } from '@/types';
@@ -68,11 +69,41 @@ const statusConfig: Record<string, { icon: React.ReactNode; color: string; label
   },
 };
 
+/**
+ * Group actions into "chains" (one chain = one turn's step sequence).
+ * The agent loop numbers steps with `iteration` (1, 2, 3…). A chain
+ * continues while iteration is non-decreasing (parallel calls share an
+ * iteration); a reset or a missing iteration starts a new chain. Order is
+ * by iteration so the persisted (newest-first) history renders chronologically.
+ */
+function groupChains(actions: ActionItem[]): ActionItem[][] {
+  const ordered = [...actions].sort((a, b) => {
+    const ai = a.iteration ?? Number.MAX_SAFE_INTEGER;
+    const bi = b.iteration ?? Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
+  const chains: ActionItem[][] = [];
+  let cur: ActionItem[] = [];
+  let prevIter: number | null = null;
+  for (const act of ordered) {
+    const iter = act.iteration ?? null;
+    const continues = prevIter !== null && iter !== null && iter >= prevIter;
+    if (!continues && cur.length > 0) {
+      chains.push(cur);
+      cur = [];
+    }
+    cur.push(act);
+    prevIter = iter;
+  }
+  if (cur.length > 0) chains.push(cur);
+  return chains;
+}
+
 function ActionCard({ action }: { action: ActionItem }) {
   const [expanded, setExpanded] = useState(false);
   const status = statusConfig[action.status] ?? statusConfig.pending;
-  const hasOutput = Boolean(action.output || action.error);
-  const hasDetail = Boolean(action.input || action.detail);
+  const hasBody = Boolean(action.output || action.error);
+  const verbatim = action.input || action.detail || '';
 
   return (
     <div
@@ -82,7 +113,7 @@ function ActionCard({ action }: { action: ActionItem }) {
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-white/[0.02] transition-colors text-left"
       >
-        {hasDetail || hasOutput ? (
+        {verbatim || hasBody ? (
           expanded ? (
             <ChevronDown className="h-3 w-3 text-brand-green-muted shrink-0" />
           ) : (
@@ -92,8 +123,20 @@ function ActionCard({ action }: { action: ActionItem }) {
           <span className="w-3 shrink-0" />
         )}
         <span className={actionColors[action.type]}>{actionIcons[action.type]}</span>
-        <span className="text-[11px] text-brand-green-soft font-medium truncate flex-1 min-w-0">
-          {action.label}
+        <span className="flex-1 min-w-0">
+          {/* Title — the real action label (e.g. "Running: git status") */}
+          <span className="block text-[11px] text-brand-green-soft font-medium truncate">
+            {action.label}
+          </span>
+          {/* Verbatim command/args — visible without expanding */}
+          {verbatim && (
+            <span
+              className="block text-[9px] text-brand-green-muted font-mono truncate"
+              title={verbatim}
+            >
+              {verbatim}
+            </span>
+          )}
         </span>
         <span className={status.color} title={status.label}>
           {status.icon}
@@ -138,7 +181,7 @@ function ActionCard({ action }: { action: ActionItem }) {
               </pre>
             </div>
           )}
-          {!hasOutput && !hasDetail && (
+          {!hasBody && (
             <div className="text-[10px] text-brand-green-faint">
               {action.status === 'running' ? 'Waiting for tool to complete…' : 'No output returned.'}
             </div>
@@ -157,10 +200,40 @@ export function ActionHistory({ actions }: ActionHistoryProps) {
       </div>
     );
   }
+
+  const chains = groupChains(actions);
+
   return (
-    <div className="space-y-1 px-1">
-      {actions.map((action) => (
-        <ActionCard key={action.id} action={action} />
+    <div className="space-y-2 px-1">
+      {chains.map((chain, ci) => (
+        <div key={ci}>
+          {/* Chain header — the turn's step count + when it ran */}
+          <div className="flex items-center gap-1.5 px-0.5 pb-1 pt-0.5">
+            <Zap className="h-2.5 w-2.5 text-brand-amber" />
+            <span className="text-[9px] text-brand-green-muted uppercase tracking-wide font-medium">
+              {chain.length} step{chain.length > 1 ? 's' : ''}
+            </span>
+            <span className="text-[9px] text-brand-green-faint">
+              {chain[0]?.timestamp ?? ''}
+            </span>
+            <span className="h-px flex-1 bg-brand-border/50" />
+          </div>
+
+          {/* Numbered chain — connector line + step badges */}
+          <div className="relative">
+            {chain.map((action, i) => (
+              <div key={action.id} className="relative pl-6 pb-1.5">
+                <span className="absolute left-0 top-1.5 h-4 w-4 rounded-full border border-brand-border bg-brand-bg-base flex items-center justify-center text-[8px] font-mono text-brand-green-muted">
+                  {i + 1}
+                </span>
+                {i < chain.length - 1 && (
+                  <span className="absolute left-[7px] top-5 bottom-0 w-px bg-brand-border/70" />
+                )}
+                <ActionCard action={action} />
+              </div>
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );

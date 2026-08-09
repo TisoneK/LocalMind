@@ -33,6 +33,7 @@ class ActionItem(BaseModel):
     input: Optional[str] = None  # verbatim command/args
     output: Optional[str] = None
     error: Optional[str] = None
+    iteration: Optional[int] = None  # agent loop step number (for chaining)
 
 
 def _to_action_item(row: dict) -> ActionItem:
@@ -52,6 +53,7 @@ def _to_action_item(row: dict) -> ActionItem:
         input=row.get("input"),
         output=row.get("output"),
         error=row.get("error"),
+        iteration=row.get("iteration"),
     )
 
 
@@ -95,6 +97,7 @@ async def create_action(request: CreateActionRequest):
             "output": None,
             "error": None,
             "duration": None,
+            "iteration": None,
             "timestamp": time.time(),
         }
     )

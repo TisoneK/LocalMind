@@ -541,6 +541,7 @@ export function useChat(
                   input: _buildToolInputPreview(tc.name || tc.tool || 'unknown', tc.arguments || tc.input),
                   output: tc.output,
                   duration: tc.duration || (tc.latency_ms ? parseInt(tc.latency_ms) : undefined),
+                  iteration: tc.iteration !== undefined && tc.iteration !== '' ? Number(tc.iteration) : undefined,
                   timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
                 };
                 // Deduplicate by ID: if a tool_call with the same ID already

@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS actions (
     output      TEXT,
     error       TEXT,
     duration    REAL,
+    iteration   INTEGER,
     timestamp   REAL    NOT NULL DEFAULT (unixepoch('now'))
 );
 
@@ -179,6 +180,14 @@ class SessionStore:
             # Apply migrations
             self._apply_migrations(conn)
             logger.debug(f"SQLite store ready at {self._path}")
+        # Session 119: ensure the actions table has the iteration column.
+        # Fresh installs get it from _SCHEMA; existing DBs need a defensive
+        # ALTER (idempotent — a second run raises duplicate-column, ignored).
+        try:
+            with self._conn() as conn:
+                conn.execute("ALTER TABLE actions ADD COLUMN iteration INTEGER")
+        except sqlite3.OperationalError:
+            pass
 
     def _apply_migrations(self, conn):
         """Apply any pending migrations from the migrations directory."""
@@ -268,6 +277,7 @@ class SessionStore:
         label: str = "",
         input: str = "",
         action_id: str = "",
+        iteration: Optional[int] = None,
     ) -> str:
         """Record a tool action. Returns the action id (stable, reused for updates)."""
         import uuid as _uuid
@@ -278,9 +288,9 @@ class SessionStore:
             # duration if a done event re-created an existing id. Use
             # DO NOTHING so the running-create never clobbers a completed row.
             conn.execute(
-                "INSERT INTO actions (id, session_id, tool_name, status, label, input, timestamp) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
-                (aid, session_id, tool_name, status, label, input, time.time()),
+                "INSERT INTO actions (id, session_id, tool_name, status, label, input, iteration, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+                (aid, session_id, tool_name, status, label, input, iteration, time.time()),
             )
         return aid
 
@@ -307,10 +317,14 @@ class SessionStore:
 
     def list_actions(self, session_id: str, limit: int = 100) -> list[dict]:
         """Return tool actions for a session, newest first."""
-        cols = ("id", "session_id", "tool_name", "status", "label", "input", "output", "error", "duration", "timestamp")
+        cols = (
+            "id", "session_id", "tool_name", "status", "label", "input",
+            "output", "error", "duration", "iteration", "timestamp",
+        )
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT id, session_id, tool_name, status, label, input, output, error, duration, timestamp "
+                "SELECT id, session_id, tool_name, status, label, input, output, error, "
+                "duration, iteration, timestamp "
                 "FROM actions WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?",
                 (session_id, limit),
             ).fetchall()
