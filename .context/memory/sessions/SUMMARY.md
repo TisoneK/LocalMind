@@ -192,3 +192,6 @@ records.
 
 ---
 - **2026-08-09 — Session 94** — Buffy / deepseek-v4-flash — Backlog L50: closed WITHOUT a separate tool_history list (trace.steps already covers it). Fixed the real gap — timeout/exception handlers around `_force_final_answer` dumped FAILED-only observation_log (empty when all tools succeeded). New `_synthesis_failure_fallback` surfaces trace evidence first + reason-aware wording. 4 new tests, **1004 passed / 0 failed**. Commit `608d2e0`.
+
+---
+- **2026-08-09 — Session 95** — Buffy / deepseek-v4-flash — **Context recording** (user's architecture thread → ADRs). Read the 209-line reviewer thread (`/Users/bao/Desktop/Buffy - LocalMind Chat.txt`) and recorded its NEW insights as **ADR-14** (single front door + thin routing dispatcher — never a full pipeline pass), **ADR-15** (sub-agent contract: bounded-instruction in / fixed structured result out; general vs specific sub-agents; three-tier tool model; two-factor tool-vs-subagent test), **ADR-16** (two workflows as DISTINCT entry points: general single-pass vs specific objective loop for the "Autonomous Work" panel). Backlog **B-2026-08-09-13..17**. Cross-checked: ADR-11/12/13 + B-2026-08-09-1..8 already covered the latency/observability findings. .context only — no product code.
