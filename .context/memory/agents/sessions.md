@@ -1088,4 +1088,17 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** Real-model verification pending. Next phase: Session 71 — B-2026-08-09-5 (trivial path must emit turn_complete + per-session observability fallback, ADR-12).
 - **Report:** none — implementation session (Session 67 review + B-3/4/8 backlog are the references)
 - **Inefficiency (logged):** two code-searcher spawns failed on missing `searchQueries` param (2 wasted round-trips); the B-8 toolsUsed staleness fix took verification time to confirm it is defensive-only (SSE obs events never carry `tools_used`).
+
+---
+
+## 2026-08-09 — Session 71
+- **Session:** 71
+- **Date:** 2026-08-09
+- **Agent:** Buffy / deepseek-v4-flash
+- **Task:** B-2026-08-09-5 / ADR-12 — trivial + conversational short-circuits now emit `turn_complete` + `_store_observation` (accumulate streamed text for tokens_approx; real total_latency_ms; intent chat / confidence 0.99; observability in its own best-effort try so it never depends on persistence). Replaced the broken `self._store.add_message(...)` (SessionStore has NO such method — the cleanup try always raised AttributeError, so `trivial_short_circuit_done` never actually emitted and the user message was never persisted on short-circuit turns; pre-existing silent failure) with the persistence mixin's `_persist_user_message`. Removed the session-agnostic MetricsStore aggregate fallback from `/api/observability/{session}` (returned the first intent with any requests — leaked another session's intent/latency); empty response when no per-session observation. Updated stale route/module docstrings.
+- **Commits:** 1 product (`f607623`) + this context closeout commit
+- **Outcome:** done. Validation: 4 new tests (3 engine-level in `tests/core/test_trivial_turn_complete.py` — turn_complete emission + `_last_observation` storage for both short-circuits, cleanup-failure safety; 1 route-level in `tests/api/test_observability.py` — no cross-session leak). Full suite 849 passed / 1 known pre-existing `test_engine_emit_todo_plan` failure; ruff clean on new code (6 pre-existing E501s in `_pipeline.py` remain). Code review found + fixed: stale docstring describing the removed fallback; observability emission decoupled from persistence success (separate try blocks).
+- **Open items:** Real-model verification pending. Next phase: Session 72 — B-2026-08-09-6 (wire automatic client-side intent hints for simple queries, ADR-11 client half).
+- **Report:** none — implementation session (Session 67 review + B-5 backlog are the references)
+- **Inefficiency (logged):** none new — the `add_message` AttributeError is a pre-existing silent-failure flaw found during this work, logged in inefficiencies/log.md.
 - **Inefficiency (logged):** a graph-block `str_replace` anchored on 12-space indentation left the block de-indented (IndentationError at line ~2299), caught by compile + fixed. Lesson: when inserting into an `if/else` block, match the surrounding indentation exactly and re-compile immediately.

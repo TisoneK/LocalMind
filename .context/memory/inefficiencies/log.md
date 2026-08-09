@@ -269,3 +269,12 @@ if literally nothing slowed you down.
 - **Cause:** (1) Tool schema slipped while batching parallel spawns. (2) The B-8 backlog line pointed at `useLocalMind.ts` ~L605 without noting that the SSE obs payload omits `tools_used`, so the "stale tools" symptom is not reachable via the streaming path.
 - **Workaround / fix:** (1) Re-issued spawns with explicit `searchQueries`. (2) Kept the frontend fix (harmless, future-proof) and recorded the backend reality here + in sessions.md.
 - **Prevent next time:** Always include `params.searchQueries` when spawning code-searcher. Before implementing a frontend fix that reads an obs-event field, grep the backend `_obs.emit(...)` call sites for that exact kwarg — if it only appears in `_store_observation`, the streaming path never sees it.
+
+---
+## 2026-08-09 — Buffy / deepseek-v4-flash (Session 71)
+
+- **Problem:** The trivial/conversational short-circuit cleanup blocks called `self._store.add_message(session_id, "user", message)` — but `SessionStore` has NO `add_message` method. The call raised `AttributeError` inside the best-effort try, so `trivial_short_circuit_done` never actually emitted and the user message was never persisted on short-circuit turns. Pre-existing silent failure (the try swallowed it since the trivial path was introduced).
+- **Cost:** One failed test run (new turn_complete assertions got 0 events) + a debug script to pinpoint the exception (~10 min).
+- **Cause:** The trivial path used a nonexistent `SessionStore.add_message` API instead of the persistence mixin's `_persist_user_message(session_id, message)` used by every other completion path.
+- **Workaround / fix:** Switched both short-circuit paths to `self._persist_user_message`. Also restructured so `turn_complete`/`_store_observation` run in their OWN best-effort try — observability must never depend on persistence succeeding.
+- **Prevent next time:** When adding a test that asserts an obs event fires, first confirm nothing earlier in the same try block can raise — a swallowed exception in a best-effort try silently skips every following emit. Grep for the correct persistence API (`_persist_*` mixin) rather than assuming `SessionStore` has a method with a guessed name.
