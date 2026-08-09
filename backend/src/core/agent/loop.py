@@ -1456,6 +1456,24 @@ class AgentLoop:
         # todos as complete when their corresponding tool finishes.
         _plan_step_cursor = 0
 
+        # Session 121: the plan cursor advances ONLY when the model narrates
+        # a step transition (non-empty text before its tool call). Silent tool
+        # continuations keep the current todo — so ONE todo owns MANY actions
+        # (e.g. todo "Review backend code" → read/grep/read… all under it).
+        # The previous per-tool advance split one logical step's actions
+        # across consecutive todos. Remaining todos are finalized as done
+        # when the turn ends (see the SSE bridge's _finalize_plan_todos).
+        def _advance_plan_on_narration() -> None:
+            nonlocal _plan_step_cursor
+            if (
+                _plan_steps
+                and _plan_step_cursor < len(_plan_steps)
+                and (result.raw_content or "").strip()
+                and _obs
+            ):
+                _obs.emit("todo_completed", id=f"plan-{_plan_step_cursor}", completed=True)
+                _plan_step_cursor += 1
+
         # ── Inject agent system prompt (with plan context) ──────────────
         loop_messages = list(messages)
 
@@ -1894,6 +1912,11 @@ class AgentLoop:
                             todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                         )
 
+                # Session 121: a narrated iteration is a step transition —
+                # advance the plan before dispatching this batch so all its
+                # (parallel) actions land under the new todo.
+                _advance_plan_on_narration()
+
                 # Run all dispatches concurrently
                 dispatch_tasks = [_dispatch_single(call.tool_name, inp, call.tool_args) for call, inp in valid_calls]
                 dispatch_results = await asyncio.gather(*dispatch_tasks)
@@ -2326,6 +2349,9 @@ class AgentLoop:
                         "browse": f"Browser: {tool_args.get('action', '')}" if tool_args.get('action') else "Using browser",  # noqa: E501
                     }
                     action_label = action_labels.get(tool_name, f"Running {tool_name}")
+                # Session 121: narrated iteration → step transition; the new
+                # tool call belongs to the next plan todo.
+                _advance_plan_on_narration()
                 logger.info(
                     f"[agent.loop] iter={iteration + 1} tool={tool_name} input={tool_input[:80]} — {action_label}"
                 )
@@ -2691,14 +2717,6 @@ class AgentLoop:
                             iteration=iteration + 1,
                             todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                         )
-                        # Mark the corresponding plan todo as complete AFTER the
-                        # done emit (Session 120 review): the cursor advance used
-                        # to run before the emit, so done events drifted to the
-                        # NEXT todo's id. Each successful tool still advances the
-                        # cursor so the Todos panel shows plan progress.
-                        if _plan_steps and _plan_step_cursor < len(_plan_steps):
-                            _obs.emit("todo_completed", id=f"plan-{_plan_step_cursor}", completed=True)
-                            _plan_step_cursor += 1
 
                 trace.steps.append(
                     AgentStep(

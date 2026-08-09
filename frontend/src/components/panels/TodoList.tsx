@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Check,
   Plus,
@@ -141,6 +141,34 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
   const [showInput, setShowInput] = useState(false);
   // Expanded todos — keyed by todo id.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Session 121: while streaming, auto-expand any todo that has a running
+  // action — the user watches the work happen without clicking. Collapsed
+  // todos with only completed actions stay collapsed (manual control).
+  useEffect(() => {
+    const active = new Set<string>();
+    for (const a of actions) {
+      if (
+        a.todoId &&
+        (a.status === 'running' || a.status === 'started' || a.status === 'in_progress')
+      ) {
+        active.add(a.todoId);
+      }
+    }
+    if (active.size > 0) {
+      setExpanded((prev) => {
+        let changed = false;
+        const next = new Set(prev);
+        for (const id of active) {
+          if (!next.has(id)) {
+            next.add(id);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }
+  }, [actions]);
 
   const completed = todos.filter((t) => t.completed).length;
   const total = todos.length;

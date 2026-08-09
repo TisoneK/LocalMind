@@ -51,6 +51,26 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
+def _finalize_plan_todos(session_id: str) -> list[dict]:
+    """Session 121: mark any plan todos the loop didn't explicitly advance as
+    complete. The plan covers the whole turn, so when the turn ends the
+    remaining steps are done (or moot) — this makes the persisted Todos panel
+    agree with reality instead of leaving trailing "pending" rows.
+
+    Returns the todos that were flipped so the SSE bridge can emit live
+    todo_completed events. Best-effort — never raises into the stream."""
+
+    flipped: list[dict] = []
+    try:
+        for row in _engine._store.list_todos(session_id):
+            if row.get("id", "").startswith("plan-") and not row.get("completed"):
+                _engine._store.upsert_todo(session_id, row["id"], completed=True)
+                flipped.append({"id": row["id"], "completed": True})
+    except Exception as _exc:
+        logger.warning(f"[todos] finalize failed: {_exc}")
+    return flipped
+
+
 def _sse_comment(comment: str = "keepalive") -> str:
     """SSE comment line — ignored by EventSource but keeps the connection alive.
 
@@ -461,6 +481,12 @@ async def _event_stream(
                     }
                 )
 
+        # Session 121: the plan covers the whole turn — mark any plan todos
+        # the loop didn't advance as complete, live (the finally block repeats
+        # the DB update for aborted/disconnected streams).
+        for _td in _finalize_plan_todos(session_id):
+            yield _sse({"type": "todo_completed", "todo": _td})
+
     except Exception as exc:
         logger.error(f"[chat] stream error: {exc}", exc_info=True)
         # Session 31: GUARANTEE — always yield SOMETHING to the user.
@@ -484,6 +510,15 @@ async def _event_stream(
             )
         except Exception:
             pass  # Never let cleanup crash the SSE stream
+        # Session 121: mark any plan todos the loop didn't explicitly advance
+        # as done — the plan covers the whole turn, so a turn that ended (even
+        # via abort/timeout) means the remaining steps are done or moot.
+        # Best-effort DB-only here (no yield in finally); the live SSE update
+        # is emitted on the normal completion path above.
+        try:
+            _finalize_plan_todos(session_id)
+        except Exception:
+            pass
 
     # ── Stage 2: schedule LLM title as background task ────────────────────
     # Fires after the response stream completes so it never blocks the user.

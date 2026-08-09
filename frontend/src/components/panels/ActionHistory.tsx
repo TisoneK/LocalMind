@@ -14,6 +14,7 @@ import {
   XCircle,
   Clock,
   Zap,
+  ListChecks,
 } from 'lucide-react';
 import { useState } from 'react';
 import { ActionItem } from '@/types';
@@ -97,6 +98,24 @@ function groupChains(actions: ActionItem[]): ActionItem[][] {
   }
   if (cur.length > 0) chains.push(cur);
   return chains;
+}
+
+/**
+ * Session 121: group chains under the plan todo they serve (one todo owns
+ * many actions). Chains without a todo_id (legacy data) stay ungrouped.
+ */
+function groupChainsByTodo(chains: ActionItem[][]): { todoId: string | null; chains: ActionItem[][] }[] {
+  const groups: { todoId: string | null; chains: ActionItem[][] }[] = [];
+  for (const chain of chains) {
+    const todoId = chain[0]?.todoId ?? null;
+    const last = groups[groups.length - 1];
+    if (last && last.todoId === todoId) {
+      last.chains.push(chain);
+    } else {
+      groups.push({ todoId, chains: [chain] });
+    }
+  }
+  return groups;
 }
 
 function ActionCard({ action }: { action: ActionItem }) {
@@ -201,11 +220,32 @@ export function ActionHistory({ actions }: ActionHistoryProps) {
     );
   }
 
-  const chains = groupChains(actions);
+  const groups = groupChainsByTodo(groupChains(actions));
+
+  const stepLabel = (todoId: string) => {
+    const m = todoId.match(/^plan-(\d+)$/);
+    return m ? `Step ${Number(m[1]) + 1}` : todoId;
+  };
 
   return (
     <div className="space-y-2 px-1">
-      {chains.map((chain, ci) => (
+      {groups.map((group, gi) => (
+        <div key={gi} className="space-y-2">
+          {/* Todo header — the plan step this group of actions serves */}
+          {group.todoId && (
+            <div className="flex items-center gap-1.5 px-0.5 pt-0.5">
+              <ListChecks className="h-2.5 w-2.5 text-brand-green" />
+              <span className="text-[9px] text-brand-green uppercase tracking-wide font-medium">
+                {stepLabel(group.todoId)}
+              </span>
+              <span className="text-[9px] text-brand-green-faint">
+                {group.chains.reduce((n, c) => n + c.length, 0)} action
+                {group.chains.reduce((n, c) => n + c.length, 0) === 1 ? '' : 's'}
+              </span>
+              <span className="h-px flex-1 bg-brand-border/50" />
+            </div>
+          )}
+        {group.chains.map((chain, ci) => (
         <div key={ci}>
           {/* Chain header — the turn's step count + when it ran */}
           <div className="flex items-center gap-1.5 px-0.5 pb-1 pt-0.5">
@@ -233,6 +273,8 @@ export function ActionHistory({ actions }: ActionHistoryProps) {
               </div>
             ))}
           </div>
+        </div>
+        ))}
         </div>
       ))}
     </div>

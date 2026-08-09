@@ -92,6 +92,9 @@ function ToolStep({ toolCall, isStreaming }: { toolCall: ToolCall; isStreaming?:
    // FIX 2: Prefer the human-readable label from the LLM 'description' field.
   // Fall back to the toolLabels map, then to a cleaned-up tool name.
   const label = toolCall.label || toolLabels[toolCall.name] || toolCall.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+  // Session 121: which plan todo this tool serves ("plan-N" → Step N+1),
+  // linking the chat trace to the Tasks panel checklist.
+  const stepMatch = toolCall.todoId?.match(/^plan-(\d+)$/);
   const inputStr = toolCall.input || '';
   // Show the full input — CSS truncate handles visual truncation.
   // Previously this had JS .slice(0, 60) + '...' which caused double truncation
@@ -116,6 +119,14 @@ function ToolStep({ toolCall, isStreaming }: { toolCall: ToolCall; isStreaming?:
         <span className="text-[11px] text-brand-green-soft font-mono shrink-0">
           {label}
         </span>
+        {stepMatch && (
+          <span
+            className="text-[8px] px-1 py-px rounded bg-brand-amber/10 text-brand-amber border border-brand-amber/20 shrink-0"
+            title={`Serves plan step ${Number(stepMatch[1]) + 1} in the Tasks panel`}
+          >
+            Step {Number(stepMatch[1]) + 1}
+          </span>
+        )}
         {isRunning && (
           <span className="inline-flex items-center gap-1 text-[9px] text-brand-amber shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-brand-amber animate-ping" />
