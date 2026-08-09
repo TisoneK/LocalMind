@@ -35,12 +35,22 @@ def get_adapter(name: str, model_override: str = "") -> BaseAdapter:
 
 
 def clear_adapter_cache(name: str = None) -> None:
-    """Clear adapter cache. If name provided, only clear that adapter's entries."""
+    """Clear adapter cache. If name provided, only clear that adapter's entries.
+
+    Also drops the OpenAI-compat /models TTL cache so an API-key or provider
+    change takes effect immediately instead of waiting out the 60s TTL.
+    """
     global _adapter_cache
     if name is None:
         _adapter_cache.clear()
+        from adapters.openai_compat import OpenAICompatAdapter
+
+        OpenAICompatAdapter.clear_models_cache()
     else:
         _adapter_cache = {k: v for k, v in _adapter_cache.items() if k[0] != name}
+        from adapters.openai_compat import OpenAICompatAdapter
+
+        OpenAICompatAdapter.clear_models_cache(name)
 
 
 async def close_all_adapters() -> None:

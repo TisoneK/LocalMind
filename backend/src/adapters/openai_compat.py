@@ -509,6 +509,74 @@ def _extract_content_and_reasoning(delta: dict) -> tuple[str, str]:
 class OpenAICompatAdapter(BaseAdapter):
     """Composable adapter for OpenAI-compatible APIs."""
 
+    # ── Class-level /models TTL cache (mirrors OllamaAdapter) ──────────────
+    # The provider /models endpoint is fetched by BOTH health_check() and
+    # list_models(). At startup the frontend polls /api/health every 1.5s,
+    # Electron every 2s, wait-on polls before launching, and useModels hits
+    # /api/models — each used to fire an uncached GET {base_url}/models,
+    # producing 20+ identical Zen fetches in ~7s. Caching at the CLASS level
+    # (keyed by provider) means even the throwaway adapter instances created
+    # in routes/models.py share the cached result. Failures are NOT cached,
+    # so a recovering provider is detected promptly.
+    #
+    # TTL is 30s (not 60s): the health ROUTE already caches reachability for
+    # 60s, so an adapter TTL of 30s caps worst-case outage-detection lag at
+    # ~90s (route 60s + adapter 30s) while still cutting the fetch burst
+    # from 20+ to ~2/min.
+    _MODELS_CACHE_TTL: float = 30.0  # seconds
+    _cached_models: dict[str, list[str]] = {}
+    _models_cache_ts: dict[str, float] = {}
+    # Per-provider lock so CONCURRENT misses (startup pollers fire within
+    # the same second) collapse into a single fetch instead of re-bursting.
+    _models_fetch_locks: dict[str, asyncio.Lock] = {}
+
+    @classmethod
+    def clear_models_cache(cls, provider: str | None = None) -> None:
+        """Drop cached /models lists. If provider given, only that provider."""
+        if provider is None:
+            cls._cached_models.clear()
+            cls._models_cache_ts.clear()
+            cls._models_fetch_locks.clear()
+        else:
+            cls._cached_models.pop(provider, None)
+            cls._models_cache_ts.pop(provider, None)
+            cls._models_fetch_locks.pop(provider, None)
+
+    async def _fetch_models_cached(self) -> list[str] | None:
+        """Return the provider's model list, cached class-wide for TTL seconds.
+
+        Returns None when the provider is unreachable or the fetch failed
+        (failures are not cached, matching OllamaAdapter's behavior so a
+        recovering provider is detected promptly). Concurrent misses for the
+        same provider are serialized by a per-provider lock so the startup
+        burst becomes a single fetch.
+        """
+        import time as _time
+
+        key = self._provider_key
+        lock = OpenAICompatAdapter._models_fetch_locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            now = _time.monotonic()
+            ts = OpenAICompatAdapter._models_cache_ts.get(key)
+            if ts is not None and now - ts < OpenAICompatAdapter._MODELS_CACHE_TTL:
+                return OpenAICompatAdapter._cached_models.get(key)
+            try:
+                response = await self._client.get(
+                    f"{self._base_url}/models",
+                    headers=self._headers,
+                    timeout=15,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    models = [m.get("id") for m in data.get("data", [])]
+                    OpenAICompatAdapter._cached_models[key] = models
+                    OpenAICompatAdapter._models_cache_ts[key] = now
+                    return models
+                return None
+            except Exception as e:
+                logger.warning(f"Failed to fetch models for {self._provider_name}: {e}")
+                return None
+
     def __init__(
         self,
         provider: str = "openai",
@@ -1660,40 +1728,31 @@ class OpenAICompatAdapter(BaseAdapter):
                     400,
                 )  # 400 means auth worked but invalid request
             else:
-                response = await self._client.get(
-                    f"{self._base_url}/models",
-                    headers=self._headers,
-                    timeout=10,
-                )
-                return response.status_code == 200
+                return (await self._fetch_models_cached()) is not None
         except Exception:
             return False
 
     async def list_models(self) -> list[str]:
         """Return list of available models for this provider."""
-        try:
-            if self._provider_name == "anthropic":
-                # Anthropic returns models in a different format
-                # Use a simple approach: return the configured model + known variants
-                return [
-                    "claude-sonnet-4-20250514",
-                    "claude-3-5-sonnet-20241022",
-                    "claude-3-5-sonnet-20240620",
-                    "claude-3-opus-20240229",
-                    "claude-3-sonnet-20240229",
-                    "claude-3-haiku-20240307",
-                    "claude-3-5-haiku-20241022",
-                ]
-            else:
-                response = await self._client.get(
-                    f"{self._base_url}/models",
-                    headers=self._headers,
-                    timeout=15,
-                )
-                data = response.json()
-                return [m.get("id") for m in data.get("data", [])]
-        except Exception as e:
-            logger.warning(f"Failed to list models for {self._provider_name}: {e}")
+        # _fetch_models_cached() never raises (it catches and returns None),
+        # so no try/except is needed here.
+        if self._provider_name == "anthropic":
+            # Anthropic returns models in a different format
+            # Use a simple approach: return the configured model + known variants
+            return [
+                "claude-sonnet-4-20250514",
+                "claude-3-5-sonnet-20241022",
+                "claude-3-5-sonnet-20240620",
+                "claude-3-opus-20240229",
+                "claude-3-sonnet-20240229",
+                "claude-3-haiku-20240307",
+                "claude-3-5-haiku-20241022",
+            ]
+        else:
+            models = await self._fetch_models_cached()
+            if models is not None:
+                return models
+            logger.warning(f"Failed to list models for {self._provider_name}; falling back to configured model")
             return [self._model]  # Fallback to current model
 
     # ─────────────────────────────────────────────────────────────────────
