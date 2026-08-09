@@ -1,264 +1,55 @@
-# Shell Tool Fix Analysis
+# Shell Tool Fix Analysis — Historical Record
 
-## Problem Overview
-
-The shell tool has three distinct failure layers that explain the weird behavior (including the Mac hallucination when the system is clearly on Windows).
-
----
-
-## 1. The Actual Runtime Error (Root Cause)
-
-### The Real Failure
-```
-cannot access local variable 're' where it is not associated with a value
-```
-
-This is a Python scope error, not just a bad import style.
-
-### Why It Happens
-When you do:
-```python
-if os.name == 'nt':
-    import re
-else:
-    import re
-```
-
-Python treats `re` as a local variable in the function scope, but:
-- It is conditionally assigned
-- If execution path analysis gets confused (or code references `re` before assignment), Python raises: `UnboundLocalError: cannot access local variable 're'`
-
-### Correct Fix (Non-Negotiable)
-Move imports to the top of the function/module:
-```python
-import os
-import re
-from pathlib import Path
-```
-
-And remove ALL conditional imports.
+> **Status: RESOLVED (2026-07-27, Session 31)**
+> This document was originally written while the bugs below were LIVE. All
+> items have since been fixed and verified. It is kept as a historical record
+> of what went wrong and how it was resolved — do NOT treat any section here
+> as describing current behavior. Verification references were re-confirmed
+> in Session 93 (2026-08-09).
 
 ---
 
-## 2. Silent Tool Failure (Design Flaw)
+## What happened (the original incident)
 
-This is actually more serious than the bug.
+A request to create a project under `C:\Users\tison\Dev\localmind` produced a
+Mac-flavored response (`You are on Mac... /Users/...`) instead of acting on the
+Windows path. Root cause was a chain of three distinct failures:
 
-### What Happened
-```
-Direct tool dispatch failed for shell: cannot access local variable 're'
-```
-
-Then instead of:
-- Surfacing the error
-- Returning a structured failure
-
-The system fell back to LLM generation
-
-That's why you got:
-```
-"You are on Mac... /Users/..."
-```
-
-### This is a Tool Orchestration Failure
-The agent violated a core rule:
-**"If a tool fails, never fabricate a result."**
-
-### Required Fix: Explicit Tool Failure Contract
-The shell tool must return structured output like:
-```python
-return {
-    "success": False,
-    "error": str(e),
-    "stdout": "",
-    "stderr": traceback.format_exc()
-}
-```
-
-And the agent loop must enforce:
-```python
-if not result["success"]:
-    return f"[TOOL ERROR] {result['error']}"
-```
-
-No fallback to LLM guessing. Ever.
+1. **A Python scope bug** — `import re` inside a conditional made `re` a
+   function-local that could be referenced before assignment →
+   `UnboundLocalError: cannot access local variable 're'`.
+2. **Silent tool failure** — when the shell tool crashed, the system fell back
+   to LLM generation instead of surfacing a structured failure, so the model
+   fabricated a platform-appropriate (but wrong) answer.
+3. **Wrong platform detection** — the fallback guessed the OS instead of
+   reading it from the system.
 
 ---
 
-## 3. Wrong Platform Detection (Secondary Failure)
+## Fixes shipped (in order)
 
-The system is clearly on:
-```
-C:\Users\tison\Dev\localmind
-```
+| # | Item | Fix | Verified at |
+|---|------|-----|-------------|
+| 1 | `re` scope error | All imports moved to module top; no conditional imports remain. `import re` at module top (line 38). | Session 31, re-checked Session 93 |
+| 2 | Silent tool failure | Shell tool returns structured `{"success": False, ...}` results on error (`success=False` returns at multiple sites); the agent loop tracks `last_tool_failed` / `consecutive_failures` and handles failures explicitly rather than fabricating results. | Session 31; loop.py `last_tool_failed` handling |
+| 3 | Platform detection | `platform.system()` read at module level (`SYSTEM`); no regex-based OS guessing. | Session 31, re-checked Session 93 |
+| 4 | Structured ToolResult | `ToolResult` carries `success`/`error` fields; tools return structured success/error consistently. | Session 31+ |
+| 5 | Deterministic navigation | `pathlib` + controlled folder mapping replace regex-heavy path guessing. | Session 31+ |
+| 6 | Silent-failure fallback contract | Agent loop always yields text on the silent-failure path (never silently returns nothing); intent-aware fallback with concrete next steps. Contract documented in `AGENTS.md`; regression tests in `tests/e2e/test_tool_execution_failure.py`. | Session 31; AGENTS.md |
 
-But the system said Mac.
+### Current canonical references (not this doc)
 
-This means:
-- Either platform detection never ran
-- Or tool context was lost after failure  
-- Or fallback LLM ignored system state
-
-### Fix: Single Source of Truth for Platform
-Do this once:
-```python
-import platform
-
-SYSTEM_INFO = {
-    "os": platform.system(),  # 'Windows', 'Linux', 'Darwin'
-    "home": str(Path.home())
-}
-```
-
-Then inject into tool context:
-```python
-context.system_info = SYSTEM_INFO
-```
-
-And never let the LLM guess OS again.
+- Shell tool: `backend/src/tools/shell.py` (imports at top, structured
+  `success`/`error` returns, `SYSTEM = platform.system()`).
+- Silent-failure contract: `AGENTS.md` → "Silent-failure fallback contract".
+- Regression tests: `tests/e2e/test_tool_execution_failure.py`.
 
 ---
 
-## 4. Correct Architecture: Home Directory First
+## Why this doc exists in its current form
 
-The proposed approach is the right abstraction.
-
-### Instead of Brittle Regex Parsing
-**Current (fragile):**
-```
-"list Documents folder" -> regex -> absolute path
-```
-
-**Better (deterministic navigation model):**
-
-#### Step 1: Resolve Home Directory
-On Windows:
-```
-C:\Users\<username>\
-```
-
-Use:
-```python
-home = Path.home()
-```
-
-#### Step 2: Controlled Folder Mapping
-```python
-KNOWN_FOLDERS = {
-    "documents": "Documents",
-    "downloads": "Downloads", 
-    "desktop": "Desktop",
-    "pictures": "Pictures",
-    "music": "Music",
-    "videos": "Videos"
-}
-```
-
-#### Step 3: Intent -> Command
-```python
-def resolve_user_path(query: str) -> Path:
-    q = query.lower()
-    
-    for key, folder in KNOWN_FOLDERS.items():
-        if key in q:
-            return Path.home() / folder
-            
-    return Path.home()
-```
-
-#### Step 4: Execute Safely
-```python
-path = resolve_user_path(command)
-
-if os.name == 'nt':
-    cmd = ["cmd", "/c", "dir", str(path)]
-else:
-    cmd = ["ls", str(path)]
-```
-
----
-
-## 5. Cross-Platform Strategy (Clean Version)
-
-Stop using regex-heavy path guessing.
-
-### Use:
-- `pathlib` for paths
-- `platform` for OS  
-- controlled mappings for natural language
-
-### Remove Entirely:
-- Multiple `import re` inside conditionals
-- Regex-based OS detection
-- Hardcoded `/Users/...` assumptions
-- Silent failure fallback
-
----
-
-## Final Architecture (What We Actually Want)
-
-### Tool Layer
-- Deterministic
-- Returns structured success/error
-- Proper platform detection
-
-### Agent Layer
-- Never fabricates tool results
-- Surfaces real errors
-- Handles structured failures
-
-### NLP Layer
-- Maps intent -> known folders
-- NOT raw path guessing
-
----
-
-## Bottom Line
-
-The analysis was right on all three:
-
-- The `re` import caused the crash
-- The tool is not truly cross-platform  
-- The system hallucinated instead of reporting failure
-
-And the proposed idea:
-"Start from `C:\Users\$env:USERNAME\` and navigate"
-
-That's not just a fix - that's the correct system design direction.
-
----
-
-## Implementation Plan
-
-### Files to Modify
-
-1. **`tools/shell.py`** - Main fixes for imports, error handling, platform detection
-2. **`core/agent/`** - Agent loop to handle structured failures  
-3. **`core/models.py`** - Update `ToolResult` for structured success/error
-
-### Priority Order
-
-1. **Critical**: Fix Python scope error (imports)
-2. **Critical**: Implement structured tool failure
-3. **Critical**: Add single source of truth for platform
-4. **Architecture**: Implement deterministic navigation
-5. **Cleanup**: Remove all regex-heavy path guessing
-
-### Testing Strategy
-
-1. Test on Windows: "list Documents folder" -> proper Windows path
-2. Test on Mac/Linux: "list Documents" -> proper Unix path  
-3. Test error cases: Invalid commands -> structured error, not hallucination
-4. Test edge cases: Unknown folders -> graceful fallback to home directory
-
----
-
-## Success Criteria
-
-- [ ] No more "cannot access local variable 're'" errors
-- [ ] Tools return structured success/error responses
-- [ ] Agent never fabricates results when tools fail
-- [ ] Platform detection is accurate and consistent
-- [ ] Natural language commands work deterministically
-- [ ] Cross-platform compatibility is maintained
-- [ ] Error messages are clear and actionable
+The original analysis (imports, structured failures, platform truth, home-dir
+navigation) was correct in direction. It was rewritten as a historical record
+because, as written, it misled future agents into believing the bugs were still
+live. If you are debugging a NEW shell-tool issue, start from the canonical
+references above, not from this document.
