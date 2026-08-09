@@ -233,3 +233,12 @@ if literally nothing slowed you down.
 - **Cause:** The reader's return contract changed during the bounded-capture refactor, and the test initially mocked implementation details instead of exercising a real command.
 - **Workaround / fix:** Kept decoding inside the stream reader, treated collected output as strings, simplified shell coverage to a real short-lived command, and added compile/Ruff/full-suite validation before commit.
 - **Prevent next time:** When changing stream ownership, define and test the reader return type before wiring callers; prefer real short-lived subprocess tests for capture behavior and reserve mocks for failure-specific cases.
+
+---
+## 2026-08-09 — Buffy / deepseek-v4-flash (Session 67)
+
+- **Problem:** `docs/PERFORMANCE_BOTTLENECK_REPORT.md` and `docs/PERFORMANCE_IMPLEMENTATION_PLAN.md` (2026-05-15) were the first hit when verifying the reviewer's latency claim, and both are stale in three misleading ways: they reference dead file paths (`core/engine.py` — now `core/engine/_pipeline.py`), claim `DISPATCHER_HIGH_CONFIDENCE_SKIP=0.7` (now 0.6), and recommend reducing `MAX_ITERATIONS` 8→5 — which directly contradicts the Session 32 standing contract ("Do NOT lower below 8"). I had to verify the current pipeline code directly instead of trusting the docs, and had to be careful not to carry the docs' superseded recommendation forward.
+- **Cost:** ~15 minutes of cross-checking code vs docs; one real risk avoided (I nearly treated "reduce MAX_ITERATIONS to 5" as a live recommendation before catching the Session 32 contract).
+- **Cause:** The docs were written 2026-05-15 (pre-Sessions 21-32) and never updated after the trivial-input short-circuit (Session 21), the parallel memory retrieval, the skip-logic changes, and the Session 32 MAX_ITERATIONS contract.
+- **Workaround / fix:** Verified the live behavior in `_pipeline.py` / `thinking_dispatcher.py` / `trivial_input.py` directly. Filed B-2026-08-09-7 to rewrite/annotate both docs as historical records.
+- **Prevent next time:** When a doc references a `core/engine.py` path or pre-2026-07 constants, check `.context/memory/plans/decisions.md` and recent session entries for superseding contracts before following any recommendation in it. Also found while reviewing: `THINKING_DISPATCH_TIMEOUT_SECS=12.0` (constants.py) vs `DISPATCHER_TIMEOUT_SECS=30.0` (thinking_dispatcher.py) disagree — backlogged as B-2026-08-09-11.

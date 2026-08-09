@@ -114,3 +114,6 @@ records.
 
 ---
 - **2026-08-03 — Session 66** — Buffy / openai/gpt-5.6-luna — implemented B-2026-08-02-1: reusable bounded head+tail output for shell and code execution, incremental stream capture, combined 4000-character code output cap, and regression tests. Product commit `90fe3d0`; 66 focused tests passed; full backend 816 passed / 1 known stale todo-plan wording failure. Detail: `.context/memory/reviews/2026-08-03-review.md`.
+
+---
+- **2026-08-09 — Session 67** — Buffy / deepseek-v4-flash — analysis-only: verified a reviewer conversation's claims against the codebase; confirmed latency root cause (2+ sequential LLM calls for non-trivial chat queries), heuristic/misleading Observe pipeline, inconsistent latency units, no per-message metrics, session-agnostic observability fallback, plus stale perf docs and conflicting timeout constants. Filed ADRs 11-13 + backlog B-2026-08-09-1..11; 0 product commits. Detail: `.context/memory/reviews/2026-08-09-review.md`.

@@ -1041,3 +1041,14 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Validation:** 18 focused tests passed; compile, Ruff import checks, and diff checks passed. Full backend: 823 passed / 1 pre-existing stale todo-plan wording failure, reproduced on HEAD. Context core verify/status both pass on 0.5.0.
 - **Review:** final review had no blocking safety or routing findings; optional-node semantics and a live pipeline regression test remain deferred follow-ups.
 - **Commits:** pending product commit and separate context closeout commit at session end.
+
+---
+## 2026-08-09 — Session 67
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-flash | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — analysis/recording session (user brief: "go through the reviewer conversation, record every noticeable issue in .context, create ADRs, catch everything even the ones missed")
+- **Task:** Verify the reviewer-agent conversation (39.9s latency on "What can you do?", Observe panel gaps, per-message metrics proposals) against the codebase, record every issue in `.context`, and write ADRs.
+- **Commits:** 2 (`.context/` only — `docs(review):` report commit + `chore(context):` closeout commit)
+- **Outcome:** done — every claim verified to code. Key findings: (H1) non-trivial conversational queries pay 2-3 sequential LLM calls (dispatcher + chat [+ maybe_compress_history]) — the 39.9s root cause; (H2) no per-stage timing reaches the UI — the Observe pipeline is a frontend heuristic (Tool Select stays orange forever on no-tool turns, Execute shows done with no tools); (M) trivial path emits no turn_complete + observability fallback is session-agnostic; latency units inconsistent (raw unlabeled ms side panel vs adaptive s bottom bar); no per-message metrics; global `_process_lock` serializes all engine requests; "Vector Store Hits" mislabels memory-facts count; (L) stale performance docs (dead paths + MAX_ITERATIONS 8→5 recommendation that contradicts the Session 32 contract), conflicting timeout constants (12 vs 30), broken-bullet/`**` is a model-output issue (no UI fix without real-model reproduction). Filed ADR-11 (conversational fast-path), ADR-12 (truthful per-stage observability), ADR-13 (per-message metrics), plus 11 backlog items B-2026-08-09-1..11. No product code changed — user asked for recording, not fixes.
+- **Open items:** B-2026-08-09-1 (High, conversational fast-path) and B-2026-08-09-2 (High, stage timing) are the top priorities; the standing Target (ADR-8 implementation) remains untouched.
+- **Report:** `.context/memory/reviews/2026-08-09-review.md`
