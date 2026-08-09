@@ -105,6 +105,39 @@ def _fallback_todo_plan(intent: Intent, message: str) -> list[str]:
     ]
 
 
+# Intents whose requests are usually compound tasks and therefore keep the
+# agent planning phase even when the dispatcher is highly confident. The
+# v0.11 latency fix skipped planning for ALL intents at confidence >= 0.7,
+# which left tool-heavy intents without any translate-before-dispatch step
+# — Session 113's failure: the model passed the raw user sentence as a shell
+# command. Planning is kept for these so requests like "check git status,
+# and if there are changes show the diff" get decomposed up front (the
+# plan phase also eliminates the documented file_write missing-args
+# fumbling). Single-shot/simple intents keep the v0.11 fast path.
+_PLAN_REQUIRED_INTENTS: frozenset[Intent] = frozenset(
+    {
+        Intent.SHELL,
+        Intent.CODE_EXEC,
+        Intent.FILE_WRITE,
+        Intent.FILE_EDIT,
+    }
+)
+
+
+# Session 114: the planning-skip decision is a pure function so the routing
+# contract is unit-testable without running the engine.
+def _should_skip_planning(intent: Intent, dispatcher_confidence: float) -> bool:
+    """Whether the agent planning phase should be skipped for this turn.
+
+    The v0.11 fast path skips planning when the dispatcher was highly
+    confident (>= 0.7) AND the intent is not compound-capable. Below the
+    threshold planning is never skipped (the slow path runs the planner).
+    """
+    if dispatcher_confidence < 0.7:
+        return False
+    return intent not in _PLAN_REQUIRED_INTENTS
+
+
 def get_adapter(*args, **kwargs):
     """Deferred-lookup wrapper for adapters.get_adapter.
 
@@ -2366,15 +2399,25 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # without value when the dispatcher was confident.
                 if _dispatcher_confidence >= 0.7:
                     _skip_orchestrator = True
-                    _skip_planning = True
+                    # Session 114: planning is skipped only for simple
+                    # intents. Tool-heavy intents (SHELL, CODE_EXEC,
+                    # FILE_WRITE, FILE_EDIT) keep the planner so compound
+                    # requests get translated/decomposed before dispatch
+                    # (Session 113: raw NL reached the shell tool because
+                    # planning was skipped at this exact confidence).
+                    _skip_planning = _should_skip_planning(
+                        effective_intent, _dispatcher_confidence
+                    )
+                    _skipped = ["orchestrator"] + ([] if not _skip_planning else ["planning"])
                     _obs.emit(
                         "dispatcher_high_confidence_skip",
                         confidence=round(_dispatcher_confidence, 2),
-                        skipped=["orchestrator", "planning"],
+                        skipped=_skipped,
                     )
                     logger.info(
-                        "[engine] dispatcher confidence %.2f ≥ 0.7 — skipping orchestrator + planning (saves ~5-16s)",
+                        "[engine] dispatcher confidence %.2f ≥ 0.7 — skipping %s (saves ~3-16s)",
                         _dispatcher_confidence,
+                        " + ".join(_skipped),
                     )
             else:
                 # v0.11 PHASE 3 OPTIMIZATION: For trivial high-confidence CHAT intents,
