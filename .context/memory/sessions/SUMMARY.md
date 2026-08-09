@@ -117,3 +117,6 @@ records.
 
 ---
 - **2026-08-09 — Session 67** — Buffy / deepseek-v4-flash — analysis-only: verified a reviewer conversation's claims against the codebase; confirmed latency root cause (2+ sequential LLM calls for non-trivial chat queries), heuristic/misleading Observe pipeline, inconsistent latency units, no per-message metrics, session-agnostic observability fallback, plus stale perf docs and conflicting timeout constants. Filed ADRs 11-13 + backlog B-2026-08-09-1..11; 0 product commits. Detail: `.context/memory/reviews/2026-08-09-review.md`.
+
+---
+- **2026-08-09 — Session 68** — Buffy / deepseek-v4-flash — Phase 1 implementation: B-2026-08-09-1 / ADR-11 conversational fast-path. `is_conversational_question()` + single-call `conversational_response()` wired into `_pipeline.py` before the dispatcher; conservative fall-through keeps WEB_SEARCH/SYSINFO/tool routing intact. 11 new tests; full suite 834 passed / 1 known baseline failure; product commit `09cd6bf`. Real-model verification pending user-side.

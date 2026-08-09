@@ -242,3 +242,12 @@ if literally nothing slowed you down.
 - **Cause:** The docs were written 2026-05-15 (pre-Sessions 21-32) and never updated after the trivial-input short-circuit (Session 21), the parallel memory retrieval, the skip-logic changes, and the Session 32 MAX_ITERATIONS contract.
 - **Workaround / fix:** Verified the live behavior in `_pipeline.py` / `thinking_dispatcher.py` / `trivial_input.py` directly. Filed B-2026-08-09-7 to rewrite/annotate both docs as historical records.
 - **Prevent next time:** When a doc references a `core/engine.py` path or pre-2026-07 constants, check `.context/memory/plans/decisions.md` and recent session entries for superseding contracts before following any recommendation in it. Also found while reviewing: `THINKING_DISPATCH_TIMEOUT_SECS=12.0` (constants.py) vs `DISPATCHER_TIMEOUT_SECS=30.0` (thinking_dispatcher.py) disagree — backlogged as B-2026-08-09-11.
+
+---
+## 2026-08-09 — Buffy / deepseek-v4-flash (Session 68)
+
+- **Problem:** When refactoring `trivial_response` to share a helper with the new `conversational_response`, I first wrote the helper as a plain `def` containing `async for` (SyntaxError: 'async for' outside async function) and then as an `async def` that `return`ed the inner async generator instead of iterating it — the latter makes the public functions coroutines, breaking `async for chunk in conversational_response(...)` at runtime.
+- **Cost:** One failed test run (collection SyntaxError) + one runtime-shape fix, plus a third edit to correct the `async def` return-vs-iterate mistake. ~5 minutes.
+- **Cause:** Two async-generator pitfalls hit in sequence: forgetting `async` on a generator helper, then assuming `return <async generator>` from an `async def` keeps it an async iterator (it doesn't — no `yield` in the body makes it a coroutine function).
+- **Workaround / fix:** Made the helper `async def` with `yield` inside, and both public wrappers iterate it (`async for chunk in helper(...): yield chunk`).
+- **Prevent next time:** When a public `async def` must be an async iterator, the body must contain `yield` (or explicitly iterate a child generator) — `return <agen>` silently converts it into a coroutine function. Add a quick test that does `[c async for c in fn(...)]` for every new streaming helper.
