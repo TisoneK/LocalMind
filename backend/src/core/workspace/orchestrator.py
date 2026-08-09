@@ -184,6 +184,7 @@ class WorkspaceOrchestrator:
         session_id: str,
         memory_facts: list[str],
         obs,
+        adapter=None,
     ) -> AsyncIterator[StreamChunk]:
         ws = WorkspaceManager.new()
         logger.info("[orch] turn=%s session=%s", ws.turn_id, session_id)
@@ -194,7 +195,7 @@ class WorkspaceOrchestrator:
 
             # ── 1. Plan ───────────────────────────────────────────────────────
             obs.emit("workspace_planning", turn=ws.turn_id)
-            tasks = await self._plan(message, ws)
+            tasks = await self._plan(message, ws, adapter)
 
             if not tasks:
                 logger.info("[orch] planner: no tools needed, direct answer")
@@ -225,7 +226,7 @@ class WorkspaceOrchestrator:
                     )
                     yield StreamChunk(text="", done=True)
                     return
-                async for chunk in self._synthesise(message, ws, obs, skip_context=True):
+                async for chunk in self._synthesise(message, ws, obs, skip_context=True, adapter=adapter):
                     yield chunk
                 return
 
@@ -268,7 +269,7 @@ class WorkspaceOrchestrator:
                 return
 
             chunks = []
-            async for chunk in self._synthesise(message, ws, obs):
+            async for chunk in self._synthesise(message, ws, obs, adapter=adapter):
                 chunks.append(chunk)
                 if not chunk.done:
                     yield chunk
@@ -285,7 +286,7 @@ class WorkspaceOrchestrator:
 
     # ── Planning ──────────────────────────────────────────────────────────────
 
-    async def _plan(self, message: str, ws: WorkspaceManager) -> list[dict]:
+    async def _plan(self, message: str, ws: WorkspaceManager, adapter=None) -> list[dict]:
         """Ask the LLM to produce a structured task list with typed input dicts."""
         tools = available_tools()
         tool_list = "\n".join(f"- {t['intent']}: {t['description']}" for t in tools)
@@ -302,9 +303,10 @@ class WorkspaceOrchestrator:
             {"role": "user", "content": _PLANNER_USER.format(message=message)},
         ]
 
+        active_adapter = adapter or self._adapter
         chunks: list[str] = []
         try:
-            async for chunk in self._adapter.chat(messages, temperature=0.0):
+            async for chunk in active_adapter.chat(messages, temperature=0.0):
                 if chunk.error:
                     logger.warning("[orch] planner adapter error: %s", chunk.error[:120])
                     break
@@ -526,6 +528,7 @@ class WorkspaceOrchestrator:
         ws: WorkspaceManager,
         obs,
         skip_context: bool = False,
+        adapter=None,
     ) -> AsyncIterator[StreamChunk]:
         obs.emit("workspace_synthesising")
 
@@ -541,7 +544,8 @@ class WorkspaceOrchestrator:
             {"role": "user", "content": message},
         ]
 
-        async for chunk in self._adapter.chat(messages):
+        active_adapter = adapter or self._adapter
+        async for chunk in active_adapter.chat(messages):
             if chunk.error:
                 yield StreamChunk(text="", done=True, error=chunk.error)
                 return

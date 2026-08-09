@@ -182,14 +182,17 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # correct directory (e.g., after user navigates to
         # Documents/Code/arcade-bounce, subsequent commands run there).
         self._session_ctx = SessionContextManager()
-        # Think-first dispatcher: replaces regex-first RiskAwareRouter.
-        # Created lazily with adapter in process() so it picks up setting changes.
-        self._dispatcher: ThinkingDispatcher | None = None
         self._warmed_up = False
-        # Chat and autonomous objectives share mutable routing/orchestration
-        # state. Serialize complete engine streams until those components are
-        # fully request-scoped.
-        self._process_lock = asyncio.Lock()
+        # Per-session stream locks (B-2026-08-09-9): every piece of engine
+        # state mutated during a stream is keyed by session_id (intent
+        # history, observations, pending writes, CWD), so only streams on the
+        # SAME session must be serialized — interleaving those would corrupt
+        # that session's history/observations. A single global lock previously
+        # let one long chat stream (~40s) block CLI ask/chat and
+        # ObjectiveRuntime turns on OTHER sessions. Locks are created on
+        # demand and pruned beyond a cap, mirroring the other per-session
+        # dicts below.
+        self._session_locks: dict[str, asyncio.Lock] = {}
         # Reliability bootstrap happens in startup(), not here
         try:
             load_reliability_from_db(self._store.get_reliability())
@@ -276,6 +279,18 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             self._last_observation_snapshots[session_id] = observation
         return observation
 
+    def _lock_for(self, session_id: str) -> asyncio.Lock:
+        """Return the per-session stream lock, creating it on demand.
+
+        Bounded like the other per-session dicts (intent history,
+        observations) so session churn cannot grow this dict without bound.
+        """
+        if len(self._session_locks) > 200:
+            oldest = sorted(self._session_locks.keys())[: len(self._session_locks) - 100]
+            for sid in oldest:
+                del self._session_locks[sid]
+        return self._session_locks.setdefault(session_id, asyncio.Lock())
+
     def _update_intent_history(self, session_id: str, intent: Intent) -> list[str]:
         """Track a rolling window of intent values per session."""
         # Prune old sessions to prevent unbounded memory growth
@@ -310,6 +325,7 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             self._last_code,
             self._last_observation,
             self._last_observation_snapshots,
+            self._session_locks,
         ):
             if session_id in d:
                 del d[session_id]
@@ -706,7 +722,6 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             )
 
         adapter = self._adapter_for(intent)
-        self._agent_orchestrator._adapter = adapter
 
         result = await self._agent_orchestrator.orchestrate(
             reformulated_message=reformulated_message,
@@ -831,8 +846,14 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         client_confidence: float = 0.0,
         allowed_tool_names: Optional[set[str]] = None,
     ) -> AsyncIterator[StreamChunk]:
-        """Serialize a complete engine stream against shared mutable state."""
-        async with self._process_lock:
+        """Serialize a complete engine stream.
+
+        Per-session locking (B-2026-08-09-9): streams on different sessions
+        may run concurrently (their engine state is session-scoped); streams
+        on the SAME session are serialized so interleaved turns cannot
+        corrupt that session's history/observations.
+        """
+        async with self._lock_for(session_id):
             async for chunk in self._process_unlocked(
                 message=message,
                 session_id=session_id,
@@ -860,7 +881,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         client_confidence: float = 0.0,
         allowed_tool_names: Optional[set[str]] = None,
     ) -> AsyncIterator[StreamChunk]:
-        """Process one request while the caller owns ``_process_lock``."""
+        """Process one request while the caller owns the session's stream lock."""
         _obs = obs or ObsCollector()
         t0 = time.monotonic()
         # ADR-12 (B-2026-08-09-2): per-request stage clock — emits real
@@ -1188,7 +1209,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # The dispatcher streams REAL thinking tokens from the LLM
             # (the model's pre-JSON reasoning) as they arrive — no need
             # for generic "Analyzing..." status placeholders.
-            self._dispatcher = ThinkingDispatcher(adapter)
+            _dispatcher = ThinkingDispatcher(adapter)
 
             # Start memory retrieval IN PARALLEL with the dispatcher.
             _memory_task = asyncio.create_task(
@@ -1199,7 +1220,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 )
             )
 
-            async for output in self._dispatcher.dispatch(
+            async for output in _dispatcher.dispatch(
                 message=message,
                 history=history,
                 memory_facts=[],
@@ -1764,12 +1785,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             _clock.start("generate")
             # Get fresh adapter for orchestrator
             orch_adapter = get_adapter(settings.localmind_adapter)
-            self._orchestrator._adapter = orch_adapter
             async for chunk in self._orchestrator.run(
                 message=message,
                 session_id=session_id,
                 memory_facts=memory_facts,
                 obs=_obs,
+                adapter=orch_adapter,
             ):
                 safe = _filter_system_leaks(chunk.text)
                 full_response_chunks.append(safe)
@@ -2872,7 +2893,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 type(agent_adapter).__name__,
                 getattr(agent_adapter, "_model", "?"),
             )
-            self._agent_loop._adapter = agent_adapter
+            # The adapter is passed explicitly to run()/agent.run() below
+            # (B-2026-08-09-9: never stored on the shared AgentLoop instance
+            # — a cross-session field write the per-session lock used to
+            # serialize). `agent_adapter` remains for agent selection.
             # Track metrics for agent-mode intents (SHELL, CODE_EXEC, etc.)
             # Without this, the status bar shows 0 tok/s and 0ms latency because
             # start_request() was only called in the CHAT path.
