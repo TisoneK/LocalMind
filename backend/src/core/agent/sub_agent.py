@@ -359,7 +359,7 @@ class SubAgent:
                             messages.append(
                                 {
                                     "role": "user",
-                                    "content": f"Tool '{tc_name}' not available. Respond with your best answer without tools.",
+                                    "content": f"Tool '{tc_name}' not available. Respond with your best answer without tools.",  # noqa: E501
                                 }
                             )
                             continue
@@ -472,7 +472,7 @@ Respond in this exact JSON format:
   }}
 ]
 
-User request: {request}"""
+User request: {request}"""  # noqa: E501
 
 
 async def decompose_task(
@@ -557,7 +557,7 @@ async def decompose_task(
 _MULTI_DOMAIN_PATTERNS = [
     # Build + document
     re.compile(
-        r"\b(?:build|create|make|develop|implement|write|set up)\s+.*\b(?:and|then|also|plus|with)\s+.*\b(?:readme|doc|documentation|guide|tutorial)\b",
+        r"\b(?:build|create|make|develop|implement|write|set up)\s+.*\b(?:and|then|also|plus|with)\s+.*\b(?:readme|doc|documentation|guide|tutorial)\b",  # noqa: E501
         re.IGNORECASE,
     ),
     # Search + code
@@ -572,7 +572,7 @@ _MULTI_DOMAIN_PATTERNS = [
     ),
     # Setup project (implies multiple domains)
     re.compile(
-        r"\b(?:set up|setup|initialize|scaffold|bootstrap)\s+(?:a\s+)?(?:project|app|application|workspace|environment)\b",
+        r"\b(?:set up|setup|initialize|scaffold|bootstrap)\s+(?:a\s+)?(?:project|app|application|workspace|environment)\b",  # noqa: E501
         re.IGNORECASE,
     ),
     # Full-stack patterns
@@ -1041,7 +1041,7 @@ def _build_tool_defs(allowed_tools: frozenset[str]) -> list[dict]:
             "type": "function",
             "function": {
                 "name": "file_task",
-                "description": "Read file contents (PDF, DOCX, XLSX, TXT, etc.). Supports binary formats via automatic parsing. Use for reading ANY file — NOT for directories. Do NOT use shell commands like 'type' or 'cat' to read files.",
+                "description": "Read file contents (PDF, DOCX, XLSX, TXT, etc.). Supports binary formats via automatic parsing. Use for reading ANY file — NOT for directories. Do NOT use shell commands like 'type' or 'cat' to read files.",  # noqa: E501
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1055,7 +1055,7 @@ def _build_tool_defs(allowed_tools: frozenset[str]) -> list[dict]:
             "type": "function",
             "function": {
                 "name": "shell",
-                "description": "Run a system command (dir/ls, git, disk checks). For reading file contents, use file_task — NOT 'type' or 'cat' commands which fail on PDFs/binary files.",
+                "description": "Run a system command (dir/ls, git, disk checks). For reading file contents, use file_task — NOT 'type' or 'cat' commands which fail on PDFs/binary files.",  # noqa: E501
                 "parameters": {
                     "type": "object",
                     "properties": {

@@ -748,7 +748,7 @@ def _infer_language(filepath: str) -> str:
 register_tool(
     Intent.FILE_EDIT,
     edit_file,
-    description="Edit an existing file in-place with search/replace, insert, delete, append, or prepend operations. Creates backups automatically.",
+    description="Edit an existing file in-place with search/replace, insert, delete, append, or prepend operations. Creates backups automatically.",  # noqa: E501
     cost=0.01,
     latency_ms=50,
     parallelizable=False,  # file edits are stateful — don't run concurrently

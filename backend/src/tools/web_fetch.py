@@ -370,7 +370,7 @@ async def web_fetch(url: str) -> ToolResult:
 
                 if _is_binary_content_type(content_type):
                     return ToolResult(
-                        content=f"The URL points to a binary file ({content_type}). LocalMind can only read text-based web pages.",
+                        content=f"The URL points to a binary file ({content_type}). LocalMind can only read text-based web pages.",  # noqa: E501
                         risk=RiskLevel.LOW,
                         source="web_fetch",
                         success=False,
@@ -381,7 +381,7 @@ async def web_fetch(url: str) -> ToolResult:
 
                 if content_length > WEB_FETCH_MAX_CONTENT_LENGTH:
                     return ToolResult(
-                        content=f"The page is too large ({content_length / 1024 / 1024:.1f} MB). LocalMind can fetch pages up to {WEB_FETCH_MAX_CONTENT_LENGTH / 1024 / 1024:.0f} MB.",
+                        content=f"The page is too large ({content_length / 1024 / 1024:.1f} MB). LocalMind can fetch pages up to {WEB_FETCH_MAX_CONTENT_LENGTH / 1024 / 1024:.0f} MB.",  # noqa: E501
                         risk=RiskLevel.LOW,
                         source="web_fetch",
                         success=False,
@@ -401,7 +401,7 @@ async def web_fetch(url: str) -> ToolResult:
             content_type = response.headers.get("content-type", "")
             if _is_binary_content_type(content_type):
                 return ToolResult(
-                    content=f"The URL points to a binary file ({content_type}). LocalMind can only read text-based web pages.",
+                    content=f"The URL points to a binary file ({content_type}). LocalMind can only read text-based web pages.",  # noqa: E501
                     risk=RiskLevel.LOW,
                     source="web_fetch",
                     success=False,
@@ -415,7 +415,7 @@ async def web_fetch(url: str) -> ToolResult:
 
             if not html or len(html.strip()) < 50:
                 return ToolResult(
-                    content="The page returned empty or very little content. It may require JavaScript to render, which LocalMind cannot execute.",
+                    content="The page returned empty or very little content. It may require JavaScript to render, which LocalMind cannot execute.",  # noqa: E501
                     risk=RiskLevel.LOW,
                     source="web_fetch",
                     success=False,
@@ -430,7 +430,7 @@ async def web_fetch(url: str) -> ToolResult:
 
             if not readable or len(readable.strip()) < 30:
                 return ToolResult(
-                    content="Could not extract readable content from this page. It may be heavily JavaScript-dependent or have an unusual structure.",
+                    content="Could not extract readable content from this page. It may be heavily JavaScript-dependent or have an unusual structure.",  # noqa: E501
                     risk=RiskLevel.LOW,
                     source="web_fetch",
                     success=False,
@@ -468,7 +468,7 @@ async def web_fetch(url: str) -> ToolResult:
     except httpx.TimeoutException:
         logger.warning(f"[web_fetch] Timeout fetching {url}")
         return ToolResult(
-            content=f"Timed out while fetching the page (limit: {WEB_FETCH_TIMEOUT_SECS}s). The site may be slow or blocking requests.",
+            content=f"Timed out while fetching the page (limit: {WEB_FETCH_TIMEOUT_SECS}s). The site may be slow or blocking requests.",  # noqa: E501
             risk=RiskLevel.LOW,
             source="web_fetch",
             success=False,
@@ -531,7 +531,7 @@ async def web_fetch(url: str) -> ToolResult:
 register_tool(
     Intent.WEB_FETCH,
     web_fetch,
-    description="Fetch and extract readable content from a web page URL. Use after web_search when results are link-only without substantive content.",
+    description="Fetch and extract readable content from a web page URL. Use after web_search when results are link-only without substantive content.",  # noqa: E501
     cost=0.08,
     latency_ms=3000,
     parallelizable=True,

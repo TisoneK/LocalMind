@@ -204,7 +204,7 @@ class SessionStore:
                     """
                     INSERT INTO messages(session_id, role, content, tool_name, timestamp, file_name, file_path, file_size, file_type)
                     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
+                    """,  # noqa: E501
                     (
                         session_id,
                         message.role.value,

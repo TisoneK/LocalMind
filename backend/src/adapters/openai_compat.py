@@ -1035,7 +1035,7 @@ class OpenAICompatAdapter(BaseAdapter):
                         # Partial "minimax:tool_call" prefix detected — the full
                         # <invoke> tag hasn't arrived yet. Keep reading.
                         logger.info(
-                            "[adapter] MiniMax tool_call prefix detected in Phase 1 — continuing to read for full pattern"
+                            "[adapter] MiniMax tool_call prefix detected in Phase 1 — continuing to read for full pattern"  # noqa: E501
                         )
                     elif _full_text_so_far and chunks_read >= 15:
                         # We've seen actual CONTENT (not just reasoning) and no
@@ -1321,7 +1321,7 @@ class OpenAICompatAdapter(BaseAdapter):
                                             # We can't un-send the text already
                                             # yielded, but we log it for debugging.
                                             logger.info(
-                                                "[adapter] MiniMax tool_call detected mid-stream (after text already sent): %s",
+                                                "[adapter] MiniMax tool_call detected mid-stream (after text already sent): %s",  # noqa: E501
                                                 _mm_m.group(1),
                                             )
 
@@ -1393,7 +1393,7 @@ class OpenAICompatAdapter(BaseAdapter):
             return _error_iter()
 
         except httpx.TimeoutException:
-            msg = f"{self._provider_name} timed out after {timeout}s. The request may be too large for the context window."
+            msg = f"{self._provider_name} timed out after {timeout}s. The request may be too large for the context window."  # noqa: E501
             logger.error(msg)
 
             async def _error_iter():
@@ -1490,7 +1490,7 @@ class OpenAICompatAdapter(BaseAdapter):
             logger.error(msg)
             yield StreamChunk(text="", done=True, error=msg)
         except httpx.TimeoutException:
-            msg = f"{self._provider_name} timed out after {timeout}s. The request may be too large for the context window."
+            msg = f"{self._provider_name} timed out after {timeout}s. The request may be too large for the context window."  # noqa: E501
             logger.error(msg)
             yield StreamChunk(text="", done=True, error=msg)
         except Exception as e:

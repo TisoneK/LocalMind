@@ -1,6 +1,8 @@
+# ruff: noqa: E501 — prompt templates are intentionally long lines.
 """
 Agent prompt builder — constructs the system prompt injected at the top of
 every agent-loop LLM call.
+
 
 Kept separate so that prompt wording can be edited and tested independently
 of the loop mechanics.

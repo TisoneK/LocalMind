@@ -236,7 +236,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "web_search",
-            "description": "Search the web for current information, news, prices, weather. Returns URLs and short snippets. If snippets don't contain enough detail to answer the question, use web_fetch to read the actual page content from the most relevant URL.",
+            "description": "Search the web for current information, news, prices, weather. Returns URLs and short snippets. If snippets don't contain enough detail to answer the question, use web_fetch to read the actual page content from the most relevant URL.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -254,7 +254,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "web_fetch",
-            "description": "Fetch and extract readable text content from a web page URL. Use this AFTER web_search when the search results are link-only (URLs without substantive content in the snippets). This reads the actual page so you can extract specific facts like weather, prices, or article content.",
+            "description": "Fetch and extract readable text content from a web page URL. Use this AFTER web_search when the search results are link-only (URLs without substantive content in the snippets). This reads the actual page so you can extract specific facts like weather, prices, or article content.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -264,7 +264,7 @@ TOOL_DEFINITIONS = [
                     },
                     "description": {
                         "type": "string",
-                        "description": "Brief description of what you're looking for on this page (e.g., 'Current weather conditions for Cheptais')",
+                        "description": "Brief description of what you're looking for on this page (e.g., 'Current weather conditions for Cheptais')",  # noqa: E501
                     },
                 },
                 "required": ["url"],
@@ -314,7 +314,7 @@ TOOL_DEFINITIONS = [
                     },
                     "url": {"type": "string", "description": "For open: URL to navigate to"},
                     "ref": {"type": "string", "description": "Element reference such as @e1"},
-                    "selector": {"type": "string", "description": "For dom: CSS selector or element reference; defaults to html"},
+                    "selector": {"type": "string", "description": "For dom: CSS selector or element reference; defaults to html"},  # noqa: E501
                     "value": {"type": "string", "description": "Text, key, script, or wait target depending on action"},
                     "script": {"type": "string", "description": "For eval: JavaScript to execute"},
                     "direction": {"type": "string", "enum": ["up", "down", "left", "right"]},
@@ -325,9 +325,9 @@ TOOL_DEFINITIONS = [
                     "type": {"type": "string", "description": "For network: resource type filter, such as xhr,fetch"},
                     "method": {"type": "string", "description": "For network: HTTP method filter"},
                     "status": {"type": "string", "description": "For network: status filter, such as 2xx"},
-                    "clear": {"type": "boolean", "description": "For network/console: clear captured entries after reading"},
+                    "clear": {"type": "boolean", "description": "For network/console: clear captured entries after reading"},  # noqa: E501
                     "json": {"type": "boolean", "description": "For console: return structured JSON output"},
-                    "interactive": {"type": "boolean", "description": "For snapshot: limit output to interactive elements (default true)"},
+                    "interactive": {"type": "boolean", "description": "For snapshot: limit output to interactive elements (default true)"},  # noqa: E501
                 },
                 "required": ["action"],
             },
@@ -358,7 +358,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "file_write",
-            "description": "Write or save content to a file on disk. Creates parent directories automatically. Only use this when you need to CREATE or OVERWRITE a file — do NOT use this to check if a file exists or read its contents (use file_task instead).",
+            "description": "Write or save content to a file on disk. Creates parent directories automatically. Only use this when you need to CREATE or OVERWRITE a file — do NOT use this to check if a file exists or read its contents (use file_task instead).",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -380,7 +380,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "edit_file",
-            "description": "Edit an existing file in-place using search/replace, insert, delete, append, or prepend operations. Prefer this over file_write when modifying an existing file — it preserves the rest of the file and creates backups automatically. ALWAYS read the file with file_task before editing it.",
+            "description": "Edit an existing file in-place using search/replace, insert, delete, append, or prepend operations. Prefer this over file_write when modifying an existing file — it preserves the rest of the file and creates backups automatically. ALWAYS read the file with file_task before editing it.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -438,7 +438,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "file_task",
-            "description": "Read the CONTENTS of a single FILE. Supports both text and binary formats: PDF, DOCX, XLSX, TXT, MD, CSV, JSON, YAML, HTML, XML, and code files. Automatically detects and parses file format. Use this to read any file — NOT for directories/folder listings. Do NOT use shell commands like 'type' or 'cat' for reading files — they only work for plain text.",
+            "description": "Read the CONTENTS of a single FILE. Supports both text and binary formats: PDF, DOCX, XLSX, TXT, MD, CSV, JSON, YAML, HTML, XML, and code files. Automatically detects and parses file format. Use this to read any file — NOT for directories/folder listings. Do NOT use shell commands like 'type' or 'cat' for reading files — they only work for plain text.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -459,13 +459,13 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "shell",
-            "description": "Run a system command or list directory contents. Use shell for: listing folders (dir/ls), finding files, git operations, disk checks, and OS commands. Use file_task to READ file contents — NOT shell commands. Shell commands like 'type' or 'cat' only work for plain text files and will fail on PDFs/DOCX/XLSX. Commands must match the current OS (Windows: dir/mkdir | Unix: ls/mkdir).",
+            "description": "Run a system command or list directory contents. Use shell for: listing folders (dir/ls), finding files, git operations, disk checks, and OS commands. Use file_task to READ file contents — NOT shell commands. Shell commands like 'type' or 'cat' only work for plain text files and will fail on PDFs/DOCX/XLSX. Commands must match the current OS (Windows: dir/mkdir | Unix: ls/mkdir).",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "Shell command to execute. For directory listings use 'dir <path>' (Windows) or 'ls <path>' (Unix). DO NOT use 'type' or 'cat' to read files — use file_task instead.",
+                        "description": "Shell command to execute. For directory listings use 'dir <path>' (Windows) or 'ls <path>' (Unix). DO NOT use 'type' or 'cat' to read files — use file_task instead.",  # noqa: E501
                     },
                     "description": {
                         "type": "string",
@@ -532,7 +532,7 @@ TOOL_DEFINITIONS = [
                 "properties": {
                     "target_agent": {
                         "type": "string",
-                        "enum": ["research", "coding", "browser", "direct", "verifier", "reviewer", "debugger", "analyst"],
+                        "enum": ["research", "coding", "browser", "direct", "verifier", "reviewer", "debugger", "analyst"],  # noqa: E501
                         "description": (
                             "The agent to delegate to. 'research' for web search "
                             "+ fetch; 'coding' for shell + file tools + code exec; "
@@ -566,12 +566,12 @@ TOOL_DEFINITIONS = [
                     },
                     "input_evidence": {
                         "type": "string",
-                        "description": "Optional selected evidence from the parent run; the child does not inherit parent history.",
+                        "description": "Optional selected evidence from the parent run; the child does not inherit parent history.",  # noqa: E501
                     },
                     "output_contract": {
                         "type": "object",
                         "additionalProperties": {"type": "string"},
-                        "description": "Optional named report requirements, for example {\"format\": \"structured report\"}.",
+                        "description": "Optional named report requirements, for example {\"format\": \"structured report\"}.",  # noqa: E501
                     },
                 },
                 "required": ["target_agent", "task"],
@@ -596,13 +596,13 @@ TOOL_DEFINITIONS = [
                 "properties": {
                     "targets": {
                         "type": "array",
-                        "description": "Up to 5 independent sub-tasks. Each object requires 'agent' and 'task'; optional scope/constraints/forbidden_tools/output_requirements.",
+                        "description": "Up to 5 independent sub-tasks. Each object requires 'agent' and 'task'; optional scope/constraints/forbidden_tools/output_requirements.",  # noqa: E501
                         "items": {
                             "type": "object",
                             "properties": {
                                 "agent": {
                                     "type": "string",
-                                    "enum": ["research", "coding", "browser", "direct", "verifier", "reviewer", "debugger", "analyst"],
+                                    "enum": ["research", "coding", "browser", "direct", "verifier", "reviewer", "debugger", "analyst"],  # noqa: E501
                                     "description": "The agent to delegate this sub-task to.",
                                 },
                                 "task": {
@@ -926,17 +926,17 @@ TOOL_DEFINITIONS = [
                     },
                     "add_all": {
                         "type": "boolean",
-                        "description": "For 'commit': stage all changes before committing (git add -A && git commit). Default: false (commit only staged changes)",
+                        "description": "For 'commit': stage all changes before committing (git add -A && git commit). Default: false (commit only staged changes)",  # noqa: E501
                     },
                     "action": {
                         "type": "string",
                         "enum": ["push", "pop", "list"],
-                        "description": "For 'stash': push (save changes), pop (restore and remove), or list (show all stashes). Default: push",
+                        "description": "For 'stash': push (save changes), pop (restore and remove), or list (show all stashes). Default: push",  # noqa: E501
                     },
                     "mode": {
                         "type": "string",
                         "enum": ["--soft", "--mixed", "--hard"],
-                        "description": "For 'reset': reset mode. --soft keeps changes staged; --mixed keeps changes unstaged; --hard is BLOCKED for safety (use shell if absolutely needed). Default: --mixed",
+                        "description": "For 'reset': reset mode. --soft keeps changes staged; --mixed keeps changes unstaged; --hard is BLOCKED for safety (use shell if absolutely needed). Default: --mixed",  # noqa: E501
                     },
                     "ref": {
                         "type": "string",
@@ -974,15 +974,15 @@ TOOL_DEFINITIONS = [
                     },
                     "name": {
                         "type": "string",
-                        "description": "Process name — a short identifier you'll use to refer to this process in subsequent calls (e.g., 'dev-server', 'pytest-run')",
+                        "description": "Process name — a short identifier you'll use to refer to this process in subsequent calls (e.g., 'dev-server', 'pytest-run')",  # noqa: E501
                     },
                     "command": {
                         "type": "string",
-                        "description": "For 'start'/'restart': the shell command to run (e.g., 'npm run dev', 'uvicorn main:app'). Supports shell syntax like && and pipes.",
+                        "description": "For 'start'/'restart': the shell command to run (e.g., 'npm run dev', 'uvicorn main:app'). Supports shell syntax like && and pipes.",  # noqa: E501
                     },
                     "force": {
                         "type": "boolean",
-                        "description": "For 'stop': force-kill with SIGKILL instead of graceful SIGTERM. Default: false",
+                        "description": "For 'stop': force-kill with SIGKILL instead of graceful SIGTERM. Default: false",  # noqa: E501
                     },
                     "timeout": {
                         "type": "number",
@@ -1025,7 +1025,7 @@ TOOL_DEFINITIONS = [
                     },
                     "path": {
                         "type": "string",
-                        "description": "For inspect_logs: optional file path to read logs from. If omitted, the 'text' parameter is analyzed directly.",
+                        "description": "For inspect_logs: optional file path to read logs from. If omitted, the 'text' parameter is analyzed directly.",  # noqa: E501
                     },
                 },
                 "required": ["operation"],
@@ -1858,18 +1858,18 @@ class AgentLoop:
                         else "Fetching web page",
                         "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
                         "shell": f"Running: {_command[:80]}" if _command else "Running command",
-                        "memory_op": f"Memory: {call.tool_args.get('operation', '')} {call.tool_args.get('content', '')[:40]}".strip(),
+                        "memory_op": f"Memory: {call.tool_args.get('operation', '')} {call.tool_args.get('content', '')[:40]}".strip(),  # noqa: E501
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
-                        "git": f"Git: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Git operation",
-                        "process": f"Process: {call.tool_args.get('operation', '')} {call.tool_args.get('name', '')}" if call.tool_args.get('operation') else "Process operation",
-                        "diagnostics": f"Diagnostics: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Analyzing failure",
-                        "browse": f"Browser: {call.tool_args.get('action', '')}" if call.tool_args.get('action') else "Using browser",
-                        "delegate": f"Delegating to {call.tool_args.get('target_agent', '')}" if call.tool_args.get('target_agent') else "Delegating sub-task",
-                        "delegate_parallel": f"Delegating {len(call.tool_args.get('targets') or [])} sub-agents in parallel" if call.tool_args.get('targets') else "Delegating sub-agents in parallel",
-                        "delegate_inline": f"Inline: {call.tool_args.get('target_agent', '')}" if call.tool_args.get('target_agent') else "Inline delegation",
-                        "propose_str_replace": f"Staging edit: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Staging edit proposal",
-                        "propose_write_file": f"Staging write: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Staging write proposal",
-                        "apply_proposed_edit": f"Applying edit: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Applying staged edit",
+                        "git": f"Git: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Git operation",  # noqa: E501
+                        "process": f"Process: {call.tool_args.get('operation', '')} {call.tool_args.get('name', '')}" if call.tool_args.get('operation') else "Process operation",  # noqa: E501
+                        "diagnostics": f"Diagnostics: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Analyzing failure",  # noqa: E501
+                        "browse": f"Browser: {call.tool_args.get('action', '')}" if call.tool_args.get('action') else "Using browser",  # noqa: E501
+                        "delegate": f"Delegating to {call.tool_args.get('target_agent', '')}" if call.tool_args.get('target_agent') else "Delegating sub-task",  # noqa: E501
+                        "delegate_parallel": f"Delegating {len(call.tool_args.get('targets') or [])} sub-agents in parallel" if call.tool_args.get('targets') else "Delegating sub-agents in parallel",  # noqa: E501
+                        "delegate_inline": f"Inline: {call.tool_args.get('target_agent', '')}" if call.tool_args.get('target_agent') else "Inline delegation",  # noqa: E501
+                        "propose_str_replace": f"Staging edit: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Staging edit proposal",  # noqa: E501
+                        "propose_write_file": f"Staging write: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Staging write proposal",  # noqa: E501
+                        "apply_proposed_edit": f"Applying edit: {call.tool_args.get('path', '')[:80]}" if call.tool_args.get('path') else "Applying staged edit",  # noqa: E501
                         "add_subgoal": "Adding subgoal",
                         "update_subgoal": (f"Updating subgoal: {call.tool_args.get('id', '')[:40]}"
                                             if call.tool_args.get('id') else "Updating subgoal"),
@@ -2013,7 +2013,7 @@ class AgentLoop:
                 # Guard: reject tool names outside the explicit objective policy.
                 if effective_allowed is not None and tool_name not in effective_allowed:
                     allowed_list = ", ".join(sorted(effective_allowed))
-                    observation = f"[Tool '{tool_name}' is not available in this objective policy. Allowed tools: {allowed_list}]"
+                    observation = f"[Tool '{tool_name}' is not available in this objective policy. Allowed tools: {allowed_list}]"  # noqa: E501
                     logger.warning(f"[agent.loop] rejected tool name by explicit policy: {tool_name!r}")
                     last_tool_failed = True
                     consecutive_failures += 1
@@ -2312,12 +2312,12 @@ class AgentLoop:
                         "web_search": f"Searching: {_query[:80]}" if _query else "Searching the web",
                         "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
                         "shell": f"Running: {_command[:80]}" if _command else "Running command",
-                        "memory_op": f"Memory: {tool_args.get('operation', '')} {tool_args.get('content', '')[:40]}".strip(),
+                        "memory_op": f"Memory: {tool_args.get('operation', '')} {tool_args.get('content', '')[:40]}".strip(),  # noqa: E501
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
-                        "git": f"Git: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Git operation",
-                        "process": f"Process: {tool_args.get('operation', '')} {tool_args.get('name', '')}" if tool_args.get('operation') else "Process operation",
-                        "diagnostics": f"Diagnostics: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Analyzing failure",
-                        "browse": f"Browser: {tool_args.get('action', '')}" if tool_args.get('action') else "Using browser",
+                        "git": f"Git: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Git operation",  # noqa: E501
+                        "process": f"Process: {tool_args.get('operation', '')} {tool_args.get('name', '')}" if tool_args.get('operation') else "Process operation",  # noqa: E501
+                        "diagnostics": f"Diagnostics: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Analyzing failure",  # noqa: E501
+                        "browse": f"Browser: {tool_args.get('action', '')}" if tool_args.get('action') else "Using browser",  # noqa: E501
                     }
                     action_label = action_labels.get(tool_name, f"Running {tool_name}")
                 logger.info(
@@ -2906,7 +2906,7 @@ class AgentLoop:
                             "shell": f"Running: {_command[:80]}" if _command else "Running command",
                             "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
                             "code_exec": "Executing code",
-                            "memory_op": f"Memory: {_normalized_args.get('operation', '')} {_normalized_args.get('content', '')[:40]}".strip(),
+                            "memory_op": f"Memory: {_normalized_args.get('operation', '')} {_normalized_args.get('content', '')[:40]}".strip(),  # noqa: E501
                             "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
                         }
                         action_label = _label_map.get(tc_name, f"Running {tc_name}")
@@ -3541,13 +3541,13 @@ class AgentLoop:
         except asyncio.TimeoutError:
             logger.warning("[agent.loop] final synthesis timed out — yielding observation log")
             yield StreamChunk(
-                text="I completed the tool calls but ran out of time to synthesize a final answer. Here's what I did:\n\n" + observation_log[:2000],
+                text="I completed the tool calls but ran out of time to synthesize a final answer. Here's what I did:\n\n" + observation_log[:2000],  # noqa: E501
                 done=True,
             )
         except Exception as e:
             logger.warning(f"[agent.loop] final synthesis failed: {e}")
             yield StreamChunk(
-                text="I completed the tool calls but couldn't generate a final summary. Here's what I did:\n\n" + observation_log[:2000],
+                text="I completed the tool calls but couldn't generate a final summary. Here's what I did:\n\n" + observation_log[:2000],  # noqa: E501
                 done=True,
             )
 

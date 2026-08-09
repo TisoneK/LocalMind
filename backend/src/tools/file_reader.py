@@ -179,7 +179,7 @@ async def _parse_csv_xlsx(data: bytes, filename: str) -> str:
                 df = pd.read_csv(io.BytesIO(data))
 
             # Summary + first rows
-            shape_info = f"Shape: {df.shape[0]} rows × {df.shape[1]} columns\nColumns: {', '.join(df.columns.tolist())}\n\n"
+            shape_info = f"Shape: {df.shape[0]} rows × {df.shape[1]} columns\nColumns: {', '.join(df.columns.tolist())}\n\n"  # noqa: E501
             preview = df.head(20).to_markdown(index=False)
             return shape_info + preview
         except Exception as e:

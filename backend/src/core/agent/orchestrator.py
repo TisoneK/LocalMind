@@ -186,7 +186,7 @@ def _build_result_from_dict(data: dict, raw_text: str) -> OrchestrationResult:
             args_str = ", ".join(f"{k}={v!r}" for k, v in step.args.items()) if step.args else ""
             context_parts.append(f"  {i}. {step.tool}({args_str}) — {step.reason}")
         context_parts.append(
-            f"Confidence: {confidence:.0%} ({'HIGH' if confidence >= ORCHESTRATOR_CONFIDENCE_HIGH else 'MEDIUM' if confidence >= ORCHESTRATOR_CONFIDENCE_MEDIUM else 'LOW'})"
+            f"Confidence: {confidence:.0%} ({'HIGH' if confidence >= ORCHESTRATOR_CONFIDENCE_HIGH else 'MEDIUM' if confidence >= ORCHESTRATOR_CONFIDENCE_MEDIUM else 'LOW'})"  # noqa: E501
         )
     else:
         context_parts.append("[Orchestrator: no structured steps produced — execution agent should plan independently]")
@@ -393,7 +393,7 @@ class AgentOrchestrator:
                 steps=[],
                 confidence=0.3,
                 needs_clarification=True,
-                clarification_question=f"A tool execution failed ({failure_reason[:100]}). How would you like to proceed?",
+                clarification_question=f"A tool execution failed ({failure_reason[:100]}). How would you like to proceed?",  # noqa: E501
                 orchestrator_context=f"[Orchestrator replan: execution failure — {failure_reason[:150]}]",
                 raw_plan="",
             )
@@ -423,7 +423,7 @@ class AgentOrchestrator:
         # knows what went wrong and can plan around it.
         failure_context = (
             f"[REPLAN REQUEST — previous execution failed]\n"
-            f"Failed step: {failed_step.tool}({', '.join(f'{k}={v!r}' for k, v in failed_step.args.items()) if failed_step.args else ''})\n"
+            f"Failed step: {failed_step.tool}({', '.join(f'{k}={v!r}' for k, v in failed_step.args.items()) if failed_step.args else ''})\n"  # noqa: E501
             f"Reason: {failed_step.reason}\n"
             f"Failure reason: {failure_reason}\n\n"
             f"Please create an UPDATED plan that avoids the failure above. "
@@ -461,7 +461,7 @@ class AgentOrchestrator:
                     steps=[],
                     confidence=0.3,
                     needs_clarification=True,
-                    clarification_question=f"A tool execution failed ({failure_reason[:80]}). Would you like to try a different approach?",
+                    clarification_question=f"A tool execution failed ({failure_reason[:80]}). Would you like to try a different approach?",  # noqa: E501
                     orchestrator_context=f"[Orchestrator replan: no output — original failure: {failure_reason[:100]}]",
                     raw_plan="",
                 )
@@ -493,7 +493,7 @@ class AgentOrchestrator:
                 steps=[],
                 confidence=0.3,
                 needs_clarification=True,
-                clarification_question=f"A tool execution failed and replanning timed out ({failure_reason[:80]}). How would you like to proceed?",
+                clarification_question=f"A tool execution failed and replanning timed out ({failure_reason[:80]}). How would you like to proceed?",  # noqa: E501
                 orchestrator_context=f"[Orchestrator replan: timed out — original failure: {failure_reason[:100]}]",
                 raw_plan="",
             )
@@ -505,7 +505,7 @@ class AgentOrchestrator:
                 steps=[],
                 confidence=0.3,
                 needs_clarification=True,
-                clarification_question=f"A tool execution failed ({failure_reason[:80]}). Would you like to try a different approach?",
+                clarification_question=f"A tool execution failed ({failure_reason[:80]}). Would you like to try a different approach?",  # noqa: E501
                 orchestrator_context=f"[Orchestrator replan error — {str(e)[:100]}]",
                 raw_plan="",
             )

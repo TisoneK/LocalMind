@@ -690,7 +690,7 @@ async def write_file(message: str) -> ToolResult:
 register_tool(
     Intent.FILE_WRITE,
     write_file,
-    description="Write literal text or code to a file. The caller supplies the exact content — do not use shell/code_exec to generate content first. Saves to ~/LocalMind/ by default. Confirms before writing.",
+    description="Write literal text or code to a file. The caller supplies the exact content — do not use shell/code_exec to generate content first. Saves to ~/LocalMind/ by default. Confirms before writing.",  # noqa: E501
     cost=0.01,
     latency_ms=100,
     parallelizable=False,

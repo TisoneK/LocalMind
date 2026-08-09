@@ -862,13 +862,13 @@ Combine the original request with the user's clarification answer into a single,
 3. Be specific enough for the Orchestrator to create a high-confidence execution plan
 4. Include exact file paths, commands, or other specifics mentioned in either the original request or the answer
 
-Respond with ONLY the reformulated instruction — no acknowledgement, no questions, no meta-commentary."""
+Respond with ONLY the reformulated instruction — no acknowledgement, no questions, no meta-commentary."""  # noqa: E501
 
         messages = [
             {"role": "system", "content": clarification_prompt},
             {
                 "role": "user",
-                "content": f"Original: {original_request}\nClarification: {clarification_question}\nAnswer: {user_answer}",
+                "content": f"Original: {original_request}\nClarification: {clarification_question}\nAnswer: {user_answer}",  # noqa: E501
             },
         ]
 
@@ -1536,7 +1536,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 re.compile(r"\brunning now\.\.\.\b", re.IGNORECASE),
                 re.compile(r"\bactually executing\.\.\.\b", re.IGNORECASE),
                 re.compile(
-                    r"\bI (just |already )?(ran|checked|listed|read)\b.{0,30}\b(the |your |this )?(directory|folder|file|command)\b",
+                    r"\bI (just |already )?(ran|checked|listed|read)\b.{0,30}\b(the |your |this )?(directory|folder|file|command)\b",  # noqa: E501
                     re.IGNORECASE,
                 ),
                 # v0.7: Fabricated time-sensitive data patterns
@@ -1550,7 +1550,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     r"\b(table|standings|rankings?)\b.{0,10}\b(1\.|1st|2nd|3rd)", re.IGNORECASE
                 ),  # Fabricated league tables
                 re.compile(
-                    r"\b(fixture|match|game)\b.{0,20}\b(vs|versus|against)\b.{0,30}\b(today|tomorrow|this week|saturday|sunday|monday)",
+                    r"\b(fixture|match|game)\b.{0,20}\b(vs|versus|against)\b.{0,30}\b(today|tomorrow|this week|saturday|sunday|monday)",  # noqa: E501
                     re.IGNORECASE,
                 ),
                 re.compile(
@@ -2899,7 +2899,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                         explanation_messages = prompt_messages + [
                             {
                                 "role": "user",
-                                "content": f"Code output:\n```\n{safe_output[:2000]}\n```\nBriefly explain what happened.",
+                                "content": f"Code output:\n```\n{safe_output[:2000]}\n```\nBriefly explain what happened.",  # noqa: E501
                             }
                         ]
                         full_response_chunks: list[str] = []

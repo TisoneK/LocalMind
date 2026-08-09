@@ -6,9 +6,10 @@
 # Exit code 0 = all checks pass; non-zero = at least one check failed.
 #
 # Conventions honored:
-#   - Backend ruff ignores E501 (line-length) — the codebase has ~111 genuinely
-#     long string/prompt lines that resist wrapping (backlog L1). All OTHER
-#     rules (F821 undefined names, I001 import sort, etc.) are enforced.
+#   - Backend ruff enforces E501 (line-length) — the genuinely-long prompt
+#     strings are exempted per-file via `# ruff: noqa: E501` (prompts.py,
+#     loop.py) and inline `# noqa: E501` on the remaining scattered strings
+#     (backlog L1, closed Session 92). New overlong lines now FAIL the gate.
 #   - Frontend eslint allows the 56 pre-existing warnings but fails if the
 #     count grows beyond --max-warnings (catches big regressions).
 #
@@ -32,7 +33,7 @@ if [ ! -d frontend/node_modules ]; then
 fi
 
 echo "── ruff (backend) ──────────────────────────────────────────────"
-backend/.venv/bin/ruff check backend/src --ignore E501
+backend/.venv/bin/ruff check backend/src
 
 echo "── pytest (backend) ────────────────────────────────────────────"
 backend/.venv/bin/python -m pytest tests -q

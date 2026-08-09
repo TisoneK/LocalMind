@@ -122,7 +122,7 @@ async def set_adapter(req: AdapterConfig):
             if not (runtime_key or env_key):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"API key not set for {info['name']}. Set it via the Settings UI or {info['key_env']} in .env.",
+                    detail=f"API key not set for {info['name']}. Set it via the Settings UI or {info['key_env']} in .env.",  # noqa: E501
                 )
 
     settings.localmind_adapter = req.adapter
@@ -203,7 +203,7 @@ async def set_provider_key(req: ProviderKeyRequest):
         adapter = get_adapter(req.provider)
         validated = await adapter.health_check()
         if not validated:
-            validation_error = "Key saved, but the provider did not respond to a health check. The key may be invalid, the provider may be down, or your network may be blocking the request."
+            validation_error = "Key saved, but the provider did not respond to a health check. The key may be invalid, the provider may be down, or your network may be blocking the request."  # noqa: E501
         # Close the adapter's HTTP client to avoid leaking connections.
         if hasattr(adapter, "close"):
             await adapter.close()

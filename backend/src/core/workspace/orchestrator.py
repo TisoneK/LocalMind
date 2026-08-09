@@ -139,7 +139,7 @@ Respond with ONLY a JSON array, no markdown, no explanation:
   {{"id": "t1", "tool": "sysinfo", "input": {{"goal": "Get current RAM usage and total installed memory"}}, "depends_on": []}},
   {{"id": "t2", "tool": "web_search", "input": {{"query": "DDR5 32GB upgrade options prices 2025"}}, "depends_on": []}},
   {{"id": "t3", "tool": "file_write", "input": {{"path": "~/LocalMind/ram_report.md", "content": "# RAM Report\\n..."}}, "depends_on": ["t1", "t2"]}}
-]"""
+]"""  # noqa: E501
 
 _PLANNER_USER = "User request: {message}"
 
@@ -154,7 +154,7 @@ Rules:
 - If a contract violation occurred, explain that the planner emitted an invalid payload.
 - NEVER fabricate data. If no tool results are provided, say you couldn't retrieve the information rather than making up answers.
 - Every specific detail (file names, folder contents, system specs, search results) MUST come from the tool results above.
-- If the tool results show 3 items, report 3 items — never add items that "seem typical"."""
+- If the tool results show 3 items, report 3 items — never add items that "seem typical"."""  # noqa: E501
 
 _MAX_CONTEXT_TOKENS = 2000
 _MAX_SECTION_CHARS = 2000
@@ -221,7 +221,7 @@ class WorkspaceOrchestrator:
                     ]
                 ):
                     yield StreamChunk(
-                        text='I wasn\'t able to execute that command. Could you try rephrasing your request? For example: "Run dir Documents" or "List files in my Code folder".',
+                        text='I wasn\'t able to execute that command. Could you try rephrasing your request? For example: "Run dir Documents" or "List files in my Code folder".',  # noqa: E501
                         done=False,
                     )
                     yield StreamChunk(text="", done=True)

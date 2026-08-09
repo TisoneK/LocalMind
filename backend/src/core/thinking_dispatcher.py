@@ -248,7 +248,7 @@ CRITICAL RULES:
 
 Reply with ONLY valid JSON:
 {"capabilities":["cap1","cap2"],"flags":{"requires_grounding":false,"requires_tools":false,"requires_planning":false,"requires_memory":false,"requires_reasoning":false,"requires_execution":false,"requires_file_access":false,"realtime_sensitive":false},"execution_mode":"direct","safety_level":"low","confidence":0.85,"primary_domain":"","reformulated_query":"the optimal query for getting the data the user needs — NOT their raw message","acknowledgement":"brief 1-sentence acknowledgement","execution_plan":{"steps":[{"id":"step_id","capability":"cap_name","tool":"tool_name","args":{},"depends_on":[],"label":"Human-readable step description"}]}}
-"""
+"""  # noqa: E501
 
 
 # ── ThinkingDispatcher ────────────────────────────────────────────────────────

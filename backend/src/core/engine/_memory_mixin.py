@@ -68,7 +68,7 @@ class _MemoryMixin:
             _USER_FACT_SIGNALS = [
                 # Identity & profession
                 r"\bmy name is\b",
-                r"\bi(?:'m| am)\b.{0,5}\b(?:a |an )?(?:developer|designer|engineer|student|teacher|writer|researcher|manager|analyst|architect|consultant|devops|admin|freelancer)\b",
+                r"\bi(?:'m| am)\b.{0,5}\b(?:a |an )?(?:developer|designer|engineer|student|teacher|writer|researcher|manager|analyst|architect|consultant|devops|admin|freelancer)\b",  # noqa: E501
                 # Preferences & habits
                 r"\bi (?:prefer|like|love|hate|always|usually|never|typically|normally)\b",
                 r"\b(?:remember|note|store|keep in mind|don't forget)\b",
@@ -77,7 +77,7 @@ class _MemoryMixin:
                 r"\bi (?:work|am working|am based|was working)\b.{0,3}\b(?:at|in|on|for|with)\b",
                 r"\bmy (?:project|repo|repository|codebase|app|website|server|team|company|org)\b",
                 # Technical environment
-                r"\bi(?:'m| am) (?:using|running|on|with|switching to|migrating to)\b.{0,15}\b(?:python|node|rust|java|go|linux|mac|windows|docker|kubernetes|aws|gcp|azure)\b",
+                r"\bi(?:'m| am) (?:using|running|on|with|switching to|migrating to)\b.{0,15}\b(?:python|node|rust|java|go|linux|mac|windows|docker|kubernetes|aws|gcp|azure)\b",  # noqa: E501
                 r"\bmy (?:stack|setup|environment|workflow|pipeline|editor|ide|terminal|shell)\b",
                 # Life context that affects how we work together
                 r"\bi'm (?:new to|learning|studying|struggling with|stuck on)\b",
@@ -194,7 +194,7 @@ class _MemoryMixin:
         """
 
         _BLOCKED_PATTERNS = [
-            r"\b(ignore|bypass|override|disable|forget)\b.{0,30}\b(safety|rules|guidelines|instructions|system prompt|restrictions)\b",
+            r"\b(ignore|bypass|override|disable|forget)\b.{0,30}\b(safety|rules|guidelines|instructions|system prompt|restrictions)\b",  # noqa: E501
             r"\byou (are|must|should|will)\b.{0,40}\b(lie|deceive|pretend|ignore|always agree|never refuse)\b",
             r"\b(always|never) (tell|say|respond|answer|agree|refuse)\b",
             r"\bact (as|like)\b.{0,30}\b(jailbreak|unrestricted|dan|evil|unfiltered)\b",
