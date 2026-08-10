@@ -943,6 +943,7 @@ async def _dispatch_sub_agent_tool(
             "web_search": Intent.WEB_SEARCH,
             "memory_op": Intent.MEMORY_OP,
             "sysinfo": Intent.SYSINFO,
+            "observe": Intent.OBSERVE,  # B-2026-07-31-9: desktop awareness
         }
         intent = _tool_intent_map.get(tool_name)
         if not intent:

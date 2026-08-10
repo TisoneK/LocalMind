@@ -170,6 +170,7 @@ from tools import (
     find_path,  # noqa: E402, F401 -- FIND_PATH (name-match search, path-only, capped)
     git_tool,  # noqa: E402, F401 -- GIT (structured git operations)
     memory_tool,  # noqa: E402, F401 -- registers MEMORY_OP
+    observe,  # noqa: E402, F401 -- B-2026-07-31-9: OBSERVE (desktop awareness: window, clipboard, apps, state, recent files)
     process_tool,  # noqa: E402, F401 -- PROCESS (long-running process management)
     propose_edit,  # noqa: E402, F401 -- B-2026-08-02-7: stage an edit proposal (no write)
     propose_write,  # noqa: E402, F401 -- B-2026-08-02-7: stage a write proposal (no write)

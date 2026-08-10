@@ -341,6 +341,9 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         return f"{operation} {content}".strip()
     elif tool_name == "sysinfo":
         return tool_args.get("query", "")
+    elif tool_name == "observe":
+        # observe takes a single query string, same as sysinfo.
+        return tool_args.get("query", "")
     elif tool_name == "delegate":
         # delegate dispatcher expects JSON-encoded args (target_agent + task)
         # — same pattern as edit_file. The delegate tool parses it back.

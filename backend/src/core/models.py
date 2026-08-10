@@ -45,6 +45,7 @@ class Intent(str, Enum):
     CODE_EXEC = "code_exec"
     SHELL = "shell"
     SYSINFO = "sysinfo"
+    OBSERVE = "observe"  # B-2026-07-31-9: desktop awareness (window, clipboard, apps, state, recent files)
     MEMORY_OP = "memory_op"
     FILE_WRITE = "file_write"
     FILE_EDIT = "file_edit"
@@ -110,6 +111,7 @@ class Capability(str, Enum):
 
     # ── System ──
     SYSINFO = "sysinfo"
+    OBSERVE = "observe"  # B-2026-07-31-9: desktop awareness — "what's happening right now"
 
     # ── Cognitive ──
     REASONING = "reasoning"
@@ -123,6 +125,7 @@ class Capability(str, Enum):
 
 CAPABILITY_TO_INTENT: dict[Capability, Intent] = {
     Capability.SYSINFO: Intent.SYSINFO,
+    Capability.OBSERVE: Intent.OBSERVE,
     Capability.WEB_SEARCH: Intent.WEB_SEARCH,
     Capability.WEB_FETCH: Intent.WEB_FETCH,
     Capability.BROWSE: Intent.BROWSE,
@@ -147,6 +150,7 @@ TOOL_CAPABILITIES: set[Capability] = {
     Capability.MEMORY_STORE,
     Capability.MEMORY_RETRIEVE,
     Capability.SYSINFO,
+    Capability.OBSERVE,  # B-2026-07-31-9: desktop awareness
 }
 
 COGNITIVE_CAPABILITIES: set[Capability] = {

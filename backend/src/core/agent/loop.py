@@ -424,6 +424,28 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "observe",
+            "description": (
+                "Observe the desktop right now (offline, instant, bounded): active window, "
+                "clipboard, running apps, CPU/RAM/disk/battery state, recently modified files. "
+                "Use to answer \"what's happening right now?\" without shell. "
+                "Query keywords: window, clipboard, apps, state, recent files."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "What to observe: window, clipboard, apps, cpu/ram, recent files",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "delegate",
             "description": (
                 "Delegate a sub-task to a specialized agent when the task needs a "
@@ -1633,6 +1655,7 @@ class AgentLoop:
                         "shell": f"Running: {_command[:80]}" if _command else "Running command",
                         "memory_op": f"Memory: {call.tool_args.get('operation', '')} {call.tool_args.get('content', '')[:40]}".strip(),  # noqa: E501
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
+                        "observe": f"Observing: {_query[:60]}" if _query else "Observing the desktop",
                         "git": f"Git: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Git operation",  # noqa: E501
                         "process": f"Process: {call.tool_args.get('operation', '')} {call.tool_args.get('name', '')}" if call.tool_args.get('operation') else "Process operation",  # noqa: E501
                         "diagnostics": f"Diagnostics: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Analyzing failure",  # noqa: E501
@@ -2100,6 +2123,7 @@ class AgentLoop:
                         "shell": f"Running: {_command[:80]}" if _command else "Running command",
                         "memory_op": f"Memory: {tool_args.get('operation', '')} {tool_args.get('content', '')[:40]}".strip(),  # noqa: E501
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
+                        "observe": f"Observing: {_query[:60]}" if _query else "Observing the desktop",
                         "git": f"Git: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Git operation",  # noqa: E501
                         "process": f"Process: {tool_args.get('operation', '')} {tool_args.get('name', '')}" if tool_args.get('operation') else "Process operation",  # noqa: E501
                         "diagnostics": f"Diagnostics: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Analyzing failure",  # noqa: E501
@@ -2705,6 +2729,7 @@ class AgentLoop:
                             "code_exec": "Executing code",
                             "memory_op": f"Memory: {_normalized_args.get('operation', '')} {_normalized_args.get('content', '')[:40]}".strip(),  # noqa: E501
                             "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
+                        "observe": f"Observing: {_query[:60]}" if _query else "Observing the desktop",
                         }
                         action_label = _label_map.get(tc_name, f"Running {tc_name}")
 

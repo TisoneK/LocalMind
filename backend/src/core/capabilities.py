@@ -114,6 +114,13 @@ _CAPABILITY_CATALOG: dict[Capability, CapabilityMetadata] = {
         description="Inspect local hardware, operating-system, and time state.",
         tool_names=("sysinfo",),
     ),
+    Capability.OBSERVE: CapabilityMetadata(
+        capability=Capability.OBSERVE,
+        family=CapabilityFamily.COMPUTER,
+        description="Observe the desktop right now: active window, clipboard, running apps, "
+        "system state, recently modified files (offline, bounded).",
+        tool_names=("observe",),
+    ),
     Capability.REASONING: CapabilityMetadata(
         capability=Capability.REASONING,
         family=CapabilityFamily.KNOWLEDGE_REASONING,

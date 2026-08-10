@@ -71,6 +71,7 @@ _INTENT_TO_AGENT: dict[Intent, str] = {
     Intent.BROWSE: "browser",
     Intent.CHAT: "direct",
     Intent.SYSINFO: "coding",
+    Intent.OBSERVE: "coding",  # B-2026-07-31-9: desktop awareness routes to coding (observe tool)
     Intent.MEMORY_OP: "coding",
     Intent.GIT: "coding",  # Session 41: git operations route to coding agent
     Intent.PROCESS: "coding",  # Session 42: process management routes to coding agent
@@ -160,6 +161,7 @@ _DOMAIN_TO_AGENT: dict[str, str] = {
     "file_edit": "coding",
     "file_write": "coding",
     "system_info": "coding",  # sysinfo is shell-adjacent; coding agent handles it
+    "observe": "coding",  # B-2026-07-31-9: desktop awareness — coding agent owns the observe tool
     "shell_command": "coding",
     "code_exec": "coding",
     "memory_op": "coding",

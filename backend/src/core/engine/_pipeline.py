@@ -1348,6 +1348,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     Intent.WEB_FETCH,
                     Intent.FILE_TASK,
                     Intent.SYSINFO,
+                    Intent.OBSERVE,  # B-2026-07-31-9: observe returns grounded desktop data
                 )
                 _client_mode = ExecutionMode.DIRECT if _client_intent == Intent.CHAT else ExecutionMode.SINGLE_TOOL
                 # Map client intent to capabilities

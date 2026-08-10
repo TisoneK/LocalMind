@@ -152,6 +152,7 @@ AGENT_INTENTS: frozenset[Intent] = frozenset(
         Intent.FILE_EDIT,
         Intent.FILE_TASK,
         Intent.FIND_PATH,  # Session 125: name-match search routes to the agent loop
+        Intent.OBSERVE,  # B-2026-07-31-9: desktop awareness routes to the agent loop
         Intent.GIT,
         Intent.MEMORY_OP,
         Intent.PROCESS,
@@ -183,6 +184,7 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
         "shell",
         "memory_op",
         "sysinfo",
+        "observe",  # B-2026-07-31-9: desktop awareness (window, clipboard, apps, state, recent files)
         "delegate",  # ADR-8 Phase 3: agent-initiated delegation
         "delegate_parallel",  # B-2026-08-02-6: parallel delegation fan-out
         "delegate_inline",  # B-2026-08-02-9: inline delegation (child rewrites parent history)
@@ -221,6 +223,7 @@ _INTENT_CORE_LOCAL_TOOLS: frozenset[str] = frozenset(
         "process",
         "diagnostics",
         "sysinfo",
+        "observe",  # B-2026-07-31-9: desktop awareness — cheap, offline, bounded
         "memory_op",
         "find_path",  # Session 125: name-match search (locate before listing)
         "delegate",  # ADR-8 Phase 3: keep delegation available everywhere
@@ -245,6 +248,7 @@ INTENT_TOOL_SCOPES: dict[Intent, frozenset[str]] = {
     Intent.MEMORY_OP: _INTENT_CORE_LOCAL_TOOLS,
     Intent.PROCESS: _INTENT_CORE_LOCAL_TOOLS,
     Intent.SYSINFO: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.OBSERVE: _INTENT_CORE_LOCAL_TOOLS,  # B-2026-07-31-9: desktop awareness
     Intent.DIAGNOSTICS: _INTENT_CORE_LOCAL_TOOLS,
     Intent.VERIFY: _INTENT_CORE_LOCAL_TOOLS,
     Intent.REVIEW: _INTENT_CORE_LOCAL_TOOLS,

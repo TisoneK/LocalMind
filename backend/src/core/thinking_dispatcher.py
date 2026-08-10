@@ -124,6 +124,7 @@ _INTENT_STEP_LABELS: dict[str, str] = {
     "file_write": "Write File",
     "file_edit": "Edit File",
     "sysinfo": "System Info",
+    "observe": "Observe",
     "memory_op": "Memory",
 }
 
@@ -199,6 +200,7 @@ AVAILABLE CAPABILITIES:
 - memory_store: Store a persistent fact for later recall
 - memory_retrieve: Recall stored facts from memory
 - sysinfo: Get system info (current time, date, hardware specs, installed programs)
+- observe: Observe the desktop right now (active window, clipboard, running apps, CPU/RAM/disk/battery, recently modified files)
 - reasoning: Deep analysis, logical deduction, evaluation
 - synthesis: Combine information from multiple sources into coherent output
 - planning: Multi-step task decomposition and sequencing
