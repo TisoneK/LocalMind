@@ -38,6 +38,13 @@ from core.agent.loop import _has_minimax_tool_call, _parse_minimax_tool_call
 from core.agent.orchestrator import AgentOrchestrator, OrchestrationResult
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.config import settings
+from core.engine.routing_helpers import (
+    _PLAN_REQUIRED_INTENTS,
+    _fallback_todo_plan,
+    _should_skip_planning,
+    get_adapter,
+)
+from core.engine.stage_clock import _StageClock
 from core.execution_graph import (
     execute_graph,
     format_graph_results,
@@ -90,121 +97,6 @@ from ._reflection_mixin import _ReflectionMixin
 logger = logging.getLogger(__name__)
 
 
-def _fallback_todo_plan(intent: Intent, message: str) -> list[str]:
-    """Fallback todo plan for multi-step intents (Understand → Run → Verify).
-
-    Kept as a module-level factory (not inline in Engine._emit_todo_plan) so
-    tests/e2e/test_todo_system.py derives its expectations from the SAME
-    source — pinning the strings in the test caused a long-lived baseline
-    failure whenever the template changed (fixed Session 90).
-    """
-    intent_label = intent.value.replace('_', ' ')
-    return [
-        f"Understand: {message.strip()[:72]}",
-        f"Run the {intent_label} action",
-        "Verify the result and explain what changed",
-    ]
-
-
-# Intents whose requests are usually compound tasks and therefore keep the
-# agent planning phase even when the dispatcher is highly confident. The
-# v0.11 latency fix skipped planning for ALL intents at confidence >= 0.7,
-# which left tool-heavy intents without any translate-before-dispatch step
-# — Session 113's failure: the model passed the raw user sentence as a shell
-# command. Planning is kept for these so requests like "check git status,
-# and if there are changes show the diff" get decomposed up front (the
-# plan phase also eliminates the documented file_write missing-args
-# fumbling). Single-shot/simple intents keep the v0.11 fast path.
-_PLAN_REQUIRED_INTENTS: frozenset[Intent] = frozenset(
-    {
-        Intent.SHELL,
-        Intent.CODE_EXEC,
-        Intent.FILE_WRITE,
-        Intent.FILE_EDIT,
-        # Session 122: git requests chain tools (locate → status → maybe
-        # diff → report); at dispatcher confidence >= 0.7 the planner used to
-        # be skipped, so the Todos panel showed no real plan for them.
-        Intent.GIT,
-    }
-)
-
-
-# Session 114: the planning-skip decision is a pure function so the routing
-# contract is unit-testable without running the engine.
-def _should_skip_planning(intent: Intent, dispatcher_confidence: float) -> bool:
-    """Whether the agent planning phase should be skipped for this turn.
-
-    The v0.11 fast path skips planning when the dispatcher was highly
-    confident (>= 0.7) AND the intent is not compound-capable. Below the
-    threshold planning is never skipped (the slow path runs the planner).
-    """
-    if dispatcher_confidence < 0.7:
-        return False
-    return intent not in _PLAN_REQUIRED_INTENTS
-
-
-def get_adapter(*args, **kwargs):
-    """Deferred-lookup wrapper for adapters.get_adapter.
-
-    Looks up get_adapter from the core.engine package at call time so that
-    test patches (patch("core.engine.get_adapter", ...)) take effect on
-    code in this submodule. Without this, a module-level
-    `from adapters import get_adapter` would create a separate binding
-    that the patch cannot reach.
-    """
-    from core.engine import get_adapter as _real
-
-    return _real(*args, **kwargs)
-
-
-class _StageClock:
-    """Per-request pipeline stage timing for the Observe panel (ADR-12).
-
-    The frontend's "Agent Pipeline" section previously derived stage status
-    from a heuristic (intent present / tool call seen / latency > 0), which
-    left "Tool Select" orange forever on completed no-tool turns and showed
-    "Execute" as done with no tools. This clock records REAL wall-clock
-    latency per stage and emits ``stage_timing`` obs events so the panel can
-    render truthful statuses (done / skipped) with real timings.
-
-    Stages: intent_classify, context_build, tool_select, generate, execute.
-    Stages that never ran are emitted as "skipped" so the UI never shows a
-    stuck "running" state for work that didn't happen.
-    """
-
-    def __init__(self, obs: ObsCollector):
-        self._obs = obs
-        self._marks: dict[str, float] = {}
-        self.timings: dict[str, dict] = {}
-
-    def start(self, stage: str) -> None:
-        self._marks[stage] = time.monotonic()
-
-    def end(self, stage: str, status: str = "done") -> None:
-        t0 = self._marks.pop(stage, None)
-        if t0 is None:
-            return
-        latency_ms = round((time.monotonic() - t0) * 1000)
-        self._timing(stage, latency_ms, status)
-
-    def mark(self, stage: str, latency_ms: int, status: str = "done") -> None:
-        """Record a stage that completed outside start()/end() (e.g. skipped
-        or folded into another stage) with an explicit latency."""
-        self._timing(stage, latency_ms, status)
-
-    def skip(self, stage: str) -> None:
-        self._timing(stage, 0, "skipped")
-
-    def snapshot(self) -> dict:
-        return dict(self.timings)
-
-    def _timing(self, stage: str, latency_ms: int, status: str) -> None:
-        self.timings[stage] = {"latency_ms": latency_ms, "status": status}
-        self._obs.emit("stage_timing", stage=stage, latency_ms=latency_ms, status=status)
-
-
-# B-2026-08-02-5 (A5): max queued steering messages per session before the
-# POST /api/chat/{session_id}/steer endpoint returns 409.
 STEERING_QUEUE_MAX = 10
 
 
