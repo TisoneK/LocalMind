@@ -139,6 +139,12 @@ _CAPABILITY_CATALOG: dict[Capability, CapabilityMetadata] = {
         description="Parse local JSON (file or inline) with optional dot-path queries, bounded.",
         tool_names=("json",),
     ),
+    Capability.SQL: CapabilityMetadata(
+        capability=Capability.SQL,
+        family=CapabilityFamily.LOCAL_INFORMATION,
+        description="Run read-only SQLite queries against a local database, bounded.",
+        tool_names=("sql",),
+    ),
     Capability.REASONING: CapabilityMetadata(
         capability=Capability.REASONING,
         family=CapabilityFamily.KNOWLEDGE_REASONING,

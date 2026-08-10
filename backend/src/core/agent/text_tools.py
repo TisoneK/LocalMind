@@ -355,6 +355,10 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         # json dispatcher expects JSON-encoded args (source/query/max_items)
         # — same pattern as find_path/git. The tool parses it back.
         return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "sql":
+        # sql dispatcher expects JSON-encoded args (path/query/max_rows)
+        # — same pattern as find_path/git. The tool parses it back.
+        return json.dumps(tool_args, ensure_ascii=False)
     elif tool_name == "delegate":
         # delegate dispatcher expects JSON-encoded args (target_agent + task)
         # — same pattern as edit_file. The delegate tool parses it back.

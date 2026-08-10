@@ -60,6 +60,7 @@ CODING_TOOLS: frozenset[str] = frozenset(
         "calculator",  # B-2026-07-31-10: safe arithmetic — offline, bounded
         "csv",  # B-2026-07-31-10: bounded CSV parsing — offline, bounded
         "json",  # B-2026-07-31-10: bounded JSON parse/query — offline, bounded
+        "sql",  # B-2026-07-31-10: read-only SQLite queries — offline, bounded
         "process",
         "delegate",  # ADR-8 Phase 3: agent-initiated delegation
         "delegate_parallel",  # B-2026-08-02-6: parallel delegation fan-out

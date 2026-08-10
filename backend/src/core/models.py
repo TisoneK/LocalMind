@@ -49,6 +49,7 @@ class Intent(str, Enum):
     CALCULATE = "calculate"  # B-2026-07-31-10: safe arithmetic evaluation
     CSV = "csv"  # B-2026-07-31-10: bounded CSV file parsing
     JSON = "json"  # B-2026-07-31-10: bounded JSON parse/query
+    SQL = "sql"  # B-2026-07-31-10: read-only SQLite queries
     MEMORY_OP = "memory_op"
     FILE_WRITE = "file_write"
     FILE_EDIT = "file_edit"
@@ -120,6 +121,7 @@ class Capability(str, Enum):
     CALCULATE = "calculate"  # safe arithmetic evaluation
     CSV = "csv"  # bounded CSV file parsing
     JSON = "json"  # bounded JSON parse/query
+    SQL = "sql"  # read-only SQLite queries
 
     # ── Cognitive ──
     REASONING = "reasoning"
@@ -137,6 +139,7 @@ CAPABILITY_TO_INTENT: dict[Capability, Intent] = {
     Capability.CALCULATE: Intent.CALCULATE,
     Capability.CSV: Intent.CSV,
     Capability.JSON: Intent.JSON,
+    Capability.SQL: Intent.SQL,
     Capability.WEB_SEARCH: Intent.WEB_SEARCH,
     Capability.WEB_FETCH: Intent.WEB_FETCH,
     Capability.BROWSE: Intent.BROWSE,
@@ -165,6 +168,7 @@ TOOL_CAPABILITIES: set[Capability] = {
     Capability.CALCULATE,  # B-2026-07-31-10: safe arithmetic
     Capability.CSV,  # B-2026-07-31-10: bounded CSV parsing
     Capability.JSON,  # B-2026-07-31-10: bounded JSON parse/query
+    Capability.SQL,  # B-2026-07-31-10: read-only SQLite queries
 }
 
 COGNITIVE_CAPABILITIES: set[Capability] = {
@@ -435,6 +439,7 @@ class TaskProfile(BaseModel):
             Capability.CALCULATE: "calculator",  # B-2026-07-31-10: safe arithmetic
             Capability.CSV: "csv",  # B-2026-07-31-10: bounded CSV parsing
             Capability.JSON: "json",  # B-2026-07-31-10: bounded JSON parse/query
+            Capability.SQL: "sql",  # B-2026-07-31-10: read-only SQLite queries
         }
         tools: list[str] = []
         seen: set[str] = set()

@@ -28,14 +28,14 @@ def test_coding_agent_config():
     cfg = agent.config()
     assert cfg.name == "coding"
     assert cfg.tools_enabled is True
-    # Scoped toolset: 22 coding tools (5 core + git + process + find_path +
-    # observe + calculator/csv/json + delegate + delegate_parallel +
+    # Scoped toolset: 23 coding tools (5 core + git + process + find_path +
+    # observe + calculator/csv/json/sql + delegate + delegate_parallel +
     # diagnostics + 3 propose-stage + 3 subgoal + skill + best_of_n_edit),
     # not the full AGENT_ALLOWED_TOOLS
     assert cfg.allowed_tools == CODING_TOOLS
     assert cfg.allowed_tools == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
-         "git", "process", "find_path", "observe", "calculator", "csv", "json",
+         "git", "process", "find_path", "observe", "calculator", "csv", "json", "sql",
          "delegate", "delegate_parallel", "diagnostics", "propose_str_replace",
          "propose_write_file", "apply_proposed_edit", "add_subgoal",
          "update_subgoal", "create_plan", "skill", "best_of_n_edit"}
@@ -120,6 +120,7 @@ def test_coding_agent_scoped_tools_filters_non_coding():
         {"intent": "calculator", "description": "safe arithmetic"},  # B-2026-07-31-10
         {"intent": "csv", "description": "bounded csv parse"},  # B-2026-07-31-10
         {"intent": "json", "description": "bounded json query"},  # B-2026-07-31-10
+        {"intent": "sql", "description": "read-only sqlite"},  # B-2026-07-31-10
         {"intent": "delegate", "description": "delegate"},  # ADR-8 Phase 3
             {"intent": "delegate_parallel", "description": "delegate parallel"},  # B-2026-08-02-6
             {"intent": "propose_str_replace", "description": "propose edit"},  # B-2026-08-02-7
@@ -134,7 +135,7 @@ def test_coding_agent_scoped_tools_filters_non_coding():
     scoped = agent.scoped_tools(all_tools)
     scoped_intents = {t["intent"] for t in scoped}
     assert scoped_intents == CODING_TOOLS
-    assert len(scoped) == 23  # 22 + calculator/csv/json (Session 131, B-2026-07-31-10)
+    assert len(scoped) == 24  # 23 + sql (Session 132, B-2026-07-31-10)
     # Must NOT include web/browser/memory/sysinfo tools
     assert "web_search" not in scoped_intents
     assert "web_fetch" not in scoped_intents
@@ -188,12 +189,12 @@ def test_coding_tools_has_ten_tools():
     (B-2026-08-02-12, universal); Session 86 added best_of_n_edit
     (B-2026-08-02-11); Session 125 added find_path (name-match search);
     Session 130 added observe (B-2026-07-31-9, desktop awareness);
-    Session 131 added calculator/csv/json (B-2026-07-31-10, data tools).
+    Sessions 131-132 added calculator/csv/json/sql (B-2026-07-31-10, data tools).
     """
-    assert len(CODING_TOOLS) == 23
+    assert len(CODING_TOOLS) == 24
     assert CODING_TOOLS == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
-         "git", "process", "find_path", "observe", "calculator", "csv", "json",
+         "git", "process", "find_path", "observe", "calculator", "csv", "json", "sql",
          "delegate", "delegate_parallel", "diagnostics", "propose_str_replace",
          "propose_write_file", "apply_proposed_edit", "add_subgoal",
          "update_subgoal", "create_plan", "skill", "best_of_n_edit"}

@@ -518,6 +518,30 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "sql",
+            "description": (
+                "Run a read-only SQLite SELECT against a local .db/.sqlite file (path must "
+                "be in allowed folders). Read-only connection — writes fail safely. Output "
+                "is bounded (row cap 20, max 50). Use for 'what's in this database' / "
+                "inspect tables without dumping the whole file. Args: path, query, max_rows?."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the .db/.sqlite file"},
+                    "query": {"type": "string", "description": "SELECT statement to run"},
+                    "max_rows": {
+                        "type": "integer",
+                        "description": "Row cap (1-50, default 20)",
+                    },
+                },
+                "required": ["path", "query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "delegate",
             "description": (
                 "Delegate a sub-task to a specialized agent when the task needs a "
@@ -1731,6 +1755,7 @@ class AgentLoop:
                         "calculator": f"Calculating: {_query[:60]}" if _query else "Calculating",
                         "csv": f"Reading CSV: {_query[:60]}" if _query else "Reading CSV",
                         "json": f"Querying JSON: {_query[:60]}" if _query else "Querying JSON",
+                        "sql": f"Querying DB: {_query[:60]}" if _query else "Querying database",
                         "git": f"Git: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Git operation",  # noqa: E501
                         "process": f"Process: {call.tool_args.get('operation', '')} {call.tool_args.get('name', '')}" if call.tool_args.get('operation') else "Process operation",  # noqa: E501
                         "diagnostics": f"Diagnostics: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Analyzing failure",  # noqa: E501
@@ -2202,6 +2227,7 @@ class AgentLoop:
                         "calculator": f"Calculating: {_query[:60]}" if _query else "Calculating",
                         "csv": f"Reading CSV: {_query[:60]}" if _query else "Reading CSV",
                         "json": f"Querying JSON: {_query[:60]}" if _query else "Querying JSON",
+                        "sql": f"Querying DB: {_query[:60]}" if _query else "Querying database",
                         "git": f"Git: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Git operation",  # noqa: E501
                         "process": f"Process: {tool_args.get('operation', '')} {tool_args.get('name', '')}" if tool_args.get('operation') else "Process operation",  # noqa: E501
                         "diagnostics": f"Diagnostics: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Analyzing failure",  # noqa: E501
@@ -2811,6 +2837,7 @@ class AgentLoop:
                         "calculator": f"Calculating: {_query[:60]}" if _query else "Calculating",
                         "csv": f"Reading CSV: {_query[:60]}" if _query else "Reading CSV",
                         "json": f"Querying JSON: {_query[:60]}" if _query else "Querying JSON",
+                        "sql": f"Querying DB: {_query[:60]}" if _query else "Querying database",
                         }
                         action_label = _label_map.get(tc_name, f"Running {tc_name}")
 

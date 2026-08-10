@@ -75,6 +75,7 @@ _INTENT_TO_AGENT: dict[Intent, str] = {
     Intent.CALCULATE: "coding",  # B-2026-07-31-10: safe arithmetic routes to coding (calculator)
     Intent.CSV: "coding",  # B-2026-07-31-10: CSV parsing routes to coding
     Intent.JSON: "coding",  # B-2026-07-31-10: JSON parse/query routes to coding
+    Intent.SQL: "coding",  # B-2026-07-31-10: SQLite queries route to coding
     Intent.MEMORY_OP: "coding",
     Intent.GIT: "coding",  # Session 41: git operations route to coding agent
     Intent.PROCESS: "coding",  # Session 42: process management routes to coding agent
