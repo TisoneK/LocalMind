@@ -50,6 +50,7 @@ SyntaxHighlighter.registerLanguage('shell', shell);
 SyntaxHighlighter.registerLanguage('shell-session', shell);
 import { ChatMessage as ChatMessageType, FileResult, PendingWrite } from '@/types';
 import { formatLatency } from '@/lib/localmind/progress';
+import { repairMarkdown } from '@/lib/markdownRepair';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolSteps } from './ToolSteps';
 import { DiffBlock, type DiffHunk } from '@/components/shared/DiffBlock';
@@ -417,6 +418,11 @@ function MarkdownDel({ children, ...props }: React.ComponentPropsWithoutRef<'del
 function MarkdownContent({ text }: { text: string }) {
   if (!text) return null;
 
+  // B-2026-08-09-10: the model sometimes emits malformed markdown (unclosed
+  // `**`, broken bullet lead-ins). Repair conservatively before render —
+  // code fences and inline code are protected inside the pass.
+  const repaired = repairMarkdown(text);
+
   return (
     <div className="text-[12px] text-brand-green-soft leading-relaxed overflow-hidden max-w-full break-words">
       <ReactMarkdown
@@ -460,7 +466,7 @@ function MarkdownContent({ text }: { text: string }) {
           del: MarkdownDel,
         }}
       >
-        {text}
+        {repaired}
       </ReactMarkdown>
     </div>
   );
