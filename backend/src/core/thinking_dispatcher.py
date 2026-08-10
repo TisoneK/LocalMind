@@ -470,10 +470,29 @@ class ThinkingDispatcher:
                     yield StreamChunk(text="", thinking=item)
                 # Ensure the task completes — but don't hang if it already
                 # finished or errored. Use a short timeout.
+                # NOTE: CancelledError is a BaseException in py3.8+ — a bare
+                # `await asyncio.wait_for(_collect_task, timeout=5)` on a task
+                # cancelled by the timeout path above raises CancelledError,
+                # which `except (TimeoutError, Exception)` does NOT catch. It
+                # would escape and kill the whole request instead of falling
+                # back to the minimal plan (the free-tier overload case).
+                # gather(return_exceptions=True) absorbs the child's
+                # CancelledError as a RESULT deterministically (no reliance on
+                # the racy task.cancelled() flag).
                 try:
-                    await asyncio.wait_for(_collect_task, timeout=5)
-                except (asyncio.TimeoutError, Exception):
+                    await asyncio.wait_for(
+                        asyncio.gather(_collect_task, return_exceptions=True),
+                        timeout=5,
+                    )
+                except Exception:
                     _collect_task.cancel()
+            except asyncio.CancelledError:
+                # The dispatcher generator itself is being cancelled externally
+                # (client abort / engine shutdown). Cancel the child collect
+                # task so it doesn't dangle, then propagate cleanly — a real
+                # cancellation must NOT be swallowed by the fallback below.
+                _collect_task.cancel()
+                raise
             except Exception:
                 _collect_task.cancel()
                 raise

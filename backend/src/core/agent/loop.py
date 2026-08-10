@@ -176,8 +176,37 @@ _STANDALONE_INVOKE_RE = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 
+# DSML (DeepSeek Markup Language) tool-call tags use a fullwidth-bar prefix
+# (U+FF5C): <｜DSML｜invoke name="shell"> with a `string="true"` attribute on
+# <｜DSML｜parameter>. Normalize the prefix away so the existing invoke/parameter
+# regexes handle them, and allow extra attributes on <parameter>.
+_DSML_PREFIX_RE = re.compile(r"<｜DSML｜|</｜DSML｜", re.IGNORECASE)
+
+
+def _normalize_dsml(text: str) -> str:
+    """Convert DeepSeek DSML tool-call markup to standard <invoke>/<parameter> form.
+
+    DSML wraps tags in a fullwidth-bar prefix:
+        <｜DSML｜tool_calls>
+          <｜DSML｜invoke name="shell">
+            <｜DSML｜parameter name="command" string="true">cmd</｜DSML｜parameter>
+          </｜DSML｜invoke>
+        </｜DSML｜tool_calls>
+    becomes:
+        <tool_calls>
+          <invoke name="shell">
+            <parameter name="command" string="true">cmd</parameter>
+          </invoke>
+        </tool_calls>
+    which the existing MiniMax-style regexes already parse.
+    """
+    if not text or "｜DSML｜" not in text:
+        return text
+    return _DSML_PREFIX_RE.sub(lambda m: "</" if m.group(0).startswith("</") else "<", text)
+
+
 _PARAM_RE = re.compile(
-    r"<parameter\s+name=[\"']([^\"']+)[\"']\s*>"
+    r"<parameter\s+name=[\"']([^\"']+)[\"'][^>]*>"
     r"(.*?)"
     r"</parameter>",
     re.DOTALL | re.IGNORECASE,
@@ -210,6 +239,11 @@ def _parse_minimax_tool_call(text: str) -> list[tuple[str, dict, str]]:
     """
     calls = []
 
+    # Normalize DeepSeek DSML markup into the standard invoke/parameter form
+    # first, so DSML tool calls are intercepted + executed (not streamed as
+    # the final answer — Session 127 smoke caught this on zen/deepseek-v4-flash).
+    text = _normalize_dsml(text)
+
     # Format 1: Full minimax:tool_call wrapper
     for m in _MINIMAX_TOOL_CALL_RE.finditer(text):
         tool_name = m.group(1).strip()
@@ -236,12 +270,16 @@ def _parse_minimax_tool_call(text: str) -> list[tuple[str, dict, str]]:
 
 def _strip_minimax_tool_calls(text: str) -> str:
     """Remove all MiniMax tool call XML from text, leaving clean content."""
+    text = _normalize_dsml(text)
     cleaned = _MINIMAX_TOOL_CALL_RE.sub("", text)
     cleaned = _STANDALONE_INVOKE_RE.sub("", cleaned)
     cleaned = _MINIMAX_PARTIAL_RE.sub("", cleaned)
     cleaned = _STANDALONE_PARTIAL_RE.sub("", cleaned)
     # Also strip bare minimax:tool_call keyword
     cleaned = re.sub(r"minimax:tool_call\b", "", cleaned, flags=re.IGNORECASE)
+    # Strip DSML tool_calls wrapper tags (left over after normalizing the
+    # inner invoke/parameter tags away)
+    cleaned = re.sub(r"<\s*/?\s*tool_calls\s*>", "", cleaned, flags=re.IGNORECASE)
     # Collapse runs of blank lines
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
@@ -249,6 +287,7 @@ def _strip_minimax_tool_calls(text: str) -> str:
 
 def _has_minimax_tool_call(text: str) -> bool:
     """Quick check if text contains a MiniMax-style tool call pattern."""
+    text = _normalize_dsml(text)
     return bool(_MINIMAX_TOOL_CALL_RE.search(text) or _STANDALONE_INVOKE_RE.search(text))
 
 
@@ -1101,6 +1140,8 @@ _TOOL_TALK_PATTERNS = [
     re.compile(r"to answer (this|your) (question|request),? i (will|would|need to)", re.IGNORECASE),
     re.compile(r"<tool>|<action>|<function>", re.IGNORECASE),
     re.compile(r"tool_call|function_call|invoke_tool", re.IGNORECASE),
+    # DeepSeek DSML tool-call markup — must be intercepted, not streamed
+    re.compile(r"<｜DSML｜\s*(tool_calls|invoke)\b", re.IGNORECASE),
     # MiniMax-style: "I will call the web_search tool" followed by XML
     re.compile(r"i('ll| will) (now |then )?(call|use|invoke) (the )?\w+ (tool|function)", re.IGNORECASE),
     # v0.7: Additional plain-text tool narration patterns — models like MiniMax M2.5
@@ -2908,7 +2949,9 @@ class AgentLoop:
                     if _has_minimax_tool_call(_minimax_buffer):
                         # Complete tool call found — stop buffering
                         break
-                    if _MINIMAX_PARTIAL_RE.search(_minimax_buffer) or _STANDALONE_PARTIAL_RE.search(_minimax_buffer):
+                    if _MINIMAX_PARTIAL_RE.search(_minimax_buffer) or _STANDALONE_PARTIAL_RE.search(
+                        _normalize_dsml(_minimax_buffer)
+                    ):
                         _minimax_partial_seen = True
                     if len(_minimax_buffer) >= _MINIMAX_CHECK_CHARS:
                         if _minimax_partial_seen:
@@ -3925,10 +3968,23 @@ class AgentLoop:
                     yield item
                 # Ensure the task completes — but don't hang if it already
                 # finished or errored. Use a short timeout.
+                # NOTE: same BaseException trap as the dispatcher (Session 127):
+                # awaiting a task cancelled by the timeout path above raises
+                # CancelledError, which `except (TimeoutError, Exception)` does
+                # NOT catch in py3.8+ — it would escape and kill the whole
+                # request. gather(return_exceptions=True) absorbs it.
                 try:
-                    await asyncio.wait_for(_task, timeout=5)
-                except (asyncio.TimeoutError, Exception):
+                    await asyncio.wait_for(
+                        asyncio.gather(_task, return_exceptions=True),
+                        timeout=5,
+                    )
+                except Exception:
                     _task.cancel()
+            except asyncio.CancelledError:
+                # External cancellation of the generator itself (client abort):
+                # cancel the child task, then propagate cleanly.
+                _task.cancel()
+                raise
             except Exception:
                 _task.cancel()
                 raise

@@ -34,6 +34,7 @@ from core.agent.constants import (
     REFLECT_ENABLED,
     REFLECT_INTENTS,
 )
+from core.agent.loop import _has_minimax_tool_call, _parse_minimax_tool_call
 from core.agent.orchestrator import AgentOrchestrator, OrchestrationResult
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.config import settings
@@ -1654,7 +1655,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             _dup_filter = DuplicateFilter()
             _obs.emit("thinking_start", intent="chat")
             self._metrics.start_request()
-            async for chunk in active_adapter.chat(prompt_messages, intent="chat"):
+            _direct_dsml_buffer = ""
+            _direct_escalate: Optional[str] = None  # tool name to escalate on
+            _direct_stream = active_adapter.chat(prompt_messages, intent="chat")
+            async for chunk in _direct_stream:
                 if chunk.usage:
                     _provider_usage.update(chunk.usage)
                 # Propagate adapter errors to the SSE bridge so the frontend
@@ -1663,11 +1667,101 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     yield StreamChunk(text="", done=True, error=chunk.error)
                     return
                 safe_text = _filter_system_leaks(chunk.text)
+                # Session 127: the DIRECT fast-path has NO tool interception,
+                # so when the dispatcher times out (free-tier overload) and the
+                # model still wants a tool, it emits DSML/MiniMax XML as text
+                # that would otherwise stream raw as the final answer. Detect
+                # it and escalate to the agent loop (which intercepts + runs
+                # the tool).
+                _direct_dsml_buffer += safe_text
+                if _has_minimax_tool_call(_direct_dsml_buffer):
+                    _parsed = _parse_minimax_tool_call(_direct_dsml_buffer)
+                    if _parsed:
+                        _direct_escalate = _parsed[0][0]
+                        logger.warning(
+                            "[engine] DIRECT path: model emitted tool-call XML "
+                            f"({_direct_escalate!r}) — escalating to agent loop"
+                        )
+                        break
                 # Suppress duplicate paragraphs (small models sometimes loop)
                 filtered = _dup_filter.feed(safe_text)
                 if filtered:
                     full_response_chunks.append(filtered)
                     yield StreamChunk(text=filtered, done=chunk.done, usage=dict(_provider_usage))
+
+            # ── Session 127: escalate DSML/MiniMax tool-call XML to the agent loop ──
+            # The DIRECT path is a no-tools conversational fast-path. If the
+            # model demanded a tool anyway, hand off to the agent loop so the
+            # tool actually RUNS instead of the raw XML streaming as the answer.
+            if _direct_escalate:
+                # Drain the one-shot stream fully (httpx streams can't be
+                # re-iterated; the agent loop opens its own adapter call).
+                try:
+                    async for _ch in _direct_stream:
+                        if _ch.usage:
+                            _provider_usage.update(_ch.usage)
+                except Exception:
+                    pass
+                _obs.emit(
+                    "direct_escalate_agent",
+                    tool=_direct_escalate,
+                    reason="model emitted tool-call XML on DIRECT path",
+                )
+                # Any text streamed BEFORE the DSML was already yielded to the
+                # user; drop it from the persisted response so the final stored
+                # message is the agent-loop answer, not a half-sentence prefix
+                # mixed with it.
+                full_response_chunks = []
+                # Map the requested tool to an intent for the agent loop.
+                # Fall back to a TOOL-CAPABLE intent: on the DIRECT fallback
+                # path effective_intent is CHAT (a no-tool intent), which would
+                # leave the agent loop tool-less and get the DSML rejected.
+                _esc_intent = Intent.SHELL
+                try:
+                    _esc_intent = Intent(_direct_escalate)
+                except ValueError:
+                    pass
+                _esc_available = [
+                    tool
+                    for tool in available_tools()
+                    if allowed_tool_names is None or tool.get("intent") in allowed_tool_names
+                ]
+                _agent_esc_run = self._agent_loop.run(
+                    messages=prompt_messages,
+                    intent=_esc_intent,
+                    initial_tool_result=None,
+                    available_tools=_esc_available,
+                    allowed_tool_names=(
+                        frozenset(allowed_tool_names) if allowed_tool_names is not None else None
+                    ),
+                    confidence=confidence,
+                    adapter=active_adapter,
+                    intent_history=intent_history,
+                    obs=_obs,
+                    memory_facts=memory_facts,
+                    orchestrator_context=None,
+                    skip_planning=True,
+                    steering_queue=self._steering_queue_for(session_id),
+                    abort_signal=self._abort_event_for(session_id),
+                )
+                async for chunk in _agent_esc_run:
+                    if chunk.usage:
+                        _provider_usage.update(chunk.usage)
+                    safe_text = _filter_system_leaks(chunk.text)
+                    if safe_text:
+                        full_response_chunks.append(safe_text)
+                    if chunk.done:
+                        continue
+                    yield StreamChunk(
+                        text=safe_text,
+                        done=False,
+                        error=chunk.error,
+                        thinking=chunk.thinking,
+                        metadata=chunk.metadata,
+                        status=chunk.status,
+                        usage=dict(_provider_usage),
+                    )
+
             # Prefer provider-reported usage; estimate only when the provider
             # omitted usage metadata.
             response_so_far = _dup_filter.text
