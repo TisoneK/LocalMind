@@ -1,8 +1,6 @@
-# Current Task (overwrite each session)
+# Current Task
 
-- **Session:** 131
-- **Feature:** none (backlog: B-2026-07-31-10 — first slice: Data tools)
-- **Task:** Backlog item B-2026-07-31-10 — Non-coding capability roadmap, first tractable slice per the incremental principle: **Data tools** — safe calculator (restricted-eval), CSV summary/head, JSON view/query. Offline, deterministic, bounded output, graceful degradation — the same contract as the observe tool (Session 130). SQL + chart deferred (need a DB engine decision / frontend).
-- **Status:** in progress
-
----
+- **Session:** 132 (2026-08-10) — COMPLETE
+- **Feature:** B-2026-07-31-10 — Non-coding capability roadmap
+- **Done:** Data tools slice #2 (SQL read-only tool) + user-reported "dispatch" Observe-label bug fix (backend thinking_start placeholder + frontend dead guard).
+- **Next:** Roadmap remaining: chart, Knowledge & Reasoning, Computer Interaction, Personal Productivity, External Services. Anthropic verification still blocked (needs API key).
