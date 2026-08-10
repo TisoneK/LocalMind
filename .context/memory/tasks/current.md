@@ -1,8 +1,8 @@
 # Current Task (overwrite each session)
 
-- **Session:** 129
-- **Feature:** none (backlog: Decompose monolith files)
-- **Task:** Backlog item (line 29) — decompose `backend/src/core/engine/_pipeline.py` (2269 LOC) and `backend/src/core/agent/loop.py` (2926 LOC) into smaller modules. Low priority but enables future feature work. Behavior-preserving extraction only — the existing pytest suite (1149 backend tests) is the safety net.
+- **Session:** 130
+- **Feature:** none (backlog: B-2026-07-31-9)
+- **Task:** Backlog item B-2026-07-31-9 — **Build Observe capability for desktop awareness** — screen, active_window, clipboard, running_apps, system_state. Foundation for "what's happening right now?" — the Observe→Think→Decide→Act→Observe→Verify loop. See `.context/memory/reviews/2026-07-31-review-6.md` Phase E.
 - **Status:** in progress
 
 ---
