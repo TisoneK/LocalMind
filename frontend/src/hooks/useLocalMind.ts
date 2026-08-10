@@ -190,7 +190,10 @@ export function useChat(
   // at 20-40s/call legitimately runs 80-280s). It now fires only after 120s
   // of SILENCE — a genuinely stuck stream still recovers, a slow-but-active
   // one (tokens/obs/status events every few seconds) is left alone.
-  const lastActivityRef = useRef<number>(Date.now());
+  // Initialized 0 (not Date.now() — impure during render): the value is
+  // only read by the silence-check interval, which runs solely while
+  // isStreaming is true, and send() re-arms it before the stream starts.
+  const lastActivityRef = useRef<number>(0);
 
   const prevSessionIdRef = useRef<string | null>(null);
   const isStreamingRef = useRef(false);
@@ -403,6 +406,13 @@ export function useChat(
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
       streamStartedAtRef.current = Date.now();
+      // Session 133 addendum: re-arm the stall timer at stream START, not
+      // component mount. lastActivityRef is only otherwise written on SSE
+      // payloads, so if the app sat idle >120s before sending (and the
+      // first payload is delayed by a slow model/busy backend), the silence
+      // check would be already-past-threshold and kill a working request
+      // before its first event arrived.
+      lastActivityRef.current = Date.now();
       setElapsedMs(0);
       setLastMetrics(null);
       setActiveToolCalls([]);
