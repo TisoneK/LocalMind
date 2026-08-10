@@ -195,6 +195,85 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
     }
 )
 
+# ── Per-intent tool scoping (Session 124) ────────────────────────────────────
+# The 21.9K-prompt-token bug: the agent loop sent ALL 24 tool definitions
+# (~24.2K chars ≈ 6K tokens) on EVERY step of every intent — a git-status
+# task paid the same fixed cost as a web-research task, 4+ times over a
+# multi-step plan. Per-intent scoping intersects the agent's toolset with
+# only the tools the current intent can plausibly need, cutting the fixed
+# per-step cost roughly in half (24 → ~11 tools for local-execution
+# intents) with zero capability loss: web tools are only relevant to
+# WEB_* intents, the proposal/subgoal scratchpad to editing intents, etc.
+#
+# Each scope is a subset of AGENT_ALLOWED_TOOLS. Unknown intents fall back
+# to the full AGENT_ALLOWED_TOOLS (safe default — same as pre-Session-124
+# behavior).
+_INTENT_CORE_LOCAL_TOOLS: frozenset[str] = frozenset(
+    {
+        "shell",
+        "git",
+        "file_task",
+        "file_write",
+        "edit_file",
+        "code_exec",
+        "process",
+        "diagnostics",
+        "sysinfo",
+        "memory_op",
+        "delegate",  # ADR-8 Phase 3: keep delegation available everywhere
+        "skill",  # B-2026-08-02-12: universal tool — playbooks are cheap (~130 tok)
+    }
+)
+
+INTENT_TOOL_SCOPES: dict[Intent, frozenset[str]] = {
+    Intent.SHELL: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.GIT: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.CODE_EXEC: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.FILE_TASK: _INTENT_CORE_LOCAL_TOOLS,
+    # Editing intents keep the proposal/best-of-N family (B-2026-08-02-7/11)
+    # — those are coding-agent editing features that must not be lost.
+    Intent.FILE_WRITE: _INTENT_CORE_LOCAL_TOOLS | frozenset(
+        {"propose_write_file", "propose_str_replace", "apply_proposed_edit", "best_of_n_edit"}
+    ),
+    Intent.FILE_EDIT: _INTENT_CORE_LOCAL_TOOLS | frozenset(
+        {"propose_str_replace", "propose_write_file", "apply_proposed_edit", "best_of_n_edit"}
+    ),
+    Intent.MEMORY_OP: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.PROCESS: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.SYSINFO: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.DIAGNOSTICS: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.VERIFY: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.REVIEW: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.DEBUG: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.ANALYZE: _INTENT_CORE_LOCAL_TOOLS,
+    # Web/browse intents keep their domain tools + delegation + skill.
+    Intent.WEB_SEARCH: frozenset(
+        {"web_search", "web_fetch", "delegate", "skill", "file_task"}
+    ),
+    Intent.WEB_FETCH: frozenset(
+        {"web_search", "web_fetch", "delegate", "skill", "file_task"}
+    ),
+    Intent.BROWSE: frozenset({"browse", "delegate", "skill", "file_task"}),
+    # Delegation intents only need the delegation + domain tools.
+    Intent.DELEGATE: frozenset({"delegate"}),
+    Intent.DELEGATE_PARALLEL: frozenset({"delegate", "delegate_parallel"}),
+    Intent.DELEGATE_INLINE: frozenset({"delegate", "delegate_inline"}),
+    Intent.PROPOSE_EDIT: frozenset(
+        {"propose_str_replace", "edit_file", "file_task", "file_write", "apply_proposed_edit"}
+    ),
+    Intent.PROPOSE_WRITE: frozenset(
+        {"propose_write_file", "file_write", "file_task", "apply_proposed_edit"}
+    ),
+    Intent.APPLY_PROPOSED: frozenset({"apply_proposed_edit", "file_write", "file_task"}),
+    Intent.ADD_SUBGOAL: frozenset({"add_subgoal", "update_subgoal", "create_plan"}),
+    Intent.UPDATE_SUBGOAL: frozenset({"add_subgoal", "update_subgoal", "create_plan"}),
+    Intent.CREATE_PLAN: frozenset({"create_plan", "add_subgoal", "update_subgoal"}),
+    Intent.SKILL: frozenset({"skill", "file_task"}),
+    Intent.BEST_OF_N_EDIT: frozenset(
+        {"best_of_n_edit", "propose_str_replace", "apply_proposed_edit", "file_task"}
+    ),
+}
+
 # ── Answer Synthesis ────────────────────────────────────────────────────────
 
 SYNTHESIS_ENABLED: bool = True

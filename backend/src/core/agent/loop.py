@@ -61,6 +61,7 @@ from core.agent.constants import (
     AGENT_ALLOWED_TOOLS,
     AGENT_INTENTS,
     CLARIFICATION_THRESHOLD,
+    INTENT_TOOL_SCOPES,
     MAX_ITERATIONS,
     MAX_WALL_CLOCK_SECS,
     OBS_LOG_MAX_CHARS,
@@ -551,20 +552,13 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "delegate",
             "description": (
-                "Delegate a sub-task to another specialized agent. Use this when "
-                "the current task requires a different domain of expertise (e.g., "
-                "a coding task that needs web research, or a research task that "
-                "needs file analysis). The sub-agent runs with its own scoped tools "
-                "and returns its result; you continue with that result in your "
-                "context. Available target agents: 'research' (web search + fetch), "
-                "'coding' (shell + file tools + code exec), 'browser' (headless "
-                "browser), 'verifier' (run tests, reproduce bugs, validate "
-                "behavior), 'reviewer' (assess code quality and spec "
-                "conformance), 'debugger' (isolate failures and find "
-                "root causes of bugs), 'analyst' (understand requirements and "
-                "clarify what to build), 'direct' (single model call, no tools). Use 'delegate' "
-                "sparingly — it costs an extra agent loop. If you can handle the "
-                "task with your own tools, do that instead."
+                "Delegate a sub-task to a specialized agent when the task needs a "
+                "different domain. Targets: 'research' (web search+fetch), "
+                "'coding' (shell+file+code), 'browser' (headless browser), "
+                "'verifier' (run tests/reproduce bugs), 'reviewer' (code quality), "
+                "'debugger' (root-cause bugs), 'analyst' (clarify requirements), "
+                "'direct' (single model call, no tools). Costs an extra agent loop "
+                "— prefer your own tools when they suffice."
             ),
             "parameters": {
                 "type": "object",
@@ -622,13 +616,10 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "delegate_parallel",
             "description": (
-                "Delegate MULTIPLE independent sub-tasks to specialized agents "
-                "IN PARALLEL. Use this when a task splits into pieces that can "
-                "proceed simultaneously (research several topics at once, get "
-                "multiple perspectives, draft multiple variants for best-of-N). "
-                "All sub-agents run concurrently; the result is a summary of "
-                "EVERY output so you can compare and combine them. For a single "
-                "dependent sub-task use 'delegate' (handoff) instead."
+                "Delegate MULTIPLE independent sub-tasks to agents IN PARALLEL "
+                "(up to 5 targets; each needs agent+task). Returns a summary of "
+                "every output for comparison. For a single dependent sub-task use "
+                "'delegate' instead."
             ),
             "parameters": {
                 "type": "object",
@@ -662,16 +653,12 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "delegate_inline",
             "description": (
-                "Delegate an INLINE transformation to a special agent that can "
-                "REWRITE this conversation's history in place. Only agents "
-                "explicitly marked inline-capable accept this (currently only "
-                "'context_pruner', which summarizes/compacts the message "
-                "history when it grows too long). The pre-mutation history is "
-                "snapshotted to disk for debugging. Use sparingly — it changes "
-                "what you will see in subsequent steps. Payload: "
-                '{"target_agent": "context_pruner", "task": "summarize the '
-                "tool results and older turns, keep the user's latest message "
-                'verbatim"}.'
+                "Delegate an INLINE transformation to an inline-capable agent that "
+                "REWRITES this conversation's history in place (currently only "
+                "'context_pruner', which compacts history when it grows too long). "
+                "Payload: {\"target_agent\": \"context_pruner\", \"task\": \"summarize "
+                "the tool results and older turns, keep the user's latest message "
+                "verbatim\"}. Use sparingly — it changes what you see next."
             ),
             "parameters": {
                 "type": "object",
@@ -694,12 +681,11 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "propose_str_replace",
             "description": (
-                "Stage a search/replace-style edit as a PROPOSAL without touching disk. "
-                "Takes the same arguments as edit_file (path, action, search, replace, etc.) "
-                "and returns a diff preview; the modified content is stored in a per-run "
-                "proposal registry. Use this for best-of-N editing: stage 2-3 candidate "
-                "fixes for the same file, compare the previews, then apply the winner with "
-                "apply_proposed_edit. Nothing is written until you apply."
+                "Stage a search/replace edit as a PROPOSAL without touching disk "
+                "(same args as edit_file). Returns a diff preview stored in a per-run "
+                "registry; apply the winner with apply_proposed_edit. For best-of-N: "
+                "stage 2-3 candidate fixes, compare, then apply. Nothing is written "
+                "until you apply."
             ),
             "parameters": {
                 "type": "object",
@@ -759,11 +745,10 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "propose_write_file",
             "description": (
-                "Stage a full-file write as a PROPOSAL without touching disk. Takes the "
-                "same arguments as file_write (path + content). The content is stored in "
-                "a per-run proposal registry; call apply_proposed_edit to write it. Use "
-                "with propose_str_replace for best-of-N editing: stage multiple candidate "
-                "versions of a file, compare, then apply the winner."
+                "Stage a full-file write as a PROPOSAL without touching disk (same "
+                "args as file_write: path+content). Stored in a per-run registry; call "
+                "apply_proposed_edit to write it. Use with propose_str_replace for "
+                "best-of-N editing."
             ),
             "parameters": {
                 "type": "object",
@@ -780,10 +765,8 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "apply_proposed_edit",
             "description": (
-                "Write a staged proposal to disk. Applies the content staged by "
-                "propose_str_replace or propose_write_file for the given path. Inherits "
-                "the same permission gating as file_write — nothing is written without "
-                "confirmation when write permission is required."
+                "Write a staged proposal to disk (staged by propose_str_replace or "
+                "propose_write_file). Same permission gating as file_write."
             ),
             "parameters": {
                 "type": "object",
@@ -799,17 +782,12 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "best_of_n_edit",
             "description": (
-                "Produce N candidate edits for one file under different strategies, "
-                "pick the best via a selector agent, and apply it. Use for "
-                "high-stakes edits where you want the best of several attempts "
-                "(refactors, tricky bug fixes). Payload: "
-                '{"file_path": "src/foo.py", "instruction": "make the parser strict", '
-                '"n": 2, "strategies": ["conservative", "refactor"]}. n defaults to 2 '
-                "(max 5); strategies optional. The winner is applied via "
-                "apply_proposed_edit (same permission gating as file_write). "
-                "Expensive — spawns N+1 sub-agents. Note: the selector sees "
-                "search/replace truncated to 600 chars, so large edits are "
-                "judged partly on the candidate rationale."
+                "Produce N candidate edits for one file, pick the best via a "
+                "selector agent, and apply it. Payload: {\"file_path\": \"src/foo.py\", "
+                "\"instruction\": \"make the parser strict\", \"n\": 2, \"strategies\": "
+                "[\"conservative\", \"refactor\"]}. n defaults 2 (max 5). Winner applied "
+                "via apply_proposed_edit. Expensive (spawns N+1 sub-agents) — use "
+                "sparingly for high-stakes edits."
             ),
             "parameters": {
                 "type": "object",
@@ -922,18 +900,12 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "git",
             "description": (
-                "Structured Git version control operations. Use this instead of "
-                "shell for git commands — it provides semantic, structured output "
-                "that's easier to reason about. Operations: status (working tree "
-                "state — what's staged and unstaged), diff (show unstaged or staged "
-                "changes), log (recent commit history), branch (list all branches "
-                "or create a new one), checkout (switch to a different branch), "
-                "commit (commit staged changes or stage-all-and-commit), merge "
-                "(merge a branch into current), stash (push/pop/list stashed "
-                "changes), reset (--soft/--mixed to undo commits — --hard is "
-                "blocked for safety). ALWAYS check git status before committing. "
-                "ALWAYS check git log before resetting to understand what you're "
-                "undoing."
+                "Structured Git operations (prefer over shell for git). Operations: "
+                "status (working tree state), diff (unstaged/staged changes), log "
+                "(history), branch (list/create), checkout (switch), commit (staged "
+                "or --add_all), merge, stash (push/pop/list), reset (--soft/--mixed; "
+                "--hard is blocked). Always check git status before committing and "
+                "git log before resetting."
             ),
             "parameters": {
                 "type": "object",
@@ -991,17 +963,11 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "process",
             "description": (
-                "Manage long-running processes — start, stop, restart, check status, "
-                "read logs, and wait for completion. Use this for commands that run "
-                "for more than a few seconds: dev servers (npm run dev, uvicorn), "
-                "test runners (pytest, npm test), builds, docker containers. "
-                "Operations: start (provide name + command → the process runs in "
-                "background and you get its PID), stop (graceful SIGTERM by default, "
-                "or force=true for SIGKILL), restart (stop + start), status (list "
-                "all tracked processes or check a specific one), logs (read captured "
-                "stdout/stderr — last 200 lines), wait (block until process finishes "
-                "or timeout, default 30s). ALWAYS start long-running commands with "
-                "this tool instead of shell — shell kills commands after 20s timeout."
+                "Manage long-running processes: start (name+command, background, "
+                "returns PID), stop (SIGTERM; force=true for SIGKILL), restart, "
+                "status, logs (last 200 lines), wait (block until done or timeout, "
+                "default 30s). Use for commands that run >20s (dev servers, test "
+                "runners, builds) — shell kills commands after 20s."
             ),
             "parameters": {
                 "type": "object",
@@ -1037,18 +1003,11 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "diagnostics",
             "description": (
-                "Analyze errors, tracebacks, logs, and test failures to provide "
-                "structured diagnostic output. Use this instead of raw shell or "
-                "file_task when you need to understand WHY something failed. "
-                "Operations: inspect_error (analyze an error message — extracts "
-                "error type, message, stack frames, and likely origin), "
-                "analyze_traceback (parse a Python traceback into call stack and "
-                "immediate cause with file paths and line numbers), inspect_logs "
-                "(scan log text or log file for error/warning patterns with counts), "
-                "inspect_test_failure (parse pytest/unittest failure output into "
-                "expected vs actual values, diff, and source location). All "
-                "operations return structured output with severity classification "
-                "and suggested next actions."
+                "Structured analysis of errors, tracebacks, logs, and test failures. "
+                "Operations: inspect_error (error type+origin), analyze_traceback "
+                "(call stack + immediate cause), inspect_logs (error/warning "
+                "patterns with counts), inspect_test_failure (expected vs actual, "
+                "diff, source location). Returns severity + suggested next actions."
             ),
             "parameters": {
                 "type": "object",
@@ -1388,16 +1347,39 @@ class AgentLoop:
 
         # ── Build tool definitions filtered by allowlist ───────────────
         # ADR-6: when an agent_config is provided, use its scoped
-        # allowed_tools instead of the global AGENT_ALLOWED_TOOLS. This
-        # is the ADR-6 value — a coding agent sees only 5 tools, a
-        # browser agent sees only 1, etc. Smaller surface = more
-        # reliable selection on gemma3:1b-class hardware.
+        # allowed_tools instead of the global AGENT_ALLOWED_TOOLS, then
+        # (Session 124) further narrow to the intent's tool scope — a
+        # coding agent's 19 tools become ~11 for a SHELL task. Smaller
+        # surface = more reliable selection AND fewer tokens per step.
         scoped_tools = agent_config.allowed_tools if agent_config is not None else None
         effective_allowed = allowed_tool_names
         if effective_allowed is not None:
             scoped_tools = frozenset(scoped_tools or AGENT_ALLOWED_TOOLS).intersection(effective_allowed)
+        # Session 124: per-intent tool scoping — intersect with the intent's
+        # tool scope so a git-status request doesn't pay for web/browse/
+        # proposal/subgoal tool definitions on every step (the 21.9K-prompt-
+        # token driver). Unknown intents fall back to the full allowlist.
+        #
+        # Guard: when the CALLER explicitly scoped tools (allowed_tool_names
+        # provided — e.g. the execution-graph/objective path passes a graph
+        # policy), respect that scope fully and do NOT further narrow it by
+        # intent. The graph policy is already the authoritative toolset for
+        # that step; intersecting it with the intent scope could silently
+        # drop a tool the graph expects.
+        if effective_allowed is None:
+            intent_scope = INTENT_TOOL_SCOPES.get(intent, AGENT_ALLOWED_TOOLS)
+            scoped_tools = frozenset(scoped_tools or AGENT_ALLOWED_TOOLS).intersection(intent_scope)
         filtered_tools = _filtered_tool_defs(scoped_tools)
         env_context = _build_environment_context()
+        # Scope the metadata tool list the same way so the system-prompt
+        # "Available tools" section and the planner see the same small
+        # surface as the adapter tool defs. Metadata uses intent values;
+        # most equal their tool names except FILE_EDIT (tool module
+        # "edit_file").
+        def _scope_name(t: dict) -> str:
+            return "edit_file" if t.get("intent") == "file_edit" else t.get("intent")
+
+        scoped_available = [t for t in available_tools if _scope_name(t) in scoped_tools]
 
         # ── ADR-5: Workspace state feedback ──────────────────────────────
         # Mark the turn start (records current HEAD for diff tracking),
@@ -1454,7 +1436,7 @@ class AgentLoop:
                 active_adapter=active_adapter,
                 intent=intent,
                 loop_messages=messages,
-                available_tools=available_tools,
+                available_tools=scoped_available,
                 env_context=env_context,
                 intent_history=intent_history,
             ):
@@ -1529,7 +1511,7 @@ class AgentLoop:
         # and orchestrator context (three-layer pipeline)
         system_prompt = build_agent_system_prompt(
             intent=intent,
-            available_tools=available_tools,
+            available_tools=scoped_available,
             intent_history=intent_history,
             plan_context=plan_context if plan_context else None,
             memory_facts=memory_facts,
@@ -3930,6 +3912,11 @@ class AgentLoop:
         env_context: str,
         intent_history: Optional[list[str]] = None,
     ) -> tuple[str, int]:
+        # NOTE (Session 124): this non-streaming planner is currently dead
+        # code — run() only calls _plan_stream. If re-enabled, pass the
+        # scoped tool list (scoped_available) here too, or it silently
+        # re-sends all 24 tool definitions and reintroduces the 21.9K-
+        # prompt-token bug.
         """
         Run a planning LLM call (no tools) to produce a step-by-step plan.
 
