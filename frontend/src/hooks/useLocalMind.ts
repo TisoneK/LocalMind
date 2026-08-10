@@ -700,18 +700,28 @@ export function useChat(
                   }
                   break;
                 }
-                // Session 115: the dispatcher used to emit thinking_done with
-                // the internal routing placeholder intent="dispatch", which
-                // clobbered the real classification in the Observe panel.
-                // Ignore that literal placeholder value only — legitimate
-                // thinking_done intents (chat/file_write/shell) still pass
-                // through for paths that skip the ThinkingDispatcher and
-                // rely on this event as their only intent source.
-                const isPlaceholderIntent = obs.intent === 'dispatch';
-                if (obs.intent && !isPlaceholderIntent) setCurrentIntent(obs.intent);
-                if (obs.confidence && !isPlaceholderIntent) setCurrentConfidence(obs.confidence);
-                // Update live observation from obs_event data
+                // Session 115 + 132: the dispatcher used to emit
+                // thinking_start/thinking_done with the internal routing
+                // placeholder intent="dispatch", which clobbered the real
+                // classification in the Observe panel. The OLD guard read
+                // obs.intent (top-level) but the intent actually rides in
+                // obs.data.intent — so it was dead code and the placeholder
+                // still won whenever the dispatcher failed before
+                // intent_classified fired. Check BOTH levels, and honor the
+                // intent_classified `primary` field. Legitimate intents
+                // (chat/file_write/shell) still pass through for paths that
+                // skip the ThinkingDispatcher.
                 const obsData = obs.data || obs;
+                const isPlaceholderIntent =
+                  obs.intent === 'dispatch' || obsData.intent === 'dispatch';
+                const obsIntent =
+                  (obs.type === 'intent_classified' ? obsData.primary : undefined) ||
+                  obsData.intent ||
+                  obs.intent;
+                if (obsIntent && !isPlaceholderIntent) setCurrentIntent(obsIntent);
+                if (obsData.confidence && !isPlaceholderIntent) {
+                  setCurrentConfidence(Number(obsData.confidence));
+                }
                 if (obsData) {
                   // ADR-12 (B-2026-08-09-2): the engine's _StageClock emits
                   // stage_timing obs events with real per-stage latency +
@@ -739,7 +749,7 @@ export function useChat(
                   setLiveObservation((prev) => ({
                     intent: (isPlaceholderIntent
                       ? (prev?.intent || 'chat')
-                      : (obsData.intent || obs.intent || prev?.intent || 'chat')) as any,
+                      : (obsIntent || prev?.intent || 'chat')) as any,
                     confidence: Number(isPlaceholderIntent
                       ? (prev?.confidence || 0)
                       : (obsData.confidence || obs.confidence || prev?.confidence || 0)),

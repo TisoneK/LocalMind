@@ -128,6 +128,7 @@ _INTENT_STEP_LABELS: dict[str, str] = {
     "calculate": "Calculate",
     "csv": "CSV",
     "json": "JSON",
+    "sql": "SQL",
     "memory_op": "Memory",
 }
 
@@ -207,6 +208,7 @@ AVAILABLE CAPABILITIES:
 - calculate: Evaluate a safe arithmetic expression exactly (percentages, formulas)
 - csv: Read a CSV file into a compact bounded table
 - json: Parse local JSON (file or inline) with optional dot-path queries
+- sql: Run read-only SQLite SELECT queries against a local database
 - reasoning: Deep analysis, logical deduction, evaluation
 - synthesis: Combine information from multiple sources into coherent output
 - planning: Multi-step task decomposition and sequencing
@@ -390,7 +392,13 @@ class ThinkingDispatcher:
         ]
 
         # ── 3. Stream from LLM — emit thinking in real-time ─────────────
-        obs.emit("thinking_start", intent="dispatch")
+        # Session 115 + 132: DO NOT emit intent="dispatch" here. It is an
+        # internal routing marker, not a classified intent — the Observe panel
+        # rendered it verbatim (with no confidence) whenever the dispatcher
+        # failed before intent_classified fired. At this point the real intent
+        # is not known yet; the panel falls back to its previous/chat value
+        # until intent_classified (or the engine's own intent event) lands.
+        obs.emit("thinking_start")
         yield StreamChunk(text="", thinking="start")
 
         raw_chunks: list[str] = []
