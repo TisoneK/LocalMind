@@ -498,6 +498,35 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "find_path",
+            "description": "Find files or folders whose NAME matches a pattern (substring or glob) under a root. Returns only matching paths, capped (default 10, max 25, depth 4). Use to LOCATE a file/folder by name — never dir/ls to hunt for something (that dumps the whole listing).",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Substring or glob pattern to match against file/folder names (case-insensitive)",  # noqa: E501
+                    },
+                    "root": {
+                        "type": "string",
+                        "description": "Directory to search under (default: user home)",
+                    },
+                    "max_depth": {
+                        "type": "integer",
+                        "description": "Recursion depth cap (default 4, max 8)",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Result cap (default 10, max 25)",
+                    },
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "shell",
             "description": "Run a system command or list directory contents. Use shell for: listing folders (dir/ls), finding files, git operations, disk checks, and OS commands. Use file_task to READ file contents — NOT shell commands. Shell commands like 'type' or 'cat' only work for plain text files and will fail on PDFs/DOCX/XLSX. Commands must match the current OS (Windows: dir/mkdir | Unix: ls/mkdir).",  # noqa: E501
             "parameters": {
@@ -1126,6 +1155,10 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         return json.dumps(tool_args, ensure_ascii=False)
     elif tool_name == "file_task":
         return tool_args.get("path", "")
+    elif tool_name == "find_path":
+        # find_path dispatcher expects JSON-encoded args (name/root/max_depth/
+        # max_results) — same pattern as git/delegate. The tool parses it back.
+        return json.dumps(tool_args, ensure_ascii=False)
     elif tool_name == "shell":
         return tool_args.get("command", "")
     elif tool_name == "memory_op":

@@ -55,6 +55,7 @@ CODING_TOOLS: frozenset[str] = frozenset(
         "edit_file",
         "code_exec",
         "git",
+        "find_path",  # Session 125: name-match search — locate before listing
         "process",
         "delegate",  # ADR-8 Phase 3: agent-initiated delegation
         "delegate_parallel",  # B-2026-08-02-6: parallel delegation fan-out

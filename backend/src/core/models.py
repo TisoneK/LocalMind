@@ -39,6 +39,7 @@ class Role(str, Enum):
 
 class Intent(str, Enum):
     FILE_TASK = "file_task"
+    FIND_PATH = "find_path"  # Session 125: name-match search for files/folders (path-only, capped)
     WEB_SEARCH = "web_search"
     WEB_FETCH = "web_fetch"
     CODE_EXEC = "code_exec"

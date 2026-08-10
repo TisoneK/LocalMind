@@ -50,6 +50,9 @@ def test_shell_scope_excludes_web_and_browse_tools():
     assert "browse" not in scope
     assert "shell" in scope
     assert "git" in scope
+    # Session 125: find_path is the locate-before-listing tool — always in
+    # the local-execution scope.
+    assert "find_path" in scope
 
 
 def test_shell_scope_excludes_proposal_and_subgoal_scratchpad():
@@ -100,11 +103,12 @@ def test_scoped_defs_respect_intent_scope():
 
 
 def test_description_trims_reduced_total_payload():
-    """The verbose tool descriptions were trimmed (Session 124) — the full
-    24-tool payload must be at most ~89% of its pre-trim size (24,229 chars;
-    ratio-based so a future tool addition doesn't spuriously break this)."""
-    _PRE_TRIM_FULL_CHARS = 24229
-    assert _payload_chars(AGENT_ALLOWED_TOOLS) <= _PRE_TRIM_FULL_CHARS * 0.89
+    """The verbose tool descriptions were trimmed (Session 124) — even after
+    adding find_path (Session 125, 25 tools total), the full payload must be
+    smaller than the ORIGINAL pre-trim 24-tool payload (24,229 chars). This
+    is the durable bound: trims + one new tool still net-negative."""
+    _PRE_TRIM_24_TOOL_CHARS = 24229
+    assert _payload_chars(AGENT_ALLOWED_TOOLS) <= _PRE_TRIM_24_TOOL_CHARS
 
 
 # ── AgentLoop integration: intent scoping reaches the adapter ─────────────

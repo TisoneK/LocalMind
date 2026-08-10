@@ -151,6 +151,7 @@ AGENT_INTENTS: frozenset[Intent] = frozenset(
         Intent.FILE_WRITE,
         Intent.FILE_EDIT,
         Intent.FILE_TASK,
+        Intent.FIND_PATH,  # Session 125: name-match search routes to the agent loop
         Intent.GIT,
         Intent.MEMORY_OP,
         Intent.PROCESS,
@@ -176,6 +177,7 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
         "diagnostics",
         "edit_file",
         "file_task",
+        "find_path",
         "git",
         "process",
         "shell",
@@ -220,6 +222,7 @@ _INTENT_CORE_LOCAL_TOOLS: frozenset[str] = frozenset(
         "diagnostics",
         "sysinfo",
         "memory_op",
+        "find_path",  # Session 125: name-match search (locate before listing)
         "delegate",  # ADR-8 Phase 3: keep delegation available everywhere
         "skill",  # B-2026-08-02-12: universal tool — playbooks are cheap (~130 tok)
     }
@@ -230,6 +233,7 @@ INTENT_TOOL_SCOPES: dict[Intent, frozenset[str]] = {
     Intent.GIT: _INTENT_CORE_LOCAL_TOOLS,
     Intent.CODE_EXEC: _INTENT_CORE_LOCAL_TOOLS,
     Intent.FILE_TASK: _INTENT_CORE_LOCAL_TOOLS,
+    Intent.FIND_PATH: _INTENT_CORE_LOCAL_TOOLS,  # Session 125: locate before listing
     # Editing intents keep the proposal/best-of-N family (B-2026-08-02-7/11)
     # — those are coding-agent editing features that must not be lost.
     Intent.FILE_WRITE: _INTENT_CORE_LOCAL_TOOLS | frozenset(

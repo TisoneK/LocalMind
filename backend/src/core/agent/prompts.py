@@ -727,6 +727,8 @@ Do NOT re-plan or re-think — just call the tools as described in the plan.
             "- Quote paths with spaces. Use the right commands for the OS.\n"
             "- If a command fails, read the error message before retrying\n"
             "- Prefer safe commands first: ls before rm, cat before overwrite, --dry-run when available\n"
+            "- To LOCATE a file or folder by name, use find_path — never dir/ls an entire\n"
+            "  directory hoping to spot it (that dumps the whole listing into context).\n"
             "- For DIRECTORY LISTINGS: ALWAYS use shell (list_files or dir/ls), NEVER file_task\n"
             "- For READING FILE CONTENTS: ALWAYS use file_task, NOT shell commands\n"
             "- CRITICAL: NEVER use 'type', 'cat', 'more' to read files — they work for text only\n"
