@@ -944,6 +944,9 @@ async def _dispatch_sub_agent_tool(
             "memory_op": Intent.MEMORY_OP,
             "sysinfo": Intent.SYSINFO,
             "observe": Intent.OBSERVE,  # B-2026-07-31-9: desktop awareness
+            "calculator": Intent.CALCULATE,  # B-2026-07-31-10: safe arithmetic
+            "csv": Intent.CSV,  # B-2026-07-31-10: bounded CSV parsing
+            "json": Intent.JSON,  # B-2026-07-31-10: bounded JSON parse/query
         }
         intent = _tool_intent_map.get(tool_name)
         if not intent:

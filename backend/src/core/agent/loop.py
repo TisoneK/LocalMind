@@ -446,6 +446,78 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "calculator",
+            "description": (
+                "Evaluate a safe arithmetic expression exactly — offline and instant. "
+                "Supports + - * / // % **, parentheses, pi/e/tau, and functions "
+                "abs/round/min/max/pow/sqrt/floor/ceil/exp/log/sin/cos/tan. "
+                "Understands '15% of 80'. Use for precise numeric answers (percentages, "
+                "formulas) instead of shell."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "The arithmetic expression to evaluate, e.g. '15% of 80'",
+                    },
+                },
+                "required": ["expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "csv",
+            "description": (
+                "Read a CSV file and return a compact bounded table (default 20 rows x 20 cols, "
+                "max 50) — never the raw file. Use for 'what's in this CSV' without flooding "
+                "context. Args: path (must be in allowed folders), optional max_rows, max_cols."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the .csv file"},
+                    "max_rows": {"type": "integer", "description": "Row cap (1-50, default 20)"},
+                    "max_cols": {"type": "integer", "description": "Column cap (1-50, default 20)"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "json",
+            "description": (
+                "Parse and summarize JSON — from a file path (must be in allowed folders) or "
+                "an inline JSON string. Optional dot-path query to drill in, e.g. 'a.b[0].c'. "
+                "Output is bounded: large collections are summarized, never dumped."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "type": "string",
+                        "description": "Path to a .json file OR inline JSON text",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Optional dot-path to extract, e.g. 'a.b[0].c'",
+                    },
+                    "max_items": {
+                        "type": "integer",
+                        "description": "Item cap for large collections (1-100, default 20)",
+                    },
+                },
+                "required": ["source"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "delegate",
             "description": (
                 "Delegate a sub-task to a specialized agent when the task needs a "
@@ -1656,6 +1728,9 @@ class AgentLoop:
                         "memory_op": f"Memory: {call.tool_args.get('operation', '')} {call.tool_args.get('content', '')[:40]}".strip(),  # noqa: E501
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
                         "observe": f"Observing: {_query[:60]}" if _query else "Observing the desktop",
+                        "calculator": f"Calculating: {_query[:60]}" if _query else "Calculating",
+                        "csv": f"Reading CSV: {_query[:60]}" if _query else "Reading CSV",
+                        "json": f"Querying JSON: {_query[:60]}" if _query else "Querying JSON",
                         "git": f"Git: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Git operation",  # noqa: E501
                         "process": f"Process: {call.tool_args.get('operation', '')} {call.tool_args.get('name', '')}" if call.tool_args.get('operation') else "Process operation",  # noqa: E501
                         "diagnostics": f"Diagnostics: {call.tool_args.get('operation', '')}" if call.tool_args.get('operation') else "Analyzing failure",  # noqa: E501
@@ -2124,6 +2199,9 @@ class AgentLoop:
                         "memory_op": f"Memory: {tool_args.get('operation', '')} {tool_args.get('content', '')[:40]}".strip(),  # noqa: E501
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
                         "observe": f"Observing: {_query[:60]}" if _query else "Observing the desktop",
+                        "calculator": f"Calculating: {_query[:60]}" if _query else "Calculating",
+                        "csv": f"Reading CSV: {_query[:60]}" if _query else "Reading CSV",
+                        "json": f"Querying JSON: {_query[:60]}" if _query else "Querying JSON",
                         "git": f"Git: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Git operation",  # noqa: E501
                         "process": f"Process: {tool_args.get('operation', '')} {tool_args.get('name', '')}" if tool_args.get('operation') else "Process operation",  # noqa: E501
                         "diagnostics": f"Diagnostics: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Analyzing failure",  # noqa: E501
@@ -2730,6 +2808,9 @@ class AgentLoop:
                             "memory_op": f"Memory: {_normalized_args.get('operation', '')} {_normalized_args.get('content', '')[:40]}".strip(),  # noqa: E501
                             "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
                         "observe": f"Observing: {_query[:60]}" if _query else "Observing the desktop",
+                        "calculator": f"Calculating: {_query[:60]}" if _query else "Calculating",
+                        "csv": f"Reading CSV: {_query[:60]}" if _query else "Reading CSV",
+                        "json": f"Querying JSON: {_query[:60]}" if _query else "Querying JSON",
                         }
                         action_label = _label_map.get(tc_name, f"Running {tc_name}")
 

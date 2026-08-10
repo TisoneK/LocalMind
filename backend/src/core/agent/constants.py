@@ -153,6 +153,9 @@ AGENT_INTENTS: frozenset[Intent] = frozenset(
         Intent.FILE_TASK,
         Intent.FIND_PATH,  # Session 125: name-match search routes to the agent loop
         Intent.OBSERVE,  # B-2026-07-31-9: desktop awareness routes to the agent loop
+        Intent.CALCULATE,  # B-2026-07-31-10: safe arithmetic routes to the agent loop
+        Intent.CSV,  # B-2026-07-31-10: bounded CSV parsing routes to the agent loop
+        Intent.JSON,  # B-2026-07-31-10: bounded JSON parse/query routes to the agent loop
         Intent.GIT,
         Intent.MEMORY_OP,
         Intent.PROCESS,
@@ -185,6 +188,9 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
         "memory_op",
         "sysinfo",
         "observe",  # B-2026-07-31-9: desktop awareness (window, clipboard, apps, state, recent files)
+        "calculator",  # B-2026-07-31-10: safe arithmetic (offline, bounded)
+        "csv",  # B-2026-07-31-10: bounded CSV parsing (offline, bounded)
+        "json",  # B-2026-07-31-10: bounded JSON parse/query (offline, bounded)
         "delegate",  # ADR-8 Phase 3: agent-initiated delegation
         "delegate_parallel",  # B-2026-08-02-6: parallel delegation fan-out
         "delegate_inline",  # B-2026-08-02-9: inline delegation (child rewrites parent history)
@@ -224,6 +230,9 @@ _INTENT_CORE_LOCAL_TOOLS: frozenset[str] = frozenset(
         "diagnostics",
         "sysinfo",
         "observe",  # B-2026-07-31-9: desktop awareness — cheap, offline, bounded
+        "calculator",  # B-2026-07-31-10: safe arithmetic — cheap, offline, bounded
+        "csv",  # B-2026-07-31-10: bounded CSV parsing — cheap, offline, bounded
+        "json",  # B-2026-07-31-10: bounded JSON parse/query — cheap, offline, bounded
         "memory_op",
         "find_path",  # Session 125: name-match search (locate before listing)
         "delegate",  # ADR-8 Phase 3: keep delegation available everywhere
@@ -249,6 +258,9 @@ INTENT_TOOL_SCOPES: dict[Intent, frozenset[str]] = {
     Intent.PROCESS: _INTENT_CORE_LOCAL_TOOLS,
     Intent.SYSINFO: _INTENT_CORE_LOCAL_TOOLS,
     Intent.OBSERVE: _INTENT_CORE_LOCAL_TOOLS,  # B-2026-07-31-9: desktop awareness
+    Intent.CALCULATE: _INTENT_CORE_LOCAL_TOOLS,  # B-2026-07-31-10: safe arithmetic
+    Intent.CSV: _INTENT_CORE_LOCAL_TOOLS,  # B-2026-07-31-10: bounded CSV parsing
+    Intent.JSON: _INTENT_CORE_LOCAL_TOOLS,  # B-2026-07-31-10: bounded JSON parse/query
     Intent.DIAGNOSTICS: _INTENT_CORE_LOCAL_TOOLS,
     Intent.VERIFY: _INTENT_CORE_LOCAL_TOOLS,
     Intent.REVIEW: _INTENT_CORE_LOCAL_TOOLS,

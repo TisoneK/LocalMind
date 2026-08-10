@@ -159,7 +159,9 @@ from tools import (
     # edit_file — importing it here guarantees those are loaded first.
     best_of_n_edit,  # noqa: E402, F401 -- B-2026-08-02-11: N candidate edits → selector → apply
     browser_agent,  # noqa: E402, F401 -- BROWSE (real browser interaction)
+    calculator,  # noqa: E402, F401 -- B-2026-07-31-10: CALCULATE (safe arithmetic)
     code_exec,  # noqa: E402, F401 -- registers CODE_EXEC
+    csv_tool,  # noqa: E402, F401 -- B-2026-07-31-10: CSV (bounded CSV parsing)
     delegate,  # noqa: E402, F401 -- ADR-8 Phase 3: agent-initiated delegation
     delegate_inline,  # noqa: E402, F401 -- B-2026-08-02-9: inline delegation (after delegate: imports its contextvars)
     delegate_parallel,  # noqa: E402, F401 -- B-2026-08-02-6: parallel delegation fan-out
@@ -169,6 +171,7 @@ from tools import (
     file_writer,  # noqa: E402, F401 -- FILE_WRITE (secondary intent)
     find_path,  # noqa: E402, F401 -- FIND_PATH (name-match search, path-only, capped)
     git_tool,  # noqa: E402, F401 -- GIT (structured git operations)
+    json_tool,  # noqa: E402, F401 -- B-2026-07-31-10: JSON (bounded JSON parse/query)
     memory_tool,  # noqa: E402, F401 -- registers MEMORY_OP
     observe,  # noqa: E402, F401 -- B-2026-07-31-9: OBSERVE (desktop awareness: window, clipboard, apps, state, recent files)
     process_tool,  # noqa: E402, F401 -- PROCESS (long-running process management)

@@ -125,6 +125,9 @@ _INTENT_STEP_LABELS: dict[str, str] = {
     "file_edit": "Edit File",
     "sysinfo": "System Info",
     "observe": "Observe",
+    "calculate": "Calculate",
+    "csv": "CSV",
+    "json": "JSON",
     "memory_op": "Memory",
 }
 
@@ -201,6 +204,9 @@ AVAILABLE CAPABILITIES:
 - memory_retrieve: Recall stored facts from memory
 - sysinfo: Get system info (current time, date, hardware specs, installed programs)
 - observe: Observe the desktop right now (active window, clipboard, running apps, CPU/RAM/disk/battery, recently modified files)
+- calculate: Evaluate a safe arithmetic expression exactly (percentages, formulas)
+- csv: Read a CSV file into a compact bounded table
+- json: Parse local JSON (file or inline) with optional dot-path queries
 - reasoning: Deep analysis, logical deduction, evaluation
 - synthesis: Combine information from multiple sources into coherent output
 - planning: Multi-step task decomposition and sequencing

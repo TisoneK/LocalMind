@@ -46,6 +46,9 @@ class Intent(str, Enum):
     SHELL = "shell"
     SYSINFO = "sysinfo"
     OBSERVE = "observe"  # B-2026-07-31-9: desktop awareness (window, clipboard, apps, state, recent files)
+    CALCULATE = "calculate"  # B-2026-07-31-10: safe arithmetic evaluation
+    CSV = "csv"  # B-2026-07-31-10: bounded CSV file parsing
+    JSON = "json"  # B-2026-07-31-10: bounded JSON parse/query
     MEMORY_OP = "memory_op"
     FILE_WRITE = "file_write"
     FILE_EDIT = "file_edit"
@@ -113,6 +116,11 @@ class Capability(str, Enum):
     SYSINFO = "sysinfo"
     OBSERVE = "observe"  # B-2026-07-31-9: desktop awareness — "what's happening right now"
 
+    # ── Data (B-2026-07-31-10) ──
+    CALCULATE = "calculate"  # safe arithmetic evaluation
+    CSV = "csv"  # bounded CSV file parsing
+    JSON = "json"  # bounded JSON parse/query
+
     # ── Cognitive ──
     REASONING = "reasoning"
     COMPARISON = "comparison"
@@ -126,6 +134,9 @@ class Capability(str, Enum):
 CAPABILITY_TO_INTENT: dict[Capability, Intent] = {
     Capability.SYSINFO: Intent.SYSINFO,
     Capability.OBSERVE: Intent.OBSERVE,
+    Capability.CALCULATE: Intent.CALCULATE,
+    Capability.CSV: Intent.CSV,
+    Capability.JSON: Intent.JSON,
     Capability.WEB_SEARCH: Intent.WEB_SEARCH,
     Capability.WEB_FETCH: Intent.WEB_FETCH,
     Capability.BROWSE: Intent.BROWSE,
@@ -151,6 +162,9 @@ TOOL_CAPABILITIES: set[Capability] = {
     Capability.MEMORY_RETRIEVE,
     Capability.SYSINFO,
     Capability.OBSERVE,  # B-2026-07-31-9: desktop awareness
+    Capability.CALCULATE,  # B-2026-07-31-10: safe arithmetic
+    Capability.CSV,  # B-2026-07-31-10: bounded CSV parsing
+    Capability.JSON,  # B-2026-07-31-10: bounded JSON parse/query
 }
 
 COGNITIVE_CAPABILITIES: set[Capability] = {
@@ -417,6 +431,10 @@ class TaskProfile(BaseModel):
             Capability.MEMORY_STORE: "memory_op",
             Capability.MEMORY_RETRIEVE: "memory_op",
             Capability.SYSINFO: "sysinfo",
+            Capability.OBSERVE: "observe",  # B-2026-07-31-9: desktop awareness
+            Capability.CALCULATE: "calculator",  # B-2026-07-31-10: safe arithmetic
+            Capability.CSV: "csv",  # B-2026-07-31-10: bounded CSV parsing
+            Capability.JSON: "json",  # B-2026-07-31-10: bounded JSON parse/query
         }
         tools: list[str] = []
         seen: set[str] = set()

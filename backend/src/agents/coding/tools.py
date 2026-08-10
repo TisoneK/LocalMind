@@ -57,6 +57,9 @@ CODING_TOOLS: frozenset[str] = frozenset(
         "git",
         "find_path",  # Session 125: name-match search — locate before listing
         "observe",  # B-2026-07-31-9: desktop awareness — window/clipboard/apps/state/recent files
+        "calculator",  # B-2026-07-31-10: safe arithmetic — offline, bounded
+        "csv",  # B-2026-07-31-10: bounded CSV parsing — offline, bounded
+        "json",  # B-2026-07-31-10: bounded JSON parse/query — offline, bounded
         "process",
         "delegate",  # ADR-8 Phase 3: agent-initiated delegation
         "delegate_parallel",  # B-2026-08-02-6: parallel delegation fan-out

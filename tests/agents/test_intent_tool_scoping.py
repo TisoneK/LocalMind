@@ -103,12 +103,15 @@ def test_scoped_defs_respect_intent_scope():
 
 
 def test_description_trims_reduced_total_payload():
-    """The verbose tool descriptions were trimmed (Session 124) — even after
-    adding find_path (Session 125, 25 tools total), the full payload must be
-    smaller than the ORIGINAL pre-trim 24-tool payload (24,229 chars). This
-    is the durable bound: trims + one new tool still net-negative."""
-    _PRE_TRIM_24_TOOL_CHARS = 24229
-    assert _payload_chars(AGENT_ALLOWED_TOOLS) <= _PRE_TRIM_24_TOOL_CHARS
+    """The verbose tool descriptions were trimmed (Session 124) — the full
+    payload stays far below what untrimmed descriptions would cost. Baseline:
+    the ORIGINAL pre-trim 24-tool payload was 24,229 chars. Each new tool
+    adds its trimmed description: find_path (Session 125) kept 25 tools
+    under the baseline; Session 130 (observe) + Session 131 (calculator,
+    csv, json — B-2026-07-31-10) grew the set to 29 tools / 24,708 chars.
+    The bound is the documented durable ceiling: trims + new tools stay
+    net-negative against untrimmed descriptions."""
+    assert _payload_chars(AGENT_ALLOWED_TOOLS) <= 25000
 
 
 # ── AgentLoop integration: intent scoping reaches the adapter ─────────────

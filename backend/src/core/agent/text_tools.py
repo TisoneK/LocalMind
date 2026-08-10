@@ -344,6 +344,17 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
     elif tool_name == "observe":
         # observe takes a single query string, same as sysinfo.
         return tool_args.get("query", "")
+    elif tool_name == "calculator":
+        # calculator takes a single expression string, same as observe.
+        return tool_args.get("expression", "")
+    elif tool_name == "csv":
+        # csv dispatcher expects JSON-encoded args (path/max_rows/max_cols)
+        # — same pattern as find_path/git. The tool parses it back.
+        return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "json":
+        # json dispatcher expects JSON-encoded args (source/query/max_items)
+        # — same pattern as find_path/git. The tool parses it back.
+        return json.dumps(tool_args, ensure_ascii=False)
     elif tool_name == "delegate":
         # delegate dispatcher expects JSON-encoded args (target_agent + task)
         # — same pattern as edit_file. The delegate tool parses it back.

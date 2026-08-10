@@ -121,6 +121,24 @@ _CAPABILITY_CATALOG: dict[Capability, CapabilityMetadata] = {
         "system state, recently modified files (offline, bounded).",
         tool_names=("observe",),
     ),
+    Capability.CALCULATE: CapabilityMetadata(
+        capability=Capability.CALCULATE,
+        family=CapabilityFamily.LOCAL_INFORMATION,
+        description="Evaluate a safe arithmetic expression exactly (offline, deterministic).",
+        tool_names=("calculator",),
+    ),
+    Capability.CSV: CapabilityMetadata(
+        capability=Capability.CSV,
+        family=CapabilityFamily.LOCAL_INFORMATION,
+        description="Parse a local CSV file into a bounded aligned table.",
+        tool_names=("csv",),
+    ),
+    Capability.JSON: CapabilityMetadata(
+        capability=Capability.JSON,
+        family=CapabilityFamily.LOCAL_INFORMATION,
+        description="Parse local JSON (file or inline) with optional dot-path queries, bounded.",
+        tool_names=("json",),
+    ),
     Capability.REASONING: CapabilityMetadata(
         capability=Capability.REASONING,
         family=CapabilityFamily.KNOWLEDGE_REASONING,

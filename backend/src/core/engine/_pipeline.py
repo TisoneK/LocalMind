@@ -1349,6 +1349,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     Intent.FILE_TASK,
                     Intent.SYSINFO,
                     Intent.OBSERVE,  # B-2026-07-31-9: observe returns grounded desktop data
+                    Intent.CSV,  # B-2026-07-31-10: csv reads local file data
+                    Intent.JSON,  # B-2026-07-31-10: json reads local file data
                 )
                 _client_mode = ExecutionMode.DIRECT if _client_intent == Intent.CHAT else ExecutionMode.SINGLE_TOOL
                 # Map client intent to capabilities

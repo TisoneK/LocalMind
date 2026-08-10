@@ -72,6 +72,9 @@ _INTENT_TO_AGENT: dict[Intent, str] = {
     Intent.CHAT: "direct",
     Intent.SYSINFO: "coding",
     Intent.OBSERVE: "coding",  # B-2026-07-31-9: desktop awareness routes to coding (observe tool)
+    Intent.CALCULATE: "coding",  # B-2026-07-31-10: safe arithmetic routes to coding (calculator)
+    Intent.CSV: "coding",  # B-2026-07-31-10: CSV parsing routes to coding
+    Intent.JSON: "coding",  # B-2026-07-31-10: JSON parse/query routes to coding
     Intent.MEMORY_OP: "coding",
     Intent.GIT: "coding",  # Session 41: git operations route to coding agent
     Intent.PROCESS: "coding",  # Session 42: process management routes to coding agent
