@@ -184,6 +184,13 @@ export function useChat(
   const [elapsedMs, setElapsedMs] = useState(0);
   const streamStartedAtRef = useRef<number | null>(null);
   const abortRef = useRef<(() => void) | null>(null);
+  // Session 133: last time ANY SSE payload arrived for the current stream.
+  // The old force-reset fired after 120s of STREAMING (wall clock), killing
+  // legitimate slow requests (a tool loop chaining 4-7 free-tier model calls
+  // at 20-40s/call legitimately runs 80-280s). It now fires only after 120s
+  // of SILENCE — a genuinely stuck stream still recovers, a slow-but-active
+  // one (tokens/obs/status events every few seconds) is left alone.
+  const lastActivityRef = useRef<number>(Date.now());
 
   const prevSessionIdRef = useRef<string | null>(null);
   const isStreamingRef = useRef(false);
@@ -243,15 +250,20 @@ export function useChat(
     });
   }, [isStreaming, lastMetrics, setMessages]);
 
-  // SAFETY: If isStreaming stays true for more than 120s, force-reset it.
-  // This prevents the "second message hangs forever" bug where a stream
-  // error or backend hang leaves isStreaming stuck true, causing all
-  // subsequent send() calls to silently return.
+  // SAFETY: force-reset isStreaming only when the stream is genuinely
+  // STALLED — no SSE payload for 120s — not merely long-running. This
+  // preserves the "second message hangs forever" protection (a backend
+  // hang or stream error goes silent and still recovers) without killing
+  // slow-but-working requests: a tool loop chaining several free-tier model
+  // calls streams obs/status/token events throughout, so lastActivityRef
+  // keeps advancing and the reset never fires.
   useEffect(() => {
     if (!isStreaming) return;
-    const timer = setTimeout(() => {
-      if (isStreamingRef.current) {
-        console.warn('[useChat] force-resetting isStreaming after 120s timeout');
+    const id = window.setInterval(() => {
+      if (!isStreamingRef.current) return;
+      const silenceMs = Date.now() - lastActivityRef.current;
+      if (silenceMs > 120000) {
+        console.warn(`[useChat] force-resetting isStreaming after ${Math.round(silenceMs / 1000)}s of silence`);
         setIsStreaming(false);
         streamingSessionRef.current = null;
         abortRef.current = null;
@@ -263,8 +275,8 @@ export function useChat(
           )
         );
       }
-    }, 120000);
-    return () => clearTimeout(timer);
+    }, 5000);
+    return () => window.clearInterval(id);
   }, [isStreaming]);
 
   // FIX: Auto-timeout for stuck tool calls. If a tool_call stays in "running"
@@ -408,6 +420,8 @@ export function useChat(
         effectiveSessionId,
         // onChunk — parse structured SSE events
         (rawData: string) => {
+          // Any SSE payload (token, obs, status, tool) counts as activity.
+          lastActivityRef.current = Date.now();
           try {
             const parsed = JSON.parse(rawData);
             // The backend emits structured obs events as {"obs_event": {...}}

@@ -56,7 +56,11 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-DISPATCHER_TIMEOUT_SECS: float = 30.0  # was 10.0 — too short for GLM/Z.ai (18s typical)
+DISPATCHER_TIMEOUT_SECS: float = 45.0  # was 10.0 (GLM/Z.ai 18s typical) → 30.0. Session 133:
+# free-tier providers now run 20-40s/call, so 30s fired constant dispatcher
+# timeouts → fallback CHAT plans (tool requests misrouted as conversation).
+# 45s matches PER_CALL_TIMEOUT_SECS: a slow-but-productive classification gets
+# its chance; the fallback fires only after 45s of true silence.
 DISPATCHER_TEMPERATURE: float = 0.2
 MAX_HISTORY_FOR_PROMPT: int = 6
 
