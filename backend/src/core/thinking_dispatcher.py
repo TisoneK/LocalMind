@@ -64,6 +64,98 @@ DISPATCHER_TIMEOUT_SECS: float = 45.0  # was 10.0 (GLM/Z.ai 18s typical) → 30.
 DISPATCHER_TEMPERATURE: float = 0.2
 MAX_HISTORY_FOR_PROMPT: int = 6
 
+# ── Dispatcher result cache (Session 135) ────────────────────────────────
+# Repeated/near-duplicate requests (same normalized message + same recent
+# intent-history context) reuse the previous routing decision and SKIP the
+# capability-inference LLM call entirely. Safe because the plan is only a
+# ROUTING decision (intent + capabilities + execution mode + reformulated
+# query) — the agent loop still executes tools fresh on every turn, so
+# caching the route never serves stale tool data (realtime-sensitive plans
+# still run their web_search/file_read live).
+#
+# The cache is MODULE-LEVEL because the engine constructs a fresh
+# ThinkingDispatcher per request; without a shared store every request
+# would start cold. Entries are TTL'd (routing drift over a session) and
+# bounded (LRU-ish eviction by insertion order).
+_PLAN_CACHE: dict[tuple, tuple[float, "OrchestrationPlan"]] = {}
+_PLAN_CACHE_TTL_SECS: float = 300.0  # 5 min — long enough for retries/follow-ups, short enough to drift
+_PLAN_CACHE_MAX_ENTRIES: int = 64
+# Only plans at/above this confidence are cached. Sits safely above the
+# fallback floor (0.3) so a parsed-but-garbage routing decision can never
+# be served to a repeat request.
+_PLAN_CACHE_MIN_CONFIDENCE: float = 0.35
+
+
+def _normalize_message_for_cache(message: str) -> str:
+    """Lowercase + collapse whitespace + strip punctuation for cache keying.
+
+    Turns "Check git status!!" and "check  git status" into the same key
+    so near-duplicate phrasings reuse the plan instead of re-classifying.
+    """
+    text = re.sub(r"\s+", " ", (message or "").strip().lower())
+    return text.strip(" .,!?;:'\"").strip()
+
+
+def _dispatcher_cache_key(
+    message: str,
+    intent_history: Optional[list[str]],
+    has_attachment: bool,
+) -> tuple:
+    """Cache key: normalized message + recent intent-history signature.
+
+    Intent history is the disambiguator the user asked for: the same words
+    after a SHELL task vs after a CHAT turn can legitimately route
+    differently, so the key must capture which intents preceded this
+    message. Attachment presence also changes routing (file upload).
+    """
+    history_sig = tuple((intent_history or [])[-MAX_HISTORY_FOR_PROMPT:])
+    return (_normalize_message_for_cache(message), history_sig, has_attachment)
+
+
+def _get_cached_plan(key: tuple) -> Optional["OrchestrationPlan"]:
+    """Return a deep copy of the cached plan if fresh, else None."""
+    entry = _PLAN_CACHE.get(key)
+    if entry is None:
+        return None
+    stored_at, plan = entry
+    if time.monotonic() - stored_at > _PLAN_CACHE_TTL_SECS:
+        _PLAN_CACHE.pop(key, None)
+        return None
+    # Deep copy so downstream mutation (engine tweaks profile fields like
+    # auto_correct / execution-mode derivation) never corrupts the cache.
+    try:
+        return plan.model_copy(deep=True)
+    except Exception:
+        # Deep copy failed — treat as a MISS, not a shared reference. Returning
+        # the stored instance would hand out a mutable object: downstream engine
+        # code derives profile fields from the plan (auto_correct, execution-mode
+        # correction), and mutating the cached instance would corrupt every later
+        # hit served from this entry. A re-run of the LLM is cheaper than serving
+        # a degraded route.
+        _PLAN_CACHE.pop(key, None)
+        return None
+
+
+def _store_plan(key: tuple, plan: "OrchestrationPlan") -> None:
+    """Store a plan, evicting expired + oldest entries when over capacity.
+
+    Enforces the "only quality plans cached" invariant itself: plans below
+    _PLAN_CACHE_MIN_CONFIDENCE (fallback floor is 0.3) are rejected so a
+    garbage routing decision can never be served to a repeat request.
+    """
+    if plan.profile.confidence < _PLAN_CACHE_MIN_CONFIDENCE:
+        return
+    now = time.monotonic()
+    # Opportunistic TTL sweep keeps the dict from accumulating dead keys.
+    expired = [k for k, (ts, _p) in _PLAN_CACHE.items() if now - ts > _PLAN_CACHE_TTL_SECS]
+    for k in expired:
+        _PLAN_CACHE.pop(k, None)
+    if len(_PLAN_CACHE) >= _PLAN_CACHE_MAX_ENTRIES:
+        # Evict oldest by insertion (dict preserves insertion order).
+        oldest_key = next(iter(_PLAN_CACHE))
+        _PLAN_CACHE.pop(oldest_key, None)
+    _PLAN_CACHE[key] = (now, plan)
+
 # Signal detection: only intercept truly unambiguous one-way signals.
 # These produce TaskProfile objects without an LLM call, saving 2-5s.
 # IMPORTANT: Fast-paths do NOT route to CHAT.
@@ -312,11 +404,17 @@ class ThinkingDispatcher:
         obs: ObsCollector,
         session_id: str = "",
         attachment_filename: Optional[str] = None,
+        intent_history: Optional[list[str]] = None,
     ) -> AsyncIterator[Union[StreamChunk, OrchestrationPlan]]:
         """
         Infer capabilities and return an OrchestrationPlan.
 
         Steps:
+          0. Check the module-level plan cache (Session 135) — a repeat of
+             a normalized message with the same recent intent-history
+             context reuses the previous routing decision and SKIPS the
+             LLM call entirely (safe: only the route is cached, tools still
+             execute fresh).
           1. Check signal detection for truly unambiguous signals.
           2. Check follow-up detection for short contextual messages.
           3. Build context from history + memory.
@@ -324,6 +422,14 @@ class ThinkingDispatcher:
           5. Stream thinking tokens to the frontend IN REAL-TIME.
           6. Parse the structured JSON output into OrchestrationPlan.
           7. Build ExecutionGraph from plan steps.
+
+        Args:
+            intent_history: Optional rolling window of this session's prior
+                intent values (most recent last). Part of the cache key —
+                the same words after a SHELL task vs after a CHAT turn may
+                route differently, so the key must capture the preceding
+                routing context. The engine passes its per-session
+                intent-history list.
 
         Yields:
             StreamChunk — thinking tokens streamed in real-time
@@ -378,6 +484,51 @@ class ThinkingDispatcher:
                 yield StreamChunk(text="", thinking="end")
                 yield followup_plan
                 return
+
+        # ── 1c. Plan cache — repeated/near-duplicate requests skip the LLM ──
+        # Session 135: the previous routing decision is safe to reuse because
+        # it only decides HOW to route (intent/capabilities/reformulation) —
+        # the agent loop executes tools fresh on every turn, so cached routes
+        # never serve stale tool data. Emit the same obs events the normal
+        # path emits (intent_classified / dispatcher_complete) so the Observe
+        # panel and the engine's downstream reads behave identically.
+        _cache_key = _dispatcher_cache_key(message, intent_history, has_attachment)
+        _cached = _get_cached_plan(_cache_key)
+        if _cached is not None:
+            _cached_intent = _cached.profile.primary_intent().value
+            logger.info(
+                "[dispatcher] cache hit for %r (intent=%s) — skipping LLM call",
+                message[:50],
+                _cached_intent,
+            )
+            obs.emit(
+                "dispatcher_cache_hit",
+                intent=_cached_intent,
+                message_preview=message[:60],
+            )
+            obs.emit(
+                "intent_classified",
+                primary=_cached_intent,
+                confidence=round(_cached.profile.confidence, 2),
+            )
+            obs.emit(
+                "dispatcher_complete",
+                intent=_cached_intent,
+                execution_mode=_cached.profile.execution_mode.value,
+                confidence=round(_cached.profile.confidence, 2),
+                latency_ms=0,
+                capabilities=[c.value for c in _cached.profile.capabilities],
+                cached=True,
+                session_id=session_id[:8] if session_id else "",
+            )
+            if _cached.profile.acknowledgement:
+                yield StreamChunk(
+                    text="",
+                    status=_cached.profile.acknowledgement,
+                    dispatch_steps=_cached.dispatch_steps,
+                )
+            yield _cached
+            return
 
         # ── 2. Build context from history ────────────────────────────────
         history_text = self._format_history(history)
@@ -605,6 +756,12 @@ class ThinkingDispatcher:
             [c.value for c in plan.profile.capabilities],
             plan.profile.reformulated[:60],
         )
+
+        # Session 135: store the routing plan for repeated/near-duplicate
+        # requests. Only REAL LLM-produced plans — fallback plans
+        # (timeout/error) return earlier and never reach here, and _store_plan
+        # itself rejects low-confidence (garbage) plans.
+        _store_plan(_cache_key, plan)
 
         yield plan
 

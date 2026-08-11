@@ -1408,6 +1408,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 obs=_obs,
                 session_id=session_id,
                 attachment_filename=filename,
+                # Session 135: prior intents of this session form the cache
+                # key's context half — same words after a SHELL task vs a
+                # CHAT turn can legitimately route differently. Note this is
+                # the window BEFORE this turn's intent is appended
+                # (_update_intent_history runs after dispatch).
+                intent_history=self._intent_history.get(session_id, []),
             ):
                 if isinstance(output, StreamChunk):
                     yield output
