@@ -16,6 +16,59 @@ from __future__ import annotations
 from core.models import Intent
 
 
+def _dispatcher_plan_context(graph) -> str:
+    """Format an ExecutionGraph into an orchestrator-style plan text.
+
+    The ThinkingDispatcher's single LLM call already emits
+    ``execution_plan.steps`` (graph nodes with capability/tool/label).
+    When that plan is usable, the engine feeds it to the agent loop as
+    ``orchestrator_context`` and skips the separate planning LLM call —
+    the plan already exists, a second call would only re-derive it
+    (Session 134: the 4-7 model calls per tool request include a plan
+    call that duplicates what call #1 already produced).
+
+    Returns "" when the graph is empty/degenerate (fallback plans build
+    an empty ``ExecutionGraph()``), which leaves the existing planner in
+    place — never skip planning with no plan at all (Session 113: raw NL
+    reached the shell tool because planning was skipped with nothing to
+    translate-before-dispatch).
+    """
+    if graph is None or not getattr(graph, "nodes", None):
+        return ""
+    lines = []
+    for i, node in enumerate(graph.nodes, 1):
+        label = (getattr(node, "label", "") or "").strip()
+        tool = (getattr(node, "tool_name", "") or "").strip()
+        # Only nodes with a human-readable label count as plan steps — a
+        # bare tool name ("1. shell") is not a plan. This keeps degenerate
+        # graphs (fallback plans, LLM output with steps but no labels) on
+        # the existing planner instead of silently skipping it.
+        if not label:
+            continue
+        lines.append(f"{i}. {label}" + (f" (via {tool})" if tool else ""))
+    return "\n".join(lines)
+
+
+def _dispatcher_plan_steps(graph) -> list[str]:
+    """Human-readable step labels from the dispatcher's ExecutionGraph.
+
+    Used to seed the Todos panel when the dispatcher's plan is reused in
+    place of the separate planning call, so the UI still shows a real
+    plan (the loop's own plan parsing is bypassed in that path).
+    """
+    if graph is None or not getattr(graph, "nodes", None):
+        return []
+    steps = []
+    for i, node in enumerate(graph.nodes, 1):
+        label = (getattr(node, "label", "") or "").strip()
+        # Mirrors _dispatcher_plan_context: only labeled nodes are plan
+        # steps, so the Todos panel shows exactly what the injected
+        # orchestrator plan says.
+        if label:
+            steps.append(label)
+    return steps
+
+
 def get_adapter(*args, **kwargs):
     """Deferred-lookup wrapper for adapters.get_adapter.
 

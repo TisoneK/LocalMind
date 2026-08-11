@@ -1078,6 +1078,12 @@ class AgentLoop:
         memory_facts: Optional[list[str]] = None,
         orchestrator_context: Optional[str] = None,
         skip_planning: bool = False,
+        # Session 134: when the caller (engine) skips the separate planning
+        # call because the ThinkingDispatcher already produced an
+        # execution_plan, pass those step labels here. They seed the Todos
+        # panel (same plan-{i} ids the planner would emit) and drive the
+        # plan cursor, so the UI still shows a real plan + progress.
+        plan_steps: Optional[list[str]] = None,
         agent_config=None,
         agent_context: Optional[str] = None,
         allowed_tool_names: Optional[frozenset[str]] = None,
@@ -1102,6 +1108,14 @@ class AgentLoop:
                 (three-layer pipeline). Contains the structured execution plan
                 and confidence assessment. When present, the Execution Agent
                 should follow this plan rather than planning independently.
+                Session 134: also set by the engine when the dispatcher's own
+                execution_plan is reused in place of the separate planning
+                call (plan_steps carries the same steps as Todos).
+            plan_steps: Optional list of step labels (Session 134). When the
+                caller skips the separate planning call because the
+                ThinkingDispatcher's execution_plan is being reused, these
+                seed the Todos panel (plan-{i} ids) and drive the plan
+                cursor as the model narrates each step.
             agent_config: Optional AgentConfig from the selected BaseAgent
                 subclass (ADR-6). When provided, its `max_iterations` and
                 `max_wall_clock_secs` override the module-level defaults
@@ -1322,6 +1336,16 @@ class AgentLoop:
                     f"[agent.loop] plan produced 0 steps for intent={intent.value} "
                     f"(plan_len={len(plan_context)}); no todos emitted"
                 )
+        elif plan_steps:
+            # Session 134: planning was skipped because the dispatcher's
+            # execution_plan is being reused (injected via
+            # orchestrator_context). Seed the todo list from those steps so
+            # the Todos panel shows the plan and the cursor can advance as
+            # the model narrates each step.
+            _plan_steps = list(plan_steps)
+            if _obs:
+                for i, step in enumerate(_plan_steps):
+                    _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
         else:
             _plan_steps = []
 

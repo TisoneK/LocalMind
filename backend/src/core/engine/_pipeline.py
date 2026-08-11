@@ -40,6 +40,8 @@ from core.agent.tool_dispatch import dispatch_with_retry
 from core.config import settings
 from core.engine.routing_helpers import (
     _PLAN_REQUIRED_INTENTS,
+    _dispatcher_plan_context,
+    _dispatcher_plan_steps,
     _fallback_todo_plan,
     _should_skip_planning,
     get_adapter,
@@ -2415,6 +2417,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         orchestrator_context = ""  # Will be set by orchestrator if enabled
         _skip_orchestrator = False  # v0.11: skip orchestrator when dispatcher has high confidence
         _skip_planning = False  # v0.11: skip agent planning when dispatcher has high confidence
+        # Session 134: when the dispatcher's own execution_plan (produced in
+        # its single LLM call) is reused in place of the separate agent
+        # planning call, these step labels seed the Todos panel so the UI
+        # still shows a real plan (the loop's todo emission is bypassed).
+        _reused_plan_steps: list[str] = []
         if effective_intent in AGENT_INTENTS:
             # Yield a status update so the user knows what's happening
             # (previously: the user saw "Thinking..." with no indication of progress)
@@ -2473,6 +2480,44 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     _skip_planning = _should_skip_planning(
                         effective_intent, _dispatcher_confidence
                     )
+                    # Session 134: the dispatcher's single LLM call ALREADY
+                    # produces an execution_plan (graph nodes with tool +
+                    # label). For the tool-heavy intents above, this used to
+                    # be DISCARDED and re-derived by a second planning call
+                    # (_plan_stream) — the middle call of the 4-7-call chain.
+                    # When the dispatcher plan is usable, reuse it as
+                    # orchestrator_context and skip the planner: the loop
+                    # follows this plan instead of re-planning (its
+                    # orchestrator_context mechanism was built for exactly
+                    # this). Cuts one 20-40s free-tier model call per tool
+                    # request. Falls back to the planner when the dispatcher
+                    # produced no usable steps (empty/degenerate graph) —
+                    # never skip planning with no plan at all (Session 113).
+                    if not _skip_planning:
+                        _dispatcher_plan = _dispatcher_plan_context(
+                            _orchestration_plan.graph
+                        )
+                        if _dispatcher_plan:
+                            _skip_planning = True
+                            _reused_plan_steps = _dispatcher_plan_steps(
+                                _orchestration_plan.graph
+                            )
+                            orchestrator_context = (
+                                "Structured plan from capability inference:\n"
+                                + _dispatcher_plan
+                            )
+                            _obs.emit(
+                                "dispatcher_plan_reused",
+                                intent=effective_intent.value,
+                                steps=len(_reused_plan_steps),
+                                confidence=round(_dispatcher_confidence, 2),
+                            )
+                            logger.info(
+                                "[engine] reusing dispatcher execution plan (%d steps) "
+                                "for %s — skipped agent planning call (saves one model call)",
+                                len(_reused_plan_steps),
+                                effective_intent.value,
+                            )
                     _skipped = ["orchestrator"] + ([] if not _skip_planning else ["planning"])
                     _obs.emit(
                         "dispatcher_high_confidence_skip",
@@ -3255,6 +3300,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     memory_facts=memory_facts,
                     orchestrator_context=orchestrator_context or None,
                     skip_planning=_skip_planning,
+                    plan_steps=_reused_plan_steps or None,  # Session 134: dispatcher plan reuse
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
                 )
@@ -3308,6 +3354,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     memory_facts=memory_facts,
                     orchestrator_context=orchestrator_context or None,
                     skip_planning=_skip_planning,
+                    plan_steps=_reused_plan_steps or None,  # Session 134: dispatcher plan reuse
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
                 ):
