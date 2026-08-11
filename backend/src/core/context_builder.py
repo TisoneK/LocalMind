@@ -17,6 +17,7 @@ import sys
 import threading
 from pathlib import Path
 
+from core.cache import LRUCache
 from core.config import settings
 from core.models import EngineContext, Intent, Role
 
@@ -24,8 +25,10 @@ logger = logging.getLogger(__name__)
 
 # ── Prompt fragment loader ─────────────────────────────────────────────────────
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
-_fragment_cache: dict[str, str] = {}
-_fragment_lock = threading.Lock()
+# Thread-safe bounded LRU (was an unbounded dict + manual lock before Session
+# 136). Fragment count is tiny (a handful of .md files), so a small bound is
+# plenty and prevents unbounded growth if names ever become dynamic.
+_fragment_cache: "LRUCache[str]" = LRUCache(max_entries=64)
 
 
 def _load_fragment(name: str) -> str:
@@ -37,25 +40,25 @@ def _load_fragment(name: str) -> str:
 
     Returns empty string if neither file exists.
     """
-    with _fragment_lock:
-        if name in _fragment_cache:
-            return _fragment_cache[name]
-        # Try skills/ subdirectory first (specialist skill files)
-        skill_path = _PROMPTS_DIR / "skills" / f"{name}.md"
-        intent_path = _PROMPTS_DIR / f"{name}.md"
-        for path in [skill_path, intent_path]:
-            try:
-                text = path.read_text(encoding="utf-8").strip()
-                _fragment_cache[name] = text
-                logger.debug(
-                    "[context_builder] loaded prompt fragment: %s (%d chars)", name, len(text)
-                )
-                return text
-            except FileNotFoundError:
-                continue
-        logger.debug("[context_builder] prompt fragment not found: %s -- using fallback", name)
-        _fragment_cache[name] = ""
-        return ""
+    cached = _fragment_cache.get(name)
+    if cached is not None:
+        return cached
+    # Try skills/ subdirectory first (specialist skill files)
+    skill_path = _PROMPTS_DIR / "skills" / f"{name}.md"
+    intent_path = _PROMPTS_DIR / f"{name}.md"
+    for path in [skill_path, intent_path]:
+        try:
+            text = path.read_text(encoding="utf-8").strip()
+            _fragment_cache.set(name, text)
+            logger.debug(
+                "[context_builder] loaded prompt fragment: %s (%d chars)", name, len(text)
+            )
+            return text
+        except FileNotFoundError:
+            continue
+    logger.debug("[context_builder] prompt fragment not found: %s -- using fallback", name)
+    _fragment_cache.set(name, "")
+    return ""
 
 
 def _intent_fragment_name(intent: Intent) -> str:

@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, AsyncIterator
 import httpx
 
 from adapters.base import BaseAdapter
+from core.cache import TTLCache
 from core.models import StreamChunk
 
 if TYPE_CHECKING:
@@ -130,6 +131,28 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     # Default fallback
     "default": 32768,
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /models TTL cache (shared TTLCache — was class-level dicts before Session 136)
+# ─────────────────────────────────────────────────────────────────────────────
+# The provider /models endpoint is fetched by BOTH health_check() and
+# list_models(). At startup the frontend polls /api/health every 1.5s,
+# Electron every 2s, wait-on polls before launching, and useModels hits
+# /api/models — each used to fire an uncached GET {base_url}/models,
+# producing 20+ identical Zen fetches in ~7s. A MODULE-level TTLCache (keyed
+# by provider) means even the throwaway adapter instances created in
+# routes/models.py share the cached result. Failures are NOT cached, so a
+# recovering provider is detected promptly.
+#
+# TTL is 30s (not 60s): the health ROUTE already caches reachability for
+# 60s, so an adapter TTL of 30s caps worst-case outage-detection lag at
+# ~90s (route 60s + adapter 30s) while still cutting the fetch burst
+# from 20+ to ~2/min.
+_MODELS_CACHE: "TTLCache[list[str]]" = TTLCache(ttl_seconds=30.0, max_entries=32)
+# Per-provider lock so CONCURRENT misses (startup pollers fire within
+# the same second) collapse into a single fetch instead of re-bursting.
+_models_fetch_locks: dict[str, asyncio.Lock] = {}
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Provider configuration
@@ -509,57 +532,30 @@ def _extract_content_and_reasoning(delta: dict) -> tuple[str, str]:
 class OpenAICompatAdapter(BaseAdapter):
     """Composable adapter for OpenAI-compatible APIs."""
 
-    # ── Class-level /models TTL cache (mirrors OllamaAdapter) ──────────────
-    # The provider /models endpoint is fetched by BOTH health_check() and
-    # list_models(). At startup the frontend polls /api/health every 1.5s,
-    # Electron every 2s, wait-on polls before launching, and useModels hits
-    # /api/models — each used to fire an uncached GET {base_url}/models,
-    # producing 20+ identical Zen fetches in ~7s. Caching at the CLASS level
-    # (keyed by provider) means even the throwaway adapter instances created
-    # in routes/models.py share the cached result. Failures are NOT cached,
-    # so a recovering provider is detected promptly.
-    #
-    # TTL is 30s (not 60s): the health ROUTE already caches reachability for
-    # 60s, so an adapter TTL of 30s caps worst-case outage-detection lag at
-    # ~90s (route 60s + adapter 30s) while still cutting the fetch burst
-    # from 20+ to ~2/min.
-    _MODELS_CACHE_TTL: float = 30.0  # seconds
-    _cached_models: dict[str, list[str]] = {}
-    _models_cache_ts: dict[str, float] = {}
-    # Per-provider lock so CONCURRENT misses (startup pollers fire within
-    # the same second) collapse into a single fetch instead of re-bursting.
-    _models_fetch_locks: dict[str, asyncio.Lock] = {}
-
-    @classmethod
-    def clear_models_cache(cls, provider: str | None = None) -> None:
+    @staticmethod
+    def clear_models_cache(provider: str | None = None) -> None:
         """Drop cached /models lists. If provider given, only that provider."""
         if provider is None:
-            cls._cached_models.clear()
-            cls._models_cache_ts.clear()
-            cls._models_fetch_locks.clear()
+            _MODELS_CACHE.clear()
+            _models_fetch_locks.clear()
         else:
-            cls._cached_models.pop(provider, None)
-            cls._models_cache_ts.pop(provider, None)
-            cls._models_fetch_locks.pop(provider, None)
+            _MODELS_CACHE.pop(provider)
+            _models_fetch_locks.pop(provider, None)
 
     async def _fetch_models_cached(self) -> list[str] | None:
-        """Return the provider's model list, cached class-wide for TTL seconds.
+        """Return the provider's model list, cached for TTL seconds.
 
         Returns None when the provider is unreachable or the fetch failed
-        (failures are not cached, matching OllamaAdapter's behavior so a
-        recovering provider is detected promptly). Concurrent misses for the
-        same provider are serialized by a per-provider lock so the startup
-        burst becomes a single fetch.
+        (failures are not cached, so a recovering provider is detected
+        promptly). Concurrent misses for the same provider are serialized by
+        a per-provider lock so the startup burst becomes a single fetch.
         """
-        import time as _time
-
         key = self._provider_key
-        lock = OpenAICompatAdapter._models_fetch_locks.setdefault(key, asyncio.Lock())
+        lock = _models_fetch_locks.setdefault(key, asyncio.Lock())
         async with lock:
-            now = _time.monotonic()
-            ts = OpenAICompatAdapter._models_cache_ts.get(key)
-            if ts is not None and now - ts < OpenAICompatAdapter._MODELS_CACHE_TTL:
-                return OpenAICompatAdapter._cached_models.get(key)
+            cached = _MODELS_CACHE.get(key)
+            if cached is not None:
+                return cached
             try:
                 response = await self._client.get(
                     f"{self._base_url}/models",
@@ -569,8 +565,8 @@ class OpenAICompatAdapter(BaseAdapter):
                 if response.status_code == 200:
                     data = response.json()
                     models = [m.get("id") for m in data.get("data", [])]
-                    OpenAICompatAdapter._cached_models[key] = models
-                    OpenAICompatAdapter._models_cache_ts[key] = now
+                    # Only cache successes — a failure must retry next call.
+                    _MODELS_CACHE.set(key, models)
                     return models
                 return None
             except Exception as e:

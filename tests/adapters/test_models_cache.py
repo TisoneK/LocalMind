@@ -7,10 +7,10 @@ Electron poll, and useModels all hitting /api/health + /api/models at
 startup, that was 20+ identical Zen fetches in ~7s (see
 `opencode.ai/zen/v1/models` in the dev log).
 
-The cache is CLASS-level (mirrors OllamaAdapter) so even the throwaway
-adapter instances created in routes/models.py share the cached result.
-Successes are cached for ``_MODELS_CACHE_TTL`` seconds; failures are NOT
-cached so a recovering provider is detected promptly.
+The cache is a shared TTLCache (Session 136 — was class-level dicts) so
+even the throwaway adapter instances created in routes/models.py share the
+cached result. Successes are cached for the TTL; failures are NOT cached
+so a recovering provider is detected promptly.
 """
 
 from __future__ import annotations
@@ -124,8 +124,13 @@ def test_provider_key_isolation(monkeypatch):
     asyncio.run(run())
 
 
-def test_cache_expires_after_ttl(monkeypatch):
-    """After TTL elapses, the next call re-fetches."""
+def test_forced_invalidation_forces_refetch(monkeypatch):
+    """Dropping the cached entry forces the next call to re-fetch.
+
+    (TTL expiry itself is covered by tests/core/test_cache.py::test_ttl_expiry;
+    this test pins the per-provider targeted invalidation path.)
+    """
+    from adapters.openai_compat import _MODELS_CACHE
 
     async def run():
         client = CountingClient()
@@ -133,8 +138,7 @@ def test_cache_expires_after_ttl(monkeypatch):
         assert await adapter.health_check() is True
         assert client.calls == 1
 
-        # Simulate TTL expiry by backdating the cache timestamp.
-        OpenAICompatAdapter._models_cache_ts["zen"] -= OpenAICompatAdapter._MODELS_CACHE_TTL + 1
+        _MODELS_CACHE.pop("zen")
         assert await adapter.health_check() is True
         assert client.calls == 2
 

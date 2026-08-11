@@ -21,6 +21,7 @@ from typing import AsyncIterator
 import httpx
 
 from adapters.base import BaseAdapter
+from core.cache import TTLCache
 from core.config import settings
 from core.models import StreamChunk
 
@@ -174,13 +175,16 @@ def _smart_num_ctx(model: str, context_window: int, intent: str = "chat") -> int
     return context_window
 
 
+# Cache for available models — avoids hitting /api/tags on every request.
+# Shared module-level TTLCache (class-level before Session 136): instances are
+# cheap and recreated often, so the cache must live at module scope to be
+# effective. Failures are NOT cached (only a successful fetch is stored), so a
+# recovering Ollama is detected promptly.
+_MODELS_CACHE: "TTLCache[list[str]]" = TTLCache(ttl_seconds=30.0, max_entries=1)
+
+
 class OllamaAdapter(BaseAdapter):
     """Wraps the Ollama OpenAI-compatible API with streaming + tool calling."""
-
-    # Cache for available models — avoids hitting /api/tags on every request.
-    _cached_models: list[str] = []
-    _models_cache_ts: float = 0.0
-    _MODELS_CACHE_TTL: float = 30.0  # seconds
 
     def __init__(self, model_override: str = ""):
         self._base_url = settings.ollama_base_url.rstrip("/")
@@ -204,16 +208,11 @@ class OllamaAdapter(BaseAdapter):
     async def _check_model_exists(self) -> tuple[bool, list[str]]:
         """Check if the configured model exists locally via GET /api/tags.
 
-        Returns (exists, available_models). The result is cached for
-        ``_MODELS_CACHE_TTL`` seconds to avoid hammering Ollama on every
-        request.
+        Returns (exists, available_models). The result is cached (30s TTL,
+        shared TTLCache) to avoid hammering Ollama on every request.
         """
-        import time as _time
-
-        now = _time.monotonic()
-        if now - OllamaAdapter._models_cache_ts < OllamaAdapter._MODELS_CACHE_TTL:
-            available = OllamaAdapter._cached_models
-        else:
+        available = _MODELS_CACHE.get("models")
+        if available is None:
             try:
                 resp = await self._client.get(
                     f"{self._base_url}/api/tags",
@@ -222,8 +221,8 @@ class OllamaAdapter(BaseAdapter):
                 if resp.status_code == 200:
                     data = resp.json()
                     available = [m.get("name", "") for m in data.get("models", [])]
-                    OllamaAdapter._cached_models = available
-                    OllamaAdapter._models_cache_ts = now
+                    # Only cache successes — a failure must retry next call.
+                    _MODELS_CACHE.set("models", available)
                 else:
                     available = []
             except Exception:

@@ -91,6 +91,15 @@ class TTLCache(Generic[T]):
         with self._lock:
             self._store.clear()
 
+    def pop(self, key: Any) -> None:
+        """Drop a single key (no-op if absent).
+
+        Used for targeted invalidation, e.g. per-provider model-list caches
+        when one provider's config changes.
+        """
+        with self._lock:
+            self._store.pop(key, None)
+
     def __len__(self) -> int:
         with self._lock:
             return len(self._store)
