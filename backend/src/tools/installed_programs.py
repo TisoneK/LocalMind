@@ -13,18 +13,19 @@ from __future__ import annotations
 import logging
 import sys
 
-from core.cache import TTLCache
+from core.cache import memoize
 
 logger = logging.getLogger(__name__)
 
-# 5 minutes — picks up mid-session installs (TTLCache handles expiry)
-_WINDOWS_CACHE: "TTLCache[list[dict]]" = TTLCache(ttl_seconds=300.0, max_entries=1)
 
-
+@memoize(ttl_seconds=300.0, max_entries=1)
 def _list_windows() -> list[dict]:
-    cached = _WINDOWS_CACHE.get("programs")
-    if cached is not None:
-        return cached
+    # 5-minute TTL — picks up mid-session installs. The memoize decorator
+    # owns the cache (see _list_windows.cache for tests / invalidation).
+    # Note: the decorator caches ANY non-None return, so the [] returned on
+    # ImportError below is also cached — harmless since winreg always exists
+    # on win32, and this function is only called on that platform.
+
     try:
         import winreg
 
@@ -66,7 +67,6 @@ def _list_windows() -> list[dict]:
                 seen.add(p["name"].lower())
                 unique.append(p)
         result = sorted(unique, key=lambda x: x["name"].lower())
-        _WINDOWS_CACHE.set("programs", result)
         return result
     except ImportError:
         return []

@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 
 import pytest
-from core.cache import LRUCache, TTLCache
+from core.cache import LRUCache, TTLCache, memoize
 
 
 @pytest.fixture(autouse=True)
@@ -132,6 +132,106 @@ def test_lru_clear():
     cache.clear()
     assert len(cache) == 0
     assert cache.get("a") is None
+
+
+# ── Memoize decorator ──────────────────────────────────────────────────────
+
+
+def test_memoize_caches_by_args(_fast_clock):
+    calls = []
+
+    @memoize(ttl_seconds=60.0)
+    def add(a, b):
+        calls.append((a, b))
+        return a + b
+
+    assert add(1, 2) == 3
+    assert add(1, 2) == 3  # cached
+    assert add(2, 3) == 5  # different args → miss
+    assert len(calls) == 2
+    assert add.cache is not None
+
+
+def test_memoize_ttl_expiry(_fast_clock):
+    calls = []
+
+    @memoize(ttl_seconds=60.0)
+    def f(x):
+        calls.append(x)
+        return x * 2
+
+    assert f(5) == 10
+    _fast_clock["t"] += 60.001
+    assert f(5) == 10  # expired → recompute
+    assert len(calls) == 2
+
+
+def test_memoize_kwargs_and_key_fn(_fast_clock):
+    calls = []
+
+    @memoize(ttl_seconds=60.0, key_fn=lambda args, kwargs: args[0])
+    def f(x, y=10):
+        calls.append((x, y))
+        return x + y
+
+    assert f(1) == 11
+    assert f(1, y=20) == 11  # same key (ignores kwargs) → cached
+    assert len(calls) == 1
+
+
+def test_memoize_none_result_not_cached(_fast_clock):
+    calls = []
+
+    @memoize(ttl_seconds=60.0)
+    def f(x):
+        calls.append(x)
+
+    assert f(1) is None
+    assert f(1) is None  # None = miss → recomputes every time
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_memoize_async(_fast_clock):
+    import asyncio
+
+    calls = []
+
+    @memoize(ttl_seconds=60.0)
+    async def af(x):
+        await asyncio.sleep(0)  # ensure coroutine behavior
+        calls.append(x)
+        return x * 3
+
+    assert await af(4) == 12
+    assert await af(4) == 12  # cached
+    assert len(calls) == 1
+
+
+def test_memoize_copier_isolates_caller_mutations(_fast_clock):
+    @memoize(ttl_seconds=60.0, copier=lambda v: list(v))
+    def f():
+        return [1, 2, 3]
+
+    first = f()
+    first.append(99)  # mutate the copy
+    assert f() == [1, 2, 3], "stored value must not be mutated via the copy"
+
+
+def test_memoize_bare_usage_without_parens(_fast_clock):
+    """@memoize (no parens) behaves like @memoize() with defaults."""
+    calls = []
+
+    @memoize
+    def f(x):
+        calls.append(x)
+        return x * 2
+
+    assert f(3) == 6
+    assert f(3) == 6  # cached
+    assert len(calls) == 1
+    assert f(4) == 8  # different arg → miss
+    assert len(calls) == 2
 
 
 def test_thread_safety_smoke():

@@ -15,9 +15,11 @@ stores in storage/ (db.py, vector.py embed cache).
 
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 from collections import OrderedDict
+from functools import wraps
 from typing import Any, Callable, Generic, Optional, TypeVar
 
 T = TypeVar("T")
@@ -152,3 +154,96 @@ class LRUCache(Generic[T]):
     def __len__(self) -> int:
         with self._lock:
             return len(self._store)
+
+
+# ── Memoize decorator ──────────────────────────────────────────────────────
+
+
+def memoize(
+    ttl_seconds: float = 300.0,
+    max_entries: int = 64,
+    key_fn: Optional[Callable[..., Any]] = None,
+    copier: Optional[Callable[[Any], Any]] = None,
+):
+    # Support bare @memoize (no parens) like functools.lru_cache — the first
+    # positional arg is then the decorated function with default options.
+    if callable(ttl_seconds):
+        return memoize()(ttl_seconds)
+
+    """Memoize a function's result in a per-function TTLCache.
+
+    Supports both sync and async callables. Each decorated function gets its
+    OWN TTLCache instance (mirroring functools.lru_cache's per-function
+    cache), so keys can never collide across functions.
+
+    Args:
+        ttl_seconds: How long a result is reused before the function re-runs.
+        max_entries: Bound on cached keys (FIFO eviction by insertion order).
+        key_fn: Optional ``key_fn(args_tuple, kwargs_dict) -> hashable key``.
+            Default: ``(repr(pos_arg)..., kwarg=repr(v)...)`` — repr keeps
+            unhashable args from crashing the keyer; the cache key itself is
+            a tuple of strings, always hashable.
+        copier: Optional deep-copy applied on read so callers can't mutate
+            cached state through the returned reference.
+
+    Returns the wrapped function with a ``.cache`` attribute exposing the
+    underlying TTLCache (for tests and targeted ``cache.clear()``).
+
+    Note: like TTLCache, ``None`` means "miss" — a function returning None
+    is never cached and re-runs every call.
+    """
+
+    cache: TTLCache = TTLCache(
+        ttl_seconds=ttl_seconds,
+        max_entries=max_entries,
+        copier=copier,
+    )
+
+    def _default_key(args: tuple, kwargs: dict) -> tuple:
+        parts = [repr(a) for a in args]
+        parts.extend(f"{k}={v!r}" for k, v in sorted(kwargs.items()))
+        return tuple(parts)
+
+    keyer = key_fn or _default_key
+
+    def _store_and_return(result, key):
+        # Shared by the sync and async wrappers.
+        if result is None:
+            return None
+        cache.set(key, result)
+        if copier is not None:
+            # Hand out a fresh copy even on the FIRST call — otherwise the
+            # caller would receive the stored object itself and a mutation
+            # would corrupt the cache before any later read could be
+            # protected.
+            copied = cache.get(key)
+            if copied is not None:
+                return copied
+        return result
+
+    def decorator(fn):
+        if asyncio.iscoroutinefunction(fn):
+
+            @wraps(fn)
+            async def _async_wrapper(*args, **kwargs):
+                key = keyer(args, kwargs)
+                cached = cache.get(key)
+                if cached is not None:
+                    return cached
+                return _store_and_return(await fn(*args, **kwargs), key)
+
+            _async_wrapper.cache = cache
+            return _async_wrapper
+
+        @wraps(fn)
+        def _sync_wrapper(*args, **kwargs):
+            key = keyer(args, kwargs)
+            cached = cache.get(key)
+            if cached is not None:
+                return cached
+            return _store_and_return(fn(*args, **kwargs), key)
+
+        _sync_wrapper.cache = cache
+        return _sync_wrapper
+
+    return decorator
