@@ -2456,7 +2456,16 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             )
             # ThinkingDispatcher already reformulated and acknowledged?
             # Skip the Chat Agent phase — the dispatcher already did this work.
-            if not _dispatcher_fast_path and _dispatcher_reformulated:
+            # Session 145 (ADR-17 track 2): the original guard required
+            # `not _dispatcher_fast_path` — signal-detected fast paths
+            # (URL fetch, shell prefixes, sysinfo phrases) carry a full
+            # reformulation + acknowledgement but fell through to
+            # _chat_agent_phase, an unnecessary LLM call that defeated the
+            # signal's purpose (a signal exists precisely to skip LLM work).
+            # Now: any dispatcher reformulation (LLM or signal) skips the
+            # Chat Agent. The _is_trivial else-branch below still covers the
+            # no-reformulation fallback.
+            if _dispatcher_reformulated:
                 reformulated = _dispatcher_reformulated
                 acknowledgement = _dispatcher_acknowledgement
                 if acknowledgement:

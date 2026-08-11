@@ -933,6 +933,69 @@ class ThinkingDispatcher:
                 fast_path=True,
             )
 
+        # Directory-listing phrasing → SHELL (Session 145, ADR-17 track 2).
+        # "Show me all projects in dev" / "List projects available in dev/"
+        # are unambiguous directory-list requests but don't START with a
+        # shell prefix, so they used to pay the full dispatcher LLM call
+        # (~10-20s on the free tier) for a routing decision a regex can
+        # make. The listing noun (files/folders/projects/contents/items)
+        # + a location preposition (in/of/under/inside) + a non-empty
+        # target makes the signal unambiguous. Anything with a verb that
+        # implies non-listing work (read, open, create, edit, search) or
+        # a non-filesystem target falls through to the LLM.
+        _LIST_VERB = re.compile(
+            r"^(?:show|list|display|see)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?",
+            re.IGNORECASE,
+        )
+        _LIST_NOUN = re.compile(
+            r"\b(files|folders|directories|projects|contents|items|things|dirs|subfolders)\b",
+            re.IGNORECASE,
+        )
+        _LIST_LOCATION = re.compile(
+            r"\b(in|of|under|inside)\s+(?P<target>[^\s]+.*)$",
+            re.IGNORECASE,
+        )
+        _NON_LIST_VERBS = re.compile(
+            r"\b(read|open|create|make|write|edit|delete|search|find|install|run|execute|check|show me how)\b",
+            re.IGNORECASE,
+        )
+        if (
+            _LIST_VERB.match(msg)
+            and _LIST_NOUN.search(msg)
+            and _LIST_LOCATION.search(msg)
+            and not _NON_LIST_VERBS.search(msg)
+        ):
+            _target = _LIST_LOCATION.search(msg).group("target").strip("\"' ").rstrip("/")
+            if _target:
+                profile = TaskProfile(
+                    capabilities=[Capability.SHELL],
+                    requires_tools=True,
+                    requires_execution=True,
+                    execution_mode=ExecutionMode.SINGLE_TOOL,
+                    safety_level=SafetyLevel.HIGH,
+                    confidence=0.9,
+                    primary_domain="shell_command",
+                    reformulated=f"List the contents of the directory: {_target}",
+                    acknowledgement=f"Listing contents of {_target}...",
+                )
+                return OrchestrationPlan(
+                    profile=profile,
+                    graph=build_graph_from_plan_steps(
+                        [
+                            {
+                                "id": "list_dir",
+                                "capability": "shell",
+                                "tool": "shell",
+                                "args": {"action": f"list {_target}"},
+                                "depends_on": [],
+                                "label": f"Listing contents: {_target[:50]}",
+                            }
+                        ]
+                    ),
+                    dispatch_steps=_build_dispatch_steps(Intent.SHELL, message, f"List directory {_target}"),
+                    fast_path=True,
+                )
+
         return None
 
     # ── Follow-up Detection ─────────────────────────────────────────────
