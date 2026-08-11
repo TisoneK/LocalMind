@@ -11,7 +11,15 @@ tool definitions; Session 126 trimmed the static prompt itself:
   - trimmed `skills/shell.md` (dropped "Output handling" = exact duplicate of
     CRITICAL RULES #4 and the platform table duplicated by TOOL ARGUMENT RULES)
 
-Budgets below are the measured post-126 sizes + ~1-1.5K headroom so normal
+Session 144 (ADR-17 track 1): consolidated the post-persona tail — merged
+CRITICAL RULES + VERIFICATION + RESULT VERIFICATION + RESPONSE FORMATTING into
+one deduplicated block (anti-fabrication / "never say Done" / exact-report
+appeared 3-4x) and capped the injected skill fragment at 2,000 chars (heads
+carry the distinctive per-intent expertise; tails overlapped the universal
+rules). SHELL system prompt: 16,449 → 12,981 chars (~876 tok saved per
+agent-path call); editing intents: ~20.5K → ~13K chars.
+
+Budgets below are the measured post-144 sizes + ~1-1.5K headroom so normal
 prompt evolution doesn't churn the test daily, but re-adding a duplicate
 section (a multi-KB regression) trips it. Intentional additions must be
 justified, not silently absorbed.
@@ -23,18 +31,19 @@ from core.models import Intent
 
 # intent -> max chars for the system prompt with EMPTY tool metadata list
 # (the tool list is measured separately by test_intent_tool_scoping).
+# Measured 2026-08-11 post-Session-144 trim.
 _BUDGETS = {
-    Intent.SHELL: 17_500,  # measured 16,449 (was 19,027 pre-126)
-    Intent.SYSINFO: 16_500,  # measured 15,122 (shares skills/shell.md)
-    Intent.CODE_EXEC: 21_000,  # measured 20,056
-    Intent.FILE_WRITE: 21_000,  # measured 19,950
-    Intent.FILE_EDIT: 21_500,  # measured 20,548
-    Intent.FILE_TASK: 21_500,  # measured 20,579
-    Intent.WEB_SEARCH: 21_000,  # measured 19,825
-    Intent.WEB_FETCH: 20_000,  # measured 19,012
-    Intent.MEMORY_OP: 16_500,  # measured 15,618
-    Intent.BROWSE: 18_500,  # measured 17,761
-    Intent.CHAT: 6_000,  # measured 4,730
+    Intent.SHELL: 15_000,  # measured 12,981 (was 16,449 post-126)
+    Intent.SYSINFO: 13_500,  # measured 11,654
+    Intent.CODE_EXEC: 15_500,  # measured 13,043
+    Intent.FILE_WRITE: 15_500,  # measured 13,083
+    Intent.FILE_EDIT: 15_500,  # measured 13,088
+    Intent.FILE_TASK: 16_000,  # measured 13,566
+    Intent.WEB_SEARCH: 16_000,  # measured 13,630
+    Intent.WEB_FETCH: 15_000,  # measured 12,817
+    Intent.MEMORY_OP: 14_000,  # measured 12,150
+    Intent.BROWSE: 14_500,  # measured 12,285
+    Intent.CHAT: 6_000,  # measured 4,730 (unchanged)
 }
 
 # Load-bearing rules that MUST survive future trims — the budget test guards
