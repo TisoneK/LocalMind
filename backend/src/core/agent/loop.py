@@ -3478,13 +3478,17 @@ class AgentLoop:
                         _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
                     _worker_report = trace.work_report()
                     if _worker_report.needs_report(full_text):
-                        _report_text = _worker_report.render()
-                        if _report_text:
-                            logger.info(
-                                "[agent.loop] short final response did not report tool evidence; "
-                                "emitting worker report"
-                            )
-                            yield StreamChunk(text="\n\n" + _report_text, done=False)
+                        # Session 147: try one focused synthesis call before
+                        # the deterministic report — the free-tier model often
+                        # ends a tool-bearing turn with a bare heading.
+                        async for _rescue_chunk in self._rescue_final_answer(
+                            loop_messages=loop_messages,
+                            observation_log=observation_log,
+                            active_adapter=active_adapter,
+                            trace=trace,
+                            provider_usage=_provider_usage,
+                        ):
+                            yield _rescue_chunk
                     yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                     return
 
@@ -3547,13 +3551,17 @@ class AgentLoop:
                 # append the deterministic report derived from the trace.
                 _worker_report = trace.work_report()
                 if _worker_report.needs_report(full_text):
-                    _report_text = _worker_report.render()
-                    if _report_text:
-                        logger.info(
-                            "[agent.loop] final response did not report tool evidence; "
-                            "emitting worker report"
-                        )
-                        yield StreamChunk(text="\n\n" + _report_text, done=False)
+                    # Session 147: try one focused synthesis call before
+                    # the deterministic report — the free-tier model often
+                    # ends a tool-bearing turn with a bare heading.
+                    async for _rescue_chunk in self._rescue_final_answer(
+                        loop_messages=loop_messages,
+                        observation_log=observation_log,
+                        active_adapter=active_adapter,
+                        trace=trace,
+                        provider_usage=_provider_usage,
+                    ):
+                        yield _rescue_chunk
                 elif not full_text.strip():
                     # Preserve the existing diagnostic fallback for the rare
                     # case where no structured worker report is available.
@@ -4209,6 +4217,55 @@ class AgentLoop:
             "or re-run the request."
         )
 
+    async def _rescue_final_answer(
+        self,
+        loop_messages: list[dict],
+        observation_log: str,
+        active_adapter,
+        trace: Optional[AgentTrace],
+        provider_usage: dict[str, int],
+    ) -> AsyncIterator[StreamChunk]:
+        """Session 147: rescue a heading-only final answer on NORMAL completion.
+
+        The free-tier model frequently ends a tool-bearing turn with a bare
+        heading ("**Git status**") instead of a synthesized answer. Before
+        dumping the deterministic worker report, run ONE focused synthesis
+        call (plain chat, user's request + tool observations) and stream its
+        answer. Only fall back to the report when synthesis fails, times
+        out, or itself produces a non-substantive reply.
+        """
+        _report_text = trace.work_report().render() if trace is not None else ""
+        _synth = ""
+        try:
+            async for _chunk in self._force_final_answer(
+                loop_messages=loop_messages,
+                observation_log=observation_log,
+                active_adapter=active_adapter,
+                trace=trace,
+                provider_usage=provider_usage,
+                framing="final",
+                suppress_report=True,
+                suppress_empty_fallback=True,
+            ):
+                if _chunk.text:
+                    _synth += _chunk.text
+        except Exception as exc:
+            logger.warning(f"[agent.loop] clean synthesis failed: {exc}")
+        _synth = _synth.strip()
+        if _synth and (trace is None or not trace.work_report().needs_report(_synth)):
+            logger.info(
+                "[agent.loop] heading-only final answer rescued by synthesis (%d chars)",
+                len(_synth),
+            )
+            yield StreamChunk(text=_synth, done=False)
+            return
+        if _report_text:
+            logger.info(
+                "[agent.loop] final response did not report tool evidence; "
+                "emitting worker report"
+            )
+            yield StreamChunk(text="\n\n" + _report_text, done=False)
+
     async def _force_final_answer(
         self,
         loop_messages: list[dict],
@@ -4216,6 +4273,9 @@ class AgentLoop:
         active_adapter,
         trace=None,
         provider_usage: Optional[dict[str, int]] = None,
+        framing: str = "limit",
+        suppress_report: bool = False,
+        suppress_empty_fallback: bool = False,
     ) -> AsyncIterator[StreamChunk]:
         """
         After hitting MAX_ITERATIONS, ask the LLM to synthesize a final
@@ -4226,6 +4286,12 @@ class AgentLoop:
         empty-stream fallback can surface ACTUAL tool inputs/outputs
         instead of guessing "overload" (per user feedback — the overload
         diagnosis was unverified and likely wrong for small tasks).
+
+        Session 147: `framing` selects the directive text — "limit" for the
+        iteration-limit path (default, preserves prior behavior) or "final"
+        for rescuing a heading-only answer on normal completion. When
+        `suppress_report` is True, the internal needs_report append is
+        skipped (the caller owns the report fallback decision).
         """
         # Strip tool_calls from messages for the plain chat call.
         # Convert tool results to user-readable context with generous truncation
@@ -4255,19 +4321,32 @@ class AgentLoop:
             else:
                 clean_messages.append(msg)
 
+        if framing == "final":
+            _directive = (
+                "Your earlier reply was too short to answer the user. Provide a "
+                "complete, direct final answer to the user's ORIGINAL request now, "
+                "based EXACTLY on the tool results shown above. Do not call any "
+                "tools — just answer directly.\n\n"
+                "ANTI-FABRICATION: Your answer MUST be based EXACTLY on the tool "
+                "results shown above. Do NOT invent file names, folder contents, "
+                "or any data that was not in the tool output. If a tool showed "
+                "3 items, report 3 items — never add items that 'seem typical'."
+            )
+        else:
+            _directive = (
+                "Maximum iterations reached. Provide your best answer now "
+                "based on everything gathered so far. Do not call any tools — "
+                "just answer directly.\n\n"
+                "ANTI-FABRICATION: Your answer MUST be based EXACTLY on the tool "
+                "results shown above. Do NOT invent file names, folder contents, "
+                "or any data that was not in the tool output. If a tool showed "
+                "3 items, report 3 items — never add items that 'seem typical'."
+            )
+
         force_msg = clean_messages + [
             {
                 "role": "user",
-                "content": (
-                    f"{observation_log}\n"
-                    "Maximum iterations reached. Provide your best answer now "
-                    "based on everything gathered so far. Do not call any tools — "
-                    "just answer directly.\n\n"
-                    "ANTI-FABRICATION: Your answer MUST be based EXACTLY on the tool "
-                    "results shown above. Do NOT invent file names, folder contents, "
-                    "or any data that was not in the tool output. If a tool showed "
-                    "3 items, report 3 items — never add items that 'seem typical'."
-                ),
+                "content": f"{observation_log}\n{_directive}",
             }
         ]
         # Session 31: track whether the model produced ANY non-empty text.
@@ -4310,17 +4389,28 @@ class AgentLoop:
         except Exception as exc:
             logger.warning(f"[agent.loop] final synthesis failed: {exc}")
             _error_report = trace.work_report().render() if trace is not None else ""
-            _exception_text = (
-                "I've reached my iteration limit. Here are the key findings gathered so far:\n\n"
-                + observation_log
-            )
+            if framing == "final":
+                _exception_text = (
+                    "I couldn't complete the final answer. Here are the key findings "
+                    "gathered so far:\n\n"
+                    + observation_log
+                )
+            else:
+                _exception_text = (
+                    "I've reached my iteration limit. Here are the key findings gathered so far:\n\n"
+                    + observation_log
+                )
             if _error_report:
                 _exception_text += "\n\n" + _error_report
             yield StreamChunk(text=_exception_text, done=True, usage=dict(_provider_usage))
             return  # CRITICAL: return after yielding the exception fallback
 
         _final_text = "".join(_final_text_parts)
-        if trace is not None and trace.work_report().needs_report(_final_text):
+        if (
+            not suppress_report
+            and trace is not None
+            and trace.work_report().needs_report(_final_text)
+        ):
             _report_text = trace.work_report().render()
             if _report_text:
                 logger.info(
@@ -4345,6 +4435,13 @@ class AgentLoop:
         # synthesizer chokes on. So instead of guessing, surface the actual
         # tool inputs and outputs from the trace and let the user decide.
         if not _any_text_yielded:
+            if suppress_empty_fallback:
+                # Session 147: the rescue caller owns the empty case — it
+                # renders the deterministic worker report itself.
+                logger.info(
+                    "[agent.loop] final synthesis empty — caller handles fallback"
+                )
+                return
             logger.warning(
                 "[agent.loop] final synthesis produced no text — "
                 "yielding evidence-based fallback (model returned empty stream)"
