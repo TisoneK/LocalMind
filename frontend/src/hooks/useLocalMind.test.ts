@@ -204,6 +204,30 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 
+  it('accumulates thinking across phase boundaries instead of wiping (Session 146)', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      // Dispatcher phase reasoning streams first…
+      onChunk()(JSON.stringify({ type: 'thinking_start' }));
+      onChunk()(JSON.stringify({ type: 'thinking_token', thinking: 'UNDERSTANDING: user wants the git status' }));
+      // …then the plan phase starts — the old code wiped the dispatcher's
+      // reasoning here (thinkingContent = ''), making the pre-tool phase a
+      // silent black box. It must now accumulate instead.
+      onChunk()(JSON.stringify({ type: 'thinking_start' }));
+      onChunk()(JSON.stringify({ type: 'thinking_token', thinking: 'STEPS: 1. run git status' }));
+      onChunk()(JSON.stringify({ type: 'thinking_end' }));
+    });
+
+    const last = result.current.messages[result.current.messages.length - 1];
+    expect(last.isAgent).toBe(true);
+    expect(last.thinking).toContain('UNDERSTANDING: user wants the git status');
+    expect(last.thinking).toContain('STEPS: 1. run git status');
+
+    act(() => onDone());
+    unmount();
+  });
+
   it('dedupes anomaly events by kind, newest wins (Session 123)', () => {
     const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
 

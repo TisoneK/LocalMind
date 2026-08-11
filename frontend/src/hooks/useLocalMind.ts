@@ -485,10 +485,22 @@ export function useChat(
               }
 
               case 'thinking_start': {
-                thinkingContent = '';
-                // Don't reset thinkStartTime if already set by a status_update
-                // that arrived before thinking_start.
-                if (!thinkStartTime) thinkStartTime = Date.now();
+                // Session 146: DON'T wipe earlier phases' reasoning. The
+                // dispatcher, chat-agent, and agent-loop phases each emit
+                // thinking_start; resetting on every one discarded everything
+                // streamed before — the pre-tool phase rendered as a silent
+                // black-box "SHELL" card. Seed only on the FIRST phase so the
+                // full multi-phase reasoning trace accumulates on the message
+                // (expanded live while streaming, auto-collapsed after); later
+                // phase boundaries insert a separator instead of truncating.
+                if (!thinkingContent) {
+                  thinkingContent = '';
+                  // Don't reset thinkStartTime if already set by a status_update
+                  // that arrived before thinking_start.
+                  if (!thinkStartTime) thinkStartTime = Date.now();
+                } else {
+                  thinkingContent += '\n\n';
+                }
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
