@@ -14,7 +14,7 @@ import logging
 import re
 from typing import Optional
 
-from core.cache import LRUCache
+from core.cache import LRUCache, memoize
 from core.models import Intent
 
 logger = logging.getLogger(__name__)
@@ -171,10 +171,18 @@ def _resolve_intent(
 # ── Token estimation ─────────────────────────────────────────────────────
 
 
+@memoize(ttl_seconds=300.0, max_entries=256)
 def _approx_tokens(text: str) -> int:
     """
     Rough token count. ~4 chars/token for Latin scripts; ~1.5 for CJK/Arabic.
     Not used for billing — observability only.
+
+    Memoized (shared TTLCache): the engine calls this 30+ times per request,
+    often on the SAME text twice (prompt + completion of one turn) — the
+    pure Python per-char scan is the expensive part, so caching identical
+    inputs is a real win. Bounded to 256 entries, 5-minute TTL; the default
+    keyer stores repr(text) so a busy session with large outputs holds up to
+    256 full-text keys briefly — bounded, TTL'd, not a leak.
     """
     cjk_and_arabic = sum(
         1

@@ -1,16 +1,23 @@
 """Tests for the context builder."""
-import pytest
-from core.context_builder import build, _count_tokens
-from core.models import EngineContext, Intent, Message, Role, ToolResult, RiskLevel, FileAttachment
+from core.context_builder import _count_tokens, build
+from core.models import (
+    EngineContext,
+    FileAttachment,
+    Intent,
+    Message,
+    RiskLevel,
+    Role,
+    ToolResult,
+)
 
 
 def _make_ctx(**kwargs) -> EngineContext:
-    defaults = dict(
-        session_id="test-session",
-        message="Hello",
-        intent=Intent.CHAT,
-        history=[],
-    )
+    defaults = {
+        "session_id": "test-session",
+        "message": "Hello",
+        "intent": Intent.CHAT,
+        "history": [],
+    }
     defaults.update(kwargs)
     return EngineContext(**defaults)
 
@@ -91,6 +98,30 @@ def test_history_trimmed_on_budget():
     # Should still have system + at least the current user message
     assert messages[0]["role"] == "system"
     assert messages[-1]["content"] == "New question"
+
+
+def test_knowledge_doc_loader_is_memoized(monkeypatch, tmp_path):
+    """_load_knowledge_doc reads disk once, then serves from the memo cache."""
+    from core import context_builder as cb
+
+    calls = []
+    real_read = cb.Path.read_text
+
+    def counting_read(self, *a, **kw):
+        calls.append(str(self))
+        return real_read(self, *a, **kw)
+
+    monkeypatch.setattr(cb.Path, "read_text", counting_read)
+    cb._load_knowledge_doc.cache.clear()  # start cold
+
+    cb._load_knowledge_doc()
+    first_call_reads = len(calls)
+    assert first_call_reads >= 1  # probed the candidate paths
+
+    cb._load_knowledge_doc()
+    cb._load_knowledge_doc()
+    # Subsequent calls must be cache hits — no additional disk reads.
+    assert len(calls) == first_call_reads
 
 
 def test_count_tokens_basic():

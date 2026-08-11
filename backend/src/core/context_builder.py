@@ -17,7 +17,7 @@ import sys
 import threading
 from pathlib import Path
 
-from core.cache import LRUCache
+from core.cache import LRUCache, memoize
 from core.config import settings
 from core.models import EngineContext, Intent, Role
 
@@ -218,37 +218,36 @@ def build_system_prompt(intent: Intent, model_context_window: int, session_cwd: 
 
 # ── Knowledge doc loader ───────────────────────────────────────────────────────
 # localmind.md lives next to the source tree root (one level above core/).
-# It is loaded once at import time and injected into every system prompt.
-# Edit localmind.md to update what the model knows about its own capabilities
-# without touching Python code.
+# It is injected into every system prompt. Edit localmind.md to update what
+# the model knows about its own capabilities without touching Python code.
+# Memoized (shared TTLCache — was a global + lock before Session 139): loaded
+# lazily on first build(), re-read on a 300s TTL so an edited localmind.md is
+# picked up within 5 minutes, and a not-found miss is cached for 300s too.
 
-_KNOWLEDGE_DOC: str = ""
-_KNOWLEDGE_DOC_LOCK = threading.Lock()
 
-
+@memoize(ttl_seconds=300.0, max_entries=1)
 def _load_knowledge_doc() -> str:
-    """Load localmind.md from the project root. Fails silently if absent."""
-    global _KNOWLEDGE_DOC
-    with _KNOWLEDGE_DOC_LOCK:
-        if _KNOWLEDGE_DOC:
-            return _KNOWLEDGE_DOC
-        candidates = [
-            Path(__file__).parent.parent / "localmind.md",  # running from source
-            Path.cwd() / "localmind.md",  # running from project root
-        ]
-        for path in candidates:
-            try:
-                text = path.read_text(encoding="utf-8")
-                if text.strip():
-                    _KNOWLEDGE_DOC = text
-                    logger.info(
-                        "[context_builder] loaded knowledge doc from %s (%d chars)", path, len(text)
-                    )
-                    return _KNOWLEDGE_DOC
-            except OSError:
-                continue
-        logger.debug("[context_builder] localmind.md not found — skipping knowledge injection")
-        return ""
+    """Load localmind.md from the project root. Fails silently if absent.
+
+    Note: the decorator caches ANY non-None return, so the not-found "" is
+    also cached (re-checked after the TTL, not every call).
+    """
+    candidates = [
+        Path(__file__).parent.parent / "localmind.md",  # running from source
+        Path.cwd() / "localmind.md",  # running from project root
+    ]
+    for path in candidates:
+        try:
+            text = path.read_text(encoding="utf-8")
+            if text.strip():
+                logger.info(
+                    "[context_builder] loaded knowledge doc from %s (%d chars)", path, len(text)
+                )
+                return text
+        except OSError:
+            continue
+    logger.debug("[context_builder] localmind.md not found — skipping knowledge injection")
+    return ""
 
 
 # ── Encoder setup ─────────────────────────────────────────────────────────────

@@ -234,6 +234,22 @@ def test_memoize_bare_usage_without_parens(_fast_clock):
     assert len(calls) == 2
 
 
+def test_approx_tokens_is_memoized():
+    """The engine's token estimator caches identical text (30+ calls/request)."""
+    from core.engine._helpers import _approx_tokens
+
+    _approx_tokens.cache.clear()  # start cold
+    text = "the quick brown fox jumps over the lazy dog " * 10
+    first = _approx_tokens(text)
+    second = _approx_tokens(text)
+    assert first == second
+    assert len(_approx_tokens.cache) == 1
+
+    # Different text → distinct entry, still cached.
+    _approx_tokens("a completely different sentence")
+    assert len(_approx_tokens.cache) == 2
+
+
 def test_thread_safety_smoke():
     """Concurrent sets/gets must not corrupt the store."""
     import threading
