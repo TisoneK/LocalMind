@@ -1132,7 +1132,14 @@ export function useChat(
             }
           }
         },
+        // Session 142: dispatched here (stream END — after the backend's
+        // post-loop _finalize_plan_todos commits) rather than on the SSE
+        // 'done' event, which fires MID-stream before the DB finalize. The
+        // backend always finalizes ALL plan todos in its finally block, so
+        // this re-sync guarantees the Todos panel agrees with the DB — fixing
+        // the persistent "task ran but checkbox stayed unchecked" report.
         () => {
+          window.dispatchEvent(new CustomEvent('localmind:todo-refetch'));
           setIsStreaming(false);
           streamStartedAtRef.current = null;
           streamingSessionRef.current = null;
@@ -1524,6 +1531,25 @@ export function useTodos(sessionId: string | null) {
       window.removeEventListener('localmind:todo-completed', handler);
     };
   }, []);
+
+  // Session 142: re-sync todos from the DB when the turn ends. The backend
+  // finalizes ALL plan todos in its SSE-bridge `finally` block, so this
+  // refetch makes the panel agree with the DB even when a live
+  // todo_completed event was missed (silent tool runs never advance the
+  // in-loop cursor — the executed step stayed 'pending' in the UI).
+  useEffect(() => {
+    const refetch = async () => {
+      if (!sessionId) return;
+      try {
+        const data = await localmindClient.getTodos(sessionId);
+        setTodos(data);
+      } catch {
+        // Best-effort — the live events already cover the common path.
+      }
+    };
+    window.addEventListener('localmind:todo-refetch', refetch);
+    return () => window.removeEventListener('localmind:todo-refetch', refetch);
+  }, [sessionId]);
 
   // Session 29: Listen for todo-cleared events — clear all todos
   // when the engine starts a new request.

@@ -1371,6 +1371,35 @@ class AgentLoop:
                 _obs.emit("todo_completed", id=f"plan-{_plan_step_cursor}", completed=True)
                 _plan_step_cursor += 1
 
+        # Session 142: the 'why' for any tool call under the active plan
+        # step. The frontend renders `why: {action.reasoning}` in the
+        # Actions/tool-step cards — previously only the model's pre-tool
+        # narration (thought=) was attached, so a silent tool run (no
+        # narration, the common free-tier case) rendered a blank 'why:'.
+        # The plan-step label IS the rationale for the action; attach it.
+        def _step_reasoning() -> str:
+            if _plan_steps and 0 <= _plan_step_cursor < len(_plan_steps):
+                return _plan_steps[_plan_step_cursor]
+            return ""
+
+        # Session 142: mark the CURRENT plan step's todo complete when the
+        # loop is about to end. `_advance_plan_on_narration` only completes
+        # on model narration; a silent tool run (the common free-tier case)
+        # never advances, so the executed step's todo stayed 'pending' until
+        # the SSE bridge's end-of-turn finalize — which the user's real run
+        # showed NOT landing in the UI. Emit from the loop itself so the
+        # bridge's todo_completed handler (chat.py) forwards it regardless.
+        # Does NOT advance the cursor — one todo may own many actions.
+        def _complete_current_plan_step() -> None:
+            if not _plan_steps or not _obs:
+                return
+            if 0 <= _plan_step_cursor < len(_plan_steps):
+                _obs.emit(
+                    "todo_completed",
+                    id=f"plan-{_plan_step_cursor}",
+                    completed=True,
+                )
+
         # ── Inject agent system prompt (with plan context) ──────────────
         loop_messages = list(messages)
 
@@ -1758,6 +1787,13 @@ class AgentLoop:
                     return tc_name, tc_obs, tc_failed, tc_lat
 
                 # Build labels for each tool call
+                # Session 142: capture the batch's 'why' ONCE — the started
+                # emits below run BEFORE _advance_plan_on_narration and the
+                # done emits AFTER it, so calling _step_reasoning() at each
+                # emit would stamp the same tool call with two different step
+                # labels on a narrated transition. All calls in a batch share
+                # the same cursor, so one capture serves the whole batch.
+                _batch_reasoning = _step_reasoning()
                 for call, _inp in valid_calls:
                     _path = call.tool_args.get("path", "")
                     _command = call.tool_args.get("command", "")
@@ -1812,7 +1848,7 @@ class AgentLoop:
                             tool_args=_inp,
                             iteration=iteration + 1,
                             todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                            thought=result.raw_content or "",
+                            thought=result.raw_content or "", reasoning=_batch_reasoning,
                         )
 
                 # Session 121: a narrated iteration is a step transition —
@@ -1855,7 +1891,7 @@ class AgentLoop:
                             tool_args=_inp,
                             iteration=iteration + 1,
                             todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                            thought=result.raw_content or "",
+                            thought=result.raw_content or "", reasoning=_batch_reasoning,
                         )
                     if tc_failed:
                         any_failed = True
@@ -2273,7 +2309,7 @@ class AgentLoop:
                         tool_args=tool_input,
                         iteration=iteration + 1,
                         todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                        thought=result.raw_content or "",
+                        thought=result.raw_content or "", reasoning=_step_reasoning(),
                     )
 
                 # ── Yield intermediate status to the user so they see real-time ──
@@ -2444,7 +2480,7 @@ class AgentLoop:
                             async for chunk in self._handle_web_search_result(
                                 safe_obs=safe_obs,
                                 query=tool_input,
-                                thought=result.raw_content or "",
+                                thought=result.raw_content or "", reasoning=_step_reasoning(),
                                 iteration=iteration,
                                 trace=trace,
                                 user_question=_user_q,
@@ -2463,7 +2499,7 @@ class AgentLoop:
                                     tool_args=tool_input,
                                     iteration=iteration + 1,
                                     todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                                    thought=result.raw_content or "",
+                                    thought=result.raw_content or "", reasoning=_step_reasoning(),
                                 )
                                 _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
                             return  # web search is always terminal in agent loop
@@ -2607,7 +2643,7 @@ class AgentLoop:
                             latency_ms=latency_ms,                                            tool_args=tool_input,
                                             iteration=iteration + 1,
                                             todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                                            thought=result.raw_content or "",
+                                            thought=result.raw_content or "", reasoning=_step_reasoning(),
                                         )
                         _obs.emit(
                             "fabrication_risk",
@@ -2626,7 +2662,7 @@ class AgentLoop:
                             latency_ms=latency_ms,                                            tool_args=tool_input,
                                             iteration=iteration + 1,
                                             todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                                            thought=result.raw_content or "",
+                                            thought=result.raw_content or "", reasoning=_step_reasoning(),
                                         )
 
                 trace.steps.append(
@@ -2875,7 +2911,7 @@ class AgentLoop:
                                 status="started",
                                 iteration=iteration + 1,
                                 todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                                thought=result.raw_content or "",
+                                thought=result.raw_content or "", reasoning=_step_reasoning(),
                             )
 
                         # Dispatch the tool
@@ -2933,7 +2969,7 @@ class AgentLoop:
                                 tool_args=tool_input,
                                 iteration=iteration + 1,
                                 todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                                thought=result.raw_content or "",
+                                thought=result.raw_content or "", reasoning=_step_reasoning(),
                             )
                                     return  # web search is terminal
 
@@ -3027,7 +3063,7 @@ class AgentLoop:
                                 latency_ms=latency_ms if "latency_ms" in dir() else 0,
                                 iteration=iteration + 1,
                                 todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                                thought=result.raw_content or "",
+                                thought=result.raw_content or "", reasoning=_step_reasoning(),
                             )
 
                         trace.steps.append(
@@ -3251,6 +3287,11 @@ class AgentLoop:
                             "limit. Please try again, or switch to a larger/faster "
                             "model."
                         )
+                    # Session 142: do NOT complete the plan todo here — the
+                    # model produced nothing and NO tool ran, so marking the
+                    # step done would be a lie. The SSE bridge's end-of-turn
+                    # _finalize_plan_todos still closes it (the plan covers
+                    # the whole turn), but we don't pretend the work happened.
                     yield StreamChunk(text=_empty_msg, done=False)
                     yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                     return
@@ -3313,7 +3354,7 @@ class AgentLoop:
                                     status="started",
                                     iteration=iteration + 1,
                                     todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                                    thought=result.raw_content or "",
+                                    thought=result.raw_content or "", reasoning=_step_reasoning(),
                                 )
                             t_late = time.monotonic()
                             try:
@@ -3409,7 +3450,7 @@ class AgentLoop:
                                     latency_ms=_late_lat if "_late_lat" in dir() else 0,
                                     iteration=iteration + 1,
                                     todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                                    thought=result.raw_content or "",
+                                    thought=result.raw_content or "", reasoning=_step_reasoning(),
                                 )
                         continue  # continue the loop so the model can produce a final answer
 
@@ -3430,6 +3471,9 @@ class AgentLoop:
                         )
                     )
                     logger.info(f"[agent.loop] finished iter={iteration + 1} — {trace.summary()}")
+                    # Session 142: turn-end — close out the current plan step's
+                    # todo (covers the stream-ended-early silent path).
+                    _complete_current_plan_step()
                     if _obs:
                         _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
                     _worker_report = trace.work_report()
@@ -3521,12 +3565,20 @@ class AgentLoop:
                             iteration + 1,
                         )
                         yield StreamChunk(text=_tool_summary, done=False)
+                # Session 142: close out the current plan step's todo — a
+                # silent tool run never advanced the cursor, so without this
+                # the executed step stays 'pending' in the Todos panel.
+                _complete_current_plan_step()
                 yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                 return
 
         # ── MAX_ITERATIONS hit (or wall-clock cap broke the loop) ──────
         trace.hit_limit = True
         logger.warning(f"[agent.loop] loop ended — {trace.summary()}")
+        # Session 142: close out the current plan step's todo on the
+        # hit-limit path too — the work for the current step may have
+        # completed even though the loop was capped.
+        _complete_current_plan_step()
         if _obs:
             _obs.emit("agent_loop_done", intent=intent.value, iterations=trace.iterations_used, hit_limit=True)
 

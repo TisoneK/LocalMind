@@ -157,6 +157,44 @@ class TestChat:
         assert len(intent_events) >= 1
         assert intent_events[0]["data"]["primary"] == "web_search"
 
+    def test_forwards_tool_call_reasoning_to_sse(self, client):
+        """Session 142: the SSE bridge must forward the plan-step label the
+        loop attaches as `reasoning` on tool_call obs events. Before this fix
+        the bridge only forwarded `thought` — a silent tool run (no narration)
+        rendered a blank `why:` on the step cards even though the plan-step
+        label was in the obs event the whole time."""
+
+        async def _process_with_tool_call(self, message, session_id, file=None, filename=None,
+                                           content_type=None, obs=None, original_path=None,
+                                           client_intent=None, client_confidence=0.0, **kwargs):
+            if obs:
+                obs.emit("intent_classified", primary="shell", secondary="none", confidence=0.9)
+                obs.emit(
+                    "tool_call",
+                    tool="shell",
+                    label="Listing contents of the dev directory",
+                    status="done",
+                    output="Volume in drive C has no label.",
+                    latency_ms=50,
+                    tool_args="dir",
+                    iteration=1,
+                    todo_id="plan-0",
+                    thought="",
+                    reasoning="List the contents of the dev directory to show all projects",
+                )
+            from core.models import StreamChunk
+            yield StreamChunk(text="done", done=True)
+
+        with patch("core.engine.Engine.process", _process_with_tool_call):
+            r = client.post("/api/chat", data={"message": "show projects", "session_id": "t-reason"})
+        events = _parse_sse(r.text)
+        tc_events = [e.get("tool_call") for e in events if e.get("type") == "tool_call"]
+        assert tc_events, "expected a bridged tool_call SSE event"
+        # The plan-step label must reach the frontend as `reasoning`.
+        assert tc_events[0].get("reasoning") == (
+            "List the contents of the dev directory to show all projects"
+        )
+
     def test_emits_intent_convenience_payload(self, client):
         with _mock_stream(intent="memory_op", confidence=0.82):
             r = client.post("/api/chat", data={"message": "remember", "session_id": "t6"})

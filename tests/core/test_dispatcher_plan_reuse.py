@@ -126,8 +126,104 @@ async def test_loop_seeds_todos_from_passed_plan_steps_without_planning_call():
     # No planning phase events (planner skipped).
     assert not [e for e in obs.history() if e.type == "agent_planning_start"]
 
+    # Session 142: the loop closes out the current plan step's todo when
+    # the turn ends WITHOUT narration (the common silent tool-run case).
+    # Previously the executed step stayed 'pending' — the user's real run
+    # showed "task ran but checkbox stayed unchecked".
+    completed = [e for e in obs.history() if e.type == "todo_completed"]
+    assert completed, "loop must emit todo_completed for the silent (non-narration) turn end"
+    assert completed[-1].data["id"] == "plan-0"
+    assert completed[-1].data.get("completed") is True
+
     # The final answer still streams.
     assert any(chunk.done for chunk in chunks)
+
+
+@pytest.mark.asyncio
+async def test_loop_attaches_plan_step_label_as_tool_call_reasoning():
+    """Session 142: the 'why' for a tool call under a plan step must be the
+    plan-step label. The frontend renders `why: {action.reasoning}` in the
+    Actions/tool-step cards; before this fix only the model's pre-tool
+    narration (thought=) was attached, so a SILENT tool run (empty
+    narration — the common free-tier case) rendered a blank 'why:' even
+    though the plan step label was in scope the whole time.
+
+    Drive a real MultiToolCallResult through the loop (single shell call,
+    no narration), with dispatch patched to a canned result, and assert the
+    emitted tool_call obs events carry reasoning == the active plan step."""
+    from adapters.ollama import MultiToolCallResult, ToolCallResult
+
+    obs = ObsCollector()
+    adapter = _FakeAdapter()
+    loop = AgentLoop(adapter=adapter)
+    messages = [{"role": "system", "content": "sys"}, {"role": "user", "content": "show projects in dev"}]
+
+    plan = ["List the contents of the dev directory to show all projects"]
+
+    calls = []
+
+    class _ToolCallingAdapter:
+        """Returns a silent (no narration) shell tool call, then a plain
+        final answer — exercising the silent-tool-run shape from the user's
+        real failure (blank why: + unchecked todo)."""
+
+        def __init__(self):
+            self.phase = 0
+
+        async def chat_with_tools(self, **kwargs):
+            self.phase += 1
+            calls.append(kwargs)
+            if self.phase == 1:
+                tc = ToolCallResult(
+                    tool_name="shell",
+                    tool_args={"command": "dir C:\\Users\\tison\\dev"},
+                    raw_content="",
+                )
+                return MultiToolCallResult(calls=[tc])
+
+            async def _stream():
+                yield StreamChunk(text="done", done=True)
+
+            return _stream()
+
+    from unittest.mock import patch as _patch
+
+    from core.models import RiskLevel, ToolResult
+
+    async def _fake_dispatch(tool_intent, tool_input, max_retries=1, base_delay=0, adapter=None, allowed_tool_names=None):
+        return ToolResult(
+            content=" Volume in drive C has no label.\n Directory of C:\\Users\\tison\\dev",
+            source="shell",
+            risk=RiskLevel.LOW,
+        ), False, 0
+
+    with _patch("core.agent.loop.dispatch_with_retry", _fake_dispatch):
+        await _drain(
+            loop.run(
+                messages=messages,
+                intent=Intent.SHELL,
+                initial_tool_result=None,
+                available_tools=[],
+                obs=obs,
+                skip_planning=True,
+                plan_steps=plan,
+                adapter=_ToolCallingAdapter(),
+            )
+        )
+
+    # The tool_call started/done events must carry the plan-step label as
+    # the 'why' (reasoning=) — the field the frontend renders as `why:`.
+    tool_events = [e for e in obs.history() if e.type == "tool_call"]
+    assert tool_events, "expected tool_call obs events"
+    for evt in tool_events:
+        assert evt.data.get("reasoning") == plan[0], (
+            "tool_call must attach the active plan-step label as reasoning; "
+            f"got {evt.data.get('reasoning')!r}"
+        )
+
+    # The silent tool run also closes the current plan step's todo at turn end.
+    completed = [e for e in obs.history() if e.type == "todo_completed"]
+    assert completed, "silent tool run must still complete the plan todo"
 
 
 def test_loop_without_plan_steps_keeps_empty_plan():

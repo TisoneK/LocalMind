@@ -180,6 +180,12 @@ async def _event_stream(
                     _todo_id = evt.data.get("todo_id") or None
                     # Session 122: the model's reasoning that led to this tool call.
                     _thought = evt.data.get("thought") or None
+                    # Session 142: the plan-step label — the 'why' for the
+                    # action. The loop attaches it as `reasoning` on every
+                    # tool_call obs event (falls back to the model's thought
+                    # on silent runs). MUST be forwarded here or the frontend
+                    # renders a blank `why:` on the step cards.
+                    _reasoning = evt.data.get("reasoning") or _thought
                     # Generate a stable ID from tool name + iteration so the
                     # frontend can match "started" and "done" events for the
                     # same tool call and UPDATE instead of appending duplicates.
@@ -212,7 +218,7 @@ async def _event_stream(
                                 action_id=_tc_id,
                                 iteration=int(_iteration) if str(_iteration).isdigit() else None,
                                 todo_id=_todo_id,
-                                reasoning=_thought,
+                                reasoning=_reasoning,
                             )
                         elif _status in ("done", "failed"):
                             _engine._store.update_action(
@@ -238,6 +244,7 @@ async def _event_stream(
                                 "arguments": _args_str,
                                 "todo_id": _todo_id,
                                 "thought": _thought,
+                                "reasoning": _reasoning,
                             },
                         }
                     )
