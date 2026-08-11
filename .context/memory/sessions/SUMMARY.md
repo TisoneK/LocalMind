@@ -225,3 +225,4 @@ records.
 
 ---
 - **2026-08-09 — Session 105** — Buffy / deepseek-v4-flash — "Add frontend tests" progress: ChatInput component tests (5): send on Enter + clear, empty rejection, explicit tool hint (shell), streaming abort, steer injection. 42 vitest tests, tsc 0.
+- 2026-08-11 — Buffy/deepseek-v4-flash (Session 143): documented ADR-17 prompt-budget program (measured 9K static floor per agent call; 18K is cumulative across 3-5 chained calls) + backlog B-2026-08-11-1..4. Implementation starts Session 144.
