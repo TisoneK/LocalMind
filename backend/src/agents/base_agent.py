@@ -222,6 +222,14 @@ class BaseAgent(ABC):
         memory_facts: Optional[list[str]] = None,
         orchestrator_context: Optional[str] = None,
         skip_planning: bool = False,
+        # Session 134: when the engine skips the separate planning call
+        # because the ThinkingDispatcher already produced an
+        # execution_plan, those step labels come through here and seed
+        # the Todos panel (same plan-{i} ids the planner would emit).
+        # Must be forwarded to AgentLoop.run() — forgetting this param
+        # crashes with "got an unexpected keyword argument 'plan_steps'"
+        # (Session 141 regression fix).
+        plan_steps: Optional[list[str]] = None,
         allowed_tool_names: Optional[frozenset[str]] = None,
         steering_queue=None,  # B-2026-08-02-5 (A5): per-session asyncio.Queue
         abort_signal=None,  # B-2026-08-02-2 (A2): per-session asyncio.Event
@@ -356,6 +364,7 @@ class BaseAgent(ABC):
             agent_context=agent_context_str,
             agent_config=cfg,  # ADR-6: pass the scoped toolset + caps
             skip_planning=skip_planning,
+            plan_steps=plan_steps,  # Session 134: dispatcher plan reuse
             allowed_tool_names=allowed_tool_names,
             steering_queue=steering_queue,  # B-2026-08-02-5 (A5)
             abort_signal=abort_signal,  # B-2026-08-02-2 (A2)

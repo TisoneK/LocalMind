@@ -26,11 +26,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from agents import CodingAgent, ResearchAgent
+from agents import CodingAgent
 from core.agent.prompts import build_agent_system_prompt
 from core.models import Intent
-
 
 # ── build_agent_system_prompt accepts + injects agent_context ──────────────
 
@@ -118,7 +116,6 @@ def test_build_coding_context_falls_back_when_playbook_missing(tmp_path, monkeyp
 async def test_base_agent_run_calls_build_context_and_passes_to_loop():
     """BaseAgent.run() calls build_context() and passes the result as
     agent_context to AgentLoop.run()."""
-    from agents.base_agent import BaseAgent
     from core.models import Intent as I
 
     # Use the CodingAgent (a real BaseAgent subclass)
@@ -154,9 +151,10 @@ async def test_base_agent_run_calls_build_context_and_passes_to_loop():
             orchestrator_context=orchestrator_context,
         )
 
-    with patch("core.agent.loop.AgentLoop", _FakeLoop):
-        with patch.object(CodingAgent, "build_context", _spy_build_context):
-            async for _ in agent.run(
+    with patch("core.agent.loop.AgentLoop", _FakeLoop), patch.object(
+        CodingAgent, "build_context", _spy_build_context
+    ):
+        async for _ in agent.run(
                 messages=[{"role": "user", "content": "create hello.py"}],
                 intent=I.SHELL,
                 initial_tool_result=None,
@@ -178,7 +176,6 @@ async def test_base_agent_run_calls_build_context_and_passes_to_loop():
 @pytest.mark.asyncio
 async def test_base_agent_run_continues_on_build_context_failure():
     """If build_context() throws, BaseAgent.run() logs and continues with empty agent_context."""
-    from agents.base_agent import BaseAgent
     from core.models import Intent as I
 
     agent = CodingAgent(adapter=None)
@@ -197,9 +194,10 @@ async def test_base_agent_run_continues_on_build_context_failure():
     def _boom(self, messages, intent, memory_facts=None, orchestrator_context=None):
         raise RuntimeError("simulated context-builder failure")
 
-    with patch("core.agent.loop.AgentLoop", _FakeLoop):
-        with patch.object(CodingAgent, "build_context", _boom):
-            async for _ in agent.run(
+    with patch("core.agent.loop.AgentLoop", _FakeLoop), patch.object(
+        CodingAgent, "build_context", _boom
+    ):
+        async for _ in agent.run(
                 messages=[{"role": "user", "content": "test"}],
                 intent=I.SHELL,
                 initial_tool_result=None,
@@ -214,17 +212,77 @@ async def test_base_agent_run_continues_on_build_context_failure():
     )
 
 
+@pytest.mark.asyncio
+async def test_base_agent_run_forwards_plan_steps_to_loop():
+    """Session 141 regression: BaseAgent.run() must ACCEPT `plan_steps` and
+    forward it to AgentLoop.run(). The engine passes plan_steps= (Session
+    134 dispatcher plan reuse) on the agent path; before this fix the
+    call crashed with "got an unexpected keyword argument 'plan_steps'" —
+    the exact error the user hit on "Show me all projects in dev" —
+    because BaseAgent.run() never gained the parameter.
+
+    This test pins BOTH halves: the signature accepts plan_steps (no
+    TypeError on call), and the value reaches AgentLoop.run()."""
+    from core.models import Intent as I
+
+    agent = CodingAgent(adapter=None)
+
+    captured_kwargs = {}
+
+    class _FakeLoop:
+        def __init__(self, adapter=None):
+            self.adapter = adapter
+
+        async def run(self, **kwargs):
+            captured_kwargs.update(kwargs)
+            return
+            yield
+
+    plan = [
+        "Locate the dev directory",
+        "List its contents",
+        "Report the projects",
+    ]
+
+    with patch("core.agent.loop.AgentLoop", _FakeLoop):
+        async for _ in agent.run(
+            messages=[{"role": "user", "content": "Show me all projects in dev"}],
+            intent=I.SHELL,
+            initial_tool_result=None,
+            available_tools=[],
+            plan_steps=plan,
+        ):
+            pass
+
+    # The value was forwarded unchanged to AgentLoop.run()
+    assert captured_kwargs.get("plan_steps") == plan, (
+        "BaseAgent.run() must forward plan_steps to AgentLoop.run(); "
+        f"got {captured_kwargs.get('plan_steps')!r}"
+    )
+
+    # Default is None when the engine doesn't provide a plan
+    captured_kwargs.clear()
+    with patch("core.agent.loop.AgentLoop", _FakeLoop):
+        async for _ in agent.run(
+            messages=[{"role": "user", "content": "hi"}],
+            intent=I.CHAT,
+            initial_tool_result=None,
+            available_tools=[],
+        ):
+            pass
+    assert captured_kwargs.get("plan_steps") is None
+
+
 # ── AgentLoop.run() honors agent_config.max_iterations / max_wall_clock_secs ──
 
 
 def test_agent_loop_uses_module_defaults_when_agent_config_is_none():
     """When agent_config is None, AgentLoop uses module-level MAX_ITERATIONS / MAX_WALL_CLOCK_SECS."""
-    from core.agent.constants import MAX_ITERATIONS, MAX_WALL_CLOCK_SECS
 
     # Construct an AgentLoop and inspect the _effective_max_iter / _effective_max_wall
     # computation by running a tiny stub. We can't actually run the loop without
     # a model, but we CAN test the resolution logic in isolation.
-    from core.agent.constants import MAX_ITERATIONS as MI, MAX_WALL_CLOCK_SECS as MW
+    from core.agent.constants import MAX_ITERATIONS as MI
 
     # Simulate the resolution logic from AgentLoop.run()
     def resolve(agent_config):
