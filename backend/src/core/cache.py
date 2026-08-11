@@ -189,6 +189,13 @@ def memoize(
     Returns the wrapped function with a ``.cache`` attribute exposing the
     underlying TTLCache (for tests and targeted ``cache.clear()``).
 
+    Single-flight: concurrent misses for the SAME key are serialized by a
+    per-key lock (asyncio.Lock for async callables, threading.Lock for sync)
+    so the underlying function computes ONCE and the other callers reuse the
+    result — mirroring the adapter /models per-provider lock. Lock dicts are
+    bounded (oldest evicted past a cap); eviction only costs a duplicate
+    compute, never correctness.
+
     Note: like TTLCache, ``None`` means "miss" — a function returning None
     is never cached and re-runs every call.
     """
@@ -198,6 +205,35 @@ def memoize(
         max_entries=max_entries,
         copier=copier,
     )
+
+    # ── Per-key single-flight locks (Session 140) ────────────────────────
+    # Concurrent misses for the SAME key must compute ONCE, not N times: the
+    # first caller to acquire the key's lock computes + stores, waiters re-
+    # check the cache after acquiring and return the stored result. Mirrors
+    # the adapter /models per-provider lock, but generic per-key.
+    #
+    # The lock dicts are bounded (evict oldest beyond a cap) so a long-lived
+    # process with many distinct keys can't grow unboundedly. The cap scales
+    # with max_entries so lock-dict key memory stays proportional to the
+    # cache itself (e.g. a 256-entry cache holds at most ~1K lock keys, not
+    # a fixed 1024 regardless of size). Eviction is safe for correctness:
+    # losing a lock merely means a duplicate compute (same as no
+    # single-flight), never a wrong result.
+    _SINGLE_FLIGHT_LOCKS_MAX = max(64, min(1024, max_entries * 4))
+    _async_key_locks: dict[Any, "asyncio.Lock"] = {}
+    _thread_key_locks: dict[Any, "threading.Lock"] = {}
+    _locks_guard = threading.Lock()
+
+    def _get_key_lock(key: Any, lock_map: dict, factory) -> Any:
+        """Return (creating if needed) the per-key single-flight lock."""
+        with _locks_guard:
+            lock = lock_map.get(key)
+            if lock is None:
+                if len(lock_map) >= _SINGLE_FLIGHT_LOCKS_MAX:
+                    lock_map.pop(next(iter(lock_map)), None)
+                lock = factory()
+                lock_map[key] = lock
+            return lock
 
     def _default_key(args: tuple, kwargs: dict) -> tuple:
         parts = [repr(a) for a in args]
@@ -230,7 +266,14 @@ def memoize(
                 cached = cache.get(key)
                 if cached is not None:
                     return cached
-                return _store_and_return(await fn(*args, **kwargs), key)
+                # Single-flight: serialize concurrent misses for this key.
+                async with _get_key_lock(key, _async_key_locks, asyncio.Lock):
+                    # Re-check after acquiring — the lock winner may have
+                    # computed + stored while we waited.
+                    cached = cache.get(key)
+                    if cached is not None:
+                        return cached
+                    return _store_and_return(await fn(*args, **kwargs), key)
 
             _async_wrapper.cache = cache
             return _async_wrapper
@@ -241,7 +284,11 @@ def memoize(
             cached = cache.get(key)
             if cached is not None:
                 return cached
-            return _store_and_return(fn(*args, **kwargs), key)
+            with _get_key_lock(key, _thread_key_locks, threading.Lock):
+                cached = cache.get(key)
+                if cached is not None:
+                    return cached
+                return _store_and_return(fn(*args, **kwargs), key)
 
         _sync_wrapper.cache = cache
         return _sync_wrapper

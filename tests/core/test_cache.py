@@ -234,6 +234,76 @@ def test_memoize_bare_usage_without_parens(_fast_clock):
     assert len(calls) == 2
 
 
+@pytest.mark.asyncio
+async def test_memoize_async_single_flight_computes_once(_fast_clock):
+    """Concurrent misses for the SAME key compute once, not N times."""
+    import asyncio
+
+    compute_count = 0
+
+    @memoize(ttl_seconds=60.0)
+    async def slow(x):
+        nonlocal compute_count
+        compute_count += 1
+        # sleep(0) yields the loop so gather's other tasks reach the lock —
+        # must stay 0: the autouse _fast_clock freezes time.monotonic, so any
+        # nonzero asyncio.sleep would never wake.
+        await asyncio.sleep(0)
+        return x * 2
+
+    # Fire 10 concurrent calls for the same key — single-flight must collapse
+    # them into ONE underlying computation.
+    results = await asyncio.gather(*(slow(5) for _ in range(10)))
+    assert results == [10] * 10
+    assert compute_count == 1, "concurrent misses for the same key must compute once"
+
+
+@pytest.mark.asyncio
+async def test_memoize_async_distinct_keys_compute_independently(_fast_clock):
+    """Different keys are not serialized by the single-flight lock."""
+    import asyncio
+
+    computed = set()
+
+    @memoize(ttl_seconds=60.0)
+    async def f(x):
+        computed.add(x)
+        await asyncio.sleep(0)
+        return x
+
+    await asyncio.gather(*(f(i) for i in range(5)))
+    assert computed == {0, 1, 2, 3, 4}, "distinct keys must each compute"
+
+
+def test_memoize_sync_single_flight_across_threads():
+    """Concurrent cross-thread misses for the same key compute once."""
+    import threading
+    import time as _time
+
+    compute_count = 0
+
+    @memoize(ttl_seconds=60.0)
+    def slow(x):
+        nonlocal compute_count
+        compute_count += 1
+        _time.sleep(0.01)
+        return x * 2
+
+    results: list = []
+
+    def _worker():
+        results.append(slow(7))
+
+    threads = [threading.Thread(target=_worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert results == [14] * 8
+    assert compute_count == 1, "cross-thread same-key misses must compute once"
+
+
 def test_approx_tokens_is_memoized():
     """The engine's token estimator caches identical text (30+ calls/request)."""
     from core.engine._helpers import _approx_tokens
