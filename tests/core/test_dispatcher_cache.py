@@ -167,16 +167,19 @@ async def test_cache_hit_emits_same_obs_events(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ttl_expiry_forces_reclassification(monkeypatch):
-    monkeypatch.setattr(td, "_PLAN_CACHE_TTL_SECS", 0.05)
-    adapter = CountingJSONAdapter()
-    d = td.ThinkingDispatcher(adapter)
-    await _collect(d, "top stories today")
-    assert adapter.chat_calls == 1
+async def test_ttl_expiry_forces_reclassification():
+    td._PLAN_CACHE.ttl_seconds = 0.05
+    try:
+        adapter = CountingJSONAdapter()
+        d = td.ThinkingDispatcher(adapter)
+        await _collect(d, "top stories today")
+        assert adapter.chat_calls == 1
 
-    await asyncio.sleep(0.12)  # let the entry expire
-    await _collect(d, "top stories today")
-    assert adapter.chat_calls == 2, "expired entry must be recomputed"
+        await asyncio.sleep(0.12)  # let the entry expire
+        await _collect(d, "top stories today")
+        assert adapter.chat_calls == 2, "expired entry must be recomputed"
+    finally:
+        td._PLAN_CACHE.ttl_seconds = 300.0
 
 
 @pytest.mark.asyncio
@@ -195,10 +198,13 @@ async def test_low_confidence_plan_never_cached():
 
 
 @pytest.mark.asyncio
-async def test_cache_is_bounded(monkeypatch):
-    monkeypatch.setattr(td, "_PLAN_CACHE_MAX_ENTRIES", 4)
-    adapter = CountingJSONAdapter()
-    d = td.ThinkingDispatcher(adapter)
-    for i in range(10):
-        await _collect(d, f"distinct message number {i}")
-    assert len(td._PLAN_CACHE) <= 4
+async def test_cache_is_bounded():
+    td._PLAN_CACHE.max_entries = 4
+    try:
+        adapter = CountingJSONAdapter()
+        d = td.ThinkingDispatcher(adapter)
+        for i in range(10):
+            await _collect(d, f"distinct message number {i}")
+        assert len(td._PLAN_CACHE) <= 4
+    finally:
+        td._PLAN_CACHE.max_entries = 64

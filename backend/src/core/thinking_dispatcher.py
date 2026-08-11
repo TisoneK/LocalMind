@@ -38,6 +38,7 @@ import re
 import time
 from typing import AsyncIterator, Optional, Union
 
+from core.cache import TTLCache
 from core.execution_graph import ExecutionGraph, build_graph_from_plan_steps
 from core.filters import _filter_system_leaks
 from core.models import (
@@ -73,13 +74,16 @@ MAX_HISTORY_FOR_PROMPT: int = 6
 # caching the route never serves stale tool data (realtime-sensitive plans
 # still run their web_search/file_read live).
 #
-# The cache is MODULE-LEVEL because the engine constructs a fresh
-# ThinkingDispatcher per request; without a shared store every request
-# would start cold. Entries are TTL'd (routing drift over a session) and
-# bounded (LRU-ish eviction by insertion order).
-_PLAN_CACHE: dict[tuple, tuple[float, "OrchestrationPlan"]] = {}
-_PLAN_CACHE_TTL_SECS: float = 300.0  # 5 min — long enough for retries/follow-ups, short enough to drift
-_PLAN_CACHE_MAX_ENTRIES: int = 64
+# The cache is MODULE-LEVEL (a shared TTLCache instance) because the engine
+# constructs a fresh ThinkingDispatcher per request; without a shared store
+# every request would start cold. Plans are deep-copied on read so engine
+# mutations (auto_correct / execution-mode derivation) never corrupt the
+# cached entry.
+_PLAN_CACHE: "TTLCache[OrchestrationPlan]" = TTLCache(
+    ttl_seconds=300.0,  # 5 min — long enough for retries/follow-ups, short enough to drift
+    max_entries=64,
+    copier=lambda plan: plan.model_copy(deep=True),
+)
 # Only plans at/above this confidence are cached. Sits safely above the
 # fallback floor (0.3) so a parsed-but-garbage routing decision can never
 # be served to a repeat request.
@@ -112,49 +116,17 @@ def _dispatcher_cache_key(
     return (_normalize_message_for_cache(message), history_sig, has_attachment)
 
 
-def _get_cached_plan(key: tuple) -> Optional["OrchestrationPlan"]:
-    """Return a deep copy of the cached plan if fresh, else None."""
-    entry = _PLAN_CACHE.get(key)
-    if entry is None:
-        return None
-    stored_at, plan = entry
-    if time.monotonic() - stored_at > _PLAN_CACHE_TTL_SECS:
-        _PLAN_CACHE.pop(key, None)
-        return None
-    # Deep copy so downstream mutation (engine tweaks profile fields like
-    # auto_correct / execution-mode derivation) never corrupts the cache.
-    try:
-        return plan.model_copy(deep=True)
-    except Exception:
-        # Deep copy failed — treat as a MISS, not a shared reference. Returning
-        # the stored instance would hand out a mutable object: downstream engine
-        # code derives profile fields from the plan (auto_correct, execution-mode
-        # correction), and mutating the cached instance would corrupt every later
-        # hit served from this entry. A re-run of the LLM is cheaper than serving
-        # a degraded route.
-        _PLAN_CACHE.pop(key, None)
-        return None
-
-
 def _store_plan(key: tuple, plan: "OrchestrationPlan") -> None:
-    """Store a plan, evicting expired + oldest entries when over capacity.
+    """Store a plan, enforcing the "only quality plans cached" invariant.
 
-    Enforces the "only quality plans cached" invariant itself: plans below
-    _PLAN_CACHE_MIN_CONFIDENCE (fallback floor is 0.3) are rejected so a
-    garbage routing decision can never be served to a repeat request.
+    Plans below _PLAN_CACHE_MIN_CONFIDENCE (fallback floor is 0.3) are
+    rejected so a garbage routing decision can never be served to a repeat
+    request. TTL + bounded eviction + deep-copy-on-read are handled by the
+    shared TTLCache (reads go straight through ``_PLAN_CACHE.get``).
     """
     if plan.profile.confidence < _PLAN_CACHE_MIN_CONFIDENCE:
         return
-    now = time.monotonic()
-    # Opportunistic TTL sweep keeps the dict from accumulating dead keys.
-    expired = [k for k, (ts, _p) in _PLAN_CACHE.items() if now - ts > _PLAN_CACHE_TTL_SECS]
-    for k in expired:
-        _PLAN_CACHE.pop(k, None)
-    if len(_PLAN_CACHE) >= _PLAN_CACHE_MAX_ENTRIES:
-        # Evict oldest by insertion (dict preserves insertion order).
-        oldest_key = next(iter(_PLAN_CACHE))
-        _PLAN_CACHE.pop(oldest_key, None)
-    _PLAN_CACHE[key] = (now, plan)
+    _PLAN_CACHE.set(key, plan)
 
 # Signal detection: only intercept truly unambiguous one-way signals.
 # These produce TaskProfile objects without an LLM call, saving 2-5s.
@@ -493,7 +465,7 @@ class ThinkingDispatcher:
         # path emits (intent_classified / dispatcher_complete) so the Observe
         # panel and the engine's downstream reads behave identically.
         _cache_key = _dispatcher_cache_key(message, intent_history, has_attachment)
-        _cached = _get_cached_plan(_cache_key)
+        _cached = _PLAN_CACHE.get(_cache_key)
         if _cached is not None:
             _cached_intent = _cached.profile.primary_intent().value
             logger.info(

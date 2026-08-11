@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from adapters import get_adapter
+from core.cache import TTLCache
 from core.config import settings
 from tools import available_tools
 
@@ -25,9 +26,7 @@ _SERVER_START = _time.time()
 # engine_ready=true (StatusBar displays health status). With 60s TTL we
 # reduce Ollama /api/tags calls to ~1 per minute while still detecting
 # Ollama going down within 60s.
-_REACHABILITY_CACHE_TTL = 60  # seconds (was 30)
-_cached_reachable: bool = False
-_cached_reachable_at: float = 0.0
+_reachability_cache = TTLCache(ttl_seconds=60.0, max_entries=1)  # was 30s
 
 
 class HealthResponse(BaseModel):
@@ -52,24 +51,17 @@ def set_engine_ready() -> None:
 
 @router.get("/health", response_model=HealthResponse)
 async def health():
-    global _cached_reachable, _cached_reachable_at
-
-    now = _time.time()
     # Use cached value if still within TTL
-    if now - _cached_reachable_at < _REACHABILITY_CACHE_TTL:
-        reachable = _cached_reachable
-    else:
+    reachable = _reachability_cache.get("provider")
+    if reachable is None:
         try:
             adapter = get_adapter(settings.localmind_adapter)
             reachable = await adapter.health_check()
-            _cached_reachable = reachable
-            _cached_reachable_at = now
         except Exception:
             reachable = False
-            _cached_reachable = False
-            _cached_reachable_at = now
+        _reachability_cache.set("provider", reachable)
 
-    uptime = round(now - _SERVER_START, 2)
+    uptime = round(_time.time() - _SERVER_START, 2)
 
     # Get model based on adapter
     adapter_name = settings.localmind_adapter

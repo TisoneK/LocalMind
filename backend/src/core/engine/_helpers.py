@@ -12,9 +12,9 @@ import asyncio
 import hashlib
 import logging
 import re
-from collections import OrderedDict
 from typing import Optional
 
+from core.cache import LRUCache
 from core.models import Intent
 
 logger = logging.getLogger(__name__)
@@ -60,34 +60,8 @@ def _safe_task(coro) -> asyncio.Task:
 # ── Chat Agent response cache ────────────────────────────────────────────
 # v0.11 PERFORMANCE: Cache Chat Agent responses for repeated/simple queries.
 # This saves 2-5s for repeated queries (15-25% of requests).
-
-
-class _LRUCache:
-    """Simple LRU cache with max size."""
-
-    def __init__(self, maxsize: int = 256):
-        self._cache: OrderedDict = OrderedDict()
-        self._maxsize = maxsize
-
-    def get(self, key: str) -> Optional[tuple[str, str]]:
-        if key in self._cache:
-            self._cache.move_to_end(key)
-            return self._cache[key]
-        return None
-
-    def set(self, key: str, value: tuple[str, str]) -> None:
-        if key in self._cache:
-            self._cache.move_to_end(key)
-        else:
-            if len(self._cache) >= self._maxsize:
-                self._cache.popitem(last=False)
-        self._cache[key] = value
-
-    def clear(self) -> None:
-        self._cache.clear()
-
-
-_chat_agent_cache = _LRUCache(maxsize=256)
+# Uses the shared LRUCache primitive from core.cache (Session 136).
+_chat_agent_cache = LRUCache(max_entries=256)
 
 
 def _get_chat_agent_cache_key(message: str, intent: Intent) -> str:

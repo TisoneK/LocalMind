@@ -59,34 +59,51 @@ def _parse_sse(body: str) -> list[dict]:
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
+class _FakeAdapter:
+    """Deterministic adapter stub for health-route tests.
+
+    The route calls ``get_adapter(settings.localmind_adapter)`` — and the
+    dev .env typically selects 'zen' (a live OpenAI-compat provider), so
+    patching ``adapters.ollama.OllamaAdapter.health_check`` never took
+    effect: the route silently hit the real network instead. Patching
+    ``api.routes.health.get_adapter`` makes these tests hermetic regardless
+    of which adapter .env selects.
+    """
+
+    def __init__(self, reachable: bool):
+        self._reachable = reachable
+
+    async def health_check(self):
+        return self._reachable
+
+
+def _health_ctx(reachable: bool):
+    return patch("api.routes.health.get_adapter", return_value=_FakeAdapter(reachable))
+
+
 class TestHealth:
     def test_returns_200(self, client):
-        with patch("adapters.ollama.OllamaAdapter.health_check",
-                   new_callable=AsyncMock, return_value=True):
+        with _health_ctx(True):
             assert client.get("/api/health").status_code == 200
 
     def test_schema_has_required_fields(self, client):
-        with patch("adapters.ollama.OllamaAdapter.health_check",
-                   new_callable=AsyncMock, return_value=True):
+        with _health_ctx(True):
             data = client.get("/api/health").json()
         for field in ("status", "provider_reachable", "model", "tools", "version"):
             assert field in data, f"missing field: {field}"
 
-    def test_degraded_when_ollama_down(self, client):
+    def test_degraded_when_provider_down(self, client):
         # Invalidate the reachability cache so our mock is actually used
         import api.routes.health as health_module
-        health_module._cached_reachable = True
-        health_module._cached_reachable_at = 0.0  # force cache miss
+        health_module._reachability_cache.clear()  # force cache miss
 
-        with patch("adapters.ollama.OllamaAdapter.health_check",
-                   new_callable=AsyncMock, return_value=False):
+        with _health_ctx(False):
             data = client.get("/api/health").json()
         assert data["status"] == "degraded"
         assert data["provider_reachable"] is False
 
     def test_lists_all_registered_tools(self, client):
-        with patch("adapters.ollama.OllamaAdapter.health_check",
-                   new_callable=AsyncMock, return_value=True):
+        with _health_ctx(True):
             tools = client.get("/api/health").json()["tools"]
         intents = {t["intent"] for t in tools}
         for expected in ("web_search", "code_exec", "memory_op", "file_task"):

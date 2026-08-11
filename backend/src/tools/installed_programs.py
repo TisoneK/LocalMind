@@ -12,19 +12,18 @@ from __future__ import annotations
 
 import logging
 import sys
-import time
+
+from core.cache import TTLCache
 
 logger = logging.getLogger(__name__)
 
-
-_WINDOWS_CACHE: tuple[list[dict], float] | tuple[None, float] = (None, 0.0)
-_WINDOWS_CACHE_TTL = 300  # 5 minutes — picks up mid-session installs
+# 5 minutes — picks up mid-session installs (TTLCache handles expiry)
+_WINDOWS_CACHE: "TTLCache[list[dict]]" = TTLCache(ttl_seconds=300.0, max_entries=1)
 
 
 def _list_windows() -> list[dict]:
-    global _WINDOWS_CACHE
-    cached, ts = _WINDOWS_CACHE
-    if cached is not None and (time.monotonic() - ts) < _WINDOWS_CACHE_TTL:
+    cached = _WINDOWS_CACHE.get("programs")
+    if cached is not None:
         return cached
     try:
         import winreg
@@ -67,7 +66,7 @@ def _list_windows() -> list[dict]:
                 seen.add(p["name"].lower())
                 unique.append(p)
         result = sorted(unique, key=lambda x: x["name"].lower())
-        _WINDOWS_CACHE = (result, time.monotonic())
+        _WINDOWS_CACHE.set("programs", result)
         return result
     except ImportError:
         return []
