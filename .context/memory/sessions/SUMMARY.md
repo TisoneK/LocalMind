@@ -226,3 +226,4 @@ records.
 ---
 - **2026-08-09 — Session 105** — Buffy / deepseek-v4-flash — "Add frontend tests" progress: ChatInput component tests (5): send on Enter + clear, empty rejection, explicit tool hint (shell), streaming abort, steer injection. 42 vitest tests, tsc 0.
 - 2026-08-11 — Buffy/deepseek-v4-flash (Session 143): documented ADR-17 prompt-budget program (measured 9K static floor per agent call; 18K is cumulative across 3-5 chained calls) + backlog B-2026-08-11-1..4. Implementation starts Session 144.
+- 2026-08-11 — Buffy/deepseek-v4-flash (Sessions 146-147): realtime thinking accumulation fix (e00ee3d) + heading-only final-answer synthesis rescue (562b8a5). Live zen smoke: 120s→22.4s wall, first thinking 0.08s, Worker report eliminated, clean table answer, prompt 14.2K→9.1K cumulative.

@@ -1737,3 +1737,17 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Commits:** `chore(context): document ADR-17 prompt-budget program + backlog B-2026-08-11-1..4 (Session 143)`
 - **Open items:** B-2026-08-11-1..4 — implementation starts Session 144
 - **Report:** none (context-only session)
+---
+## 2026-08-11 — Session 146
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** B-2026-08-11-3 (ADR-17 track 3) — realtime UI: thinking no longer a black box. Verified the realtime plumbing was already live (dispatcher/plan/loop thinking streams via SSE, ThinkingBlock renders expanded during streaming) and found the one provable gap: every `thinking_start` (one per phase: dispatcher → chat-agent → agent loop, confirmed at thinking_dispatcher.py:528, _pipeline.py:1560/3510) reset `thinkingContent=''`, wiping the dispatcher's live reasoning the moment the next phase began — the pre-tool "SHELL" card rendered as a silent void.
+- **Done:** `frontend/src/hooks/useLocalMind.ts` now seeds the thinking buffer only on the first phase; later phase boundaries insert a `\n\n` separator, so the full multi-phase reasoning trace accumulates on the message and is visible live. Added regression test (accumulates across phase boundaries). Committed `e00ee3d`; 91 frontend tests pass, tsc clean, eslint 0 errors.
+
+---
+## 2026-08-11 — Session 147
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** B-2026-08-11-4 — live real-model verification with the configured Zen key (LOCALMIND_ADAPTER=zen, key already in backend/.env). Built `_tmp_live_smoke.py` (httpx multipart SSE stream on dedicated port) and ran two real smoke passes of "Check git status … and show the diff if uncommitted".
+- **Measured (pre-fix):** wall 12.3s/26.0s, first thinking 0.07-0.09s (Session 146 fix visible), 11 tool calls, real commands (`git -C … status`) — but final answer collapsed to "**Git status**" (14 chars) and the deterministic Worker report fired (needs_report correctly True: heading quotes no evidence). prompt cumulative 14.2K.
+- **Root cause:** on NORMAL completion, a short final answer went straight to the Worker report; the AnswerSynthesizer was only reached on the hit-limit path (_force_final_answer).
+- **Done:** loop.py — `_rescue_final_answer()` runs ONE focused synthesis call (plain chat, framing="final", suppress_report + suppress_empty_fallback) before the report fallback; `_force_final_answer` gained framing/suppress_report/suppress_empty_fallback params. 4 regression tests (`tests/core/test_final_answer_rescue.py`).
+- **Verified on the real model (post-fix):** has_worker_report **False**; final answer = clean markdown table of changed files + diff (1185 chars); prompt 14.2K→9.1K cumulative; completion 121→296; wall 22.4s; first thinking 0.08s. Committed `562b8a5`; 1287 backend tests pass, ruff clean.
