@@ -248,7 +248,78 @@ class TestChat:
         events = _parse_sse(r.text)
         error_events = [e for e in events if e.get("type") == "error"]
         assert error_events
-        assert "File upload failed" in error_events[0]["error"]
+        # ADR-20 (Session 166): the error payload is now the canonical object;
+        # the friendly message carries the upload context, source is internal.
+        err = error_events[0]["error"]
+        assert isinstance(err, dict)
+        assert "File upload failed" in err["message"]
+        assert err["source"] == "internal"
+        assert any(e.get("type") == "done" for e in events)
+
+
+class TestErrorNormalization:
+    """ADR-20 — the SSE error event carries the CANONICAL object, never the
+    raw provider payload. The friendly message is what reaches the UI; the
+    raw string stays in the `raw` debug field."""
+
+    ZEN_429 = (
+        'zen returned 429: {"type":"error","error":{"type":"FreeUsageLimitError",'
+        '"message":"Error from provider (Console): Rate limit exceeded. '
+        'Please try again later."}}'
+    )
+
+    def test_streamed_provider_error_is_canonical(self, client):
+        from core.models import StreamChunk
+
+        # `self` inside the patched method is the ENGINE, not the test —
+        # capture the payload in a closure instead.
+        zen_429 = self.ZEN_429
+
+        async def _process(self, message, session_id, file=None, filename=None,
+                           content_type=None, obs=None, original_path=None,
+                           client_intent=None, client_confidence=0.0, **kwargs):
+            yield StreamChunk(text="", done=True, error=zen_429)
+
+        with patch("core.engine.Engine.process", _process):
+            r = client.post(
+                "/api/chat", data={"message": "hi", "session_id": "err-norm"}
+            )
+
+        assert r.status_code == 200
+        events = _parse_sse(r.text)
+        error_events = [e for e in events if e.get("type") == "error"]
+        assert error_events
+        err = error_events[0]["error"]
+        assert isinstance(err, dict)
+        assert err["code"] == "rate_limit"
+        assert err["retryable"] is True
+        assert err["provider"] == "zen"
+        assert "FreeUsageLimitError" not in err["message"]
+        assert err["raw"].startswith("zen returned 429")
+
+    def test_exception_path_is_canonical_and_leaks_no_raw(self, client):
+        async def _process(self, *args, **kwargs):
+            raise RuntimeError("boom: connection refused")
+            yield  # pragma: no cover
+
+        with patch("core.engine.Engine.process", _process):
+            r = client.post(
+                "/api/chat", data={"message": "hi", "session_id": "err-exc"}
+            )
+
+        events = _parse_sse(r.text)
+        error_events = [e for e in events if e.get("type") == "error"]
+        assert error_events
+        err = error_events[0]["error"]
+        assert isinstance(err, dict)
+        assert err["message"]
+        assert err["raw"].startswith("boom")
+        # Session 31 guarantee kept: the token line stays generic — no raw
+        # exception text leaks into the content.
+        token_text = "".join(
+            e.get("content", "") for e in events if e.get("type") == "token"
+        )
+        assert "boom" not in token_text
         assert any(e.get("type") == "done" for e in events)
 
 

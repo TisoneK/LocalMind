@@ -37,6 +37,7 @@ from fastapi.responses import StreamingResponse
 
 from core.config import settings
 from core.engine import Engine
+from core.error_normalizer import SOURCE_INTERNAL, normalize_error
 from core.obs import ObsCollector
 from core.title_generator import generate_title_smart, refine_title_async
 
@@ -403,7 +404,13 @@ async def _event_stream(
                 # error text into the chat content. The .error field is the
                 # sole authoritative signal; the frontend renders it via the
                 # 'error' event handler.
-                yield _sse({"type": "error", "error": chunk.error})
+                #
+                # ADR-20 (Session 166): the raw provider payload never crosses
+                # the presentation boundary. chunk.error stays a string for all
+                # internal consumers; this is the ONE place it becomes the
+                # canonical error object (code/message/retryable/raw) the
+                # frontend renders as a friendly card.
+                yield _sse({"type": "error", "error": normalize_error(chunk.error)})
                 _last_sent_time = time.monotonic()
                 return
 
@@ -522,8 +529,11 @@ async def _event_stream(
         # Session 31: GUARANTEE — always yield SOMETHING to the user.
         # If the engine crashed before producing any output, yield an
         # error token + done so the frontend shows the error and resets.
-        yield _sse({"type": "token", "content": f"⚠️ An error occurred: {str(exc)[:200]}"})
-        yield _sse({"type": "error", "error": str(exc)})
+        # ADR-20 (Session 166): the token carries a generic line — the raw
+        # exception text used to leak into the content. The canonical error
+        # object (below) carries the real, friendly message.
+        yield _sse({"type": "token", "content": "⚠️ An error occurred. See the details below."})
+        yield _sse({"type": "error", "error": normalize_error(str(exc))})
         yield _sse({"type": "done"})
 
     finally:
@@ -684,7 +694,15 @@ async def chat(
                 # Keep upload failures on the same typed SSE contract as
                 # engine/adapter failures so the frontend renders the error
                 # instead of silently completing an empty assistant bubble.
-                yield _sse({"type": "error", "error": _upload_error_msg})
+                # ADR-20 (Session 166): upload failures are internal-domain —
+                # normalize with source_hint so a "connection reset" inside
+                # the upload isn't mislabeled as a provider outage.
+                yield _sse(
+                    {
+                        "type": "error",
+                        "error": normalize_error(_upload_error_msg, source_hint=SOURCE_INTERNAL),
+                    }
+                )
                 yield _sse({"type": "done"})
 
             return StreamingResponse(
