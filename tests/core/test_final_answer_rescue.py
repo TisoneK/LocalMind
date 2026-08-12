@@ -135,6 +135,36 @@ class TestFinalAnswerRescue:
         )
 
 
+    @pytest.mark.asyncio
+    async def test_synthesis_leaked_dsml_markup_is_stripped(self):
+        """Session 148: the browser-validated run leaked a raw
+        <｜DSML｜tool_calls> block into the final answer because the rescue
+        path only ran the system-leak filter. The strip must apply."""
+        loop = AgentLoop(adapter=MagicMock())
+        mock_adapter = MagicMock()
+        mock_adapter.chat = lambda messages, temperature=0.4: _synth_stream(
+            'The<｜DSML｜tool_calls> <｜DSML｜invoke name="shell"> '
+            '<｜DSML｜parameter name="command" string="true">cd /Users/bao/Code/LocalMind && git status'
+            '</｜DSML｜parameter> </｜DSML｜invoke> </｜DSML｜tool_calls> '
+            "The working tree is clean — no uncommitted changes to report."
+        )
+
+        chunks = []
+        async for chunk in loop._rescue_final_answer(
+            loop_messages=[{"role": "user", "content": "check git status"}],
+            observation_log="[Tool result]: On branch main",
+            active_adapter=mock_adapter,
+            trace=_git_status_trace(),
+            provider_usage={},
+        ):
+            chunks.append(chunk)
+
+        full = "".join(c.text for c in chunks)
+        assert "DSML" not in full, f"DSML markup leaked into answer: {full!r}"
+        assert "<invoke" not in full, f"invoke markup leaked into answer: {full!r}"
+        assert "working tree is clean" in full, f"expected synthesis, got {full!r}"
+
+
 class TestEndToEndHeadingRescue:
     @pytest.mark.asyncio
     async def test_tool_turn_ending_in_heading_yields_synthesized_answer(self):

@@ -3817,6 +3817,11 @@ class AgentLoop:
                             logger.warning("[agent.loop] plan stream adapter error: %s", chunk.error[:120])
                             break
                         text = _filter_system_leaks(chunk.text)
+                        # Session 148: strip DSML/MiniMax tool-call markup from
+                        # planning text too — a model that emits a stray tool
+                        # call block here would otherwise leak it into the plan
+                        # context and the thinking stream.
+                        text = _strip_minimax_tool_calls(text)
                         if text:
                             await _plan_queue.put(text)
                 finally:
@@ -4377,6 +4382,13 @@ class AgentLoop:
                     )
                     return
                 filtered_text = _filter_system_leaks(chunk.text)
+                # Session 148: strip DSML/MiniMax tool-call markup from the
+                # final synthesis too — the browser-validated run leaked a raw
+                # <｜DSML｜tool_calls> block into the answer because the rescue
+                # path (framing='final') only ran the system-leak filter. The
+                # model sometimes emits a tool call as plain text here even
+                # though plain chat has no tools.
+                filtered_text = _strip_minimax_tool_calls(filtered_text)
                 if filtered_text:
                     _any_text_yielded = True
                     _final_text_parts.append(filtered_text)
