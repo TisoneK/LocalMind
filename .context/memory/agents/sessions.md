@@ -1764,3 +1764,10 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Task:** B-2026-08-11-5 — stats split + top-bar context meter (user's design: corner = session cumulative, bubbles = per-message; confidence badge redundant; real context-window signal missing).
 - **Done:** `useChat` returns `sessionStats` (per-hook-instance Map keyed by session; accumulation effect runs only when idle, replace-on-same-turn for late metrics upgrades, token guard so zero-token aborts never count; pure ref-based accumulator — no side effects in state updaters). `PerformanceMetrics` corner now shows summed tokens / weighted speed / avg latency (+ turns chip + wall-time tooltip), live overrides while streaming. `CenterPanel` confidence badge removed → context-window occupancy meter (contextTokens / contextWindowSize, green→amber→red; zen = 128,000). Backend `/api/models` now carries `context_window` (adapter.effective_context_window). Types: `ModelOption.contextWindow`, `SessionStats`. 3 hook regression tests + WorkspaceLayout wiring updates.
 - **Verified:** backend 1293 pass, frontend 95 pass, tsc clean, eslint 0 errors, ruff clean.
+
+---
+## 2026-08-11 — Session 151 (validation pass)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** Real-UI validation of the Session 150 stats split + context meter.
+- **Done:** booted backend (:8000, shell enabled) + frontend (:3000) detached; live-confirmed `/api/models` now returns `context_window: 128000` for deepseek-v4-flash-free (the meter's denominator is real).
+- **Blocked:** live two-turn E2E could not complete — the Zen free tier returned persistent `429 FreeUsageLimitError` (rate limit) on both requests; the app surfaced it as a clean SSE `error` event with no crash. Same free-tier overload class from this thread. Frontend data path covered by the 3 hook regression tests (wire-shaped turn_complete through the real SSE handler → sessionStats). Servers left running for the user; re-run the two-turn check once the rate limit clears (Session 152).

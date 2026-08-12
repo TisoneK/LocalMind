@@ -1,6 +1,7 @@
 # Current Task
 
-- **Session:** 150 (2026-08-11)
-- **Feature:** B-2026-08-11-5 — stats split + context-window meter; B-2026-08-11-6 — git-phrasing signal
-- **Done (149-150):** git-phrasing signal (zero-LLM for "Check git status…" → chained status→diff plan); bottom-right corner now shows cumulative session stats (summed tokens, weighted speed, average latency, turns chip) while per-message lines stay under each bubble; top-bar confidence badge removed → live context-window occupancy meter (this turn's prompt / 128K zen window, color-graded). backend 1293 / frontend 95 tests green.
-- **Next:** Session 151 — browser-level real-UI validation of the new corner + meter (start backend + frontend, drive a real request, verify the corner accumulates across two turns and the meter moves), then continue the ADR-17 latency track.
+- **Session:** 151 (2026-08-11)
+- **Feature:** B-2026-08-11-5 — stats split + context-window meter (Session 151 = real-UI validation pass)
+- **Done (149-150):** git-phrasing signal (zero-LLM for "Check git status…" → chained status→diff plan); bottom-right corner now shows cumulative session stats (summed tokens, weighted speed, average latency, turns chip) while per-message lines stay under each bubble; top-bar confidence badge removed → live context-window occupancy meter. backend 1293 / frontend 95 tests green.
+- **Session 151 outcome:** servers booted detached (backend :8000 + frontend :3000); `/api/models` live-confirmed `context_window: 128000` for deepseek-v4-flash-free — the meter has a real denominator. Browser-level E2E validation BLOCKED: the Zen free tier returned persistent `429 FreeUsageLimitError` (rate limited) on both live turns — the same free-tier overload class from this thread, not a code bug. The frontend data path IS covered by the 3 new hook regression tests (wire-shaped `turn_complete` events through the real SSE handler → sessionStats). Backend error path verified: streams a clean `error` event, no crash.
+- **Next:** Session 152 — re-run the live two-turn UI check once the Zen free-tier rate limit clears (corner must show "2 turns" + summed tokens; Context meter a real %; no confidence badge; per-message line under each bubble). Servers are still running.
