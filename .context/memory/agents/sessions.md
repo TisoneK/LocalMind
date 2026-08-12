@@ -1884,3 +1884,11 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Tests:** 28 new (provider matrix: OpenAI quota/API-key/context, Anthropic rate-limit/overload/not-found/too-large, Ollama string envelopes, Azure string+dict codes, double-nested, `errors[]`, unknown-token fallbacks, type-beats-status priority, long-body parse, provider-shaped generic source); 56 normalizer + 75 API/adapter green; ruff clean.
 - **Commits:** (feat(errors), Session 169).
 - **Next:** Session 170 — full backend regression, deepseek-flash review, live smoke attempt (provider-blocked expected), close out + push.
+---
+## 2026-08-12 — Session 170 (ADR-21 review fixes + close out)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-21 step 2 — full regression, review fixes, close out + push.
+- **Done:** full backend suite **1468 green** (59 normalizer tests), ruff clean. deepseek-flash review → 4 fixes: (1) HTTP 529 → `server_error` in `_STATUS_CODES` (Anthropic overload, plain-bodied 529 previously fell to generic); (2) `_dig_type` falls back to `error.code` when `error.type` is a generic bucket that misses the catalog — OpenAI carries the specific subtype in `code` (`context_length_exceeded`/`invalid_api_key`/`model_not_found`) under `invalid_request_error`; (3) `raw` capped at 2000 chars in the canonical output (unbounded direct inputs); (4) numeric tokens always cleared after status promotion. 4 new tests (code-in-generic-bucket, plain 529, raw cap, existing numeric cases). Feature memory updated (manifest/design). Live smoke stays pending on a live provider (Zen completions still 429 — same as ADR-19/20).
+- **Tests:** 1468 backend green; 59 normalizer (28 ADR-20 + 31 ADR-21); ruff clean.
+- **Commits:** 611e126 (feat(errors), Session 169); (fix(errors), Session 170).
+- **Next:** ADR-21 P0 complete. Standing pendings unchanged: successful-turn live smokes for ADR-19/20/21 when a provider frees up; B-2026-08-12-4 (live two-turn UI check); ADR-18 P1-P3; ADR-19 P1-P3.

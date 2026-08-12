@@ -124,6 +124,8 @@ _STATUS_CODES: dict[int, tuple[str, bool]] = {
     502: (SERVER_ERROR, True),
     503: (SERVER_ERROR, True),
     504: (TIMEOUT, True),
+    # Anthropic's overload status (review fix, Session 169).
+    529: (SERVER_ERROR, True),
 }
 
 # Provider error-type/code tokens → canonical code (ADR-21). The provider's
@@ -259,15 +261,26 @@ def _walk_error(parsed: Any) -> Any:
 
 
 def _dig_type(parsed: Any) -> str:
-    """Pull a normalized (lowercased) error-type/code token from a body."""
+    """Pull a normalized (lowercased) error-type/code token from a body.
+
+    Prefers ``error.type``; when the type is a generic bucket that misses
+    the catalog (OpenAI uses ``invalid_request_error`` as the type for many
+    errors), falls back to ``error.code`` — OpenAI carries the specific
+    subtype there (``context_length_exceeded``, ``invalid_api_key``,
+    ``model_not_found``). Top-level ``code`` (Azure) is the last resort.
+    """
     err = _walk_error(parsed)
+    type_tok = code_tok = ""
     if isinstance(err, dict):
-        tok = err.get("type") or err.get("code") or ""
-    else:
-        tok = ""
-    if not tok and isinstance(parsed, dict):
-        tok = parsed.get("code") or ""  # Azure: {"code": "429", ...}
-    return str(tok).strip().lower()
+        type_tok = str(err.get("type") or "").strip().lower()
+        code_tok = str(err.get("code") or "").strip().lower()
+    if not type_tok and not code_tok and isinstance(parsed, dict):
+        code_tok = str(parsed.get("code") or "").strip().lower()
+    if type_tok in _ERROR_TYPE_RULES:
+        return type_tok
+    if code_tok:
+        return code_tok
+    return type_tok
 
 
 def _dig_message(parsed: Any, fallback: str) -> str:
@@ -285,6 +298,14 @@ def _dig_message(parsed: Any, fallback: str) -> str:
     if isinstance(msg, str) and msg.strip():
         return msg.strip()
     return fallback
+
+
+def _cap_raw(value: Any, limit: int = 2000) -> Any:
+    """Cap string raws so an unbounded direct input can't bloat the SSE
+    event; non-strings (dicts from caller-parsed payloads) pass through."""
+    if isinstance(value, str) and len(value) > limit:
+        return value[: limit - 1] + "…"
+    return value
 
 
 def _clean_text(text: str, limit: int = 220) -> str:
@@ -338,10 +359,12 @@ def _extract(raw: Any) -> tuple[str | None, int | None, str, str, Any]:
         type_token = _dig_type(raw)
         if not text:
             text = _dig_message(raw, text)
-        # Azure-style numeric codes ("429") act as the HTTP status.
+        # Azure-style numeric codes ("429") act as the HTTP status; the
+        # token is always cleared so it can't linger into classification.
         num = _as_int(type_token)
-        if status is None and num is not None and 100 <= num <= 599:
-            status = num
+        if num is not None and 100 <= num <= 599:
+            if status is None:
+                status = num
             type_token = ""
         # Re-normalizing an already-canonical dict must keep the ORIGINAL raw
         # (the debug surface), not wrap itself.
@@ -364,8 +387,9 @@ def _extract(raw: Any) -> tuple[str | None, int | None, str, str, Any]:
             type_token = _dig_type(parsed)
             body = _dig_message(parsed, body)
             num = _as_int(type_token)
-            if status is None and num is not None and 100 <= num <= 599:
-                status = num
+            if num is not None and 100 <= num <= 599:
+                if status is None:
+                    status = num
                 type_token = ""
         return provider, status, body, type_token, text
     return None, None, text, "", text
@@ -407,7 +431,7 @@ def normalize_error(
             "code": GENERIC_ERROR,
             "message": _clean_text(text) or "Something went wrong.",
             "retryable": False,
-            "raw": raw_src,
+            "raw": _cap_raw(raw_src),
         }
 
     code, retryable = _classify(status, text, type_token)
@@ -430,7 +454,7 @@ def normalize_error(
         "code": code,
         "message": message,
         "retryable": retryable,
-        "raw": raw_src,
+        "raw": _cap_raw(raw_src),
     }
 
 

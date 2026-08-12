@@ -360,3 +360,27 @@ class TestProviderEnvelopes:
         )
         err = normalize_error(f"openai returned 400: {body}")
         assert err["code"] == CONTEXT_OVERFLOW
+
+    def test_openai_specific_code_in_generic_type_bucket(self):
+        # OpenAI puts the specific subtype in error.code while error.type is
+        # a generic bucket ("invalid_request_error") — the code must win
+        # when the type misses the catalog.
+        err = normalize_error(
+            'openai returned 400: {"error":{"type":"invalid_request_error",'
+            '"code":"context_length_exceeded","message":"We couldn\'t '
+            'process this request"}}'
+        )
+        assert err["code"] == CONTEXT_OVERFLOW
+
+    def test_plain_body_529_overload(self):
+        # Anthropic's 529 overload status classifies even without a JSON
+        # envelope (review fix, Session 169).
+        err = normalize_error("anthropic returned 529: overloaded upstream")
+        assert err["code"] == SERVER_ERROR
+        assert err["retryable"] is True
+        assert err["provider"] == "anthropic"
+
+    def test_raw_capped_for_long_strings(self):
+        err = normalize_error("plain provider error " + "z" * 3000)
+        assert len(err["raw"]) <= 2000
+        assert err["message"] != ""

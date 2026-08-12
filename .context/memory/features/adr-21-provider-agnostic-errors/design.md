@@ -113,5 +113,20 @@ chars, and `raw` (the debug surface) may now carry the fuller envelope.
    matrix tests (OpenAI quota/API-key/context, Anthropic rate-limit/overload/
    not-found/too-large, Ollama string envelopes, Azure string + dict codes,
    double-nested, `errors[]`, unknown-token fallbacks, long-body parse).
-2. **Session 170** — full backend regression, deepseek-flash review, live
-   smoke attempt (provider-blocked expected), close out + push.
+2. **Session 170** — full backend regression (1468 green), deepseek-flash
+   review, close out + push. Live smoke stays pending on a live provider
+   (Zen completions still 429 — same as ADR-19/20).
+
+**Session 169 review fixes (recorded so design/code don't drift):**
+- HTTP **529** added to `_STATUS_CODES` → `server_error` (Anthropic's
+  overload status; a plain-bodied 529 previously fell to generic).
+- `_dig_type` now prefers `error.type` but falls back to `error.code` when
+  the type is a generic bucket that misses the catalog — OpenAI carries the
+  specific subtype in `code` (`context_length_exceeded`, `invalid_api_key`,
+  `model_not_found`) under the `invalid_request_error` type.
+- `raw` capped at 2000 chars in the canonical output (unbounded direct
+  inputs could bloat the SSE event; `message` was already capped at 220).
+- Numeric tokens ("429") are always cleared after status promotion, not
+  only when no status was present.
+- Known tradeoff: CLI chat/ask print `chunk.error` verbatim and now receive
+  up to 1000 chars instead of 200 — bounded, acceptable for a dev tool.

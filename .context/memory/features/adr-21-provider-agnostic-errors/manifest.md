@@ -32,9 +32,13 @@ providers:
 (~45 tokens), `_walk_error`/`_dig_type` envelope walking (error dict,
 `errors[]`, double-nested, error-as-string, top-level code, numeric-code-as-
 status), type-token-first classification order (token → status → keywords →
-generic), provider-shaped generic errors keep `source=model_provider`,
-adapter body truncation `[:200]` → `[:1000]`. Full backend suite green,
-ruff clean, deepseek-flash review passed, everything pushed.
+generic), code-token fallback when the type is a generic bucket (OpenAI
+`invalid_request_error` + `code=context_length_exceeded`), provider-shaped
+generic errors keep `source=model_provider`, adapter body truncation
+`[:200]` → `[:1000]`. Review fixes (Session 169): HTTP 529 → server_error,
+`raw` capped at 2000 chars, numeric token always cleared. Full backend
+suite **1468 green**, ruff clean, deepseek-flash review passed, everything
+pushed.
 **Builds on:** ADR-20 (error_normalizer.py + SSE boundary + frontend
 ErrorMessage card). Reuses the same canonical codes — **no frontend change
 needed** (new handling produces the existing codes the card already renders).
