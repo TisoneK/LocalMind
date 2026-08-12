@@ -206,7 +206,10 @@ def _extract(raw: Any) -> tuple[str | None, int | None, str, Any]:
         raw_src = raw.get("raw", raw)
         return provider, status, text, raw_src
     if isinstance(raw, Exception):
-        return None, None, f"{type(raw).__name__}: {raw}", raw
+        # raw must stay JSON-serializable — the canonical object can reach
+        # chat.py's json.dumps. str(raw) keeps the debug surface without the
+        # un-serializable exception object (review fix, Session 168).
+        return None, None, f"{type(raw).__name__}: {raw}", str(raw)
     text = str(raw)
     match = _PROVIDER_ERROR_RE.match(text)
     if match:
@@ -234,7 +237,16 @@ def normalize_error(
     (e.g. `source_hint="internal"` for upload failures) — provider keyword
     classification is skipped so a "connection reset" inside an upload error
     isn't mislabeled as a provider outage.
+
+    Already-canonical input is passed through untouched (review fix, Session
+    168): re-classifying the FRIENDLY message would round-trip rate_limit/
+    context_overflow/network_error (whose messages contain their own
+    keywords) but flip auth_error/timeout/server_error/model_not_found to
+    generic "error" (source→internal, retryable→false).
     """
+    if is_canonical_error(raw):
+        return raw
+
     provider, status, text, raw_src = _extract(raw)
 
     if source_hint == SOURCE_INTERNAL:

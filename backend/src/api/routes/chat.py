@@ -529,11 +529,15 @@ async def _event_stream(
         # Session 31: GUARANTEE — always yield SOMETHING to the user.
         # If the engine crashed before producing any output, yield an
         # error token + done so the frontend shows the error and resets.
-        # ADR-20 (Session 166): the token carries a generic line — the raw
-        # exception text used to leak into the content. The canonical error
-        # object (below) carries the real, friendly message.
-        yield _sse({"type": "token", "content": "⚠️ An error occurred. See the details below."})
-        yield _sse({"type": "error", "error": normalize_error(str(exc))})
+        # ADR-20 (Sessions 166/168): normalize ONCE and reuse the friendly
+        # message — the raw exception text used to leak into the content,
+        # AND `_guarantee_persist_assistant` persisted only a generic line.
+        # Now the token (and thus the persisted reply) carries the canonical
+        # friendly message, while the full object (code/retryable/raw) rides
+        # the error event for the ErrorMessage card.
+        _norm_error = normalize_error(str(exc))
+        yield _sse({"type": "token", "content": f"⚠️ {_norm_error['message']}"})
+        yield _sse({"type": "error", "error": _norm_error})
         yield _sse({"type": "done"})
 
     finally:

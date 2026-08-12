@@ -163,9 +163,22 @@ Exception inputs use `type(exc).__name__ + str(exc)`.
 3. **Frontend** — `ModelError` type, hook stores canonical error, `ErrorMessage`
    component + `localmind:open-model-selector` event, `ChatMessage` wiring,
    vitest coverage. ✅ Session 167
-4. **Regression + live smoke + close out** — full backend suite + frontend
-   vitest, code review, retry `scripts/smoke_gate.py` (Zen may still be
-   429-limited), feature memory. ✅ Session 168
+4. **Regression + live smoke + close out** — full backend suite 1437 green +
+   frontend vitest 105 green, deepseek-flash review (3 fixes: canonical
+   passthrough short-circuit, JSON-safe exception `raw`, friendly persisted
+   exception text), live smoke — Zen 429 persists for completions but the
+   canonical error emission was verified LIVE end-to-end. ✅ Session 168
+
+**Session 168 review fixes (recorded so design/code don't drift):**
+- `normalize_error` short-circuits on `is_canonical_error(raw)` — re-
+  classifying the FRIENDLY message would round-trip rate_limit/
+  context_overflow/network_error but flip auth_error/timeout/server_error/
+  model_not_found to generic (source→internal, retryable→false).
+- Exception `raw` coerced to `str()` — canonical output must survive
+  `json.dumps` (the SSE wire).
+- The chat.py exception token now carries the canonical friendly message
+  (so `_guarantee_persist_assistant` persists a useful line), while the raw
+  exception stays out of content.
 
 ## 5. No-regression list (must hold)
 

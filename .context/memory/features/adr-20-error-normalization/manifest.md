@@ -20,7 +20,7 @@ engine → `chat.py:406` emits `{"type":"error","error":"<raw>"}` →
 
 **Started:** 2026-08-12 (Session 165)
 **Branch:** main
-**Status:** ACTIVE — Session 165: design + backend normalizer + tests.
+**Status:** P0 IMPLEMENTED (Sessions 165-168): error_normalizer.py (`f261ef0`), SSE boundary wiring (`6cd514f`), frontend ErrorMessage card + ModelError type + switch-model event (`ca56845`), review fixes (canonical passthrough + JSON-safe raw + friendly persisted text). Full backend suite **1437 green**, frontend vitest **105 green**, ruff + tsc clean. LIVE SMOKE (Session 168): Zen still 429-limited for chat completions (models endpoint 200, completions rate-limited), BUT the pipeline was live-verified — the exact user-reported error now emits the canonical `rate_limit` object with the friendly message and the raw payload confined to `raw`. Remaining: none for P0; the full successful-turn smoke stays pending on a live provider (same as ADR-19).
 **Builds on:** nothing new — sits at the SSE presentation boundary; keeps
 `chunk.error` (string) unchanged for all internal consumers (CLI, logs,
 synthesizer, memory). Supersedes nothing; complements ADR-18 (TaskState) and

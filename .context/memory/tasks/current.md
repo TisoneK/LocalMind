@@ -1,35 +1,33 @@
 # Current Task
 
-- **Session:** 164 (2026-08-12)
-- **Feature:** adr-19-task-aware-context
-- **Task:** ADR-19 P0 — task-aware context management, implemented and live-smoke attempted (provider-blocked).
-- **Done (159-164):**
-  - **159**: design doc (Context Planner: policy_for(task_type) → MUST KEEP /
-    CAN SUMMARIZE / CAN DISCARD) + four decisions locked by the user.
-  - **160** (`17b3624`): `context_policy.py` — pure ContextPolicy dataclass,
-    per-task KEEP tables (debug/plan/code/research/chat/verify), legacy
-    no-op default, case-insensitive marker semantics, `resolve_task_type`
-    priority, `parse_task_type_from_plan`; `OrchestrationPlan.task_type`;
-    dispatcher execution_plan schema + malformed-plan guard.
-  - **161** (`42053dd`): `simplify_tool_results(policy=...)` — newest
-    keep_last ∪ up to max_keep old marker-matched results stay verbatim;
-    CAN-DISCARD implemented but OFF for every policy_for() result;
-    byte-identical legacy path for None/default.
-  - **162** (`89f5d77`): `maybe_compress_history(policy=...)` — per-task
-    summary prompts + decision-line preservation (kept lines verbatim in a
-    [Preserved decisions] block, extracted from RAW content, bounded 8/200/
-    1200); failure semantics unchanged.
-  - **163** (`53210be`): wiring — `AgentLoop.run(task_type)` resolves the
-    policy from the dispatcher-resolved value only (deviation documented
-    in design.md §7) and feeds the compactor; engine threads it to both
-    loop call sites + all three summarizer calls. Default no-op.
-  - **164**: full suite **1407 green**, ruff clean. Live smoke
-    (`scripts/smoke_gate.py` + task_type check) verified the pipeline to
-    the provider call → Zen 429 FreeUsageLimitError. **Live E2E
-    provider-blocked** (same as 2026-08-11/12) — retry when Zen recovers
-    or install Ollama.
-- **Next:** P1 — context hierarchy (turn → session → project → long-term)
-  with retrieval-by-level; P2 — cross-session decision ledger; P3 — LLM
-  value-scoring. Secondary pending: B-2026-08-12-4 (live two-turn UI
-  check); ADR-18 P1-P3 (verifier-as-stage, failure memory, transitional
-  wiring).
+- **Session:** 168 (2026-08-12)
+- **Feature:** adr-20-error-normalization
+- **Task:** ADR-20 P0 — canonical error normalization + friendly presentation layer, implemented and live-verified (provider still rate-limited for completions).
+- **Done (165-168):**
+  - **165** (`f261ef0`): `core/error_normalizer.py` — pure deterministic normalizer;
+    parses `{provider} returned {status}: {body}` (openai_compat + ollama
+    shapes), digs nested provider JSON (FreeUsageLimitError), classifies into
+    canonical codes (rate_limit/auth_error/payment_required/model_not_found/
+    context_overflow/timeout/server_error/network_error) with retryable flags
+    + friendly provider-agnostic messages; raw kept for debug; internal-source
+    override for uploads. 28 tests.
+  - **166** (`6cd514f`): SSE boundary — `chat.py` chunk.error emits the
+    canonical object; exception path yields a friendly token + canonical error
+    + done (Session 31 guarantee kept); uploads use source_hint=internal.
+  - **167** (`ca56845`): frontend — `ModelError` type + `ChatMessage.error`;
+    hook stores the canonical error object (legacy string fallback kept);
+    `ErrorMessage` card (headline, friendly message, provider·status·retryable
+    meta, Try again + Switch model via `localmind:open-model-selector`, raw in
+    collapsed Technical details); rendered in ChatMessage. 18 new tests;
+    vitest 105 green, tsc clean.
+  - **168**: full backend suite **1437 green**; deepseek-flash review → 3 fixes
+    (canonical passthrough short-circuit, JSON-safe exception raw, friendly
+    persisted exception text). Restarted backend; LIVE SMOKE — Zen 429 persists
+    for completions BUT the exact user-reported error now emits the canonical
+    `rate_limit` object live (friendly message in the UI path, raw confined to
+    debug). Success-turn smoke half pending on a live provider.
+- **Next:** ADR-20 P0 complete. Standing pendings: successful-turn live smoke
+  for ADR-19/20 when a provider frees up (Zen completions still 429);
+  B-2026-08-12-4 (live two-turn UI check); ADR-18 P1-P3 (verifier-as-stage,
+  failure memory, transitional wiring); ADR-19 P1-P3 (context hierarchy,
+  decision ledger, LLM value-scoring).

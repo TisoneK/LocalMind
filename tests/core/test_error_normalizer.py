@@ -124,6 +124,38 @@ class TestGenericAndInternal:
         again = normalize_error(canonical)
         assert again == canonical
 
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            ZEN_429,
+            "zen returned 401: nope",
+            "openai returned 402: nope",
+            "Ollama returned 404 for model 'x'",
+            "maximum context length exceeded",
+            "zen returned 504: nope",
+            "zen returned 503: nope",
+            "connection refused",
+        ],
+    )
+    def test_every_code_round_trips_through_canonical(self, raw):
+        # Review fix (Session 168): re-normalizing ANY canonical object must
+        # pass through untouched — friendly messages don't contain their own
+        # keywords, so re-classification would flip the code to generic.
+        canonical = normalize_error(raw)
+        assert canonical["code"] != GENERIC_ERROR
+        again = normalize_error(canonical)
+        assert again == canonical
+
+    def test_exception_raw_is_json_serializable(self):
+        # Review fix (Session 168): `raw` must survive json.dumps if the
+        # canonical object ever crosses the SSE wire directly.
+        import json
+
+        err = normalize_error(TimeoutError("zen request timed out"))
+        dumped = json.dumps(err)
+        assert isinstance(dumped, str)
+        assert "timed out" in dumped
+
     def test_provider_dict_input(self):
         err = normalize_error(
             {
