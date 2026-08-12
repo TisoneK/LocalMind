@@ -42,6 +42,16 @@ pushed.
 **Builds on:** ADR-20 (error_normalizer.py + SSE boundary + frontend
 ErrorMessage card). Reuses the same canonical codes — **no frontend change
 needed** (new handling produces the existing codes the card already renders).
+**Session 171 hardening (6eebfaa):** the trivial/conversational fast-path
+(`trivial_input.py` Session 153 fallback) embedded the RAW adapter string
+into the fallback TEXT (the exact "zen returned 429: {…}" bubble the user
+reported), bypassing SSE normalization entirely. Fallback text now embeds
+the canonical friendly message; the raw error is forwarded on
+`chunk.error` so the SSE boundary emits the canonical error object → the
+ErrorMessage card renders; clean text keeps the Session 153 visible-text +
+persistence guarantees. Loop.py empty-response fallbacks audited clean.
+Live-verified via /api/chat ("hi"): token = friendly sentence, error event
+= canonical rate_limit with raw confined to debug. 1469 backend green.
 **No-regression list:** canonical shape unchanged; string inputs, dict
 inputs, exception inputs, canonical passthrough, `source_hint=internal`
 override all preserved (ADR-20 tests untouched and green); `chunk.error`
