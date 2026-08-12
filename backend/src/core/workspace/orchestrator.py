@@ -55,6 +55,7 @@ import re
 import time
 from typing import Any, AsyncIterator, Dict, Optional
 
+from core.error_normalizer import normalize_error
 from core.models import Intent, StreamChunk, ToolResult
 from core.workspace.manager import WorkspaceManager
 from tools import available_tools
@@ -279,8 +280,18 @@ class WorkspaceOrchestrator:
 
         except Exception as exc:
             logger.error("[orch] fatal error: %s", exc, exc_info=True)
-            yield StreamChunk(text=f"Orchestrator error: {exc}", done=False)
-            yield StreamChunk(text="", done=True)
+            # ADR-20/21 (Session 172 audit): the outer except can catch an
+            # ADAPTER exception from _synthesise/_plan (provider-shaped — e.g.
+            # "zen returned 429: {...}") or a tool exception re-raised from
+            # _dispatch_loop. Never embed the raw payload in the bubble text —
+            # the canonical friendly/cleaned message goes in the text, the raw
+            # error rides chunk.error so the SSE boundary emits the error card.
+            _norm = normalize_error(str(exc))
+            yield StreamChunk(
+                text=f"Orchestrator error: {_norm['message']}",
+                done=False,
+            )
+            yield StreamChunk(text="", done=True, error=str(exc))
         finally:
             ws.cleanup()
 

@@ -52,6 +52,16 @@ ErrorMessage card renders; clean text keeps the Session 153 visible-text +
 persistence guarantees. Loop.py empty-response fallbacks audited clean.
 Live-verified via /api/chat ("hi"): token = friendly sentence, error event
 = canonical rate_limit with raw confined to debug. 1469 backend green.
+**Session 172 audit (full fallback-text sweep):** every `chunk.error` site
+and `{exc}` text construction in backend/src checked. Safe: all error-
+forwarding sites ride the SSE `error` event (normalized); logger sites;
+chat.py exception/upload paths (already normalized);
+`_summarize_trace_for_user`/`_synthesis_failure_fallback`/work report only
+surface tool evidence; tool-level `{exc}` content is tool-result territory
+(out of ADR-20 scope). ONE leak found + fixed: `workspace/orchestrator.py`
+outer except could embed an adapter exception (provider-shaped) raw in the
+bubble — now normalized (friendly text + raw on `chunk.error`). 3 new
+tests. 1472 backend green.
 **No-regression list:** canonical shape unchanged; string inputs, dict
 inputs, exception inputs, canonical passthrough, `source_hint=internal`
 override all preserved (ADR-20 tests untouched and green); `chunk.error`
