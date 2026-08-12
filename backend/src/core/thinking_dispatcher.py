@@ -996,6 +996,101 @@ class ThinkingDispatcher:
                     fast_path=True,
                 )
 
+        # Git-phrasing → git tool (Session 149, ADR-17 track 2).
+        # The canonical dev-tool request — "Check git status on the
+        # localmind repo, and if there are uncommitted changes, show me
+        # the diff" — starts with "Check" (no shell prefix) and is not a
+        # directory listing, so it used to pay the full dispatcher LLM
+        # call (~10-20s on the free tier) for a routing decision a regex
+        # can make. Fire only when the message explicitly anchors on git
+        # state:
+        #   - "git <subcommand>" (status/diff/log/branch/stash)
+        #   - git-state phrasing: uncommitted/unstaged changes, working
+        #     tree, committed changes, commit history, recent commits
+        #   - "show (me )?the diff" combined with one of the anchors above
+        # Requests with no git anchor (a bare "show me the diff" between
+        # two files) or a git verb outside the detected set (push, pull,
+        # commit, merge as the only operation) fall through to the LLM.
+        _msg_lower = msg.lower()
+        _git_anchored = bool(
+            re.search(
+                r"\bgit\b|\b(uncommitted|unstaged|committed|working tree|"
+                r"repo|repository|commit history|recent commits|branches)\b",
+                _msg_lower,
+            )
+        )
+        if _git_anchored:
+            _want: list[tuple[str, str, str]] = []
+            if re.search(
+                r"\bgit\s+status\b|\bstatus\s+of\s+the\s+repo\b|"
+                r"\b(uncommitted|unstaged)\s+changes\b|\bworking\s+tree\b|"
+                r"\brepo\s+status\b",
+                _msg_lower,
+            ):
+                _want.append(("status", "Git status", "git_status"))
+            if re.search(
+                r"\bgit\s+diff\b|\bshow\s+(?:me\s+)?the\s+diff\b|"
+                r"\bwhat('|\u2019|&#39;)?s\s+changed\b|\bwhat\s+changed\b|"
+                r"\bcommitted\s+changes\b|\bthe\s+diff\b",
+                _msg_lower,
+            ):
+                _want.append(("diff", "Git diff (if changes)", "git_diff"))
+            if re.search(
+                r"\bgit\s+log\b|\bcommit\s+history\b|\brecent\s+commits\b|"
+                r"\bgit\s+history\b",
+                _msg_lower,
+            ):
+                _want.append(("log", "Git log", "git_log"))
+            if re.search(
+                r"\bgit\s+branch\b|\bshow\s+(?:me\s+)?(?:the\s+)?branches\b",
+                _msg_lower,
+            ):
+                _want.append(("branch", "Git branch", "git_branch"))
+            if re.search(r"\bgit\s+stash\b", _msg_lower):
+                _want.append(("stash", "Git stash", "git_stash"))
+            if _want:
+                # Deduplicate (a message can name the same op twice).
+                _seen: set[str] = set()
+                _ops: list[tuple[str, str, str]] = []
+                for _op in _want:
+                    if _op[0] not in _seen:
+                        _seen.add(_op[0])
+                        _ops.append(_op)
+                _steps: list[dict] = []
+                _prev: str | None = None
+                for _op, _label, _node_id in _ops:
+                    _steps.append(
+                        {
+                            "id": _node_id,
+                            "capability": "shell",
+                            "tool": "git",
+                            "args": {"operation": _op},
+                            "depends_on": [_prev] if _prev else [],
+                            "label": _label,
+                        }
+                    )
+                    _prev = _node_id
+                profile = TaskProfile(
+                    capabilities=[Capability.SHELL],
+                    requires_tools=True,
+                    requires_execution=True,
+                    execution_mode=ExecutionMode.SINGLE_TOOL,
+                    safety_level=SafetyLevel.HIGH,
+                    confidence=0.9,
+                    primary_domain="shell_command",
+                    reformulated=(
+                        "Run git operations on the current repository: "
+                        + ", ".join(o for o, _, _ in _ops)
+                    ),
+                    acknowledgement=f"Checking {_ops[0][1].lower()}...",
+                )
+                return OrchestrationPlan(
+                    profile=profile,
+                    graph=build_graph_from_plan_steps(_steps),
+                    dispatch_steps=[{"intent": "shell", "detail": f"Git: {_ops[0][1]}"}],
+                    fast_path=True,
+                )
+
         return None
 
     # ── Follow-up Detection ─────────────────────────────────────────────

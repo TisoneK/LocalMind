@@ -88,13 +88,17 @@ async def test_repeat_request_skips_llm_call():
 
 @pytest.mark.asyncio
 async def test_near_duplicate_phrasing_hits_cache():
+    # NB: this fixture used to be "Check git status!!" but the Session 149
+    # git-phrasing signal now routes ANY git-anchored message through the
+    # zero-LLM signal fast path (which correctly bypasses the cache). Use a
+    # non-signal message so this test exercises the cache normalization.
     adapter = CountingJSONAdapter()
     d = td.ThinkingDispatcher(adapter)
-    await _collect(d, "Check git status!!")
+    await _collect(d, "What is the weather in kitengela?")
     assert adapter.chat_calls == 1
 
     # Near-duplicate (case/whitespace/punctuation) must reuse the plan.
-    items = await _collect(d, "check  git status")
+    items = await _collect(d, "what  is the weather in  Kitengela")
     assert adapter.chat_calls == 1
     plans = _plans(items)
     assert plans, "cache hit must still yield an OrchestrationPlan"

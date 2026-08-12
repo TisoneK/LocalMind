@@ -151,7 +151,6 @@ def test_sysinfo_phrase_signal_still_fires():
 
 
 def _fast_path_plan_with_reformulation():
-    d = td.ThinkingDispatcher(_NoCallAdapter())
     return _signal_plan("Show me all projects in dev")[0]
 
 
@@ -161,3 +160,68 @@ def test_signal_plan_carries_reformulation_for_chat_agent_skip():
     # reformulated must be truthy (else branch runs _chat_agent_phase).
     assert plan.profile.reformulated
     assert plan.fast_path is True
+
+
+# ── 4. Git-phrasing signal (Session 149) ───────────────────────────────
+# The canonical dev-tool request — "Check git status on the repo, and if
+# there are uncommitted changes, show me the diff" — anchors on git state
+# but starts with "Check" (no shell prefix), so it used to pay the full
+# dispatcher LLM call (~10-20s on the free tier). The git signal produces
+# a chained status→diff plan with ZERO adapter calls.
+
+
+def test_git_status_request_is_a_signal():
+    plans = _signal_plan(
+        "Check git status on the localmind repo, and if there are "
+        "uncommitted changes, show me the diff"
+    )
+    assert len(plans) == 1, "git phrasing must produce a plan without an LLM call"
+    plan = plans[0]
+    assert plan.profile.primary_domain == "shell_command"
+    assert plan.profile.execution_mode.value == "single_tool"
+    assert plan.fast_path is True
+    assert "git" in plan.profile.reformulated
+
+
+def test_git_signal_chains_status_then_diff():
+    plans = _signal_plan(
+        "Check git status, and if there are uncommitted changes, show me the diff"
+    )
+    plan = plans[0]
+    ops = [n.id for n in plan.graph.nodes]
+    assert "git_status" in ops
+    assert "git_diff" in ops
+    assert ops.index("git_status") < ops.index("git_diff"), \
+        "status must run before the conditional diff"
+
+
+def test_git_log_and_branch_signals():
+    for msg, expected in [
+        ("show me recent commits", "git_log"),
+        ("show me the branches", "git_branch"),
+    ]:
+        plans = _signal_plan(msg)
+        plan = plans[0]
+        assert plan.fast_path is True and plan.profile.primary_domain == "shell_command", \
+            f"{msg!r} must be a git signal"
+        node_ids = [n.id for n in plan.graph.nodes]
+        assert expected in node_ids, f"{msg!r} should produce {expected}"
+
+
+def test_git_stash_goes_through_shell_prefix_signal():
+    # "git stash list" STARTS with the shell prefix "git " so the pre-existing
+    # shell-prefix signal wins BEFORE the git block — still a zero-LLM fast
+    # path (plan carries the git subcommand as the shell instruction).
+    plans = _signal_plan("git stash list")
+    plan = plans[0]
+    assert plan.fast_path is True and plan.profile.primary_domain == "shell_command"
+
+
+def test_bare_diff_without_git_anchor_falls_through():
+    # "show me the diff" between two files has no git anchor (no git/repo/
+    # uncommitted/working-tree wording) — must NOT be a git signal.
+    plans = _signal_plan("show me the diff between the two files")
+    plan = plans[0]
+    assert not (
+        plan.fast_path is True and plan.profile.primary_domain == "shell_command"
+    )
