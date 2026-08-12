@@ -1432,6 +1432,14 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 )
                 _orchestration_plan = OrchestrationPlan(profile=_task_profile)
 
+        # ADR-19: the context policy used by maybe_compress_history (summarizer)
+        # on the engine-side prompt builds. Resolved once per turn AFTER the
+        # orchestrator ran; empty task_type → the legacy no-op default policy.
+        _reused_task_type = str(getattr(_orchestration_plan, "task_type", "") or "")
+        from core.context_policy import policy_for
+
+        _turn_context_policy = policy_for(_reused_task_type)
+
         _clock.end("intent_classify")
         # Tool selection is decided by the dispatcher's capability inference.
         if _task_profile.required_tools():
@@ -1545,7 +1553,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             active_adapter = self._adapter_for(effective_intent)
             prompt_messages = context_builder.build(ctx, active_adapter.effective_context_window)
             prompt_messages = await maybe_compress_history(
-                prompt_messages, active_adapter, active_adapter.effective_context_window
+                prompt_messages,
+                active_adapter,
+                active_adapter.effective_context_window,
+                policy=_turn_context_policy,  # ADR-19 task-aware summarizer
             )
             _clock.end("context_build")
             _clock.start("generate")
@@ -2695,7 +2706,10 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         active_adapter = self._adapter_for(effective_intent)
         prompt_messages = context_builder.build(ctx, active_adapter.effective_context_window)
         prompt_messages = await maybe_compress_history(
-            prompt_messages, active_adapter, active_adapter.effective_context_window
+            prompt_messages,
+            active_adapter,
+            active_adapter.effective_context_window,
+            policy=_turn_context_policy,  # ADR-19 task-aware summarizer
         )
 
         # ── 7a/7b. Stream response ─────────────────────────────────────────
@@ -2899,7 +2913,12 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             )
             sm_adapter = self._adapter_for(Intent.CHAT)
             sm_messages = context_builder.build(ctx_sm, sm_adapter.effective_context_window)
-            sm_messages = await maybe_compress_history(sm_messages, sm_adapter, sm_adapter.effective_context_window)
+            sm_messages = await maybe_compress_history(
+                sm_messages,
+                sm_adapter,
+                sm_adapter.effective_context_window,
+                policy=_turn_context_policy,  # ADR-19 task-aware summarizer
+            )
 
             _obs.emit("thinking_start", intent="file_write")
             async for chunk in sm_adapter.chat(sm_messages, intent="chat"):
@@ -3327,6 +3346,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     skip_planning=_skip_planning,
                     plan_steps=_reused_plan_steps or None,  # Session 134: dispatcher plan reuse
                     success_criteria=_reused_criteria or None,  # ADR-18 P0 acceptance contract
+                    task_type=_reused_task_type or None,  # ADR-19 context policy
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
                 )
@@ -3382,6 +3402,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     skip_planning=_skip_planning,
                     plan_steps=_reused_plan_steps or None,  # Session 134: dispatcher plan reuse
                     success_criteria=_reused_criteria or None,  # ADR-18 P0 acceptance contract
+                    task_type=_reused_task_type or None,  # ADR-19 context policy
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
                 ):

@@ -198,6 +198,15 @@ filters drop-listed messages with the notice. The context-window meter
    parse path), stored on `OrchestrationPlan.task_type`, threaded into the
    loop. Fallback when absent: `TaskState.phase` + `Intent` → default
    (legacy no-op) policy.
+
+   **Session 163 simplification (documented deviation):** the LOOP trusts
+   only the dispatcher-resolved value (`parse_task_type_from_plan` applies
+   the primary_domain hint before storing). The `Intent`/`TaskState.phase`
+   fallback branches of `resolve_task_type()` are implemented and unit-
+   tested but NOT wired into the loop — the dispatcher prompt contract
+   ("omit when ambiguous → legacy") makes silent loop-side activation a
+   behavior change risk. Recorded here so locked-design vs code don't
+   drift; re-enable when a task type is explicitly needed.
 3. **KEEP priority: PER-TASK TABLES** — `policy_for(task_type)` returns a
    policy whose keep/drop markers are task-specific; a global default
    table seeds each, per-task overrides win.

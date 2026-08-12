@@ -235,6 +235,7 @@ class BaseAgent(ABC):
         # gate evaluates them against tool evidence; "done" requires
         # receipts. None = no contract (legacy path).
         success_criteria: Optional[list[str]] = None,
+        task_type: str = "",  # ADR-19: explicit task type → context policy
         allowed_tool_names: Optional[frozenset[str]] = None,
         steering_queue=None,  # B-2026-08-02-5 (A5): per-session asyncio.Queue
         abort_signal=None,  # B-2026-08-02-2 (A2): per-session asyncio.Event
@@ -374,6 +375,7 @@ class BaseAgent(ABC):
             # is_done() (criteria-verified stop) + the dispatcher criteria.
             is_done_fn=self.is_done,
             success_criteria=success_criteria,
+            task_type=task_type,
             allowed_tool_names=allowed_tool_names,
             steering_queue=steering_queue,  # B-2026-08-02-5 (A5)
             abort_signal=abort_signal,  # B-2026-08-02-2 (A2)

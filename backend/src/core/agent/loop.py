@@ -1109,6 +1109,10 @@ class AgentLoop:
         # evaluates these against tool evidence + workspace; "done" requires
         # receipts. None = no contract (legacy model-assertion path).
         success_criteria: Optional[list[str]] = None,
+        # ADR-19: explicit task type from the dispatcher's execution_plan.
+        # Selects the task-aware context policy (which tool results/history
+        # stay verbatim vs. get stubbed). Empty = legacy positional behavior.
+        task_type: str = "",
         # ADR-18 P0: the selected BaseAgent's is_done() implementation,
         # called at each iteration head so the loop stops when criteria are
         # VERIFIED (not merely asserted). None for the direct-loop path
@@ -1172,6 +1176,19 @@ class AgentLoop:
         # ADR-18 P0: seed the acceptance contract from the dispatcher's plan.
         if success_criteria:
             trace.success_criteria = [str(c).strip() for c in success_criteria if str(c).strip()]
+
+        # ADR-19: resolve the context policy from the DISPATCHER-RESOLVED
+        # task_type (parse_task_type_from_plan already applied the
+        # primary_domain hint before storing it on the plan). The dispatcher
+        # prompt contract says "when unset or ambiguous, omit it — the engine
+        # falls back to the legacy positional behavior" — so the loop must
+        # not additionally activate a policy via intent/phase fallbacks
+        # (Session 163: a SHELL intent with no task_type must behave exactly
+        # as before; see design.md §7 locked decision 2 note). Empty → the
+        # legacy no-op default policy.
+        from core.context_policy import policy_for
+
+        self._context_policy = policy_for(task_type)
         # Provider usage is carried through every streamed chunk and tool-call
         # result so the Engine can report real prompt/completion counts.
         _provider_usage: dict[str, int] = {}
@@ -1757,7 +1774,10 @@ class AgentLoop:
             # what the model still needs; old results it already acted on
             # are exactly what frees the most context (see
             # context_compactor.simplify_tool_results docstring).
-            iteration_messages = simplify_tool_results(iteration_messages)
+            iteration_messages = simplify_tool_results(
+                iteration_messages,
+                policy=getattr(self, "_context_policy", None),
+            )
 
             # B-2026-08-02-8 (B3): surface the subgoal scratchpad directly in
             # the system message each iteration — tool results alone aren't
