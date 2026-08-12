@@ -406,12 +406,21 @@ async def _direct_chat_response(
 
     try:
         _usage_agg: dict[str, int] = {}
+        _streamed_any_text = False
+        _stream_error: str | None = None
         async for chunk in adapter.chat(messages, intent="chat"):
             # Only forward real usage dicts — MagicMock-based fake adapters in
             # tests auto-create truthy usage attributes that aren't dicts.
             _u = chunk.usage if isinstance(getattr(chunk, "usage", None), dict) else {}
             _usage_agg.update(_u)
+            # Same guard for error chunks: streamed provider errors (429, auth
+            # failure, ...) surface in the fallback instead of being masked by
+            # the generic overload message.
+            _err = getattr(chunk, "error", None)
+            if isinstance(_err, str) and _err:
+                _stream_error = _err
             if hasattr(chunk, "text") and chunk.text:
+                _streamed_any_text = True
                 yield StreamChunk(text=chunk.text, done=False, usage=dict(_u))
         # Forward the authoritative final usage on the done chunk — streaming
         # providers often report usage only on the final, text-less delta, so
@@ -422,6 +431,27 @@ async def _direct_chat_response(
         _done_usage: dict[str, int] = dict(_usage_agg)
         if not _usage_agg and _prompt_est:
             _done_usage["prompt_tokens"] = _prompt_est
+        # Session 153 / silent-failure contract: when the adapter streamed
+        # ZERO text (free-tier models can return empty or reasoning-only
+        # streams — the provider reports usage but never emits content), the
+        # UI would show a status update with an EMPTY bubble, which reads as
+        # "the message never displayed". Yield a meaningful fallback instead
+        # — mirroring the agent loop's overload wording (loop.py) — so the
+        # turn always ends with visible text. Normal streams are untouched.
+        if not _streamed_any_text:
+            if _stream_error:
+                _fallback = (
+                    "I couldn't get a response from the model: "
+                    f"{_stream_error[:200]}. Please try again, or switch to "
+                    "a different model."
+                )
+            else:
+                _fallback = (
+                    "I didn't get a response from the model this time — the "
+                    "free-tier model may be overloaded. Please try again, or "
+                    "switch to a faster model."
+                )
+            yield StreamChunk(text=_fallback, done=False)
         yield StreamChunk(text="", done=True, usage=_done_usage)
     except Exception:
         # If the direct chat fails, yield a minimal fallback and done.

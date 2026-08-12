@@ -14,6 +14,7 @@ from core.trivial_input import (
     is_conversational_question,
     is_trivial_input,
     trivial_intent,
+    trivial_response,
 )
 
 # ── Greetings ────────────────────────────────────────────────────────────────
@@ -401,6 +402,82 @@ async def test_conversational_response_does_not_override_provider_prompt_count()
     assert streamed[0].usage.get("prompt_tokens") == 300
     assert done.usage.get("prompt_tokens") == 300
     assert done.usage.get("completion_tokens") == 5
+
+
+# ── Empty-stream fallback (Session 153 / silent-failure contract) ───────────
+# Free-tier models can return EMPTY or reasoning-only streams on the direct
+# chat fast path — the provider reports usage but never emits content. Before
+# this fix the UI showed a status update with an EMPTY bubble ("message not
+# displaying"). The fallback guarantees visible text on every turn.
+
+
+@pytest.mark.asyncio
+async def test_conversational_response_empty_stream_falls_back():
+    """A zero-text stream must still yield visible text — not an empty bubble."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(text="", done=False)  # empty/reasoning-only delta
+        yield MagicMock(text="", done=True)   # usage-only terminal delta
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    chunks = [c async for c in conversational_response("What can you do?", mock_adapter)]
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert text, "empty stream must yield a fallback message"
+    assert any(getattr(c, "done", False) for c in chunks)
+    # The fallback must surface concrete next steps, not blame the phrasing.
+    assert "try again" in text.lower() or "switch" in text.lower()
+
+
+@pytest.mark.asyncio
+async def test_trivial_response_empty_stream_falls_back():
+    """The greeting/thanks short-circuit gets the same empty-stream fallback."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(text="", done=True)
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    chunks = [c async for c in trivial_response("hi", mock_adapter)]
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert text, "empty stream must yield a fallback message"
+    assert any(getattr(c, "done", False) for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_conversational_response_streamed_error_chunk_surfaces_error():
+    """A streamed provider error (429/auth) must surface in the fallback —
+    not be masked by the generic overload message."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(text="", done=True, error="429 rate limited")
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    chunks = [c async for c in conversational_response("What can you do?", mock_adapter)]
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert "429" in text
+    assert any(getattr(c, "done", False) for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_conversational_response_normal_stream_not_polluted():
+    """The fallback must NOT fire when the model actually streamed text."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(text="I can help with code, files, and more!", done=False)
+        yield MagicMock(text="", done=True)
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    chunks = [c async for c in conversational_response("What can you do?", mock_adapter)]
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert "help" in text.lower()
+    assert "try again" not in text.lower()
 
 
 # ── Engine wiring (Session 68 / ADR-11) ────────────────────────────────────
