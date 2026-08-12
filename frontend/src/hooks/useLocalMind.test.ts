@@ -362,3 +362,61 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 });
+
+describe('useChat ADR-20 error normalization', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    streamMock.getSessionHistory.mockResolvedValue([]);
+  });
+
+  it('stores the canonical error object on the message (never in content)', () => {
+    const { result, onChunk, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        type: 'error',
+        error: {
+          status: 'error',
+          source: 'model_provider',
+          provider: 'zen',
+          code: 'rate_limit',
+          message: 'The model provider has temporarily reached its usage limit. Try again in a few minutes or switch to another model.',
+          retryable: true,
+          raw: 'zen returned 429: {...}',
+        },
+      }));
+    });
+
+    const msgs = result.current.messages;
+    const last = msgs[msgs.length - 1];
+    expect(last.role).toBe('assistant');
+    // The friendly card data lands on `error` — the raw payload never
+    // becomes chat content.
+    expect(last.error?.code).toBe('rate_limit');
+    expect(last.error?.provider).toBe('zen');
+    expect(last.error?.retryable).toBe(true);
+    expect(last.content).toBe('');
+    expect(last.content).not.toContain('zen returned');
+
+    unmount();
+  });
+
+  it('keeps the legacy string fallback for old backends', () => {
+    const { result, onChunk, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        type: 'error',
+        error: 'old backend: something broke',
+      }));
+    });
+
+    const msgs = result.current.messages;
+    const last = msgs[msgs.length - 1];
+    expect(last.error).toBeUndefined();
+    expect(last.content).toContain('⚠️');
+    expect(last.content).toContain('old backend');
+
+    unmount();
+  });
+});

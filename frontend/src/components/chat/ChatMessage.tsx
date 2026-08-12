@@ -53,6 +53,7 @@ import { formatLatency } from '@/lib/localmind/progress';
 import { repairMarkdown } from '@/lib/markdownRepair';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolSteps } from './ToolSteps';
+import { ErrorMessage } from './ErrorMessage';
 import { DiffBlock, type DiffHunk } from '@/components/shared/DiffBlock';
 
 interface ChatMessageProps {
@@ -669,6 +670,14 @@ export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps)
               then a wall of text — the agent's work was invisible. */}
           {message.toolCalls && message.toolCalls.length > 0 && (
             <ToolSteps toolCalls={message.toolCalls} isStreaming={isStreaming} />
+          )}
+
+          {/* ADR-20: canonical error card — a failed reply renders this
+              instead of a raw provider payload. Content is empty on error
+              replies (the backend streams no tokens), so the card IS the
+              message. Try again re-sends the preceding prompt. */}
+          {!isUser && message.error && (
+            <ErrorMessage error={message.error} onRetry={onRetry} />
           )}
 
           {/* Content — rendered as Markdown for assistant, plain for user */}

@@ -71,6 +71,19 @@ export function LeftPanel({
     return () => window.removeEventListener('localmind:tool-call-started', showActions);
   }, []);
 
+  // ADR-20 (Session 167): the error card's "Switch model" action dispatches
+  // this event — forward it to the ModelSelector trigger so the dropdown
+  // opens, putting the user one click from a different provider/model.
+  useEffect(() => {
+    const openSelector = () => {
+      document
+        .querySelector('[data-testid="model-selector-trigger"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    };
+    window.addEventListener('localmind:open-model-selector', openSelector);
+    return () => window.removeEventListener('localmind:open-model-selector', openSelector);
+  }, []);
+
   // Format epoch timestamp to human-readable date/time
   function formatTimestamp(ts: string | number, formattedDate?: string): string {
     // FIX: Prefer pre-formatted date from backend to avoid showing raw epoch numbers

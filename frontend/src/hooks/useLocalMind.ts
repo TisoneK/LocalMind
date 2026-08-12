@@ -30,6 +30,7 @@ import type {
   ObservationData,
   AnomalyData,
   CapabilitiesData,
+  ModelError,
   ModelOption,
   ToolCall,
   CompletionSuggestion,
@@ -1054,7 +1055,28 @@ export function useChat(
               }
 
               case 'error': {
-                const errorMsg = `⚠️ ${parsed.error || 'Failed to get a response.'}`;
+                const err = parsed.error;
+                if (err && typeof err === 'object' && (err as any).code) {
+                  // ADR-20 (Session 167): the backend now emits the canonical
+                  // error OBJECT — store it on the message and let the
+                  // ErrorMessage card render it. Never stuff it into content
+                  // (that's what leaked the raw provider JSON into the chat).
+                  setMessages((prev) => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last && last.role === 'assistant') {
+                      updated[updated.length - 1] = {
+                        ...last,
+                        error: err as ModelError,
+                      };
+                    }
+                    return updated;
+                  });
+                  break;
+                }
+                // Legacy path (old backends send a plain string): keep the
+                // existing fallback — append ⚠️ text below partial content.
+                const errorMsg = `⚠️ ${err || 'Failed to get a response.'}`;
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];

@@ -33,11 +33,37 @@ export interface PendingWrite {
   filename: string;
 }
 
+/** Canonical model/provider error (ADR-20). The backend's SSE error event
+ *  carries this object instead of a raw provider payload; the ErrorMessage
+ *  card renders it. `raw` is the original provider response, kept for the
+ *  collapsed developer details — never rendered as chat content. */
+export interface ModelError {
+  status: 'error';
+  /** 'model_provider' — a provider/API failure; 'internal' — LocalMind-side. */
+  source: 'model_provider' | 'internal';
+  /** Provider name (zen, ollama, openai, ...) when detectable. */
+  provider?: string | null;
+  /** Canonical classification: rate_limit | auth_error | payment_required |
+   *  model_not_found | context_overflow | timeout | server_error |
+   *  network_error | error */
+  code: string;
+  /** Human-friendly, provider-agnostic explanation. */
+  message: string;
+  /** Whether retrying is likely to help — drives the Try again action. */
+  retryable: boolean;
+  /** Original provider/adapter error — debug surface only. */
+  raw?: string | unknown;
+}
+
 export interface ChatMessage {
   id: string;
   role: MessageRole;
   content: string;
   timestamp: string;
+  /** ADR-20: canonical error object when this reply failed — rendered as a
+   *  friendly card (never the raw provider payload). Mutually exclusive with
+   *  normal content (error replies stream no tokens). */
+  error?: ModelError;
   toolCalls?: ToolCall[];
   thinkingBlock?: ThinkingStep;
   thinking?: string;

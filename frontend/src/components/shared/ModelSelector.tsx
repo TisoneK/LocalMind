@@ -38,6 +38,7 @@ export function ModelSelector({ selectedModel, onModelChange, models }: ModelSel
   return (
     <div className="relative">
       <button
+        data-testid="model-selector-trigger"
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-brand-green-muted hover:text-brand-green-soft hover:bg-brand-border transition-colors w-full"
       >
