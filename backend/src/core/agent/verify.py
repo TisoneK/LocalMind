@@ -329,6 +329,45 @@ def gate_passed(results: list[tuple[str, bool, str]]) -> bool:
     return all(passed for _, passed, _ in results)
 
 
+def criteria_gate(
+    trace: AgentTrace,
+    unmet_label: str = "criteria not yet met",
+) -> tuple[bool, str]:
+    """Shared criteria-verified gate used by every agent's is_done()
+    (ADR-18 P0/P1). Evaluates the trace's success_criteria against its
+    tool evidence; stores results/gate_passed/gate_summary back on the
+    trace so the final-answer path can report honestly.
+
+    - No criteria → (False, "") — the legacy model-assertion + hard-caps
+      termination is unchanged for contract-free turns.
+    - Run-scoped evidence guard: never passes before this run executed
+      ANY tool (workspace-scoped criteria can be satisfied by pre-existing
+      state; "done" requires receipts FROM THIS RUN).
+    - All criteria met → (True, "✓ n/n criteria met (...)").
+    - Unmet → (False, f"{unmet_label}: ...") so the loop continues.
+
+    unmet_label lets each agent speak its own dialect ("criteria not yet
+    met" vs the verifier's "verification criteria not yet met") without
+    duplicating the gate logic.
+    """
+    criteria = getattr(trace, "success_criteria", None) or []
+    if not criteria:
+        return False, ""
+    if not any(step.tool_name for step in getattr(trace, "steps", [])):
+        return False, ""
+
+    results = evaluate_criteria(criteria, trace)
+    trace.criteria_results = results
+    trace.gate_passed = gate_passed(results)
+
+    if trace.gate_passed:
+        trace.gate_summary = format_gate_results(results)
+        return True, trace.gate_summary
+
+    unmet = [criterion for criterion, passed, _ in results if not passed]
+    return False, f"{unmet_label}: {', '.join(unmet[:3])}"
+
+
 def format_gate_results(results: list[tuple[str, bool, str]]) -> str:
     """One-line gate outcome for the user-facing final answer, e.g.
     '✓ 2/2 criteria met (pytest passes, hello.py exists with content)' or

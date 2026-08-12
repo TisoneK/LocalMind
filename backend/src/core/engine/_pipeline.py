@@ -109,6 +109,22 @@ logger = logging.getLogger(__name__)
 # path. is_coding_done is a safe no-op (False, "") when there are no
 # criteria, so the legacy loop termination is unchanged for contract-free
 # turns.
+# ADR-18 P1 (Session 174): high-stakes intents get the VERIFIER gate as
+# their acceptance stage — writing/editing files or executing code is
+# exactly where "an agent saying 'done' should not mean the task is
+# done" bites. Both gates share the deterministic verify.py checkers;
+# the verifier gate is the semantically-correct stage for these intents
+# (and, per ADR-8, would be reached via the VerifierAgent when agent
+# selection routes there).
+_HIGH_STAKES_INTENTS = frozenset(
+    {
+        Intent.FILE_WRITE,
+        Intent.FILE_EDIT,
+        Intent.CODE_EXEC,
+    }
+)
+
+
 def _default_acceptance_gate(iterations, wall_clock_secs, last_tool_result, trace):
     # Lazy import: agents.coding.is_done pulls in core.agent.verify; keep
     # it out of module load time (matches the pipeline's other lazy
@@ -121,6 +137,30 @@ def _default_acceptance_gate(iterations, wall_clock_secs, last_tool_result, trac
         last_tool_result=last_tool_result,
         trace=trace,
     )
+
+
+def _verifier_acceptance_gate(iterations, wall_clock_secs, last_tool_result, trace):
+    # ADR-18 P1: the verifier gate — criteria-verified acceptance for
+    # high-stakes intents. Same lazy-import pattern as the coding gate.
+    from agents.verifier.is_done import is_verifier_done
+
+    return is_verifier_done(
+        iterations=iterations,
+        wall_clock_secs=wall_clock_secs,
+        last_tool_result=last_tool_result,
+        trace=trace,
+    )
+
+
+def _acceptance_gate_for(intent: Intent):
+    """Pick the acceptance stage by intent (ADR-18 P1). High-stakes
+    intents (file write/edit, code exec) are gated by the verifier's
+    is_done(); everything else by the coding gate. Both are safe no-ops
+    without criteria — this only changes WHICH gate labels the verified
+    stop, never the no-criteria legacy path."""
+    if intent in _HIGH_STAKES_INTENTS:
+        return _verifier_acceptance_gate
+    return _default_acceptance_gate
 
 
 STEERING_QUEUE_MAX = 10
@@ -1680,7 +1720,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     memory_facts=memory_facts,
                     orchestrator_context=None,
                     skip_planning=True,
-                    is_done_fn=_default_acceptance_gate,  # Session 173: Verify stage on the escalate path
+                    is_done_fn=_acceptance_gate_for(_esc_intent),  # Session 173/174: Verify stage on the escalate path
                     steering_queue=self._steering_queue_for(session_id),
                     abort_signal=self._abort_event_for(session_id),
                 )
@@ -3427,7 +3467,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     skip_planning=_skip_planning,
                     plan_steps=_reused_plan_steps or None,  # Session 134: dispatcher plan reuse
                     success_criteria=_reused_criteria or None,  # ADR-18 P0 acceptance contract
-                    is_done_fn=_default_acceptance_gate,  # Session 173: Verify stage — criteria-verified stop
+                    # Session 173/174: Verify stage — criteria-verified stop
+                    is_done_fn=_acceptance_gate_for(effective_intent),
                     task_type=_reused_task_type or None,  # ADR-19 context policy
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)

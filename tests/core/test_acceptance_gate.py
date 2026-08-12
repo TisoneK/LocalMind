@@ -192,6 +192,43 @@ def test_is_coding_done_no_criteria_returns_false():
     assert reason == ""
 
 
+def test_shared_criteria_gate_speaks_the_agents_dialect():
+    """Session 174: the shared criteria_gate drives both agents' is_done;
+    the unmet_label keeps each agent's dialect without duplicating the
+    gate logic."""
+    from agents.coding.is_done import is_coding_done
+    from agents.verifier.is_done import is_verifier_done
+
+    # Same evidence, same criteria → both verify identically.
+    trace_c = _trace_with_steps(
+        [_shell_step("pytest tests -q", "3 passed in 0.5s")],
+        criteria=["pytest passes"],
+    )
+    trace_v = _trace_with_steps(
+        [_shell_step("pytest tests -q", "3 passed in 0.5s")],
+        criteria=["pytest passes"],
+    )
+    done_c, _ = is_coding_done(3, 10.0, None, trace_c)
+    done_v, _ = is_verifier_done(3, 10.0, None, trace_v)
+    assert done_c is True
+    assert done_v is True
+
+    # Unmet → each reports in its own dialect.
+    bad_c = _trace_with_steps(
+        [_shell_step("pytest tests -q", "1 failed")],
+        criteria=["pytest passes"],
+    )
+    bad_v = _trace_with_steps(
+        [_shell_step("pytest tests -q", "1 failed")],
+        criteria=["pytest passes"],
+    )
+    _, reason_c = is_coding_done(3, 10.0, None, bad_c)
+    _, reason_v = is_verifier_done(3, 10.0, None, bad_v)
+    assert "criteria not yet met" in reason_c
+    assert "verification criteria not yet met" in reason_v
+    assert reason_c != reason_v
+
+
 def test_is_coding_done_all_criteria_met():
     from agents.coding.is_done import is_coding_done
 
@@ -713,3 +750,199 @@ async def test_engine_escalate_path_wires_acceptance_gate():
 
     assert captured.get("is_done_fn") is _default_acceptance_gate
     assert any(getattr(c, "done", False) for c in chunks)
+
+
+# ── 7. ADR-18 P1 — Verifier as a stage (Session 174) ───────────────────────
+# P1 promotes VerifierAgent from an intent-routing destination to the
+# acceptance stage for high-stakes intents (file write/edit, code exec):
+#  (a) real is_verifier_done (criteria-verified, same verify.py checkers)
+#  (b) intent-aware gate selection in the engine (_acceptance_gate_for)
+#  (c) the SINGLE_TOOL fast path records its initial tool result as a
+#      trace.step, so criteria on fast-path plans (dir listing, git,
+#      URL fetch) can finally verify (Session 173 follow-up).
+
+
+def test_is_verifier_done_real_implementation():
+    """The verifier stub is gone: criteria + evidence → verified stop;
+    no criteria / no evidence → keep going (legacy)."""
+    from agents.verifier.is_done import is_verifier_done
+
+    # No criteria → (False, "") — legacy termination unchanged.
+    done, reason = is_verifier_done(3, 10.0, None, AgentTrace())
+    assert done is False
+    assert reason == ""
+
+    # Criteria + evidence → verified stop, honest summary on the trace.
+    trace = _trace_with_steps(
+        [_shell_step("pytest tests -q", "3 passed in 0.5s")],
+        criteria=["pytest passes"],
+    )
+    done, reason = is_verifier_done(3, 10.0, None, trace)
+    assert done is True
+    assert "criteria met" in reason
+    assert trace.gate_passed is True
+    assert trace.gate_summary.startswith("✓ 1/1 criteria met")
+
+    # Criteria but unmet → continue with a verifier-flavored reason.
+    trace2 = _trace_with_steps(
+        [_shell_step("pytest tests -q", "1 failed, 2 passed")],
+        criteria=["pytest passes"],
+    )
+    done2, reason2 = is_verifier_done(3, 10.0, None, trace2)
+    assert done2 is False
+    assert "verification criteria not yet met" in reason2
+    assert trace2.gate_passed is False
+
+    # Run-scoped evidence guard: no tool run this turn → never passes.
+    trace3 = _trace_with_steps([], criteria=["hello.py exists with content"])
+    with patch("core.agent.verify.os.path.isfile", return_value=True):
+        done3, _ = is_verifier_done(1, 1.0, None, trace3)
+    assert done3 is False
+
+
+def test_acceptance_gate_for_selects_verifier_for_high_stakes():
+    """FILE_WRITE/FILE_EDIT/CODE_EXEC gate on the verifier; others on the
+    coding gate. Both are safe no-ops without criteria."""
+    from core.engine._pipeline import (
+        _acceptance_gate_for,
+        _default_acceptance_gate,
+    )
+
+    verifier_gate = _acceptance_gate_for(Intent.FILE_WRITE)
+    assert verifier_gate is not _default_acceptance_gate
+    # It behaves like the verifier (delegates to is_verifier_done).
+    trace = _trace_with_steps(
+        [_shell_step("pytest tests -q", "3 passed in 0.5s")],
+        criteria=["pytest passes"],
+    )
+    done, _ = verifier_gate(3, 10.0, None, trace)
+    assert done is True
+
+    assert _acceptance_gate_for(Intent.FILE_EDIT) is not _default_acceptance_gate
+    assert _acceptance_gate_for(Intent.CODE_EXEC) is not _default_acceptance_gate
+    # Non-high-stakes intents keep the coding gate.
+    assert _acceptance_gate_for(Intent.SHELL) is _default_acceptance_gate
+    assert _acceptance_gate_for(Intent.WEB_SEARCH) is _default_acceptance_gate
+    assert _acceptance_gate_for(Intent.CHAT) is _default_acceptance_gate
+
+
+@pytest.mark.asyncio
+async def test_engine_wires_verifier_gate_for_high_stakes_intent():
+    """A FILE_WRITE plan (agent selection OFF) must pass the VERIFIER gate
+    on the direct loop — high-stakes work gets the acceptance stage."""
+    from core.engine import Engine
+
+    engine = Engine()
+    obs = ObsCollector()
+    mock_adapter = MagicMock()
+    mock_adapter.effective_context_window = 8192
+    captured, fake_run = _engine_loop_recorder()
+
+    class _FileWriteDispatcher:
+        def __init__(self, adapter):
+            self._adapter = adapter
+
+        async def dispatch(self, **kwargs):
+            yield OrchestrationPlan(
+                profile=TaskProfile(
+                    capabilities=["file_write"],
+                    execution_mode=ExecutionMode.AGENT_LOOP,
+                    confidence=0.9,
+                    reformulated="write hello.py",
+                    acknowledgement="Writing that for you...",
+                ),
+                success_criteria=["hello.py exists with content"],
+                fast_path=False,
+                dispatch_steps=[{"intent": "file_write", "detail": "Write hello.py"}],
+            )
+
+    with patch("core.engine._pipeline.ThinkingDispatcher", _FileWriteDispatcher), patch(
+        "core.engine.get_adapter", return_value=mock_adapter
+    ), patch("core.engine._pipeline.AGENT_SELECTION_ENABLED", False), patch.object(
+        engine._agent_loop, "run", fake_run
+    ):
+        chunks = [
+            c
+            async for c in engine.process("write hello.py", "sess-engine-verifier-gate", obs=obs)
+        ]
+
+    from core.engine._pipeline import _acceptance_gate_for, _default_acceptance_gate
+
+    assert captured.get("success_criteria") == ["hello.py exists with content"]
+    assert captured.get("is_done_fn") is not _default_acceptance_gate
+    assert captured.get("is_done_fn") is _acceptance_gate_for(Intent.FILE_WRITE)
+    assert any(getattr(c, "done", False) for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_initial_tool_result_becomes_trace_evidence():
+    """SINGLE_TOOL fast path: the engine pre-dispatched tool result must
+    land as a trace.step so criteria can verify (Session 173 follow-up —
+    this is the piece that makes 'list projects in dev' verify)."""
+    from core.agent.loop import AgentLoop
+    from core.models import ToolResult
+
+    loop = AgentLoop(adapter=MagicMock())
+    captured = {}
+    adapter = _GateLoopAdapter()
+
+    def first_call_done(iterations, wall_clock_secs, last_tool_result, trace):
+        captured["tool_names"] = [s.tool_name for s in trace.steps]
+        captured["observations"] = [s.observation for s in trace.steps]
+        return False, ""
+
+    initial = ToolResult(
+        content="Listing contents of dev:\n  frontend\n  backend\n  docs",
+        source="shell",
+        success=True,
+    )
+    async for _chunk in loop.run(
+        messages=[{"role": "user", "content": "list projects in dev"}],
+        intent=Intent.SHELL,
+        initial_tool_result=initial,
+        available_tools=[],
+        adapter=adapter,
+        success_criteria=["the listing for dev was shown"],
+        is_done_fn=first_call_done,
+    ):
+        pass
+
+    # The initial dispatch is recorded as run-scoped evidence.
+    assert captured["tool_names"] == ["shell"]
+    assert "Listing contents of dev" in captured["observations"][0]
+
+
+@pytest.mark.asyncio
+async def test_fast_path_criteria_verify_via_initial_tool_step():
+    """With the initial tool result recorded as a step, the acceptance
+    gate can verify a fast-path criterion end-to-end: 'dev folder
+    contents listed' passes once the shell listing is evidence."""
+    from core.agent.loop import AgentLoop
+    from core.models import ToolResult
+
+    loop = AgentLoop(adapter=MagicMock())
+
+    # Use the real gate as is_done_fn — it must see the initial-tool step
+    # as evidence and terminate cleanly on the first iteration head.
+    from core.engine._pipeline import _default_acceptance_gate
+
+    initial = ToolResult(
+        content="Listing contents of dev:\n  frontend\n  backend\n  docs",
+        source="shell",
+        success=True,
+    )
+    chunks = []
+    async for chunk in loop.run(
+        messages=[{"role": "user", "content": "list projects in dev"}],
+        intent=Intent.SHELL,
+        initial_tool_result=initial,
+        available_tools=[],
+        adapter=_GateLoopAdapter(),
+        success_criteria=["the listing for dev was shown"],
+        is_done_fn=_default_acceptance_gate,
+    ):
+        chunks.append(chunk)
+
+    text = "".join(c.text for c in chunks)
+    assert "criteria met" in text
+    assert any(c.done for c in chunks)

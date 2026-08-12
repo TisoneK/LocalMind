@@ -39,12 +39,18 @@ verify.py + AgentTrace fields (155, `d55c0e6`); is_done() wired at the
 iteration head + success_criteria schemas on dispatcher execution_plan AND
 create_plan tool (156, `63dd038`); acceptance gate at the final-answer path
 + explicit time-boxed replan + honest unmet report at cap (157, `e7d7df1`).
-Full suite 1358 green, ruff clean. Live real-model smoke (Session 158,
-`scripts/smoke_gate.py`) VERIFIED the pipeline up to the provider call
-(context build → dispatcher thinking → Zen 429 FreeUsageLimitError) —
-provider-blocked, same as 2026-08-11; retry the smoke when Zen recovers or
-install Ollama. Remaining phases: P1 (verifier-as-stage), P2 (failure
-memory), P3 (transitional wiring).
+Session 173 (`1b348dd`): gate wired into the engine's DIRECT AgentLoop path
+(was dead code when agent selection fell through). Full suite 1475 green.
+**P1 IMPLEMENTED (Session 174, `adr-18-p1`):** real `is_verifier_done`
+replacing the stub, shared `verify.criteria_gate(trace, unmet_label)`
+helper (coding + verifier is_done both delegate — no drift), engine
+`_acceptance_gate_for(intent)` picks the VERIFIER gate for high-stakes
+intents (FILE_WRITE/FILE_EDIT/CODE_EXEC), and the SINGLE_TOOL fast path
+records its engine pre-dispatched `initial_tool_result` as a `trace.step`
+so fast-path criteria (dir listing, git, URL fetch) can VERIFY —
+"list projects in dev" now terminates at the iteration head with zero
+model calls and `✓ 1/1 criteria met`. Full suite **1481 green**, ruff
+clean. Remaining phases: P2 (failure memory), P3 (transitional wiring).
 **No-regression list (must hold after every phase):** iteration caps (8/180s)
 + hit-limit fallback wording (Sessions 31/32); check-before-acting `safety.md`
 injection (Session 32); trailing-tool-role + reasoning-only Phase-1 adapter

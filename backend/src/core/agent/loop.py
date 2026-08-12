@@ -1544,6 +1544,27 @@ class AgentLoop:
                     "content": _truncate_observation(safe_initial),
                 }
             )
+            # ADR-18 P1 (Session 174): the SINGLE_TOOL fast path (dir
+            # listing, git status, URL fetch, browse) pre-dispatches the
+            # tool in the engine and passes the result as
+            # initial_tool_result — but the result never became a
+            # trace.step, so the run-scoped evidence guard in both gates
+            # (iteration-head is_done_fn and _acceptance_gate_at_final_answer)
+            # saw ZERO tool evidence and criteria on fast-path plans could
+            # never verify. Record it as a step: the tool DID run this
+            # turn, its output IS evidence, and the criteria checkers
+            # (tests/file/git/http/no-errors/fallback) can now evaluate it.
+            trace.steps.append(
+                AgentStep(
+                    iteration=0,
+                    thought="initial tool dispatch (engine pre-dispatch)",
+                    tool_name=initial_tool_result.source or "tool",
+                    tool_input="",
+                    observation=safe_initial,
+                    tool_failed=not initial_tool_result.success,
+                    phase="execute",
+                )
+            )
 
         # Per-turn tool call cache: (tool_name, normalised_input) → observation text.
         _call_cache: dict[tuple[str, str], str] = {}

@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from core.agent.verify import evaluate_criteria, format_gate_results, gate_passed
+from core.agent.verify import criteria_gate
 from core.models import ToolResult
 
 
@@ -48,26 +48,4 @@ def is_coding_done(
     termination logic (model assertion, max iterations, wall-clock cap)
     continues to apply unchanged.
     """
-    criteria = getattr(trace, "success_criteria", None) or []
-    if not criteria:
-        return False, ""
-
-    # Run-scoped evidence guard: the gate must NOT pass before this run has
-    # executed ANY tool. Workspace-scoped criteria ("hello.py exists", "git
-    # status is clean") can be satisfied by PRE-EXISTING state — without this
-    # guard the loop would terminate on iteration 0 claiming the criteria are
-    # met while the agent never did any work. "Done" requires receipts FROM
-    # THIS RUN.
-    if not any(step.tool_name for step in getattr(trace, "steps", [])):
-        return False, ""
-
-    results = evaluate_criteria(criteria, trace)
-    trace.criteria_results = results
-    trace.gate_passed = gate_passed(results)
-
-    if trace.gate_passed:
-        trace.gate_summary = format_gate_results(results)
-        return True, trace.gate_summary
-
-    unmet = [criterion for criterion, passed, _ in results if not passed]
-    return False, f"criteria not yet met: {', '.join(unmet[:3])}"
+    return criteria_gate(trace, unmet_label="criteria not yet met")
