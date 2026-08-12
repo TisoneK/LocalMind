@@ -3437,6 +3437,7 @@ class AgentLoop:
                 # never burn another PER_CALL_TIMEOUT_SECS call on the same
                 # empty output.
                 if not (initial_buffer or "").strip():
+                    trace.empty_response = True  # ADR-18 P2: remember this failure
                     if _obs:
                         _obs.emit(
                             "agent_loop_empty_response",
@@ -3465,6 +3466,7 @@ class AgentLoop:
                     # step done would be a lie. The SSE bridge's end-of-turn
                     # _finalize_plan_todos still closes it (the plan covers
                     # the whole turn), but we don't pretend the work happened.
+                    self._emit_failure_memory(trace, intent, _obs)  # ADR-18 P2
                     yield StreamChunk(text=_empty_msg, done=False)
                     yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                     return
@@ -3666,6 +3668,7 @@ class AgentLoop:
                     # Session 142: turn-end — close out the current plan step's
                     # todo (covers the stream-ended-early silent path).
                     _complete_current_plan_step()
+                    self._emit_failure_memory(trace, intent, _obs)
                     if _obs:
                         _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
                     _worker_report = trace.work_report()
@@ -3753,6 +3756,7 @@ class AgentLoop:
                     trace.final_response = full_text
                     yield StreamChunk(text=_gate_suffix, done=False)
                 logger.info(f"[agent.loop] finished iter={iteration + 1} — {trace.summary()}")
+                self._emit_failure_memory(trace, intent, _obs)
                 if _obs:
                     _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
 
@@ -3798,6 +3802,7 @@ class AgentLoop:
         # hit-limit path too — the work for the current step may have
         # completed even though the loop was capped.
         _complete_current_plan_step()
+        self._emit_failure_memory(trace, intent, _obs)
         if _obs:
             _obs.emit("agent_loop_done", intent=intent.value, iterations=trace.iterations_used, hit_limit=True)
 
@@ -3830,6 +3835,29 @@ class AgentLoop:
     # ------------------------------------------------------------------
     # ADR-18 P0 — acceptance gate at the final-answer point
     # ------------------------------------------------------------------
+
+    # ──────────────────────────────────────────────────────────────────────
+    # ADR-18 P2 — failure memory emit (Session 175)
+    # ──────────────────────────────────────────────────────────────────────
+    def _emit_failure_memory(self, trace, intent, obs):
+        """Emit an `agent_loop_failure` obs event when this run FAILED
+        (iteration cap, unmet acceptance criteria, or a tool failure).
+        The engine persists it to failure memory (the Remember stage).
+        Successful runs emit nothing — remembering success would flood
+        the table with noise."""
+        try:
+            from core.failure_memory import build_failure_summary, classify_failure
+
+            failure_type = classify_failure(trace)
+            if failure_type and obs:
+                obs.emit(
+                    "agent_loop_failure",
+                    intent=intent.value,
+                    failure_type=failure_type,
+                    summary=build_failure_summary(trace),
+                )
+        except Exception:  # pragma: no cover — memory must never break the loop
+            pass
 
     async def _acceptance_gate_at_final_answer(
         self,

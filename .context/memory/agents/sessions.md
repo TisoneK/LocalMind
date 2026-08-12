@@ -1925,3 +1925,32 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   3. `agent/loop.py` — when `initial_tool_result` is present (SINGLE_TOOL fast path), record it as a `trace.step` (iteration=0, phase=execute) so the run-scoped evidence guard passes and fast-path criteria (dir listing, git, URL fetch) can finally VERIFY. Live-verified: "list projects in dev" now terminates at the iteration head with ZERO model calls and `✓ 1/1 criteria met`.
 - **Validated:** full backend suite **1481 green** (1475 + 6 new), ruff clean, deepseek-flash review passed (dedupe feedback implemented as criteria_gate).
 - **Next:** ADR-18 P2 (failure memory — the Remember stage), then P3, then ADR-19 P1/P2/P3.
+---
+## 2026-08-12 — Session 175 (ADR-18 P2 — failure memory, the Remember stage)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-18 P2 — close the Remember stage of Observe→…→Verify→Remember→Continue.
+- **Done:**
+  - `storage/db.py`: new `failure_memory` table (+ session index) in `_SCHEMA`;
+    `SessionStore.record_failure()` best-effort INSERT with 90-day retention
+    prune on write; `SessionStore.recall_failures(message, intent, limit)` —
+    token-overlap match requiring ≥2 shared tokens (kills one-word false
+    positives), intent-filtered when given, newest first.
+  - `core/failure_memory.py`: deterministic `classify_failure(trace)`
+    (iteration_limit > empty_response > criteria_unmet > tool_failure > ''),
+    `build_failure_summary`, `format_recall_hint` — pure, no LLM calls.
+  - `core/agent/loop.py`: `trace.empty_response` marker + `_emit_failure_memory`
+    obs event (`agent_loop_failure`) at the three failure terminal points
+    (empty stream, iteration cap, criteria-unmet). Successful runs emit nothing.
+  - `core/engine/_pipeline.py`: after the agent loop, best-effort persist of
+    `agent_loop_failure` events to the store (defensive try/except — memory
+    must never break the turn); before the loop, `recall_failures` + hint are
+    injected into `memory_facts` so the next similar turn sees past failures.
+  - 15 tests (`tests/core/test_failure_memory.py`): classification, summaries,
+    recall-hint shape, DB round-trip, intent filter, ≥2-token bar, empty/short
+    queries, retention prune, loop terminal emits, engine persist+recall e2e.
+- **Reviewer fixes applied:** intent param now actually filters; duplicate
+  "make" stopword removed; ≥2-token overlap threshold; retention prune added
+  (bounded table, stale secrets age out); unused message index dropped;
+  dead `record_failure_for_trace` removed (loop→obs→engine path is the only
+  write path).
+- **Validation:** full backend suite **1496 green** (1481 + 15 new), ruff clean.

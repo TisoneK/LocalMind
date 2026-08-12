@@ -1971,6 +1971,24 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     memory_facts.append(wf)
                     existing.add(wf.lower().strip())
 
+        # ADR-18 P2 (Session 175): Remember→Continue — recall past failures
+        # matching this message and append them to the memory facts the
+        # loop sees, so a repeated failure pattern is avoided instead of
+        # repeated. Best-effort: recall must never slow or break the turn.
+        try:
+            _past_failures = self._store.recall_failures(
+                message=message,
+                intent=effective_intent.value,
+            )
+            if _past_failures:
+                from core.failure_memory import format_recall_hint
+
+                _hint = format_recall_hint(_past_failures)
+                if _hint:
+                    memory_facts.append(_hint)
+        except Exception:  # pragma: no cover — defensive
+            pass
+
         _clock.end("context_build")
 
         # ── 5b. Workspace orchestrator — parallel track ───────────────────
@@ -3501,6 +3519,27 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # yield an error message BEFORE the done signal. This is the
             # fix for "no final output" — the #1 bug.
             _agent_response = "".join(full_response_chunks)
+
+            # ADR-18 P2 (Session 175): the Remember stage — persist
+            # what-failed-and-why (emitted by the loop at its failure
+            # terminal points) to failure memory, so the next similar turn
+            # recalls it (injected into memory_facts above). Runs for EVERY
+            # agent-loop turn, success or failure (success emits no event,
+            # so nothing is recorded). Best-effort.
+            try:
+                for _evt in _obs.all():
+                    if _evt.type == "agent_loop_failure":
+                        self._store.record_failure(
+                            session_id=session_id,
+                            intent=_evt.data.get("intent", ""),
+                            message=message,
+                            failure_type=_evt.data.get("failure_type", ""),
+                            summary=_evt.data.get("summary", ""),
+                        )
+                        break
+            except Exception:  # pragma: no cover — defensive
+                pass
+
             if not _agent_response.strip():
                 # Session 31: check if the tool was disabled — that's a
                 # different error than "output too large"

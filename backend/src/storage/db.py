@@ -13,6 +13,7 @@ Migrations live in storage/migrations/ for forward compatibility.
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 import threading
 import time
@@ -23,6 +24,21 @@ from typing import Generator, Optional
 from core.models import Message, Role
 
 logger = logging.getLogger(__name__)
+
+# ADR-18 P2: tokens that carry no signal for failure recall matching.
+_FAILURE_STOPWORDS = {
+    "the", "and", "with", "that", "this", "please", "what", "when",
+    "where", "which", "there", "your", "from", "have", "will", "was",
+    "were", "can", "could", "would", "should", "about", "into", "them",
+    "then", "than", "just", "some", "make", "need", "want",
+    "show", "list", "tell", "give", "help", "does", "doing", "work",
+    "works", "working", "failed", "failing", "error", "errors",
+}
+
+# ADR-18 P2: failures older than this are pruned on write — the table
+# stays bounded and stale secrets age out of recall.
+_FAILURE_RETENTION_DAYS = 90
+
 
 
 _SCHEMA = """
@@ -76,6 +92,21 @@ ON actions(session_id, timestamp);
 CREATE TABLE IF NOT EXISTS migration_history (
     name TEXT PRIMARY KEY
 );
+
+-- ADR-18 P2 (Session 175): failure memory — what-failed-and-why at loop
+-- end (the "Remember" stage of Observe→…→Verify→Remember→Continue).
+-- Read back for repeated patterns so the next similar turn can avoid
+-- the same mistake (injected as a context hint alongside memory facts).
+CREATE TABLE IF NOT EXISTS failure_memory (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT    NOT NULL,
+    intent      TEXT    DEFAULT '',
+    message     TEXT    DEFAULT '',
+    failure_type TEXT   DEFAULT '',  -- iteration_limit | criteria_unmet | tool_failure
+    summary     TEXT    DEFAULT '',  -- what-failed-and-why (deterministic)
+    created_at  TEXT    DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_failure_memory_session ON failure_memory(session_id);
 """
 
 # ── Connection pool ─────────────────────────────────────────────────────────
@@ -537,3 +568,95 @@ class SessionStore:
             if total >= 5:  # only trust stats after enough samples
                 result[row["tool_name"]] = row["success_count"] / total
         return result
+
+    # ── ADR-18 P2: Failure memory (Session 175) ───────────────────────────
+
+    def record_failure(
+        self,
+        session_id: str,
+        intent: str,
+        message: str,
+        failure_type: str,
+        summary: str,
+    ) -> None:
+        """Append a what-failed-and-why entry at loop end (the Remember
+        stage). Best-effort: a failure record must never break the turn.
+        Prunes stale rows (older than _FAILURE_RETENTION_DAYS) on each
+        write so the table stays bounded and old secrets/failures age
+        out of recall."""
+        try:
+            with self._conn() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO failure_memory(session_id, intent, message, failure_type, summary)
+                    VALUES(?, ?, ?, ?, ?)
+                    """,
+                    (session_id, intent or "", (message or "")[:500], failure_type or "", (summary or "")[:1000]),
+                )
+                conn.execute(
+                    "DELETE FROM failure_memory WHERE created_at < "
+                    f"datetime('now', '-{_FAILURE_RETENTION_DAYS} days')"
+                )
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.debug("[db] record_failure skipped: %s", exc)
+
+    def recall_failures(
+        self,
+        message: str,
+        intent: str = "",
+        limit: int = 3,
+    ) -> list[dict]:
+        """Read back past failures for repeated patterns (the Remember→
+        Continue read path). Token-overlap match against the stored
+        message (requires ≥2 overlapping tokens to avoid one-word false
+        positives like any message containing "build"); newest first.
+        When intent is given, only that intent's failures are considered.
+        Returns [{failure_type, message, summary, intent, created_at}]."""
+        tokens = {t for t in re.findall(r"[a-z0-9_]{4,}", (message or "").lower()) if t not in _FAILURE_STOPWORDS}
+        if len(tokens) < 2:
+            return []
+        try:
+            with self._conn() as conn:
+                if intent:
+                    rows = conn.execute(
+                        """
+                        SELECT failure_type, message, summary, intent, created_at
+                        FROM failure_memory
+                        WHERE intent = ?
+                        ORDER BY id DESC
+                        LIMIT ?
+                        """,
+                        (intent, 50),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        """
+                        SELECT failure_type, message, summary, intent, created_at
+                        FROM failure_memory
+                        ORDER BY id DESC
+                        LIMIT ?
+                        """,
+                        (50,),
+                    ).fetchall()
+        except Exception:
+            return []
+        scored = []
+        for row in rows:
+            stored_tokens = {
+                t for t in re.findall(r"[a-z0-9_]{4,}", (row["message"] or "").lower())
+            }
+            overlap = tokens & stored_tokens
+            if len(overlap) < 2:
+                continue
+            scored.append(
+                {
+                    "failure_type": row["failure_type"],
+                    "message": row["message"],
+                    "summary": row["summary"],
+                    "intent": row["intent"],
+                    "created_at": row["created_at"],
+                    "score": len(overlap),
+                }
+            )
+        scored.sort(key=lambda r: r["score"], reverse=True)
+        return scored[:limit]
