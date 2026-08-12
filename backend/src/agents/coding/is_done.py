@@ -2,26 +2,31 @@
 Coding agent stop condition.
 
 Per ADR-6: each agent supplies its own is_done(). The coding agent's
-stop condition is tests-pass / build-succeeds / user-says-stop.
+stop condition is criteria-verified / tests-pass / build-succeeds /
+user-says-stop.
 
-Phase 1 (this session, Session 17): structural skeleton. The actual
-stop-condition logic will be wired in when BaseAgent.run() hosts the
-actual loop (Phase 2). For now, is_done() always returns False — the
-existing AgentLoop's own termination logic (max iterations, no more
-tool calls, wall-clock cap from Session 16) continues to apply.
+ADR-18 P0 (B-2026-08-12-1, Session 156): the acceptance gate. When the
+turn carries success criteria (from the dispatcher's execution_plan or
+the model's create_plan), is_done() evaluates them deterministically
+against the trace's tool evidence + the workspace. The loop stops ONLY
+when every criterion is VERIFIED — not merely because the model asserts
+it is done. That is the "an agent saying 'done' should not mean the
+task is done" contract.
 
-Phase 2 will add coding-specific stop conditions:
-    - tests pass after a file edit → done (task complete)
-    - build/typecheck succeeds after a change → done
-    - no more tool calls requested → done (model is satisfied)
-    - user sends a new message → done (yield back to user)
-    - wall-clock cap hit → done (hard limit, already enforced)
+No criteria → (False, "") — the legacy model-assertion + hard-caps
+termination path is unchanged (chat/trivial/research turns never get a
+contract, so this agent's stop behavior is identical there).
+
+The base loop still enforces the hard caps (max_iterations,
+max_wall_clock_secs) regardless of this function's answer — the "OR
+limit" from ADR-5.
 """
 
 from __future__ import annotations
 
 from typing import Optional
 
+from core.agent.verify import evaluate_criteria, format_gate_results, gate_passed
 from core.models import ToolResult
 
 
@@ -34,18 +39,35 @@ def is_coding_done(
     """
     Decide whether the coding agent's loop should terminate.
 
-    Phase 1: always returns (False, "") — let the existing AgentLoop
-    handle termination via its own max-iterations + wall-clock-cap +
-    no-more-tool-calls logic. This keeps the new abstraction
-    non-breaking.
+    With success criteria: evaluate them against the trace evidence; the
+    loop stops (True) only when all criteria pass. The evaluation is
+    stored back on the trace (criteria_results / gate_passed /
+    gate_summary) so the final-answer path can report it honestly.
 
-    Phase 2 will add coding-specific stop conditions:
-        - shell tool ran `pytest` / `ruff` / `tsc` and it passed → done
-        - file_write/file_edit succeeded and no follow-up tool call → done
-        - code_exec output indicates success → done
-
-    The base loop also enforces hard caps (max_iterations,
-    max_wall_clock_secs from Session 16) regardless of this function's
-    answer — that's the "OR limit" from ADR-5.
+    Without criteria: returns (False, "") — the existing AgentLoop
+    termination logic (model assertion, max iterations, wall-clock cap)
+    continues to apply unchanged.
     """
-    return False, ""
+    criteria = getattr(trace, "success_criteria", None) or []
+    if not criteria:
+        return False, ""
+
+    # Run-scoped evidence guard: the gate must NOT pass before this run has
+    # executed ANY tool. Workspace-scoped criteria ("hello.py exists", "git
+    # status is clean") can be satisfied by PRE-EXISTING state — without this
+    # guard the loop would terminate on iteration 0 claiming the criteria are
+    # met while the agent never did any work. "Done" requires receipts FROM
+    # THIS RUN.
+    if not any(step.tool_name for step in getattr(trace, "steps", [])):
+        return False, ""
+
+    results = evaluate_criteria(criteria, trace)
+    trace.criteria_results = results
+    trace.gate_passed = gate_passed(results)
+
+    if trace.gate_passed:
+        trace.gate_summary = format_gate_results(results)
+        return True, trace.gate_summary
+
+    unmet = [criterion for criterion, passed, _ in results if not passed]
+    return False, f"criteria not yet met: {', '.join(unmet[:3])}"

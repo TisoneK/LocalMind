@@ -143,8 +143,15 @@ async def update_subgoal(message: str) -> ToolResult:
 
 
 async def create_plan(message: str) -> ToolResult:
-    """Create many subgoals at once from a markdown list or JSON steps array."""
+    """Create many subgoals at once from a markdown list or JSON steps array.
+
+    ADR-18 P0: an optional `success_criteria` array (or markdown list) is
+    stored on the run's SubgoalRegistry so the acceptance gate can judge
+    the plan once executed — "done" requires receipts.
+    """
     steps: list[str] = []
+    criteria: list[str] = []
+    payload: dict = {}
     if message.strip().startswith("{"):
         try:
             payload = json.loads(message)
@@ -158,6 +165,13 @@ async def create_plan(message: str) -> ToolResult:
             steps = _parse_plan_text(message)
     else:
         steps = _parse_plan_text(message)
+
+    if isinstance(payload, dict):
+        raw_criteria = payload.get("success_criteria")
+        if isinstance(raw_criteria, list):
+            criteria = [str(c).strip() for c in raw_criteria if str(c).strip()]
+        elif isinstance(raw_criteria, str) and raw_criteria.strip():
+            criteria = _parse_plan_text(raw_criteria)
 
     if not steps:
         return ToolResult(
@@ -175,18 +189,25 @@ async def create_plan(message: str) -> ToolResult:
 
     registry = get_registry()
     created = [registry.add(step) for step in steps]
+    if criteria:
+        registry.success_criteria = criteria[:6]
     ids = ", ".join(s.id for s in created)
+    content = f"Created plan with {len(created)} subgoals (`{ids}`):\n\n{_render(registry)}"
+    if registry.success_criteria:
+        content += (
+            "\n\nSuccess criteria (the acceptance gate verifies these before "
+            "the run reports done):\n"
+            + "\n".join(f"  - {c}" for c in registry.success_criteria)
+        )
     return ToolResult(
-        content=(
-            f"Created plan with {len(created)} subgoals (`{ids}`):\n\n"
-            f"{_render(registry)}"
-        ),
+        content=content,
         risk=RiskLevel.LOW,
         source="create_plan",
         success=True,
         metadata={
             "created": [s.to_dict() for s in created],
             "subgoals": registry.list_dicts(),
+            "success_criteria": list(registry.success_criteria),
         },
     )
 
@@ -227,7 +248,9 @@ register_tool(
     description=(
         "Create multiple subgoals at once for a multi-step task. Pass a JSON "
         "array of steps ({\"steps\": [\"create dir\", \"write hello.py\", ...]}) "
-        "or a markdown list ('1. create dir\\n2. write hello.py'). The plan is "
+        "or a markdown list ('1. create dir\\n2. write hello.py'). Optionally "
+        "include 2-4 CONCRETE success_criteria (checkable statements proving "
+        "the plan succeeded — the acceptance gate verifies them). The plan is "
         "tracked in the current run's scratchpad so you can check off each step "
         "as you complete it. Returns the full current scratchpad."
     ),

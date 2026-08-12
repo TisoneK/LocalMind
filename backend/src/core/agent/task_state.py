@@ -105,14 +105,20 @@ class TaskState:
 
     # ── Serialization ────────────────────────────────────────────────────
 
-    def to_prompt(self) -> str:
-        """Compact TASK STATE block for system-prompt injection.
+    def to_prompt(self, include_criteria: bool = True) -> str:
+        """Compact TASK STATE block for prompt injection.
 
         Kept concise: the evidence itself is already visible via the
         tool messages in context — duplicating it here would bloat the
         prompt (the workspace feedback bar makes the same trade-off).
         The criteria render as an unchecked checklist so the model sees
         the "done" contract every iteration.
+
+        Args:
+            include_criteria: the full block (system-prompt injection) vs
+                the per-iteration refresh (progress/budget only — the
+                criteria are already in the system prompt, so re-injecting
+                them every iteration would duplicate tokens).
         """
         if (
             not self.objective
@@ -125,7 +131,7 @@ class TaskState:
             lines.append(f"Objective: {self.objective}")
         if self.constraints:
             lines.append(f"Constraints: {'; '.join(self.constraints)}")
-        if self.success_criteria:
+        if self.success_criteria and include_criteria:
             lines.append("Success criteria — do NOT report done until ALL are met:")
             for criterion in self.success_criteria:
                 lines.append(f"  - [ ] {criterion}")

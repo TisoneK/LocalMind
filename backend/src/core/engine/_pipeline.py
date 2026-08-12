@@ -2428,6 +2428,16 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # planning call, these step labels seed the Todos panel so the UI
         # still shows a real plan (the loop's todo emission is bypassed).
         _reused_plan_steps: list[str] = []
+        # ADR-18 P0: the dispatcher's typed success criteria (its
+        # execution_plan.success_criteria). Threaded to the agent loop as
+        # the acceptance contract — "done" requires verified receipts.
+        _reused_criteria: list[str] = []
+        if _orchestration_plan is not None:
+            _reused_criteria = [
+                str(c).strip()
+                for c in (getattr(_orchestration_plan, "success_criteria", None) or [])
+                if str(c).strip()
+            ]
         if effective_intent in AGENT_INTENTS:
             # Yield a status update so the user knows what's happening
             # (previously: the user saw "Thinking..." with no indication of progress)
@@ -3316,6 +3326,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     orchestrator_context=orchestrator_context or None,
                     skip_planning=_skip_planning,
                     plan_steps=_reused_plan_steps or None,  # Session 134: dispatcher plan reuse
+                    success_criteria=_reused_criteria or None,  # ADR-18 P0 acceptance contract
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
                 )
@@ -3370,6 +3381,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     orchestrator_context=orchestrator_context or None,
                     skip_planning=_skip_planning,
                     plan_steps=_reused_plan_steps or None,  # Session 134: dispatcher plan reuse
+                    success_criteria=_reused_criteria or None,  # ADR-18 P0 acceptance contract
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
                 ):

@@ -325,7 +325,18 @@ CRITICAL RULES:
    user needs, not a literal copy of their question.
 
 Reply with ONLY valid JSON:
-{"capabilities":["cap1","cap2"],"flags":{"requires_grounding":false,"requires_tools":false,"requires_planning":false,"requires_memory":false,"requires_reasoning":false,"requires_execution":false,"requires_file_access":false,"realtime_sensitive":false},"execution_mode":"direct","safety_level":"low","confidence":0.85,"primary_domain":"","reformulated_query":"the optimal query for getting the data the user needs — NOT their raw message","acknowledgement":"brief 1-sentence acknowledgement","execution_plan":{"steps":[{"id":"step_id","capability":"cap_name","tool":"tool_name","args":{},"depends_on":[],"label":"Human-readable step description"}]}}
+{"capabilities":["cap1","cap2"],"flags":{"requires_grounding":false,"requires_tools":false,"requires_planning":false,"requires_memory":false,"requires_reasoning":false,"requires_execution":false,"requires_file_access":false,"realtime_sensitive":false},"execution_mode":"direct","safety_level":"low","confidence":0.85,"primary_domain":"","reformulated_query":"the optimal query for getting the data the user needs — NOT their raw message","acknowledgement":"brief 1-sentence acknowledgement","execution_plan":{"steps":[{"id":"step_id","capability":"cap_name","tool":"tool_name","args":{},"depends_on":[],"label":"Human-readable step description"}],"success_criteria":["2-4 CONCRETE checkable statements that prove success"]}}
+
+CRITICAL RULE — success_criteria (ADR-18 P0 acceptance gate):
+- Write 2-4 CONCRETE, CHECKABLE statements that prove the task succeeded:
+  a command that passes ("pytest passes"), a file that exists with content
+  ("hello.py exists with content"), a git-diff outcome ("git diff contains
+  hello.py"), an HTTP status ("the endpoint returns 200"), or the absence of
+  error output ("no errors in the build output").
+- ONE criterion per checkable statement. Never vague/subjective ("works well",
+  "looks good", "make it nice") — the acceptance gate checks these
+  deterministically against tool evidence.
+- Omit success_criteria entirely for pure chat/trivial requests (no contract).
 """  # noqa: E501
 
 
@@ -1368,6 +1379,15 @@ class ThinkingDispatcher:
         steps = data.get("execution_plan", {}).get("steps", [])
         graph = build_graph_from_plan_steps(steps) if steps else ExecutionGraph()
 
+        # ADR-18 P0: typed success criteria from the plan's execution_plan.
+        # The acceptance gate judges these against tool evidence + workspace.
+        criteria_raw = data.get("execution_plan", {}).get("success_criteria", [])
+        success_criteria: list[str] = []
+        if isinstance(criteria_raw, list):
+            success_criteria = [
+                str(c).strip() for c in criteria_raw if str(c).strip()
+            ][:6]
+
         # Build dispatch steps for UI
         dispatch_steps = []
         for step in steps:
@@ -1384,6 +1404,7 @@ class ThinkingDispatcher:
             reasoning=data.get("reasoning", ""),
             dispatch_steps=dispatch_steps,
             fast_path=False,
+            success_criteria=success_criteria,
         )
 
     # ── Fallback ────────────────────────────────────────────────────────

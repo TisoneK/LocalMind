@@ -90,6 +90,7 @@ from core.agent.delegation import (
 from core.agent.models import AgentStep, AgentTrace
 from core.agent.prompts import build_agent_system_prompt, build_planning_prompt
 from core.agent.synthesizer import AnswerSynthesizer
+from core.agent.task_state import TaskState
 from core.agent.text_tools import (
     _MAX_TOOL_TALK_RECOVERIES,
     _MINIMAX_PARTIAL_RE,
@@ -846,11 +847,10 @@ TOOL_DEFINITIONS = [
         "function": {
             "name": "create_plan",
             "description": (
-                "Create multiple subgoals at once for a multi-step task. Pass a JSON "
-                "array of steps ({\"steps\": [\"create dir\", \"write hello.py\", ...]}) "
-                "or a markdown list ('1. create dir\\n2. write hello.py'). The plan is "
-                "tracked in the current run's scratchpad so you can check off each step "
-                "as you complete it. Returns the full current scratchpad."
+                "Create multiple subgoals for a multi-step task. Pass steps as a JSON "
+                "array ({\"steps\": [...]}) or a markdown list; optionally add "
+                "success_criteria (the acceptance gate verifies them). Returns the "
+                "scratchpad."
             ),
             "parameters": {
                 "type": "object",
@@ -859,6 +859,11 @@ TOOL_DEFINITIONS = [
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Ordered list of steps for the plan",
+                    },
+                    "success_criteria": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional: 2-4 concrete checkable statements proving success.",
                     },
                 },
                 "required": ["steps"],
@@ -1028,6 +1033,14 @@ TOOL_DEFINITIONS = [
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
+def _user_message_text(messages: list[dict]) -> str:
+    """Return the latest user-role message text (for the TaskState objective)."""
+    for msg in reversed(messages):
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            return str(msg.get("content", ""))[:200]
+    return ""
+
+
 def _filtered_tool_defs(allowed_tools: Optional[frozenset[str]] = None) -> list[dict]:
     """Return TOOL_DEFINITIONS filtered to the allowed tool set.
 
@@ -1084,6 +1097,16 @@ class AgentLoop:
         # panel (same plan-{i} ids the planner would emit) and drive the
         # plan cursor, so the UI still shows a real plan + progress.
         plan_steps: Optional[list[str]] = None,
+        # ADR-18 P0: typed success criteria from the dispatcher's
+        # execution_plan (or the model's create_plan). The acceptance gate
+        # evaluates these against tool evidence + workspace; "done" requires
+        # receipts. None = no contract (legacy model-assertion path).
+        success_criteria: Optional[list[str]] = None,
+        # ADR-18 P0: the selected BaseAgent's is_done() implementation,
+        # called at each iteration head so the loop stops when criteria are
+        # VERIFIED (not merely asserted). None for the direct-loop path
+        # (no agent instance) — hard caps still bound it.
+        is_done_fn=None,
         agent_config=None,
         agent_context: Optional[str] = None,
         allowed_tool_names: Optional[frozenset[str]] = None,
@@ -1139,6 +1162,9 @@ class AgentLoop:
         """
         active_adapter = adapter or self._adapter
         trace = AgentTrace()
+        # ADR-18 P0: seed the acceptance contract from the dispatcher's plan.
+        if success_criteria:
+            trace.success_criteria = [str(c).strip() for c in success_criteria if str(c).strip()]
         # Provider usage is carried through every streamed chunk and tool-call
         # result so the Engine can report real prompt/completion counts.
         _provider_usage: dict[str, int] = {}
@@ -1349,6 +1375,27 @@ class AgentLoop:
         else:
             _plan_steps = []
 
+        # ADR-18 P0: first-class task state — created once per turn when
+        # there is a contract (criteria) or a plan. The full block (objective
+        # + criteria checklist) is injected into the system prompt ONCE — the
+        # criteria are the "done" contract. Progress/budget are refreshed
+        # into the per-iteration context each iteration (cheaper than
+        # re-injecting the criteria every turn). Objective prefers the short
+        # user message; the plan text (already injected via plan_context) is
+        # only a capped fallback so it is never duplicated.
+        task_state = TaskState(
+            objective=_user_message_text(messages)
+            or (plan_context or "").strip()[:160]
+            or "",
+            success_criteria=list(trace.success_criteria),
+        )
+        task_state.set_budget(
+            iter_used=0,
+            iter_max=_effective_max_iter,
+            wall_used=0.0,
+            wall_max=_effective_max_wall,
+        )
+
         # Track which plan step we're currently executing so we can mark
         # todos as complete when their corresponding tool finishes.
         _plan_step_cursor = 0
@@ -1420,6 +1467,14 @@ class AgentLoop:
         # result — that turns a bare API call into a real harness.
         if workspace_context:
             system_prompt = system_prompt + "\n\n" + workspace_context
+
+        # ADR-18 P0: append the TASK STATE block (objective, criteria,
+        # progress, budget) so the model sees the acceptance contract every
+        # iteration instead of reconstructing it from history. Empty for
+        # turns with no contract/plan — zero prompt-cost change there.
+        _task_state_prompt = task_state.to_prompt()
+        if _task_state_prompt:
+            system_prompt = system_prompt + "\n\n" + _task_state_prompt
 
         # Replace or prepend the system message
         if loop_messages and loop_messages[0]["role"] == "system":
@@ -1572,6 +1627,71 @@ class AgentLoop:
                     )
                 break
 
+            # ── ADR-18 P0 acceptance gate (iteration head) ──────────────
+            # Sync model-declared success criteria (create_plan tool) into
+            # the trace, update the task-state block, then ask the selected
+            # agent's is_done(): the loop stops only when the criteria are
+            # VERIFIED against evidence (not merely asserted). Stub
+            # is_done() implementations return (False, "") — the legacy
+            # model-assertion + hard-caps path is unchanged for them. The
+            # wall-clock/iteration caps below still bound everything.
+            from core.subgoal import get_registry as _get_subgoal_registry
+
+            _sub_registry = _get_subgoal_registry()
+            if not trace.success_criteria and _sub_registry.success_criteria:
+                trace.success_criteria = list(_sub_registry.success_criteria)
+                task_state.success_criteria = list(trace.success_criteria)
+            task_state.iteration = iteration + 1
+            task_state.set_budget(
+                iter_used=iteration + 1,
+                iter_max=_effective_max_iter,
+                wall_used=_elapsed,
+                wall_max=_effective_max_wall,
+            )
+            _subgoals = _sub_registry.all()
+            task_state.completed = [s.description for s in _subgoals if s.status == "completed"]
+            task_state.pending = [s.description for s in _subgoals if s.status in ("pending", "in_progress")]
+            task_state.failed = [(s.description, s.notes or "") for s in _subgoals if s.status == "blocked"]
+            # Fresh progress/budget for the per-iteration context (the
+            # criteria checklist stays in the system prompt — no duplication).
+            task_state_refresh = task_state.to_prompt(include_criteria=False)
+            if task_state_refresh:
+                task_state_refresh = "\n\n" + task_state_refresh
+
+            if is_done_fn is not None:
+                _done, _done_reason = is_done_fn(
+                    iteration + 1,
+                    _elapsed,
+                    None,  # last tool result — the gate evaluates trace evidence
+                    trace,
+                )
+                if _done:
+                    logger.info(
+                        "[agent.loop] acceptance gate passed — %s (iter %d/%d)",
+                        _done_reason,
+                        iteration + 1,
+                        _effective_max_iter,
+                    )
+                    if _obs:
+                        _obs.emit(
+                            "agent_loop_gate_passed",
+                            intent=intent.value,
+                            iterations=iteration + 1,
+                            reason=str(_done_reason)[:200],
+                        )
+                    # Gate-passed is a CLEAN termination: the criteria are
+                    # verified (not asserted), so the verified summary IS the
+                    # final answer. A plain `break` would fall into the
+                    # hit-limit path (forced answer + hit_limit=True) — wrong.
+                    # Same todo bookkeeping as the other clean exits.
+                    _complete_current_plan_step()
+                    trace.final_response = str(_done_reason or "")
+                    if _obs:
+                        _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
+                    yield StreamChunk(text=str(_done_reason or ""), done=False)
+                    yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
+                    return
+
             # B-2026-08-02-5 (A5): steering without aborting. Drain any
             # user messages queued via POST /api/chat/{session_id}/steer
             # at the NEXT iteration boundary — never mid-tool. The agent
@@ -1613,6 +1733,11 @@ class AgentLoop:
                 if len(observation_log) > _OBS_LOG_TOTAL_CAP:
                     trimmed_log = "…[earlier observations truncated]\n" + observation_log[-_OBS_LOG_TOTAL_CAP:]
                 context_content = f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{_effective_max_iter}. "
+                # ADR-18 P0: refresh the task-state progress/budget lines
+                # into the per-iteration context (criteria stay in the
+                # system prompt; only progress changes per iteration).
+                if task_state_refresh:
+                    context_content += task_state_refresh
                 iteration_messages.append({"role": "user", "content": context_content})
 
             # B-2026-08-02-4 (A4): deterministic tool-result simplification.

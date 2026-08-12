@@ -57,6 +57,10 @@ class SubgoalRegistry:
         self._subgoals: dict[str, Subgoal] = {}
         self._order: list[str] = []
         self._counter = 0
+        # ADR-18 P0: success criteria declared by the model via create_plan's
+        # optional `success_criteria` arg. The agent loop syncs these onto
+        # the run's AgentTrace so the acceptance gate can judge them.
+        self.success_criteria: list[str] = []
 
     def add(self, description: str, status: str = "pending") -> Subgoal:
         """Add a subgoal and return it. Ids are stable within the run (sg-1, sg-2...)."""

@@ -230,6 +230,11 @@ class BaseAgent(ABC):
         # crashes with "got an unexpected keyword argument 'plan_steps'"
         # (Session 141 regression fix).
         plan_steps: Optional[list[str]] = None,
+        # ADR-18 P0: typed success criteria (dispatcher execution_plan or
+        # model create_plan). Forwarded to AgentLoop.run() — the acceptance
+        # gate evaluates them against tool evidence; "done" requires
+        # receipts. None = no contract (legacy path).
+        success_criteria: Optional[list[str]] = None,
         allowed_tool_names: Optional[frozenset[str]] = None,
         steering_queue=None,  # B-2026-08-02-5 (A5): per-session asyncio.Queue
         abort_signal=None,  # B-2026-08-02-2 (A2): per-session asyncio.Event
@@ -365,6 +370,10 @@ class BaseAgent(ABC):
             agent_config=cfg,  # ADR-6: pass the scoped toolset + caps
             skip_planning=skip_planning,
             plan_steps=plan_steps,  # Session 134: dispatcher plan reuse
+            # ADR-18 P0: the acceptance gate — pass this agent's real
+            # is_done() (criteria-verified stop) + the dispatcher criteria.
+            is_done_fn=self.is_done,
+            success_criteria=success_criteria,
             allowed_tool_names=allowed_tool_names,
             steering_queue=steering_queue,  # B-2026-08-02-5 (A5)
             abort_signal=abort_signal,  # B-2026-08-02-2 (A2)
