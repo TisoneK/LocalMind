@@ -1771,3 +1771,11 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Task:** Real-UI validation of the Session 150 stats split + context meter.
 - **Done:** booted backend (:8000, shell enabled) + frontend (:3000) detached; live-confirmed `/api/models` now returns `context_window: 128000` for deepseek-v4-flash-free (the meter's denominator is real).
 - **Blocked:** live two-turn E2E could not complete — the Zen free tier returned persistent `429 FreeUsageLimitError` (rate limit) on both requests; the app surfaced it as a clean SSE `error` event with no crash. Same free-tier overload class from this thread. Frontend data path covered by the 3 hook regression tests (wire-shaped turn_complete through the real SSE handler → sessionStats). Servers left running for the user; re-run the two-turn check once the rate limit clears (Session 152).
+---
+## 2026-08-12 — Session 152
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** Kickoff + ADR-18 — verification-first runtime hardening program, per the user's agentic-architecture thread ("it feels like generative AI rather than agentic AI"). Code-verified the gap: all per-agent `is_done()` are stubs returning False (loop ends on model assertion or iteration cap — `agents/*/is_done.py`); no Goal/success_criteria object in `backend/src`; VerifierAgent is an intent destination, not an acceptance gate; task state scattered; no failure-memory write-back. Baseline green (`scripts/ci-check.sh` all pass — backend 1293, ruff, tsc, eslint 0 errors).
+- **Commits:** 2 (chore(context): ADR-18 + docs(review): report)
+- **Outcome:** done (context documentation — ADR-18, backlog B-2026-08-12-1..5, feature-scoped memory `features/verification-first-hardening/`, review report)
+- **Open items:** B-2026-08-12-1..5 — implementation starts Session 153 (P0 acceptance gate, real-model smoke first per flaw log)
+- **Report:** .context/memory/reviews/2026-08-12-review.md

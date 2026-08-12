@@ -287,3 +287,11 @@ if literally nothing slowed you down.
 - **Cause:** The oldString matched the first 3 lines of the last test's `toMatchObject` call — not unique/self-contained — so the edit duplicated instead of replacing cleanly.
 - **Workaround / fix:** Re-read the file, identified the orphaned duplicate at EOF, and removed exactly that block with a targeted replacement.
 - **Prevent next time:** When appending a new describe/test block to an existing test file, anchor the insertion on a UNIQUE, self-contained boundary (e.g. the final `});` of the file, or a complete statement) — never on a partial line sequence that could be a prefix of larger content. After any multi-line edit to a test file, run the test suite immediately (a SyntaxError or duplicate-assertion failure surfaces within seconds).
+
+---
+## 2026-08-12 — Buffy / deepseek-v4-flash (Session 152)
+- **Problem:** Four `code-searcher` spawns failed with `ENOTDIR: not a directory, posix_spawn '/Users/bao/.config/manicode/rg'` when the `cwd` param pointed at a FILE (`loop.py`) instead of a directory.
+- **Cost:** ~1 min (one wasted round-trip).
+- **Cause:** `searchQueries[].cwd` must be a directory; passing a file path made ripgrep's spawn target resolve through the config shim and fail.
+- **Workaround / fix:** Re-issued with `cwd` omitted and file-targeted searches scoped via `-g 'loop.py'` / `-g '_pipeline.py'` glob flags.
+- **Prevent next time:** Never pass a file path as `cwd` — scope single-file searches with `-g '<filename>'` flags.
