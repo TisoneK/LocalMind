@@ -116,6 +116,7 @@ function setup(overrides: SetupOverrides = {}) {
     liveObservation: overrides.liveObservation !== undefined ? overrides.liveObservation : null,
     lastMetrics: null,
     elapsedMs: 0,
+    sessionStats: { promptTokens: 0, completionTokens: 0, latencyMs: 0, genTimeMs: 0, turnCount: 0 },
     send: fns.send,
     abort: fns.abort,
     steer: fns.steer,
@@ -222,11 +223,33 @@ describe('WorkspaceLayout', () => {
     // currentModel fallback resolves to the backend-reported model.
     expect(center.selectedModel).toMatchObject({ id: 'm1', name: 'Model One', provider: 'zen' });
     expect(center.currentIntent).toBe('CONVERSATION');
-    expect(center.currentConfidence).toBe(0.98);
+    // Stats split: the redundant confidence badge is gone from the top bar —
+    // it only lives in the Observe panel now. Its slot is the context-window
+    // occupancy meter, fed by the model's window size + live prompt tokens.
+    expect(center.currentConfidence).toBeUndefined();
+    expect(center.contextWindowSize).toBeUndefined();
+    expect(center.contextTokens).toBe(0);
     expect(center.memoryCount).toBe(0);
     expect(typeof center.onSend).toBe('function');
     expect(typeof center.onAbort).toBe('function');
     expect(typeof center.onSteer).toBe('function');
+  });
+
+  it('passes the model context window + live prompt tokens to the center meter', () => {
+    setup({
+      models: [{ id: 'm1', name: 'Model One', provider: 'zen', contextWindow: 32768 }],
+      liveObservation: {
+        intent: 'chat',
+        confidence: 0.9,
+        toolsUsed: [],
+        memoryHits: 0,
+        contextTokens: 12000,
+        latency: 0,
+      },
+    });
+    const center = mockPanelProps.center;
+    expect(center.contextWindowSize).toBe(32768);
+    expect(center.contextTokens).toBe(12000);
   });
 
   it('wires terminal/metrics/observation/capabilities into RightPanel', () => {
@@ -237,6 +260,10 @@ describe('WorkspaceLayout', () => {
     expect(right.terminalCwd).toBe('/tmp');
     expect(right.metrics).toMatchObject({ totalTokens: 0, latency: 0 });
     expect(right.observation).toMatchObject({ contextTokens: 0, latency: 0 });
+    // Stats split wiring: the corner bar receives the session totals + the
+    // live-stream flag so it can show cumulative values (with live overrides).
+    expect(right.sessionStats).toMatchObject({ promptTokens: 0, completionTokens: 0, turnCount: 0 });
+    expect(right.isStreaming).toBe(false);
     expect(right.capabilities).toEqual({ families: [] });
     expect(right.memoryFacts).toEqual([]);
     expect(typeof right.onTerminalExecute).toBe('function');

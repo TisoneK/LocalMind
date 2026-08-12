@@ -370,4 +370,21 @@ export interface ModelOption {
   name: string;
   provider: string;
   size?: string;
+  /** The model's max input-token budget (backend adapter effective_context_window).
+   *  Used by the top-bar context-window occupancy meter. */
+  contextWindow?: number;
+}
+
+/** Cumulative per-chat performance totals (stats split — bottom-right corner).
+ *  Distinct from per-message stats under each bubble: these answer "how is
+ *  this session doing overall" — summed tokens, throughput weighted by output
+ *  tokens, and average turn latency. Resets on new chat / session switch. */
+export interface SessionStats {
+  promptTokens: number;
+  completionTokens: number;
+  /** Sum of per-turn latencies (ms) — average = latencyMs / turnCount. */
+  latencyMs: number;
+  /** Sum of per-turn generation time (ms) — weighted speed = completionTokens / genTimeMs. */
+  genTimeMs: number;
+  turnCount: number;
 }

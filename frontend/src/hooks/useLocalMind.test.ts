@@ -254,4 +254,111 @@ describe('useChat SSE obs_event routing', () => {
     act(() => onDone());
     unmount();
   });
+
+  // ── Session stats (B-2026-08-11-5 / stats split) ─────────────────────
+  // The bottom-right corner accumulates per-chat totals (summed tokens,
+  // weighted speed, average latency) while each bubble keeps its own
+  // per-message line. These tests drive real wire-shaped turn_complete
+  // events through the hook and assert the accumulation semantics.
+
+  it('accumulates a completed turn into sessionStats (stats split)', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: {
+          type: 'turn_complete',
+          data: {
+            intent: 'chat',
+            confidence: 0.9,
+            tokens_approx: 9,
+            prompt_tokens_approx: 3500,
+            total_latency_ms: 2300,
+          },
+        },
+      }));
+    });
+    // The harness exposes onDone as a getter — call the returned function.
+    act(() => onDone()());
+
+    const s = result.current.sessionStats;
+    expect(s.turnCount).toBe(1);
+    expect(s.promptTokens).toBe(3500);
+    expect(s.completionTokens).toBe(9);
+    expect(s.latencyMs).toBe(2300);
+    // Weighted-speed inputs: generation time ≈ completion / tok-per-sec.
+    expect(s.genTimeMs).toBeGreaterThan(0);
+
+    unmount();
+  });
+
+  it('sums across turns instead of showing only the last turn', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    // Turn 1
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: {
+          type: 'turn_complete',
+          data: { tokens_approx: 9, prompt_tokens_approx: 3500, total_latency_ms: 2300 },
+        },
+      }));
+    });
+    act(() => onDone()());
+
+    // Turn 2 (retry / follow-up)
+    act(() => {
+      result.current.send('Show me the diff');
+    });
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: {
+          type: 'turn_complete',
+          data: { tokens_approx: 20, prompt_tokens_approx: 4000, total_latency_ms: 5000 },
+        },
+      }));
+    });
+    act(() => onDone()());
+
+    const s = result.current.sessionStats;
+    expect(s.turnCount).toBe(2);
+    expect(s.promptTokens).toBe(7500);
+    expect(s.completionTokens).toBe(29);
+    expect(s.latencyMs).toBe(7300);
+
+    unmount();
+  });
+
+  it('a late metrics upgrade replaces — not double-counts — the same turn', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: {
+          type: 'turn_complete',
+          data: { tokens_approx: 9, prompt_tokens_approx: 3500, total_latency_ms: 2300 },
+        },
+      }));
+    });
+    act(() => onDone()());
+
+    // The backend upgrades the SAME turn with exact usage after the stream
+    // ends. The accumulated totals must replace, not add on top.
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: {
+          type: 'turn_complete',
+          data: { tokens_approx: 15, prompt_tokens_approx: 4200, total_latency_ms: 2600 },
+        },
+      }));
+    });
+
+    const s = result.current.sessionStats;
+    expect(s.turnCount).toBe(1);
+    expect(s.promptTokens).toBe(4200);
+    expect(s.completionTokens).toBe(15);
+    expect(s.latencyMs).toBe(2600);
+
+    unmount();
+  });
 });

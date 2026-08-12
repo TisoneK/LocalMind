@@ -215,11 +215,16 @@ async def list_models(provider: str | None = None):
     adapter_name = settings.localmind_adapter
 
     # Get adapter - but don't create new instance, just get the class
+    # Also read the active adapter's effective context window (the max
+    # input-token budget) once so every model option carries it — the
+    # frontend uses it for the live context-window occupancy meter.
+    context_window: int | None = None
     try:
         adapter = get_adapter(adapter_name)
         available = await adapter.list_models()
         if adapter_name == "ollama":
             available = set(available)
+        context_window = adapter.effective_context_window
     except Exception:
         available = []
 
@@ -302,6 +307,12 @@ async def list_models(provider: str | None = None):
                     "size": "Cloud",
                 }
             )
+
+    # Attach the active model's token budget to every option (additive field;
+    # the frontend falls back gracefully when it's absent).
+    if context_window:
+        for opt in model_options:
+            opt["context_window"] = context_window
 
     return {"models": model_options, "current": current_model, "provider": adapter_name}
 

@@ -8,7 +8,6 @@ import {
   Wifi,
   WifiOff,
   Shield,
-  Zap,
   Loader2,
 } from 'lucide-react';
 import { ChatMessage as ChatMessageType, ModelOption } from '@/types';
@@ -61,9 +60,13 @@ interface CenterPanelProps {
   onAbort: () => void;
   onSteer?: (message: string) => void;
   currentIntent?: string;
-  currentConfidence?: number;
   memoryCount: number;
   sessionId?: string;
+  /** The active model's max input-token budget (adapter effective context
+   *  window). Renders the context-window occupancy meter in the top bar. */
+  contextWindowSize?: number;
+  /** Current window occupancy in tokens (this turn's real prompt size). */
+  contextTokens?: number;
 }
 
 export function CenterPanel({
@@ -75,9 +78,10 @@ export function CenterPanel({
   onAbort,
   onSteer,
   currentIntent,
-  currentConfidence,
   memoryCount,
   sessionId,
+  contextWindowSize,
+  contextTokens,
 }: CenterPanelProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -97,9 +101,21 @@ export function CenterPanel({
 
 
   const isOnline = health.status === 'online';
-  const confidencePercent = currentConfidence
-    ? Math.round(currentConfidence * 100)
+
+  // Context-window occupancy (replaces the old confidence badge): this turn's
+  // prompt size / the model's real max budget. The top bar's "percentage that
+  // matters" is now the one that predicts whether the next message degrades.
+  const windowSize = contextWindowSize && contextWindowSize > 0 ? contextWindowSize : null;
+  const occupancyPct = windowSize
+    ? Math.min(100, Math.round(((contextTokens || 0) / windowSize) * 100))
     : null;
+  const occupancyColor = occupancyPct === null
+    ? ''
+    : occupancyPct >= 85
+      ? 'bg-brand-red'
+      : occupancyPct >= 60
+        ? 'bg-brand-amber'
+        : 'bg-brand-green';
 
   // Clean up model name for display: remove internal suffixes, format nicely
   const rawModelName = selectedModel?.name || selectedModel?.id || '';
@@ -131,11 +147,23 @@ export function CenterPanel({
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Confidence badge */}
-          {confidencePercent !== null && (
-            <div className="flex items-center gap-1.5" title={`Confidence: ${confidencePercent}%`}>
-              <Zap className="h-3 w-3 text-brand-green" />
-              <span className="text-[10px] text-brand-green-muted">{confidencePercent}%</span>
+          {/* Context-window occupancy meter — the confidence badge was removed:
+              it duplicated the Observe panel's Intent Classification section
+              and was low-value as an always-on number. The window meter is the
+              actionable one (predicts degradation / compaction). */}
+          {windowSize && occupancyPct !== null && (
+            <div
+              className="flex items-center gap-1.5"
+              title={`Context window: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} tokens (${occupancyPct}%)`}
+            >
+              <span className="text-[9px] text-brand-green-muted uppercase tracking-wider">Context</span>
+              <div className="w-14 h-1.5 rounded-full bg-brand-border overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${occupancyColor}`}
+                  style={{ width: `${occupancyPct}%` }}
+                />
+              </div>
+              <span className="text-[10px] font-mono text-brand-green-soft">{occupancyPct}%</span>
             </div>
           )}
           {/* Memory badge */}

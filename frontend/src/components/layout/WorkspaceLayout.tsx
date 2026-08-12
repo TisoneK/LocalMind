@@ -116,7 +116,7 @@ export function WorkspaceLayout() {
   // Hook data — useChat receives the terminal event callback
   const health = useHealth();
   const { sessions, refresh: refreshSessions, deleteSession } = useSessions();
-  const { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, elapsedMs, send, abort, steer, setMessages } =
+  const { messages, isStreaming, currentIntent, activeToolCalls, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files } = useFileTree();
@@ -358,9 +358,15 @@ export function WorkspaceLayout() {
           onAbort={abort}
           onSteer={steer}
           currentIntent={currentIntent}
-          currentConfidence={currentConfidence}
           memoryCount={memoryFacts.length}
           sessionId={currentSessionId || undefined}
+          // Context-window occupancy meter: the freed top-bar slot that used
+          // to show the redundant confidence badge now shows how full the
+          // model's input window is (this turn's prompt / adapter max).
+          contextWindowSize={currentModel?.contextWindow}
+          contextTokens={lastMetrics && lastMetrics.promptTokens > 0
+            ? lastMetrics.promptTokens
+            : (liveObservationForPanel.contextTokens || 0)}
         />
       </div>
 
@@ -395,6 +401,8 @@ export function WorkspaceLayout() {
           metrics={metrics}
           lastMetrics={lastMetrics}
           elapsedMs={elapsedMs}
+          isStreaming={isStreaming}
+          sessionStats={sessionStats}
           collapsed={rightPanelCollapsed}
           onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
           forceTerminalTab={forceTerminalTab}

@@ -34,7 +34,41 @@ import type {
   ToolCall,
   CompletionSuggestion,
   Objective,
+  SessionStats,
 } from '@/types';
+
+// ─── Session stats (stats split — bottom-right corner) ────────────────────
+// Per-chat cumulative performance totals. Keyed per hook instance so they
+// survive session switches within the app run (switching back to a session
+// you already chatted with restores its numbers) but reset on app reload and
+// are isolated between test renderHook instances.
+const _EMPTY_SESSION_STATS: SessionStats = {
+  promptTokens: 0,
+  completionTokens: 0,
+  latencyMs: 0,
+  genTimeMs: 0,
+  turnCount: 0,
+};
+
+/** Rebuild session totals from loaded history (assistant messages that carry
+ *  attached `performance`). Used when no in-memory cache entry exists. */
+function _seedSessionStats(history: ChatMessage[]): SessionStats {
+  const acc: SessionStats = { ..._EMPTY_SESSION_STATS };
+  for (const m of history) {
+    if (m.role !== 'assistant' || !m.performance) continue;
+    const p = m.performance;
+    const completion = p.completionTokens ?? 0;
+    const latency = p.latencyMs ?? 0;
+    acc.promptTokens += p.promptTokens ?? 0;
+    acc.completionTokens += completion;
+    acc.latencyMs += latency;
+    acc.genTimeMs += p.tokensPerSecond && p.tokensPerSecond > 0 && completion > 0
+      ? (completion / p.tokensPerSecond) * 1000
+      : latency;
+    acc.turnCount += 1;
+  }
+  return acc;
+}
 
 // ─── useCapabilities ────────────────────────────────────────────────────
 
@@ -161,6 +195,10 @@ interface ChatState {
   liveObservation: ObservationData | null;
   lastMetrics: PerformanceMetrics | null;
   elapsedMs: number;
+  /** Cumulative per-chat totals (B-2026-08-11-5 / stats split): the bottom-
+   *  right corner answers "how is this session doing overall" while each
+   *  bubble keeps its own per-message line. */
+  sessionStats: SessionStats;
   send: (message: string, sessionIdOverride?: string, tool?: string) => void;
   abort: () => void;
   /** B-2026-08-02-5 (A5): inject a user message at the next step boundary
@@ -182,6 +220,30 @@ export function useChat(
   const [liveObservation, setLiveObservation] = useState<ObservationData | null>(null);
   const [lastMetrics, setLastMetrics] = useState<PerformanceMetrics | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [sessionStats, setSessionStats] = useState<SessionStats>({ ..._EMPTY_SESSION_STATS });
+  // Mirrors sessionStats for pure, synchronous reads (the accumulation effect
+  // computes the next totals from this ref — never from a state updater — so
+  // there's no side-effect-in-updater smell and no StrictMode double-invoke
+  // risk). Every write goes through applySessionStats() which updates both.
+  const sessionStatsRef = useRef<SessionStats>({ ..._EMPTY_SESSION_STATS });
+  const applySessionStats = useCallback((next: SessionStats) => {
+    sessionStatsRef.current = next;
+    setSessionStats(next);
+  }, []);
+  // Which session the current/next turn belongs to + the turn counter, used by
+  // the accumulation effect to (a) ignore late metrics from a switched-away
+  // session and (b) REPLACE (not double-count) a same-turn metrics upgrade.
+  const turnSessionRef = useRef<string | null>(null);
+  const turnCounterRef = useRef(0);
+  const lastTurnContributionRef = useRef<{
+    turn: number;
+    prompt: number;
+    completion: number;
+    latency: number;
+    genMs: number;
+  } | null>(null);
+  const sessionStatsSeededForRef = useRef<string | null>(null);
+  const sessionStatsBySessionRef = useRef<Map<string, SessionStats>>(new Map());
   const streamStartedAtRef = useRef<number | null>(null);
   const abortRef = useRef<(() => void) | null>(null);
   // Session 133: last time ANY SSE payload arrived for the current stream.
@@ -252,6 +314,51 @@ export function useChat(
       return updated;
     });
   }, [isStreaming, lastMetrics, setMessages]);
+
+  // Stats split: accumulate each completed turn into the session totals shown
+  // in the bottom-right corner. Runs only when idle (the stream owns timing
+  // while active). Guarded so a late metrics upgrade REPLACES — not
+  // double-counts — the same turn, late events from a previous session are
+  // ignored after a session switch, and an aborted turn that produced NO
+  // tokens (pure wall-clock, nothing sent to the model) never counts.
+  useEffect(() => {
+    if (isStreaming) return;
+    if (turnSessionRef.current !== sessionId) return;
+    const m = lastMetrics;
+    if (!m) return;
+    const completion = Math.max(0, m.completionTokens || 0);
+    const prompt = Math.max(0, m.promptTokens || 0);
+    const latency = Math.max(0, m.latency || 0);
+    const hasTokens = completion > 0 || prompt > 0;
+    const hasLatency = latency > 0 || (m.totalTokens || 0) > 0;
+    if (!hasTokens || !hasLatency) return;
+    const genMs = m.tokensPerSecond && m.tokensPerSecond > 0 && completion > 0
+      ? (completion / m.tokensPerSecond) * 1000
+      : latency;
+    const turn = turnCounterRef.current;
+    const prevContribution = lastTurnContributionRef.current?.turn === turn
+      ? lastTurnContributionRef.current
+      : null;
+    const prev = sessionStatsRef.current;
+    const next: SessionStats = prevContribution
+      ? {
+          promptTokens: prev.promptTokens - prevContribution.prompt + prompt,
+          completionTokens: prev.completionTokens - prevContribution.completion + completion,
+          latencyMs: prev.latencyMs - prevContribution.latency + latency,
+          genTimeMs: prev.genTimeMs - prevContribution.genMs + genMs,
+          turnCount: Math.max(0, prev.turnCount - 1) + 1,
+        }
+      : {
+          promptTokens: prev.promptTokens + prompt,
+          completionTokens: prev.completionTokens + completion,
+          latencyMs: prev.latencyMs + latency,
+          genTimeMs: prev.genTimeMs + genMs,
+          turnCount: prev.turnCount + 1,
+        };
+    applySessionStats(next);
+    if (sessionId) sessionStatsBySessionRef.current.set(sessionId, next);
+    lastTurnContributionRef.current = { turn, prompt, completion, latency, genMs };
+  }, [isStreaming, lastMetrics, sessionId, applySessionStats]);
 
   // SAFETY: force-reset isStreaming only when the stream is genuinely
   // STALLED — no SSE payload for 120s — not merely long-running. This
@@ -325,6 +432,10 @@ export function useChat(
           // B-2026-08-09-3: don't let the previous session's metrics attach
           // to a different session's messages on the next turn.
           setLastMetrics(null);
+          // Stats split: new chat / cleared session → fresh counters.
+          applySessionStats({ ..._EMPTY_SESSION_STATS });
+          sessionStatsSeededForRef.current = null;
+          lastTurnContributionRef.current = null;
         }
         return;
       }
@@ -340,6 +451,12 @@ export function useChat(
         // attach-on-complete effect from stamping the OLD session's turn
         // metrics onto the newly loaded history's last message (review fix).
         setLastMetrics(null);
+        // Stats split: switch to the other session's cumulative totals (or
+        // fresh zeros if this run never chatted there).
+        const cached = sessionStatsBySessionRef.current.get(sessionId);
+        applySessionStats(cached ? { ...cached } : { ..._EMPTY_SESSION_STATS });
+        if (cached) sessionStatsSeededForRef.current = sessionId;
+        lastTurnContributionRef.current = null;
       }
       // Skip if we're actively streaming to this session — the messages
       // are already in local state and the DB may not have them yet.
@@ -360,6 +477,17 @@ export function useChat(
       const history = await localmindClient.getSessionHistory(sessionId);
       if (mounted) {
         setMessages(history);
+        // Stats split: seed the corner totals once per session — from the
+        // in-run per-session totals when this hook instance already chatted
+        // there (never overwrite live-accumulated numbers with a stale
+        // empty-history seed), else from history's attached metrics.
+        if (
+          sessionStatsSeededForRef.current !== sessionId &&
+          !sessionStatsBySessionRef.current.has(sessionId)
+        ) {
+          applySessionStats(_seedSessionStats(history));
+          sessionStatsSeededForRef.current = sessionId;
+        }
       }
     };
 
@@ -406,6 +534,10 @@ export function useChat(
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
       streamStartedAtRef.current = Date.now();
+      // Stats split: this turn belongs to the effective session and gets a
+      // fresh turn number so the accumulation effect can attribute it.
+      turnCounterRef.current += 1;
+      turnSessionRef.current = effectiveSessionId;
       // Session 133 addendum: re-arm the stall timer at stream START, not
       // component mount. lastActivityRef is only otherwise written on SSE
       // payloads, so if the app sat idle >120s before sending (and the
@@ -1247,7 +1379,7 @@ export function useChat(
     });
   }, []);
 
-  return { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, elapsedMs, send, abort, steer, setMessages, onTerminalEvent };
+  return { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, onTerminalEvent };
 }
 
 // ─── Prompt leak detection (FIX 1) ────────────────────────────────────

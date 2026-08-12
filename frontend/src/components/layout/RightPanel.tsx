@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Terminal, Eye, Brain, PanelRightClose, PanelRight, Settings } from 'lucide-react';
-import { TerminalLine, ObservationData, CapabilitiesData, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion } from '@/types';
+import { TerminalLine, ObservationData, CapabilitiesData, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, SessionStats } from '@/types';
 import { TerminalPanel } from '@/components/panels/TerminalPanel';
 import { ObservabilityTab } from '@/components/panels/ObservabilityTab';
 import { MemoryTab } from '@/components/panels/MemoryTab';
@@ -28,6 +28,10 @@ interface RightPanelProps {
   lastMetrics?: PerformanceMetricsType | null;
   /** Wall-clock request duration updated while the stream is active */
   elapsedMs?: number;
+  /** Whether a request is in flight — the corner shows live values */
+  isStreaming?: boolean;
+  /** Cumulative per-chat totals (stats split) */
+  sessionStats?: SessionStats | null;
   collapsed: boolean;
   onToggleCollapse: () => void;
   /** FIX 4: Force the terminal tab to be active when agent runs shell/code_exec */
@@ -58,6 +62,8 @@ export function RightPanel({
   metrics,
   lastMetrics,
   elapsedMs,
+  isStreaming,
+  sessionStats,
   collapsed,
   onToggleCollapse,
   forceTerminalTab,
@@ -189,8 +195,14 @@ export function RightPanel({
         {activeTab === 'memory' && <MemoryTab facts={memoryFacts} onDelete={onMemoryDelete} />}
       </div>
 
-      {/* Performance metrics */}
-      <PerformanceMetrics metrics={metrics} lastMetrics={lastMetrics} elapsedMs={elapsedMs} />
+      {/* Performance metrics — session cumulative (stats split) */}
+      <PerformanceMetrics
+        metrics={metrics}
+        lastMetrics={lastMetrics}
+        elapsedMs={elapsedMs}
+        isStreaming={isStreaming}
+        sessionStats={sessionStats}
+      />
 
       {showSettings && (
         <SettingsModal onClose={() => setShowSettings(false)} onSave={refreshModels} />
