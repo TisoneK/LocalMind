@@ -34,10 +34,17 @@ Program phases (each real-model tested per the flaw log before shipping):
 **Started:** 2026-08-12 (Session 152 — ADR-18 + backlog + this manifest; no
 product code)
 **Branch:** main
-**Status:** P0 design LOCKED (Session 154 — see `design-p0.md`; four decisions
-settled: strict+honest gate, wire into AgentLoop, explicit replan call,
-criteria from both dispatcher AND create_plan). Implementation next —
-B-2026-08-12-1, build order steps 1-6 in design-p0.md.
+**Status:** P0 IMPLEMENTED (Sessions 155-157, B-2026-08-12-1): TaskState +
+verify.py + AgentTrace fields (155, `d55c0e6`); is_done() wired at the
+iteration head + success_criteria schemas on dispatcher execution_plan AND
+create_plan tool (156, `63dd038`); acceptance gate at the final-answer path
++ explicit time-boxed replan + honest unmet report at cap (157, `e7d7df1`).
+Full suite 1358 green, ruff clean. Live real-model smoke (Session 158,
+`scripts/smoke_gate.py`) VERIFIED the pipeline up to the provider call
+(context build → dispatcher thinking → Zen 429 FreeUsageLimitError) —
+provider-blocked, same as 2026-08-11; retry the smoke when Zen recovers or
+install Ollama. Remaining phases: P1 (verifier-as-stage), P2 (failure
+memory), P3 (transitional wiring).
 **No-regression list (must hold after every phase):** iteration caps (8/180s)
 + hit-limit fallback wording (Sessions 31/32); check-before-acting `safety.md`
 injection (Session 32); trailing-tool-role + reasoning-only Phase-1 adapter

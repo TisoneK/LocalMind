@@ -1797,3 +1797,20 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Commits:** 1 (chore(context): P0 design lock)
 - **Outcome:** done (design locked, no product code — per the design-review-first choice).
 - **Open items:** B-2026-08-12-1 implementation starts Session 155 (design-p0.md build order; real-model smoke last — Zen overloaded). B-2026-08-12-4 still pending.
+---
+## 2026-08-12 — Session 157 (P0 gate at final answer + replan)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-18 P0 step 5 — wire the acceptance gate at the final-answer path + explicit replan call (locked decisions: strict+honest, AgentLoop wiring, explicit replan, both sources).
+- **Done:** `AgentLoop._acceptance_gate_at_final_answer()` gates the model's done-claim in BOTH final-answer branches (stream-ended-early + normal): all criteria met → appends "✓ n/n" verified summary; unmet + iterations remain → `_replan_for_gate()` (explicit LLM replan via chat(), time-boxed by PLAN_TIMEOUT_SECS via nested _collect_replan coroutine matching the _collect_plan pattern, failure falls back to a re-attempt directive) injects a [ACCEPTANCE GATE] user block and returns ('', False) so the loop continues; unmet at cap → honest unmet report. Run-scoped evidence guard mirrors is_coding_done (never gate before any tool ran). `_user_message_text` now skips injected gate blocks so REPEATED replans keep the original task framing (reviewer-caught).
+- **Review:** deepseek-flash found 2 real gaps, both fixed: (1) replan call had NO timeout — now asyncio.wait_for(PLAN_TIMEOUT_SECS) like the planning phase; (2) multi-replan Task degradation — _user_message_text returns latest user msg, which after the 1st injection was the gate block — now skips [ACCEPTANCE GATE] content. Verified production openai_compat.chat() is an async generator (test fakes match). Confirmed: no worker-report bypass (gate runs before needs_report, both still execute), no harmful double-evaluation (head-preempt + done-claim gate are complementary), injected user block never follows a trailing tool role.
+- **Tests:** 6 new (18 in test_acceptance_gate.py total); full suite 1358 green; ruff clean.
+- **Commits:** e7d7df1 (feat(loop)).
+- **Next:** Session 158 — real-model smoke (Ollama if available, else Zen probe).
+
+---
+## 2026-08-12 — Session 158 (P0 live smoke + close out)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-18 P0 step 6 — real-model smoke of the acceptance gate, then close out the feature slice.
+- **Done:** restarted the launchd backend (com.localmind.backend, PID 4112) with the new code; wrote `scripts/smoke_gate.py` (POSTs a coding task to /api/chat, streams SSE, checks for success_criteria + gate summary + done). Pipeline verified LIVE up to the provider call: context build → dispatcher thinking → Zen **429 FreeUsageLimitError** (free-tier rate limit, same as 2026-08-11 Session 151). Provider-blocked — honest close per the flaw log; the smoke script is committed for reuse. Full backend suite 1358 green + ruff clean after Sessions 155-157.
+- **Commits:** e7d7df1 (last product commit, Session 157); context commits for 155-158.
+- **Next:** P1 (verifier-as-stage) or re-run smoke_gate.py when Zen recovers / Ollama installed.

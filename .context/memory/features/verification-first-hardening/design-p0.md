@@ -119,16 +119,21 @@ regression. Per-agent semantic overrides (e.g. bug-reproduction tasks where
 
 ## Build order (each step deterministic + unit-testable; live smoke last)
 
-1. `task_state.py` + prompt renderer + unit tests.
-2. `verify.py` checker library + unit tests.
+1. `task_state.py` + prompt renderer + unit tests. ✅ Session 155
+2. `verify.py` checker library + unit tests. ✅ Session 155
 3. Wire `is_done()` into AgentLoop iteration head (stubs still return False →
-   no behavior change) + tests.
+   no behavior change) + tests. ✅ Session 156 (real is_coding_done; clean
+   gate-passed return, not hit-limit)
 4. Dispatcher schema + `create_plan` schema + `OrchestrationPlan.success_criteria`
-   + parsing + tests.
+   + parsing + tests. ✅ Session 156
 5. Gate integration at the final-answer path + explicit replan call + tests.
-6. Real-model smoke — currently blocked (Zen free tier overloaded 2026-08-12);
-   a local Ollama model unblocks it earlier. Flaw-log rule: do not ship
-   loop-path code untested (Session 116).
+   ✅ Session 157 (time-boxed replan, honest unmet report at cap)
+6. Real-model smoke — attempted Session 158 (`scripts/smoke_gate.py`):
+   pipeline verified live to the provider call (context build → dispatcher
+   thinking → Zen 429 FreeUsageLimitError). STILL BLOCKED on a live model;
+   retry when Zen free tier recovers or install Ollama. Loop-path code
+   covered by 18 gate tests + full suite 1358 green; per the flaw log the
+   live E2E remains pending.
 
 ## No-regression list (from the manifest — must hold)
 
