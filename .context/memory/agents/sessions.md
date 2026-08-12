@@ -1751,3 +1751,16 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Root cause:** on NORMAL completion, a short final answer went straight to the Worker report; the AnswerSynthesizer was only reached on the hit-limit path (_force_final_answer).
 - **Done:** loop.py — `_rescue_final_answer()` runs ONE focused synthesis call (plain chat, framing="final", suppress_report + suppress_empty_fallback) before the report fallback; `_force_final_answer` gained framing/suppress_report/suppress_empty_fallback params. 4 regression tests (`tests/core/test_final_answer_rescue.py`).
 - **Verified on the real model (post-fix):** has_worker_report **False**; final answer = clean markdown table of changed files + diff (1185 chars); prompt 14.2K→9.1K cumulative; completion 121→296; wall 22.4s; first thinking 0.08s. Committed `562b8a5`; 1287 backend tests pass, ruff clean.
+---
+## 2026-08-11 — Session 149
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-17 track 2 — kill the dispatcher LLM call for the user's canonical test phrase. "Check git status on the localmind repo, and if there are uncommitted changes, show me the diff" starts with "Check" (no shell prefix) so it paid the full capability-inference call every time.
+- **Done:** `thinking_dispatcher.py` git-phrasing signal (git-anchored regex → chained status→diff/log/branch/stash SINGLE_TOOL git plan, zero adapter calls, step dedup + depends_on chaining). 4 regression tests in `test_signal_fast_paths.py`; `test_dispatcher_cache.py` fixture moved off "Check git status!!" (now correctly a signal — it was breaking the near-duplicate cache test). Also fixed a pre-existing unused variable (ruff F841) in the same test file.
+- **Note:** "git stash list" starts with the shell prefix, so the OLD prefix signal wins before the new git block — same zero-LLM outcome via a different path (test documents this).
+
+---
+## 2026-08-11 — Session 150
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** B-2026-08-11-5 — stats split + top-bar context meter (user's design: corner = session cumulative, bubbles = per-message; confidence badge redundant; real context-window signal missing).
+- **Done:** `useChat` returns `sessionStats` (per-hook-instance Map keyed by session; accumulation effect runs only when idle, replace-on-same-turn for late metrics upgrades, token guard so zero-token aborts never count; pure ref-based accumulator — no side effects in state updaters). `PerformanceMetrics` corner now shows summed tokens / weighted speed / avg latency (+ turns chip + wall-time tooltip), live overrides while streaming. `CenterPanel` confidence badge removed → context-window occupancy meter (contextTokens / contextWindowSize, green→amber→red; zen = 128,000). Backend `/api/models` now carries `context_window` (adapter.effective_context_window). Types: `ModelOption.contextWindow`, `SessionStats`. 3 hook regression tests + WorkspaceLayout wiring updates.
+- **Verified:** backend 1293 pass, frontend 95 pass, tsc clean, eslint 0 errors, ruff clean.
