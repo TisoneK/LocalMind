@@ -325,7 +325,17 @@ CRITICAL RULES:
    user needs, not a literal copy of their question.
 
 Reply with ONLY valid JSON:
-{"capabilities":["cap1","cap2"],"flags":{"requires_grounding":false,"requires_tools":false,"requires_planning":false,"requires_memory":false,"requires_reasoning":false,"requires_execution":false,"requires_file_access":false,"realtime_sensitive":false},"execution_mode":"direct","safety_level":"low","confidence":0.85,"primary_domain":"","reformulated_query":"the optimal query for getting the data the user needs — NOT their raw message","acknowledgement":"brief 1-sentence acknowledgement","execution_plan":{"steps":[{"id":"step_id","capability":"cap_name","tool":"tool_name","args":{},"depends_on":[],"label":"Human-readable step description"}],"success_criteria":["2-4 CONCRETE checkable statements that prove success"]}}
+{"capabilities":["cap1","cap2"],"flags":{"requires_grounding":false,"requires_tools":false,"requires_planning":false,"requires_memory":false,"requires_reasoning":false,"requires_execution":false,"requires_file_access":false,"realtime_sensitive":false},"execution_mode":"direct","safety_level":"low","confidence":0.85,"primary_domain":"","reformulated_query":"the optimal query for getting the data the user needs — NOT their raw message","acknowledgement":"brief 1-sentence acknowledgement","execution_plan":{"steps":[{"id":"step_id","capability":"cap_name","tool":"tool_name","args":{},"depends_on":[],"label":"Human-readable step description"}],"success_criteria":["2-4 CONCRETE checkable statements that prove success"],"task_type":"debug|plan|code|research|chat|verify"}}
+
+CRITICAL RULE — task_type (ADR-19 task-aware context):
+- OPTIONAL. Set it ONLY when the task clearly maps to one of: debug
+  (fixing/finding a failure), plan (design/requirements), code (writing or
+  editing implementation), research (gathering sources/facts), verify
+  (running tests/checks to confirm), chat (general conversation).
+- When unset or ambiguous, omit it entirely — the engine falls back to
+  the legacy positional context behavior (no task-aware compaction).
+- It only controls WHICH tool results/history stay verbatim in context —
+  never the routing or the tools.
 
 CRITICAL RULE — success_criteria (ADR-18 P0 acceptance gate):
 - Write 2-4 CONCRETE, CHECKABLE statements that prove the task succeeded:
@@ -1375,18 +1385,31 @@ class ThinkingDispatcher:
                 [c.value for c in capabilities],
             )
 
-        # Build execution graph from plan steps
-        steps = data.get("execution_plan", {}).get("steps", [])
+        # Build execution graph from plan steps. Defensive (Session 160
+        # review): execution_plan may be malformed (list/string) — guard the
+        # steps, success_criteria, and task_type reads with one isinstance.
+        execution_plan = data.get("execution_plan")
+        plan_dict = execution_plan if isinstance(execution_plan, dict) else {}
+
+        steps = plan_dict.get("steps", [])
         graph = build_graph_from_plan_steps(steps) if steps else ExecutionGraph()
 
-        # ADR-18 P0: typed success criteria from the plan's execution_plan.
-        # The acceptance gate judges these against tool evidence + workspace.
-        criteria_raw = data.get("execution_plan", {}).get("success_criteria", [])
+        # ADR-18/19: typed success_criteria + task_type from execution_plan.
+        criteria_raw = plan_dict.get("success_criteria", [])
         success_criteria: list[str] = []
         if isinstance(criteria_raw, list):
             success_criteria = [
                 str(c).strip() for c in criteria_raw if str(c).strip()
             ][:6]
+
+        # ADR-19: explicit task_type from the plan's execution_plan (optional).
+        # Controls task-aware context compaction; empty = legacy behavior.
+        from core.context_policy import parse_task_type_from_plan
+
+        task_type = parse_task_type_from_plan(
+            plan_dict.get("task_type", ""),
+            primary_domain=str(data.get("primary_domain", "")),
+        )
 
         # Build dispatch steps for UI
         dispatch_steps = []
@@ -1405,6 +1428,7 @@ class ThinkingDispatcher:
             dispatch_steps=dispatch_steps,
             fast_path=False,
             success_criteria=success_criteria,
+            task_type=task_type,
         )
 
     # ── Fallback ────────────────────────────────────────────────────────

@@ -531,6 +531,15 @@ class OrchestrationPlan(BaseModel):
     reasoning: str = ""
     dispatch_steps: list[dict] = Field(default_factory=list)
     fast_path: bool = False
+    success_criteria: list[str] = Field(default_factory=list)
+    """Typed, checkable success criteria from the plan (ADR-18 P0). The
+    acceptance gate evaluates these against tool evidence + workspace;
+    the model must not report done until every criterion has receipts."""
+    task_type: str = ""
+    """Explicit task type from the plan's execution_plan (ADR-19). The
+    context policy layer (core/context_policy.py) uses it to decide which
+    tool results/history stay verbatim vs. get stubbed. Empty = legacy
+    positional behavior (no-op policy)."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
