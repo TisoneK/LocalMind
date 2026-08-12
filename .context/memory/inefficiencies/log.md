@@ -295,3 +295,11 @@ if literally nothing slowed you down.
 - **Cause:** `searchQueries[].cwd` must be a directory; passing a file path made ripgrep's spawn target resolve through the config shim and fail.
 - **Workaround / fix:** Re-issued with `cwd` omitted and file-targeted searches scoped via `-g 'loop.py'` / `-g '_pipeline.py'` glob flags.
 - **Prevent next time:** Never pass a file path as `cwd` — scope single-file searches with `-g '<filename>'` flags.
+
+---
+## 2026-08-12 — Buffy / deepseek-v4-flash (Session 153)
+- **Problem:** Restarting the dev backend to reload code left the app DOWN for several minutes. Two `nohup ... &` restarts from agent shells died the moment the spawn session ended, and two `launchctl submit` retries failed with server.py's `[startup] Port ... already in use` exit-42 even though nothing was LISTENing.
+- **Cost:** ~6 min of restart churn + probes.
+- **Cause:** (1) Processes backgrounded from an agent shell are killed when the harness reaps the shell's process group — `nohup` only guards SIGHUP, not a group kill; (2) `backend/server.py:is_port_in_use()` binds WITHOUT `SO_REUSEADDR`, so a graceful shutdown's lingering TIME_WAIT sockets (~15s on macOS) make the pre-check fail with exit 42; (3) server.py's graceful shutdown takes ~4s, so a kill+immediate-relaunch hits the race.
+- **Workaround / fix:** Relaunch via `launchctl submit -l com.localmind.backend -- <venv-python> /abs/path/backend/server.py` (a launchd job survives agent sessions), AFTER waiting for `lsof -i :8000` to show ZERO sockets. Electron's normal flow also restores the backend (main.js spawns server.py when its health check fails).
+- **Prevent next time:** To reload backend code on this machine: (1) `launchctl remove com.localmind.backend`, (2) poll until `lsof -i :8000` is empty, (3) `launchctl submit -l com.localmind.backend ...`, (4) poll /api/health. Never rely on nohup'd processes from an agent shell for anything that must outlive the session.

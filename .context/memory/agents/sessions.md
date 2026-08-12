@@ -1779,3 +1779,13 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Outcome:** done (context documentation — ADR-18, backlog B-2026-08-12-1..5, feature-scoped memory `features/verification-first-hardening/`, review report)
 - **Open items:** B-2026-08-12-1..5 — implementation starts Session 153 (P0 acceptance gate, real-model smoke first per flaw log)
 - **Report:** .context/memory/reviews/2026-08-12-review.md
+---
+## 2026-08-12 — Session 153 (bugfix)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** Fix the regression report — "after adding the context-window feature the message is not displaying on the UI and latency is back".
+- **Diagnosis (live-verified):** (1) context-window meter dead-on-arrival — backend /api/models sends `context_window` (snake_case); frontend `getModels()` returned it raw and never mapped to `ModelOption.contextWindow` (the Session 150 commit `0e640d8` built the meter but forgot the mapping). (2) blank bubbles — the free-tier Zen model returns EMPTY streams on every non-agent chat path (trivial/conversational/DIRECT probes all streamed zero text; 6.9-13.6s generations; `tokens_approx: 1`), and those fast paths had NO empty-response fallback (the agent loop has one — Sessions 31/147 — the chat fast paths didn't). Latency = the empty generation wait + 429 backoffs: model overload, not the context-window commit.
+- **Fix:** (1) `client.ts` getModels maps `context_window` → `contextWindow` (wire type + 2 unit tests); (2) `_direct_chat_response` (trivial + conversational fast paths) yields a fallback text chunk when the adapter streamed zero text, surfacing a streamed provider error (429/auth) when present — consistent with the silent-failure contract. 4 backend regression tests.
+- **Validation:** 46 backend + 97 frontend tests pass; ruff/tsc/eslint clean. Live smoke (backend restarted under launchd): "hi" and "what is LocalMind?" both stream visible fallback text; /api/models confirms `context_window: 128000`.
+- **Commits:** 3 (fix(loop) fallback, fix(ui) meter mapping, chore(context) log)
+- **Outcome:** done. Backend left running under launchd label `com.localmind.backend` (survives agent sessions; Electron's normal spawn path also restores it — see inefficiencies log for the restart trap).
+- **Open items:** B-2026-08-12-1..5 unchanged — P0 acceptance gate is next (B-2026-08-12-1).
