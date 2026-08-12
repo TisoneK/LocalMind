@@ -1789,3 +1789,11 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Commits:** 3 (fix(loop) fallback, fix(ui) meter mapping, chore(context) log)
 - **Outcome:** done. Backend left running under launchd label `com.localmind.backend` (survives agent sessions; Electron's normal spawn path also restores it — see inefficiencies log for the restart trap).
 - **Open items:** B-2026-08-12-1..5 unchanged — P0 acceptance gate is next (B-2026-08-12-1).
+---
+## 2026-08-12 — Session 154 (design review)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** Design review + LOCK of the P0 acceptance gate (B-2026-08-12-1, ADR-18) — user picked "design review first" and settled all four open decisions.
+- **Done:** grounded the design in the current code (AgentLoop.run iteration head at loop.py:1552; AgentTrace/AgentStep/WorkReport evidence model; BaseAgent is_done() contract never invoked; dispatcher execution_plan schema at thinking_dispatcher.py:328; create_plan tool at loop.py:847). Key finding: the evidence skeleton already exists (trace.steps, WorkReport.needs_report, AgentStep.phase='verify', trace.verification_results) — P0 fills the hollow parts and WIRES is_done() into the loop for the first time. Locked decisions: strict+honest gate; wire into AgentLoop (no BaseAgent._run_loop extraction in P0); explicit LLM replan call on gate failure; success_criteria from BOTH dispatcher and create_plan. Design persisted at features/verification-first-hardening/design-p0.md (4 pieces + build order 1-6 + no-regression list).
+- **Commits:** 1 (chore(context): P0 design lock)
+- **Outcome:** done (design locked, no product code — per the design-review-first choice).
+- **Open items:** B-2026-08-12-1 implementation starts Session 155 (design-p0.md build order; real-model smoke last — Zen overloaded). B-2026-08-12-4 still pending.

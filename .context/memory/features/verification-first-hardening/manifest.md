@@ -34,7 +34,10 @@ Program phases (each real-model tested per the flaw log before shipping):
 **Started:** 2026-08-12 (Session 152 — ADR-18 + backlog + this manifest; no
 product code)
 **Branch:** main
-**Status:** documented — implementation starts Session 153 (B-2026-08-12-1).
+**Status:** P0 design LOCKED (Session 154 — see `design-p0.md`; four decisions
+settled: strict+honest gate, wire into AgentLoop, explicit replan call,
+criteria from both dispatcher AND create_plan). Implementation next —
+B-2026-08-12-1, build order steps 1-6 in design-p0.md.
 **No-regression list (must hold after every phase):** iteration caps (8/180s)
 + hit-limit fallback wording (Sessions 31/32); check-before-acting `safety.md`
 injection (Session 32); trailing-tool-role + reasoning-only Phase-1 adapter
