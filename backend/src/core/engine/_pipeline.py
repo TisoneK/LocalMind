@@ -99,6 +99,30 @@ from ._reflection_mixin import _ReflectionMixin
 logger = logging.getLogger(__name__)
 
 
+# ADR-18 P0 wiring (Session 173): the engine's DIRECT loop path never
+# passed is_done_fn, so the acceptance gate — the Verify stage that stops
+# the loop when the success criteria have receipts, instead of
+# Act→Act→Act until the model asserts done — was dead code whenever
+# agent selection fell through to the bare AgentLoop (the common path on
+# free-tier models). BaseAgent.run() wires its own per-agent is_done()
+# when a selected agent runs; this is the default gate for the direct
+# path. is_coding_done is a safe no-op (False, "") when there are no
+# criteria, so the legacy loop termination is unchanged for contract-free
+# turns.
+def _default_acceptance_gate(iterations, wall_clock_secs, last_tool_result, trace):
+    # Lazy import: agents.coding.is_done pulls in core.agent.verify; keep
+    # it out of module load time (matches the pipeline's other lazy
+    # `agents` imports, e.g. select_agent_by_task_profile).
+    from agents.coding.is_done import is_coding_done
+
+    return is_coding_done(
+        iterations=iterations,
+        wall_clock_secs=wall_clock_secs,
+        last_tool_result=last_tool_result,
+        trace=trace,
+    )
+
+
 STEERING_QUEUE_MAX = 10
 
 
@@ -1656,6 +1680,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     memory_facts=memory_facts,
                     orchestrator_context=None,
                     skip_planning=True,
+                    is_done_fn=_default_acceptance_gate,  # Session 173: Verify stage on the escalate path
                     steering_queue=self._steering_queue_for(session_id),
                     abort_signal=self._abort_event_for(session_id),
                 )
@@ -3402,6 +3427,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     skip_planning=_skip_planning,
                     plan_steps=_reused_plan_steps or None,  # Session 134: dispatcher plan reuse
                     success_criteria=_reused_criteria or None,  # ADR-18 P0 acceptance contract
+                    is_done_fn=_default_acceptance_gate,  # Session 173: Verify stage — criteria-verified stop
                     task_type=_reused_task_type or None,  # ADR-19 context policy
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)

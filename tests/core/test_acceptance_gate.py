@@ -6,6 +6,11 @@ Covers the four wiring points of the locked P0 design:
   3. is_coding_done() evaluates criteria against trace evidence (real gate).
   4. AgentLoop.run() calls is_done_fn at the iteration head and terminates
      CLEANLY (not via the hit-limit path) when the gate passes.
+
+Session 173: 5. The ENGINE's direct AgentLoop path (agent selection
+   disabled/failed — the common free-tier fallback) now passes
+   is_done_fn=_default_acceptance_gate, so the Verify stage runs there
+   too, not only via BaseAgent.run() on the ADR-8 selection path.
 """
 
 from __future__ import annotations
@@ -16,7 +21,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from core.agent.loop import AgentLoop
 from core.agent.models import AgentStep, AgentTrace
-from core.models import Intent, StreamChunk
+from core.models import (
+    ExecutionMode,
+    Intent,
+    OrchestrationPlan,
+    StreamChunk,
+    TaskProfile,
+)
 from core.obs import ObsCollector
 
 # ── 1. Dispatcher parses success_criteria ───────────────────────────────────
@@ -520,3 +531,185 @@ async def test_loop_without_gate_fn_unchanged():
     text = "".join(c.text for c in chunks)
     assert "All good." in text
     assert any(c.done for c in chunks)
+
+
+# ── 6. Engine wiring (Session 173) ──────────────────────────────────────────
+# The Verify stage was dead code on the engine's DIRECT loop path: both
+# `self._agent_loop.run()` call sites passed success_criteria but never
+# is_done_fn, so the acceptance gate only ran when agent selection (ADR-8
+# Phase 4) succeeded. On free-tier models the dispatcher LLM frequently
+# fails → fallback CHAT plan → select_agent_by_task_profile returns None →
+# the direct loop path runs WITHOUT any verification: Act→Act→Act until
+# the model asserts done or the iteration cap hits.
+
+
+def test_default_acceptance_gate_delegates_to_is_coding_done():
+    """The wired gate is is_coding_done (safe no-op without criteria,
+    criteria-verified stop with evidence)."""
+    from core.engine._pipeline import _default_acceptance_gate
+
+    # No criteria → (False, "") — legacy loop termination unchanged.
+    done, reason = _default_acceptance_gate(1, 1.0, None, AgentTrace())
+    assert done is False
+    assert reason == ""
+
+    # Criteria + evidence → verified stop.
+    trace = _trace_with_steps(
+        [_shell_step("pytest tests -q", "3 passed in 0.5s")],
+        criteria=["pytest passes"],
+    )
+    done, reason = _default_acceptance_gate(3, 10.0, None, trace)
+    assert done is True
+    assert "criteria met" in reason
+    assert trace.gate_passed is True
+
+    # Criteria, no tool evidence yet → keep going (run-scoped guard).
+    trace2 = _trace_with_steps([], criteria=["hello.py exists with content"])
+    with patch("core.agent.verify.os.path.isfile", return_value=True):
+        done2, _ = _default_acceptance_gate(1, 1.0, None, trace2)
+    assert done2 is False
+
+
+class _CriteriaPlanDispatcher:
+    """Dispatcher stub yielding an AGENT_LOOP plan with success_criteria
+    (mirrors the real dispatcher's execution_plan contract)."""
+
+    def __init__(self, adapter):
+        self._adapter = adapter
+
+    async def dispatch(self, **kwargs):
+        yield OrchestrationPlan(
+            profile=TaskProfile(
+                capabilities=["shell"],
+                execution_mode=ExecutionMode.AGENT_LOOP,
+                confidence=0.9,
+                reformulated="create hello world repo",
+                acknowledgement="Setting that up...",
+            ),
+            success_criteria=["hello.py exists with content", "pytest passes"],
+            fast_path=False,
+            dispatch_steps=[{"intent": "shell", "detail": "Create hello.py"}],
+        )
+
+
+class _DirectPlanDispatcher:
+    """Dispatcher stub returning a DIRECT (no-tools) plan immediately.
+    Local copy — keeps the escalation test self-contained instead of
+    importing from test_direct_escalation (cross-test-module coupling)."""
+
+    def __init__(self, adapter):
+        self._adapter = adapter
+
+    async def dispatch(self, **kwargs):
+        yield OrchestrationPlan(
+            profile=TaskProfile(
+                capabilities=[],
+                execution_mode=ExecutionMode.DIRECT,
+                confidence=0.5,
+                reformulated=kwargs.get("message", ""),
+            )
+        )
+
+
+_DSML = (
+    "<｜DSML｜tool_calls>\n"
+    '<｜DSML｜invoke name="shell">\n'
+    '<｜DSML｜parameter name="command" string="true">ls -la</｜DSML｜parameter>\n'
+    "</｜DSML｜invoke>\n"
+    "</｜DSML｜tool_calls>"
+)
+
+
+def _make_dsml_adapter():
+    """Adapter whose chat() emits DSML (then ends) — local copy."""
+    mock_adapter = MagicMock()
+
+    async def chat(messages, intent="chat", **kwargs):
+        yield MagicMock(text=_DSML, done=False, error=None, usage={})
+        yield MagicMock(text="", done=True, error=None, usage={})
+
+    mock_adapter.chat = chat
+    mock_adapter.effective_context_window = 8192
+    return mock_adapter
+
+
+def _engine_loop_recorder():
+    """A fake `_agent_loop.run` that records kwargs and streams a reply."""
+    captured = {}
+
+    async def fake_run(**kwargs):
+        captured.update(kwargs)
+        yield StreamChunk(text="Created hello.py", done=False, usage={})
+        yield StreamChunk(text="", done=True, usage={})
+
+    return captured, fake_run
+
+
+@pytest.mark.asyncio
+async def test_engine_direct_loop_wires_acceptance_gate():
+    """The direct `self._agent_loop.run()` call (agent selection OFF) must
+    pass is_done_fn — before Session 173 the Verify stage was dead there."""
+    from core.engine import Engine
+    from core.engine._pipeline import _default_acceptance_gate
+
+    engine = Engine()
+    obs = ObsCollector()
+    mock_adapter = MagicMock()
+    mock_adapter.effective_context_window = 8192
+
+    captured, fake_run = _engine_loop_recorder()
+
+    with patch("core.engine._pipeline.ThinkingDispatcher", _CriteriaPlanDispatcher), patch(
+        "core.engine.get_adapter", return_value=mock_adapter
+    ), patch("core.engine._pipeline.AGENT_SELECTION_ENABLED", False), patch.object(
+        engine._agent_loop, "run", fake_run
+    ):
+        chunks = [
+            c
+            async for c in engine.process(
+                "create hello world repo", "sess-engine-gate", obs=obs
+            )
+        ]
+
+    # The direct loop got BOTH the contract AND the Verify stage.
+    assert captured.get("success_criteria") == [
+        "hello.py exists with content",
+        "pytest passes",
+    ]
+    assert captured.get("is_done_fn") is _default_acceptance_gate
+
+    # User-visible reply still streams normally.
+    full_text = "".join(getattr(c, "text", "") or "" for c in chunks)
+    assert "Created hello.py" in full_text
+    assert any(getattr(c, "done", False) for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_engine_escalate_path_wires_acceptance_gate():
+    """The DSML-escalate loop call also passes the gate (consistency)."""
+    from core.engine import Engine
+
+    engine = Engine()
+    obs = ObsCollector()
+    mock_adapter = MagicMock()
+    mock_adapter.effective_context_window = 8192
+
+    captured, fake_run = _engine_loop_recorder()
+    # The escalate path is reached when a DIRECT stream emits DSML. Use the
+    # local DSML adapter + real detection (no patching of the detector).
+    dsml_adapter = _make_dsml_adapter()
+
+    with patch("core.engine._pipeline.ThinkingDispatcher", _DirectPlanDispatcher), patch(
+        "core.engine.get_adapter", return_value=dsml_adapter
+    ), patch.object(engine._agent_loop, "run", fake_run):
+        chunks = [
+            c
+            async for c in engine.process(
+                "create hello world repo", "sess-engine-esc-gate", obs=obs
+            )
+        ]
+
+    from core.engine._pipeline import _default_acceptance_gate
+
+    assert captured.get("is_done_fn") is _default_acceptance_gate
+    assert any(getattr(c, "done", False) for c in chunks)
