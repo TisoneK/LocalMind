@@ -48,6 +48,7 @@ import re
 from typing import AsyncIterator, Optional
 
 from core.engine._helpers import _approx_tokens
+from core.error_normalizer import normalize_error
 from core.models import StreamChunk
 
 # ── Trivial input patterns ───────────────────────────────────────────────────
@@ -440,17 +441,34 @@ async def _direct_chat_response(
         # turn always ends with visible text. Normal streams are untouched.
         if not _streamed_any_text:
             if _stream_error:
-                _fallback = (
-                    "I couldn't get a response from the model: "
-                    f"{_stream_error[:200]}. Please try again, or switch to "
-                    "a different model."
+                # ADR-20/21 (Session 171): never embed the raw provider
+                # payload in the fallback TEXT — the user previously saw
+                # "zen returned 429: {…json…}" dumped into the bubble. Use
+                # the canonical friendly message instead, and forward the
+                # raw error on chunk.error so the SSE boundary emits the
+                # canonical error object → the ErrorMessage card renders
+                # (Try again / Switch model). The clean text keeps the
+                # Session 153 visible-text + persistence guarantees.
+                _norm = normalize_error(_stream_error)
+                yield StreamChunk(
+                    text=(
+                        "I couldn't get a response from the model. "
+                        f"{_norm['message']}"
+                    ),
+                    done=False,
                 )
-            else:
-                _fallback = (
-                    "I didn't get a response from the model this time — the "
-                    "free-tier model may be overloaded. Please try again, or "
-                    "switch to a faster model."
+                yield StreamChunk(
+                    text="",
+                    done=True,
+                    error=_stream_error,
+                    usage=_done_usage,
                 )
+                return
+            _fallback = (
+                "I didn't get a response from the model this time — the "
+                "free-tier model may be overloaded. Please try again, or "
+                "switch to a faster model."
+            )
             yield StreamChunk(text=_fallback, done=False)
         yield StreamChunk(text="", done=True, usage=_done_usage)
     except Exception:

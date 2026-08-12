@@ -447,19 +447,58 @@ async def test_trivial_response_empty_stream_falls_back():
 
 
 @pytest.mark.asyncio
-async def test_conversational_response_streamed_error_chunk_surfaces_error():
+async def test_conversational_response_streamed_error_chunk_is_normalized():
     """A streamed provider error (429/auth) must surface in the fallback —
-    not be masked by the generic overload message."""
+    but as the canonical friendly message, never as the raw provider payload.
+    The raw error is forwarded on chunk.error so the SSE boundary emits the
+    error card (ADR-20/21)."""
 
     async def mock_chat(messages, intent="chat", **kwargs):
-        yield MagicMock(text="", done=True, error="429 rate limited")
+        yield MagicMock(text="", done=True, error="zen returned 429: rate limit")
 
     mock_adapter = MagicMock()
     mock_adapter.chat = mock_chat
 
     chunks = [c async for c in conversational_response("What can you do?", mock_adapter)]
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
-    assert "429" in text
+    # Raw provider payload must never reach the message text.
+    assert "429" not in text
+    assert "zen returned" not in text
+    # The canonical friendly message is embedded instead.
+    assert "usage limit" in text.lower()
+    # The raw error is forwarded so the SSE boundary emits the error card.
+    err_chunks = [c for c in chunks if getattr(c, "error", None)]
+    assert err_chunks and err_chunks[0].error == "zen returned 429: rate limit"
+    assert any(getattr(c, "done", False) for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_trivial_response_zen_payload_never_leaks_raw_json():
+    """The exact user-reported case: the full Zen 429 JSON payload must not
+    appear in the fallback text — only the friendly message (Session 171)."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(
+            text="",
+            done=True,
+            error=(
+                'zen returned 429: {"type":"error","error":{"type":'
+                '"FreeUsageLimitError","message":"Error from provider '
+                '(Console): Rate limit exceeded. Please try again later."}}'
+            ),
+        )
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    chunks = [c async for c in trivial_response("hi", mock_adapter)]
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert "{" not in text
+    assert "FreeUsageLimitError" not in text
+    assert "zen" not in text.lower()
+    assert "usage limit" in text.lower()
+    err_chunks = [c for c in chunks if getattr(c, "error", None)]
+    assert err_chunks, "raw error must be forwarded for the canonical card"
     assert any(getattr(c, "done", False) for c in chunks)
 
 
