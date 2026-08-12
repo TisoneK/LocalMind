@@ -1034,10 +1034,17 @@ TOOL_DEFINITIONS = [
 
 
 def _user_message_text(messages: list[dict]) -> str:
-    """Return the latest user-role message text (for the TaskState objective)."""
+    """Return the latest user-role message text (for the TaskState objective).
+
+    Skips injected acceptance-gate blocks so repeated replans keep the
+    ORIGINAL task framing instead of degrading to a previous gate message.
+    """
     for msg in reversed(messages):
         if isinstance(msg, dict) and msg.get("role") == "user":
-            return str(msg.get("content", ""))[:200]
+            content = str(msg.get("content", ""))
+            if "[ACCEPTANCE GATE]" in content:
+                continue
+            return content[:200]
     return ""
 
 
@@ -3595,6 +3602,25 @@ class AgentLoop:
                             observation=None,
                         )
                     )
+                    # ADR-18 P0: the model saying "done" is not enough — gate
+                    # the claim against the success criteria (replan or honest
+                    # report). Only finish when the gate is satisfied or capped.
+                    _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
+                        trace=trace,
+                        iteration=iteration,
+                        effective_max_iter=_effective_max_iter,
+                        loop_messages=loop_messages,
+                        observation_log=observation_log,
+                        active_adapter=active_adapter,
+                        intent=intent,
+                        obs=_obs,
+                    )
+                    if not _gate_final:
+                        continue
+                    if _gate_suffix:
+                        full_text += _gate_suffix
+                        trace.final_response = full_text
+                        yield StreamChunk(text=_gate_suffix, done=False)
                     logger.info(f"[agent.loop] finished iter={iteration + 1} — {trace.summary()}")
                     # Session 142: turn-end — close out the current plan step's
                     # todo (covers the stream-ended-early silent path).
@@ -3666,6 +3692,25 @@ class AgentLoop:
                         observation=None,
                     )
                 )
+                # ADR-18 P0: gate the model's "done" claim (replan or honest
+                # report) BEFORE the turn-end events — the loop is only done
+                # when the gate is satisfied or the caps force an honest close.
+                _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
+                    trace=trace,
+                    iteration=iteration,
+                    effective_max_iter=_effective_max_iter,
+                    loop_messages=loop_messages,
+                    observation_log=observation_log,
+                    active_adapter=active_adapter,
+                    intent=intent,
+                    obs=_obs,
+                )
+                if not _gate_final:
+                    continue
+                if _gate_suffix:
+                    full_text += _gate_suffix
+                    trace.final_response = full_text
+                    yield StreamChunk(text=_gate_suffix, done=False)
                 logger.info(f"[agent.loop] finished iter={iteration + 1} — {trace.summary()}")
                 if _obs:
                     _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
@@ -3740,6 +3785,138 @@ class AgentLoop:
                 text=self._synthesis_failure_fallback(trace, observation_log, timed_out=False),
                 done=True,
             )
+
+    # ------------------------------------------------------------------
+    # ADR-18 P0 — acceptance gate at the final-answer point
+    # ------------------------------------------------------------------
+
+    async def _acceptance_gate_at_final_answer(
+        self,
+        *,
+        trace,
+        iteration: int,
+        effective_max_iter: int,
+        loop_messages: list[dict],
+        observation_log: str,
+        active_adapter,
+        intent: Intent,
+        obs,
+    ) -> tuple[str, bool]:
+        """Gate the model's "done" claim against the success criteria.
+
+        Runs when the model produces a final answer (no more tool calls).
+        "An agent saying done should not mean the task is done":
+          - All criteria met → suffix = the verified summary (✓ n/n).
+          - Some unmet + iterations remain → EXPLICIT replan LLM call
+            (locked decision 3, Session 154); the revised plan is injected
+            as a user block and the loop continues (returns is_final=False).
+          - Some unmet + cap → suffix = the honest unmet report.
+        No criteria → ("", True) — the legacy path is unchanged.
+        """
+        criteria = getattr(trace, "success_criteria", None) or []
+        if not criteria:
+            return "", True
+        # Run-scoped evidence guard (same as is_coding_done): never gate on
+        # pre-existing workspace state before this run executed a tool.
+        if not any(step.tool_name for step in getattr(trace, "steps", [])):
+            return "", True
+
+        from core.agent.verify import evaluate_criteria, format_gate_results, gate_passed
+
+        results = evaluate_criteria(criteria, trace)
+        trace.criteria_results = results
+        trace.gate_passed = gate_passed(results)
+        if trace.gate_passed:
+            trace.gate_summary = format_gate_results(results)
+            return f"\n\n{trace.gate_summary}", True
+
+        unmet = [(c, n) for c, passed, n in results if not passed]
+        if iteration + 1 < effective_max_iter:
+            revised = await self._replan_for_gate(
+                trace=trace,
+                unmet=unmet,
+                loop_messages=loop_messages,
+                observation_log=observation_log,
+                active_adapter=active_adapter,
+            )
+            if obs:
+                obs.emit(
+                    "agent_loop_gate_failed_replan",
+                    intent=intent.value,
+                    iteration=iteration + 1,
+                    unmet=[c for c, _ in unmet][:5],
+                )
+            block = (
+                "\n[ACCEPTANCE GATE] Your success criteria are NOT yet met:\n"
+                + "\n".join(f"- {c} — {n}" for c, n in unmet)
+                + f"\n\nRevised plan from the gate:\n{revised}\n"
+                + "\nDo NOT report done until every criterion is met. Continue working."
+            )
+            loop_messages.append({"role": "user", "content": block})
+            return "", False
+
+        # Cap hit: strict + honest report — the answer must state what's unmet.
+        trace.gate_summary = format_gate_results(results)
+        return f"\n\n{trace.gate_summary}", True
+
+    async def _replan_for_gate(
+        self,
+        *,
+        trace,
+        unmet: list[tuple[str, str]],
+        loop_messages: list[dict],
+        observation_log: str,
+        active_adapter,
+    ) -> str:
+        """Explicit LLM replan call (planning-prompt shape) for gate failure.
+
+        Returns the revised plan text (capped); on any failure returns a
+        directive to re-attempt so the loop always continues with a plan.
+        """
+        user_text = _user_message_text(loop_messages)
+        unmet_text = "\n".join(f"- {c}: {n}" for c, n in unmet)
+        evidence_tail = observation_log[-1200:] if observation_log else "(no tool observations recorded)"
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are the replanning step of an acceptance-gate loop. "
+                    "A previous plan did not meet its success criteria. Produce "
+                    "a REVISED, concrete, step-by-step plan to meet the unmet "
+                    "criteria. Number each step."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Task: {user_text}\n"
+                    f"Success criteria: {'; '.join(trace.success_criteria)}\n"
+                    f"Unmet criteria:\n{unmet_text}\n"
+                    f"Evidence so far (tail):\n{evidence_tail}\n"
+                    "Revised plan:"
+                ),
+            },
+        ]
+        plan_chunks: list[str] = []
+
+        async def _collect_replan():
+            async for chunk in active_adapter.chat(messages, temperature=0.1, intent="chat"):
+                if chunk.error:
+                    break
+                text = _filter_system_leaks(chunk.text)
+                if text:
+                    plan_chunks.append(text)
+
+        try:
+            await asyncio.wait_for(_collect_replan(), timeout=PLAN_TIMEOUT_SECS)
+        except asyncio.TimeoutError:
+            logger.warning("[agent.loop] gate replan stream timed out (%ss)", PLAN_TIMEOUT_SECS)
+        except Exception as exc:
+            logger.warning("[agent.loop] gate replan call failed: %s", exc)
+        plan_text = "".join(plan_chunks).strip()
+        if not plan_text:
+            plan_text = "Re-attempt the failed steps, then verify each criterion against the evidence."
+        return plan_text[:1500]
 
     # ------------------------------------------------------------------
     # Web-search result handler

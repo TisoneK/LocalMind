@@ -308,6 +308,183 @@ async def test_loop_seeds_trace_criteria_from_param():
     assert captured["criteria"] == ["pytest passes", "tsc clean"]
 
 
+# ── 5. Final-answer gate + explicit replan (Session 157) ─────────────────────
+
+
+def _trace_with_tool_runs(tool_runs, criteria=None):
+    """Build a trace whose steps match the passed tool_runs list.
+
+    tool_runs: list of (tool_name, tool_input, observation)
+    """
+    trace = AgentTrace(success_criteria=criteria or [])
+    for i, (name, inp, obs) in enumerate(tool_runs):
+        trace.steps.append(
+            AgentStep(
+                iteration=i + 1,
+                thought=f"step {i}",
+                tool_name=name,
+                tool_input=inp,
+                observation=obs,
+            )
+        )
+    return trace
+
+
+class _ReplanAdapter:
+    """Adapter capturing the replan LLM call and returning a revised plan."""
+
+    def __init__(self, plan_text="1. re-run tests\n2. verify output"):
+        self.plan_text = plan_text
+        self.replan_calls = []
+
+    async def chat(self, messages, temperature=0.1, intent=None):
+        self.replan_calls.append(messages)
+        yield StreamChunk(text=self.plan_text, done=False)
+        yield StreamChunk(text="", done=True)
+
+    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None):
+        raise AssertionError("gate replan must use chat(), not chat_with_tools()")
+        yield  # pragma: no cover
+
+
+async def _run_gate(loop, trace, *, iteration=0, max_iter=8, messages=None):
+    """Invoke the final-answer gate directly with minimal wiring."""
+    loop_messages = messages or [{"role": "user", "content": "create hello repo"}]
+    return await loop._acceptance_gate_at_final_answer(
+        trace=trace,
+        iteration=iteration,
+        effective_max_iter=max_iter,
+        loop_messages=loop_messages,
+        observation_log="$ pytest\n1 passed",
+        active_adapter=_ReplanAdapter(),
+        intent=Intent.SHELL,
+        obs=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_gate_all_criteria_met_appends_summary():
+    loop = AgentLoop(adapter=MagicMock())
+    trace = _trace_with_tool_runs(
+        [("shell", "pytest", "$ pytest\n1 passed")],
+        criteria=["pytest passes"],
+    )
+    suffix, is_final = await _run_gate(loop, trace)
+    assert is_final is True
+    assert "✓" in suffix and "1/1" in suffix
+    assert trace.gate_passed is True
+    assert trace.gate_summary == suffix.strip()
+
+
+@pytest.mark.asyncio
+async def test_gate_unmet_with_iterations_replans_and_continues():
+    loop = AgentLoop(adapter=MagicMock())
+    trace = _trace_with_tool_runs(
+        [("shell", "pytest", "$ pytest\n1 passed")],
+        criteria=["pytest passes", "tsc clean"],
+    )
+    adapter = _ReplanAdapter()
+    loop_messages = [{"role": "user", "content": "build the app"}]
+    suffix, is_final = await loop._acceptance_gate_at_final_answer(
+        trace=trace,
+        iteration=0,
+        effective_max_iter=8,
+        loop_messages=loop_messages,
+        observation_log="$ pytest\n1 passed",
+        active_adapter=adapter,
+        intent=Intent.SHELL,
+        obs=None,
+    )
+    assert is_final is False
+    assert suffix == ""
+    # The replan call happened (explicit LLM replan, locked decision 3).
+    assert len(adapter.replan_calls) == 1
+    replan_user = adapter.replan_calls[0][-1]["content"]
+    assert "tsc clean" in replan_user
+    # The revised plan is injected as a user block and the loop continues.
+    injected = loop_messages[-1]
+    assert injected["role"] == "user"
+    assert "ACCEPTANCE GATE" in injected["content"]
+    assert "Do NOT report done" in injected["content"]
+
+
+@pytest.mark.asyncio
+async def test_gate_unmet_at_cap_is_honest_final():
+    """Strict + honest: at the iteration cap the answer MUST state what's
+    unmet instead of letting the model's "done" claim stand."""
+    loop = AgentLoop(adapter=MagicMock())
+    trace = _trace_with_tool_runs(
+        [("shell", "pytest", "$ pytest\n1 passed")],
+        criteria=["pytest passes", "tsc clean"],
+    )
+    adapter = _ReplanAdapter()
+    suffix, is_final = await loop._acceptance_gate_at_final_answer(
+        trace=trace,
+        iteration=7,  # last allowed iteration
+        effective_max_iter=8,
+        loop_messages=[],
+        observation_log="$ pytest\n1 passed",
+        active_adapter=adapter,
+        intent=Intent.SHELL,
+        obs=None,
+    )
+    assert is_final is True
+    # Honest report: the unmet criterion is stated, no replan fired at cap.
+    assert "tsc clean" in suffix
+    assert adapter.replan_calls == []
+
+
+@pytest.mark.asyncio
+async def test_gate_no_criteria_legacy_path():
+    loop = AgentLoop(adapter=MagicMock())
+    trace = _trace_with_tool_runs([("shell", "pytest", "$ pytest\n1 passed")])
+    suffix, is_final = await _run_gate(loop, trace)
+    assert is_final is True
+    assert suffix == ""
+
+
+@pytest.mark.asyncio
+async def test_gate_skipped_before_any_tool_run():
+    """Run-scoped evidence guard mirrors is_coding_done: a final answer
+    with NO tool evidence cannot be gated (and cannot false-pass)."""
+    loop = AgentLoop(adapter=MagicMock())
+    trace = _trace_with_tool_runs([], criteria=["hello.py exists with content"])
+    suffix, is_final = await _run_gate(loop, trace)
+    assert is_final is True
+    assert suffix == ""
+    assert trace.gate_passed is None
+
+
+@pytest.mark.asyncio
+async def test_replan_failure_falls_back_to_directive():
+    """The replan call must NEVER break the loop: on failure the injected
+    block carries a re-attempt directive and the gate continues (False)."""
+    loop = AgentLoop(adapter=MagicMock())
+    trace = _trace_with_tool_runs(
+        [("shell", "pytest", "$ pytest\n1 passed")],
+        criteria=["pytest passes", "tsc clean"],
+    )
+
+    class _BrokenAdapter:
+        async def chat(self, messages, temperature=0.1, intent=None):
+            raise RuntimeError("provider down")
+            yield  # pragma: no cover
+
+    loop_messages = [{"role": "user", "content": "x"}]
+    _suffix, is_final = await loop._acceptance_gate_at_final_answer(
+        trace=trace,
+        iteration=0,
+        effective_max_iter=8,
+        loop_messages=loop_messages,
+        observation_log="$ pytest\n1 passed",
+        active_adapter=_BrokenAdapter(),
+        intent=Intent.SHELL,
+        obs=None,
+    )
+    assert is_final is False
+    assert "Re-attempt the failed steps" in loop_messages[-1]["content"]
+
+
 @pytest.mark.asyncio
 async def test_loop_without_gate_fn_unchanged():
     """No is_done_fn → the legacy path (model streams the answer)."""
