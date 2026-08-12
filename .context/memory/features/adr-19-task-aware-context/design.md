@@ -1,12 +1,6 @@
 # ADR-19 Design — Task-Aware Context Management (P0 slice)
 
-**Status:** PROPOSED — design review pending (Session 159, user picked "Design
-ADR-19 now"). No code this session.
-**Builds on:** ADR-5 (closed loop), ADR-8 (agent-centric routing), ADR-16
-(two workflows), ADR-17 (prompt-budget program — this is its *qualitative*
-complement: ADR-17 cuts static floor + call count; ADR-19 allocates the
-remaining budget by task value), ADR-18 (TaskState — this is its context
-half). Supersedes nothing.
+**Status:** **LOCKED** (Session 159 — user settled all four decisions): 1. **Full P0 design** (build order steps 1-6: policy + compactor + summarizer + wiring + enablement + live smoke); 2. **Dispatcher emits explicit `task_type`** in the plan (alongside success_criteria — ADR-18 pattern); 3. **Per-task KEEP tables** (each task type overrides its own keep/drop markers); 4. **CAN DISCARD implemented but OFF by default** in P0 (stub-only behavior ships).
 **Ledger:** `.context/memory/features/ledger.md` — verification-first-hardening
 P0 is done; this is the next active feature.
 
@@ -195,13 +189,18 @@ filters drop-listed messages with the notice. The context-window meter
 - **LLM-guided value scoring** of every message — too slow for free-tier;
   the deterministic marker approach is the P0 trade (cheap, predictable).
 
-## 7. Open decisions for the user (Session 159)
+## 7. Locked decisions (Session 159 — user answered all four)
 
-1. **P0 scope:** selective compactor only (deterministic, zero LLM cost) —
-   or compactor + task-aware summarizer together (adds one LLM call per
-   compression event, but only past 75% budget)?
-2. **Task-type source:** `TaskState.phase` + `Intent` only (no new calls) —
-   or allow the dispatcher to emit an explicit `task_type` field?
-3. **KEEP priority:** fixed global marker table (simplest) vs per-task
-   overridable tables (more tuning surface)?
-4. **Discard:** ship in P0 (off by default) or defer entirely?
+1. **P0 scope: FULL P0 design** — implement build order steps 1-6,
+   including per-task policy enablement and the live smoke.
+2. **Task-type source: dispatcher emits explicit `task_type`** — added to
+   the `execution_plan` JSON alongside `success_criteria` (same ADR-18
+   parse path), stored on `OrchestrationPlan.task_type`, threaded into the
+   loop. Fallback when absent: `TaskState.phase` + `Intent` → default
+   (legacy no-op) policy.
+3. **KEEP priority: PER-TASK TABLES** — `policy_for(task_type)` returns a
+   policy whose keep/drop markers are task-specific; a global default
+   table seeds each, per-task overrides win.
+4. **Discard: OFF by default in P0** — the capability is implemented and
+   tested, but no task type enables it until a real-model smoke shows it
+   safe. P0 ships stub-only behavior.

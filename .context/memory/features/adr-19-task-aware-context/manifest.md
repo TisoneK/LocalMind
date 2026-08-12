@@ -19,10 +19,10 @@ context builders). Supersedes nothing.
 
 **Started:** 2026-08-12 (Session 159 — design doc written, no code)
 **Branch:** main
-**Status:** design PROPOSED — pending the user's four decisions (see
-`design.md` §7: P0 scope compactor-only vs +summarizer; task-type source;
-KEEP-priority fixed vs per-task; discard in P0 or defer). After decisions →
-design LOCK → implement in the build order.
+**Status:** design **LOCKED** (Session 159 — user settled all four decisions:
+full P0 scope steps 1-6; dispatcher emits explicit `task_type`; per-task
+KEEP tables; CAN DISCARD off by default). Implementation next — build order
+steps 1-6 in design.md.
 **No-regression list (must hold after every phase):** ADR-17 static floor
 (`test_prompt_size_budget.py`, `test_intent_tool_scoping.py`); ADR-18
 TaskState + gate + replan (Sessions 155-157); Session 31/32 iteration caps +
