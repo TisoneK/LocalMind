@@ -178,15 +178,24 @@ class AgentTrace:
     """Text of the planning phase output (empty if planning was skipped)."""
     verification_results: list[str] = field(default_factory=list)
     """Results from post-execution verification checks."""
+    success_criteria: list[str] = field(default_factory=list)
+    """Typed success criteria from the dispatcher / create_plan (ADR-18 P0)."""
+    criteria_results: list[tuple[str, bool, str]] = field(default_factory=list)
+    """Acceptance-gate evaluation: [(criterion, passed, note)] (ADR-18 P0)."""
+    gate_passed: Optional[bool] = None
+    """Whether the acceptance gate passed at turn end (None = no criteria)."""
+    gate_summary: str = ""
+    """One-line gate outcome for the user-facing final answer."""
 
     def summary(self) -> str:
         """Human-readable one-liner for logs."""
         plan_status = "planned" if self.plan_text else "no-plan"
         verify_count = len(self.verification_results)
+        gate = "gate?" if self.gate_passed is None else ("gate=pass" if self.gate_passed else "gate=fail")
         return (
             f"iters={self.iterations_used} steps={len(self.steps)} "
             f"hit_limit={self.hit_limit} clarified={self.clarification_issued} "
-            f"plan={plan_status} verify={verify_count}"
+            f"plan={plan_status} verify={verify_count} criteria={len(self.success_criteria)} {gate}"
         )
 
     def work_report(self) -> WorkReport:
