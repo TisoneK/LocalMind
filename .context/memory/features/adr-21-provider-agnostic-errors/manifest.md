@@ -1,0 +1,49 @@
+# Feature: adr-21-provider-agnostic-errors
+
+Goal: implement **ADR-21** — make the ADR-20 error normalizer genuinely
+provider-agnostic: **any model's error JSON envelope** (OpenAI, Anthropic,
+Ollama, Zen, Azure, gateways, and future providers) normalizes into the
+same canonical error card, whatever the envelope shape.
+
+Trigger (user thread, 2026-08-12, Session 169): *"This isn't just about
+zen, any model's response in json should be handled."* ADR-20's normalizer
+was verified live on the Zen 429 payload, but it leaned on prose keywords
+and the `{provider} returned {status}: {body}` string shape. Gaps for other
+providers:
+
+1. **Structured error-type/code tokens** (`error.type` / `error.code` in
+   the JSON envelope — OpenAI `insufficient_quota`, Anthropic
+   `rate_limit_error` / `overloaded_error` / `not_found_error` /
+   `request_too_large`, Zen `FreeUsageLimitError`, Azure string codes)
+   weren't consulted as first-class signals — only as keyword text.
+2. **Envelope digging** missed `error.code`, the `errors[]` plural list,
+   double-nested `error.error` (proxies/gateways), and top-level `code`
+   (Azure `{"code": "429"}`).
+3. **Adapters truncated bodies at 200 chars** (`[:200]` in
+   `openai_compat.py`) so a long JSON envelope was cut mid-JSON and
+   couldn't parse at all.
+4. A provider-shaped error that failed classification was labeled
+   `source=internal` — the UI said "internal error" for something the
+   provider actually returned.
+
+**Started:** 2026-08-12 (Session 169)
+**Branch:** main
+**Status:** P0 IMPLEMENTED (Sessions 169-170): `_ERROR_TYPE_RULES` catalog
+(~45 tokens), `_walk_error`/`_dig_type` envelope walking (error dict,
+`errors[]`, double-nested, error-as-string, top-level code, numeric-code-as-
+status), type-token-first classification order (token → status → keywords →
+generic), provider-shaped generic errors keep `source=model_provider`,
+adapter body truncation `[:200]` → `[:1000]`. Full backend suite green,
+ruff clean, deepseek-flash review passed, everything pushed.
+**Builds on:** ADR-20 (error_normalizer.py + SSE boundary + frontend
+ErrorMessage card). Reuses the same canonical codes — **no frontend change
+needed** (new handling produces the existing codes the card already renders).
+**No-regression list:** canonical shape unchanged; string inputs, dict
+inputs, exception inputs, canonical passthrough, `source_hint=internal`
+override all preserved (ADR-20 tests untouched and green); `chunk.error`
+remains a string for every non-SSE consumer; adapter error strings still
+truncated (now 1000 chars — only error bodies, never success streams).
+**Flaw-log rule:** normalizer stays pure + deterministic — the provider
+matrix is fully unit-tested without a live model; the live smoke
+(`scripts/smoke_gate.py`) is the only provider-dependent step and stays
+pending while Zen is rate-limited.

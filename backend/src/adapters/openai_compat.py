@@ -967,7 +967,7 @@ class OpenAICompatAdapter(BaseAdapter):
                 body = await response.aread()
                 await response.aclose()
                 error_msg = (
-                    f"{self._provider_name} returned {response.status_code}: {body.decode(errors='replace')[:200]}"
+                    f"{self._provider_name} returned {response.status_code}: {body.decode(errors='replace')[:1000]}"
                 )
                 logger.error(error_msg)
 
@@ -1539,7 +1539,7 @@ class OpenAICompatAdapter(BaseAdapter):
                 if response.status_code != 200:
                     body = await response.aread()
                     error_msg = (
-                        f"{self._provider_name} returned {response.status_code}: {body.decode(errors='replace')[:200]}"
+                        f"{self._provider_name} returned {response.status_code}: {body.decode(errors='replace')[:1000]}"
                     )
                     logger.error(error_msg)
                     yield StreamChunk(text="", done=True, error=error_msg)
@@ -1647,7 +1647,7 @@ class OpenAICompatAdapter(BaseAdapter):
             try:
                 if response.status_code != 200:
                     body = await response.aread()
-                    error_msg = f"Anthropic returned {response.status_code}: {body.decode(errors='replace')[:200]}"
+                    error_msg = f"Anthropic returned {response.status_code}: {body.decode(errors='replace')[:1000]}"
                     logger.error(error_msg)
                     yield StreamChunk(text="", done=True, error=error_msg)
                     return

@@ -191,3 +191,172 @@ class TestMessages:
             assert code in _MESSAGES, f"missing friendly message for {code}"
             err = normalize_error(raw)
             assert err["message"] == _MESSAGES[code]
+
+
+class TestProviderEnvelopes:
+    """ADR-21 — ANY provider's error JSON envelope normalizes the same way.
+
+    The classifier is provider-agnostic: the provider's structured
+    error-type/code token (from the JSON envelope) is consulted before the
+    HTTP status and prose keywords, so OpenAI / Anthropic / Zen / Ollama /
+    Azure / gateway shapes all land on the canonical codes.
+    """
+
+    def test_openai_insufficient_quota(self):
+        err = normalize_error(
+            'openai returned 429: {"error":{"type":"insufficient_quota",'
+            '"message":"You exceeded your current quota, please check your '
+            'plan and billing details."}}'
+        )
+        assert err["code"] == RATE_LIMIT
+        assert err["retryable"] is True
+        assert err["provider"] == "openai"
+
+    def test_openai_invalid_api_key_type(self):
+        err = normalize_error(
+            'openai returned 401: {"error":{"type":"invalid_api_key",'
+            '"message":"Incorrect API key provided: sk-***"}}'
+        )
+        assert err["code"] == AUTH_ERROR
+        assert err["retryable"] is False
+
+    def test_openai_context_length_exceeded_type(self):
+        err = normalize_error(
+            'openai returned 400: {"error":{"type":"context_length_exceeded",'
+            '"message":"This model\'s maximum context length is 128000 tokens. '
+            'However, you requested 130000 tokens."}}'
+        )
+        assert err["code"] == CONTEXT_OVERFLOW
+
+    def test_anthropic_rate_limit_error(self):
+        err = normalize_error(
+            'anthropic returned 429: {"type":"error","error":{'
+            '"type":"rate_limit_error","message":"Your organization has '
+            'reached its rate limit."}}'
+        )
+        assert err["code"] == RATE_LIMIT
+        assert err["retryable"] is True
+        assert err["provider"] == "anthropic"
+
+    def test_anthropic_overloaded_error(self):
+        err = normalize_error(
+            'anthropic returned 529: {"type":"error","error":{'
+            '"type":"overloaded_error","message":"Overloaded"}}'
+        )
+        assert err["code"] == SERVER_ERROR
+        assert err["retryable"] is True
+
+    def test_anthropic_not_found_error(self):
+        err = normalize_error(
+            'anthropic returned 404: {"type":"error","error":{'
+            '"type":"not_found_error","message":"model: '
+            'claude-3-5-sonnet-20241022"}}'
+        )
+        assert err["code"] == MODEL_NOT_FOUND
+
+    def test_anthropic_request_too_large(self):
+        err = normalize_error(
+            'anthropic returned 400: {"type":"error","error":{'
+            '"type":"request_too_large","message":"Your request is too '
+            'large for the model."}}'
+        )
+        assert err["code"] == CONTEXT_OVERFLOW
+
+    def test_ollama_error_string_envelope(self):
+        err = normalize_error(
+            'ollama returned 404: {"error":"model \'llama3\' not found"}'
+        )
+        assert err["code"] == MODEL_NOT_FOUND
+        assert err["provider"] == "ollama"
+
+    def test_ollama_connection_refused_envelope(self):
+        # Connection failures normally surface as adapter exceptions (no HTTP
+        # status), so a body with an unmapped status must fall through to
+        # the network keywords.
+        err = normalize_error('ollama returned 400: {"error":"connection refused"}')
+        assert err["code"] == NETWORK_ERROR
+
+    def test_azure_numeric_code_envelope(self):
+        err = normalize_error(
+            'azure returned 429: {"error":{"code":"429","message":"Rate '
+            'limit is exceeded. Try again in N seconds."}}'
+        )
+        assert err["code"] == RATE_LIMIT
+        assert err["retryable"] is True
+        assert err["provider"] == "azure"
+
+    def test_azure_dict_numeric_code(self):
+        err = normalize_error(
+            {
+                "provider": "azure",
+                "error": {"code": "429", "message": "Rate limit is exceeded."},
+            }
+        )
+        assert err["code"] == RATE_LIMIT
+        assert err["retryable"] is True
+
+    def test_double_nested_error_envelope(self):
+        err = normalize_error(
+            'gateway returned 429: {"error":{"error":{"type":'
+            '"rate_limit_error","message":"nested"}}}'
+        )
+        assert err["code"] == RATE_LIMIT
+
+    def test_errors_plural_list_envelope(self):
+        err = normalize_error(
+            'proxy returned 401: {"errors":[{"type":"authentication_error",'
+            '"message":"bad key"}]}'
+        )
+        assert err["code"] == AUTH_ERROR
+
+    def test_unknown_type_token_falls_back_to_status(self):
+        err = normalize_error(
+            'openai returned 429: {"error":{"type":"brand_new_type",'
+            '"message":"something"}}'
+        )
+        assert err["code"] == RATE_LIMIT
+
+    def test_unknown_type_token_falls_back_to_keywords(self):
+        err = normalize_error(
+            'openai returned 400: {"error":{"type":"brand_new_type",'
+            '"message":"This model\'s maximum context length is 128K '
+            'tokens"}}'
+        )
+        assert err["code"] == CONTEXT_OVERFLOW
+
+    def test_unknown_type_generic_stays_provider_shaped(self):
+        # ADR-21: an error from a provider envelope keeps source=model_provider
+        # even when nothing classifies — the UI says "the model provider".
+        err = normalize_error(
+            'openai returned 400: {"error":{"type":"weird_error",'
+            '"message":"something odd happened"}}'
+        )
+        assert err["code"] == GENERIC_ERROR
+        assert err["source"] == SOURCE_PROVIDER
+        assert err["provider"] == "openai"
+        assert "weird_error" in err["message"]
+
+    def test_plain_dict_without_provider_stays_internal(self):
+        err = normalize_error({"message": "iteration limit reached"})
+        assert err["code"] == GENERIC_ERROR
+        assert err["source"] == SOURCE_INTERNAL
+
+    def test_type_token_beats_conflicting_status(self):
+        # The provider's named error type is explicit semantics — it wins
+        # even over a contradictory HTTP status.
+        err = normalize_error(
+            'anthropic returned 500: {"type":"error","error":{'
+            '"type":"authentication_error","message":"bad key"}}'
+        )
+        assert err["code"] == AUTH_ERROR
+
+    def test_long_json_body_survives_adapter_truncation(self):
+        # Adapters now truncate at 1000 chars (was 200) so a long JSON
+        # envelope still parses instead of being cut mid-JSON.
+        body = (
+            '{"error":{"type":"context_length_exceeded","message":"'
+            + "x" * 300
+            + '"}}'
+        )
+        err = normalize_error(f"openai returned 400: {body}")
+        assert err["code"] == CONTEXT_OVERFLOW

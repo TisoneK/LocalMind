@@ -1,4 +1,4 @@
-"""Canonical provider-error normalization (ADR-20).
+"""Canonical provider-error normalization (ADR-20 + ADR-21).
 
 The user's principle (Session 165): *never expose provider-specific error
 payloads directly in the conversation UI.* Whether the provider is Zen,
@@ -26,6 +26,27 @@ into the canonical shape the frontend renders:
       "retryable": true,              # drives the UI's primary action
       "raw": "<original provider response>"   # debug surface only
     }
+
+ADR-21 (Session 169) makes the classifier genuinely provider-agnostic —
+ANY model's error JSON envelope normalizes, not just Zen's:
+
+1. **Structured error-type catalog first.** Providers name their errors in
+   the JSON envelope (`error.type` / `error.code`): OpenAI
+   `insufficient_quota`, Anthropic `rate_limit_error` / `overloaded_error`,
+   Zen `FreeUsageLimitError`, Azure string codes ("429"), … The token is
+   the strongest signal — it is consulted BEFORE the HTTP status and the
+   prose keywords, because it is explicit semantics that survives across
+   providers even when the message text differs. Unknown tokens fall
+   through to status → keywords → generic (a new provider degrades
+   gracefully instead of mislabeling).
+2. **Envelope walking.** Common JSON shapes are dug the same way: top-level
+   `error` dict, double-nested `error.error` (proxies/gateways), the
+   `errors` plural list, `error` as a plain string (Ollama), top-level
+   `code` (Azure). A purely numeric token is treated as the HTTP status.
+3. **Provider-shaped errors stay provider.** An error that clearly came
+   from a provider envelope (name parsed or status present) keeps
+   `source="model_provider"` even when the code is generic — the UI says
+   "the model provider", not an anonymous internal error.
 """
 
 from __future__ import annotations
@@ -105,6 +126,72 @@ _STATUS_CODES: dict[int, tuple[str, bool]] = {
     504: (TIMEOUT, True),
 }
 
+# Provider error-type/code tokens → canonical code (ADR-21). The provider's
+# OWN named error type (from `error.type` / `error.code` in the JSON
+# envelope) is the strongest classification signal — stronger than the HTTP
+# status or prose keywords, because it is explicit semantics that survives
+# across providers. Tokens are matched lowercased. Covers the shapes we've
+# seen: OpenAI (insufficient_quota / tokens_exceeded / requests /
+# context_length_exceeded / invalid_api_key), Anthropic (rate_limit_error /
+# overloaded_error / not_found_error / request_too_large / api_error), Zen
+# (FreeUsageLimitError), and the common Azure/gateway codes. Unknown tokens
+# fall through to status → keywords → generic.
+_ERROR_TYPE_RULES: dict[str, tuple[str, bool]] = {
+    # rate limits & usage quotas
+    "rate_limit_exceeded": (RATE_LIMIT, True),
+    "rate_limit_error": (RATE_LIMIT, True),
+    "rate_limit_reached": (RATE_LIMIT, True),
+    "insufficient_quota": (RATE_LIMIT, True),  # OpenAI 429-class quota
+    "quota_exceeded": (RATE_LIMIT, True),
+    "requests": (RATE_LIMIT, True),  # OpenAI 429 per-minute request type
+    "tokens_exceeded": (RATE_LIMIT, True),  # OpenAI 429 per-minute token type
+    "freeusagelimiterror": (RATE_LIMIT, True),  # Zen
+    "toomanyrequests": (RATE_LIMIT, True),
+    # auth / permissions
+    "authentication_error": (AUTH_ERROR, False),
+    "invalid_api_key": (AUTH_ERROR, False),
+    "invalid_key": (AUTH_ERROR, False),
+    "permission_error": (AUTH_ERROR, False),
+    "access_denied": (AUTH_ERROR, False),
+    "forbidden": (AUTH_ERROR, False),
+    # billing
+    "billing_error": (PAYMENT_REQUIRED, False),
+    "billing_not_active": (PAYMENT_REQUIRED, False),
+    "insufficient_balance": (PAYMENT_REQUIRED, False),
+    "payment_required": (PAYMENT_REQUIRED, False),
+    # model availability
+    "model_not_found": (MODEL_NOT_FOUND, False),
+    "no_such_model": (MODEL_NOT_FOUND, False),
+    "not_found_error": (MODEL_NOT_FOUND, False),
+    # context window
+    "context_length_exceeded": (CONTEXT_OVERFLOW, False),
+    "request_too_large": (CONTEXT_OVERFLOW, False),
+    "max_context_length": (CONTEXT_OVERFLOW, False),
+    "maximum_context_length_exceeded": (CONTEXT_OVERFLOW, False),
+    # timeouts
+    "timeout": (TIMEOUT, True),
+    "timeout_error": (TIMEOUT, True),
+    "request_timeout": (TIMEOUT, True),
+    "gateway_timeout": (TIMEOUT, True),
+    # server / overload
+    "server_error": (SERVER_ERROR, True),
+    "api_error": (SERVER_ERROR, True),
+    "overloaded_error": (SERVER_ERROR, True),
+    "engine_overloaded": (SERVER_ERROR, True),
+    "temporary_overload": (SERVER_ERROR, True),
+    "internal_error": (SERVER_ERROR, True),
+    "service_unavailable": (SERVER_ERROR, True),
+    "origin_unavailable": (SERVER_ERROR, True),
+    "upstream_error": (SERVER_ERROR, True),
+    "invalid_response": (SERVER_ERROR, True),
+    # network
+    "connection_error": (NETWORK_ERROR, True),
+    "connection_closed": (NETWORK_ERROR, True),
+    "network_error": (NETWORK_ERROR, True),
+    "unreachable": (NETWORK_ERROR, True),
+    "dns_error": (NETWORK_ERROR, True),
+}
+
 # Content-keyword → code (checked case-insensitively). Ordered by priority:
 # a message that contains multiple signals (e.g. "429 rate limit") must land
 # on the most specific code.
@@ -146,19 +233,57 @@ def _try_json(text: str) -> Any:
         return None
 
 
-def _dig_message(parsed: Any, fallback: str) -> str:
-    """Pull a human message out of a parsed provider body."""
+def _walk_error(parsed: Any) -> Any:
+    """Return the innermost error payload of a parsed provider body.
+
+    Handles the common envelopes (ADR-21): the top-level ``error`` dict, the
+    ``errors`` plural list (first element), double-nested ``error.error``
+    (proxies/gateways), and ``error`` as a plain string (Ollama). Non-dict
+    input is returned unchanged.
+    """
+    err = parsed
     if isinstance(parsed, dict):
         err = parsed.get("error")
-        if isinstance(err, dict):
-            type_part = str(err.get("type", "")).strip()
-            msg = str(err.get("message", "")).strip()
-            combined = f"{type_part} {msg}".strip()
-            if combined:
-                return combined
-        msg = parsed.get("message") or parsed.get("detail") or parsed.get("error")
-        if isinstance(msg, str) and msg.strip():
-            return msg.strip()
+        if err is None:
+            err = parsed.get("errors")
+        if isinstance(err, list) and err:
+            err = err[0]
+    for _ in range(3):
+        if not isinstance(err, dict):
+            break
+        nested = err.get("error")
+        if not isinstance(nested, dict):
+            break
+        err = nested
+    return err
+
+
+def _dig_type(parsed: Any) -> str:
+    """Pull a normalized (lowercased) error-type/code token from a body."""
+    err = _walk_error(parsed)
+    if isinstance(err, dict):
+        tok = err.get("type") or err.get("code") or ""
+    else:
+        tok = ""
+    if not tok and isinstance(parsed, dict):
+        tok = parsed.get("code") or ""  # Azure: {"code": "429", ...}
+    return str(tok).strip().lower()
+
+
+def _dig_message(parsed: Any, fallback: str) -> str:
+    """Pull a human message out of a parsed provider body."""
+    if not isinstance(parsed, dict):
+        return fallback
+    err = _walk_error(parsed)
+    if isinstance(err, dict):
+        type_part = str(err.get("type") or err.get("code") or "").strip()
+        msg = str(err.get("message") or "").strip()
+        combined = f"{type_part} {msg}".strip()
+        if combined:
+            return combined
+    msg = parsed.get("message") or parsed.get("detail") or parsed.get("error")
+    if isinstance(msg, str) and msg.strip():
+        return msg.strip()
     return fallback
 
 
@@ -177,12 +302,21 @@ def _clean_text(text: str, limit: int = 220) -> str:
     return t
 
 
-def _classify(status: int | None, text: str) -> tuple[str, bool]:
+def _classify(
+    status: int | None,
+    text: str,
+    type_token: str = "",
+) -> tuple[str, bool]:
     """Classify a raw provider error into (code, retryable).
 
-    Status codes win when defined for that status; otherwise content
-    keywords (case-insensitive) decide; otherwise generic.
+    Priority (ADR-21, provider-agnostic): the provider's own structured
+    error-type/code token first (explicit semantics), then the HTTP status,
+    then content keywords; generic as the last resort.
     """
+    if type_token:
+        rule = _ERROR_TYPE_RULES.get(type_token)
+        if rule:
+            return rule
     if status is not None and status in _STATUS_CODES:
         return _STATUS_CODES[status]
     lowered = (text or "").lower()
@@ -192,35 +326,49 @@ def _classify(status: int | None, text: str) -> tuple[str, bool]:
     return GENERIC_ERROR, False
 
 
-def _extract(raw: Any) -> tuple[str | None, int | None, str, Any]:
-    """Pull (provider, status, body_text, raw_for_debug) out of any input."""
+def _extract(raw: Any) -> tuple[str | None, int | None, str, str, Any]:
+    """Pull (provider, status, body_text, type_token, raw_for_debug) from any
+    input."""
     if isinstance(raw, dict):
         provider = raw.get("provider")
-        status = _as_int(raw.get("status_code") or raw.get("status") or raw.get("http_status"))
+        status = _as_int(
+            raw.get("status_code") or raw.get("status") or raw.get("http_status")
+        )
         text = str(raw.get("message") or raw.get("detail") or "")
-        err = raw.get("error")
-        if isinstance(err, dict):
-            text = f"{err.get('type', '')} {err.get('message', '')}".strip() or text
+        type_token = _dig_type(raw)
+        if not text:
+            text = _dig_message(raw, text)
+        # Azure-style numeric codes ("429") act as the HTTP status.
+        num = _as_int(type_token)
+        if status is None and num is not None and 100 <= num <= 599:
+            status = num
+            type_token = ""
         # Re-normalizing an already-canonical dict must keep the ORIGINAL raw
         # (the debug surface), not wrap itself.
         raw_src = raw.get("raw", raw)
-        return provider, status, text, raw_src
+        return provider, status, text, type_token, raw_src
     if isinstance(raw, Exception):
         # raw must stay JSON-serializable — the canonical object can reach
         # chat.py's json.dumps. str(raw) keeps the debug surface without the
         # un-serializable exception object (review fix, Session 168).
-        return None, None, f"{type(raw).__name__}: {raw}", str(raw)
+        return None, None, f"{type(raw).__name__}: {raw}", "", str(raw)
     text = str(raw)
     match = _PROVIDER_ERROR_RE.match(text)
     if match:
         provider = match.group("provider")
         status = _as_int(match.group("status"))
         body = match.group("rest").lstrip(": ").strip()
+        type_token = ""
         parsed = _try_json(body)
         if parsed is not None:
+            type_token = _dig_type(parsed)
             body = _dig_message(parsed, body)
-        return provider, status, body, text
-    return None, None, text, text
+            num = _as_int(type_token)
+            if status is None and num is not None and 100 <= num <= 599:
+                status = num
+                type_token = ""
+        return provider, status, body, type_token, text
+    return None, None, text, "", text
 
 
 def normalize_error(
@@ -231,7 +379,9 @@ def normalize_error(
     """Normalize a raw provider/adapter error into the canonical shape.
 
     `raw` may be the adapter's `{provider} returned {status}: {body}` string,
-    a plain string, an already-parsed provider dict, or an exception.
+    a plain string, an already-parsed provider dict, or an exception. It may
+    be ANY provider's error payload — OpenAI, Anthropic, Ollama, Zen, Azure,
+    or a future one — the classifier is envelope-agnostic (ADR-21).
 
     `source_hint` forces the source when the caller knows the error's domain
     (e.g. `source_hint="internal"` for upload failures) — provider keyword
@@ -247,7 +397,7 @@ def normalize_error(
     if is_canonical_error(raw):
         return raw
 
-    provider, status, text, raw_src = _extract(raw)
+    provider, status, text, type_token, raw_src = _extract(raw)
 
     if source_hint == SOURCE_INTERNAL:
         return {
@@ -260,9 +410,14 @@ def normalize_error(
             "raw": raw_src,
         }
 
-    code, retryable = _classify(status, text)
+    code, retryable = _classify(status, text, type_token)
     if code == GENERIC_ERROR:
-        source = SOURCE_INTERNAL
+        # Provider-shaped errors (name parsed or status present) still belong
+        # to the provider domain — the UI should say "the model provider",
+        # not an anonymous internal error (ADR-21).
+        source = (
+            SOURCE_PROVIDER if (provider or status is not None) else SOURCE_INTERNAL
+        )
         message = _clean_text(text) or "Something went wrong."
     else:
         source = SOURCE_PROVIDER
