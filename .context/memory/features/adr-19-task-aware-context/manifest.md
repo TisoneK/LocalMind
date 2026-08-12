@@ -19,10 +19,15 @@ context builders). Supersedes nothing.
 
 **Started:** 2026-08-12 (Session 159 — design doc written, no code)
 **Branch:** main
-**Status:** design **LOCKED** (Session 159 — user settled all four decisions:
-full P0 scope steps 1-6; dispatcher emits explicit `task_type`; per-task
-KEEP tables; CAN DISCARD off by default). Implementation next — build order
-steps 1-6 in design.md.
+**Status:** P0 IMPLEMENTED (Sessions 160-163): context_policy.py + dispatcher
+task_type (`17b3624`), policy-aware compactor v2 (`42053dd`), task-aware
+summarizer v2 with decision-line preservation (`89f5d77`), loop+engine
+wiring default-no-op (`53210be`). Full suite **1407 green**, ruff clean.
+Live smoke (Session 164, `scripts/smoke_gate.py` + task_type check)
+provider-blocked — Zen 429 FreeUsageLimitError, same as Sessions 151/158;
+retry when Zen recovers or install Ollama. Remaining: P1 hierarchy,
+P2 cross-session decision ledger, P3 LLM value-scoring (all explicitly out
+of P0 in design.md §6).
 **No-regression list (must hold after every phase):** ADR-17 static floor
 (`test_prompt_size_budget.py`, `test_intent_tool_scoping.py`); ADR-18
 TaskState + gate + replan (Sessions 155-157); Session 31/32 iteration caps +

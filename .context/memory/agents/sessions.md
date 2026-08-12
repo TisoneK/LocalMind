@@ -1822,3 +1822,50 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Done:** grounded the design in the actual code and wrote `features/adr-19-task-aware-context/design.md` (PROPOSED). Headline finding: LocalMind already has the full assembly pipeline (context_builder.build single entry point with real token budgets; context_compactor.simplify_tool_results deterministic keep-last-4; summarizer.maybe_compress_history LLM oldest-50% past 75%; memory compose/warm_start/consolidate; per-agent playbook builders; ADR-18 TaskState as the task-type carrier) — but ALL compression is positional, none task-aware. Design: Context Planner = context_policy.py (pure policy_for(task_type) dataclasses, default-to-legacy no-op) feeding a selective compactor v2 (MUST KEEP by content markers / CAN STUB / CAN DISCARD off-by-default, tool_call_id invariants) + task-aware summarizer v2 (per-task prompts + decision-line preservation so constraint lines like 'rejected MongoDB' survive) + minimal builder/loop wiring (budget math untouched). Build order: 4 deterministic steps (no live model needed) + live smoke reusing scripts/smoke_gate.py (Zen still 429). Four open decisions pending user lock (design.md §7): P0 scope, task-type source, KEEP priority, discard in P0.
 - **Commits:** context only (manifest, design.md, ledger, current.md, sessions.md).
 - **Next:** user decisions → LOCK → implement steps 1-4.
+
+---
+## 2026-08-12 — Session 160 (ADR-19 step 1: context policy + dispatcher task_type)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-19 step 1 — the pure task-aware context policy layer + dispatcher task_type emission (locked decisions: full P0, dispatcher task_type, per-task tables, discard off).
+- **Done:** new `backend/src/core/context_policy.py` — frozen ContextPolicy dataclass (keep_markers/drop_markers/summary_prompt/max_keep=6/allow_drop=False), per-task tables for debug/plan/code/research/chat/verify seeded from a legacy no-op default, `policy_for()` (unknown→default), `resolve_task_type()` priority explicit > primary_domain hint > intent > TaskState.phase (verify AND plan) > legacy, `parse_task_type_from_plan()`. OrchestrationPlan gains `task_type`. Dispatcher execution_plan schema prompt teaches the model the optional task_type field; lenient parse; **malformed execution_plan guard** (isinstance dict) hardens the steps + success_criteria + task_type reads together. Reviewer-caught + fixed: (1) greedy markers ('.py', 'must', 'assert') would match nearly everything and degenerate to legacy — narrowed to distinctive multi-word markers + documented CASE-INSENSITIVE matching; (2) phase fallback missing plan→plan — added; (3) malformed execution_plan AttributeError — guarded. Default policy is a TRUE no-op (no keep markers, byte-identical default summary prompt) so wiring is zero-behavior-change.
+- **Tests:** 20 new in tests/core/test_context_policy.py (policy tables, resolution priority, case-insensitive expectations, dispatcher parse + malformed-plan guard + cache isolation via _PLAN_CACHE.clear()); 68 in the slice green; ruff clean.
+- **Commits:** 17b3624 (feat(context)).
+- **Next:** Session 161 — selective compactor v2 (policy-aware keep/stub, discard off).
+
+---
+## 2026-08-12 — Session 161 (ADR-19 step 2: selective compactor v2)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-19 step 2 — task-aware selective compaction of tool results (locked: per-task tables; discard OFF in P0).
+- **Done:** `simplify_tool_results()` gains `policy: Optional[ContextPolicy]`. None/default → `_legacy_simplify()` (byte-identical positional path, verified by test equality vs the no-policy call). Real policy → protected set = newest keep_last results ∪ up to policy.max_keep OLD marker-matched results (case-insensitive substring; only STUBBABLE matches > max_chars consume the cap — Session 161 review under-protection fix); everything else stubbed. CAN-DISCARD implemented (allow_drop + drop_markers → outcome-neutral notice "older tool output not needed") but NO policy_for() enables it; stub-marker guard in the discard branch keeps strict idempotency; notice wording deliberately avoids implying success/failure (Session 32 verify-after-write safety).
+- **Review:** deepseek-flash confirmed the legacy path is genuinely unchanged + no circular import + no dead code; flagged + fixed 3 minor items: (1) max_keep budget could be wasted on small never-stubbed matches — now filtered; (2) stub→discard mutation across passes if allow_drop ever on — now guarded; (3) discard notice wording — now outcome-neutral.
+- **Tests:** 11 new in tests/core/test_context_compactor_policy.py (legacy no-op equality, marker protection beyond keep_last, case-insensitive match, max_keep bound + stubbable-only budget, discard off-by-default + capability-when-explicit, tool_call_id invariants, idempotency, non-tool untouched); 382 in the slice green; ruff clean.
+- **Commits:** 42053dd (feat(context)).
+- **Next:** Session 162 — task-aware summarizer v2 (per-task prompts + decision-line preservation).
+
+---
+## 2026-08-12 — Session 162 (ADR-19 step 3: task-aware summarizer v2)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-19 step 3 — task-aware conversation summarization with decision-line preservation (locked: full P0; per-task tables).
+- **Done:** `maybe_compress_history()` gains `policy: Optional[ContextPolicy]`. None/default → original generic prompt byte-identical (verified by prompt-equality test). Real policy → (a) task-specific `summary_prompt` (debug/plan/code/research/verify variants), (b) `_preserved_decision_lines()` extracts lines matching the policy's keep_markers VERBATIM into a `[Preserved decisions — verbatim, do not lose these]` block prepended to the summary — the user's flagship lossy-compression case ("rejected MongoDB", "production uses PostgreSQL") survives compression.
+- **Review:** deepseek-flash caught the MAIN gap — preservation ran on the 500-char-truncated excerpt, so a decision line past the cut would be lost (defeating the feature). Fixed: preserved lines now extract from RAW message contents; the truncated excerpt is LLM-only. Also bounded bloat (8 lines / 200 chars per line / 1200 total — was 12x500≈1500 tokens, net-negative) and trimmed per-line length. Confirmed unchanged: single-system-message shape, adapter-error/empty-summary failure semantics, no-op for None/default.
+- **Tests:** 13 new in tests/core/test_summarizer_policy.py (generic-prompt no-op, default==none, per-task prompt, preserved constraints verbatim incl. past-500-char case, case-insensitive, bounds + line trim, preserved block in summary message, adapter-error/empty-summary unchanged, below-threshold no-call); 77 in the slice green; ruff clean.
+- **Commits:** 89f5d77 (feat(context)).
+- **Next:** Session 163 — wire the policy through AgentLoop + pipeline (default no-op), enable debug/verify, full regression.
+
+---
+## 2026-08-12 — Session 163 (ADR-19 step 4: wiring, default no-op)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-19 step 4 — wire the task-aware context policy through AgentLoop + engine with a guaranteed no-op default; enable via dispatcher task_type.
+- **Done:** `AgentLoop.run()` gains `task_type`; resolves `self._context_policy = policy_for(task_type)` from the DISPATCHER-RESOLVED value ONLY (no intent/phase fallback in the loop — the dispatcher prompt contract says omit→legacy, so a SHELL intent with no task_type must behave exactly as before; reviewer-flagged deviation documented in design.md §7). Policy passed to `simplify_tool_results()` at the iteration head. `BaseAgent.run()` forwards task_type. Engine resolves `_reused_task_type` from `OrchestrationPlan.task_type` right AFTER the orchestrator block (all three plan-set sites 1378/1421/1433 precede it), builds `_turn_context_policy`, threads task_type to both loop call sites and policy to all three `maybe_compress_history` calls. Empty task_type → legacy no-op everywhere.
+- **Review:** deepseek-flash confirmed definition-before-use is safe on all paths, no stale-plan window, no double-resolution (duplicate _reused_task_type removed). Flags handled: (1) fallback deviation now documented in design.md §7; (2) loop comment corrected to say dispatcher-RESOLVED not explicit-only; (3) noted engine-path threading has a smoke test only (acceptable — deterministic layers unit-tested, default is true no-op).
+- **Tests:** 4 new in tests/core/test_context_wiring.py (empty→legacy no-op even with SHELL intent, debug→debug policy, unknown→default, OrchestrationPlan.task_type→policy_for smoke); full suite 1407 green; ruff clean.
+- **Commits:** 53210be (feat(context)).
+- **Next:** Session 164 — enable policies per task type (debug/verify first) via dispatcher emission; live smoke reusing scripts/smoke_gate.py; close out.
+
+---
+## 2026-08-12 — Session 164 (ADR-19 live smoke + close out)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-19 P0 steps 5-6 — enable per-task policies (already wired via dispatcher emission) + real-model smoke, then close out.
+- **Done:** restarted the launchd backend with the new code (PID 6134); extended `scripts/smoke_gate.py` to report dispatcher task_type emission. Pipeline verified LIVE up to the provider call (context build → dispatcher thinking → Zen **429 FreeUsageLimitError** — free-tier rate limit, same as Sessions 151/158). Provider-blocked — honest close per the flaw log; smoke script committed for reuse. P0 is complete and deterministic phases fully verified: full suite 1407 green, ruff clean. Feature memory updated (manifest/ledger/design.md build order/current.md).
+- **Commits:** 53210be (last product, Session 163); context + smoke-script commits for 164.
+- **Next:** P1 (hierarchy) or re-run smoke_gate.py when Zen recovers / Ollama installed.

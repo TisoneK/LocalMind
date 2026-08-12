@@ -70,6 +70,7 @@ def main() -> int:
     # fallback: scan serialized events for success_criteria mention
     serialized = json.dumps(events)[:200000]
     has_criteria = '"success_criteria"' in serialized
+    has_task_type = '"task_type"' in serialized  # ADR-19 task-aware context
     gate_summary = "✓" in full or "criteria met" in full
     honest_unmet = "not met" in full or "unmet" in full
     done_seen = any(e.get("type") == "done" for e in events)
@@ -77,6 +78,7 @@ def main() -> int:
     print("\n===== SMOKE RESULTS =====")
     print(f"done event seen:            {done_seen}")
     print(f"dispatcher emitted criteria:{has_criteria}")
+    print(f"dispatcher emitted task_type:{has_task_type}")
     print(f"gate summary (✓ n/n) seen:  {gate_summary}")
     print(f"honest-unmet wording seen:  {honest_unmet}")
     print(f"plan object captured:       {plan_json is not None}")

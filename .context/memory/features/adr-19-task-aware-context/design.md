@@ -156,16 +156,24 @@ filters drop-listed messages with the notice. The context-window meter
 
 1. `context_policy.py` — pure dataclasses + `policy_for()` + task-type
    resolution from `TaskState.phase`/`Intent` + default-to-legacy + tests.
+   ✅ Session 160
 2. Selective compactor v2 — `simplify_tool_results(policy=...)` keep/stub/
    discard + protocol-invariant tests (keep-last-4 as default fallback).
+   ✅ Session 161
 3. Task-aware summarizer v2 — per-task prompts + decision-line preservation
-   + tests with a fake adapter (no real model needed).
+   + tests with a fake adapter (no real model needed). ✅ Session 162
 4. Wire policy through `AgentLoop.run()` + `_pipeline.py` (default no-op)
-   + regression: full suite.
+   + regression: full suite. ✅ Session 163
 5. Enable policies per task type (start: debug + verify — highest evidence
-   value) + targeted tests.
-6. Real-model smoke — reuse `scripts/smoke_gate.py` pattern; Zen still 429
-   as of 2026-08-12 (Session 158); Ollama would unblock.
+   value) + targeted tests. ✅ Sessions 163-164 — enablement is the
+   dispatcher emitting task_type; debug/verify/code/research tables live
+   and activate via `policy_for()` once the dispatcher emits them.
+6. Real-model smoke — reuse `scripts/smoke_gate.py` pattern; ATTEMPTED
+   Session 164 — pipeline verified live to the provider call, then Zen 429
+   FreeUsageLimitError (same as Sessions 151/158). STILL BLOCKED on a live
+   model; retry when Zen recovers or install Ollama. Loop-path code covered
+   by 49 policy/compactor/summarizer/wiring tests + full suite 1407 green;
+   per the flaw log the live E2E remains pending.
 
 ## 5. No-regression list (must hold)
 
