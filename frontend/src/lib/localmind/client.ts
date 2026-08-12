@@ -136,6 +136,14 @@ interface ModelsResponse {
   provider: string;
 }
 
+/** Wire shape of /api/models — the backend sends the token budget as
+ *  `context_window` (snake_case); the frontend type uses `contextWindow`. */
+interface ModelsResponseWire {
+  models: Array<ModelOption & { context_window?: number }>;
+  current: string;
+  provider: string;
+}
+
 interface TerminalResult {
   exitCode: number;
   stdout: string;
@@ -845,7 +853,26 @@ class LocalMindClient {
     // (used by the Settings modal's "Add Key" form). Without it, returns
     // models for the currently active adapter (used by the chat sidebar).
     const query = provider ? `?provider=${encodeURIComponent(provider)}` : '';
-    return this.request<ModelsResponse>(`/api/models${query}`);
+    const data = await this.request<ModelsResponseWire>(`/api/models${query}`);
+    // The backend attaches the active model's max input-token budget as
+    // `context_window` (snake_case) — map it to `contextWindow` (camelCase)
+    // so the top-bar context-window occupancy meter actually renders.
+    // Without this mapping the field is silently dropped and the meter
+    // stays empty (Session 153 — dead-on-arrival).
+    return {
+      current: data.current,
+      provider: data.provider,
+      models: (data.models || []).map((m) => ({
+        id: m.id,
+        name: m.name,
+        provider: m.provider,
+        size: m.size,
+        contextWindow:
+          typeof m.context_window === 'number'
+            ? m.context_window
+            : m.contextWindow,
+      })),
+    };
   }
 
   async selectModel(modelId: string): Promise<void> {

@@ -304,3 +304,45 @@ describe('steer', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('getModels', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('maps backend context_window (snake_case) to contextWindow so the meter renders', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        models: [
+          { id: 'm1', name: 'Model One', provider: 'zen', size: 'Cloud', context_window: 32768 },
+          { id: 'm2', name: 'Model Two', provider: 'zen', size: 'Cloud' },
+        ],
+        current: 'm1',
+        provider: 'zen',
+      }),
+    }));
+
+    const data = await localmindClient.getModels();
+    expect(data.models[0]).toMatchObject({ id: 'm1', contextWindow: 32768 });
+    // Model without a token budget stays undefined — the meter falls back
+    // to the observation/prompt count path rather than showing garbage.
+    expect(data.models[1].contextWindow).toBeUndefined();
+    expect(data.current).toBe('m1');
+    expect(data.provider).toBe('zen');
+  });
+
+  it('preserves an already-camelCased contextWindow from the backend', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        models: [{ id: 'm1', name: 'M', provider: 'zen', contextWindow: 64000 }],
+        current: 'm1',
+        provider: 'zen',
+      }),
+    }));
+
+    const data = await localmindClient.getModels();
+    expect(data.models[0].contextWindow).toBe(64000);
+  });
+});
