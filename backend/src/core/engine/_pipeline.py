@@ -39,7 +39,6 @@ from core.agent.orchestrator import AgentOrchestrator, OrchestrationResult
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.config import settings
 from core.engine.routing_helpers import (
-    _PLAN_REQUIRED_INTENTS,
     _dispatcher_plan_context,
     _dispatcher_plan_steps,
     _fallback_todo_plan,
@@ -514,7 +513,12 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # the todo list. A static fallback would collide with — and overwrite
         # — the model's goal-level plan in the same plan-N id namespace (the
         # user saw "Run the shell action" clobber "Run `git status`…").
-        if intent in _PLAN_REQUIRED_INTENTS:
+        #
+        # === ADR-22 (Session 184) ===
+        # Expanded from _PLAN_REQUIRED_INTENTS to AGENT_INTENTS — the agent
+        # now ALWAYS plans for AGENT_INTENTS (no more skip_planning override),
+        # so the LLM planner owns the todo list for all of them.
+        if intent in AGENT_INTENTS:
             return
 
         plan = self._INTENT_TODO_PLANS.get(intent)
@@ -2666,36 +2670,59 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     # label). For the tool-heavy intents above, this used to
                     # be DISCARDED and re-derived by a second planning call
                     # (_plan_stream) — the middle call of the 4-7-call chain.
-                    # When the dispatcher plan is usable, reuse it as
-                    # orchestrator_context and skip the planner: the loop
-                    # follows this plan instead of re-planning (its
-                    # orchestrator_context mechanism was built for exactly
-                    # this). Cuts one 20-40s free-tier model call per tool
-                    # request. Falls back to the planner when the dispatcher
-                    # produced no usable steps (empty/degenerate graph) —
-                    # never skip planning with no plan at all (Session 113).
+                    #
+                    # === ADR-22 (Session 184) — Agent-First Routing ===
+                    # The previous behavior (Session 134) was to REUSE the
+                    # dispatcher's plan as the agent's plan via
+                    # `orchestrator_context` + `plan_steps`, then set
+                    # `skip_planning=True`. The agent's first LLM call was a
+                    # tool-execution call, not a reasoning call — the
+                    # dispatcher pre-decided the tool.
+                    #
+                    # The user's diagnosis: "the agent should decide to call
+                    # tools, not intent." Example: "Show me all projects in
+                    # dev folder" should reason about locating all `dev`
+                    # folders (find_path), ask clarification if multiple,
+                    # then display a projects summary — not blindly run
+                    # `ls dev`.
+                    #
+                    # Fix (Option B approved by user): keep the dispatcher's
+                    # output as a HINT, not a directive. The agent ALWAYS
+                    # plans for AGENT_INTENTS — its `_plan_stream` LLM call
+                    # runs, sees the hint, and produces its own plan. The
+                    # agent can:
+                    #   - Agree with the hint and call the suggested tool
+                    #     (common case — preserves the latency win).
+                    #   - Disagree and call a different tool (e.g. find_path
+                    #     instead of shell ls).
+                    #   - Ask the user for clarification when the hint is
+                    #     ambiguous.
                     if not _skip_planning:
                         _dispatcher_plan = _dispatcher_plan_context(
                             _orchestration_plan.graph
                         )
                         if _dispatcher_plan:
-                            _skip_planning = True
                             _reused_plan_steps = _dispatcher_plan_steps(
                                 _orchestration_plan.graph
                             )
+                            # Pass as a HINT, not a directive. The agent
+                            # reasons about it during its own _plan_stream call.
                             orchestrator_context = (
-                                "Structured plan from capability inference:\n"
+                                "Routing hint from capability inference "
+                                "(VERIFY AND ADAPT before calling tools — "
+                                "the user's request may need a different "
+                                "tool, clarification, or a multi-step plan):\n"
                                 + _dispatcher_plan
                             )
                             _obs.emit(
-                                "dispatcher_plan_reused",
+                                "routing_hint_provided",
                                 intent=effective_intent.value,
-                                steps=len(_reused_plan_steps),
+                                hint_steps=len(_reused_plan_steps),
                                 confidence=round(_dispatcher_confidence, 2),
                             )
                             logger.info(
-                                "[engine] reusing dispatcher execution plan (%d steps) "
-                                "for %s — skipped agent planning call (saves one model call)",
+                                "[engine] routing hint provided (%d steps) for %s — "
+                                "agent will plan independently (ADR-22)",
                                 len(_reused_plan_steps),
                                 effective_intent.value,
                             )

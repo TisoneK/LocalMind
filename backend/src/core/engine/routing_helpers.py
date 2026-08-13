@@ -124,13 +124,23 @@ _PLAN_REQUIRED_INTENTS: frozenset[Intent] = frozenset(
 
 # Session 114: the planning-skip decision is a pure function so the routing
 # contract is unit-testable without running the engine.
+#
+# === ADR-22 (Session 184) — Agent-First Routing ===
+# Previously: planning was skipped when dispatcher confidence ≥0.7 AND the
+# intent was not in _PLAN_REQUIRED_INTENTS. The agent's first LLM call was a
+# tool-execution call, not a reasoning call — the dispatcher pre-decided.
+#
+# Now: ALWAYS return False — the agent ALWAYS plans for AGENT_INTENTS,
+# regardless of dispatcher confidence. The dispatcher's output becomes a
+# routing hint the agent evaluates during its own planning call, not a
+# directive that bypasses planning. See ADR-22 for the full rationale + the
+# user's "Show me projects in dev folder" example.
 def _should_skip_planning(intent: Intent, dispatcher_confidence: float) -> bool:
     """Whether the agent planning phase should be skipped for this turn.
 
-    The v0.11 fast path skips planning when the dispatcher was highly
-    confident (>= 0.7) AND the intent is not compound-capable. Below the
-    threshold planning is never skipped (the slow path runs the planner).
+    ADR-22 (Session 184): ALWAYS False — the agent always plans. The
+    `intent` and `dispatcher_confidence` parameters are kept for backward
+    compatibility with existing callers + tests; they no longer affect
+    the decision.
     """
-    if dispatcher_confidence < 0.7:
-        return False
-    return intent not in _PLAN_REQUIRED_INTENTS
+    return False

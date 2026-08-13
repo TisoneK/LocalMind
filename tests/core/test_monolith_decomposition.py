@@ -42,7 +42,10 @@ def test_pipeline_reexports_routing_and_clock_helpers():
     import core.engine.routing_helpers as routing
     import core.engine.stage_clock as clock
 
-    for name in ["_fallback_todo_plan", "_should_skip_planning", "_PLAN_REQUIRED_INTENTS", "get_adapter"]:
+    # ADR-22 (Session 184): _PLAN_REQUIRED_INTENTS is no longer imported by
+    # _pipeline.py (the agent always plans for AGENT_INTENTS now). The other
+    # re-exports are still pinned.
+    for name in ["_fallback_todo_plan", "_should_skip_planning", "get_adapter"]:
         assert getattr(pipeline, name) is getattr(routing, name), name
 
     assert pipeline._StageClock is clock._StageClock
