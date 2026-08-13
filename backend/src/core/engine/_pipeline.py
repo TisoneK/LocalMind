@@ -1577,10 +1577,14 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 )
             else:
                 t_mem = time.monotonic()
-                memory_facts = await self._memory.compose(
+                # ADR-19 P1: level-aware retrieval — restrict to the task
+                # type's preferred memory levels (design.md §6). Unknown
+                # task_type → legacy compose (no filter).
+                memory_facts = await self._memory.retrieve_for_task(
                     query=message,
                     intent=effective_intent,
                     session_id=session_id,
+                    task_type=_reused_task_type,
                 )
                 # Complement semantic retrieval with warm-start facts if
                 # compose() returned very few results (the query might be
@@ -1930,10 +1934,14 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             pass
 
         if not _has_prestarted_memory:
-            _memory_coro = self._memory.compose(
+            # ADR-19 P1: level-aware retrieval — the agent path's compose
+            # gets the task type's preferred memory levels (design.md §6).
+            # Unknown task_type → legacy compose (no filter).
+            _memory_coro = self._memory.retrieve_for_task(
                 query=message,
                 intent=effective_intent,
                 session_id=session_id,
+                task_type=_reused_task_type,
             )
 
         # Run both concurrently when both are needed
@@ -1956,6 +1964,31 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 facts=len(memory_facts),
                 latency_ms=round((time.monotonic() - t_mem) * 1000),
             )
+
+        # ADR-19 P1: the pre-started parallel recall ran with Intent.CHAT
+        # BEFORE the dispatcher resolved the task type, so it carried no
+        # level filter. Now that the task type is known, re-retrieve
+        # level-aware — the query embedding is LRU-cached per text (and
+        # this is the same text), so this is a near-free SQL filter, not a
+        # second embed call. Replaces the unfiltered facts when the level
+        # filter returns anything (best-effort: on any hiccup keep what
+        # the pre-started recall already produced).
+        if _has_prestarted_memory:
+            try:
+                from core.memory import level_priorities
+
+                _task_levels = level_priorities(_reused_task_type)
+                if _task_levels is not None:
+                    _leveled = await self._memory.retrieve_for_task(
+                        query=message,
+                        intent=effective_intent,
+                        session_id=session_id,
+                        task_type=_reused_task_type,
+                    )
+                    if _leveled:
+                        memory_facts = _leveled
+            except Exception:  # pragma: no cover — defensive
+                pass
 
         # Warm-start supplement: if compose() returned very few facts for
         # agent intents, add warm-start facts so the agent still has basic

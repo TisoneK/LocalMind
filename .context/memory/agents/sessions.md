@@ -1968,3 +1968,12 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   - `useLocalMind.ts`: renders `delegation_started`/`delegation_completed` obs events as one running tool-step card (`delegate→<agent>`), distinct name to avoid collision with tool cards.
   - Tests: `tests/tools/test_delegate_streaming.py` (7 new) — proxy forwarding, lifecycle events, obs threading through dispatch.
 - **Verified:** full backend suite **1503 green**, frontend vitest **105 green**, ruff + tsc clean. Reviewer fixes applied (SSE `agent` forwarding, DRY emit helper, distinct frontend card name, late-tool dispatch site wired).
+---
+## 2026-08-12 — Session 177 (ADR-19 P1: context hierarchy + level-aware retrieval)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-19 P1 (design.md §6) — the "different compressed contexts per task" idea extended to MEMORY: every stored fact is tagged with a context-hierarchy level (turn / session / project / long_term) and retrieval can be restricted to the levels the current task type cares about.
+- **Done:**
+  - `memory.py`: `MEMORY_LEVELS` hierarchy; `level_priorities(task_type)` pure resolver (debug→session/turn, plan→project/long_term, code→project/session, research→long_term/project, chat→long_term, verify→session; unknown→None = legacy no-op); `MemoryComposer.store(level="long_term")` tags `memory_level` metadata (invalid → long_term fallback, backward compatible); `compose(levels=...)` filters recall by tag with untagged (pre-P1) facts defaulting to long_term so nothing is lost; `retrieve_for_task()` wires task_type → levels → compose.
+  - `_pipeline.py`: the two post-dispatcher compose sites (DIRECT + agent fallback) call `retrieve_for_task(task_type=_reused_task_type)`; the pre-started parallel recall (which ran with Intent.CHAT before the task type resolved) is followed by a near-free level-aware re-retrieval — the query embedding is LRU-cached per text, so this is a SQL filter, not a second embed call.
+  - Tests: `tests/core/test_memory_levels.py` (18) — level resolution, store tagging, compose level filter, untagged-facts default, legacy no-op, engine wiring (dispatcher task_type=code flows into retrieve_for_task).
+- **Verified:** full backend suite **1521 green**, ruff clean. Live-smoke still provider-blocked per the flaw log (Zen 429); P1 is deterministic (no new LLM calls) so the unit+engine wiring coverage is the gate.

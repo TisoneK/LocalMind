@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Optional
 
 # Use built-in generics with from __future__ import annotations
 from core.models import Intent
@@ -55,6 +56,39 @@ _MAX_FACTS = 6
 _RECENCY_WINDOW_SECS = 3600 * 24 * 7  # 1 week
 _IMPORTANCE_DEFAULT = 0.5  # 0.0–1.0
 
+# ADR-19 P1 (Session 177): context-hierarchy levels. Every stored fact is
+# tagged with a `memory_level` so retrieval can be LEVEL-AWARE per task
+# type instead of always pulling the same global pool. Hierarchy:
+#   turn      — ephemeral, this turn's working context
+#   session   — this session's state / recent exchanges
+#   project   — repository / project-scoped knowledge
+#   long_term — durable user facts (the historical default)
+MEMORY_LEVELS = ("turn", "session", "project", "long_term")
+
+# ADR-19 P1: preferred levels per task type, most-relevant first (design.md
+# §6 — "the same conversation can produce different compressed contexts
+# depending on the next task"). Unknown/default → None = legacy behavior
+# (no level filter, exactly the pre-P1 retrieval).
+_TASK_TYPE_LEVELS: dict[str, tuple[str, ...]] = {
+    "debug": ("session", "turn", "long_term"),
+    "plan": ("project", "long_term"),
+    "code": ("project", "session"),
+    "research": ("long_term", "project"),
+    "chat": ("long_term",),
+    "verify": ("session",),
+}
+
+
+def level_priorities(task_type: Optional[str]) -> Optional[tuple[str, ...]]:
+    """ADR-19 P1: resolve the preferred memory levels for a task type.
+
+    Pure + deterministic. Unknown/empty/default → None, which callers treat
+    as "no level filter" — EXACTLY the pre-P1 retrieval behavior (a wiring
+    no-op until a task type is explicitly resolved).
+    """
+    key = (task_type or "").strip().lower()
+    return _TASK_TYPE_LEVELS.get(key)
+
 
 class MemoryComposer:
     """
@@ -72,7 +106,16 @@ class MemoryComposer:
         intent: Intent,
         session_id: str,
         top_k: int = _MAX_FACTS,
+        levels: Optional[tuple[str, ...]] = None,
     ) -> list[str]:
+        """Retrieve memory facts for a query with 4-factor scoring.
+
+        ADR-19 P1: `levels` optionally restricts retrieval to facts tagged
+        with one of the given context-hierarchy levels (turn/session/
+        project/long_term). None = legacy behavior (any level). Facts
+        stored before P1 carry no `memory_level` metadata — they are
+        treated as `long_term` so older stores still surface.
+        """
         if intent not in _MEMORY_RELEVANT_INTENTS:
             return []
 
@@ -105,6 +148,13 @@ class MemoryComposer:
         for fact, distance, metadata in raw:
             if distance > threshold:
                 continue
+
+            # ADR-19 P1: level-aware filter. Facts without a memory_level
+            # tag (pre-P1 stores) default to long_term so nothing is lost.
+            if levels is not None:
+                fact_level = str(metadata.get("memory_level", "long_term"))
+                if fact_level not in set(levels):
+                    continue
 
             # Factor 1: similarity (cosine, inverted)
             # sqlite-vec distances are normalised to [0,1] in VectorStore
@@ -151,8 +201,17 @@ class MemoryComposer:
         memory_type: str = "semantic",
         source: str = "user",
         importance: float = 0.5,
+        level: str = "long_term",
     ) -> bool:
-        """Store a fact with importance rating (0.0=trivial, 1.0=critical)."""
+        """Store a fact with importance rating (0.0=trivial, 1.0=critical).
+
+        ADR-19 P1: `level` tags the fact with a context-hierarchy level
+        (turn/session/project/long_term). Default long_term keeps the
+        historical behavior. Stored in metadata as `memory_level` so the
+        level-aware retriever can filter on it.
+        """
+        if level not in MEMORY_LEVELS:
+            level = "long_term"
         return await self._store.store(
             fact=fact,
             session_id=session_id,
@@ -161,7 +220,31 @@ class MemoryComposer:
                 "memory_type": memory_type,
                 "importance": str(importance),
                 "access_count": "0",
+                "memory_level": level,
             },
+        )
+
+    async def retrieve_for_task(
+        self,
+        query: str,
+        intent: Intent,
+        session_id: str,
+        task_type: Optional[str] = None,
+        top_k: int = _MAX_FACTS,
+    ) -> list[str]:
+        """ADR-19 P1: level-aware retrieval for the current task type.
+
+        Resolves the task type's preferred memory levels and composes with
+        that filter. Unknown/default task_type → legacy compose (no
+        filter) — a no-op until the dispatcher emits an explicit task_type.
+        """
+        levels = level_priorities(task_type)
+        return await self.compose(
+            query=query,
+            intent=intent,
+            session_id=session_id,
+            top_k=top_k,
+            levels=levels,
         )
 
     async def forget(self, fact: str) -> bool:
