@@ -100,6 +100,18 @@ def test_intent_fallback():
     assert resolve_task_type("", intent="CODE_EXEC") == "code"
 
 
+def test_chat_hint_corrected_on_non_chat_routing():
+    # ADR-19 x ADR-22 re-key (Session 186): 'chat' is the no-tool fallback,
+    # so a canonical 'chat' hint on a non-CHAT routing is a misclassification.
+    # Corrected to the intent fallback when the caller KNOWS the routing.
+    assert resolve_task_type("chat", intent="SHELL") == "code"
+    assert resolve_task_type("chat", intent="WEB_SEARCH") == "research"
+    # The dispatcher (no intent) keeps its emitted chat hint verbatim.
+    assert resolve_task_type("chat") == "chat"
+    # An actual CHAT routing keeps the chat hint.
+    assert resolve_task_type("chat", intent="CHAT") == "chat"
+
+
 def test_phase_fallback():
     assert resolve_task_type("", phase="verify") == "verify"
     assert resolve_task_type("", phase="plan") == "plan"

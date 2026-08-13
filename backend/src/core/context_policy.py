@@ -237,7 +237,17 @@ def resolve_task_type(
     Returns a canonical TASK_TYPES member or '' for the legacy default.
     """
     if task_type and task_type.strip().lower() in TASK_TYPES:
-        return task_type.strip().lower()
+        resolved = task_type.strip().lower()
+        # ADR-19 x ADR-22 re-key (Session 186): a canonical 'chat' hint on a
+        # NON-CHAT routing is definitionally a misclassification — 'chat' is
+        # the no-tool fallback, so a tool-bearing intent (SHELL/CODE_EXEC/
+        # WEB_*) can never settle to it. Only applied when the caller KNOWS
+        # the routing (explicit intent); the dispatcher (intent='') keeps
+        # its emitted hint verbatim for the DIRECT path.
+        if resolved == "chat" and intent and intent.upper() != "CHAT":
+            resolved = ""
+        if resolved:
+            return resolved
 
     if primary_domain and primary_domain.strip().lower() in _DOMAIN_HINTS:
         return _DOMAIN_HINTS[primary_domain.strip().lower()]

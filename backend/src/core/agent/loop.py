@@ -1194,8 +1194,13 @@ class AgentLoop:
         # (Session 163: a SHELL intent with no task_type must behave exactly
         # as before; see design.md §7 locked decision 2 note). Empty → the
         # legacy no-op default policy.
-        from core.context_policy import policy_for
+        from core.context_policy import policy_for, resolve_task_type
 
+        # ADR-19 x ADR-22 re-key (Session 186): the passed-in task_type is a
+        # dispatcher HINT — the agent re-settles it from its actual routing
+        # during planning below. Seed with the hint so any read before the
+        # settlement point sees the same value the engine used.
+        self._settled_task_type = task_type
         self._context_policy = policy_for(task_type)
         # Provider usage is carried through every streamed chunk and tool-call
         # result so the Engine can report real prompt/completion counts.
@@ -1446,6 +1451,30 @@ class AgentLoop:
                     "[agent.loop] plan_parser failed (non-fatal): %s",
                     _plan_parse_exc,
                 )
+
+        # ADR-19 x ADR-22 re-key (Session 186): settle the task type the
+        # agent committed to during planning. The dispatcher task_type is a
+        # HINT (free-tier misclassifies); the loop only plans for
+        # AGENT_INTENTS with an intent-driven planner, so the intent is the
+        # settled routing. Explicit canonical hints still win (except 'chat'
+        # on a non-CHAT routing); the intent fallback corrects a
+        # misclassified/empty hint. Re-keys the loop's own context policy
+        # (tool-result compaction) + the trace, keeping them consistent with
+        # the engine's level-aware memory retrieval.
+        self._settled_task_type = resolve_task_type(
+            task_type,
+            intent=intent.value,
+        )
+        self._context_policy = policy_for(self._settled_task_type)
+        trace.task_type = self._settled_task_type
+        if _obs:
+            _obs.emit(
+                "task_type_settled",
+                task_type=self._settled_task_type,
+                source="planning" if plan_context else "routing",
+                plan_len=len(plan_context),
+            )
+
         task_state.set_budget(
             iter_used=0,
             iter_max=_effective_max_iter,

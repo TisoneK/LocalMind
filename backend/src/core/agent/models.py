@@ -176,6 +176,10 @@ class AgentTrace:
     tool_talk_recoveries: int = 0  # how many times tool-talk was detected and suppressed
     plan_text: str = ""
     """Text of the planning phase output (empty if planning was skipped)."""
+    task_type: str = ""
+    """Task type the agent settled on during planning (ADR-19 x ADR-22 re-key,
+    Session 186). '' = legacy no-op policy / no explicit type. The dispatcher's
+    task_type is only a hint; the settled value keys memory levels + policy."""
     verification_results: list[str] = field(default_factory=list)
     """Results from post-execution verification checks."""
     success_criteria: list[str] = field(default_factory=list)

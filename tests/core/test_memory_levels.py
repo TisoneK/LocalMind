@@ -231,6 +231,27 @@ class TestEngineWiresLevelAwareRetrieval:
 
     @pytest.mark.asyncio
     async def test_agent_path_calls_retrieve_for_task(self):
+        """An explicit canonical dispatcher hint (task_type='code') on a
+        SHELL agent turn flows into the level-aware retrieval unchanged
+        (ADR-19 P1 wiring, re-used by the Session 186 re-key tests)."""
+        composer = await self._run_engine_agent_turn("sess-177", hint="code")
+        # The level-aware re-retrieval must have called retrieve_for_task
+        # with task_type="code" (code → project/session levels).
+        assert composer.retrieve_for_task.await_count >= 1
+        _, kwargs = composer.retrieve_for_task.await_args
+        assert kwargs.get("task_type") == "code"
+
+    # ── ADR-19 x ADR-22 re-key (Session 186) ────────────────────────────────
+    # The dispatcher task_type is now a HINT: the agent settles the real
+    # task type during planning (intent is the settled routing for AGENT
+    # turns). The engine re-resolves hint + intent BEFORE level-aware
+    # memory retrieval, so a misclassified/empty hint can no longer key the
+    # wrong memory levels.
+
+    async def _run_engine_agent_turn(self, session_id: str, hint: str = ""):
+        """Drive Engine.process through the AGENT_LOOP path with a shell
+        dispatcher stub carrying the given task_type hint. Returns the
+        memory composer (to inspect the retrieve_for_task calls)."""
         from unittest.mock import MagicMock, patch
 
         from core.engine import Engine
@@ -242,16 +263,13 @@ class TestEngineWiresLevelAwareRetrieval:
         )
 
         engine = Engine()
-        # Patch the memory composer to capture the retrieval call.
         composer = AsyncMock()
         composer.retrieve_for_task.return_value = []
         composer.warm_start_facts.return_value = []
         composer.compose.return_value = []
         engine._memory = composer
 
-        # Dispatcher stub yielding an AGENT_LOOP plan with task_type="code"
-        # (mirrors the acceptance-gate test's dispatcher contract).
-        class _CodeDispatcher:
+        class _ShellDispatcher:
             def __init__(self, adapter):
                 self._adapter = adapter
 
@@ -267,30 +285,52 @@ class TestEngineWiresLevelAwareRetrieval:
                     success_criteria=["app builds"],
                     fast_path=False,
                     dispatch_steps=[{"intent": "shell", "detail": "Build the app"}],
-                    task_type="code",
+                    task_type=hint,
                 )
 
-        # Stub agent-loop run: records calls, returns a done chunk so the
-        # engine's AGENT_LOOP path terminates without a real model.
         async def _fake_loop_run(**kwargs):
             yield StreamChunk(text="done", done=True)
 
-
         mock_adapter = MagicMock()
         mock_adapter.effective_context_window = 8192
-        with patch("core.engine._pipeline.ThinkingDispatcher", _CodeDispatcher), patch(
+        with patch("core.engine._pipeline.ThinkingDispatcher", _ShellDispatcher), patch(
             "core.engine.get_adapter", return_value=mock_adapter
         ), patch("core.engine._pipeline.AGENT_SELECTION_ENABLED", False), patch.object(
             engine._agent_loop, "run", _fake_loop_run
         ):
             chunks = [
                 c
-                async for c in engine.process("build the frontend app", "sess-177")
+                async for c in engine.process("build the frontend app", session_id)
             ]
-
         assert len(chunks) > 0
-        # The level-aware re-retrieval must have called retrieve_for_task
-        # with the dispatcher's task_type="code" (code → project/session).
+        return composer
+
+    @pytest.mark.asyncio
+    async def test_agent_path_settles_empty_hint_to_intent(self):
+        """An EMPTY dispatcher hint on a SHELL agent turn retrieves memory
+        with the SETTLED task_type 'code' (intent fallback) — the pre-fix
+        behavior keyed levels off the raw hint ('' → legacy no-filter), so
+        an empty/misclassified hint retrieved the wrong memory levels."""
+        composer = await self._run_engine_agent_turn("sess-186a", hint="")
         assert composer.retrieve_for_task.await_count >= 1
         _, kwargs = composer.retrieve_for_task.await_args
         assert kwargs.get("task_type") == "code"
+
+    @pytest.mark.asyncio
+    async def test_agent_path_corrects_chat_hint_on_shell_task(self):
+        """A 'chat' hint on a SHELL routing is a misclassification ('chat'
+        is the no-tool fallback) — retrieval must key off the corrected
+        'code', not the wrong hint."""
+        composer = await self._run_engine_agent_turn("sess-186b", hint="chat")
+        assert composer.retrieve_for_task.await_count >= 1
+        _, kwargs = composer.retrieve_for_task.await_args
+        assert kwargs.get("task_type") == "code"
+
+    @pytest.mark.asyncio
+    async def test_agent_path_explicit_canonical_hint_wins(self):
+        """An explicit canonical hint (debug) still keys the retrieval —
+        the re-key only corrects empty/misclassified hints."""
+        composer = await self._run_engine_agent_turn("sess-186c", hint="debug")
+        assert composer.retrieve_for_task.await_count >= 1
+        _, kwargs = composer.retrieve_for_task.await_args
+        assert kwargs.get("task_type") == "debug"

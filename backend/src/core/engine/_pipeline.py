@@ -1550,9 +1550,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # on the engine-side prompt builds. Resolved once per turn AFTER the
         # orchestrator ran; empty task_type → the legacy no-op default policy.
         _reused_task_type = str(getattr(_orchestration_plan, "task_type", "") or "")
-        from core.context_policy import policy_for
-
-        _turn_context_policy = policy_for(_reused_task_type)
+        from core.context_policy import policy_for, resolve_task_type
 
         _clock.end("intent_classify")
         # Tool selection is decided by the dispatcher's capability inference.
@@ -1572,6 +1570,24 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # because it considers multiple dimensions, not just keyword patterns.
         effective_intent = _task_profile.primary_intent()
         confidence = _task_profile.confidence
+
+        # ADR-19 x ADR-22 re-key (Session 186): the dispatcher task_type is
+        # a HINT — ADR-22 demoted the dispatcher to a hint because free-tier
+        # misclassifies (3/8 prompts in the 184 smoke), and a misclassified
+        # task type retrieves the WRONG memory levels. The agent settles the
+        # real task type when it plans, and the loop only plans for
+        # AGENT_INTENTS — so the effective intent IS the settled routing.
+        # Re-resolve the hint WITH the intent: an explicit canonical hint
+        # still wins (except 'chat' on a non-CHAT routing = misclassification);
+        # otherwise the intent fallback corrects a misclassified/empty hint
+        # before ANY ADR-19 consumer (level-aware memory retrieval,
+        # decision-ledger recall, decision sink, summarizer policy) keys off
+        # it. All consumers below use _settled_task_type, never the raw hint.
+        _settled_task_type = resolve_task_type(
+            _reused_task_type,
+            intent=effective_intent.value,
+        )
+        _turn_context_policy = policy_for(_settled_task_type)
 
         # v4.0: Removed legacy CHAT→tool override and SYSINFO safety net.
         # The ThinkingDispatcher's LLM capability inference correctly handles:
@@ -1634,7 +1650,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     query=message,
                     intent=effective_intent,
                     session_id=session_id,
-                    task_type=_reused_task_type,
+                    task_type=_settled_task_type,
                 )
                 # Complement semantic retrieval with warm-start facts if
                 # compose() returned very few results (the query might be
@@ -1676,7 +1692,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 active_adapter.effective_context_window,
                 policy=_turn_context_policy,  # ADR-19 task-aware summarizer
                 decision_sink=_decision_sink_for(  # ADR-19 P2: durable ledger
-                    self._store, session_id, _reused_task_type
+                    self._store, session_id, _settled_task_type
                 ),
                 value_scores=await _maybe_score_history(  # ADR-19 P3 opt-in
                     prompt_messages, active_adapter
@@ -1999,7 +2015,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 query=message,
                 intent=effective_intent,
                 session_id=session_id,
-                task_type=_reused_task_type,
+                task_type=_settled_task_type,
             )
 
         # Run both concurrently when both are needed
@@ -2035,13 +2051,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             try:
                 from core.memory import level_priorities
 
-                _task_levels = level_priorities(_reused_task_type)
+                _task_levels = level_priorities(_settled_task_type)
                 if _task_levels is not None:
                     _leveled = await self._memory.retrieve_for_task(
                         query=message,
                         intent=effective_intent,
                         session_id=session_id,
-                        task_type=_reused_task_type,
+                        task_type=_settled_task_type,
                     )
                     if _leveled:
                         memory_facts = _leveled
@@ -2113,7 +2129,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             from core.decision_ledger import format_ledger_hint
 
             _past_decisions = self._store.recall_decisions(
-                task_type=_reused_task_type,
+                task_type=_settled_task_type,
             )
             _decision_hint = format_ledger_hint(_past_decisions)
             if _decision_hint:
@@ -2986,7 +3002,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             active_adapter.effective_context_window,
             policy=_turn_context_policy,  # ADR-19 task-aware summarizer
             decision_sink=_decision_sink_for(  # ADR-19 P2: durable ledger
-                self._store, session_id, _reused_task_type
+                self._store, session_id, _settled_task_type
             ),
             value_scores=await _maybe_score_history(  # ADR-19 P3 opt-in
                 prompt_messages, active_adapter
@@ -3200,7 +3216,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 sm_adapter.effective_context_window,
                 policy=_turn_context_policy,  # ADR-19 task-aware summarizer
                 decision_sink=_decision_sink_for(  # ADR-19 P2: durable ledger
-                    self._store, session_id, _reused_task_type
+                    self._store, session_id, _settled_task_type
                 ),
                 value_scores=await _maybe_score_history(  # ADR-19 P3 opt-in
                     sm_messages, sm_adapter
@@ -3633,7 +3649,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     skip_planning=_skip_planning,
                     plan_steps=_reused_plan_steps or None,  # Session 134: dispatcher plan reuse
                     success_criteria=_reused_criteria or None,  # ADR-18 P0 acceptance contract
-                    task_type=_reused_task_type or None,  # ADR-19 context policy
+                    task_type=_settled_task_type or None,  # ADR-19 context policy
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
                     orchestrator=self._agent_orchestrator,  # Session 178: F1 wire replan()
@@ -3693,7 +3709,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     success_criteria=_reused_criteria or None,  # ADR-18 P0 acceptance contract
                     # Session 173/174: Verify stage — criteria-verified stop
                     is_done_fn=_acceptance_gate_for(effective_intent),
-                    task_type=_reused_task_type or None,  # ADR-19 context policy
+                    task_type=_settled_task_type or None,  # ADR-19 context policy
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
                     orchestrator=self._agent_orchestrator,  # Session 178: F1 wire replan()
