@@ -223,7 +223,15 @@ async def find_path(message: str) -> ToolResult:
         content="\n".join(lines),
         risk=RiskLevel.LOW,
         source="find_path",
-        metadata={"matches": len(matches), "root": str(root), "truncated": truncated},
+        # Session 193 (deterministic file-ops layer): expose the matched
+        # paths STRUCTURED so the engine's deterministic executor can pick
+        # and read without re-parsing the human-facing content lines.
+        metadata={
+            "matches": len(matches),
+            "root": str(root),
+            "truncated": truncated,
+            "paths": [str(m) for m in matches],
+        },
     )
 
 

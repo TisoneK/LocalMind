@@ -1998,6 +1998,228 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             yield StreamChunk(text="", done=True)
             return
 
+        # ── 2c. Deterministic file-ops fast-path (Session 193) ─────────────
+        # ADR-8 Phase 4 track 2 — the root fix for the "find my CV and read
+        # it" failure class. The file-search signal (Session 191) routed the
+        # phrasing to FIND_PATH but then handed the chain (find → pick →
+        # read) to the AGENT LOOP, where the free-tier model had to do the
+        # chaining and stalled (transcript: find_path found CV-Tisone in
+        # 1.9s, the model never read it; then a 17-iter replan spiral, now
+        # bounded by Session 192). Here the ENGINE runs the chain as code:
+        #   find_path → pick_best_match → file_reader — zero model decisions
+        # in the loop; the model gets ONLY the final synthesis (and when the
+        # model is down/empty, the deterministic evidence is yielded instead
+        # — never blank, never a raw provider payload).
+        # Gate on the client's tool fence: the deterministic path runs
+        # find_path + the file reader directly, so it must not fire when the
+        # session scoped the tools to something else (code review finding:
+        # every other tool-executing path honors allowed_tool_names).
+        _fo_tools_allowed = (
+            allowed_tool_names is None
+            or bool({"find_path", "file_task"} & set(allowed_tool_names))
+        )
+        # fast_path comes from the PLAN (_orchestration_plan.fast_path): the
+        # dispatcher SIGNALS set it on the plan, while _task_profile.fast_path
+        # is only True for client pre-classification (Session 193 debug — the
+        # first engine test fell through to the agent loop because the branch
+        # read the profile's flag, which signals never set).
+        if (
+            _orchestration_plan is not None
+            and _orchestration_plan.fast_path
+            and _fo_tools_allowed
+            and _task_profile.primary_domain == "file_ops"
+            and _orchestration_plan.graph is not None
+        ):
+            from core.file_ops import (
+                FileOpsSpec,
+                detect_read_request,
+                execute_file_ops,
+                format_match_list,
+                format_read_evidence,
+            )
+
+            _clock.start("context_build")
+            # Rebuild the spec from the signal's find_path node args + the
+            # message's read/identity detection (same deterministic parse the
+            # signal used — no LLM).
+            _fo_node = _orchestration_plan.graph.nodes[0]
+            _fo_args = _fo_node.tool_args or {}
+            _read_requested, _identity = detect_read_request(message)
+            _fo_spec = FileOpsSpec(
+                target=str(_fo_args.get("name", "")).strip("*") or message.strip()[:40],
+                pattern=str(_fo_args.get("name", "")),
+                root=str(_fo_args.get("root", "")),
+                max_depth=int(_fo_args.get("max_depth", 4) or 4),
+                max_results=int(_fo_args.get("max_results", 25) or 25),
+                read_requested=_read_requested,
+                identity=_identity,
+            )
+            _clock.end("context_build")
+            _clock.start("execute")
+            _obs.emit(
+                "file_ops_start",
+                target=_fo_spec.target,
+                read_requested=_read_requested,
+                identity=_identity or None,
+            )
+            _obs.emit("tool_status", tool="find_path", label="Searching", status="running")
+            _fo_result = await execute_file_ops(_fo_spec)
+            _obs.emit("tool_status", tool="find_path", label="Searching", status="done")
+            _clock.end("execute")
+
+            if _fo_result.error and (not _fo_result.matches or _fo_result.read_blocked):
+                # Deterministic failure (no match OR a blocked read) — no
+                # model needed, no provider JSON. A blocked read must surface
+                # the security refusal, not the match list.
+                _text = _fo_result.error
+                _obs.emit(
+                    "file_ops_no_match" if not _fo_result.matches else "file_ops_read_blocked",
+                    target=_fo_spec.target,
+                    error=_text[:120],
+                )
+                _clock.skip("generate")
+                self._persist_assistant_message(session_id, _text)
+                total_ms = round((time.monotonic() - t0) * 1000)
+                self._metrics.record("file_ops", latency_ms=total_ms, success=False)
+                _obs.emit(
+                    "turn_complete",
+                    intent="file_ops",
+                    confidence=round(confidence, 2),
+                    tokens_approx=_approx_tokens(_text),
+                    total_latency_ms=total_ms,
+                    memory_facts=0,
+                    agent_mode=False,
+                )
+                self._store_observation(
+                    session_id, _obs, intent="file_ops", confidence=round(confidence, 2),
+                    tools_used="find_path", memory_hits=0, context_tokens=0,
+                    latency_ms=total_ms,
+                )
+                yield StreamChunk(text=_text, done=False)
+                yield StreamChunk(text="", done=True)
+                return
+
+            # Deterministic results are in: either a read chain completed
+            # (chosen + content) or the request was find-only / ambiguous.
+            if _fo_result.content is not None:
+                _obs.emit(
+                    "file_ops_read_done",
+                    path=_fo_result.chosen,
+                    chars=len(_fo_result.content),
+                )
+                # Synthesis is the ONLY model call — a minimal prompt (like
+                # the FILE_TASK attachment fast-path) with the content in
+                # context. On empty/error the deterministic evidence is
+                # yielded instead, so the user always sees the file contents.
+                _clock.start("generate")
+                self._metrics.start_request()
+                active_adapter = self._adapter_for(effective_intent)
+                cw = active_adapter.effective_context_window
+                _char_budget = min(round(cw * 0.40) * 4, 24000)
+                _evidence = format_read_evidence(_fo_result, max_chars=_char_budget)
+                _sys = (
+                    "You are LocalMind. A file was found and read on the user's "
+                    "machine. Respond to the user's request using ONLY the file "
+                    "content below — never invent details not present in it.\n\n"
+                    f"[File: {_fo_result.chosen}]\n{_evidence}"
+                )
+                _fo_messages: list[dict] = [{"role": "system", "content": _sys}]
+                _recent = [m for m in history if m.role.value in ("user", "assistant")][-4:]
+                for _hm in _recent:
+                    _fo_messages.append({"role": _hm.role.value, "content": _hm.content[:800]})
+                _fo_messages.append({"role": "user", "content": message})
+                _full_response: list[str] = []
+                _model_failed = False
+                async for chunk in active_adapter.chat(
+                    _fo_messages, temperature=0.0, intent="file_task"
+                ):
+                    if chunk.usage:
+                        _provider_usage.update(chunk.usage)
+                    if chunk.error:
+                        # Do NOT surface raw provider error JSON — the
+                        # deterministic content is the answer (Session 31
+                        # silent-failure contract: always yield text).
+                        _model_failed = True
+                        logger.warning(
+                            "[engine] file_ops synthesis failed (%s) — yielding "
+                            "deterministic evidence instead", chunk.error[:80],
+                        )
+                        continue
+                    safe = _filter_system_leaks(chunk.text)
+                    _full_response.append(safe)
+                    yield StreamChunk(text=safe, done=False, usage=dict(_provider_usage))
+                _clock.end("generate")
+                _streamed = "".join(_full_response)
+                if _model_failed or not _streamed.strip():
+                    if _streamed.strip() and _model_failed:
+                        # The model streamed SOMETHING then errored — keep the
+                        # partial (better than duplicating it under a fallback
+                        # header), but the deterministic evidence still reaches
+                        # the user via the persisted message below.
+                        _obs.emit(
+                            "file_ops_synthesis_fallback",
+                            path=_fo_result.chosen,
+                            reason="model errored after partial stream",
+                        )
+                    else:
+                        # Deterministic fallback: the file contents, never blank.
+                        _fallback = (
+                            f"Here is what I found and read:\n\n"
+                            f"**{_fo_result.chosen}**\n\n{_evidence}"
+                        )
+                        _obs.emit(
+                            "file_ops_synthesis_fallback",
+                            path=_fo_result.chosen,
+                            reason="model empty or error",
+                        )
+                        yield StreamChunk(text=_fallback, done=False)
+                        _full_response = [_fallback]
+                response_text = "".join(_full_response)
+            else:
+                # Find-only request OR ambiguous match list — deterministic
+                # presentation, no model needed at all.
+                response_text = format_match_list(_fo_result)
+                _obs.emit(
+                    "file_ops_listed",
+                    matches=len(_fo_result.matches),
+                    ambiguous=not _fo_result.spec.read_requested or _fo_result.chosen is None,
+                )
+                _clock.skip("generate")
+                if _fo_result.spec.read_requested and _fo_result.chosen is None:
+                    response_text += (
+                        "\n\nWhich one would you like me to read? Tell me the name "
+                        "and I'll open it."
+                    )
+                yield StreamChunk(text=response_text, done=False)
+
+            self._persist_assistant_message(session_id, response_text)
+            total_ms = round((time.monotonic() - t0) * 1000)
+            if _fo_result.content is not None:
+                _pt = _provider_usage.get("prompt_tokens", 0) or _approx_tokens(
+                    "".join(m.get("content", "") for m in _fo_messages if isinstance(m, dict))
+                )
+            else:
+                _pt = 0
+            self._metrics.record("file_ops", latency_ms=total_ms, success=True)
+            _obs.emit(
+                "turn_complete",
+                intent="file_ops",
+                confidence=round(confidence, 2),
+                tokens_approx=_approx_tokens(response_text),
+                prompt_tokens_approx=_pt,
+                total_latency_ms=total_ms,
+                memory_facts=0,
+                agent_mode=False,
+                provider_usage=dict(_provider_usage),
+            )
+            self._store_observation(
+                session_id, _obs, intent="file_ops", confidence=round(confidence, 2),
+                tools_used="find_path" + (",file_task" if _fo_result.content is not None else ""),
+                memory_hits=0, context_tokens=_pt, latency_ms=total_ms,
+            )
+            yield StreamChunk(text="", done=True)
+            return
+
         # ── 4+5. File attachment + Memory retrieval (parallel) ─────────────
         # When a file is attached, parse it AND retrieve memory concurrently.
         # These are independent I/O-bound operations — no reason to wait

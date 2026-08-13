@@ -40,6 +40,7 @@ from typing import AsyncIterator, Optional, Union
 
 from core.cache import TTLCache
 from core.execution_graph import ExecutionGraph, build_graph_from_plan_steps
+from core.file_ops import detect_read_request
 from core.filters import _filter_system_leaks
 from core.models import (
     Capability,
@@ -982,6 +983,14 @@ class ThinkingDispatcher:
             r"(?:hey|hi|hello|ok(?:ay)?)\s*[,!]?\s*)",
             re.IGNORECASE,
         )
+        # Session 193 (deterministic file-ops layer): is this a compound
+        # READ request ("find my cv AND READ it")? The read flag routes the
+        # plan to primary_domain="file_ops", which the engine intercepts
+        # and executes deterministically (find → pick → read) with the model
+        # reduced to final synthesis. Also captures the identity name
+        # ("I'm Tisone...") so the picker prefers CV-Tisone*.docx.
+        _read_requested, _identity = detect_read_request(msg)
+        _domain = "file_ops" if _read_requested else "file_search"
 
         _msg_for_find = _FIND_LEAD.sub("", msg, count=1)
         _find_m = _FIND_VERB.match(_msg_for_find)
@@ -1032,7 +1041,7 @@ class ThinkingDispatcher:
                         execution_mode=ExecutionMode.SINGLE_TOOL,
                         safety_level=SafetyLevel.LOW,
                         confidence=0.9,
-                        primary_domain="file_search",
+                        primary_domain=_domain,
                         reformulated=_reform,
                         acknowledgement=f"Searching for '{_target}'...",
                     )
@@ -1047,6 +1056,115 @@ class ThinkingDispatcher:
                                     "args": {
                                         "name": _pattern,
                                         "root": _root,
+                                        "max_depth": 4,
+                                        "max_results": 25,
+                                    },
+                                    "depends_on": [],
+                                    "label": f"Searching for: {_target[:50]}",
+                                }
+                            ]
+                        ),
+                        dispatch_steps=_build_dispatch_steps(
+                            Intent.FIND_PATH, message, f"Find: {_target[:80]}"
+                        ),
+                        fast_path=True,
+                    )
+
+        # Direct read phrasing → file_ops (Session 193). "READ my cv",
+        # "SHOW me the invoice", "OPEN the budget file", "SUMMARIZE the
+        # report" are unambiguous find+read requests, but they don't start
+        # with find/locate/search so the file-search branch above can't see
+        # them — they used to route through the LLM dispatcher to FILE_TASK
+        # (agent loop), where the free-tier model had to chain find → pick
+        # → read and often stalled (the "find my CV" transcript: find_path
+        # succeeded in 1.9s, the model never read the file). This branch
+        # produces the same file_ops plan; the engine runs the chain
+        # deterministically.
+        #
+        # Guards (fall through to the LLM):
+        #   - Explicit paths ("read ~/Documents/notes.txt") → the FILE_TASK
+        #     path handles those; a name-search here would be wrong.
+        #   - Listing phrasing ("show me all projects in dev") → the
+        #     directory-listing signal owns that.
+        #   - Non-file targets ("read the news") → not a name search.
+        #   - Investigation ("show me how to...", "tell me about...").
+        _READ_VERB_START = re.compile(
+            r"^(?:(?:can|could|please)\s+(?:you\s+)?)?(?:read|show me|open|"
+            r"view|display|summariz\w*|review|analy[sz]e|print)\b",
+            re.IGNORECASE,
+        )
+        _READ_LISTING = re.compile(
+            r"\b(?:all|the)\s+(?:files|folders|directories|projects|contents|"
+            r"items|things|dirs|subfolders)\b",
+            re.IGNORECASE,
+        )
+        _READ_PATHISH = re.compile(r"[\\/]|^~[/.]|\.[a-z0-9]{1,6}$", re.IGNORECASE)
+        _READ_NON_FILE = re.compile(
+            r"^\s*(news|weather|emails?|messages|notifications|website|url|page|article)\b",
+            re.IGNORECASE,
+        )
+        # Direct-read targets must LOOK like a document/file, else the phrase
+        # is not a name-search ("review my CODE" / "analyze the problem" /
+        # "open the browser" are NOT file reads). The find+read compound
+        # branch above already passes the stricter find guards; this guard
+        # keeps the direct-read branch from swallowing coding/debug phrases.
+        _READ_DOC_NOUN = re.compile(
+            r"\b(cv|resume|invoice|report|document|docs?|notes?|letter|log|"
+            r"budget|contract|agreement|receipt|statement|config|readme|manual|"
+            r"guide|minutes|agenda|proposal|spec|summary|essay|thesis|paper|"
+            r"article|profile|bio|biodata|photo|photos?|image|images?|"
+            r"picture|pictures?|scan|scans?)\b",
+            re.IGNORECASE,
+        )
+        _READ_INVESTIGATION = re.compile(
+            r"\b(how to|tell me about|about how|why|what would happen)\b", re.IGNORECASE
+        )
+        _read_m = _READ_VERB_START.match(_msg_for_find)
+        if _read_m and not _FIND_INVESTIGATION.search(msg) and not _READ_INVESTIGATION.search(msg):
+            _rest = _msg_for_find[_read_m.end() :]
+            _rest = _FIND_SPLIT.split(_rest, 1)[0].strip().strip("\"'")
+            _rest = _FIND_POSSESSIVE.sub("", _rest).strip()
+            if _rest and not _READ_LISTING.search(_rest) and not _READ_PATHISH.search(_rest):
+                _target = _FIND_TRAILING_NOUN.sub("", _rest).strip().strip("\"'")
+                # Doc-noun guard checks the FULL rest (pre trailing-noun
+                # strip) so "display the license document" matches on
+                # "document" while "review my code" still falls through.
+                if (
+                    _target
+                    and not _READ_NON_FILE.search(_target)
+                    and not _FIND_DEBUG_TARGET.match(_target)
+                    and _READ_DOC_NOUN.search(_rest)
+                ):
+                    if " " in _target:
+                        _pattern = "*" + "*".join(_target.split()) + "*"
+                    else:
+                        _pattern = _target
+                    _reform = (
+                        f"Find and read the file matching '{_target}' under the "
+                        f"user home directory, then present its contents: {message[:160]}"
+                    )
+                    profile = TaskProfile(
+                        capabilities=[Capability.FILE_READ],
+                        requires_tools=True,
+                        requires_file_access=True,
+                        execution_mode=ExecutionMode.SINGLE_TOOL,
+                        safety_level=SafetyLevel.LOW,
+                        confidence=0.9,
+                        primary_domain="file_ops",
+                        reformulated=_reform,
+                        acknowledgement=f"Searching for '{_target}'...",
+                    )
+                    return OrchestrationPlan(
+                        profile=profile,
+                        graph=build_graph_from_plan_steps(
+                            [
+                                {
+                                    "id": "find_read_file",
+                                    "capability": "file_read",
+                                    "tool": "find_path",
+                                    "args": {
+                                        "name": _pattern,
+                                        "root": "",
                                         "max_depth": 4,
                                         "max_results": 25,
                                     },

@@ -226,12 +226,18 @@ def test_git_stash_goes_through_shell_prefix_signal():
 
 
 def _file_search_plan(message):
-    """Return the plan ONLY if it is the file-search (find_path) signal."""
+    """Return the plan ONLY if it is the file-ops signal family.
+
+    Session 191: plain name-searches → primary_domain "file_search".
+    Session 193: compound read requests ("find my cv and read it", "read
+    my cv") → primary_domain "file_ops" — the engine executes the
+    find→pick→read chain deterministically. Both are the find_path signal.
+    """
     plans = _signal_plan(message)
     if not plans:
         return None
     plan = plans[0]
-    if plan.fast_path is True and plan.profile.primary_domain == "file_search":
+    if plan.fast_path is True and plan.profile.primary_domain in ("file_search", "file_ops"):
         return plan
     return None
 
@@ -367,3 +373,91 @@ def test_bare_diff_without_git_anchor_falls_through():
     assert not (
         plan.fast_path is True and plan.profile.primary_domain == "shell_command"
     )
+
+
+# ── 4. Compound read phrasing → file_ops signal (Session 193) ──────────
+# The deterministic file-ops execution layer routes find+read requests to
+# primary_domain="file_ops" so the engine executes find→pick→read as code
+# (model reduced to final synthesis). Two entry points: the existing find
+# branch (now flags read_requested) and a new direct-read branch ("read my
+# cv", "show me the invoice").
+
+
+def _file_ops_plan(message):
+    """Return the plan ONLY if it is the deterministic file_ops signal."""
+    plans = _signal_plan(message)
+    if not plans:
+        return None
+    plan = plans[0]
+    if plan.fast_path is True and plan.profile.primary_domain == "file_ops":
+        return plan
+    return None
+
+
+def test_find_and_read_routes_to_file_ops_domain():
+    # The exact transcript phrasing — now a DETERMINISTIC chain, not an
+    # agent-loop gamble (the model found the CV in 1.9s but never read it).
+    plan = _file_ops_plan("I'm Tisone, find my cv and read it")
+    assert plan is not None
+    node = plan.graph.nodes[0]
+    assert node.tool_name == "find_path"
+    assert node.tool_args["name"] == "cv"
+    assert "read it" in plan.profile.reformulated
+
+
+def test_direct_read_phrasing_routes_to_file_ops():
+    for msg in [
+        "read my cv",
+        "read my resume",
+        "show me the invoice",
+        "open the budget file",
+        "summarize the annual report",
+        "view my config file",
+        "display the license document",
+    ]:
+        plan = _file_ops_plan(msg)
+        assert plan is not None, f"{msg!r} must be a file_ops signal"
+        assert plan.graph.nodes[0].tool_name == "find_path"
+
+
+def test_direct_read_multiword_target_becomes_glob():
+    plan = _file_ops_plan("summarize the annual budget report")
+    assert plan is not None
+    assert plan.graph.nodes[0].tool_args["name"] == "*annual*budget*report*"
+
+
+def test_plain_find_stays_file_search_domain():
+    # "find my cv" without a read verb is still a plain name-search (the
+    # agent loop synthesizes the location from find_path output) — the
+    # deterministic READ chain only engages when a read is requested.
+    plan = _file_search_plan("find my cv")
+    assert plan is not None
+    assert plan.profile.primary_domain == "file_search"
+    assert _file_ops_plan("find my cv") is None
+
+
+def test_non_file_read_targets_fall_through():
+    # Coding/debug/list/web phrasing must NOT become a file-name search.
+    for msg in [
+        "review my code",
+        "analyze the problem",
+        "read the news",
+        "show me all projects in dev",
+        "open the browser",
+        "read the email settings",
+        "show me how to fix this",
+        "read ~/Documents/notes.txt",  # explicit path → FILE_TASK handles it
+    ]:
+        assert _file_ops_plan(msg) is None, f"{msg!r} must NOT be a file_ops signal"
+
+
+def test_investigation_phrasing_still_falls_through():
+    for msg in ["find out what the error means", "figure out the issue"]:
+        assert _file_ops_plan(msg) is None, f"{msg!r} must NOT be a file_ops signal"
+
+
+def test_file_ops_signal_preserves_dispatch_step():
+    plan = _file_ops_plan("read my cv")
+    assert plan is not None
+    assert plan.dispatch_steps
+    assert plan.dispatch_steps[0]["intent"] == "find_path"
