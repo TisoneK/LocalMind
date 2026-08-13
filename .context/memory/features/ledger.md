@@ -17,3 +17,5 @@ archived or deleted **only after** its ledger line records the outcome
 - **adr-19-task-aware-context** — started 2026-08-12 · active · P0 implemented (Sessions 160-163: 17b3624/42053dd/89f5d77/53210be — context_policy + dispatcher task_type, compactor v2, summarizer v2 + decision preservation, loop/engine wiring; 1407 tests green) · live smoke provider-blocked (Zen 429, see manifest.md) · P1-P3 pending
 - **adr-20-error-normalization** — started 2026-08-12 · active · Session 165 (design + backend normalizer) · finished —
 - **adr-21-provider-agnostic-errors** — started 2026-08-12 · active · Session 169 (design + provider-envelope classifier) · finished —
+
+- **adr-19-task-aware-context** — started 2026-08-12 · **COMPLETE** — all phases shipped: P0 (Sessions 160-163) + P1 hierarchy/level-aware retrieval (177, 5f4f8a8) + P2 decision ledger (178, c348633) + P3 LLM value scoring opt-in (179, e2caafb) · full suite 1550 green · live smoke Zen-429 blocked (flaw log)
