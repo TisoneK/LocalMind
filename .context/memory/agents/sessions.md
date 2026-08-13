@@ -2143,3 +2143,33 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   `core/agent/planner.py` returning `list[PlanNode]` with
   `{subgoal, depends_on, success_criteria, token_budget,
   iter_budget}`. Extend TaskState to track per-node state.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 179 in progress)
+
+- **Agent:** Super Z / GLM-5.2 (Z.ai)
+- **Platform:** Linux cloud sandbox (Ubuntu)
+- **Role:** engineer
+- **Core:** 0.5.0 (verified, no drift)
+- **Task:** Real-model live smoke verification of Sessions 177-178 +
+  begin Session 179 (F4 Mandatory Verifier post-execution).
+- **Done (live smoke):**
+  - Confirmed ZEN_API works against the `zen` provider endpoint
+    (`opencode.ai/zen/v1`). Updated `secrets/zen-api` scope note.
+  - Verified free models reachable: `nemotron-3.5-lightning-free`,
+    `laguna-s-2.1-free`, `ling-3.0-tiny-free`. (`deepseek-v4-flash-free`
+    and `mimo-v2.5-free` hit FreeUsageLimitError — the same pattern
+    Sessions 169-175 reported; Sessions 177-178 worked around it by
+    using nemotron instead.)
+  - **Real chat smoke PASSED** ("Reply with the single word: OK"):
+    full pipeline ran, dispatcher→intent_classified→token→turn_complete
+    →done. Provider usage confirmed via opencode.ai/zen/v1 HTTP 200.
+  - **Real agentic smoke PASSED** ("List the files in /tmp"):
+    dispatcher signal-detected shell intent (no LLM call), ADR-8 Phase 4
+    selected coding agent, tool call `shell ls /tmp` executed
+    successfully (12ms, success=True), tool result rendered via SSE.
+  - Sessions 177-178 changes are now confirmed LIVE in production paths.
+- **Commits so far:** none in this session yet (smoke was verification,
+  not new code).
+- **Next:** Session 179 — F4 Mandatory Verifier post-execution.

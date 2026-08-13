@@ -10,3 +10,4 @@
 2026-08-13 — Super Z / GLM-5.2 — Session 176 — discovery audit; code-verified 8 ADR-18 gap claims; wrote 2026-08-13-review.md with F1-F10 findings + 7-session roadmap; no code changed.
 2026-08-13 — Super Z / GLM-5.2 — Session 177 — GoalInterpreter (F2): new goal_interpreter.py derives deterministic success_criteria when the dispatcher LLM omits them; wired into _pipeline.py; 18 new tests + engine smoke pass; full suite 1513+1-pre-existing green.
 2026-08-13 — Super Z / GLM-5.2 — Session 178 — F1 wired: AgentOrchestrator.replan() is no longer dead code; called from _acceptance_gate_at_final_answer before _replan_for_gate fallback. 5 new tests; full suite 1518+1-pre-existing green.
+2026-08-13 — Super Z / GLM-5.2 — Session 179 (in progress) — live smoke PASSED: real chat + agentic (list /tmp) via nemotron-3.5-lightning-free on Zen provider; Sessions 177-178 confirmed live.
