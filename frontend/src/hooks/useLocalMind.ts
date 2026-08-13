@@ -36,6 +36,7 @@ import type {
   CompletionSuggestion,
   Objective,
   SessionStats,
+  AgentPhase,
 } from '@/types';
 
 // ─── Session stats (stats split — bottom-right corner) ────────────────────
@@ -1016,6 +1017,49 @@ export function useChat(
                     }
                   }
                 }
+
+                // Session 181 — F4 Frontend Phase Visibility. Handle the
+                // 8 backend obs events that surface the agent's decision
+                // history. Each appends a phase entry to the LAST assistant
+                // message's `agentPhases` array — the strip renders in
+                // ChatMessage between the thinking block and tool cards.
+                const PHASE_EVENT_TYPES = new Set([
+                  'plan_nodes_created',
+                  'plan_node_advanced',
+                  'agent_loop_gate_passed',
+                  'agent_loop_gate_failed_replan',
+                  'orchestrator_replan_start',
+                  'orchestrator_replan_done',
+                  'orchestrator_replan_failed',
+                  'agent_loop_failure',
+                ]);
+                if (PHASE_EVENT_TYPES.has(obs.type)) {
+                  const phase = buildAgentPhase(obs.type, obsData);
+                  if (phase) {
+                    setMessages((prev) => {
+                      // Find the LAST assistant message — that's the one
+                      // currently streaming this turn.
+                      const lastAssistantIdx = [...prev]
+                        .reverse()
+                        .findIndex((m) => m.role === 'assistant');
+                      if (lastAssistantIdx === -1) return prev;
+                      const realIdx = prev.length - 1 - lastAssistantIdx;
+                      const target = prev[realIdx];
+                      const existingPhases = target.agentPhases ?? [];
+                      // Dedupe by phase.id (some events fire once per turn).
+                      if (existingPhases.some((p) => p.id === phase.id)) {
+                        return prev;
+                      }
+                      const updated: ChatMessage = {
+                        ...target,
+                        agentPhases: [...existingPhases, phase],
+                      };
+                      const next = [...prev];
+                      next[realIdx] = updated;
+                      return next;
+                    });
+                  }
+                }
                 break;
               }
 
@@ -1423,6 +1467,122 @@ function _toolToIntent(toolName: string, fallback: string = 'chat'): string {
     grep: 'search',
   };
   return map[toolName] || fallback;
+}
+
+// ─── Session 181 — F4 Frontend Phase Visibility ──────────────────────
+//
+// buildAgentPhase converts a backend obs event into an AgentPhase entry
+// for the phase strip in ChatMessage. Each event type carries different
+// payload fields; this helper extracts the most informative label +
+// detail for each. Returns null when the event payload is missing
+// required fields (defensive — the strip only renders entries that
+// have something useful to say).
+//
+// Exported for direct unit testing (Session 181).
+export function buildAgentPhase(
+  eventType: string,
+  data: any,
+): AgentPhase | null {
+  const ts = Date.now();
+  switch (eventType) {
+    case 'plan_nodes_created': {
+      const count = Number(data?.node_count ?? 0);
+      if (!count) return null;
+      const ids: string[] = Array.isArray(data?.node_ids) ? data.node_ids : [];
+      return {
+        id: `phase-plan-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'plan_created',
+        label: `Plan built — ${count} step${count === 1 ? '' : 's'}`,
+        detail: ids.length ? ids.join(' → ') : undefined,
+        timestamp: ts,
+      };
+    }
+    case 'plan_node_advanced': {
+      const nodeId = String(data?.node_id ?? '');
+      const newStatus = String(data?.new_status ?? '');
+      const subgoal = String(data?.subgoal ?? '').slice(0, 100);
+      if (!nodeId) return null;
+      const statusIcon = newStatus === 'completed' ? '✓' : newStatus === 'failed' ? '✗' : '~';
+      return {
+        id: `phase-adv-${nodeId}-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'node_advanced',
+        label: `${nodeId} ${statusIcon} ${subgoal}`,
+        detail: newStatus ? `status: ${newStatus}` : undefined,
+        timestamp: ts,
+        iteration: data?.iteration !== undefined ? Number(data.iteration) : undefined,
+      };
+    }
+    case 'agent_loop_gate_passed': {
+      const intent = String(data?.intent ?? '');
+      return {
+        id: `phase-gate-pass-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'gate_passed',
+        label: intent ? `Verified — ${intent} acceptance gate passed` : 'Verified — acceptance gate passed',
+        timestamp: ts,
+        iteration: data?.iteration !== undefined ? Number(data.iteration) : undefined,
+      };
+    }
+    case 'agent_loop_gate_failed_replan': {
+      const intent = String(data?.intent ?? '');
+      const unmet: string[] = Array.isArray(data?.unmet) ? data.unmet : [];
+      return {
+        id: `phase-gate-fail-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'gate_failed_replan',
+        label: intent
+          ? `Replanning — ${intent} criteria unmet`
+          : 'Replanning — acceptance criteria unmet',
+        detail: unmet.length ? `Unmet: ${unmet.slice(0, 3).join('; ')}` : undefined,
+        timestamp: ts,
+        iteration: data?.iteration !== undefined ? Number(data.iteration) : undefined,
+      };
+    }
+    case 'orchestrator_replan_start': {
+      const intent = String(data?.intent ?? '');
+      return {
+        id: `phase-orch-start-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'orchestrator_replan_start',
+        label: intent
+          ? `Orchestrator notified — ${intent} failure`
+          : 'Orchestrator notified of failure',
+        timestamp: ts,
+        iteration: data?.iteration !== undefined ? Number(data.iteration) : undefined,
+      };
+    }
+    case 'orchestrator_replan_done': {
+      const confidence = Number(data?.confidence ?? 0);
+      const intent = String(data?.intent ?? '');
+      return {
+        id: `phase-orch-done-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'orchestrator_replan_done',
+        label: intent
+          ? `Orchestrator replanned — ${intent}, confidence ${confidence.toFixed(2)}`
+          : `Orchestrator replanned — confidence ${confidence.toFixed(2)}`,
+        timestamp: ts,
+      };
+    }
+    case 'orchestrator_replan_failed': {
+      const error = String(data?.error ?? '');
+      return {
+        id: `phase-orch-fail-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'orchestrator_replan_failed',
+        label: 'Orchestrator replan failed (non-fatal — using fallback)',
+        detail: error ? `Error: ${error.slice(0, 120)}` : undefined,
+        timestamp: ts,
+      };
+    }
+    case 'agent_loop_failure': {
+      const reason = String(data?.reason ?? data?.failure_type ?? '');
+      return {
+        id: `phase-fail-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'agent_loop_failure',
+        label: 'Agent loop terminated',
+        detail: reason ? `Reason: ${reason.slice(0, 120)}` : undefined,
+        timestamp: ts,
+      };
+    }
+    default:
+      return null;
+  }
 }
 
 const _PROMPT_LEAK_PATTERNS = [

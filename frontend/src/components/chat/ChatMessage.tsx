@@ -53,6 +53,7 @@ import { formatLatency } from '@/lib/localmind/progress';
 import { repairMarkdown } from '@/lib/markdownRepair';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolSteps } from './ToolSteps';
+import { AgentPhases } from './AgentPhases';
 import { ErrorMessage } from './ErrorMessage';
 import { DiffBlock, type DiffHunk } from '@/components/shared/DiffBlock';
 
@@ -661,6 +662,17 @@ export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps)
           {/* Thinking block — the model's reasoning, auto-expanded while streaming */}
           {message.thinking && message.isAgent && (
             <ThinkingBlock thinking={message.thinking} thinkMs={message.thinkMs} isStreaming={isStreaming} />
+          )}
+
+          {/* Session 181 — F4 Frontend Phase Visibility. Agentic phase strip
+              (plan_created, gate_passed, gate_failed_replan, orchestrator_replan_*,
+              plan_node_advanced, agent_loop_failure). Renders between the
+              thinking block and the tool cards so the user sees the agent's
+              decision history — "I planned X → I verified Y → I replanned
+              because Z" — the literal difference between a chat-with-tools
+              and an agent. */}
+          {message.agentPhases && message.agentPhases.length > 0 && (
+            <AgentPhases phases={message.agentPhases} isStreaming={isStreaming} />
           )}
 
           {/* Live agent trace — every tool the agent ran, with verbatim input,
