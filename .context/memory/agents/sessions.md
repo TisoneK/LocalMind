@@ -2356,3 +2356,53 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Next:** Session 183 — F6-F9 cleanup (4 dead is_done stubs,
   dead _plan variant, undocumented memory merge) + final
   real-model end-to-end smoke.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 183)
+
+- **Agent:** Super Z / GLM-5.2 (Z.ai)
+- **Platform:** Linux cloud sandbox (Ubuntu)
+- **Role:** engineer
+- **Core:** 0.5.0 (verified, no drift)
+- **Task:** Session 183 — F6-F9 cleanup + final real-model smoke.
+- **Done:**
+  - F6: Promoted 4 dead is_done() stubs (browser/analyst/debugger/
+    reviewer) to use the shared criteria_gate. Same one-line pattern
+    as coding/verifier from Sessions 173-174.
+  - F7: Already addressed in Session 178 (orchestrator_replan_*
+    events are no longer dead — wired into the verify-fail path).
+  - F8: Deleted the dead _plan non-streaming variant at
+    loop.py:4516-4600 (~85 lines, including the unused
+    PLAN_ITERATION_COST import).
+  - F9: Documented the memory merge at _pipeline.py:1974-1990 with
+    a 20-line comment block explaining that MemoryComposer (semantic)
+    + failure_memory are independent at storage/retrieval but merged
+    at this single point in the pipeline. The contract was invisible
+    from either module's docstring — now visible.
+  - Refined Session 2's GoalInterpreter SHELL template from
+    'command exit code 0' to 'no error markers in shell output'
+    (the former had no checkable tokens per the gate's
+    _IGNORED_FALLBACK_TOKENS filter).
+  - **Final real-model smoke PASSED** against
+    nemotron-3.5-lightning-free via Zen:
+      User: 'Run ls /tmp and tell me what's there'
+      → agent_planning_done
+      → shell ls /tmp (12ms, success=True, clean output)
+      → agent_loop_gate_passed: '✓ 1/1 criteria met (no error
+         markers in shell output)'
+      → agent_loop_done
+      → final synthesis streamed
+    This is the literal difference between a chat-with-tools and an
+    agent: the loop terminated on VERIFIED success, not model
+    assertion. The agent_loop_gate_passed event now fires for real
+    (consumed by the frontend Session 181 phase strip).
+- **Tests:** full backend suite **1572 passed** + 1 pre-existing
+  failure (unchanged). Ruff clean.
+- **Commits:** `647c01b` (this session).
+- **Program complete:** all 9 audit findings (F1-F10) from Session
+  176 addressed. F1 wired replan, F2 GoalInterpreter, F3 structured
+  plan DAG, F4 post-exec verifier, F4-ui frontend phase visibility,
+  F5 investigated + skipped (deliberate decision), F6-F9 cleanup.
+  F10 (live smokes for ADR-19/20/21) — closed by the real-model
+  smokes in Sessions 177, 178, 181, 183.
