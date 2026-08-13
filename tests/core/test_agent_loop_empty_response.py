@@ -96,3 +96,48 @@ class TestEmptyResponseFastFail:
 
         full = "".join(c.text for c in chunks)
         assert "All good - nothing to do." in full, f"expected normal text, got {full!r}"
+
+    @pytest.mark.asyncio
+    async def test_stream_error_propagates_adapter_message(self):
+        """Session 187: when the adapter yields an error chunk (e.g. zen 429),
+        the loop must pass the adapter's error message through to the SSE
+        error event. Previously the MiniMax buffering dropped the message
+        (error=""), so the chat route skipped the error event and the
+        frontend rendered a silent spinner."""
+        loop = AgentLoop(adapter=MagicMock())
+
+        zen_429 = (
+            'zen returned 429: {"type":"error","error":{"type":'
+            '"FreeUsageLimitError","message":"Rate limit exceeded."}}'
+        )
+
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+            async def _stream():
+                yield StreamChunk(text="", done=True, error=zen_429)
+
+            return _stream()
+
+        async def empty_chat(messages, temperature=0.4):
+            return
+            yield
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_with_tools = chat_with_tools
+        mock_adapter.chat = empty_chat
+
+        chunks = []
+        with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+             patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x):
+            async for chunk in loop.run(
+                messages=[{"role": "user", "content": "list files"}],
+                intent=Intent.SHELL,
+                initial_tool_result=None,
+                available_tools=[],
+                adapter=mock_adapter,
+            ):
+                chunks.append(chunk)
+
+        # The error message must survive — not be replaced by "".
+        errs = [c.error for c in chunks if c.error]
+        assert errs, f"expected a non-empty chunk.error, got {chunks!r}"
+        assert any("429" in e for e in errs), f"expected the 429 text to survive, got {errs!r}"

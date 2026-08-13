@@ -3034,6 +3034,9 @@ class AgentLoop:
                 _minimax_chunks: list[StreamChunk] = []
                 _minimax_stream_ended = False
                 _minimax_error = False
+                _minimax_error_msg = ""  # Session 187: keep the adapter's error
+                # message (e.g. "zen returned 429: …") — previously dropped, so
+                # the frontend got error="" and rendered nothing.
                 _minimax_partial_seen = False  # track if we've seen start of XML
 
                 async for chunk in result:
@@ -3049,6 +3052,8 @@ class AgentLoop:
                     )
                     if chunk.error:
                         _minimax_error = True
+                        if not _minimax_error_msg:
+                            _minimax_error_msg = chunk.error
                     if chunk.done:
                         _minimax_stream_ended = True
                         break
@@ -3398,15 +3403,20 @@ class AgentLoop:
                     )
                 ):
                     logger.warning(f"[agent.loop] iter={iteration + 1} — error in stream, aborting")
+                    # Session 187: prefer the adapter's error message (preserved
+                    # during MiniMax buffering) so the SSE error event carries
+                    # the real cause (e.g. rate limit / provider 429) instead of
+                    # an empty string that renders as a silent spinner.
+                    _stream_err = _minimax_error_msg or initial_buffer
                     if _obs:
-                        _obs.emit("agent_loop_error", error=initial_buffer[:120], iteration=iteration + 1)
+                        _obs.emit("agent_loop_error", error=_stream_err[:120], iteration=iteration + 1)
                     yield StreamChunk(
                         text=(
                             "⚠️ The model ran into an issue. Please try again, "
                             "or switch to a larger model for this task."
                         ),
                         done=True,
-                        error=initial_buffer[:200],
+                        error=_stream_err[:200],
                     )
                     # Drain remaining chunks from the stream
                     if not stream_ended_early:
