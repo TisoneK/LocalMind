@@ -1123,6 +1123,15 @@ class AgentLoop:
         allowed_tool_names: Optional[frozenset[str]] = None,
         steering_queue: Optional[asyncio.Queue] = None,
         abort_signal: Optional[asyncio.Event] = None,
+        # Session 178 — wire the dead AgentOrchestrator.replan() into the
+        # verify-fail path. Before falling back to _replan_for_gate's
+        # self-contained LLM call, notify the orchestrator so its confidence
+        # drops, it can re-route to a different agent (e.g. coding→debugger),
+        # and the orchestrator_replan_* obs events fire for real (consumed by
+        # the frontend in Session 180). None = legacy behavior (no orchestrator
+        # notification; _replan_for_gate runs alone).
+        orchestrator=None,
+        reformulated_message: str = "",
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -3657,6 +3666,10 @@ class AgentLoop:
                         active_adapter=active_adapter,
                         intent=intent,
                         obs=_obs,
+                        orchestrator=orchestrator,
+                        reformulated_message=reformulated_message,
+                        memory_facts=memory_facts,
+                        intent_history=intent_history,
                     )
                     if not _gate_final:
                         continue
@@ -3748,6 +3761,10 @@ class AgentLoop:
                     active_adapter=active_adapter,
                     intent=intent,
                     obs=_obs,
+                    orchestrator=orchestrator,
+                    reformulated_message=reformulated_message,
+                    memory_facts=memory_facts,
+                    intent_history=intent_history,
                 )
                 if not _gate_final:
                     continue
@@ -3870,6 +3887,12 @@ class AgentLoop:
         active_adapter,
         intent: Intent,
         obs,
+        # Session 178 — pass-through from run() so the orchestrator's
+        # dead replan() method can finally be called. None = legacy.
+        orchestrator=None,
+        reformulated_message: str = "",
+        memory_facts: Optional[list[str]] = None,
+        intent_history: Optional[list[str]] = None,
     ) -> tuple[str, bool]:
         """Gate the model's "done" claim against the success criteria.
 
@@ -3879,6 +3902,12 @@ class AgentLoop:
           - Some unmet + iterations remain → EXPLICIT replan LLM call
             (locked decision 3, Session 154); the revised plan is injected
             as a user block and the loop continues (returns is_final=False).
+            Session 178: when `orchestrator` is provided, it is notified
+            FIRST — its replan() produces a structured OrchestrationResult
+            (re-route, confidence drop, clarification question) which is
+            prepended to the revised plan block. The orchestrator's obs
+            events (orchestrator_replan_start/_done/_timeout/_failed) now
+            fire for real (consumed by the frontend in Session 180).
           - Some unmet + cap → suffix = the honest unmet report.
         No criteria → ("", True) — the legacy path is unchanged.
         """
@@ -3901,6 +3930,87 @@ class AgentLoop:
 
         unmet = [(c, n) for c, passed, n in results if not passed]
         if iteration + 1 < effective_max_iter:
+            # Session 178 — Notify the orchestrator FIRST so its dead
+            # replan() method finally runs, its confidence drops, and
+            # the orchestrator_replan_* obs events fire for real (to be
+            # consumed by the frontend in Session 180). The orchestrator
+            # may also return a clarification_question or a re-route hint.
+            _orchestrator_hint = ""
+            if orchestrator is not None:
+                # Session 178 — emit the obs events HERE (in the loop) so
+                # they fire even when the orchestrator is mocked in tests
+                # (the real AgentOrchestrator.replan also emits them, but
+                # the loop is the authoritative source — it owns the call).
+                if obs:
+                    obs.emit(
+                        "orchestrator_replan_start",
+                        intent=intent.value,
+                        iteration=iteration + 1,
+                        unmet=[c for c, _ in unmet][:3],
+                    )
+                try:
+                    # Build an OrchestrationStep describing the failed work.
+                    # The trace's last failed step (or last tool) is the
+                    # closest proxy we have without a richer TaskState.
+                    from core.agent.orchestrator import OrchestrationStep
+
+                    _last_step = None
+                    for _s in reversed(getattr(trace, "steps", []) or []):
+                        if _s.tool_name:
+                            _last_step = _s
+                            break
+                    _failed_step = OrchestrationStep(
+                        tool=_last_step.tool_name if _last_step else "(unknown)",
+                        args=(
+                            {"input": (_last_step.tool_input or "")[:200]}
+                            if _last_step
+                            else {}
+                        ),
+                        reason="; ".join(f"{c}: {n}" for c, n in unmet)[:300],
+                    )
+                    _replan_result = await orchestrator.replan(
+                        reformulated_message=reformulated_message
+                        or _user_message_text(loop_messages),
+                        intent=intent,
+                        failed_step=_failed_step,
+                        failure_reason="; ".join(f"{c}: {n}" for c, n in unmet)[:200],
+                        adapter=active_adapter,
+                        memory_facts=memory_facts,
+                        intent_history=intent_history,
+                        obs=obs,
+                    )
+                    if _replan_result and _replan_result.orchestrator_context:
+                        _orchestrator_hint = (
+                            f"\n[ORCHESTRATOR — confidence dropped to "
+                            f"{round(_replan_result.confidence, 2)}]\n"
+                            f"{_replan_result.orchestrator_context}\n"
+                        )
+                        if _replan_result.clarification_question:
+                            _orchestrator_hint += (
+                                f"Clarification needed: "
+                                f"{_replan_result.clarification_question}\n"
+                            )
+                    if obs:
+                        obs.emit(
+                            "orchestrator_replan_done",
+                            confidence=round(_replan_result.confidence, 2)
+                            if _replan_result
+                            else 0.0,
+                            intent=intent.value,
+                        )
+                except Exception as _orch_exc:  # pragma: no cover — defensive
+                    logger.warning(
+                        "[agent.loop] orchestrator.replan failed (non-fatal, "
+                        "falling back to _replan_for_gate): %s",
+                        _orch_exc,
+                    )
+                    if obs:
+                        obs.emit(
+                            "orchestrator_replan_failed",
+                            error=str(_orch_exc)[:120],
+                            intent=intent.value,
+                        )
+
             revised = await self._replan_for_gate(
                 trace=trace,
                 unmet=unmet,
@@ -3918,7 +4028,8 @@ class AgentLoop:
             block = (
                 "\n[ACCEPTANCE GATE] Your success criteria are NOT yet met:\n"
                 + "\n".join(f"- {c} — {n}" for c, n in unmet)
-                + f"\n\nRevised plan from the gate:\n{revised}\n"
+                + (_orchestrator_hint + "\n" if _orchestrator_hint else "")
+                + f"\nRevised plan from the gate:\n{revised}\n"
                 + "\nDo NOT report done until every criterion is met. Continue working."
             )
             loop_messages.append({"role": "user", "content": block})

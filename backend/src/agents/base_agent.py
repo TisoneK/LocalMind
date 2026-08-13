@@ -239,6 +239,11 @@ class BaseAgent(ABC):
         allowed_tool_names: Optional[frozenset[str]] = None,
         steering_queue=None,  # B-2026-08-02-5 (A5): per-session asyncio.Queue
         abort_signal=None,  # B-2026-08-02-2 (A2): per-session asyncio.Event
+        # Session 178 — pass the engine's AgentOrchestrator through to
+        # AgentLoop so its dead replan() can finally be called from the
+        # verify-fail path. None = legacy (no orchestrator notification).
+        orchestrator=None,
+        reformulated_message: str = "",
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop.
@@ -379,6 +384,8 @@ class BaseAgent(ABC):
             allowed_tool_names=allowed_tool_names,
             steering_queue=steering_queue,  # B-2026-08-02-5 (A5)
             abort_signal=abort_signal,  # B-2026-08-02-2 (A2)
+            orchestrator=orchestrator,  # Session 178
+            reformulated_message=reformulated_message,  # Session 178
         ):
             yield chunk
 

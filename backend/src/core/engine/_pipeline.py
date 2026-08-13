@@ -1723,6 +1723,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     is_done_fn=_acceptance_gate_for(_esc_intent),  # Session 173/174: Verify stage on the escalate path
                     steering_queue=self._steering_queue_for(session_id),
                     abort_signal=self._abort_event_for(session_id),
+                    orchestrator=self._agent_orchestrator,  # Session 178: F1 wire replan()
+                    reformulated_message=message,  # Session 178 — original message on the escalate path
                 )
                 async for chunk in _agent_esc_run:
                     if chunk.usage:
@@ -3469,6 +3471,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     task_type=_reused_task_type or None,  # ADR-19 context policy
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
+                    orchestrator=self._agent_orchestrator,  # Session 178: F1 wire replan()
+                    reformulated_message=reformulated,  # Session 178
                 )
                 # Session 31: CRITICAL FIX — intercept done=True from the
                 # agent loop. If the loop produced NO text, the done signal
@@ -3527,6 +3531,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     task_type=_reused_task_type or None,  # ADR-19 context policy
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
+                    orchestrator=self._agent_orchestrator,  # Session 178: F1 wire replan()
+                    reformulated_message=reformulated,  # Session 178
                 ):
                     if chunk.usage:
                         _provider_usage.update(chunk.usage)
