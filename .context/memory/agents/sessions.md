@@ -2545,3 +2545,50 @@ program + ADR-22). -->
   GoalInterpreter and F4 post-execution verifier ARE wired (verified in
   merged loop.py/_pipeline.py) but deserve a live-model smoke;
   (3) no integration test covers delegation x AgentPhases rendering combo.
+---
+## 2026-08-13 — Session 186 (ADR-19 x ADR-22 re-key: settle memory on the agent's task type)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-19-task-aware-context (post-close hardening follow-up)
+- **Task:** Re-key ADR-19 level-aware memory retrieval on the task_type the
+  agent SETTLES on during planning, instead of the dispatcher's hint — the
+  Session 185 post-merge latent finding (inefficiencies log).
+- **Done:**
+  - `resolve_task_type()` gains a 'chat'-hint correction: a canonical
+    'chat' hint on an explicit NON-CHAT intent is a misclassification
+    ('chat' is the no-tool fallback) → hint dropped, intent fallback
+    applies. Gated on the caller knowing the routing — the dispatcher (no
+    intent) keeps its emitted 'chat' verbatim; DIRECT/CHAT turns unaffected.
+  - Engine (`_pipeline.py`): after `effective_intent` resolves,
+    `_settled_task_type = resolve_task_type(hint, intent=...)`; `_turn_context_policy`
+    + ALL ADR-19 consumers re-keyed off it: DIRECT memory retrieve, DIRECT
+    decision sink, agent-path retrieve, the post-dispatcher level-aware
+    RE-retrieval + `level_priorities`, `recall_decisions` (now per-task
+    instead of accidentally-all-types), both orchestrator/file_write sinks,
+    and both `loop.run(task_type=...)` params. No consumer is left on the
+    raw hint.
+  - Loop (`loop.py`): the planning phase settles
+    `self._settled_task_type` (same pure resolve), re-keys
+    `self._context_policy`, sets `trace.task_type`, emits `task_type_settled`
+    obs (source planning|routing). `AgentTrace.task_type` added (models.py).
+  - Tests: +7 — chat-correction unit test; loop settlement (SHELL+empty hint
+    → 'code' policy, WEB_SEARCH → 'research', invalid hint → 'code',
+    explicit 'debug' hint wins, obs event); engine retrieval regression
+    (empty hint → 'code', 'chat' hint → 'code', 'debug' hint wins); the
+    existing engine wiring test refactored onto the shared helper.
+  - Session 163's "empty hint must stay legacy" contract is superseded FOR
+    AGENT TURNS ONLY — a SHELL task IS a code task; DIRECT/chat keeps legacy.
+- **Verification:** full backend **1635 green** (was 1628), ruff clean on
+  product + touched tests, code-reviewed (all six review concerns verified:
+  DIRECT chat behavior-preserving, no leftover hint consumers, settlement
+  write→use is await-free and the engine never reads the loop's copy, the
+  dispatcher's own resolution untouched, `_obs` guarded, `trace.task_type`
+  write-only observability).
+- **Notes:** `recall_decisions` is now keyed per settled task type — narrower
+  but the ADR-19 designed behavior (docstring: "a plan turn recalls planning
+  decisions, a debug turn recalls debugging constraints"); decisions recorded
+  under task_type='' are not recalled by a filtered recall. Known bound: only
+  'chat' is corrected; a wrong-but-canonical hint (e.g. 'research' on a SHELL
+  task) still wins — settlement is intent-derived, not plan-content-derived
+  (the plan has no structured task_type).
+- **Next (unchanged):** dispatcher accuracy for free-tier (3/8 misclassified
+  as CHAT in the 184 smoke) + ADR-8 Phases 2-4.

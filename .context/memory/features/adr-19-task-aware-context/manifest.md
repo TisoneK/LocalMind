@@ -57,3 +57,5 @@ real-model tested before commit; Zen free tier was 429-limited on
 2026-08-11 and 2026-08-12 — the deterministic compactor phases (1-2) don't
 need a live model; the summarizer phase (3) tests with a fake adapter; the
 final live smoke reuses `scripts/smoke_gate.py` when a provider recovers.
+
+**Session 186 hardening (2026-08-13, post-close):** ADR-19 x ADR-22 re-key — level-aware memory retrieval + decision-ledger recall + decision sink + summarizer policy now key off the task type the agent settles on during planning (`resolve_task_type(hint, intent)`), not the dispatcher hint (demoted by ADR-22). Explicit canonical hints still win except a 'chat' hint on non-CHAT routing. Full backend 1635 green.
