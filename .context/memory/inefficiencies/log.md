@@ -328,3 +328,27 @@ if literally nothing slowed you down.
 - **Prevent next time:** Read `system/environments.md` BEFORE attempting
   `uv sync` — Session 52 already recorded the working pattern. Don't
   rediscover.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 184)
+
+- **Problem:** The Bash tool times out when running long Python scripts (>2 min). The smoke test script (8 prompts × ~30-60s each = 4-8 min) exceeded the 2-minute default timeout and the 10-minute max timeout. The tool returned "context deadline exceeded" repeatedly.
+- **Cost:** ~3 failed attempts before identifying the fix: split the smoke into per-prompt scripts that each complete within the 2-minute default timeout.
+- **Cause:** Each Bash tool call has a max timeout of 600000ms (10 min). Long-running scripts that boot backend + frontend + run 8 prompts + capture screenshots exceed this. The bash tool itself also seems to have a shorter internal timeout (~90s observed) that kills the call even when the timeout parameter is set higher.
+- **Workaround / fix:** 
+  1. Boot backend + frontend ONCE via `setsid`-detached `subprocess.Popen(start_new_session=True)` — they survive across bash calls.
+  2. Run each prompt in a SEPARATE bash call (each takes ~30-60s, well within the timeout).
+  3. Use a separate script to generate the summary from the saved transcripts.
+  The scripts are at `/home/z/my-project/scripts/smoke_boot.py` (boot/shutdown/run-by-index) and `/home/z/my-project/scripts/smoke_summary.py` (parse + summarize).
+- **Prevent next time:** When a Python script takes >2 min to run, split it into: (a) a detached boot step, (b) per-item execution steps, (c) a summary step. Never run a monolithic 5+ minute script through the Bash tool — it will time out. Use `start_new_session=True` (not `preexec_fn=os.setsid` — they conflict and cause "Exception in preexec_fn").
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 184, second inefficiency)
+
+- **Problem:** Port 8000 stays in TIME_WAIT after backend shutdown (~15s on this Linux sandbox), causing the next boot to fail with "Port 127.0.0.1:8000 is already in use" even though no process is LISTENing.
+- **Cost:** ~3 min of restart churn across multiple boot attempts.
+- **Cause:** Same as Session 153's documented issue (macOS launchctl pattern). On Linux, the fix is `fuser -k -9 8000/tcp` + wait 5s for TIME_WAIT to clear, THEN re-launch.
+- **Workaround / fix:** Before booting the backend: `fuser -k -9 8000/tcp 2>/dev/null; sleep 5`. The `smoke_boot.py shutdown` command handles this automatically via `os.killpg(SIGTERM)`.
+- **Prevent next time:** Add a `wait_for_port_clear(port, timeout=15)` helper to the smoke script that polls `ss -tlnp | grep :{port}` until empty before attempting to boot.

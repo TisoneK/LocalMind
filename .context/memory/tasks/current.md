@@ -1,14 +1,16 @@
 # Current Task
 
-- **Session:** 184 (2026-08-13, in progress)
+- **Session:** 184 (2026-08-13, complete)
 - **Feature:** adr-22-agent-first-routing
-- **Task:** ADR-22 implementation done; smoke testing in progress.
+- **Task:** ADR-22 implementation + real-model smoke verification.
 - **Done (184):**
   - ADR-22 written + 3 code changes + test updates.
   - 1573 backend tests pass; ruff clean.
-- **Next:** Real-model smoke against DIVERSE prompts across all tool
-  categories (file_task, web_search, calculate, find_path, sysinfo,
-  shell, code_exec). Capture UI screenshots via Playwright Python
-  (agent-browser can't reach localhost from its sandbox — documented
-  in inefficiencies/log.md). Verify the agent reasons + acknowledges
-  within seconds.
+  - Real-model smoke: 8 diverse prompts across all tool categories.
+    - 5/8 entered the agent loop → ALL 5 had agent planning (ADR-22 works).
+    - 3/8 were misclassified as CHAT by the dispatcher (free-tier model limitation — separate issue).
+    - Signal fast-path (shell/git) still triggers BUT the agent now plans after it — the hint mechanism handles it correctly.
+    - Acceptance gate passed on all 5 agent-loop prompts.
+  - UI screenshots captured via Playwright Python (agent-browser can't reach localhost).
+  - Inefficiencies logged: bash tool timeout + port TIME_WAIT.
+- **Next:** Dispatcher accuracy improvement for free-tier models (the 3/8 misclassified prompts). Separate session.

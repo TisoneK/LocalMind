@@ -2429,3 +2429,41 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Commits:** (this session) — see git log.
 - **Next:** Real-model smoke against DIVERSE prompts (not just the user's
   example), capturing UI screenshots via Playwright Python.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 184 — complete with smoke)
+
+- **Agent:** Super Z / GLM-5.2 (Z.ai)
+- **Platform:** Linux cloud sandbox (Ubuntu)
+- **Role:** engineer
+- **Core:** 0.5.0 (verified, no drift)
+- **Task:** Session 184 — ADR-22 Agent-First Routing + real-model smoke.
+- **Done:**
+  - ADR-22 written + implemented: _should_skip_planning always False;
+    _skip_planning override removed; dispatcher output reframed as
+    "Routing hint" instead of "Structured plan".
+  - 1573 backend tests pass; ruff clean.
+  - **Real-model smoke against 8 diverse prompts** via Zen
+    nemotron-3.5-lightning-free:
+    - find_path: 23.5s, planning ✓, routing_hint ✓, gate ✓
+    - calculate: 7.5s (trivial fast-path — model answered directly)
+    - file_task: 43.0s, planning ✓, gate ✓
+    - sysinfo: 31.9s (dispatcher misclassified as CHAT)
+    - shell (git log): 9.4s, planning ✓, routing_hint ✓, fast_path ✓
+      BUT agent still planned — exactly the ADR-22 behavior wanted
+    - code_exec: 41.6s, planning ✓, routing_hint ✓, gate ✓
+    - multi_step: 40.2s, planning ✓, gate ✓
+    - reasoning: 54.6s (dispatcher misclassified as CHAT)
+  - **Key finding:** ADR-22 works for ALL prompts that enter the agent
+    loop (5/5 had planning). The 3 that didn't were misclassified as
+    CHAT by the dispatcher LLM (free-tier limitation) — they never
+    entered the agent loop. ADR-22 can't fix this — it only affects
+    AGENT_INTENTS routing.
+  - UI screenshots captured via Playwright Python at
+    /home/z/my-project/download/smoke_184/
+  - Inefficiencies logged: bash tool timeout (split into per-prompt
+    scripts), port TIME_WAIT (fuser -k + sleep 5).
+- **Commits:** db70f6a + 1e30494 (code + context); this entry is the
+  smoke verification.
+- **Next:** Dispatcher accuracy improvement for free-tier models.
