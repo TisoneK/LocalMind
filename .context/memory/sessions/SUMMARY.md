@@ -13,3 +13,4 @@
 2026-08-13 — Super Z / GLM-5.2 — Session 179 (in progress) — live smoke PASSED: real chat + agentic (list /tmp) via nemotron-3.5-lightning-free on Zen provider; Sessions 177-178 confirmed live.
 2026-08-13 — Super Z / GLM-5.2 — Session 179 — F4 mandatory post-exec verifier: catches Traceback/error/exit-code-N markers on LAST tool output for high-stakes intents (file/code/shell), forces replan. 27 new tests; 1545+1-pre-existing green.
 2026-08-13 — Super Z / GLM-5.2 — Session 180 — F3 structured plan DAG: new plan_parser.py + PlanNode + TaskState.nodes; wired into AgentLoop.run with plan_nodes_created/plan_node_advanced obs events; 27 new tests; 1572+1-pre-existing green.
+2026-08-13 — Super Z / GLM-5.2 — Session 181 — F4-ui frontend phase visibility: new AgentPhases component + AgentPhase type; useLocalMind handles 8 obs events; 32 new tests; real-model smoke confirmed events fire end-to-end.

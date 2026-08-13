@@ -1,17 +1,18 @@
 # Current Task
 
-- **Session:** 181 (2026-08-13, in progress)
+- **Session:** 182 (2026-08-13, in progress)
 - **Feature:** adr-18-verification-first-hardening (continuing)
-- **Task:** Session 181 — F4 Frontend Phase Visibility from the
-  Session 176 audit roadmap.
-- **Done (180):**
-  - New `core/agent/plan_parser.py` (~260 LOC).
-  - New `PlanNode` dataclass + `TaskState.nodes` field.
-  - Wired into `AgentLoop.run()` with `plan_nodes_created` +
-    `plan_node_advanced` obs events.
-  - 27 new tests in `tests/core/test_plan_parser.py`.
-- **Next:** Session 181 — F4 Frontend Phase Visibility. Consume the
-  now-live backend events in the frontend:
-  `agent_loop_gate_passed`, `agent_loop_gate_failed_replan`,
-  `orchestrator_replan_start/_done`, `agent_loop_failure`,
-  `plan_nodes_created`, `plan_node_advanced`.
+- **Task:** Session 182 — F5 Open up WorkspaceOrchestrator to
+  substantive intents from the Session 176 audit roadmap.
+- **Done (181):**
+  - New `AgentPhase` type + `ChatMessage.agentPhases` field.
+  - New `AgentPhases.tsx` component.
+  - `useLocalMind.ts` handles 8 obs_event types.
+  - 32 new tests across 2 test files. Real-model smoke PASSED.
+- **Next:** Session 182 — F5 Open up WorkspaceOrchestrator.
+  `_should_use_orchestrator` (workspace/orchestrator.py:578)
+  excludes essentially every substantive intent (CODE_EXEC, FILE_*,
+  SHELL, GIT, VERIFY, REVIEW, DEBUG, ANALYZE, etc.) — only SYSINFO
+  survives. The structured depends_on DAG only runs for read-only
+  sysinfo, exactly where it's least needed. Let coding/shell
+  intents route through the structured DAG path.

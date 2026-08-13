@@ -2276,3 +2276,48 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   now-live `agent_loop_gate_passed`, `agent_loop_gate_failed_replan`,
   `orchestrator_replan_start/_done`, `agent_loop_failure`,
   `plan_nodes_created`, `plan_node_advanced` events in the frontend.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 181)
+
+- **Agent:** Super Z / GLM-5.2 (Z.ai)
+- **Platform:** Linux cloud sandbox (Ubuntu)
+- **Role:** engineer
+- **Core:** 0.5.0 (verified, no drift)
+- **Task:** Session 181 — F4 Frontend Phase Visibility from the
+  Session 176 audit roadmap.
+- **Done:**
+  - New `AgentPhase` type in `types/index.ts` (8 phase types:
+    plan_created, node_advanced, gate_passed, gate_failed_replan,
+    orchestrator_replan_start/done/failed, agent_loop_failure).
+  - New `ChatMessage.agentPhases?: AgentPhase[]` field.
+  - New `AgentPhases.tsx` component (memoized) — renders the strip
+    with per-type icons (✓⚠🔄✗) + color classes. Pulses the most
+    recent in-progress phase when streaming.
+  - `useLocalMind.ts`: handle the 8 obs_event types in the
+    obs_event case. Each → buildAgentPhase() → append to the LAST
+    assistant message's agentPhases.
+  - New exported `buildAgentPhase()` helper.
+  - `ChatMessage.tsx`: import + render <AgentPhases> between
+    ThinkingBlock and ToolSteps.
+  - 11 new tests in `AgentPhases.test.tsx` + 21 new tests in
+    `buildAgentPhase.test.ts`.
+- **Key findings / design decisions:**
+  - The phase strip renders BETWEEN ThinkingBlock and ToolSteps so
+    the user sees the agent's decision history above the tool cards.
+  - Each phase type gets a distinct icon + color (green ✓ verified,
+    amber ⚠ replanning, purple 🔄 orchestrator, red ✗ failure).
+  - The most recent in-progress phase pulses when streaming — gives
+    the user a live "the agent is currently replanning" signal.
+  - Real-model smoke PASSED: triggered an agentic task that
+    produced `orchestrator_replan_start` + `orchestrator_replan_done`
+    + `agent_loop_gate_failed_replan` events. The frontend will now
+    render these as the phase strip. This proves Sessions 2+3+4+6
+    are all live and interacting correctly.
+- **Tests:** Frontend suite **137 pass** (was 105 → +32 new).
+  tsc clean, eslint 0 errors (64 warnings, +3 from test-file any
+  types — acceptable). Backend suite unchanged at 1572+1-pre-existing.
+- **Commits:** `bd3a511` (this session).
+- **Next:** Session 182 — F5 Open up WorkspaceOrchestrator to
+  substantive intents (currently only SYSINFO survives the gate).
