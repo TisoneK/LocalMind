@@ -184,6 +184,31 @@ def _decision_sink_for(
     return _sink
 
 
+async def _maybe_score_history(
+    messages: list[dict],
+    adapter,
+) -> Optional[list[float]]:
+    """ADR-19 P3 (Session 179): LLM value-scoring — OPT-IN via
+    settings.localmind_llm_value_scoring. When disabled (default), returns
+    None and compression stays the deterministic positional slice. When
+    enabled, one bounded LLM call scores the messages; any failure returns
+    None (deterministic fallback) so value scoring can never break a turn.
+
+    Cheap size pre-check (Session 179 review): the LLM scoring call is only
+    made when history is large enough that compression is plausible — a
+    2-message chat below the 75% trigger must not pay an extra up-to-8s
+    scoring call every turn with the flag enabled."""
+    if not settings.localmind_llm_value_scoring:
+        return None
+    # Rough guard mirroring the summarizer's 75% trigger shape: only score
+    # when there is enough conversation content to matter (8+ messages).
+    if len(messages) < 8:
+        return None
+    from core.value_scoring import score_messages
+
+    return await score_messages(messages, adapter)
+
+
 STEERING_QUEUE_MAX = 10
 
 
@@ -1649,6 +1674,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 decision_sink=_decision_sink_for(  # ADR-19 P2: durable ledger
                     self._store, session_id, _reused_task_type
                 ),
+                value_scores=await _maybe_score_history(  # ADR-19 P3 opt-in
+                    prompt_messages, active_adapter
+                ),
             )
             _clock.end("context_build")
             _clock.start("generate")
@@ -2871,6 +2899,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             decision_sink=_decision_sink_for(  # ADR-19 P2: durable ledger
                 self._store, session_id, _reused_task_type
             ),
+            value_scores=await _maybe_score_history(  # ADR-19 P3 opt-in
+                prompt_messages, active_adapter
+            ),
         )
 
         # ── 7a/7b. Stream response ─────────────────────────────────────────
@@ -3081,6 +3112,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 policy=_turn_context_policy,  # ADR-19 task-aware summarizer
                 decision_sink=_decision_sink_for(  # ADR-19 P2: durable ledger
                     self._store, session_id, _reused_task_type
+                ),
+                value_scores=await _maybe_score_history(  # ADR-19 P3 opt-in
+                    sm_messages, sm_adapter
                 ),
             )
 

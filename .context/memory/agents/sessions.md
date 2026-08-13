@@ -1988,3 +1988,15 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   - `_pipeline.py`: WRITE path — `_decision_sink_for(store, session_id, task_type)` wired into all 3 maybe_compress_history call sites; READ path — `recall_decisions(task_type=_reused_task_type)` recalled alongside failure memory and `format_ledger_hint()` appended to memory_facts so a new session still honors earlier decisions.
   - Tests: `tests/core/test_decision_ledger.py` (15) — DB roundtrip/newest-first/task filter/cross-session durability/near-dup suppression/retention prune; helper extraction + hint shape; summarizer sink invocation + no-op default + sink-failure safety; engine read-path recall.
 - **Verified:** full backend suite **1536 green**, ruff clean. Deterministic read path + fake-adapter summarizer tests per the flaw-log rule (live smoke still Zen-429 blocked).
+---
+## 2026-08-12 — Session 179 (ADR-19 P3: LLM value scoring, opt-in)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-19 P3 (design.md §6) — the last ADR-19 slice: "LLM-guided value scoring of every message" as an OPT-IN (design says too slow for free-tier; the deterministic marker approach stays the P0 default).
+- **Done:**
+  - `config.py`: `localmind_llm_value_scoring: bool = False` (default OFF).
+  - `core/value_scoring.py`: `score_messages()` — one bounded LLM call (8s timeout, 40-message cap, 400-char/message) scores history 0-1; returns None on ANY failure (error/timeout/malformed/wrong-length) so the deterministic path always wins; `_parse_scores` accepts JSON array or fenced output, clamps to [0,1]; `lowest_value_indices()` deterministic lowest-n pick.
+  - `summarizer.py`: `maybe_compress_history(value_scores=...)` — when scores are present AND correctly sized, the oldest-50% slice is replaced by the LOWEST-VALUE slice (kept messages retain original order); None/mismatched → legacy positional slice.
+  - `_pipeline.py`: `_maybe_score_history()` opt-in gate wired into all 3 summarizer call sites; cheap size pre-check (8+ messages) so a small chat never pays the scoring call (Session 179 review).
+  - Tests: `tests/core/test_value_scoring.py` (14) — parse/clamp/malformed/error/empty, lowest-indices, value-slice vs legacy (non-monotonic scores prove the newest-low-value msg is compressed while oldest-high-value survives — a regression to positional would fail), flag OFF no-call, flag ON small-conversation skip, flag ON large-conversation score.
+- **Verified:** full backend suite **1550 green** (1549 + reviewer-fix test), ruff clean. Per the flaw log: value scoring is fake-adapter tested (no live model needed for the deterministic fallback contract); live smoke remains Zen-429 blocked.
+- **ADR-19 now complete (P0-P3):** task-aware policy + selective compactor + decision-line preservation (160-163), context hierarchy + level-aware retrieval (177), cross-session decision ledger (178), LLM value scoring opt-in (179).

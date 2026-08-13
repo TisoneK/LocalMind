@@ -182,6 +182,14 @@ class Settings(BaseSettings):
     localmind_response_reserve_tokens: int = 2048
     localmind_history_max_tokens: int = 4096
 
+    # ADR-19 P3 (Session 179): LLM-guided value scoring of history messages
+    # — when enabled, one LLM call scores each message 0-1 and the
+    # summarizer compresses the LOWEST-value messages instead of the oldest
+    # 50%. OFF by default (design.md §6: "too slow for free-tier; the
+    # deterministic marker approach is the P0 trade"). The deterministic
+    # marker path (policy keep_markers) remains the default.
+    localmind_llm_value_scoring: bool = False
+
     # Model routing
     ollama_model_fast: str = ""
     ollama_model_code: str = ""

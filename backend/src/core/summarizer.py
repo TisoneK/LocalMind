@@ -28,6 +28,7 @@ import logging
 from typing import TYPE_CHECKING, Callable, Optional
 
 from core.context_policy import ContextPolicy
+from core.value_scoring import lowest_value_indices
 
 if TYPE_CHECKING:
     from adapters.base import BaseAdapter
@@ -107,6 +108,7 @@ async def maybe_compress_history(
     token_budget: int,
     policy: Optional[ContextPolicy] = None,
     decision_sink: Optional[DecisionSink] = None,
+    value_scores: Optional[list[float]] = None,
 ) -> list[dict]:
     """
     A2: If history exceeds 75% of token_budget, summarize oldest 50% into a
@@ -123,6 +125,11 @@ async def maybe_compress_history(
             decision lines when compression actually ran (so the caller can
             persist them to the cross-session decision ledger). Default None
             → no-op; the summarizer stays pure.
+        value_scores: Optional ADR-19 P3 list of per-message value scores
+            (0-1, aligned with the conversation messages after any leading
+            system message). When present and correctly sized, the OLDEST-50%
+            slice is replaced by the LOWEST-VALUE slice — compression by
+            value, not by position. None/mismatched → legacy positional slice.
 
     Returns:
         Original list unchanged, or compressed list with a summary injected.
@@ -141,10 +148,29 @@ async def maybe_compress_history(
     if len(conv_msgs) < 4:
         return messages  # too short to compress meaningfully
 
-    # Identify oldest slice to summarise
+    # Identify the slice to summarise. Default: the oldest 50%. ADR-19 P3
+    # (opt-in LLM value scoring): when per-message value scores are present
+    # and correctly sized, compress the LOWEST-VALUE messages instead — the
+    # context window is rebuilt by value, not by position (design.md §6).
+    # The kept messages retain their original relative order.
     n_to_compress = max(2, int(len(conv_msgs) * _COMPRESS_FRACTION))
-    to_compress = conv_msgs[:n_to_compress]
-    to_keep = conv_msgs[n_to_compress:]
+    if value_scores is not None and len(value_scores) == len(conv_msgs):
+        low_idx = lowest_value_indices(value_scores, n_to_compress)
+        if low_idx is not None:
+            low_set = set(low_idx)
+            to_compress = [m for i, m in enumerate(conv_msgs) if i in low_set]
+            to_keep = [m for i, m in enumerate(conv_msgs) if i not in low_set]
+            logger.info(
+                "[summarizer] ADR-19 P3: compressing %d LOWEST-VALUE messages "
+                "(value-based slice)",
+                len(to_compress),
+            )
+        else:
+            to_compress = conv_msgs[:n_to_compress]
+            to_keep = conv_msgs[n_to_compress:]
+    else:
+        to_compress = conv_msgs[:n_to_compress]
+        to_keep = conv_msgs[n_to_compress:]
 
     # Build a text excerpt for the summariser (truncated per message — the
     # LLM only needs a digest).
