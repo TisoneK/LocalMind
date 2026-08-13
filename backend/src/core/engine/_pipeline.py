@@ -163,6 +163,27 @@ def _acceptance_gate_for(intent: Intent):
     return _default_acceptance_gate
 
 
+def _decision_sink_for(
+    store: "SessionStore",
+    session_id: str,
+    task_type: str,
+):
+    """ADR-19 P2: build the decision_sink callback for maybe_compress_history.
+    It persists the summarizer's preserved decision lines into the
+    cross-session decision ledger (best-effort per line inside)."""
+    from core.decision_ledger import record_decisions_from_compression
+
+    def _sink(decision_lines: list[str]) -> None:
+        record_decisions_from_compression(
+            store=store,
+            session_id=session_id,
+            decision_lines=decision_lines,
+            task_type=task_type,
+        )
+
+    return _sink
+
+
 STEERING_QUEUE_MAX = 10
 
 
@@ -1625,6 +1646,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 active_adapter,
                 active_adapter.effective_context_window,
                 policy=_turn_context_policy,  # ADR-19 task-aware summarizer
+                decision_sink=_decision_sink_for(  # ADR-19 P2: durable ledger
+                    self._store, session_id, _reused_task_type
+                ),
             )
             _clock.end("context_build")
             _clock.start("generate")
@@ -2019,6 +2043,24 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 _hint = format_recall_hint(_past_failures)
                 if _hint:
                     memory_facts.append(_hint)
+        except Exception:  # pragma: no cover — defensive
+            pass
+
+        # ADR-19 P2 (Session 178): Remember→Continue for DECISIONS — recall
+        # recent ledger decisions (per task type when known) and append them
+        # to the memory facts the loop sees, so decisions made in earlier
+        # sessions ("production uses PostgreSQL", "user rejected MongoDB")
+        # are honored even after their source conversation was compressed
+        # away or deleted. Best-effort: recall must never slow the turn.
+        try:
+            from core.decision_ledger import format_ledger_hint
+
+            _past_decisions = self._store.recall_decisions(
+                task_type=_reused_task_type,
+            )
+            _decision_hint = format_ledger_hint(_past_decisions)
+            if _decision_hint:
+                memory_facts.append(_decision_hint)
         except Exception:  # pragma: no cover — defensive
             pass
 
@@ -2826,6 +2868,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             active_adapter,
             active_adapter.effective_context_window,
             policy=_turn_context_policy,  # ADR-19 task-aware summarizer
+            decision_sink=_decision_sink_for(  # ADR-19 P2: durable ledger
+                self._store, session_id, _reused_task_type
+            ),
         )
 
         # ── 7a/7b. Stream response ─────────────────────────────────────────
@@ -3034,6 +3079,9 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 sm_adapter,
                 sm_adapter.effective_context_window,
                 policy=_turn_context_policy,  # ADR-19 task-aware summarizer
+                decision_sink=_decision_sink_for(  # ADR-19 P2: durable ledger
+                    self._store, session_id, _reused_task_type
+                ),
             )
 
             _obs.emit("thinking_start", intent="file_write")

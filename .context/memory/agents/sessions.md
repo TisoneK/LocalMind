@@ -1977,3 +1977,14 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   - `_pipeline.py`: the two post-dispatcher compose sites (DIRECT + agent fallback) call `retrieve_for_task(task_type=_reused_task_type)`; the pre-started parallel recall (which ran with Intent.CHAT before the task type resolved) is followed by a near-free level-aware re-retrieval — the query embedding is LRU-cached per text, so this is a SQL filter, not a second embed call.
   - Tests: `tests/core/test_memory_levels.py` (18) — level resolution, store tagging, compose level filter, untagged-facts default, legacy no-op, engine wiring (dispatcher task_type=code flows into retrieve_for_task).
 - **Verified:** full backend suite **1521 green**, ruff clean. Live-smoke still provider-blocked per the flaw log (Zen 429); P1 is deterministic (no new LLM calls) so the unit+engine wiring coverage is the gate.
+---
+## 2026-08-12 — Session 178 (ADR-19 P2: cross-session decision ledger)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-19 P2 (design.md §6) — a durable store of "decisions that must never be compressed away." The user's lossy-compression case ("user wants PostgreSQL, rejected MongoDB, wants SQLite locally, production uses PostgreSQL" → "Database: PostgreSQL") is now prevented from being lost FOREVER, not just for one turn.
+- **Done:**
+  - `storage/db.py`: new `decision_ledger` table (deliberately NO FK to sessions — decisions outlive their source session) + `record_decision()` (best-effort, 7-day near-dup suppression, 180-day retention prune) + `recall_decisions(task_type=, limit=)` newest-first with optional task-type filter.
+  - `core/decision_ledger.py`: `extract_decision_lines()` (reuses summarizer preservation), `record_decisions_from_compression()` (best-effort write adapter), `format_ledger_hint()` (read-back context hint shape).
+  - `summarizer.py`: `maybe_compress_history()` gained `decision_sink: Callable` — invoked with the preserved decision lines when compression actually ran (default None = no-op, summarizer stays pure; a sink failure never breaks compression).
+  - `_pipeline.py`: WRITE path — `_decision_sink_for(store, session_id, task_type)` wired into all 3 maybe_compress_history call sites; READ path — `recall_decisions(task_type=_reused_task_type)` recalled alongside failure memory and `format_ledger_hint()` appended to memory_facts so a new session still honors earlier decisions.
+  - Tests: `tests/core/test_decision_ledger.py` (15) — DB roundtrip/newest-first/task filter/cross-session durability/near-dup suppression/retention prune; helper extraction + hint shape; summarizer sink invocation + no-op default + sink-failure safety; engine read-path recall.
+- **Verified:** full backend suite **1536 green**, ruff clean. Deterministic read path + fake-adapter summarizer tests per the flaw-log rule (live smoke still Zen-429 blocked).

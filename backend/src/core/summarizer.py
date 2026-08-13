@@ -25,12 +25,17 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from core.context_policy import ContextPolicy
 
 if TYPE_CHECKING:
     from adapters.base import BaseAdapter
+
+# ADR-19 P2 (Session 178): the engine passes a decision_sink so preserved
+# decision lines are persisted to the cross-session decision ledger
+# (durable — survives compression and session deletion).
+DecisionSink = Callable[[list[str]], None]
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +106,7 @@ async def maybe_compress_history(
     adapter: "BaseAdapter",
     token_budget: int,
     policy: Optional[ContextPolicy] = None,
+    decision_sink: Optional[DecisionSink] = None,
 ) -> list[dict]:
     """
     A2: If history exceeds 75% of token_budget, summarize oldest 50% into a
@@ -113,6 +119,10 @@ async def maybe_compress_history(
         policy: Optional ADR-19 ContextPolicy. None/default → the original
             generic summary (no-op). A real policy switches to its per-task
             summary prompt and prepends preserved decision lines.
+        decision_sink: Optional ADR-19 P2 callback invoked with the preserved
+            decision lines when compression actually ran (so the caller can
+            persist them to the cross-session decision ledger). Default None
+            → no-op; the summarizer stays pure.
 
     Returns:
         Original list unchanged, or compressed list with a summary injected.
@@ -176,6 +186,13 @@ async def maybe_compress_history(
             "\n\n[Preserved decisions — verbatim, do not lose these]\n"
             + "\n".join(f"- {line}" for line in preserved)
         )
+        # ADR-19 P2: forward the preserved lines to the decision ledger
+        # (durable, cross-session) — best-effort, never breaks compression.
+        if decision_sink is not None:
+            try:
+                decision_sink(preserved)
+            except Exception as _ledger_exc:  # pragma: no cover — defensive
+                logger.debug("[summarizer] decision_sink failed (non-fatal): %s", _ledger_exc)
     summary_msg = {"role": "system", "content": "\n".join(parts)}
 
     compressed = system_msgs + [summary_msg] + to_keep

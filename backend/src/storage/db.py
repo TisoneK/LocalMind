@@ -107,6 +107,23 @@ CREATE TABLE IF NOT EXISTS failure_memory (
     created_at  TEXT    DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_failure_memory_session ON failure_memory(session_id);
+
+-- ADR-19 P2 (Session 178): cross-session decision ledger — durable
+-- store of "decisions that must never be compressed away" (design.md
+-- §6). The task-aware summarizer's [Preserved decisions] block is
+-- written here so a decision-changing line ("user rejected MongoDB",
+-- "production uses PostgreSQL") survives even after the conversation
+-- that produced it is compressed away or the session is deleted.
+-- Deliberately NO foreign key to sessions: decisions outlive their
+-- source session by design.
+CREATE TABLE IF NOT EXISTS decision_ledger (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT    NOT NULL,
+    task_type   TEXT    DEFAULT '',
+    decision    TEXT    NOT NULL,
+    created_at  TEXT    DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_decision_ledger_session ON decision_ledger(session_id, created_at);
 """
 
 # ── Connection pool ─────────────────────────────────────────────────────────
@@ -660,3 +677,77 @@ class SessionStore:
             )
         scored.sort(key=lambda r: r["score"], reverse=True)
         return scored[:limit]
+
+    # ── ADR-19 P2: Cross-session decision ledger (Session 178) ─────────
+
+    # Decisions older than this are pruned on write — the ledger stays
+    # bounded and stale constraints age out of recall (mirrors the failure
+    # memory retention rule). 180 days keeps decisions far longer than
+    # failure memory (90) because they are the durable constraint surface.
+    _DECISION_RETENTION_DAYS = 180
+
+    def record_decision(
+        self,
+        session_id: str,
+        decision: str,
+        task_type: str = "",
+    ) -> None:
+        """Persist a decision line that must never be compressed away.
+
+        Best-effort (a ledger write must never break the turn), with
+        retention pruning on each write so the table stays bounded.
+        Near-duplicate suppression: a decision already recorded within
+        the last 7 days (same normalized text) is skipped — repeated
+        compression of the same lines must not duplicate rows.
+        """
+        text = (decision or "").strip()
+        if len(text) < 8:
+            return
+        try:
+            with self._conn() as conn:
+                dup = conn.execute(
+                    "SELECT id FROM decision_ledger WHERE decision = ? "
+                    "AND created_at > datetime('now', '-7 days')",
+                    (text[:400],),
+                ).fetchone()
+                if dup:
+                    return
+                conn.execute(
+                    "INSERT INTO decision_ledger(session_id, task_type, decision) VALUES(?, ?, ?)",
+                    (session_id or "", (task_type or "")[:40], text[:400]),
+                )
+                conn.execute(
+                    "DELETE FROM decision_ledger WHERE created_at < "
+                    f"datetime('now', '-{self._DECISION_RETENTION_DAYS} days')"
+                )
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.debug("[db] record_decision skipped: %s", exc)
+
+    def recall_decisions(
+        self,
+        task_type: str = "",
+        limit: int = 5,
+    ) -> list[dict]:
+        """Read back the most recent ledger decisions, newest first.
+        When task_type is given, only that task type's decisions are
+        returned (a plan turn recalls planning decisions, a debug turn
+        recalls debugging constraints). Returns
+        [{decision, task_type, created_at, session_id}]."""
+        try:
+            with self._conn() as conn:
+                if task_type:
+                    rows = conn.execute(
+                        "SELECT decision, task_type, created_at, session_id "
+                        "FROM decision_ledger WHERE task_type = ? "
+                        "ORDER BY id DESC LIMIT ?",
+                        (task_type, limit),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT decision, task_type, created_at, session_id "
+                        "FROM decision_ledger ORDER BY id DESC LIMIT ?",
+                        (limit,),
+                    ).fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
