@@ -263,6 +263,20 @@ async def delegate(message: str) -> ToolResult:
             error_type="adapter_unavailable",
         )
 
+    # ADR-18 P3: the parent's ObsCollector (if any) streams the sub-agent's
+    # work into the UI. The child runs with a ChildObsProxy so its own
+    # tool activity is forwarded to the parent collector (Actions panel)
+    # while its internal events (CHAT intent, turn_complete, …) stay local.
+    parent_obs = get_current_obs()
+    child_obs = None
+    if parent_obs is not None:
+        try:
+            from core.obs import ChildObsProxy
+
+            child_obs = ChildObsProxy(parent_obs, target_agent)
+        except Exception:  # pragma: no cover — streaming must never break delegation
+            child_obs = None
+
     # Construct the child run context before setup so construction/configuration
     # failures can still return a correlated structured result.
     child_context = AgentRunContext.create(
@@ -298,6 +312,17 @@ async def delegate(message: str) -> ToolResult:
     logger.info(
         "[delegate] delegating to %s (depth %d/%d, task=%r)",
         target_agent, current_depth + 1, MAX_DELEGATION_DEPTH, task[:200],
+    )
+
+    # ADR-18 P3: delegation lifecycle events — the frontend sees the
+    # sub-agent start and finish (collapsed into one running tool step).
+    _emit_delegation(
+        parent_obs,
+        "delegation_started",
+        target_agent=target_agent,
+        task=(task or "")[:200],
+        run_id=child_context.run_id,
+        depth=current_depth + 1,
     )
 
     # Run the sub-agent. Use a wall-clock cap to prevent a single
@@ -347,6 +372,7 @@ async def delegate(message: str) -> ToolResult:
                 available_tools=[],  # the sub-agent's config().allowed_tools is used
                 confidence=1.0,
                 allowed_tool_names=child_allowed_tools,
+                obs=child_obs,  # ADR-18 P3: stream the child's work into the UI
             ):
                 if chunk.text:
                     chunks.append(chunk.text)
@@ -362,6 +388,14 @@ async def delegate(message: str) -> ToolResult:
                 status="timed_out",
                 run_id=child_context.run_id,
                 agent_name=target_agent,
+                error_type="timeout",
+            )
+            _emit_delegation(
+                parent_obs,
+                "delegation_completed",
+                target_agent=target_agent,
+                run_id=child_context.run_id,
+                status="timed_out",
                 error_type="timeout",
             )
             return ToolResult(
@@ -390,6 +424,14 @@ async def delegate(message: str) -> ToolResult:
                 agent_name=target_agent,
                 error_type="child_exception",
             )
+            _emit_delegation(
+                parent_obs,
+                "delegation_completed",
+                target_agent=target_agent,
+                run_id=child_context.run_id,
+                status="failed",
+                error_type="child_exception",
+            )
             return ToolResult(
                 content=(
                     f"ERROR: delegated {target_agent!r} agent failed: {exc}. "
@@ -414,6 +456,14 @@ async def delegate(message: str) -> ToolResult:
                 status="failed",
                 run_id=child_context.run_id,
                 agent_name=target_agent,
+                error_type="empty_response",
+            )
+            _emit_delegation(
+                parent_obs,
+                "delegation_completed",
+                target_agent=target_agent,
+                run_id=child_context.run_id,
+                status="failed",
                 error_type="empty_response",
             )
             return ToolResult(
@@ -444,6 +494,14 @@ async def delegate(message: str) -> ToolResult:
             run_id=child_context.run_id,
             agent_name=target_agent,
             output=sub_response,
+        )
+        _emit_delegation(
+            parent_obs,
+            "delegation_completed",
+            target_agent=target_agent,
+            run_id=child_context.run_id,
+            status="completed",
+            response_length=len(sub_response),
         )
         return ToolResult(
             content=(
@@ -484,6 +542,9 @@ import contextvars  # noqa: E402  (intentional late import for clarity)
 _current_adapter: contextvars.ContextVar[Optional[object]] = contextvars.ContextVar(
     "_delegate_current_adapter", default=None
 )
+_current_obs: contextvars.ContextVar[Optional[object]] = contextvars.ContextVar(
+    "_delegate_current_obs", default=None
+)
 _current_depth: contextvars.ContextVar[int] = contextvars.ContextVar(
     "_delegate_current_depth", default=0
 )
@@ -496,6 +557,32 @@ def set_current_adapter(adapter) -> None:
     delegate tool can access the adapter when the model invokes it.
     """
     _current_adapter.set(adapter)
+
+
+def set_current_obs(obs) -> None:
+    """Set the parent's ObsCollector for delegation (ADR-18 P3).
+
+    Called alongside set_current_adapter at the start of each tool
+    dispatch. The delegate tools read it to stream the sub-agent's
+    user-visible tool activity into the parent's UI.
+    """
+    _current_obs.set(obs)
+
+
+def get_current_obs():
+    """Return the parent's ObsCollector for the current dispatch."""
+    return _current_obs.get(None)
+
+
+def _emit_delegation(obs, event_type: str, **data) -> None:
+    """Emit a delegation lifecycle event into the parent collector.
+    Best-effort: streaming must never break delegation."""
+    if obs is None:
+        return
+    try:
+        obs.emit(event_type, **data)
+    except Exception:  # pragma: no cover — defensive
+        pass
 
 
 def get_current_depth() -> int:

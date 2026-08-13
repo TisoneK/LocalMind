@@ -1954,3 +1954,17 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   dead `record_failure_for_trace` removed (loop→obs→engine path is the only
   write path).
 - **Validation:** full backend suite **1496 green** (1481 + 15 new), ruff clean.
+---
+## 2026-08-12 — Session 176 (ADR-18 P3: delegation streaming/UX)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** ADR-18 P3 — delegation streaming/UX + AgentLoop glue: the delegate tools ran sub-agents invisibly (no obs events surfaced). Threaded the parent's ObsCollector into delegated children via a forwarding proxy and surfaced delegation lifecycle in the Actions panel.
+- **Done:**
+  - `obs.py`: new `ChildObsProxy(ObsCollector)` — keeps its own event list but forwards ONLY `tool_call`/`tool_status` events to the parent collector, tagged with the child agent name. Deliberately does NOT forward `agent_loop_start`/`turn_complete`/`intent_classified`/`stage_timing` so the child's CHAT intent and metrics can't clobber the parent's UI state.
+  - `tool_dispatch.py`: `dispatch_with_retry` gained `obs=None`, sets the delegate contextvar via `set_current_obs` alongside `set_current_adapter`.
+  - `delegate.py`: `set_current_obs`/`get_current_obs` contextvars; `delegate()` builds a `ChildObsProxy` for the child run (passed as `obs=` to `sub_agent.run()`), emits `delegation_started`/`delegation_completed` on success/failure/timeout/empty paths via a DRY `_emit_delegation_event` helper.
+  - `delegate_parallel.py`: same proxy + lifecycle events around the gather.
+  - `loop.py`: wired `obs=_obs` into the three dispatch sites that can reach delegate tools (main ToolCallResult path, multi-tool, late-tool).
+  - `chat.py`: SSE bridge forwards the `agent` tag on `tool_call` events so the frontend can render child tool steps under the child's name.
+  - `useLocalMind.ts`: renders `delegation_started`/`delegation_completed` obs events as one running tool-step card (`delegate→<agent>`), distinct name to avoid collision with tool cards.
+  - Tests: `tests/tools/test_delegate_streaming.py` (7 new) — proxy forwarding, lifecycle events, obs threading through dispatch.
+- **Verified:** full backend suite **1503 green**, frontend vitest **105 green**, ruff + tsc clean. Reviewer fixes applied (SSE `agent` forwarding, DRY emit helper, distinct frontend card name, late-tool dispatch site wired).

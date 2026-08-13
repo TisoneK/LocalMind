@@ -1931,6 +1931,7 @@ class AgentLoop:
                         tc_result, tc_failed, _ = await dispatch_with_retry(
                             tc_intent,
                             tc_input,
+                            obs=_obs,  # ADR-18 P3: delegation streams into the UI
                             allowed_tool_names=effective_allowed,
                         )
                         tc_obs = tc_result.content if tc_result else f"[Tool {tc_name} returned no result]"
@@ -3096,6 +3097,7 @@ class AgentLoop:
                                 tool_intent,
                                 tool_input,
                                 adapter=active_adapter,
+                                obs=_obs,  # ADR-18 P3: delegation streams into the UI
                                 allowed_tool_names=effective_allowed,
                             )
                             latency_ms = round((time.monotonic() - t_tool) * 1000)
@@ -3536,6 +3538,7 @@ class AgentLoop:
                                 _late_result, _late_failed, _ = await dispatch_with_retry(
                                     Intent(_tc_name),
                                     _tc_input,
+                                    obs=_obs,  # ADR-18 P3: delegation streams into the UI
                                     allowed_tool_names=effective_allowed,
                                 )
                                 _late_lat = round((time.monotonic() - t_late) * 1000)

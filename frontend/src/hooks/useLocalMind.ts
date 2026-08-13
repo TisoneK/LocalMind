@@ -869,6 +869,56 @@ export function useChat(
                   }
                   break;
                 }
+                // ADR-18 P3 (Session 176): delegation streaming — the
+                // sub-agent's lifecycle shows as one running tool step
+                // ("Delegating to research…") in the Actions panel; the
+                // child's own tool_call events (forwarded by the backend,
+                // tagged with `agent`) render as their own cards interleaved.
+                // The card name is `delegate→<agent>` (NOT plain "delegate")
+                // so it can't collide with the parent's own delegate tool
+                // step in the name-based done dedup.
+                if (obs.type === 'delegation_started' || obs.type === 'delegation_completed') {
+                  const obsDel = obs.data || obs;
+                  const agentName = String(obsDel.target_agent || 'sub-agent');
+                  const delId = `delegation-${obsDel.run_id || agentName}`;
+                  const delName = `delegate→${agentName}`;
+                  if (obs.type === 'delegation_started') {
+                    const delCall: ToolCall = {
+                      id: delId,
+                      name: delName,
+                      label: `Delegating to ${agentName}…`,
+                      status: 'running' as const,
+                      input: String(obsDel.task || ''),
+                    };
+                    const existsIdx = toolCalls.findIndex((t) => t.id === delId);
+                    if (existsIdx !== -1) {
+                      toolCalls[existsIdx] = { ...toolCalls[existsIdx], ...delCall };
+                    } else {
+                      toolCalls.push(delCall);
+                    }
+                    setActiveToolCalls([...toolCalls]);
+                  } else {
+                    const doneStatus = obsDel.status === 'completed' ? 'done' as const : 'failed' as const;
+                    const doneIdx = toolCalls.findIndex((t) => t.id === delId);
+                    if (doneIdx !== -1) {
+                      toolCalls[doneIdx] = {
+                        ...toolCalls[doneIdx],
+                        status: doneStatus,
+                        duration: toolCalls[doneIdx].duration || 0,
+                      };
+                    } else {
+                      toolCalls.push({
+                        id: delId,
+                        name: delName,
+                        label: `Delegated to ${agentName}`,
+                        status: doneStatus,
+                        input: '',
+                      });
+                    }
+                    setActiveToolCalls([...toolCalls]);
+                  }
+                  break;
+                }
                 // Session 115 + 132: the dispatcher used to emit
                 // thinking_start/thinking_done with the internal routing
                 // placeholder intent="dispatch", which clobbered the real

@@ -58,6 +58,8 @@ from tools.delegate import (
     MAX_DELEGATION_DEPTH,
     _current_adapter,
     _current_depth,
+    _emit_delegation,
+    get_current_obs,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,15 +81,27 @@ _DESCRIPTION = (
 )
 
 
-async def _run_child(packet: DelegationInstructionPacket, adapter, depth: int) -> DelegationResult:
+async def _run_child(packet: DelegationInstructionPacket, adapter, depth: int, obs=None) -> DelegationResult:
     """Run ONE sub-agent for a packet; NEVER raises.
 
     Every failure mode is captured as a DelegationResult (construction,
     child exception, empty response) so partial failure is first-class.
     Depth/run_id are set inside this coroutine — asyncio task isolation
     keeps them scoped to this child even under gather().
+
+    `obs` (ADR-18 P3): the parent's ObsCollector; the child runs with a
+    ChildObsProxy so its user-visible tool activity streams into the UI.
     """
     parent_run_id = get_current_run_id()
+
+    child_obs = None
+    if obs is not None:
+        try:
+            from core.obs import ChildObsProxy
+
+            child_obs = ChildObsProxy(obs, packet.target_agent)
+        except Exception:  # pragma: no cover — streaming must never break delegation
+            child_obs = None
     child_context = AgentRunContext.create(packet, parent_run_id=parent_run_id)
     agent_name = packet.target_agent
 
@@ -163,6 +177,7 @@ async def _run_child(packet: DelegationInstructionPacket, adapter, depth: int) -
                 available_tools=[],
                 confidence=1.0,
                 allowed_tool_names=child_allowed_tools,
+                obs=child_obs,  # ADR-18 P3: stream the child's work into the UI
             ):
                 if chunk.text:
                     chunks.append(chunk.text)
@@ -333,6 +348,17 @@ async def delegate_parallel(message: str) -> ToolResult:
             error_type="adapter_unavailable",
         )
 
+    # ADR-18 P3: the parent's ObsCollector streams all children's work.
+    parent_obs = get_current_obs()
+    _emit_delegation(
+        parent_obs,
+        "delegation_started",
+        target_agent=f"{len(packets)} parallel agents",
+        task=(", ".join(p.target_agent for p in packets))[:200],
+        run_id="parallel",
+        depth=current_depth + 1,
+    )
+
     logger.info(
         "[delegate_parallel] fanning out %d children (depth %d/%d)",
         len(packets), current_depth + 1, MAX_DELEGATION_DEPTH,
@@ -341,7 +367,7 @@ async def delegate_parallel(message: str) -> ToolResult:
     try:
         gathered = await asyncio.wait_for(
             asyncio.gather(
-                *[_run_child(p, adapter, current_depth) for p in packets],
+                *[_run_child(p, adapter, current_depth, obs=parent_obs) for p in packets],
                 return_exceptions=True,
             ),
             timeout=DELEGATION_WALL_CLOCK_SECS,
@@ -388,6 +414,15 @@ async def delegate_parallel(message: str) -> ToolResult:
             )
 
     completed = [r for r in results if r.status == "completed"]
+    _emit_delegation(
+        parent_obs,
+        "delegation_completed",
+        target_agent=f"{len(packets)} parallel agents",
+        run_id="parallel",
+        status="completed" if completed else "failed",
+        completed=len(completed),
+        total=len(results),
+    )
     content = _build_summary(results)
     tool_kwargs = dict(
         content=content,

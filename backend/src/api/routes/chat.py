@@ -177,6 +177,9 @@ async def _event_stream(
                     _iteration = evt.data.get("iteration", "")
                     _latency_ms = evt.data.get("latency_ms", "")
                     _output = evt.data.get("output", "")
+                    # ADR-18 P3 (Session 176): which sub-agent performed this
+                    # tool call (delegation streaming). Empty for parent tools.
+                    _agent = evt.data.get("agent", "") or None
                     # Session 120: which plan todo this action serves.
                     _todo_id = evt.data.get("todo_id") or None
                     # Session 122: the model's reasoning that led to this tool call.
@@ -246,6 +249,7 @@ async def _event_stream(
                                 "todo_id": _todo_id,
                                 "thought": _thought,
                                 "reasoning": _reasoning,
+                                "agent": _agent,
                             },
                         }
                     )

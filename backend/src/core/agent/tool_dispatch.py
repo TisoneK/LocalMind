@@ -76,6 +76,7 @@ async def dispatch_with_retry(
     max_retries: int = TOOL_MAX_RETRIES,
     base_delay: float = TOOL_RETRY_BASE_DELAY,
     adapter=None,
+    obs=None,
     allowed_tool_names: frozenset[str] | None = None,
 ) -> tuple[Optional[ToolResult], bool, int]:
     """
@@ -87,6 +88,11 @@ async def dispatch_with_retry(
             sub-agent with the same model + provider). When provided, it's
             set as the "current adapter" via contextvar before dispatch.
             Tools that don't need an adapter ignore it.
+        obs: optional ObsCollector, made available to tools that need it
+            (e.g., the `delegate` tools use it to stream the sub-agent's
+            work into the parent's UI). When provided, it's set as the
+            "current obs" via contextvar before dispatch. Tools that
+            don't need obs ignore it.
 
     Returns:
         (result, failed, retry_count)
@@ -108,13 +114,16 @@ async def dispatch_with_retry(
             0,
         )
 
-    # ADR-8 Phase 3: set the current adapter so the delegate tool can
-    # access it. The set is conditional on `adapter` being provided
-    # (some tests call dispatch_with_retry without an adapter).
-    if adapter is not None:
+    # ADR-8 Phase 3: set the current adapter + obs so the delegate tools
+    # can access them. The sets are conditional on the args being provided
+    # (some tests call dispatch_with_retry without them).
+    if adapter is not None or obs is not None:
         try:
-            from tools.delegate import set_current_adapter
-            set_current_adapter(adapter)
+            from tools.delegate import set_current_adapter, set_current_obs
+            if adapter is not None:
+                set_current_adapter(adapter)
+            if obs is not None:
+                set_current_obs(obs)
         except ImportError:
             # tools.delegate not yet imported (e.g., during bootstrap) — skip
             pass

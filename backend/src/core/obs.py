@@ -64,3 +64,41 @@ class ObsCollector:
     def history(self) -> list[ObsEvent]:
         """Return every event emitted during this request, without clearing."""
         return list(self._history)
+
+
+# ADR-18 P3 (Session 176): delegation streaming/UX — the sub-agent's
+# work must be visible to the user. A delegated child gets a
+# ChildObsProxy instead of a bare collector: the child behaves exactly
+# as before (its own event list drives its internal behavior — failure
+# memory, SSE, etc.), but its user-visible tool activity is ALSO
+# forwarded to the parent's collector, so the frontend Actions panel
+# shows the sub-agent's tool calls interleaved with the parent's.
+#
+# Deliberately NOT forwarded: agent_loop_start/agent_loop_done,
+# turn_complete, intent_classified, stage_timing — those are the
+# PARENT's UI state (intent display, metrics, timeline). Forwarding the
+# child's CHAT intent would clobber the parent's intent in the Observe
+# panel.
+class ChildObsProxy(ObsCollector):
+    """Delegated child's observability collector.
+
+    Keeps its own event list (the child's internal behavior is
+    unchanged) AND forwards user-visible tool activity to the parent
+    collector so the sub-agent's work streams into the UI.
+    """
+
+    # Event types the frontend renders as tool progress (the chat.py
+    # bridge converts these to top-level `tool_call` SSE events).
+    _FORWARD_TYPES = frozenset({"tool_call", "tool_status"})
+
+    def __init__(self, parent, agent_name: str):
+        super().__init__()
+        self._parent = parent
+        self._agent = agent_name
+
+    def emit(self, event_type: str, **data):
+        super().emit(event_type, **data)
+        if event_type in self._FORWARD_TYPES and self._parent is not None:
+            tagged = dict(data)
+            tagged["agent"] = self._agent  # which sub-agent did this
+            self._parent.emit(event_type, **tagged)
