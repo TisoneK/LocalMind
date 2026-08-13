@@ -2321,3 +2321,38 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Commits:** `bd3a511` (this session).
 - **Next:** Session 182 — F5 Open up WorkspaceOrchestrator to
   substantive intents (currently only SYSINFO survives the gate).
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 182)
+
+- **Agent:** Super Z / GLM-5.2 (Z.ai)
+- **Platform:** Linux cloud sandbox (Ubuntu)
+- **Role:** engineer
+- **Core:** 0.5.0 (verified, no drift)
+- **Task:** Session 182 — F5 Open up WorkspaceOrchestrator.
+- **Done:** Investigated; SKIPPED with documented rationale.
+  - Re-read `workspace/orchestrator.py:_should_use_orchestrator`
+    (line 578-598) and the comment block at line 587-593 explaining
+    why SHELL was moved OUT of the orchestrator.
+  - The exclusion of AGENT_INTENTS (CODE_EXEC, FILE_WRITE/EDIT,
+    SHELL, GIT, etc.) from the orchestrator is a DELIBERATE
+    architectural decision (Sessions 31-32), not a gap. The
+    orchestrator uses `adapter.chat()` for its planner (no tool
+    calling), which causes the synthesis LLM to FABRICATE results
+    on small models. The agent loop's `chat_with_tools()` is what
+    Ollama natively supports for function calling — more reliable.
+  - Opening the orchestrator to AGENT_INTENTS would reintroduce the
+    fabrication bug Sessions 31-32 fixed. The Session 176 audit
+    mis-flagged this as F5; on closer code review it's a documented
+    design decision, not a gap.
+  - Instead, the GoalInterpreter (Session 177) + structured plan
+    DAG (Session 180) + post-exec verifier (Session 179) now bring
+    the structured-planning + verification benefits the audit
+    thought F5 would provide — to the agent loop path where
+    AGENT_INTENTS actually run. The orchestrator stays as it is
+    for the read-only SYSINFO path.
+- **Commits:** None (rationale-only).
+- **Next:** Session 183 — F6-F9 cleanup (4 dead is_done stubs,
+  dead _plan variant, undocumented memory merge) + final
+  real-model end-to-end smoke.

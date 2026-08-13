@@ -1,18 +1,23 @@
 # Current Task
 
-- **Session:** 182 (2026-08-13, in progress)
+- **Session:** 183 (2026-08-13, in progress)
 - **Feature:** adr-18-verification-first-hardening (continuing)
-- **Task:** Session 182 — F5 Open up WorkspaceOrchestrator to
-  substantive intents from the Session 176 audit roadmap.
-- **Done (181):**
-  - New `AgentPhase` type + `ChatMessage.agentPhases` field.
-  - New `AgentPhases.tsx` component.
-  - `useLocalMind.ts` handles 8 obs_event types.
-  - 32 new tests across 2 test files. Real-model smoke PASSED.
-- **Next:** Session 182 — F5 Open up WorkspaceOrchestrator.
-  `_should_use_orchestrator` (workspace/orchestrator.py:578)
-  excludes essentially every substantive intent (CODE_EXEC, FILE_*,
-  SHELL, GIT, VERIFY, REVIEW, DEBUG, ANALYZE, etc.) — only SYSINFO
-  survives. The structured depends_on DAG only runs for read-only
-  sysinfo, exactly where it's least needed. Let coding/shell
-  intents route through the structured DAG path.
+- **Task:** Session 183 — F6-F9 cleanup + final real-model smoke.
+- **Done (182):** Investigated F5 (open up WorkspaceOrchestrator);
+  SKIPPED with documented rationale. The audit's F5 was a
+  misclassification — the orchestrator's exclusion of AGENT_INTENTS
+  is a deliberate architectural decision (Sessions 31-32) to prevent
+  fabrication on small models. The structured-planning benefits the
+  audit thought F5 would provide are now in the agent loop path
+  (Sessions 177, 179, 180) where AGENT_INTENTS actually run.
+- **Next:** Session 183 — F6-F9 cleanup:
+  - F6: 4 dead is_done stubs (browser/analyst/debugger/reviewer) →
+    promote to criteria_gate (one-line change each, same pattern as
+    coding/verifier from Session 173-174).
+  - F7: 4 dead orchestrator_replan_* obs events — RE-ENABLED in
+    Session 178 (no longer dead).
+  - F8: dead _plan non-streaming variant at loop.py:4354 — delete.
+  - F9: undocumented memory merge at _pipeline.py:1974-1990 — add
+    docstring.
+  - Plus: final real-model end-to-end smoke test against
+    nemotron-3.5-lightning-free.
