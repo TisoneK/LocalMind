@@ -2615,3 +2615,34 @@ program + ADR-22). -->
   **137 green**, ruff clean on product code.
 - **Note:** the live 429s during probing are zen's free-tier usage limit (provider
   condition, not a code bug) — but users now see a proper error card instead of hanging.
+---
+## 2026-08-13 — Session 188 (live: "still no response to even Hi")
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** User reported "still no response to even 'Hi'". Browser probe confirmed
+  the UI/backend were healthy — but "hi" (and any greeting) hit the rate-limited
+  zen free tier and returned an error card instead of a greeting.
+- **Fix 1 (deterministic social replies):** `trivial_input.py` — pure social
+  intents (greeting/farewell/thanks/acknowledgment) now return canned replies via
+  `_SOCIAL_REPLIES` with ZERO LLM calls. The provider being down/rate-limited can
+  no longer turn "hi" into an error. "yes_no" + conversational questions still
+  stream through the adapter (context-dependent). Session 111 accounting kept:
+  canned chunks carry a `_approx_tokens` prompt estimate + len//4 completion
+  estimate so Context Tokens isn't a misleading 0. Live-verified: hi 11ms, thanks
+  3ms, bye 1ms. (2 updated + 3 new tests; `test_direct_escalation` switched from
+  "hello" to "I built a new feature today" — a plain statement, verified to route
+  through DIRECT, since greetings no longer touch the adapter.)
+- **Fix 2 (phantom port-in-use blocking restarts):** `server.py`
+  `is_port_in_use()` did a plain bind() without SO_REUSEADDR — after the previous
+  server stops (or probes leave TIME_WAIT sockets), it FALSE-positived "port
+  already in use" and blocked every restart while nothing was listening (uvicorn
+  itself binds with SO_REUSEADDR, so the pre-check disagreed with the real
+  server). Added SO_REUSEADDR to the check: real LISTENING conflicts still
+  detected, stale TIME_WAIT no longer false-positives. +3 new tests
+  (`tests/core/test_server_port_check.py`), including one that PROVES the
+  TIME_WAIT condition exists (plain bind fails) before asserting the fix, and
+  skips if the environment can't reproduce it.
+- **Tests:** full backend **1642 green**, frontend **137 green**, ruff clean.
+- **Note:** "sure" is in both `_ACKNOWLEDGMENTS` (checked first) and `_YES_NO`,
+  so it's now deterministic — deliberate reliability-first tradeoff (trivial path
+  passes history=None anyway). "how are you"/"what's up" get the generic greeting
+  (copy nit, acceptable).
