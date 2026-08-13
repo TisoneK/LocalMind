@@ -2683,3 +2683,14 @@ program + ADR-22). -->
   double-quotes via CreateProcess quoting; model emits single-quoted PowerShell
   so acceptable — `-EncodedCommand` (base64 UTF-16LE) is the bulletproof
   upgrade if it ever bites.
+---
+## 2026-08-13 — Session 190 (ADR-23 session episode memory — the system-level learning layer)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** Build the product-side equivalent of a `.context/`-style session log: distill each session into a compact episode at session end and load it as a bridge into the next session. System-level by user directive — users never see this layer.
+- **Done:**
+  - `storage/db.py`: `session_episodes` table (UNIQUE session_id, upsert, 180-day retention pruned on write) + `record_episode` / `get_episode` / `latest_episode(exclude_session_id)` / `sessions_needing_episode(grace, min_turns, limit)`.
+  - NEW `core/episode_memory.py`: `EpisodeMemory.distill()` (LLM summary of session tail, 30s wait_for timeout, deterministic fallback from first user + last assistant message when the provider fails/times out/returns garbage), re-distill when the session grows past its recorded turn_count, `sweep()` for restart/crash coverage, `format_episode_hint()` bridge formatter (empty-episode guard).
+  - `engine/_pipeline.py`: `__init__` adds `self._episodes` + `self._last_active_session_id`; `_process_unlocked` session-switch fire-and-forget distill trigger; `startup()` fires `sweep()`; episode hint appended to memory_facts at the memory merge point AND the DIRECT chat path (top-level import, matching the merge-point comment that names Episodic as a routed category).
+  - 13 tests in `tests/core/test_episode_memory.py` (store roundtrip/upsert, latest_episode exclusion, needing-episode filters, distill via adapter, fallback on error/raise/garbage, skip trivial/already-distilled, re-distill on growth, sweep, hint shapes).
+- **Verified:** full backend suite **1660 green** (1647 → 1660), ruff clean, code-reviewed (reviewer items fixed: retention pruning, empty-header guard, freeze-once → re-distill).
+- **ADR-23** filed in `plans/decisions.md`.
