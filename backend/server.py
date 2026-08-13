@@ -44,8 +44,18 @@ app = create_app()
 
 
 def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
-    """Check if a TCP port is already bound by another process."""
+    """Check if a TCP port is already bound by another process.
+
+    SO_REUSEADDR is required to match uvicorn's own binding: without it, a
+    plain bind() fails on lingering TIME_WAIT sockets left by the previous
+    server instance (or recent probe connections), producing a FALSE
+    "port in use" and blocking every restart (Session 188). With
+    SO_REUSEADDR, TIME_WAIT sockets don't block the check, while a genuinely
+    LISTENING other process still fails the bind — so real conflicts are
+    still detected.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind((host, port))
             return False  # Port is free

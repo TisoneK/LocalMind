@@ -134,9 +134,16 @@ async def test_direct_plain_text_does_not_escalate(monkeypatch):
     with patch("core.engine._pipeline.ThinkingDispatcher", _DirectPlanDispatcher), patch(
         "core.engine.get_adapter", return_value=mock_adapter
     ), patch.object(engine._agent_loop, "run", fake_agent_run):
+        # Note: "hello" would now be answered deterministically by the trivial
+        # short-circuit (Session 187) without touching the adapter — use a plain
+        # statement (not a conversational-question opener, which fast-paths via
+        # conversational_response) so this test exercises the DIRECT streaming
+        # path for real.
         chunks = [
             c
-            async for c in engine.process("hello", "sess-direct-plain", obs=obs)
+            async for c in engine.process(
+                "I built a new feature today", "sess-direct-plain", obs=obs
+            )
         ]
 
     full_text = "".join(getattr(c, "text", "") or "" for c in chunks)

@@ -432,7 +432,9 @@ async def test_conversational_response_empty_stream_falls_back():
 
 @pytest.mark.asyncio
 async def test_trivial_response_empty_stream_falls_back():
-    """The greeting/thanks short-circuit gets the same empty-stream fallback."""
+    """The yes_no short-circuit gets the same empty-stream fallback.
+    (Session 187: pure social intents no longer reach the LLM at all —
+    "yes" is a yes_no intent that still streams through the adapter.)"""
 
     async def mock_chat(messages, intent="chat", **kwargs):
         yield MagicMock(text="", done=True)
@@ -440,7 +442,7 @@ async def test_trivial_response_empty_stream_falls_back():
     mock_adapter = MagicMock()
     mock_adapter.chat = mock_chat
 
-    chunks = [c async for c in trivial_response("hi", mock_adapter)]
+    chunks = [c async for c in trivial_response("yes", mock_adapter)]
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert text, "empty stream must yield a fallback message"
     assert any(getattr(c, "done", False) for c in chunks)
@@ -475,7 +477,9 @@ async def test_conversational_response_streamed_error_chunk_is_normalized():
 @pytest.mark.asyncio
 async def test_trivial_response_zen_payload_never_leaks_raw_json():
     """The exact user-reported case: the full Zen 429 JSON payload must not
-    appear in the fallback text — only the friendly message (Session 171)."""
+    appear in the fallback text — only the friendly message (Session 171).
+    (Session 187: uses "yes" — a yes_no intent that still streams through
+    the adapter — since pure social intents no longer call the LLM.)"""
 
     async def mock_chat(messages, intent="chat", **kwargs):
         yield MagicMock(
@@ -491,7 +495,7 @@ async def test_trivial_response_zen_payload_never_leaks_raw_json():
     mock_adapter = MagicMock()
     mock_adapter.chat = mock_chat
 
-    chunks = [c async for c in trivial_response("hi", mock_adapter)]
+    chunks = [c async for c in trivial_response("yes", mock_adapter)]
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert "{" not in text
     assert "FreeUsageLimitError" not in text
@@ -517,6 +521,79 @@ async def test_conversational_response_normal_stream_not_polluted():
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert "help" in text.lower()
     assert "try again" not in text.lower()
+
+
+# ── Deterministic social replies (Session 187) ─────────────────────────────
+# Pure social intents (greeting/farewell/thanks/acknowledgment) are answered
+# with canned text and ZERO LLM calls — the provider being down/rate-limited
+# must never turn "hi" into an error card.
+
+
+@pytest.mark.asyncio
+async def test_greeting_is_deterministic_no_llm_call():
+    """"hi" must be answered instantly with a canned greeting — the adapter
+    (and therefore the rate-limited provider) is never touched."""
+
+    async def exploding_chat(messages, intent="chat", **kwargs):
+        raise AssertionError("adapter.chat must NOT be called for a greeting")
+        yield  # pragma: no cover
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = MagicMock(side_effect=exploding_chat)
+
+    chunks = [c async for c in trivial_response("hi", mock_adapter)]
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert text, "canned greeting must be yielded"
+    assert "help" in text.lower()
+    assert any(getattr(c, "done", False) for c in chunks)
+    mock_adapter.chat.assert_not_called()
+    # Session 111 accounting: the zero-LLM turn still reports a nonzero
+    # prompt estimate so Context Tokens isn't a misleading 0.
+    done = next(c for c in chunks if getattr(c, "done", False))
+    assert done.usage.get("prompt_tokens", 0) > 0
+    assert done.usage.get("completion_tokens", 0) > 0
+
+
+@pytest.mark.asyncio
+async def test_all_social_intents_are_deterministic():
+    """Every pure-social intent gets a canned reply without an LLM call."""
+
+    async def exploding_chat(messages, intent="chat", **kwargs):
+        raise AssertionError("adapter.chat must NOT be called for social intents")
+        yield  # pragma: no cover
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = MagicMock(side_effect=exploding_chat)
+
+    for msg, kind in [
+        ("hello", "greeting"),
+        ("bye", "farewell"),
+        ("thanks", "thanks"),
+        ("ok", "acknowledgment"),
+        ("got it", "acknowledgment"),
+    ]:
+        chunks = [c async for c in trivial_response(msg, mock_adapter)]
+        text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+        assert text, f"{msg!r} ({kind}) must yield a canned reply"
+        assert any(getattr(c, "done", False) for c in chunks)
+    mock_adapter.chat.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_yes_no_still_streams_from_adapter():
+    """yes_no is context-dependent — it must still go through the LLM path."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(text="Sure, go ahead!", done=False)
+        yield MagicMock(text="", done=True)
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = MagicMock(side_effect=mock_chat)
+
+    chunks = [c async for c in trivial_response("yes", mock_adapter)]
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert "go ahead" in text
+    mock_adapter.chat.assert_called_once()
 
 
 # ── Engine wiring (Session 68 / ADR-11) ────────────────────────────────────

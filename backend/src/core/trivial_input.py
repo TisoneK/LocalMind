@@ -44,12 +44,15 @@ Usage (in engine._pipeline.process()):
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import AsyncIterator, Optional
 
 from core.engine._helpers import _approx_tokens
 from core.error_normalizer import normalize_error
 from core.models import StreamChunk
+
+logger = logging.getLogger(__name__)
 
 # ── Trivial input patterns ───────────────────────────────────────────────────
 # Each pattern is a regex that matches the ENTIRE message (anchored ^...$).
@@ -138,6 +141,21 @@ _TRIVIAL_RE = re.compile(
 # Punctuation that's commonly appended to trivial inputs (e.g., "Hi!" or "ok.")
 # We strip these before matching so "Hi!" matches the "hi" pattern.
 _TRIVIAL_PUNCT = "!.?.,;:"
+
+# Session 187: deterministic replies for PURE SOCIAL intents (greeting /
+# farewell / thanks / acknowledgment). These carry no information request —
+# the user said "hi" and expects a greeting, NOT a rate-limit error card when
+# the free-tier provider is throttled. Yielding a canned reply here means the
+# short-circuit NEVER touches the LLM for these inputs: instant, offline-safe,
+# and immune to 429s. "yes_no" and conversational questions stay on the LLM
+# path (they can be context-dependent).
+_SOCIAL_REPLIES: dict[str, str] = {
+    "greeting": "Hi! I'm LocalMind, your local AI assistant. How can I help you today?",
+    "farewell": "Goodbye! Feel free to come back anytime.",
+    "thanks": "You're welcome! Happy to help.",
+    "acknowledgment": "Got it! What would you like to do next?",
+}
+
 
 # ── Conversational-question patterns (Session 68 / ADR-11) ───────────────────
 # Unlike the trivial patterns above, these do NOT match the whole message.
@@ -554,6 +572,11 @@ async def trivial_response(
     planning, no capability inference, no agent loop. The model just
     streams a direct reply.
 
+    Session 187: pure social intents (greeting/farewell/thanks/
+    acknowledgment) are answered DETERMINISTICALLY with zero LLM calls —
+    the provider being down/rate-limited must never turn "hi" into an
+    error card. "yes_no" and conversational questions still use the model.
+
     Args:
         message: the user's trivial message.
         adapter: the model adapter (already configured with the right model).
@@ -562,6 +585,26 @@ async def trivial_response(
     Yields:
         StreamChunk — the model's direct response, streamed token by token.
     """
+    _kind = trivial_intent(message)
+    _canned = _SOCIAL_REPLIES.get(_kind)
+    if _canned:
+        logger.info(
+            "[trivial] %r → deterministic %s reply (no LLM call)",
+            message[:40],
+            _kind,
+        )
+        # Session 111 accounting: even a zero-LLM turn must report a nonzero
+        # prompt estimate (system+user prompt) so the Observe panel Context
+        # Tokens and the bottom-bar prompt count don't drop to a misleading 0
+        # on greeting turns (the reviewer flagged this gap).
+        _est = _approx_tokens(f"You are LocalMind.\n{message}")
+        yield StreamChunk(text=_canned, done=False, usage={"prompt_tokens": _est})
+        yield StreamChunk(
+            text="",
+            done=True,
+            usage={"prompt_tokens": _est, "completion_tokens": len(_canned) // 4},
+        )
+        return
     async for chunk in _direct_chat_response(
         message,
         adapter,
