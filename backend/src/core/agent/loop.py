@@ -3926,6 +3926,114 @@ class AgentLoop:
         trace.gate_passed = gate_passed(results)
         if trace.gate_passed:
             trace.gate_summary = format_gate_results(results)
+            # Session 179 — F4 Mandatory post-execution verifier for
+            # high-stakes intents. Even when criteria pass, run ONE
+            # additional deterministic check that the LAST tool's output
+            # has no error markers. If the last tool failed (e.g. the
+            # model said "done" but the file_write returned an error
+            # string), reject "done" and force a replan — same path as
+            # criteria-fail below. Closes the gap where the GoalInterpreter's
+            # derived criteria check the FIRST tool's outcome but miss a
+            # subsequent tool's failure.
+            from core.agent.post_execution_verifier import post_execution_verify
+
+            _pe_passed, _pe_note = post_execution_verify(trace, intent)
+            if not _pe_passed:
+                # Treat as criteria-fail: replan if iterations remain.
+                unmet = [("(post-execution verifier)", _pe_note)]
+                if iteration + 1 < effective_max_iter:
+                    # Session 178 — notify the orchestrator (same path as
+                    # criteria-fail above).
+                    _orchestrator_hint = ""
+                    if orchestrator is not None:
+                        if obs:
+                            obs.emit(
+                                "orchestrator_replan_start",
+                                intent=intent.value,
+                                iteration=iteration + 1,
+                                unmet=[c for c, _ in unmet][:3],
+                            )
+                        try:
+                            from core.agent.orchestrator import OrchestrationStep
+
+                            _last_step = None
+                            for _s in reversed(getattr(trace, "steps", []) or []):
+                                if _s.tool_name:
+                                    _last_step = _s
+                                    break
+                            _failed_step = OrchestrationStep(
+                                tool=_last_step.tool_name if _last_step else "(unknown)",
+                                args=(
+                                    {"input": (_last_step.tool_input or "")[:200]}
+                                    if _last_step
+                                    else {}
+                                ),
+                                reason=_pe_note[:300],
+                            )
+                            _replan_result = await orchestrator.replan(
+                                reformulated_message=reformulated_message
+                                or _user_message_text(loop_messages),
+                                intent=intent,
+                                failed_step=_failed_step,
+                                failure_reason=_pe_note[:200],
+                                adapter=active_adapter,
+                                memory_facts=memory_facts,
+                                intent_history=intent_history,
+                                obs=obs,
+                            )
+                            if _replan_result and _replan_result.orchestrator_context:
+                                _orchestrator_hint = (
+                                    f"\n[ORCHESTRATOR — confidence dropped to "
+                                    f"{round(_replan_result.confidence, 2)}]\n"
+                                    f"{_replan_result.orchestrator_context}\n"
+                                )
+                            if obs:
+                                obs.emit(
+                                    "orchestrator_replan_done",
+                                    confidence=round(_replan_result.confidence, 2)
+                                    if _replan_result
+                                    else 0.0,
+                                    intent=intent.value,
+                                )
+                        except Exception as _orch_exc:  # pragma: no cover — defensive
+                            logger.warning(
+                                "[agent.loop] orchestrator.replan (post-exec) failed "
+                                "(non-fatal): %s",
+                                _orch_exc,
+                            )
+                            if obs:
+                                obs.emit(
+                                    "orchestrator_replan_failed",
+                                    error=str(_orch_exc)[:120],
+                                    intent=intent.value,
+                                )
+
+                    revised = await self._replan_for_gate(
+                        trace=trace,
+                        unmet=unmet,
+                        loop_messages=loop_messages,
+                        observation_log=observation_log,
+                        active_adapter=active_adapter,
+                    )
+                    if obs:
+                        obs.emit(
+                            "agent_loop_gate_failed_replan",
+                            intent=intent.value,
+                            iteration=iteration + 1,
+                            unmet=[c for c, _ in unmet][:5],
+                        )
+                    block = (
+                        "\n[POST-EXECUTION VERIFIER] Your last tool reported an error:\n"
+                        f"- {_pe_note}\n"
+                        + (_orchestrator_hint + "\n" if _orchestrator_hint else "")
+                        + f"\nRevised plan:\n{revised}\n"
+                        + "\nDo NOT report done until the error is fixed. Continue working."
+                    )
+                    loop_messages.append({"role": "user", "content": block})
+                    return "", False
+                # Cap hit — honest report.
+                trace.gate_summary = f"✗ post-execution verifier: {_pe_note}"
+                return f"\n\n{trace.gate_summary}", True
             return f"\n\n{trace.gate_summary}", True
 
         unmet = [(c, n) for c, passed, n in results if not passed]
