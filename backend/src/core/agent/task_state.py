@@ -38,6 +38,38 @@ PHASE_VERIFY = "verify"
 PHASE_FINAL = "final"
 
 
+# ── PlanNode (Session 180 — F3 Structured Planner DAG) ─────────────────────
+
+
+@dataclass
+class PlanNode:
+    """A single node in a structured plan DAG (Session 180, F3).
+
+    Replaces the free-text plan that was injected into the system prompt
+    (the existing `_plan_stream` path) with a typed node the loop can
+    advance through. Each node carries its own success criteria so the
+    gate can verify per-step completion, not just per-turn.
+
+    Lifecycle:
+        pending → in_progress → completed | failed
+    The loop's `record_step()` advances a node when its subgoal text
+    appears in the latest tool's input/output.
+    """
+
+    id: str
+    subgoal: str
+    depends_on: list[str] = field(default_factory=list)
+    success_criteria: list[str] = field(default_factory=list)
+    status: str = "pending"  # pending | in_progress | completed | failed
+    error: str = ""
+
+    def is_ready(self, completed_ids: set[str]) -> bool:
+        """True when all dependencies are completed."""
+        return self.status == "pending" and all(
+            dep in completed_ids for dep in self.depends_on
+        )
+
+
 @dataclass
 class TaskState:
     """Engine-side objective truth for one agent turn (ADR-18 P0)."""
@@ -53,6 +85,10 @@ class TaskState:
     iteration: int = 0
     budget: dict = field(default_factory=dict)
     started_at: float = field(default_factory=time.time)
+    # Session 180 — F3 Structured Planner DAG. The structured plan nodes
+    # the loop advances through. Empty list = no structured plan (legacy
+    # behavior; the free-text _plan_stream path still runs as a fallback).
+    nodes: list[PlanNode] = field(default_factory=list)
 
     # ── Mutators ─────────────────────────────────────────────────────────
 
@@ -143,6 +179,27 @@ class TaskState:
                 lines.append(f"  - [ ] {step}")
             for step, error in self.failed:
                 lines.append(f"  - [!] {step} — failed: {error[:120]}")
+        # Session 180 — F3 Structured Planner DAG. Render the plan nodes
+        # as a checklist so the model sees the DAG structure + per-node
+        # success criteria every iteration.
+        if self.nodes:
+            lines.append("Plan DAG:")
+            for node in self.nodes:
+                marker = {
+                    "pending": " ",
+                    "in_progress": "~",
+                    "completed": "x",
+                    "failed": "!",
+                }.get(node.status, " ")
+                deps = (
+                    f" (after {','.join(node.depends_on)})"
+                    if node.depends_on
+                    else ""
+                )
+                lines.append(f"  - [{marker}] {node.id}: {node.subgoal}{deps}")
+                if node.success_criteria:
+                    for c in node.success_criteria:
+                        lines.append(f"      · {c}")
         if self.budget:
             lines.append(
                 f"Phase: {self.phase} · Iteration "
@@ -166,4 +223,16 @@ class TaskState:
             "evidence": list(self.evidence),
             "iteration": self.iteration,
             "budget": dict(self.budget),
+            # Session 180 — F3 Structured Planner DAG
+            "nodes": [
+                {
+                    "id": n.id,
+                    "subgoal": n.subgoal,
+                    "depends_on": list(n.depends_on),
+                    "success_criteria": list(n.success_criteria),
+                    "status": n.status,
+                    "error": n.error,
+                }
+                for n in self.nodes
+            ],
         }

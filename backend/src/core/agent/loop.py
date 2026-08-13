@@ -1422,6 +1422,31 @@ class AgentLoop:
             or "",
             success_criteria=list(trace.success_criteria),
         )
+        # Session 180 — F3 Structured Planner DAG. Parse the free-text
+        # plan into typed PlanNode objects so the loop can advance them
+        # through pending → in_progress → completed | failed. Falls back
+        # to the GoalInterpreter's turn-level criteria for per-node
+        # criteria when the plan text doesn't carry its own.
+        if plan_context:
+            try:
+                from core.agent.plan_parser import parse_plan_to_nodes
+
+                task_state.nodes = parse_plan_to_nodes(
+                    plan_context,
+                    fallback_criteria=list(trace.success_criteria) if trace.success_criteria else None,
+                )
+                if task_state.nodes and _obs:
+                    _obs.emit(
+                        "plan_nodes_created",
+                        intent=intent.value,
+                        node_count=len(task_state.nodes),
+                        node_ids=[n.id for n in task_state.nodes],
+                    )
+            except Exception as _plan_parse_exc:  # pragma: no cover — defensive
+                logger.warning(
+                    "[agent.loop] plan_parser failed (non-fatal): %s",
+                    _plan_parse_exc,
+                )
         task_state.set_budget(
             iter_used=0,
             iter_max=_effective_max_iter,
@@ -1706,6 +1731,39 @@ class AgentLoop:
             task_state.completed = [s.description for s in _subgoals if s.status == "completed"]
             task_state.pending = [s.description for s in _subgoals if s.status in ("pending", "in_progress")]
             task_state.failed = [(s.description, s.notes or "") for s in _subgoals if s.status == "blocked"]
+            # Session 180 — F3 Structured Planner DAG. Advance the plan
+            # nodes based on the latest tool execution. Heuristic: the
+            # node whose subgoal tokens appear in the latest tool's
+            # input/observation transitions to completed (or failed).
+            if task_state.nodes and trace.steps:
+                try:
+                    from core.agent.plan_parser import advance_node_for_step
+
+                    _last = trace.steps[-1]
+                    _advanced_id = advance_node_for_step(
+                        task_state.nodes,
+                        tool_name=_last.tool_name or "",
+                        tool_input=_last.tool_input or "",
+                        observation=_last.observation or "",
+                        succeeded=not _last.tool_failed,
+                    )
+                    if _advanced_id and _obs:
+                        _adv_node = next(
+                            (n for n in task_state.nodes if n.id == _advanced_id), None
+                        )
+                        if _adv_node:
+                            _obs.emit(
+                                "plan_node_advanced",
+                                node_id=_advanced_id,
+                                new_status=_adv_node.status,
+                                subgoal=_adv_node.subgoal[:120],
+                                iteration=iteration + 1,
+                            )
+                except Exception as _advance_exc:  # pragma: no cover
+                    logger.debug(
+                        "[agent.loop] plan node advance failed (non-fatal): %s",
+                        _advance_exc,
+                    )
             # Fresh progress/budget for the per-iteration context (the
             # criteria checklist stays in the system prompt — no duplication).
             task_state_refresh = task_state.to_prompt(include_criteria=False)
