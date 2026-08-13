@@ -2406,3 +2406,26 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   F5 investigated + skipped (deliberate decision), F6-F9 cleanup.
   F10 (live smokes for ADR-19/20/21) — closed by the real-model
   smokes in Sessions 177, 178, 181, 183.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 184)
+
+- **Agent:** Super Z / GLM-5.2 (Z.ai)
+- **Platform:** Linux cloud sandbox (Ubuntu)
+- **Role:** engineer
+- **Core:** 0.5.0 (verified, no drift)
+- **Task:** Session 184 — ADR-22 Agent-First Routing.
+- **Done:**
+  - Wrote ADR-22 to .context/memory/plans/decisions.md.
+  - _should_skip_planning() now ALWAYS returns False (routing_helpers.py).
+  - Removed the _skip_planning=True override at _pipeline.py:2677-2701.
+  - Dispatcher's ExecutionGraph output reframed from 'Structured plan'
+    to 'Routing hint (VERIFY AND ADAPT before calling tools)'.
+  - _emit_todo_plan() now skips static fallback for ALL AGENT_INTENTS.
+  - dispatcher_plan_reused obs event → routing_hint_provided.
+  - Tests updated: test_planning_skip (5 new), test_monolith_decomposition,
+    test_todo_system.
+- **Commits:** (this session) — see git log.
+- **Next:** Real-model smoke against DIVERSE prompts (not just the user's
+  example), capturing UI screenshots via Playwright Python.
