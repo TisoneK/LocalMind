@@ -8,20 +8,20 @@ conditions are diagnosis-oriented:
     - Error traced to a specific line/change → done
     - No more diagnostic steps → done
 
-Phase 1 (this session): structural skeleton. is_done() always returns
-False — the existing AgentLoop's termination logic continues to apply.
+ADR-18 P0 (Session 183, F6 cleanup): promote from the always-False
+stub to a real `criteria_gate` check — same one-line pattern as
+`is_coding_done` (Session 173) and `is_verifier_done` (Session 174).
 
-Phase 2 will add debug-specific stop conditions:
-    - file_task returned the relevant source → done
-    - git log/diff identified the regression commit → done
-    - shell ran the failing command and captured output → done
-    - process restarted service and error reproduced → done
+The base loop still enforces hard caps (max_iterations,
+max_wall_clock_secs) regardless of this function's answer — that's
+the "OR limit" from ADR-5.
 """
 
 from __future__ import annotations
 
 from typing import Optional
 
+from core.agent.verify import criteria_gate
 from core.models import ToolResult
 
 
@@ -31,5 +31,13 @@ def is_debugger_done(
     last_tool_result: Optional[ToolResult],
     trace: object,
 ) -> tuple[bool, str]:
-    """Phase 1: always returns (False, "") — AgentLoop handles termination."""
-    return False, ""
+    """
+    Decide whether the debugger agent's loop should terminate.
+
+    With success criteria: evaluate them against the trace evidence; the
+    loop stops (True) only when all criteria pass.
+
+    Without criteria: returns (False, "") — the existing AgentLoop
+    termination logic continues to apply unchanged.
+    """
+    return criteria_gate(trace, unmet_label="criteria not yet met")

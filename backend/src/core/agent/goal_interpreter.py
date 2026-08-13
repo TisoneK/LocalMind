@@ -122,7 +122,6 @@ _TEMPLATES: dict[Intent, list[str]] = {
         "exit code 0 from code execution",
     ],
     Intent.SHELL: [
-        "command exit code 0",
         "no error markers in shell output",
     ],
     Intent.GIT: [

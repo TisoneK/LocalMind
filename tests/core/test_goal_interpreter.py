@@ -95,7 +95,10 @@ def test_file_write_uses_generic_fallback_when_no_path():
 
 
 def test_shell_derives_exit_code_criterion():
-    """SHELL intent derives an exit-code-0 criterion."""
+    """SHELL intent derives a no-error-markers criterion (Session 183
+    refinement — the previous 'command exit code 0' template had no
+    checkable tokens per the gate's _IGNORED_FALLBACK_TOKENS filter;
+    'no error markers in shell output' is checkable via _check_no_errors)."""
     interp = GoalInterpreter()
     result = interp.interpret(
         message="ls -la",
@@ -103,7 +106,7 @@ def test_shell_derives_exit_code_criterion():
         first_tool_args={"command": "ls -la"},
     )
     assert result.source == "deterministic"
-    assert any("exit code 0" in c for c in result.criteria)
+    assert any("no error markers" in c for c in result.criteria)
 
 
 def test_code_exec_derives_no_errors_criterion():

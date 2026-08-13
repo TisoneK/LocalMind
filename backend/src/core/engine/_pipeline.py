@@ -1973,6 +1973,29 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     memory_facts.append(wf)
                     existing.add(wf.lower().strip())
 
+        # ── Memory merge point (Session 183 — F9 documentation) ──────────
+        #
+        # The two memory stores in this codebase are INDEPENDENT at the
+        # storage + retrieval layer:
+        #   - MemoryComposer (core/memory.py) wraps a single VectorStore
+        #     for semantic facts ("remember that..."). Retrieval is via
+        #     MemoryComposer.compose() above this block (~line 1960).
+        #   - failure_memory (core/failure_memory.py + SessionStore's
+        #     record_failure/recall_failures) is a separate sqlite table
+        #     for what-failed-and-why (ADR-18 P2 / Session 175).
+        #
+        # They are MERGED here, at this single point, before the loop sees
+        # them: the failure-memory recall hint is appended as one string
+        # onto the end of the `memory_facts` list that came from
+        # MemoryComposer. The merge is invisible from either module's
+        # docstring — both look independent but they aren't.
+        #
+        # When adding new memory categories (Episodic, Project, Tool),
+        # route them through this same merge point so the loop sees one
+        # unified `memory_facts` list. Future session: extract a
+        # MemoryAggregator that owns this merge + makes the contract
+        # visible from each contributor module.
+        #
         # ADR-18 P2 (Session 175): Remember→Continue — recall past failures
         # matching this message and append them to the memory facts the
         # loop sees, so a repeated failure pattern is avoided instead of

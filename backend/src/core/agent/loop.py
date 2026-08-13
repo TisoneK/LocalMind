@@ -67,7 +67,6 @@ from core.agent.constants import (
     OBS_LOG_MAX_CHARS,
     PER_CALL_TIMEOUT_SECS,
     PLAN_ENABLED,
-    PLAN_ITERATION_COST,
     PLAN_TIMEOUT_SECS,
     SYNTHESIS_ENABLED,
     SYNTHESIS_TIMEOUT_SECS,
@@ -4512,92 +4511,6 @@ class AgentLoop:
 
         except Exception as exc:
             logger.warning(f"[agent.loop] planning stream failed (non-fatal): {exc}")
-
-    async def _plan(
-        self,
-        active_adapter,
-        intent: Intent,
-        loop_messages: list[dict],
-        available_tools: list[dict],
-        env_context: str,
-        intent_history: Optional[list[str]] = None,
-    ) -> tuple[str, int]:
-        # NOTE (Session 124): this non-streaming planner is currently dead
-        # code — run() only calls _plan_stream. If re-enabled, pass the
-        # scoped tool list (scoped_available) here too, or it silently
-        # re-sends all 24 tool definitions and reintroduces the 21.9K-
-        # prompt-token bug.
-        """
-        Run a planning LLM call (no tools) to produce a step-by-step plan.
-
-        Returns:
-            (plan_text, iterations_cost): The plan text to inject into the
-            execution prompt, and how many iterations the planning phase
-            consumed from the budget (typically PLAN_ITERATION_COST = 1).
-        """
-        # Extract user message from the conversation
-        user_message = ""
-        for msg in reversed(loop_messages):
-            if msg.get("role") == "user":
-                user_message = msg.get("content", "")
-                break
-
-        if not user_message:
-            return "", 0
-
-        planning_prompt = build_planning_prompt(
-            intent=intent,
-            user_message=user_message,
-            available_tools=available_tools,
-            env_context=env_context,
-            intent_history=intent_history,
-        )
-
-        planning_messages = [
-            {"role": "system", "content": planning_prompt},
-            {"role": "user", "content": user_message},
-        ]
-
-        try:
-            t_plan = time.monotonic()
-            plan_chunks: list[str] = []
-
-            # v0.11: Add timeout to planning phase (previously unbounded).
-            # On slow models or API providers, planning could take 30+ seconds.
-            _plan_timeout = PLAN_TIMEOUT_SECS
-
-            async def _collect_plan():
-                async for chunk in active_adapter.chat(
-                    planning_messages,
-                    temperature=0.1,
-                    intent="chat",
-                ):
-                    if chunk.error:
-                        logger.warning("[agent.loop] plan collect adapter error: %s", chunk.error[:120])
-                        break
-                    plan_chunks.append(chunk.text)
-
-            await asyncio.wait_for(_collect_plan(), timeout=_plan_timeout)
-            plan_text = "".join(plan_chunks).strip()
-            plan_ms = round((time.monotonic() - t_plan) * 1000)
-
-            if plan_text:
-                # Truncate plan to prevent context bloat — plans should be concise
-                _PLAN_MAX_CHARS = 1500
-                if len(plan_text) > _PLAN_MAX_CHARS:
-                    plan_text = plan_text[:_PLAN_MAX_CHARS] + "\n[... plan truncated]"
-                logger.info(f"[agent.loop] planning phase completed in {plan_ms}ms, plan_len={len(plan_text)}")
-                return plan_text, PLAN_ITERATION_COST
-            else:
-                logger.info("[agent.loop] planning phase returned empty plan — skipping")
-                return "", 0
-
-        except asyncio.TimeoutError:
-            logger.warning(f"[agent.loop] planning phase timed out ({_plan_timeout}s) — skipping")
-            return "", 0
-        except Exception as exc:
-            logger.warning(f"[agent.loop] planning phase failed (non-fatal): {exc}")
-            return "", 0
 
     # ------------------------------------------------------------------
     # Post-execution verification
