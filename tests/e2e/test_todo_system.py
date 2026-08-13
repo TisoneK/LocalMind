@@ -198,8 +198,13 @@ def test_todos_ordered_by_order_field(app_client):
 # ── Engine todo plan emission ────────────────────────────────────────────────
 
 
-def test_engine_emit_todo_plan(tmp_path, monkeypatch):
-    """Engine._emit_todo_plan creates todos in the DB for multi-step intents."""
+def test_engine_emit_todo_plan_skips_agent_intents(tmp_path, monkeypatch):
+    """ADR-22 (Session 184): Engine._emit_todo_plan does NOT create a static
+    fallback plan for AGENT_INTENTS — the agent's LLM planner owns the todo
+    list now (the agent always plans for AGENT_INTENTS, no more skip_planning
+    override). Previously WEB_SEARCH got a static fallback; now it gets the
+    LLM planner instead, which produces real plan steps via _plan_stream.
+    """
     from core.config import settings
     from core.engine._pipeline import Engine
     from core.models import Intent
@@ -226,10 +231,11 @@ def test_engine_emit_todo_plan(tmp_path, monkeypatch):
     obs = ObsCollector()
     session_id = "test-plan-session"
 
-    # Emit a plan for WEB_SEARCH
+    # ADR-22: WEB_SEARCH is in AGENT_INTENTS — the LLM planner owns the todo
+    # list. The static fallback must NOT fire.
     engine._emit_todo_plan(session_id, Intent.WEB_SEARCH, "trending stories", obs)
 
-    # Verify todos were created in the DB
+    # Verify NO todos were created — the LLM planner will emit its own.
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
@@ -238,20 +244,15 @@ def test_engine_emit_todo_plan(tmp_path, monkeypatch):
     ).fetchall()
     conn.close()
 
-    assert len(rows) == 3
-    # Derive expectations from the SAME fallback factory the engine uses, so
-    # a template edit cannot silently re-break this test (this exact staleness
-    # caused the long-lived '1 known baseline' failure, fixed Session 90).
-    from core.engine._pipeline import _fallback_todo_plan
+    assert len(rows) == 0, (
+        f"ADR-22 violation: static fallback emitted {len(rows)} todos for "
+        f"WEB_SEARCH — the LLM planner should own the todo list."
+    )
 
-    expected = _fallback_todo_plan(Intent.WEB_SEARCH, "trending stories")
-    for i, content in enumerate(expected):
-        assert rows[i]["content"] == content
-
-    # Verify obs events were emitted
+    # No todo_added events either.
     events = obs.drain()
     todo_events = [e for e in events if e.type == "todo_added"]
-    assert len(todo_events) == 3
+    assert len(todo_events) == 0
 
 
 def test_engine_emit_todo_plan_skips_chat(tmp_path, monkeypatch):

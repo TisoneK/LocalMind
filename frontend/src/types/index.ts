@@ -89,8 +89,47 @@ export interface ChatMessage {
   };
   /** Best-of-N editor candidates (B-2026-08-09-12 / C2 spec step 7), rendered
    * as an expandable section in the message. Populated from the tool result
-   * metadata when the backend sends a best_of_n_edit tool result. */
+   *  metadata when the backend sends a best_of_n_edit tool result. */
   candidates?: BestOfNCandidate[];
+  /** Session 181 — F4 Frontend Phase Visibility. Agentic phase entries
+   *  surfaced from the backend's now-live obs events:
+   *  agent_loop_gate_passed, agent_loop_gate_failed_replan,
+   *  orchestrator_replan_start/_done/_failed, agent_loop_failure,
+   *  plan_nodes_created, plan_node_advanced. Rendered as a phase strip
+   *  above the tool cards so the user can see "I am verifying /
+   *  replanning / switching to a different approach" — the literal
+   *  difference between a chat-with-tools and an agent. */
+  agentPhases?: AgentPhase[];
+}
+
+/** Session 181 — F4 Frontend Phase Visibility.
+ *  A single entry in the agent phase strip. Each entry corresponds to
+ *  one backend obs event (gate pass/fail, orchestrator replan,
+ *  plan node advance, etc.). The strip renders in order so the user
+ *  sees the agent's decision history for this turn. */
+export interface AgentPhase {
+  /** Stable unique id within the message (used as React key). */
+  id: string;
+  /** Canonical phase type — drives the icon + label. */
+  type:
+    | 'plan_created'        // plan_nodes_created — structured DAG built
+    | 'node_advanced'       // plan_node_advanced — a node transitioned state
+    | 'gate_passed'         // agent_loop_gate_passed — criteria verified ✓
+    | 'gate_failed_replan'  // agent_loop_gate_failed_replan — criteria unmet, replanning
+    | 'orchestrator_replan_start'  // orchestrator notified of failure
+    | 'orchestrator_replan_done'   // orchestrator produced a new plan
+    | 'orchestrator_replan_failed' // orchestrator.replan() raised (non-fatal)
+    | 'agent_loop_failure';  // agent_loop_failure — empty stream / iter cap / criteria unmet at cap
+  /** Human-readable label (e.g., "Verified: file exists at /tmp/foo"). */
+  label: string;
+  /** Optional detail string — the unmet criteria list, the failed tool,
+   *  the new plan summary, etc. Rendered as a sub-line. */
+  detail?: string;
+  /** ISO timestamp or ms since epoch — when the phase fired. */
+  timestamp: number;
+  /** Iteration the phase fired at (1-indexed). Optional — some phases
+   *  (plan_created) fire before iteration 1. */
+  iteration?: number;
 }
 
 /** A single candidate in a best-of-N edit result (B-2026-08-09-12). */

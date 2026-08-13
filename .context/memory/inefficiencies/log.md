@@ -303,3 +303,52 @@ if literally nothing slowed you down.
 - **Cause:** (1) Processes backgrounded from an agent shell are killed when the harness reaps the shell's process group — `nohup` only guards SIGHUP, not a group kill; (2) `backend/server.py:is_port_in_use()` binds WITHOUT `SO_REUSEADDR`, so a graceful shutdown's lingering TIME_WAIT sockets (~15s on macOS) make the pre-check fail with exit 42; (3) server.py's graceful shutdown takes ~4s, so a kill+immediate-relaunch hits the race.
 - **Workaround / fix:** Relaunch via `launchctl submit -l com.localmind.backend -- <venv-python> /abs/path/backend/server.py` (a launchd job survives agent sessions), AFTER waiting for `lsof -i :8000` to show ZERO sockets. Electron's normal flow also restores the backend (main.js spawns server.py when its health check fails).
 - **Prevent next time:** To reload backend code on this machine: (1) `launchctl remove com.localmind.backend`, (2) poll until `lsof -i :8000` is empty, (3) `launchctl submit -l com.localmind.backend ...`, (4) poll /api/health. Never rely on nohup'd processes from an agent shell for anything that must outlive the session.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 176)
+
+- **Problem:** `uv sync` in `backend/` fails because `pyproject.toml`
+  specifies `readme = "../README.md"` and hatchling refuses paths outside
+  the project directory ("Readme path must be within the project
+  directory").
+- **Cost:** ~3 min of trial-and-error + reading the uv error.
+- **Cause:** Hatchling's build backend enforces project-directory
+  containment; the LocalMind backend `pyproject.toml` is a sub-package of
+  the root repo and points at `../README.md`. uv's `sync` invokes the
+  build backend to compute metadata, hitting the refusal.
+- **Workaround / fix:** Don't use `uv sync`. Use the verified pattern:
+  `uv venv backend/.venv --python 3.12` then `uv pip install --python
+  backend/.venv/bin/python -e 'backend[dev]'` with a temporarily-patched
+  `pyproject.toml` (sed the readme path to a local copy, install, restore
+  the original). One-liner documented in
+  `system/environments.md` Session 176 entry. The pre-existing venv at
+  `backend/.venv` already has all deps installed from prior sessions, so
+  fresh-install is rarely needed in practice.
+- **Prevent next time:** Read `system/environments.md` BEFORE attempting
+  `uv sync` — Session 52 already recorded the working pattern. Don't
+  rediscover.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 184)
+
+- **Problem:** The Bash tool times out when running long Python scripts (>2 min). The smoke test script (8 prompts × ~30-60s each = 4-8 min) exceeded the 2-minute default timeout and the 10-minute max timeout. The tool returned "context deadline exceeded" repeatedly.
+- **Cost:** ~3 failed attempts before identifying the fix: split the smoke into per-prompt scripts that each complete within the 2-minute default timeout.
+- **Cause:** Each Bash tool call has a max timeout of 600000ms (10 min). Long-running scripts that boot backend + frontend + run 8 prompts + capture screenshots exceed this. The bash tool itself also seems to have a shorter internal timeout (~90s observed) that kills the call even when the timeout parameter is set higher.
+- **Workaround / fix:** 
+  1. Boot backend + frontend ONCE via `setsid`-detached `subprocess.Popen(start_new_session=True)` — they survive across bash calls.
+  2. Run each prompt in a SEPARATE bash call (each takes ~30-60s, well within the timeout).
+  3. Use a separate script to generate the summary from the saved transcripts.
+  The scripts are at `/home/z/my-project/scripts/smoke_boot.py` (boot/shutdown/run-by-index) and `/home/z/my-project/scripts/smoke_summary.py` (parse + summarize).
+- **Prevent next time:** When a Python script takes >2 min to run, split it into: (a) a detached boot step, (b) per-item execution steps, (c) a summary step. Never run a monolithic 5+ minute script through the Bash tool — it will time out. Use `start_new_session=True` (not `preexec_fn=os.setsid` — they conflict and cause "Exception in preexec_fn").
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 184, second inefficiency)
+
+- **Problem:** Port 8000 stays in TIME_WAIT after backend shutdown (~15s on this Linux sandbox), causing the next boot to fail with "Port 127.0.0.1:8000 is already in use" even though no process is LISTENing.
+- **Cost:** ~3 min of restart churn across multiple boot attempts.
+- **Cause:** Same as Session 153's documented issue (macOS launchctl pattern). On Linux, the fix is `fuser -k -9 8000/tcp` + wait 5s for TIME_WAIT to clear, THEN re-launch.
+- **Workaround / fix:** Before booting the backend: `fuser -k -9 8000/tcp 2>/dev/null; sleep 5`. The `smoke_boot.py shutdown` command handles this automatically via `os.killpg(SIGTERM)`.
+- **Prevent next time:** Add a `wait_for_port_clear(port, timeout=15)` helper to the smoke script that polls `ss -tlnp | grep :{port}` until empty before attempting to boot.

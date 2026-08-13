@@ -652,3 +652,32 @@ After the smoke test passes, test a multi-step task (e.g. "Create hello world re
   - **Flaw-log rule binds every phase:** any phase touching the loop/model path MUST be real-model tested before commit. Zen free tier was 429-rate-limited on 2026-08-11 — implementation sessions attempt the live smoke first and must not ship untested (Session 116 lesson: unit-mocked green ≠ real-model green).
   - Baseline (Session 152): backend 1293 tests pass, ruff clean, tsc clean, eslint 0 errors (61 warnings), frontend 95 tests.
   - Builds on ADR-5/6/7/8/10/16/17. Supersedes nothing. Agents stay structurally as they are; their is_done() becomes load-bearing.
+
+## ADR-22: Agent-First Routing — dispatcher is a hint, not a directive (2026-08-13)
+
+- **Author:** Super Z / GLM-5.2 (Session 184, per the user's "agent should decide, not intent" directive)
+- **Status:** accepted direction — implementation in this session, real-model tested per the flaw log
+- **Context:** The user's diagnosis (Session 176 audit + Session 184 follow-up): LocalMind "feels like generative + tools" because the ThinkingDispatcher pre-decides the intent via signal detection (regex match on `msg.startswith("ls ")` etc.) WITHOUT an LLM call, builds the literal tool-call node, hands it to the agent loop as `orchestrator_context` + `plan_steps`, then the engine sets `skip_planning=True` (`_pipeline.py:2677-2701`). The agent's first LLM call is therefore a tool-execution call, not a reasoning call. The user's example: "Show me all projects in dev folder" should reason about locating all `dev` folders (find_path), ask clarification if multiple exist, then display a projects summary — not blindly run `ls dev`.
+
+  The audit (Session 176) mis-flagged this as a verification gap (F2 GoalInterpreter). Sessions 177-183 closed the verification half (GoalInterpreter + post-exec verifier + structured planner + frontend phase visibility + 4 is_done stubs promoted). But the FRONT HALF of the loop — Understand + Plan — was untouched. The agent still doesn't reason about routing; the dispatcher does.
+
+  Three options were considered:
+  - **A. Remove signal detection entirely** — every message goes through the dispatcher's LLM capability inference. Costs 1 LLM call (~5-15s on free tier) per request. Restores agent reasoning but pays the latency on every turn including trivial ones.
+  - **B. Keep signal detection but route the result THROUGH the agent loop as input, not as a directive** — the agent sees "dispatcher suggested shell" as a hint, decides itself whether to call shell. Preserves the latency win for the common case (when the agent agrees with the hint) but restores reasoning. ✅ USER APPROVED.
+  - **C. Make `skip_planning=False` always for AGENT_INTENTS** — remove the `_pipeline.py:2677-2701` override. Simpler than B but loses the orchestrator_context mechanism's value entirely.
+
+- **Decision:** Option B. Three concrete changes:
+  1. **Keep `_skip_orchestrator = True` at high confidence** — the orchestrator IS redundant when the dispatcher already classified (it would just re-classify).
+  2. **Remove the `_skip_planning = True` override at `_pipeline.py:2677-2701`** — the agent ALWAYS plans for AGENT_INTENTS, even when the dispatcher produced a graph. The agent's `_plan_stream` LLM call runs; it sees the routing hint; it produces its own plan.
+  3. **Reframe `orchestrator_context` from "Structured plan from capability inference" to "Routing hint from capability inference (verify and adapt before calling tools)"** — the agent system prompt frames it as a suggestion to evaluate, not a directive to execute. The agent can:
+     - Agree with the hint and call the suggested tool (the common case — preserves the latency win).
+     - Disagree and call a different tool (e.g. "Show me projects in dev folder" → use `find_path` to locate all `dev` dirs first, not `shell ls dev`).
+     - Ask the user for clarification when the hint is ambiguous.
+
+- **Consequences:**
+  - Latency: +1 LLM call (the planning call) for high-confidence AGENT_INTENTS. On the free tier this is ~5-15s per turn. Trade-off: the agent now actually reasons about the request.
+  - The `dispatcher_plan_reused` obs event is REMOVED — the dispatcher's plan is no longer "reused" as the agent's plan. Replaced with `routing_hint_provided` (informational; the agent sees the hint but produces its own plan).
+  - The `dispatcher_high_confidence_skip` event still fires for the orchestrator skip (the orchestrator IS still skipped at high confidence — only the planning skip is removed).
+  - **No-regression list:** Sessions 177-183 changes (GoalInterpreter, post-exec verifier, structured plan DAG, frontend phase visibility, 4 promoted is_done stubs). The acceptance gate still runs. The post-exec verifier still runs. The structured plan DAG still parses the agent's `_plan_stream` output (which now always runs for AGENT_INTENTS).
+  - Baseline (Session 184 start): backend 1572 tests pass + 1 pre-existing failure (test_output_bounds — unrelated).
+  - Builds on ADR-18 P0/P1/P2 + Sessions 177-183. Supersedes the v0.11 latency-fix comment at `_pipeline.py:2641-2652` (the "≥0.7 confidence skips orchestrator + planning" decision) — the orchestrator skip stays, the planning skip is removed.

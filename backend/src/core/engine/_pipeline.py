@@ -39,7 +39,6 @@ from core.agent.orchestrator import AgentOrchestrator, OrchestrationResult
 from core.agent.tool_dispatch import dispatch_with_retry
 from core.config import settings
 from core.engine.routing_helpers import (
-    _PLAN_REQUIRED_INTENTS,
     _dispatcher_plan_context,
     _dispatcher_plan_steps,
     _fallback_todo_plan,
@@ -560,7 +559,12 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # the todo list. A static fallback would collide with — and overwrite
         # — the model's goal-level plan in the same plan-N id namespace (the
         # user saw "Run the shell action" clobber "Run `git status`…").
-        if intent in _PLAN_REQUIRED_INTENTS:
+        #
+        # === ADR-22 (Session 184) ===
+        # Expanded from _PLAN_REQUIRED_INTENTS to AGENT_INTENTS — the agent
+        # now ALWAYS plans for AGENT_INTENTS (no more skip_planning override),
+        # so the LLM planner owns the todo list for all of them.
+        if intent in AGENT_INTENTS:
             return
 
         plan = self._INTENT_TODO_PLANS.get(intent)
@@ -1779,6 +1783,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     is_done_fn=_acceptance_gate_for(_esc_intent),  # Session 173/174: Verify stage on the escalate path
                     steering_queue=self._steering_queue_for(session_id),
                     abort_signal=self._abort_event_for(session_id),
+                    orchestrator=self._agent_orchestrator,  # Session 178: F1 wire replan()
+                    reformulated_message=message,  # Session 178 — original message on the escalate path
                 )
                 async for chunk in _agent_esc_run:
                     if chunk.usage:
@@ -2056,6 +2062,29 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     memory_facts.append(wf)
                     existing.add(wf.lower().strip())
 
+        # ── Memory merge point (Session 183 — F9 documentation) ──────────
+        #
+        # The two memory stores in this codebase are INDEPENDENT at the
+        # storage + retrieval layer:
+        #   - MemoryComposer (core/memory.py) wraps a single VectorStore
+        #     for semantic facts ("remember that..."). Retrieval is via
+        #     MemoryComposer.compose() above this block (~line 1960).
+        #   - failure_memory (core/failure_memory.py + SessionStore's
+        #     record_failure/recall_failures) is a separate sqlite table
+        #     for what-failed-and-why (ADR-18 P2 / Session 175).
+        #
+        # They are MERGED here, at this single point, before the loop sees
+        # them: the failure-memory recall hint is appended as one string
+        # onto the end of the `memory_facts` list that came from
+        # MemoryComposer. The merge is invisible from either module's
+        # docstring — both look independent but they aren't.
+        #
+        # When adding new memory categories (Episodic, Project, Tool),
+        # route them through this same merge point so the loop sees one
+        # unified `memory_facts` list. Future session: extract a
+        # MemoryAggregator that owns this merge + makes the contract
+        # visible from each contributor module.
+        #
         # ADR-18 P2 (Session 175): Remember→Continue — recall past failures
         # matching this message and append them to the memory facts the
         # loop sees, so a repeated failure pattern is avoided instead of
@@ -2628,6 +2657,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # ADR-18 P0: the dispatcher's typed success criteria (its
         # execution_plan.success_criteria). Threaded to the agent loop as
         # the acceptance contract — "done" requires verified receipts.
+        #
+        # Session 177 — GoalInterpreter fallback: when the dispatcher LLM
+        # omitted `success_criteria` (common on free-tier small models),
+        # derive 1-3 deterministic criteria per intent from the
+        # `intent + first tool args`. LLM-emitted criteria always win;
+        # the deterministic fallback only fills the gap. See
+        # `core/agent/goal_interpreter.py`.
         _reused_criteria: list[str] = []
         if _orchestration_plan is not None:
             _reused_criteria = [
@@ -2635,6 +2671,36 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 for c in (getattr(_orchestration_plan, "success_criteria", None) or [])
                 if str(c).strip()
             ]
+        if not _reused_criteria:
+            # Deterministic fallback (ADR-18 P0+). Pure, no LLM call.
+            from core.agent.goal_interpreter import interpret_goal
+
+            _execution_plan_steps: list[dict] = []
+            if _orchestration_plan is not None:
+                # OrchestrationPlan.graph holds the ExecutionGraph (lazy-set
+                # by ThinkingDispatcher). Each graph.nodes[i].tool_args is
+                # a dict the GoalInterpreter can extract path/command/url from.
+                _exec_graph = getattr(_orchestration_plan, "graph", None)
+                if _exec_graph is not None:
+                    _nodes = list(getattr(_exec_graph, "nodes", []) or [])
+                    for _n in _nodes:
+                        _args = getattr(_n, "tool_args", None)
+                        if isinstance(_args, dict) and _args:
+                            _execution_plan_steps.append({"args": _args})
+                            break  # only the first step matters
+            _interp = interpret_goal(
+                message=message,
+                intent=effective_intent,
+                execution_plan_steps=_execution_plan_steps,
+                llm_criteria=None,  # we already checked — empty
+            )
+            _reused_criteria = _interp.criteria
+            if _interp.source == "deterministic":
+                logger.debug(
+                    "[goal_interpreter] derived %d deterministic criteria for intent=%s",
+                    len(_reused_criteria),
+                    effective_intent.value if effective_intent else "None",
+                )
         if effective_intent in AGENT_INTENTS:
             # Yield a status update so the user knows what's happening
             # (previously: the user saw "Thinking..." with no indication of progress)
@@ -2707,36 +2773,59 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     # label). For the tool-heavy intents above, this used to
                     # be DISCARDED and re-derived by a second planning call
                     # (_plan_stream) — the middle call of the 4-7-call chain.
-                    # When the dispatcher plan is usable, reuse it as
-                    # orchestrator_context and skip the planner: the loop
-                    # follows this plan instead of re-planning (its
-                    # orchestrator_context mechanism was built for exactly
-                    # this). Cuts one 20-40s free-tier model call per tool
-                    # request. Falls back to the planner when the dispatcher
-                    # produced no usable steps (empty/degenerate graph) —
-                    # never skip planning with no plan at all (Session 113).
+                    #
+                    # === ADR-22 (Session 184) — Agent-First Routing ===
+                    # The previous behavior (Session 134) was to REUSE the
+                    # dispatcher's plan as the agent's plan via
+                    # `orchestrator_context` + `plan_steps`, then set
+                    # `skip_planning=True`. The agent's first LLM call was a
+                    # tool-execution call, not a reasoning call — the
+                    # dispatcher pre-decided the tool.
+                    #
+                    # The user's diagnosis: "the agent should decide to call
+                    # tools, not intent." Example: "Show me all projects in
+                    # dev folder" should reason about locating all `dev`
+                    # folders (find_path), ask clarification if multiple,
+                    # then display a projects summary — not blindly run
+                    # `ls dev`.
+                    #
+                    # Fix (Option B approved by user): keep the dispatcher's
+                    # output as a HINT, not a directive. The agent ALWAYS
+                    # plans for AGENT_INTENTS — its `_plan_stream` LLM call
+                    # runs, sees the hint, and produces its own plan. The
+                    # agent can:
+                    #   - Agree with the hint and call the suggested tool
+                    #     (common case — preserves the latency win).
+                    #   - Disagree and call a different tool (e.g. find_path
+                    #     instead of shell ls).
+                    #   - Ask the user for clarification when the hint is
+                    #     ambiguous.
                     if not _skip_planning:
                         _dispatcher_plan = _dispatcher_plan_context(
                             _orchestration_plan.graph
                         )
                         if _dispatcher_plan:
-                            _skip_planning = True
                             _reused_plan_steps = _dispatcher_plan_steps(
                                 _orchestration_plan.graph
                             )
+                            # Pass as a HINT, not a directive. The agent
+                            # reasons about it during its own _plan_stream call.
                             orchestrator_context = (
-                                "Structured plan from capability inference:\n"
+                                "Routing hint from capability inference "
+                                "(VERIFY AND ADAPT before calling tools — "
+                                "the user's request may need a different "
+                                "tool, clarification, or a multi-step plan):\n"
                                 + _dispatcher_plan
                             )
                             _obs.emit(
-                                "dispatcher_plan_reused",
+                                "routing_hint_provided",
                                 intent=effective_intent.value,
-                                steps=len(_reused_plan_steps),
+                                hint_steps=len(_reused_plan_steps),
                                 confidence=round(_dispatcher_confidence, 2),
                             )
                             logger.info(
-                                "[engine] reusing dispatcher execution plan (%d steps) "
-                                "for %s — skipped agent planning call (saves one model call)",
+                                "[engine] routing hint provided (%d steps) for %s — "
+                                "agent will plan independently (ADR-22)",
                                 len(_reused_plan_steps),
                                 effective_intent.value,
                             )
@@ -3547,6 +3636,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     task_type=_reused_task_type or None,  # ADR-19 context policy
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
+                    orchestrator=self._agent_orchestrator,  # Session 178: F1 wire replan()
+                    reformulated_message=reformulated,  # Session 178
                 )
                 # Session 31: CRITICAL FIX — intercept done=True from the
                 # agent loop. If the loop produced NO text, the done signal
@@ -3605,6 +3696,8 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     task_type=_reused_task_type or None,  # ADR-19 context policy
                     steering_queue=self._steering_queue_for(session_id),  # B-2026-08-02-5 (A5)
                     abort_signal=self._abort_event_for(session_id),  # B-2026-08-02-2 (A2)
+                    orchestrator=self._agent_orchestrator,  # Session 178: F1 wire replan()
+                    reformulated_message=reformulated,  # Session 178
                 ):
                     if chunk.usage:
                         _provider_usage.update(chunk.usage)

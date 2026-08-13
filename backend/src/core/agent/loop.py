@@ -67,7 +67,6 @@ from core.agent.constants import (
     OBS_LOG_MAX_CHARS,
     PER_CALL_TIMEOUT_SECS,
     PLAN_ENABLED,
-    PLAN_ITERATION_COST,
     PLAN_TIMEOUT_SECS,
     SYNTHESIS_ENABLED,
     SYNTHESIS_TIMEOUT_SECS,
@@ -1123,6 +1122,15 @@ class AgentLoop:
         allowed_tool_names: Optional[frozenset[str]] = None,
         steering_queue: Optional[asyncio.Queue] = None,
         abort_signal: Optional[asyncio.Event] = None,
+        # Session 178 — wire the dead AgentOrchestrator.replan() into the
+        # verify-fail path. Before falling back to _replan_for_gate's
+        # self-contained LLM call, notify the orchestrator so its confidence
+        # drops, it can re-route to a different agent (e.g. coding→debugger),
+        # and the orchestrator_replan_* obs events fire for real (consumed by
+        # the frontend in Session 180). None = legacy behavior (no orchestrator
+        # notification; _replan_for_gate runs alone).
+        orchestrator=None,
+        reformulated_message: str = "",
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -1413,6 +1421,31 @@ class AgentLoop:
             or "",
             success_criteria=list(trace.success_criteria),
         )
+        # Session 180 — F3 Structured Planner DAG. Parse the free-text
+        # plan into typed PlanNode objects so the loop can advance them
+        # through pending → in_progress → completed | failed. Falls back
+        # to the GoalInterpreter's turn-level criteria for per-node
+        # criteria when the plan text doesn't carry its own.
+        if plan_context:
+            try:
+                from core.agent.plan_parser import parse_plan_to_nodes
+
+                task_state.nodes = parse_plan_to_nodes(
+                    plan_context,
+                    fallback_criteria=list(trace.success_criteria) if trace.success_criteria else None,
+                )
+                if task_state.nodes and _obs:
+                    _obs.emit(
+                        "plan_nodes_created",
+                        intent=intent.value,
+                        node_count=len(task_state.nodes),
+                        node_ids=[n.id for n in task_state.nodes],
+                    )
+            except Exception as _plan_parse_exc:  # pragma: no cover — defensive
+                logger.warning(
+                    "[agent.loop] plan_parser failed (non-fatal): %s",
+                    _plan_parse_exc,
+                )
         task_state.set_budget(
             iter_used=0,
             iter_max=_effective_max_iter,
@@ -1697,6 +1730,39 @@ class AgentLoop:
             task_state.completed = [s.description for s in _subgoals if s.status == "completed"]
             task_state.pending = [s.description for s in _subgoals if s.status in ("pending", "in_progress")]
             task_state.failed = [(s.description, s.notes or "") for s in _subgoals if s.status == "blocked"]
+            # Session 180 — F3 Structured Planner DAG. Advance the plan
+            # nodes based on the latest tool execution. Heuristic: the
+            # node whose subgoal tokens appear in the latest tool's
+            # input/observation transitions to completed (or failed).
+            if task_state.nodes and trace.steps:
+                try:
+                    from core.agent.plan_parser import advance_node_for_step
+
+                    _last = trace.steps[-1]
+                    _advanced_id = advance_node_for_step(
+                        task_state.nodes,
+                        tool_name=_last.tool_name or "",
+                        tool_input=_last.tool_input or "",
+                        observation=_last.observation or "",
+                        succeeded=not _last.tool_failed,
+                    )
+                    if _advanced_id and _obs:
+                        _adv_node = next(
+                            (n for n in task_state.nodes if n.id == _advanced_id), None
+                        )
+                        if _adv_node:
+                            _obs.emit(
+                                "plan_node_advanced",
+                                node_id=_advanced_id,
+                                new_status=_adv_node.status,
+                                subgoal=_adv_node.subgoal[:120],
+                                iteration=iteration + 1,
+                            )
+                except Exception as _advance_exc:  # pragma: no cover
+                    logger.debug(
+                        "[agent.loop] plan node advance failed (non-fatal): %s",
+                        _advance_exc,
+                    )
             # Fresh progress/budget for the per-iteration context (the
             # criteria checklist stays in the system prompt — no duplication).
             task_state_refresh = task_state.to_prompt(include_criteria=False)
@@ -3660,6 +3726,10 @@ class AgentLoop:
                         active_adapter=active_adapter,
                         intent=intent,
                         obs=_obs,
+                        orchestrator=orchestrator,
+                        reformulated_message=reformulated_message,
+                        memory_facts=memory_facts,
+                        intent_history=intent_history,
                     )
                     if not _gate_final:
                         continue
@@ -3751,6 +3821,10 @@ class AgentLoop:
                     active_adapter=active_adapter,
                     intent=intent,
                     obs=_obs,
+                    orchestrator=orchestrator,
+                    reformulated_message=reformulated_message,
+                    memory_facts=memory_facts,
+                    intent_history=intent_history,
                 )
                 if not _gate_final:
                     continue
@@ -3873,6 +3947,12 @@ class AgentLoop:
         active_adapter,
         intent: Intent,
         obs,
+        # Session 178 — pass-through from run() so the orchestrator's
+        # dead replan() method can finally be called. None = legacy.
+        orchestrator=None,
+        reformulated_message: str = "",
+        memory_facts: Optional[list[str]] = None,
+        intent_history: Optional[list[str]] = None,
     ) -> tuple[str, bool]:
         """Gate the model's "done" claim against the success criteria.
 
@@ -3882,6 +3962,12 @@ class AgentLoop:
           - Some unmet + iterations remain → EXPLICIT replan LLM call
             (locked decision 3, Session 154); the revised plan is injected
             as a user block and the loop continues (returns is_final=False).
+            Session 178: when `orchestrator` is provided, it is notified
+            FIRST — its replan() produces a structured OrchestrationResult
+            (re-route, confidence drop, clarification question) which is
+            prepended to the revised plan block. The orchestrator's obs
+            events (orchestrator_replan_start/_done/_timeout/_failed) now
+            fire for real (consumed by the frontend in Session 180).
           - Some unmet + cap → suffix = the honest unmet report.
         No criteria → ("", True) — the legacy path is unchanged.
         """
@@ -3900,10 +3986,199 @@ class AgentLoop:
         trace.gate_passed = gate_passed(results)
         if trace.gate_passed:
             trace.gate_summary = format_gate_results(results)
+            # Session 179 — F4 Mandatory post-execution verifier for
+            # high-stakes intents. Even when criteria pass, run ONE
+            # additional deterministic check that the LAST tool's output
+            # has no error markers. If the last tool failed (e.g. the
+            # model said "done" but the file_write returned an error
+            # string), reject "done" and force a replan — same path as
+            # criteria-fail below. Closes the gap where the GoalInterpreter's
+            # derived criteria check the FIRST tool's outcome but miss a
+            # subsequent tool's failure.
+            from core.agent.post_execution_verifier import post_execution_verify
+
+            _pe_passed, _pe_note = post_execution_verify(trace, intent)
+            if not _pe_passed:
+                # Treat as criteria-fail: replan if iterations remain.
+                unmet = [("(post-execution verifier)", _pe_note)]
+                if iteration + 1 < effective_max_iter:
+                    # Session 178 — notify the orchestrator (same path as
+                    # criteria-fail above).
+                    _orchestrator_hint = ""
+                    if orchestrator is not None:
+                        if obs:
+                            obs.emit(
+                                "orchestrator_replan_start",
+                                intent=intent.value,
+                                iteration=iteration + 1,
+                                unmet=[c for c, _ in unmet][:3],
+                            )
+                        try:
+                            from core.agent.orchestrator import OrchestrationStep
+
+                            _last_step = None
+                            for _s in reversed(getattr(trace, "steps", []) or []):
+                                if _s.tool_name:
+                                    _last_step = _s
+                                    break
+                            _failed_step = OrchestrationStep(
+                                tool=_last_step.tool_name if _last_step else "(unknown)",
+                                args=(
+                                    {"input": (_last_step.tool_input or "")[:200]}
+                                    if _last_step
+                                    else {}
+                                ),
+                                reason=_pe_note[:300],
+                            )
+                            _replan_result = await orchestrator.replan(
+                                reformulated_message=reformulated_message
+                                or _user_message_text(loop_messages),
+                                intent=intent,
+                                failed_step=_failed_step,
+                                failure_reason=_pe_note[:200],
+                                adapter=active_adapter,
+                                memory_facts=memory_facts,
+                                intent_history=intent_history,
+                                obs=obs,
+                            )
+                            if _replan_result and _replan_result.orchestrator_context:
+                                _orchestrator_hint = (
+                                    f"\n[ORCHESTRATOR — confidence dropped to "
+                                    f"{round(_replan_result.confidence, 2)}]\n"
+                                    f"{_replan_result.orchestrator_context}\n"
+                                )
+                            if obs:
+                                obs.emit(
+                                    "orchestrator_replan_done",
+                                    confidence=round(_replan_result.confidence, 2)
+                                    if _replan_result
+                                    else 0.0,
+                                    intent=intent.value,
+                                )
+                        except Exception as _orch_exc:  # pragma: no cover — defensive
+                            logger.warning(
+                                "[agent.loop] orchestrator.replan (post-exec) failed "
+                                "(non-fatal): %s",
+                                _orch_exc,
+                            )
+                            if obs:
+                                obs.emit(
+                                    "orchestrator_replan_failed",
+                                    error=str(_orch_exc)[:120],
+                                    intent=intent.value,
+                                )
+
+                    revised = await self._replan_for_gate(
+                        trace=trace,
+                        unmet=unmet,
+                        loop_messages=loop_messages,
+                        observation_log=observation_log,
+                        active_adapter=active_adapter,
+                    )
+                    if obs:
+                        obs.emit(
+                            "agent_loop_gate_failed_replan",
+                            intent=intent.value,
+                            iteration=iteration + 1,
+                            unmet=[c for c, _ in unmet][:5],
+                        )
+                    block = (
+                        "\n[POST-EXECUTION VERIFIER] Your last tool reported an error:\n"
+                        f"- {_pe_note}\n"
+                        + (_orchestrator_hint + "\n" if _orchestrator_hint else "")
+                        + f"\nRevised plan:\n{revised}\n"
+                        + "\nDo NOT report done until the error is fixed. Continue working."
+                    )
+                    loop_messages.append({"role": "user", "content": block})
+                    return "", False
+                # Cap hit — honest report.
+                trace.gate_summary = f"✗ post-execution verifier: {_pe_note}"
+                return f"\n\n{trace.gate_summary}", True
             return f"\n\n{trace.gate_summary}", True
 
         unmet = [(c, n) for c, passed, n in results if not passed]
         if iteration + 1 < effective_max_iter:
+            # Session 178 — Notify the orchestrator FIRST so its dead
+            # replan() method finally runs, its confidence drops, and
+            # the orchestrator_replan_* obs events fire for real (to be
+            # consumed by the frontend in Session 180). The orchestrator
+            # may also return a clarification_question or a re-route hint.
+            _orchestrator_hint = ""
+            if orchestrator is not None:
+                # Session 178 — emit the obs events HERE (in the loop) so
+                # they fire even when the orchestrator is mocked in tests
+                # (the real AgentOrchestrator.replan also emits them, but
+                # the loop is the authoritative source — it owns the call).
+                if obs:
+                    obs.emit(
+                        "orchestrator_replan_start",
+                        intent=intent.value,
+                        iteration=iteration + 1,
+                        unmet=[c for c, _ in unmet][:3],
+                    )
+                try:
+                    # Build an OrchestrationStep describing the failed work.
+                    # The trace's last failed step (or last tool) is the
+                    # closest proxy we have without a richer TaskState.
+                    from core.agent.orchestrator import OrchestrationStep
+
+                    _last_step = None
+                    for _s in reversed(getattr(trace, "steps", []) or []):
+                        if _s.tool_name:
+                            _last_step = _s
+                            break
+                    _failed_step = OrchestrationStep(
+                        tool=_last_step.tool_name if _last_step else "(unknown)",
+                        args=(
+                            {"input": (_last_step.tool_input or "")[:200]}
+                            if _last_step
+                            else {}
+                        ),
+                        reason="; ".join(f"{c}: {n}" for c, n in unmet)[:300],
+                    )
+                    _replan_result = await orchestrator.replan(
+                        reformulated_message=reformulated_message
+                        or _user_message_text(loop_messages),
+                        intent=intent,
+                        failed_step=_failed_step,
+                        failure_reason="; ".join(f"{c}: {n}" for c, n in unmet)[:200],
+                        adapter=active_adapter,
+                        memory_facts=memory_facts,
+                        intent_history=intent_history,
+                        obs=obs,
+                    )
+                    if _replan_result and _replan_result.orchestrator_context:
+                        _orchestrator_hint = (
+                            f"\n[ORCHESTRATOR — confidence dropped to "
+                            f"{round(_replan_result.confidence, 2)}]\n"
+                            f"{_replan_result.orchestrator_context}\n"
+                        )
+                        if _replan_result.clarification_question:
+                            _orchestrator_hint += (
+                                f"Clarification needed: "
+                                f"{_replan_result.clarification_question}\n"
+                            )
+                    if obs:
+                        obs.emit(
+                            "orchestrator_replan_done",
+                            confidence=round(_replan_result.confidence, 2)
+                            if _replan_result
+                            else 0.0,
+                            intent=intent.value,
+                        )
+                except Exception as _orch_exc:  # pragma: no cover — defensive
+                    logger.warning(
+                        "[agent.loop] orchestrator.replan failed (non-fatal, "
+                        "falling back to _replan_for_gate): %s",
+                        _orch_exc,
+                    )
+                    if obs:
+                        obs.emit(
+                            "orchestrator_replan_failed",
+                            error=str(_orch_exc)[:120],
+                            intent=intent.value,
+                        )
+
             revised = await self._replan_for_gate(
                 trace=trace,
                 unmet=unmet,
@@ -3921,7 +4196,8 @@ class AgentLoop:
             block = (
                 "\n[ACCEPTANCE GATE] Your success criteria are NOT yet met:\n"
                 + "\n".join(f"- {c} — {n}" for c, n in unmet)
-                + f"\n\nRevised plan from the gate:\n{revised}\n"
+                + (_orchestrator_hint + "\n" if _orchestrator_hint else "")
+                + f"\nRevised plan from the gate:\n{revised}\n"
                 + "\nDo NOT report done until every criterion is met. Continue working."
             )
             loop_messages.append({"role": "user", "content": block})
@@ -4238,92 +4514,6 @@ class AgentLoop:
 
         except Exception as exc:
             logger.warning(f"[agent.loop] planning stream failed (non-fatal): {exc}")
-
-    async def _plan(
-        self,
-        active_adapter,
-        intent: Intent,
-        loop_messages: list[dict],
-        available_tools: list[dict],
-        env_context: str,
-        intent_history: Optional[list[str]] = None,
-    ) -> tuple[str, int]:
-        # NOTE (Session 124): this non-streaming planner is currently dead
-        # code — run() only calls _plan_stream. If re-enabled, pass the
-        # scoped tool list (scoped_available) here too, or it silently
-        # re-sends all 24 tool definitions and reintroduces the 21.9K-
-        # prompt-token bug.
-        """
-        Run a planning LLM call (no tools) to produce a step-by-step plan.
-
-        Returns:
-            (plan_text, iterations_cost): The plan text to inject into the
-            execution prompt, and how many iterations the planning phase
-            consumed from the budget (typically PLAN_ITERATION_COST = 1).
-        """
-        # Extract user message from the conversation
-        user_message = ""
-        for msg in reversed(loop_messages):
-            if msg.get("role") == "user":
-                user_message = msg.get("content", "")
-                break
-
-        if not user_message:
-            return "", 0
-
-        planning_prompt = build_planning_prompt(
-            intent=intent,
-            user_message=user_message,
-            available_tools=available_tools,
-            env_context=env_context,
-            intent_history=intent_history,
-        )
-
-        planning_messages = [
-            {"role": "system", "content": planning_prompt},
-            {"role": "user", "content": user_message},
-        ]
-
-        try:
-            t_plan = time.monotonic()
-            plan_chunks: list[str] = []
-
-            # v0.11: Add timeout to planning phase (previously unbounded).
-            # On slow models or API providers, planning could take 30+ seconds.
-            _plan_timeout = PLAN_TIMEOUT_SECS
-
-            async def _collect_plan():
-                async for chunk in active_adapter.chat(
-                    planning_messages,
-                    temperature=0.1,
-                    intent="chat",
-                ):
-                    if chunk.error:
-                        logger.warning("[agent.loop] plan collect adapter error: %s", chunk.error[:120])
-                        break
-                    plan_chunks.append(chunk.text)
-
-            await asyncio.wait_for(_collect_plan(), timeout=_plan_timeout)
-            plan_text = "".join(plan_chunks).strip()
-            plan_ms = round((time.monotonic() - t_plan) * 1000)
-
-            if plan_text:
-                # Truncate plan to prevent context bloat — plans should be concise
-                _PLAN_MAX_CHARS = 1500
-                if len(plan_text) > _PLAN_MAX_CHARS:
-                    plan_text = plan_text[:_PLAN_MAX_CHARS] + "\n[... plan truncated]"
-                logger.info(f"[agent.loop] planning phase completed in {plan_ms}ms, plan_len={len(plan_text)}")
-                return plan_text, PLAN_ITERATION_COST
-            else:
-                logger.info("[agent.loop] planning phase returned empty plan — skipping")
-                return "", 0
-
-        except asyncio.TimeoutError:
-            logger.warning(f"[agent.loop] planning phase timed out ({_plan_timeout}s) — skipping")
-            return "", 0
-        except Exception as exc:
-            logger.warning(f"[agent.loop] planning phase failed (non-fatal): {exc}")
-            return "", 0
 
     # ------------------------------------------------------------------
     # Post-execution verification
