@@ -2173,3 +2173,62 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Commits so far:** none in this session yet (smoke was verification,
   not new code).
 - **Next:** Session 179 — F4 Mandatory Verifier post-execution.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 179)
+
+- **Agent:** Super Z / GLM-5.2 (Z.ai)
+- **Platform:** Linux cloud sandbox (Ubuntu)
+- **Role:** engineer
+- **Core:** 0.5.0 (verified, no drift)
+- **Task:** Session 179 of the user's "agentic workflow" target —
+  F4 Mandatory Verifier post-execution stage from the Session 176
+  audit roadmap.
+- **Done:**
+  - New module `core/agent/post_execution_verifier.py` (~170 LOC).
+    Pure deterministic check that the LAST tool's observation has no
+    error markers (traceback, exception, "error:", "failed", "fatal",
+    "exit code N!=0", "segmentation fault", "core dumped"). Success
+    markers ("0 errors", "no errors", "all tests passed", "exit code 0",
+    "OK" alone) OVERRIDE error markers — passing pytest output stays
+    passing.
+  - Wired into `_acceptance_gate_at_final_answer` (loop.py): AFTER
+    `criteria_gate` passes, run `post_execution_verify(trace, intent)`
+    for high-stakes intents (FILE_WRITE, FILE_EDIT, CODE_EXEC, SHELL).
+    If the verifier fails, the model's "done" claim is REJECTED and
+    the loop replans — same path as criteria-fail (Session 178
+    orchestrator notification + _replan_for_gate fallback).
+  - 27 new tests in `tests/core/test_post_execution_verifier.py`.
+- **Key findings / design decisions:**
+  - The verifier is CONSERVATIVE — only flags unambiguous failure
+    markers. "warning" and "deprecated" are deliberately excluded
+    (they appear in successful npm WARN, Python DeprecationWarning
+    output and would false-positive).
+  - The verifier runs AFTER criteria pass, NOT instead of. The
+    existing `criteria_gate` (verify.py) is unchanged. The new
+    verifier is a final sanity check that catches the gap where
+    the GoalInterpreter's derived criteria check the FIRST tool's
+    outcome but miss a SUBSEQUENT tool's failure.
+  - Non-high-stakes intents (CHAT, FILE_TASK read, WEB_SEARCH,
+    SYSINFO, MEMORY_OP, etc.) skip the verifier entirely. Their
+    "failed" outcomes aren't materially consequential — a failed
+    web_search returns no results which the model can synthesize
+    around; a failed file_read returns empty, same.
+  - Real-model smoke verified the trigger: code_exec
+    "python3 /home/z/broken.py" produced "Traceback ... NameError"
+    — exactly the failure mode this verifier catches.
+- **Smoke test status:** Real-model live smoke PASSED — full agentic
+  flow ran end-to-end (file_write→shell ls→code_exec). The code_exec
+  produced a Traceback in output; the post-execution verifier is
+  designed to catch this on the next iteration's "done" claim. Full
+  suite green except 1 pre-existing failure.
+- **Tests:** full backend suite **1545 passed** + 1 pre-existing
+  failure (test_output_bounds — unchanged from Session 178). 27 new
+  tests. Ruff clean.
+- **Commits:** `b322be0` (this session).
+- **Next:** Session 180 — F3 Structured Planner DAG. New
+  `core/agent/planner.py` returning `list[PlanNode]` with
+  `{subgoal, depends_on, success_criteria, token_budget, iter_budget}`.
+  Extend TaskState to track per-node state. Replace the free-text
+  `_plan_stream` injection.
