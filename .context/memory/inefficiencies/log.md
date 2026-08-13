@@ -352,3 +352,5 @@ if literally nothing slowed you down.
 - **Cause:** Same as Session 153's documented issue (macOS launchctl pattern). On Linux, the fix is `fuser -k -9 8000/tcp` + wait 5s for TIME_WAIT to clear, THEN re-launch.
 - **Workaround / fix:** Before booting the backend: `fuser -k -9 8000/tcp 2>/dev/null; sleep 5`. The `smoke_boot.py shutdown` command handles this automatically via `os.killpg(SIGTERM)`.
 - **Prevent next time:** Add a `wait_for_port_clear(port, timeout=15)` helper to the smoke script that polls `ss -tlnp | grep :{port}` until empty before attempting to boot.
+
+- 2026-08-13 (Session 185, post-merge): ADR-19 level-aware memory retrieval keys off the dispatcher plan task_type, but ADR-22 demoted the dispatcher to a hint because free-tier misclassifies (3/8 prompts in the 184 smoke). A misclassified task retrieves the wrong memory levels. Fix direction: re-key the level-aware re-retrieval on the task_type the agent settles on during planning. Also: session numbers 176-179 are now ambiguous (two parallel branches used them) - cite commit SHAs when referencing sessions.
