@@ -2592,3 +2592,26 @@ program + ADR-22). -->
   (the plan has no structured task_type).
 - **Next (unchanged):** dispatcher accuracy for free-tier (3/8 misclassified
   as CHAT in the 184 smoke) + ADR-8 Phases 2-4.
+---
+## 2026-08-13 — Session 187 (live bug: no output / infinite spinner)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** User reported "there is no output, latency runs forever" on the live UI.
+- **Root cause (primary):** the running backend (PID 13470, started Aug 12 12:58, `reload=False`)
+  was serving a **pre-merge code mix** — its `_pipeline.py` passed `orchestrator=` to
+  `AgentLoop.run()` (Session 178 wiring) but its `loop.py` predated that signature →
+  every agentic message crashed with `AgentLoop.run() got an unexpected keyword argument
+  'orchestrator'` → blank bubble / spinner. Current HEAD tree is consistent; a restart
+  was the fix. Live probes confirmed the agent path works after restart (planning fires,
+  tools run, acceptance gate passes; the Session 186 `task_type_settled` obs fires live).
+- **Secondary bug fixed:** when the provider 429s (zen free-tier), the loop's MiniMax
+  buffering set `_minimax_error = True` but **dropped the error message**, so the chat
+  route's `if chunk.error:` saw `""` and never emitted the SSE error event → silent
+  spinner. Fix in `loop.py`: preserve the adapter's `chunk.error` text
+  (`_minimax_error_msg`) and use it for the `agent_loop_error` obs event and the
+  StreamChunk `error=` field, so the ADR-21 canonical error card renders. Verified live:
+  the 429 now surfaces as `{code: rate_limit, provider: zen, retryable: true}`.
+- **Tests:** +1 regression (`test_stream_error_propagates_adapter_message` in
+  `tests/core/test_agent_loop_empty_response.py`). Full backend **1636 green**, frontend
+  **137 green**, ruff clean on product code.
+- **Note:** the live 429s during probing are zen's free-tier usage limit (provider
+  condition, not a code bug) — but users now see a proper error card instead of hanging.
