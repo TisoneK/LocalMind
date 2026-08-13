@@ -2646,3 +2646,40 @@ program + ADR-22). -->
   so it's now deterministic — deliberate reliability-first tradeoff (trivial path
   passes history=None anyway). "how are you"/"what's up" get the generic greeting
   (copy nit, acceptable).
+---
+## 2026-08-13 — Session 189 (Windows shell bug: PowerShell commands run through cmd.exe)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS (dev) / Windows (user) | **Role:** engineer | **Core:** 0.5.0
+- **Task:** User asked "did we fail?" after a live transcript: greetings/chat now
+  work, but "find my cv and read it" failed — the agent built a 3-step plan, ran
+  `Get-ChildItem -Path C:\Users\tison -Recurse -File | Where-Object { $_.Name -match 'cv|resume' }`
+  and got `'Get-ChildItem' is not recognized as an internal or external command`,
+  then the model returned empty → loop ended `empty_response` (the evidence
+  fallback worked correctly and showed what ran).
+- **Root cause:** the model is TOLD it's on PowerShell (`context_builder.py`
+  `shell_name = "PowerShell"`), so it generates PowerShell cmdlets — but
+  `tools/shell.py:_run()` executes string commands with `subprocess shell=True`,
+  which spawns **cmd.exe** on Windows. PowerShell cmdlets can't run under cmd.
+  Worse, the Session 113 NL guard didn't know cmdlets either, so even simple
+  `Get-ChildItem` commands were rejected as "natural language" before reaching
+  the shell.
+- **Fix:**
+  1. `shell.py` — new `_looks_like_powershell()` detects PowerShell syntax:
+     known approved-verb cmdlets (Get-/Where-/Select-/ForEach-/Set-… regex,
+     narrowed after review so docker-compose / my-script.py / npm-run-all are
+     NOT false-positives) plus `$_`/`Where-Object`/`ForEach-Object`/`Select-String`.
+     `_run()` routes those through `['powershell','-NoProfile','-NonInteractive',
+     '-Command',cmd]` on Windows only (list form, shell=False); cmd-style
+     commands (dir, type, git, python, ls) keep the plain path.
+  2. NL guard checks `_looks_like_powershell()` early so cmdlets aren't
+     mislabeled as natural language.
+  3. `context_builder.py` — Windows `common_cmds` now lists cmdlet-style
+     commands (Get-ChildItem/Get-Content/Select-String/Copy-Item) so the model
+     generates syntax the executor actually runs; register_tool description
+     updated to match.
+  - Tests: +5 (cmdlet detection, cmd-style not routed, dash-named executables
+    not routed, cmdlets not mislabeled as NL, end-to-end execute). Full backend
+    **1647 green**, frontend 137 green, ruff clean. Code-reviewed.
+- **Note:** known limitation (reviewer): list-form `-Command` can mangle inner
+  double-quotes via CreateProcess quoting; model emits single-quoted PowerShell
+  so acceptable — `-EncodedCommand` (base64 UTF-16LE) is the bulletproof
+  upgrade if it ever bites.
