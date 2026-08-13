@@ -1,25 +1,19 @@
 # Current Task
 
-- **Session:** 170 (2026-08-12)
-- **Feature:** adr-21-provider-agnostic-errors
-- **Task:** ADR-21 P0 — provider-agnostic error normalization, complete.
-- **Done (169-170):**
-  - **169** (`611e126`): `error_normalizer.py` — `_ERROR_TYPE_RULES` token
-    catalog (~45 tokens: OpenAI `insufficient_quota`/`tokens_exceeded`/
-    `requests`/`context_length_exceeded`/`invalid_api_key`, Anthropic
-    `rate_limit_error`/`overloaded_error`/`not_found_error`/
-    `request_too_large`/`api_error`, Zen `FreeUsageLimitError`,
-    Azure/gateway codes); `_walk_error`/`_dig_type` envelope walking (error
-    dict, double-nested `error.error`, `errors[]`, error-as-string,
-    top-level `code`, numeric-code-as-status); classification order token →
-    status → keywords → generic; provider-shaped generic errors keep
-    `source=model_provider`. Adapter truncation `[:200]` → `[:1000]` (3
-    openai_compat sites). 28 new provider-matrix tests.
-  - **170**: deepseek-flash review → 4 fixes (529 → server_error, `code`
-    fallback for generic type buckets, `raw` capped 2000, numeric-token
-    cleanup) + 4 tests. Full backend suite **1468 green**, ruff clean.
-    Feature memory updated, everything pushed.
-- **Next:** ADR-21 P0 complete. Standing pendings unchanged:
-  successful-turn live smokes for ADR-19/20/21 when a provider frees up
-  (Zen completions still 429); B-2026-08-12-4 (live two-turn UI check);
-  ADR-18 P1-P3; ADR-19 P1-P3.
+- **Session:** 176 (2026-08-13)
+- **Feature:** adr-18-verification-first-hardening (continuing)
+- **Task:** Discovery + audit session — verify the gap between ADR-18's
+  documented architecture and the actual runtime as of HEAD. User's
+  chat-message target: "The tool feels like a generative + tools rather
+  than agent ai tool."
+- **Done (176):** Ran the full `.context/` kickoff protocol. Code-verified
+  8 audit claims against the actual source. Wrote
+  `.context/memory/reviews/2026-08-13-review.md` with F1-F10 findings and
+  a 7-session roadmap (177-183) for closing the remaining gaps. No
+  product code changed.
+- **Next:** Session 177 — F2 Goal Interpreter. New
+  `backend/src/core/agent/goal_interpreter.py` that turns raw user prompt
+  into `{goal, constraints, success_criteria, capabilities}` BEFORE any
+  LLM work. Populates `TaskState.success_criteria` deterministically.
+  Real-model smoke test mandatory before commit (Zen PAT supplied in
+  chat — retry the smoke; the 429 may have lifted).

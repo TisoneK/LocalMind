@@ -103,3 +103,22 @@ block (and its "last verified" date) every time you run on it again.
   - changed-file `compileall` and Ruff checks → passed; full backend `pytest -q` → 816 passed, 1 known todo-plan wording failure (2026-08-03)
 - **Quirks:** The `python` command is unavailable and system `python3` is 3.9.6, below the backend's `>=3.10` requirement; use `backend/.venv/bin/python` (Python 3.12.13 via uv). Backend Ruff currently reports 132 E501 findings plus 3 non-E501 findings. `npm ci` reported 18 dependency vulnerabilities (17 high, 1 critical) and deprecated transitive packages. Local agent uses the user's existing git credentials and does not need a PAT for this public clone. The optional `agent-browser` CLI is not installed; BrowserAgent tests must mock `_run_browser_cmd` unless the CLI is installed for live smoke testing.
   - `sh scripts/ci-check.sh` → all pass: ruff clean; pytest 1293 passed (61.18s); tsc clean; eslint 0 errors / 61 warnings (2026-08-12, Session 152)
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 176 sandbox)
+
+- **OS:** Linux 6.8 (Ubuntu), Python 3.12.13 (system), uv 0.x
+- **Project root:** `/home/z/my-project/LocalMind`
+- **Backend venv:** `backend/.venv` (Python 3.12.13 via uv)
+- **Worklog:** `/home/z/my-project/worklog.md` (shared multi-agent log)
+- **Verified commands:**
+  - `git clone https://TisoneK:<PAT>@github.com/TisoneK/LocalMind.git` → OK (private repo; PAT stored at `secrets/github-pat` per the contract)
+  - `sh .context/core/bin/context-sync verify` → core 0.5.0 integrity OK
+  - `sh .context/core/bin/context-sync status` → up to date
+  - `cd backend && uv venv .venv --python 3.12` → OK
+  - `cd backend && sed 's|readme = "../README.md"|readme = "README.local.md"|' pyproject.toml > pyproject.install.toml && cp ../README.md ./README.local.md && mv pyproject.toml pyproject.orig.toml && mv pyproject.install.toml pyproject.toml && uv pip install --python .venv/bin/python -e '.[dev]' && mv pyproject.orig.toml pyproject.toml && rm -f README.local.md` → workaround for hatchling refusing `readme = "../README.md"` outside project dir. **Hatchling bug — uv `sync` doesn't work directly.** Use this pattern.
+  - `cd backend && .venv/bin/ruff check .` → clean
+  - `cd backend && .venv/bin/python -m pytest --co -q` → 1496 tests collected (matches Session 175's run)
+- **Quirks:** The `python` command is 3.12.13 (good). Hatchling rejects
+  `readme = "../README.md"` in `pyproject.toml` because the path is
+  outside the backend project dir — workaround documented above. The
+  venv survived between sessions on this sandbox (already existed).

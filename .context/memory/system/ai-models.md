@@ -131,3 +131,14 @@ Updated registry row:
 
 - **Buffy / deepseek/deepseek-v4-flash:** Session 68 — implemented B-2026-08-09-1 / ADR-11: deterministic conversational fast-path. Added `is_conversational_question()` (interrogative opener + blocked tool/realtime/system keyword list + size caps, conservative fall-through preserving WEB_SEARCH/SYSINFO/tool routing) and `conversational_response()` single-call chat to `trivial_input.py`, wired into `_pipeline.py` before the dispatcher. 11 new tests; full suite 834 passed / 1 known baseline `test_engine_emit_todo_plan` failure; ruff clean on new code. Demonstrated: implementing a latency fix end-to-end from a code-verified diagnosis, honoring the conservative-routing principle from ADR-11. (2026-08-09)
 - **Buffy / deepseek/deepseek-v4-flash:** Session 152 — kickoff + ADR-18 documentation. Code-verified the verification gap across the agent runtime (all is_done() stubs, no goal contract, verifier not an acceptance gate) and documented the verification-first hardening program (ADR-18 + backlog B-2026-08-12-1..5 + feature manifest). Baseline green: ci-check all pass (1293 backend, ruff, tsc, eslint 0 errors). (2026-08-12)
+
+- **Super Z / GLM-5.2:** Session 176 — discovery session verifying the
+  gap between ADR-18's documented architecture and the actual runtime as
+  of HEAD (commit 09d91de). Code-verified 8 audit claims; wrote the
+  2026-08-13-review.md report with F1-F10 findings and a 7-session
+  roadmap (177-183) for closing the remaining "feels like generative +
+  tools" gaps. Confirmed: `AgentOrchestrator.replan()` is dead code (0
+  callers); `success_criteria` only populated on ~10% of turns (2
+  conditional sites); `_plan_stream` is free-text injected into the
+  system prompt with no structured DAG; frontend ignores 4 of 5
+  verify/replan/failure events. No product code changed. (2026-08-13)

@@ -1954,3 +1954,58 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   dead `record_failure_for_trace` removed (loop→obs→engine path is the only
   write path).
 - **Validation:** full backend suite **1496 green** (1481 + 15 new), ruff clean.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 176)
+
+- **Agent:** Super Z / GLM-5.2 (Z.ai)
+- **Platform:** Linux cloud sandbox (Ubuntu)
+- **Role:** engineer
+- **Core:** 0.5.0 (verified, no drift)
+- **Task:** Discovery + audit session. User chat-message target
+  (overrides standing ADR-8 target): "The tool feels like a generative
+  + tools rather than agent ai tool. Right now the agent receives
+  instructions and ACT on it no agentic workflow like yours. Fix any
+  past issues if found."
+- **Done:**
+  - Ran the full `.context/` kickoff protocol (Steps 0-3 of the
+    ai-engineering-protocol.md cloud edition). Initial mistake: read
+    "Start .context/kickoff.md" as "create kickoff" — corrected after
+    user pushback ("isn't it read only?????"). This is the SAME flaw
+    Session 65 hit (logged); corrected behavior in this session.
+  - Stored PAT + ZEN_API per the secrets contract at
+    `.context/memory/secrets/github-pat` and `secrets/zen-api`
+    (chmod 600, gitignored).
+  - Code-verified 8 audit claims against actual source at HEAD
+    (commit 09d91de). Verdicts: 5 CONFIRMED, 3 PARTIALLY CONFIRMED.
+  - Wrote `.context/memory/reviews/2026-08-13-review.md` with F1-F10
+    findings + 7-session roadmap (177-183).
+- **Key findings (code-verified):**
+  - `AgentOrchestrator.replan()` is dead code — 0 callers in
+    `backend/src`. The verify-fail path uses self-contained
+    `_replan_for_gate` (loop.py:3931) which is a one-shot LLM call
+    that doesn't touch the orchestrator.
+  - `TaskState.success_criteria` is empty on ~90% of turns. Only 2
+    sites populate it, both conditional on LLM emission
+    (`subgoal.py:193` + `thinking_dispatcher.py:1398`). The verifier's
+    `criteria_gate` short-circuits when empty → "done" is still
+    effectively a model assertion.
+  - `_plan_stream` is free-text injected into the system prompt with
+    no structured DAG. `_parse_plan_steps` only feeds Todos UI.
+  - Frontend ignores 4 of 5 verify/replan/failure events
+    (`agent_loop_gate_passed`, `agent_loop_gate_failed_replan`,
+    `orchestrator_replan_start/done` [dead events anyway],
+    `agent_loop_failure`).
+  - 4 of 6 `is_done` stubs still `return False, ""` (browser, analyst,
+    debugger, reviewer).
+  - WorkspaceOrchestrator's structured `depends_on` DAG only runs for
+    `SYSINFO` — `_should_use_orchestrator` excludes everything
+    substantive.
+- **Commits:** None (discovery-only session; no product code changed).
+- **Notes:** none (session too short to warrant a notes/ dir; the
+  review report IS the durable record).
+- **Next:** Session 177 — F2 Goal Interpreter. New
+  `backend/src/core/agent/goal_interpreter.py`. Real-model smoke test
+  mandatory before commit (Zen PAT supplied in chat — retry the smoke;
+  the 429 may have lifted). Then sessions 178-183 per the roadmap.

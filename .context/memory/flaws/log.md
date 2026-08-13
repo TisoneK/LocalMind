@@ -345,3 +345,41 @@ Flaws from Session 7 are now **fixed**:
 - **Root cause:** no enforced gate between "code + unit tests green" and "shipped." The flaw-log rule exists and was violated twice.
 - **Corrective action (committed to):** any session touching the model/adapter/loop path MUST boot the real backend and run a real chat request against the real provider before committing. Mock-based tests are complementary, never a substitute. Where possible, mocks must enforce real-world constraints (one-shot streams, null deltas) so unit tests fail when the code violates them.
 - **Prevention in code:** the new adapter tests now use one-shot mocks (second aiter_lines raises RuntimeError) so the double-read bug is caught at unit level; a smoke-test script pattern (boot server.py + curl /api/chat, assert 0 'Unexpected error calling' in the log) should become a standard step.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 176)
+
+- **Flaw:** I read "Start .context/kickoff.md" in the user's chat message
+  as "create a kickoff document" rather than "start by reading and
+  following `.context/kickoff.md`." I drafted a 7-session plan + created
+  `/home/z/my-project/worklog.md` before reading the actual kickoff.
+  The user caught it immediately: "what do you mean create kickoff???
+  isnt it read only?????"
+- **Symptom:** Same pattern as Session 65 — an agent that has not yet
+  loaded the protocol edition (Step 3 of the kickoff) operates on
+  sandbox-default behavior and treats the kickoff as a template to fill
+  rather than an instruction set to follow. The kickoff's wording ("Start
+  .context/kickoff.md") is ambiguous to a fresh agent: it can mean "begin
+  by reading the file" OR "create the file." The HTML comment inside
+  kickoff.md (lines 3-29) DOES clarify the read-only nature, but only to
+  an agent that has actually opened the file.
+- **Root cause:** Same as Session 65's documented root cause: I jumped
+  to creating a worklog and writing a kickoff-style document BEFORE
+  opening `.context/kickoff.md`. Once I read it (after the user's
+  pushback), the protocol was clear and I followed it correctly.
+  Confounding factor: my system prompt includes a TODO-list instruction
+  that biased me toward "create artifacts" before "read existing ones."
+- **Suggested fix:** Same as Session 65's already-open fix — strengthen
+  the kickoff.md Step 3 wording. ADDITIONALLY: the kickoff's HTML comment
+  block (lines 3-29) is the only place that explicitly says "agents do
+  not CREATE this file" — but agents who haven't loaded the protocol yet
+  haven't read this comment. The fix should put a visible (non-HTML-
+  commented) "**This file is READ-ONLY for agents.** You READ it and
+  FOLLOW its 4 steps. Do NOT create a kickoff document — the file
+  already exists in the repo." banner at the very top of the file, BEFORE
+  the HTML comment.
+- **Status:** open — corrective behavior completed in Session 176 (read
+  the kickoff, followed it, stored secrets per the contract, wrote
+  review to `.context/memory/reviews/`). Protocol package change still
+  required (carried from Session 65's open status).
