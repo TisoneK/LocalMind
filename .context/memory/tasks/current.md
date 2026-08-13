@@ -1,25 +1,37 @@
 # Current Task
 
-- **Session:** 170 (2026-08-12)
-- **Feature:** adr-21-provider-agnostic-errors
-- **Task:** ADR-21 P0 — provider-agnostic error normalization, complete.
-- **Done (169-170):**
-  - **169** (`611e126`): `error_normalizer.py` — `_ERROR_TYPE_RULES` token
-    catalog (~45 tokens: OpenAI `insufficient_quota`/`tokens_exceeded`/
-    `requests`/`context_length_exceeded`/`invalid_api_key`, Anthropic
-    `rate_limit_error`/`overloaded_error`/`not_found_error`/
-    `request_too_large`/`api_error`, Zen `FreeUsageLimitError`,
-    Azure/gateway codes); `_walk_error`/`_dig_type` envelope walking (error
-    dict, double-nested `error.error`, `errors[]`, error-as-string,
-    top-level `code`, numeric-code-as-status); classification order token →
-    status → keywords → generic; provider-shaped generic errors keep
-    `source=model_provider`. Adapter truncation `[:200]` → `[:1000]` (3
-    openai_compat sites). 28 new provider-matrix tests.
-  - **170**: deepseek-flash review → 4 fixes (529 → server_error, `code`
-    fallback for generic type buckets, `raw` capped 2000, numeric-token
-    cleanup) + 4 tests. Full backend suite **1468 green**, ruff clean.
-    Feature memory updated, everything pushed.
-- **Next:** ADR-21 P0 complete. Standing pendings unchanged:
-  successful-turn live smokes for ADR-19/20/21 when a provider frees up
-  (Zen completions still 429); B-2026-08-12-4 (live two-turn UI check);
-  ADR-18 P1-P3; ADR-19 P1-P3.
+- **Session:** 179 (2026-08-12)
+- **Feature:** adr-19-task-aware-context
+- **Task:** ADR-19 P1-P3 (context hierarchy, decision ledger, value scoring) — complete.
+- **Done (176-179):**
+  - **176** (`1ddf965`): ADR-18 P3 — delegation streaming/UX. `ChildObsProxy`
+    forwards only tool_call/tool_status from sub-agents (tagged by agent
+    name; child CHAT intent/metrics can't clobber parent UI);
+    `delegation_started/completed` lifecycle events render as a running
+    tool-step card; obs threaded through all dispatch sites; SSE bridge
+    forwards the agent tag. Full backend **1503 green**.
+  - **177** (`5f4f8a8`): ADR-19 P1 — context hierarchy + level-aware
+    retrieval. Facts tagged with memory_level (turn/session/project/
+    long_term); `level_priorities()` per task type; `store(level=)`,
+    `compose(levels=)`, `retrieve_for_task()`; near-free level-aware
+    re-retrieval after the pre-started parallel recall (embedding is
+    LRU-cached per text). 18 tests. Full backend **1521 green**.
+  - **178** (`c348633`): ADR-19 P2 — cross-session decision ledger.
+    `decision_ledger` table (no FK to sessions — decisions outlive the
+    session), record_decision (7-day near-dup suppression, 180-day prune),
+    task-filtered recall_decisions, summarizer `decision_sink` write path,
+    engine read path into memory_facts. 15 tests. Full backend **1536 green**.
+  - **179** (`e2caafb`): ADR-19 P3 — LLM value scoring OPT-IN
+    (LOCALMIND_LLM_VALUE_SCORING, default off). `score_messages()`
+    bounded call (8s/40-msg/400-char; any failure → deterministic
+    fallback); summarizer compresses the lowest-value slice instead of
+    the oldest 50%; 8+ message pre-gate. 14 tests. Full backend
+    **1550 green**.
+- **ADR-19 is now complete (P0-P3).** Live smoke remains Zen-429 blocked
+  per the flaw log (retry when a provider recovers or Ollama is
+  installed); P1 is deterministic, P2/P3 fake-adapter tested.
+- **Next:** per the user's "build pending ADRs one after the other" — the
+  standing target remains ADR-8 agent-centric routing (Phases 2-4:
+  build_context wiring, agent-initiated delegation, task-type classifier);
+  ADR-20/21 are complete (error normalization). Confirm next ADR to pick
+  up, or run the live smoke when a provider is available.
