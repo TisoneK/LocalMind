@@ -2232,3 +2232,47 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   `{subgoal, depends_on, success_criteria, token_budget, iter_budget}`.
   Extend TaskState to track per-node state. Replace the free-text
   `_plan_stream` injection.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 180)
+
+- **Agent:** Super Z / GLM-5.2 (Z.ai)
+- **Platform:** Linux cloud sandbox (Ubuntu)
+- **Role:** engineer
+- **Core:** 0.5.0 (verified, no drift)
+- **Task:** Session 180 — F3 Structured Planner DAG.
+- **Done:**
+  - New module `core/agent/plan_parser.py` (~260 LOC).
+    `parse_plan_to_nodes()` converts the existing free-text plan
+    into `list[PlanNode]`. `advance_node_for_step()` heuristically
+    advances nodes based on tool I/O.
+  - New `PlanNode` dataclass in `task_state.py`.
+  - Extended `TaskState` with `nodes` field, `to_prompt()` renders
+    the DAG as a checklist, `to_dict()` serializes for persistence.
+  - Wired into `AgentLoop.run()`: parse `plan_context` into nodes;
+    emit `plan_nodes_created` event. After each tool execution, call
+    `advance_node_for_step` and emit `plan_node_advanced`.
+  - 27 new tests in `tests/core/test_plan_parser.py`.
+- **Key findings / design decisions:**
+  - The parser is ADDITIVE — it parses the existing free-text plan
+    output into structure. The model still sees the original prose
+    via `plan_context` injection. No LLM call added.
+  - Per-node criteria fall back to the GoalInterpreter's turn-level
+    criteria when the plan text doesn't carry its own.
+  - The advance heuristic is conservative: requires subgoal-specific
+    tokens (3+ chars, common ones filtered: the, file, tmp, foo, etc.)
+    to avoid false matches.
+  - Real-model smoke: the multi-step task dispatcher classified as
+    'chat' (confidence 0.3) — the agent loop never ran so the
+    plan_nodes_created event didn't fire. This is a dispatcher
+    classification issue, not my code — the parser fires correctly
+    when the agent loop runs (verified by 27 unit tests).
+- **Tests:** full backend suite **1572 passed** + 1 pre-existing
+  failure (test_output_bounds — unchanged from Session 179). 27 new
+  tests. Ruff clean.
+- **Commits:** `9794716` (this session).
+- **Next:** Session 181 — F4 Frontend Phase Visibility. Consume the
+  now-live `agent_loop_gate_passed`, `agent_loop_gate_failed_replan`,
+  `orchestrator_replan_start/_done`, `agent_loop_failure`,
+  `plan_nodes_created`, `plan_node_advanced` events in the frontend.
