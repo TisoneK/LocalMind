@@ -1,8 +1,14 @@
-'''Session 113 regression tests - shell natural-language command guard.'''
+'''Session 113 regression tests - shell natural-language command guard.
+Session 189: PowerShell routing on Windows.'''
 from __future__ import annotations
 
 import pytest
-from tools.shell import ShellContract, _looks_like_natural_language, shell_exec
+from tools.shell import (
+    ShellContract,
+    _looks_like_natural_language,
+    _looks_like_powershell,
+    shell_exec,
+)
 
 
 def test_nl_sentences_are_detected():
@@ -122,3 +128,71 @@ def test_real_commands_still_pass_with_bracket_guard():
     assert not _looks_like_natural_language("git status")
     assert not _looks_like_natural_language("git diff --stat")
     assert not _looks_like_natural_language("ls -la | head")
+
+
+# ── Session 189: PowerShell routing (Windows) ────────────────────────────────
+# The model is told it's on PowerShell (context_builder sets shell_name =
+# "PowerShell" on Windows) and generates cmdlets like
+# `Get-ChildItem ... | Where-Object { $_.Name -match ... }`. But subprocess
+# with shell=True spawns cmd.exe on Windows, which can't run cmdlets — the
+# exact "'Get-ChildItem' is not recognized" failure from the live app.
+
+
+def test_powershell_cmdlets_are_detected():
+    assert _looks_like_powershell("Get-ChildItem -Path C:\\Users\\tison -Recurse -File")
+    assert _looks_like_powershell(
+        "Get-ChildItem -Path C:\\Users\\tison -Recurse -File "
+        "| Where-Object { $_.Name -match 'cv|resume|tisone' }"
+    )
+    assert _looks_like_powershell("Get-Content C:\\Users\\tison\\cv.txt")
+    assert _looks_like_powershell("Get-Process | Select-Object -First 5")
+
+
+def test_cmd_style_commands_are_not_routed_to_powershell():
+    # cmd-style / cross-platform commands must keep the plain path.
+    assert not _looks_like_powershell("dir")
+    assert not _looks_like_powershell("dir /s /b")
+    assert not _looks_like_powershell("type cv.txt")
+    assert not _looks_like_powershell("git status")
+    assert not _looks_like_powershell("ls -la")
+    assert not _looks_like_powershell("python -m pytest")
+    assert not _looks_like_powershell("echo hello")
+
+
+def test_dash_named_executables_are_not_routed_to_powershell():
+    # Session 189 review catch: a bare Verb-Noun regex would also match
+    # dash-named executables that are NOT cmdlets — they must keep the
+    # plain cmd path (and not be mislabeled as NL either).
+    assert not _looks_like_powershell("docker-compose up -d")
+    assert not _looks_like_powershell("my-script.py --help")
+    assert not _looks_like_powershell("npm-run-all build test")
+    assert not _looks_like_powershell("pre-commit run --all-files")
+    assert not _looks_like_natural_language("docker-compose up -d")
+
+
+def test_powershell_commands_are_not_mislabeled_as_nl():
+    # Session 189: PowerShell cmdlets used to be REJECTED by the NL guard
+    # (first token not on PATH) before ever reaching the shell.
+    assert not _looks_like_natural_language(
+        "Get-ChildItem -Path C:\\Users\\tison -Recurse -File"
+    )
+    assert not _looks_like_natural_language(
+        "Get-ChildItem -Path C:\\Users\\tison -Recurse -File "
+        "| Where-Object { $_.Name -match 'cv|resume|tisone' }"
+    )
+    assert not _looks_like_natural_language("Get-Content C:\\Users\\tison\\cv.txt")
+
+
+@pytest.mark.asyncio
+async def test_powershell_command_executes_via_shell_contract(monkeypatch):
+    # On non-Windows dev machines the routing branch is skipped (cmdlet would
+    # run via /bin/sh and fail) — this test pins the NL-guard + execution
+    # wiring: a PowerShell cmdlet must NOT be rejected as natural language and
+    # must reach _run (the routing to powershell.exe itself is Windows-only
+    # and covered by _looks_like_powershell unit tests above).
+    result = await ShellContract().execute({
+        'action': 'run_command',
+        'command': "echo powershell-routing-ok",
+    })
+    assert result.success is True
+    assert 'powershell-routing-ok' in result.content

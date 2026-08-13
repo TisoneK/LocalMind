@@ -117,7 +117,14 @@ def _build_environment_context(session_cwd: str | None = None) -> str:
         os_guidance = (
             "Windows: use backslash `\\\\` for paths, `.bat`/`.cmd` for scripts, not `.sh`"
         )
-        common_cmds = "Common commands: `dir`, `type`, `copy`, `move`, `mkdir`, `del`"
+        # Session 189: the shell tool runs PowerShell-flavored commands through
+        # the real PowerShell executable on Windows — list cmdlet-style
+        # commands so the model generates syntax the executor actually runs
+        # (Get-ChildItem/Where-Object instead of dir/type, which failed with
+        # "not recognized as an internal or external command").
+        common_cmds = (
+            "Common commands: `Get-ChildItem`, `Get-Content`, `Select-String`, `Copy-Item`"
+        )
         shell_name = "PowerShell"
     else:
         os_guidance = "Unix/Linux: use forward slash `/` for paths, `.sh` for scripts"

@@ -154,6 +154,46 @@ FILE_TYPE_EXTENSIONS: dict[str, list[str]] = {
     "receipt": ["pdf", "jpg", "jpeg", "png"],
 }
 
+# ── PowerShell routing on Windows (Session 189) ──────────────────────────────
+# The model is TOLD it's on PowerShell (context_builder sets shell_name =
+# "PowerShell" on Windows) and therefore generates cmdlets like
+# `Get-ChildItem ... | Where-Object { $_.Name -match ... }`. But subprocess
+# with shell=True on Windows spawns cmd.exe, which does not understand
+# PowerShell cmdlets — every PowerShell-generated command failed with
+# "'Get-ChildItem' is not recognized as an internal or external command".
+# Detect PowerShell-flavored commands and route them through the real
+# PowerShell executable instead. cmd-flavored commands keep the cmd path.
+
+# Known PowerShell approved verbs (Verbs.PowerShell). Narrowing to these
+# avoids false-positives: a bare `^[A-Za-z]+-[A-Za-z]+` would also match
+# docker-compose / my-script.py / npm-run-all, which are NOT cmdlets and
+# must keep the plain cmd path (Session 189 review catch).
+_POWERSHELL_VERBS = (
+    r"Get|Set|Remove|New|Copy|Move|Select|Where|ForEach|Test|Invoke|Format|"
+    r"Sort|Out|Write|Read|Start|Stop|Add|Clear|Import|Export|ConvertTo|"
+    r"ConvertFrom|Compare|Join|Split|Resolve|Expand|Compress|Measure|Group"
+)
+_POWERSHELL_CMDLET_RE = re.compile(
+    rf"^\s*({_POWERSHELL_VERBS})-[A-Za-z]+\b", re.IGNORECASE
+)
+
+
+def _looks_like_powershell(command: str) -> bool:
+    """True when the command uses PowerShell-specific syntax that cmd.exe
+    cannot execute. Conservative: cmd-style commands (dir, type, git, python),
+    dash-named executables (docker-compose, my-script.py) and cross-platform
+    tools are NOT routed to PowerShell."""
+    cmd = (command or "").strip()
+    if not cmd:
+        return False
+    if _POWERSHELL_CMDLET_RE.match(cmd):
+        return True
+    # Pipeline of cmdlets or $_ variable — unambiguous PowerShell.
+    if re.search(r"\$_\b|Where-Object\b|ForEach-Object\b|Select-String\b", cmd, re.IGNORECASE):
+        return True
+    return False
+
+
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
 
@@ -225,9 +265,16 @@ def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
         )
         effective_cwd = None
     try:
+        # Session 189: on Windows, PowerShell-flavored commands (cmdlets, $_,
+        # pipelines) must run under PowerShell, not the default cmd.exe that
+        # shell=True spawns. Passing the full command string as a single
+        # argument avoids cmd.exe token-splitting/quoting issues.
+        exec_cmd: str | list = cmd
+        if IS_WIN and isinstance(cmd, str) and _looks_like_powershell(cmd):
+            exec_cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd]
         proc = subprocess.Popen(
-            cmd,
-            shell=isinstance(cmd, str),
+            exec_cmd,
+            shell=isinstance(exec_cmd, str),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -411,6 +458,12 @@ def _looks_like_natural_language(command: str) -> bool:
     # Strong NL signal — reject regardless of the rest of the string.
     if re.search(r"\[\s*(shell|tool|bash|cmd|powershell)\s*\]", cmd, re.IGNORECASE):
         return True
+    # PowerShell cmdlets (Get-ChildItem, Where-Object, $_) are real commands —
+    # Session 189: they used to be mislabeled as natural language on Windows
+    # (first token "Get-ChildItem" is not on PATH), which blocked every
+    # PowerShell-generated command before it even reached the shell.
+    if _looks_like_powershell(cmd):
+        return False
     # Shell structure ⇒ a real command — never guess.
     if re.search(r"[|&;<>`$()]", cmd):
         return False
@@ -854,7 +907,8 @@ register_tool(
     description="Execute shell commands and filesystem operations: list directory contents, "
     "find files, run commands, open apps/files/websites, check disk/internet/IP. "
     "Use shell list_files for directory/folder listings — NOT file_task. "
-    "Commands must match the current OS (Windows: dir, type | Unix: ls, cat).",
+    "Commands must match the current OS (Windows: PowerShell cmdlets like "
+    "Get-ChildItem / Get-Content / Select-String | Unix: ls, cat).",
     cost=0.3,
     latency_ms=800,
     parallelizable=False,  # stateful OS calls — keep sequential
