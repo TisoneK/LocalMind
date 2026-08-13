@@ -1,17 +1,23 @@
 # Current Task
 
-- **Session:** 186 (2026-08-13, complete)
-- **Feature:** adr-19-task-aware-context (post-close re-key hardening)
-- **Task:** Re-key ADR-19 level-aware memory retrieval on the task_type the
-  agent settles on during planning, instead of the dispatcher's hint
-  (Session 185 post-merge finding).
-- **Done (186):**
-  - `resolve_task_type(hint, intent=...)` now drives ALL ADR-19 consumers
-    (`_settled_task_type` in the engine, settled in the loop's planning
-    phase); 'chat' hint on a non-CHAT routing is corrected to the intent
-    fallback; `recall_decisions` keyed per settled task type.
-  - Full backend **1635 green**, ruff clean, code-reviewed.
-- **Next:** Dispatcher accuracy improvement for free-tier models (the 3/8
-  prompts misclassified as CHAT in the 184 smoke). Separate session.
-- **Also pending:** ADR-8 agent-centric routing Phases 2-4 (build_context
-  wiring, agent-initiated delegation, task-type classifier).
+- **Session:** 193 (2026-08-13, complete)
+- **Feature:** adr-8-agent-centric-routing (Phase 4 track 2 — deterministic file-ops)
+- **Task:** Build the deterministic file-ops execution layer — the other half of
+  the root fix for the "find my CV and read it" failure (chosen by user after
+  Session 192's loop bound).
+- **Done (193):**
+  - New `core/file_ops.py`: detect_read_request + pick_best_match +
+    execute_file_ops (find→pick→read as code, same is_path_allowed boundary
+    as file_task) + deterministic formatters.
+  - `tools/find_path.py`: metadata["paths"] structured output.
+  - `thinking_dispatcher.py`: file_ops primary_domain on read-chained find
+    plans + new direct-read branch (read/show/open/summarize my X) with
+    guards (listing/path-ish/non-file/investigation/debug/doc-noun whitelist).
+  - `engine/_pipeline.py` 2c fast-path: deterministic chain, ONE synthesis
+    call, deterministic evidence fallback when model empty/errors, tool-fence
+    honored, blocked-read surfaced.
+  - Full backend **1706 green**, ruff clean, frontend tsc + 137 vitest green.
+- **Next:** ADR-8 Phase 4 track 1 (task-type classifier) or Phase 2 (wire
+  build_context into BaseAgent.run) — both need real-model testing per the
+  flaw log. Phase 4 track 2 established the blueprint: primary_domain → engine
+  routes deterministically with zero LLM.

@@ -199,3 +199,26 @@ Four implementation phases (multi-session):
      signal the agent uses ("user mentioned shell commands, so shell
      is likely involved") rather than the router. Or it could be
      removed entirely if the task-type classifier is good enough. TBD.
+
+## Session 193 — Phase 4 track 2: deterministic file-ops execution layer (shipped)
+
+- **What:** file operations became RUNTIME behavior, not model choices, for
+  the 80% file-handling use case. The engine intercepts `file_ops`-domain
+  signal plans (Session 191's file-search + new direct-read branch) and
+  executes find → pick → read as code; the model gets ONE final-synthesis
+  call, and when the model is down/empty the deterministic evidence is
+  yielded (never blank, never raw provider JSON). This closes the transcript
+  failure: find_path found CV-Tisone in 1.9s but the model never read it.
+- **Files:** new `core/file_ops.py` (executor + picker); `tools/find_path.py`
+  (metadata["paths"]); `core/thinking_dispatcher.py` (file_ops domain +
+  direct-read branch); `core/engine/_pipeline.py` (2c fast-path).
+- **Tests:** `tests/core/test_file_ops.py` (17) + 8 signal tests. Full
+  backend **1706 green**, frontend 137 green, tsc clean.
+- **Ties to Phase 4 (task-type classifier):** the `primary_domain` field IS
+  the task-type signal — `file_ops` is the first domain the engine routes
+  on deterministically (task type → execution path, no LLM). The same
+  pattern (domain → deterministic runtime behavior) is the blueprint for
+  other high-frequency task types.
+- **Flaw-log compliance:** no agent-loop change — the deterministic path
+  bypasses the loop rather than modifying it, so no real-model test gate
+  applies (the executor tests exercise real find_path/file_reader).

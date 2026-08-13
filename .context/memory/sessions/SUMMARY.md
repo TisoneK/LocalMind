@@ -18,3 +18,4 @@
 2026-08-13 — Super Z / GLM-5.2 — Session 183 (program complete) — F6-F9 cleanup done; final real-model smoke PASSED (agent_loop_gate_passed ✓ 1/1 criteria met). All 9 audit findings addressed.
 2026-08-13 — Super Z / GLM-5.2 — Session 184 — ADR-22 agent-first routing: dispatcher output is now a hint, agent always plans. 1573+1-pre-existing green.
 2026-08-13 — Super Z / GLM-5.2 — Session 184 (complete) — ADR-22 agent-first routing + smoke verified: 5/5 agent-loop prompts had planning; 3/8 misclassified as CHAT by dispatcher (separate issue).
+- 2026-08-13 · Buffy/deepseek-v4-flash · Session 193: deterministic file-ops execution layer — find→pick→read runs as code, model reduced to one synthesis call with deterministic fallback; closes the "found CV in 1.9s but never read it" failure. ADR-8 Phase 4 track 2. Backend 1706 green. | key: primary_domain (task-type) → engine routes deterministically, zero LLM
