@@ -46,6 +46,7 @@ from core.engine.routing_helpers import (
     get_adapter,
 )
 from core.engine.stage_clock import _StageClock
+from core.episode_memory import EpisodeMemory, format_episode_hint
 from core.execution_graph import (
     execute_graph,
     format_graph_results,
@@ -221,6 +222,14 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         self._orchestrator = WorkspaceOrchestrator(adapter=None)
         self._metrics = MetricsStore()
         self._flywheel = FlywheelLogger()
+        # ADR-22 P1 (Session 190): session episode memory — system-level
+        # distillation of "what happened this session" (invisible to
+        # users). Written lazily in the background; read back per turn
+        # as the episode bridge at the memory merge point.
+        self._episodes = EpisodeMemory(store=self._store)
+        # Last session a turn was processed for — a turn arriving for a
+        # DIFFERENT session means the previous one has ended: distill it.
+        self._last_active_session_id: str = ""
         # REMOVED: self._router = RiskAwareRouter(...) — replaced by ThinkingDispatcher
         # Per-session intent history: {session_id: [intent_value, ...]}
         self._intent_history: dict[str, list[str]] = {}
@@ -322,6 +331,11 @@ class Engine(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # facts that accumulated from previous sessions. This is fire-and-forget
         # — consolidation runs in the background and doesn't block startup.
         _safe_task(self._memory.consolidate())
+
+        # ADR-22 P1 (Session 190): distill sessions that were never
+        # switched away from (app restart / crash before a switch).
+        # Background, bounded, best-effort — never blocks startup.
+        _safe_task(self._episodes.sweep())
 
     def _adapter_for(self, intent: Intent):
         """Return an adapter configured with the best model for this intent."""
@@ -1146,6 +1160,14 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         """Process one request while the caller owns the session's stream lock."""
         _obs = obs or ObsCollector()
         t0 = time.monotonic()
+        # ADR-22 P1 (Session 190): a turn for a DIFFERENT session than the
+        # last active one means the previous session ended — distill it
+        # fire-and-forget. Never blocks or breaks this turn; the distill
+        # self-checks (already distilled / too short -> no-op).
+        _prev_session = self._last_active_session_id
+        if _prev_session and _prev_session != session_id:
+            _safe_task(self._episodes.distill(_prev_session))
+        self._last_active_session_id = session_id
         # ADR-12 (B-2026-08-09-2): per-request stage clock — emits real
         # per-stage timings so the Observe panel shows truth, not a guess.
         _clock = _StageClock(_obs)
@@ -1673,6 +1695,17 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                     latency_ms=round((time.monotonic() - t_mem) * 1000),
                 )
 
+            # ADR-22 P1: episode bridge for the DIRECT path too — a short
+            # "hi" / "help" should still know what the previous session
+            # was about (same best-effort, invisible layer).
+            try:
+                _prev_episode = self._store.latest_episode(exclude_session_id=session_id)
+                _episode_hint = format_episode_hint(_prev_episode)
+                if _episode_hint:
+                    memory_facts.append(_episode_hint)
+            except Exception:  # pragma: no cover — defensive
+                pass
+
             # Build context via context_builder (consistent prompt for all CHAT)
             ctx = EngineContext(
                 session_id=session_id,
@@ -2134,6 +2167,18 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             _decision_hint = format_ledger_hint(_past_decisions)
             if _decision_hint:
                 memory_facts.append(_decision_hint)
+        except Exception:  # pragma: no cover — defensive
+            pass
+
+        # ADR-22 P1 (Session 190): the EPISODE bridge — the most recent
+        # OTHER session's distilled digest, appended so the model starts
+        # this turn with "what happened before" (system-level; the user
+        # never sees this layer). Best-effort like the two hints above.
+        try:
+            _prev_episode = self._store.latest_episode(exclude_session_id=session_id)
+            _episode_hint = format_episode_hint(_prev_episode)
+            if _episode_hint:
+                memory_facts.append(_episode_hint)
         except Exception:  # pragma: no cover — defensive
             pass
 

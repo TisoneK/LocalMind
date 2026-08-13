@@ -124,6 +124,23 @@ CREATE TABLE IF NOT EXISTS decision_ledger (
     created_at  TEXT    DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_decision_ledger_session ON decision_ledger(session_id, created_at);
+
+-- ADR-22 P1 (Session 190): session episode memory - the system-level
+-- "what happened this session" digest (the product-side equivalent of an
+-- agent's session log, invisible to users). One row per session (upsert);
+-- deliberately NO foreign key to sessions: episodes outlive their source
+-- session like decision_ledger rows.
+CREATE TABLE IF NOT EXISTS session_episodes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT    UNIQUE NOT NULL,
+    summary     TEXT    DEFAULT '',
+    decisions   TEXT    DEFAULT '',
+    failures    TEXT    DEFAULT '',
+    next_steps  TEXT    DEFAULT '',
+    turn_count  INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT    DEFAULT (datetime('now')),
+    updated_at  TEXT    DEFAULT (datetime('now'))
+);
 """
 
 # ── Connection pool ─────────────────────────────────────────────────────────
@@ -749,5 +766,120 @@ class SessionStore:
                         (limit,),
                     ).fetchall()
             return [dict(r) for r in rows]
+        except Exception:
+            return []
+
+    # ── ADR-22 P1: Session episode memory (Session 190) ──────────────────
+    #
+    # The system-level "what happened this session" digest. Written by
+    # core/episode_memory.py (background, lazy, invisible to users); read
+    # back per turn as the episode bridge at the memory merge point.
+    # All best-effort — an episode write/read must never break a turn.
+
+    # Episodes older than this are pruned on write — the table stays
+    # bounded (mirrors failure_memory 90d / decision_ledger 180d).
+    _EPISODE_RETENTION_DAYS = 180
+
+    def record_episode(
+        self,
+        session_id: str,
+        summary: str = "",
+        decisions: str = "",
+        failures: str = "",
+        next_steps: str = "",
+        turn_count: int = 0,
+    ) -> None:
+        """Upsert one episode per session (re-distill overwrites).
+        Prunes stale rows on each write so the table stays bounded."""
+        try:
+            with self._conn() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO session_episodes(session_id, summary, decisions, failures, next_steps, turn_count)
+                    VALUES(?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(session_id) DO UPDATE SET
+                        summary    = excluded.summary,
+                        decisions  = excluded.decisions,
+                        failures   = excluded.failures,
+                        next_steps = excluded.next_steps,
+                        turn_count = excluded.turn_count,
+                        updated_at = datetime('now')
+                    """,
+                    (session_id, (summary or "")[:3000], (decisions or "")[:1500],
+                     (failures or "")[:1500], (next_steps or "")[:1500], int(turn_count or 0)),
+                )
+                conn.execute(
+                    "DELETE FROM session_episodes WHERE created_at < "
+                    f"datetime('now', '-{self._EPISODE_RETENTION_DAYS} days')"
+                )
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.debug("[db] record_episode skipped: %s", exc)
+
+    def get_episode(self, session_id: str) -> Optional[dict]:
+        """Return the session's episode row, or None if not distilled yet."""
+        try:
+            with self._conn() as conn:
+                row = conn.execute(
+                    "SELECT summary, decisions, failures, next_steps, turn_count, "
+                    "created_at, updated_at FROM session_episodes WHERE session_id = ?",
+                    (session_id,),
+                ).fetchone()
+            return dict(row) if row else None
+        except Exception:
+            return None
+
+    def latest_episode(self, exclude_session_id: str = "") -> Optional[dict]:
+        """Most recent episode across sessions (the cross-session bridge).
+        exclude_session_id skips the current session so a fresh session
+        bridges from the previous one, not from itself."""
+        try:
+            with self._conn() as conn:
+                if exclude_session_id:
+                    row = conn.execute(
+                        "SELECT session_id, summary, decisions, failures, next_steps, "
+                        "turn_count, created_at, updated_at FROM session_episodes "
+                        "WHERE session_id != ? ORDER BY id DESC LIMIT 1",
+                        (exclude_session_id,),
+                    ).fetchone()
+                else:
+                    row = conn.execute(
+                        "SELECT session_id, summary, decisions, failures, next_steps, "
+                        "turn_count, created_at, updated_at FROM session_episodes "
+                        "ORDER BY id DESC LIMIT 1",
+                    ).fetchone()
+            return dict(row) if row else None
+        except Exception:
+            return None
+
+    def sessions_needing_episode(
+        self,
+        grace_secs: float = 3600.0,
+        min_turns: int = 2,
+        limit: int = 5,
+    ) -> list[str]:
+        """Sessions with real conversation but no episode yet, quiet for at
+        least grace_secs. Used by the startup sweep to distill sessions
+        that were never switched away from (restart/crash)."""
+        try:
+            cutoff = time.time() - grace_secs
+            with self._conn() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT s.id
+                    FROM sessions s
+                    JOIN (
+                        SELECT session_id, COUNT(*) AS turns
+                        FROM messages WHERE role = 'user' GROUP BY session_id
+                    ) m ON m.session_id = s.id
+                    LEFT JOIN session_episodes e ON e.session_id = s.id
+                    WHERE e.session_id IS NULL
+                      AND m.turns >= ?
+                      AND (SELECT MAX(timestamp) FROM messages WHERE session_id = s.id) <= ?
+                    ORDER BY m.turns DESC
+                    LIMIT ?
+                    """,
+                    (min_turns, cutoff, limit),
+                ).fetchall()
+            return [str(r["id"]) for r in rows]
         except Exception:
             return []
