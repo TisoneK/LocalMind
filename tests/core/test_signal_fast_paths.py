@@ -217,6 +217,148 @@ def test_git_stash_goes_through_shell_prefix_signal():
     assert plan.fast_path is True and plan.profile.primary_domain == "shell_command"
 
 
+# ── 3. File-search phrasing → FIND_PATH signal (Session 191) ──────────
+# "find my cv", "locate the invoice", "search for resume files" are
+# unambiguous NAME-SEARCH requests that used to route through the LLM
+# dispatcher → SHELL intent → the model's Get-ChildItem -Recurse (20s
+# timeouts on Windows home dirs, then a replan spiral). The signal routes
+# them to a SINGLE_TOOL find_path plan with zero dispatcher LLM calls.
+
+
+def _file_search_plan(message):
+    """Return the plan ONLY if it is the file-search (find_path) signal."""
+    plans = _signal_plan(message)
+    if not plans:
+        return None
+    plan = plans[0]
+    if plan.fast_path is True and plan.profile.primary_domain == "file_search":
+        return plan
+    return None
+
+
+def test_find_my_cv_is_a_file_search_signal():
+    # The exact request from the user's transcript — with the "and read it"
+    # follow-up preserved for the agent loop.
+    plan = _file_search_plan("find my cv and read it")
+    assert plan is not None
+    assert plan.profile.execution_mode.value == "single_tool"
+    assert plan.profile.acknowledgement == "Searching for 'cv'..."
+    assert "read it" in plan.profile.reformulated
+
+
+def test_file_search_signal_produces_find_path_node_with_args():
+    plan = _file_search_plan("find my cv")
+    assert plan is not None
+    node = plan.graph.nodes[0]
+    assert node.tool_name == "find_path"
+    assert node.tool_args["name"] == "cv"
+    assert node.tool_args["max_depth"] == 4
+    assert node.tool_args["max_results"] == 25
+
+
+def test_locate_search_for_and_where_is_phrasing():
+    for msg in [
+        "locate the invoice",
+        "search for resume files",
+        "look for my passport scan",
+        "where is my config file",
+        "can you find the design mockup",
+        "please locate the license document",
+    ]:
+        assert _file_search_plan(msg) is not None, f"{msg!r} must be a file-search signal"
+
+
+def test_file_search_multiword_target_becomes_glob():
+    plan = _file_search_plan("find the annual budget report")
+    assert plan is not None
+    assert plan.graph.nodes[0].tool_args["name"] == "*annual*budget*report*"
+
+
+def test_raw_find_shell_commands_stay_shell():
+    # `find <path> <opts>` is a real shell command — must NOT become a
+    # file-search signal (find is also a Windows cmd builtin).
+    for msg in [
+        "find . -name foo",
+        "find /tmp -type f -iname cv",
+        "find src -name '*.py'",
+        r"find C:\Users\tison -type f",
+    ]:
+        assert _file_search_plan(msg) is None, f"{msg!r} must stay a shell command"
+        plans = _signal_plan(msg)
+        assert plans[0].profile.primary_domain == "shell_command", f"{msg!r} must route to shell"
+
+
+def test_investigation_phrasing_falls_through():
+    for msg in [
+        "find out why the build failed",
+        "find a way to speed up the build",
+        "figure out what the error means",
+        "search the web for quantum computing news",
+    ]:
+        assert _file_search_plan(msg) is None, f"{msg!r} must NOT be a file-search signal"
+
+
+def test_debug_targets_fall_through():
+    for msg in [
+        "find the bug in app.py",
+        "find the error",
+        "find the problem with my code",
+        "find the issue",
+    ]:
+        assert _file_search_plan(msg) is None, f"{msg!r} must NOT be a file-search signal"
+
+
+def test_error_log_still_searches():
+    # "find the error log" is a FILE search (a log file), not debugging.
+    assert _file_search_plan("find the error log") is not None
+
+
+def test_file_search_finds_within_absolute_location():
+    # The transcript's exact winning call: root derived from the phrase.
+    plan = _file_search_plan(r"find my cv in C:\Users\tison\Documents")
+    assert plan is not None
+    assert plan.graph.nodes[0].tool_args["name"] == "cv"
+    assert plan.graph.nodes[0].tool_args["root"] == r"C:\Users\tison\Documents"
+
+
+def test_identity_clause_phrasing_from_transcript():
+    # The EXACT live message that spiraled for 480s: "I'm Tisone, find my
+    # cv and read it" — the identity clause must not defeat the signal.
+    plan = _file_search_plan("I'm Tisone, find my cv and read it")
+    assert plan is not None
+    assert plan.graph.nodes[0].tool_args["name"] == "cv"
+    assert "read it" in plan.profile.reformulated
+
+
+def test_identity_and_greeting_clauses():
+    for msg in [
+        "my name is Tisone, find my resume",
+        "hey, find the invoice",
+        "hi can you find my config file",
+        "ok, find the license document",
+    ]:
+        assert _file_search_plan(msg) is not None, f"{msg!r} must be a file-search signal"
+
+
+def test_empty_root_means_home_by_find_path_contract():
+    # "find my cv" (no location) emits root="" — find_path treats an
+    # empty root as the user home (Path.home()), never CWD.
+    plan = _file_search_plan("find my cv")
+    assert plan is not None
+    assert plan.graph.nodes[0].tool_args["root"] == ""
+
+
+def test_find_where_phrasing_falls_through():
+    assert _file_search_plan("find where my file is") is None
+
+
+def test_directory_listing_signal_unaffected():
+    # "list files in X" stays a listing signal, not a file search.
+    assert _file_search_plan("list files in dev") is None
+    plans = _signal_plan("list files in dev")
+    assert plans[0].profile.primary_domain == "shell_command"
+
+
 def test_bare_diff_without_git_anchor_falls_through():
     # "show me the diff" between two files has no git anchor (no git/repo/
     # uncommitted/working-tree wording) — must NOT be a git signal.

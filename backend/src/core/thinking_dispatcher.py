@@ -923,6 +923,144 @@ class ThinkingDispatcher:
                 fast_path=True,
             )
 
+        # File-search phrasing → FIND_PATH (Session 191, ADR-17 track 2).
+        # "find my CV", "locate the invoice", "search for resume files",
+        # "where is the config file" are unambiguous NAME-SEARCH requests,
+        # but they used to route through the LLM dispatcher → SHELL intent
+        # → the model's Get-ChildItem -Recurse (20s timeouts on Windows
+        # home dirs, then an orchestrator replan spiral). The purpose-built
+        # find_path tool (Session 124/125) finds by NAME, bounded, in ~2s.
+        # This signal routes find-phrasing to a SINGLE_TOOL find_path plan
+        # with zero dispatcher LLM calls; the FIND_PATH toolset scopes the
+        # agent (find_path-first, "locate before listing").
+        #
+        # Runs BEFORE the shell-prefix signal because "find" IS a shell
+        # prefix (the Windows cmd `find` command) — a natural-language
+        # "find my CV" must not become a shell command. A raw-shell guard
+        # (first token a path/flag, or " -" options present) leaves real
+        # `find <path> <opts>` commands on the shell path.
+        #
+        # Other guards (fall through to the LLM):
+        #   - Investigation: "find out why/how/what", "figure out",
+        #     "find a way to" → reasoning, not file search.
+        #   - Debug targets: "find the bug/issue/problem/error" →
+        #     debugging, not a name search ("find the error log" still
+        #     searches — it's a file).
+        #   - "find where X is" → too ambiguous to parse deterministically.
+        #   - No searchable target left after stripping → fall through.
+        _FIND_VERB = re.compile(
+            r"^(?:(?:can|could|please)\s+(?:you\s+)?)?(?:find|locate|search for|look for|"
+            r"hunt for|where(?:'s| is| are))(?=\s|$)",
+            re.IGNORECASE,
+        )
+        _FIND_INVESTIGATION = re.compile(
+            r"\b(find out|find a way|figure out|look into|investigate|"
+            r"search the web|google it)\b",
+            re.IGNORECASE,
+        )
+        _FIND_POSSESSIVE = re.compile(r"^(?:my|our|the|a|an|me|us)\s+", re.IGNORECASE)
+        _FIND_SPLIT = re.compile(r"\s+(?:and|but|then|so|please)\b", re.IGNORECASE)
+        _FIND_LOCATION = re.compile(
+            r"\s+(?:in|under|inside|within)\s+([^\s].*)$", re.IGNORECASE
+        )
+        _FIND_TRAILING_NOUN = re.compile(
+            r"\s+(?:files?|folders?|directories?|docs?|documents?)\s*$", re.IGNORECASE
+        )
+        _FIND_DEBUG_TARGET = re.compile(
+            r"^(?:bug|bugs|issue|issues|problem|problems|error|errors|cause|reason)"
+            r"(?:\s+(?:with|in|on|for|about)\b.*)?$",
+            re.IGNORECASE,
+        )
+        _FIND_SHELLISH = re.compile(r"^[-./~]|\\|:\s*\\", re.IGNORECASE)
+        # Strip a leading identity/greeting clause so the ANCHORED verb can
+        # match the exact live phrasing "I'm Tisone, find my cv and read it"
+        # (Session 191 review: the real-world message escaped the signal and
+        # fell back to the SHELL spiral). "I'm <name>, " / "my name is <name>,"
+        # / "hey, "/"hi "/"ok " only — anything else keeps the anchor.
+        _FIND_LEAD = re.compile(
+            r"^(?:(?:i'?m|i am|my name is)\s+[^,.]*[,.]\s*|"
+            r"(?:hey|hi|hello|ok(?:ay)?)\s*[,!]?\s*)",
+            re.IGNORECASE,
+        )
+
+        _msg_for_find = _FIND_LEAD.sub("", msg, count=1)
+        _find_m = _FIND_VERB.match(_msg_for_find)
+        if _find_m and not _FIND_INVESTIGATION.search(msg):
+            _rest = _msg_for_find[_find_m.end() :]
+            _rest = _FIND_SPLIT.split(_rest, 1)[0].strip().strip("\"'")
+            if _rest.lower().startswith("where"):
+                _rest = ""  # "find where X is" — too ambiguous to parse
+            _rest = _FIND_POSSESSIVE.sub("", _rest).strip()
+            if _rest:
+                # Raw shell guard: `find . -name` / `find C:\ -type f` stay
+                # shell commands (also catches " -" option lists).
+                _first_tok = _rest.split(None, 1)[0] if _rest else ""
+                _shellish = bool(
+                    _FIND_SHELLISH.search(_first_tok) or re.search(r"\s-", _rest)
+                )
+                _root = ""
+                _loc_m = _FIND_LOCATION.search(_rest)
+                if _loc_m:
+                    _loc = _loc_m.group(1).strip().strip("\"'").rstrip("/\\")
+                    # Only trust absolute-looking locations; bare folder names
+                    # resolve against home by find_path's default anyway.
+                    if re.match(r"^(?:[A-Za-z]:[\\/]|/|~)", _loc):
+                        _root = _loc
+                    _rest = _rest[: _loc_m.start()].strip()
+                _target = _FIND_TRAILING_NOUN.sub("", _rest).strip().strip("\"'")
+                if (
+                    not _shellish
+                    and _target
+                    and not _FIND_DEBUG_TARGET.match(_target)
+                ):
+                    # Bare word → substring match (CV matches CV-Tisone.docx);
+                    # multi-word → glob so "annual budget report" matches
+                    # annual_budget_report.pdf.
+                    if " " in _target:
+                        _pattern = "*" + "*".join(_target.split()) + "*"
+                    else:
+                        _pattern = _target
+                    _where = _root if _root else "the user home directory"
+                    _reform = (
+                        f"Find files/folders whose name matches '{_target}' under "
+                        f"{_where}, then complete the original request: {message[:160]}"
+                    )
+                    profile = TaskProfile(
+                        capabilities=[Capability.FILE_READ],
+                        requires_tools=True,
+                        requires_file_access=True,
+                        execution_mode=ExecutionMode.SINGLE_TOOL,
+                        safety_level=SafetyLevel.LOW,
+                        confidence=0.9,
+                        primary_domain="file_search",
+                        reformulated=_reform,
+                        acknowledgement=f"Searching for '{_target}'...",
+                    )
+                    return OrchestrationPlan(
+                        profile=profile,
+                        graph=build_graph_from_plan_steps(
+                            [
+                                {
+                                    "id": "find_file",
+                                    "capability": "file_read",
+                                    "tool": "find_path",
+                                    "args": {
+                                        "name": _pattern,
+                                        "root": _root,
+                                        "max_depth": 4,
+                                        "max_results": 25,
+                                    },
+                                    "depends_on": [],
+                                    "label": f"Searching for: {_target[:50]}",
+                                }
+                            ]
+                        ),
+                        dispatch_steps=_build_dispatch_steps(
+                            Intent.FIND_PATH, message, f"Find: {_target[:80]}"
+                        ),
+                        fast_path=True,
+                    )
+
         # Shell command prefix → SHELL
         if any(msg.startswith(prefix) for prefix in _SHELL_PREFIXES):
             profile = TaskProfile(
