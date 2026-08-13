@@ -2078,3 +2078,68 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   `loop.py:3931` with `orchestrator.replan(failed_step, observation)`
   so the orchestrator sees the failure and can re-route to a
   different agent (e.g. coding → debugger).
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 178)
+
+- **Agent:** Super Z / GLM-5.2 (Z.ai)
+- **Platform:** Linux cloud sandbox (Ubuntu)
+- **Role:** engineer
+- **Core:** 0.5.0 (verified, no drift)
+- **Task:** Session 178 of the user's "agentic workflow" target —
+  F1 from the Session 176 audit roadmap. Wire the dead
+  AgentOrchestrator.replan() method (orchestrator.py:361) into the
+  verify-fail path of AgentLoop.
+- **Done:**
+  - Added `orchestrator` + `reformulated_message` kwargs to
+    `AgentLoop.run()` and `BaseAgent.run()` (both default to None / ""
+    for full backward compat). Forwarded to
+    `_acceptance_gate_at_final_answer()`.
+  - Inside the verify-fail branch of `_acceptance_gate_at_final_answer`,
+    BEFORE the existing `_replan_for_gate` LLM call: when an
+    orchestrator is provided, call `orchestrator.replan(failed_step,
+    failure_reason, ...)`. Its OrchestrationResult (confidence drop,
+    clarification question, context) is injected as a user block
+    alongside the revised plan.
+  - Defensive: if `orchestrator.replan()` raises, log + fall back to
+    `_replan_for_gate` without crashing.
+  - The `orchestrator_replan_start/_done/_failed` obs events are now
+    emitted from the loop side (the authoritative caller), so they
+    fire even when the orchestrator is mocked in tests.
+  - Wired in `_pipeline.py` at all three AgentLoop/BaseAgent.run()
+    call sites: main agent path (line 3474), direct-escalate path
+    (line 1726), and the no-agent-selection direct-loop path
+    (line 3534).
+  - 5 new tests in `tests/core/test_orchestrator_replan_wiring.py` —
+    verify replan IS called on gate failure, verify None keeps legacy
+    behavior, verify raised replan is swallowed, verify gate-pass
+    does NOT call replan, verify empty-criteria does NOT call replan.
+- **Key findings / design decisions:**
+  - The orchestrator's `replan()` IS still LLM-backed (it makes an
+    adapter.chat call). This is a deliberate trade-off: it produces a
+    structured OrchestrationResult with confidence/clarification that
+    the loop can act on. The legacy `_replan_for_gate` runs AFTER to
+    produce the actual revised step-by-step plan the loop injects.
+    The two calls are complementary: orchestrator = strategy +
+    re-route signal; _replan_for_gate = concrete steps.
+  - The obs events are emitted from the loop side (not from inside
+    `replan()`) so the test mocks don't have to fake the events.
+    The real `AgentOrchestrator.replan()` also emits them (legacy
+    behavior) — the loop-side emit is additive, not a replacement.
+  - This change LIFTS the dead-code status of the
+    `orchestrator_replan_*` events — they will be consumed by the
+    frontend in Session 180.
+- **Smoke test status:** Real-model smoke NOT run (same as Session 177 —
+  no working provider key). Engine-level integration verified via the
+  5 new tests using mocked orchestrator + adapter. The wiring is
+  unit-isolated; full real-model verification is the first item on
+  Session 183's roadmap.
+- **Tests:** full backend suite **1518 passed** + 1 pre-existing
+  failure (test_output_bounds — unchanged from Session 177). 5 new
+  tests. Ruff clean.
+- **Commits:** `32a1fe3` (this session).
+- **Next:** Session 179 — F3 Structured Planner DAG. New
+  `core/agent/planner.py` returning `list[PlanNode]` with
+  `{subgoal, depends_on, success_criteria, token_budget,
+  iter_budget}`. Extend TaskState to track per-node state.

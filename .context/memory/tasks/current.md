@@ -1,20 +1,22 @@
 # Current Task
 
-- **Session:** 177 (2026-08-13)
+- **Session:** 178 (2026-08-13)
 - **Feature:** adr-18-verification-first-hardening (continuing)
-- **Task:** Session 177 of the user's "agentic workflow" target —
-  implement F2 (Goal Interpreter) from the Session 176 audit roadmap.
-- **Done (177):**
-  - New `backend/src/core/agent/goal_interpreter.py` (~330 LOC).
-    Two-tier: LLM criteria win; when omitted, derive 1-3 deterministic
-    checkable criteria per intent from `intent + first tool args`.
-  - Wired into `engine/_pipeline.py:2542-2570` — falls through to
-    the interpreter when `_reused_criteria` is empty.
-  - 18 new tests in `tests/core/test_goal_interpreter.py`.
-  - Engine-level integration smoke (4 cases) — derived criteria
-    verified checkable by `criteria_gate` against real tool evidence.
-- **Next:** Session 178 — F1 Wire `AgentOrchestrator.replan()`.
-  Replace the self-contained `_replan_for_gate` LLM call in
-  `loop.py:3931` with `orchestrator.replan(failed_step, observation)`
-  so the orchestrator sees the failure and can re-route to a
-  different agent (e.g. coding → debugger).
+- **Task:** Session 178 of the user's "agentic workflow" target —
+  F1 from the Session 176 audit roadmap. Wire the dead
+  AgentOrchestrator.replan() into the verify-fail path.
+- **Done (178):**
+  - Added `orchestrator` + `reformulated_message` kwargs to
+    `AgentLoop.run()` and `BaseAgent.run()`.
+  - `_acceptance_gate_at_final_answer` now calls
+    `orchestrator.replan()` BEFORE the legacy `_replan_for_gate`
+    fallback when an orchestrator is provided.
+  - Defensive: raised replan is swallowed.
+  - `orchestrator_replan_start/_done/_failed` obs events now fire
+    for real (emitted from the loop side).
+  - Wired in `_pipeline.py` at all 3 call sites.
+  - 5 new tests in `tests/core/test_orchestrator_replan_wiring.py`.
+- **Next:** Session 179 — F3 Structured Planner DAG. New
+  `core/agent/planner.py` returning `list[PlanNode]` with
+  `{subgoal, depends_on, success_criteria, token_budget,
+  iter_budget}`. Extend TaskState to track per-node state.
