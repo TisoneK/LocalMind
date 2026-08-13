@@ -2525,6 +2525,13 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
         # ADR-18 P0: the dispatcher's typed success criteria (its
         # execution_plan.success_criteria). Threaded to the agent loop as
         # the acceptance contract — "done" requires verified receipts.
+        #
+        # Session 177 — GoalInterpreter fallback: when the dispatcher LLM
+        # omitted `success_criteria` (common on free-tier small models),
+        # derive 1-3 deterministic criteria per intent from the
+        # `intent + first tool args`. LLM-emitted criteria always win;
+        # the deterministic fallback only fills the gap. See
+        # `core/agent/goal_interpreter.py`.
         _reused_criteria: list[str] = []
         if _orchestration_plan is not None:
             _reused_criteria = [
@@ -2532,6 +2539,36 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 for c in (getattr(_orchestration_plan, "success_criteria", None) or [])
                 if str(c).strip()
             ]
+        if not _reused_criteria:
+            # Deterministic fallback (ADR-18 P0+). Pure, no LLM call.
+            from core.agent.goal_interpreter import interpret_goal
+
+            _execution_plan_steps: list[dict] = []
+            if _orchestration_plan is not None:
+                # OrchestrationPlan.graph holds the ExecutionGraph (lazy-set
+                # by ThinkingDispatcher). Each graph.nodes[i].tool_args is
+                # a dict the GoalInterpreter can extract path/command/url from.
+                _exec_graph = getattr(_orchestration_plan, "graph", None)
+                if _exec_graph is not None:
+                    _nodes = list(getattr(_exec_graph, "nodes", []) or [])
+                    for _n in _nodes:
+                        _args = getattr(_n, "tool_args", None)
+                        if isinstance(_args, dict) and _args:
+                            _execution_plan_steps.append({"args": _args})
+                            break  # only the first step matters
+            _interp = interpret_goal(
+                message=message,
+                intent=effective_intent,
+                execution_plan_steps=_execution_plan_steps,
+                llm_criteria=None,  # we already checked — empty
+            )
+            _reused_criteria = _interp.criteria
+            if _interp.source == "deterministic":
+                logger.debug(
+                    "[goal_interpreter] derived %d deterministic criteria for intent=%s",
+                    len(_reused_criteria),
+                    effective_intent.value if effective_intent else "None",
+                )
         if effective_intent in AGENT_INTENTS:
             # Yield a status update so the user knows what's happening
             # (previously: the user saw "Thinking..." with no indication of progress)
