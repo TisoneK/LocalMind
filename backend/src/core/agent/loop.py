@@ -1060,6 +1060,43 @@ def _filtered_tool_defs(allowed_tools: Optional[frozenset[str]] = None) -> list[
     return [td for td in TOOL_DEFINITIONS if td["function"]["name"] in allowed_names]
 
 
+# Session 192 — same-tool replan bound. After this many CONSECUTIVE
+# failures on the SAME tool, the acceptance gate stops replanning and
+# reports honestly instead of looping. Root of the Session 191 death
+# spiral: "find my CV" replanned to the same failing shell tool 15+
+# times (confidence 0.30) for 480s — a tool failing twice in a row
+# means the APPROACH is wrong; retrying it a third time is not a plan
+# change, it's a loop. A different tool (or a success) resets the
+# streak, so legitimate strategy pivots are never blocked.
+_SAME_TOOL_REPLAN_CAP = 2
+
+
+def same_tool_failure_streak(trace) -> tuple[int, str]:
+    """Count CONSECUTIVE same-tool failures at the end of a trace.
+
+    Returns (streak, tool_name). The streak only counts the TRAILING
+    run of failed steps that used the same tool — a success, or a
+    different tool, breaks it (that is a strategy change, which the
+    gate must keep allowing). Tool-less reasoning iterations do not
+    break the streak: the model "thinking" between failures of the
+    same tool is still the same failing approach.
+    """
+    steps = getattr(trace, "steps", []) or []
+    streak = 0
+    last_tool = ""
+    for step in reversed(steps):
+        tool = getattr(step, "tool_name", "") or ""
+        failed = bool(getattr(step, "tool_failed", False))
+        if not tool:
+            continue
+        if failed and (not last_tool or tool == last_tool):
+            streak += 1
+            last_tool = tool
+        else:
+            break
+    return streak, last_tool
+
+
 class AgentLoop:
     """
     Runs the think → act → observe cycle for a single user turn using
@@ -4023,6 +4060,19 @@ class AgentLoop:
         results = evaluate_criteria(criteria, trace)
         trace.criteria_results = results
         trace.gate_passed = gate_passed(results)
+        # Session 192 — same-tool replan bound. Consecutive failures on the
+        # same tool means the APPROACH is wrong: stop replanning and report
+        # honestly instead of looping the same failure (the 480s spiral).
+        #
+        # Tradeoff (Session 192 review): CAP=2 gives the model exactly ONE
+        # replan cycle after the first same-tool failure — the gate only fires
+        # at the model's "done" claim, so a model that heeds the revised plan
+        # (e.g. pivots to find_path) breaks the streak on the next step and is
+        # never blocked. Only a model that repeats the same tool after the
+        # corrective replan gets stopped. That is precisely the transcript
+        # pattern (17 same-tool retries, never pivoting).
+        _streak, _streak_tool = same_tool_failure_streak(trace)
+        _block_replan = _streak >= _SAME_TOOL_REPLAN_CAP
         if trace.gate_passed:
             trace.gate_summary = format_gate_results(results)
             # Session 179 — F4 Mandatory post-execution verifier for
@@ -4038,9 +4088,10 @@ class AgentLoop:
 
             _pe_passed, _pe_note = post_execution_verify(trace, intent)
             if not _pe_passed:
-                # Treat as criteria-fail: replan if iterations remain.
+                # Treat as criteria-fail: replan if iterations remain AND the
+                # same-tool failure streak hasn't hit its bound (Session 192).
                 unmet = [("(post-execution verifier)", _pe_note)]
-                if iteration + 1 < effective_max_iter:
+                if iteration + 1 < effective_max_iter and not _block_replan:
                     # Session 178 — notify the orchestrator (same path as
                     # criteria-fail above).
                     _orchestrator_hint = ""
@@ -4130,13 +4181,25 @@ class AgentLoop:
                     )
                     loop_messages.append({"role": "user", "content": block})
                     return "", False
-                # Cap hit — honest report.
+                # Cap hit — honest report (iteration cap or same-tool streak).
                 trace.gate_summary = f"✗ post-execution verifier: {_pe_note}"
+                if _block_replan:
+                    if obs:
+                        obs.emit(
+                            "agent_loop_repeated_tool_stop",
+                            tool=_streak_tool,
+                            streak=_streak,
+                            iteration=iteration + 1,
+                        )
+                    trace.gate_summary += (
+                        f" Stopped after {_streak} consecutive failures on "
+                        f"'{_streak_tool}' — retrying the same tool won't fix it."
+                    )
                 return f"\n\n{trace.gate_summary}", True
             return f"\n\n{trace.gate_summary}", True
 
         unmet = [(c, n) for c, passed, n in results if not passed]
-        if iteration + 1 < effective_max_iter:
+        if iteration + 1 < effective_max_iter and not _block_replan:
             # Session 178 — Notify the orchestrator FIRST so its dead
             # replan() method finally runs, its confidence drops, and
             # the orchestrator_replan_* obs events fire for real (to be
@@ -4242,8 +4305,21 @@ class AgentLoop:
             loop_messages.append({"role": "user", "content": block})
             return "", False
 
-        # Cap hit: strict + honest report — the answer must state what's unmet.
+        # Cap hit: strict + honest report — the answer must state what's
+        # unmet (iteration cap or same-tool streak).
         trace.gate_summary = format_gate_results(results)
+        if _block_replan:
+            if obs:
+                obs.emit(
+                    "agent_loop_repeated_tool_stop",
+                    tool=_streak_tool,
+                    streak=_streak,
+                    iteration=iteration + 1,
+                )
+            trace.gate_summary += (
+                f" Stopped replanning after {_streak} consecutive failures on "
+                f"'{_streak_tool}' — the current approach is not converging."
+            )
         return f"\n\n{trace.gate_summary}", True
 
     async def _replan_for_gate(

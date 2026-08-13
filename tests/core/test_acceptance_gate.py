@@ -19,7 +19,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-from core.agent.loop import AgentLoop
+from core.agent.loop import _SAME_TOOL_REPLAN_CAP, AgentLoop, same_tool_failure_streak
 from core.agent.models import AgentStep, AgentTrace
 from core.models import (
     ExecutionMode,
@@ -946,3 +946,201 @@ async def test_fast_path_criteria_verify_via_initial_tool_step():
     text = "".join(c.text for c in chunks)
     assert "criteria met" in text
     assert any(c.done for c in chunks)
+
+# ── Session 192: same-tool replan bound ─────────────────────────────────
+
+
+def _trace_with_failures(tool_names, criteria=None):
+    """Trace where every step is a FAILED run of the given tool (in order).
+
+    Reasoning-only iterations (no tool) are inserted between failures to
+    prove they don't break the streak — the model "thinking" between
+    failures of the same tool is still the same failing approach.
+    """
+    trace = AgentTrace(success_criteria=criteria or [])
+    for i, name in enumerate(tool_names):
+        trace.steps.append(
+            AgentStep(
+                iteration=i * 2 + 1,
+                thought=f"step {i}",
+                tool_name=name,
+                tool_input="pytest",
+                observation="Command failed: timed out after 20s",
+                tool_failed=True,
+            )
+        )
+        if i < len(tool_names) - 1:
+            trace.steps.append(
+                AgentStep(
+                    iteration=i * 2 + 2,
+                    thought="thinking between failures...",
+                    tool_name=None,
+                    tool_input=None,
+                    observation=None,
+                )
+            )
+    return trace
+
+
+def test_same_tool_replan_cap_is_two():
+    assert _SAME_TOOL_REPLAN_CAP == 2
+
+
+def test_same_tool_streak_counts_consecutive_failures():
+    trace = _trace_with_failures(["shell", "shell", "shell"])
+    streak, tool = same_tool_failure_streak(trace)
+    assert streak == 3
+    assert tool == "shell"
+
+
+def test_same_tool_streak_success_breaks():
+    trace = AgentTrace(success_criteria=[])
+    trace.steps.append(
+        AgentStep(iteration=1, thought="a", tool_name="shell", tool_input="x",
+                  observation="Command failed", tool_failed=True)
+    )
+    trace.steps.append(
+        AgentStep(iteration=2, thought="b", tool_name="shell", tool_input="x",
+                  observation="done", tool_failed=False)
+    )
+    streak, tool = same_tool_failure_streak(trace)
+    assert streak == 0
+    assert tool == ""
+
+
+def test_same_tool_streak_different_tool_breaks():
+    trace = AgentTrace(success_criteria=[])
+    trace.steps.append(
+        AgentStep(iteration=1, thought="a", tool_name="shell", tool_input="x",
+                  observation="Command failed", tool_failed=True)
+    )
+    trace.steps.append(
+        AgentStep(iteration=2, thought="b", tool_name="find_path", tool_input="x",
+                  observation="no matches", tool_failed=True)
+    )
+    streak, tool = same_tool_failure_streak(trace)
+    assert streak == 1
+    assert tool == "find_path"
+
+
+@pytest.mark.asyncio
+async def test_gate_same_tool_streak_stops_honestly_without_replan():
+    """Session 192 — the 480s spiral: 2+ consecutive failures on the SAME
+    tool must end the turn with an honest report, not another replan."""
+    loop = AgentLoop(adapter=MagicMock())
+    trace = _trace_with_failures(
+        ["shell", "shell", "shell"],
+        criteria=["pytest passes"],
+    )
+    adapter = _ReplanAdapter()
+    suffix, is_final = await loop._acceptance_gate_at_final_answer(
+        trace=trace,
+        iteration=3,  # plenty of iterations remain — only the streak stops it
+        effective_max_iter=8,
+        loop_messages=[{"role": "user", "content": "run the tests"}],
+        observation_log="$ pytest\nCommand failed: timed out",
+        active_adapter=adapter,
+        intent=Intent.SHELL,
+        obs=None,
+    )
+    assert is_final is True
+    # The replan call must NOT have happened: retrying the same tool is
+    # the spiral we are killing.
+    assert adapter.replan_calls == []
+    # Honest report names the tool and the streak.
+    assert "shell" in suffix
+    assert "consecutive failures" in suffix
+
+
+@pytest.mark.asyncio
+async def test_gate_single_failure_below_cap_still_replans():
+    """One failure is NOT a spiral — the gate must keep replanning so the
+    model can legitimately change strategy."""
+    loop = AgentLoop(adapter=MagicMock())
+    trace = _trace_with_failures(
+        ["shell"],
+        criteria=["pytest passes", "tsc clean"],
+    )
+    adapter = _ReplanAdapter()
+    suffix, is_final = await loop._acceptance_gate_at_final_answer(
+        trace=trace,
+        iteration=0,
+        effective_max_iter=8,
+        loop_messages=[{"role": "user", "content": "build the app"}],
+        observation_log="$ pytest\nCommand failed",
+        active_adapter=adapter,
+        intent=Intent.SHELL,
+        obs=None,
+    )
+    assert is_final is False
+    assert suffix == ""
+    assert len(adapter.replan_calls) == 1
+
+@pytest.mark.asyncio
+async def test_gate_verifier_path_streak_blocks_replan():
+    """Session 192 — the post-execution-verifier replan path must honor
+    the same-tool bound too: criteria pass but the LAST tool's output
+    shows an error marker AND the same tool failed repeatedly → honest
+    stop, no replan, no loop."""
+    loop = AgentLoop(adapter=MagicMock())
+    # Two trailing shell failures (streak 2 >= cap) after a passing test
+    # run — criteria "pytest passes" is met via the first step, but the
+    # verifier sees the last step's error marker and rejects "done".
+    trace = AgentTrace(success_criteria=["pytest passes"])
+    trace.steps.append(
+        AgentStep(iteration=1, thought="a", tool_name="shell", tool_input="pytest",
+                  observation="$ pytest\n1 passed", tool_failed=False)
+    )
+    trace.steps.append(
+        AgentStep(iteration=2, thought="b", tool_name="shell", tool_input="pytest",
+                  observation="Command failed: timed out after 20s", tool_failed=True)
+    )
+    trace.steps.append(
+        AgentStep(iteration=3, thought="c", tool_name="shell", tool_input="pytest",
+                  observation="Command failed: timed out after 20s", tool_failed=True)
+    )
+    adapter = _ReplanAdapter()
+    suffix, is_final = await loop._acceptance_gate_at_final_answer(
+        trace=trace,
+        iteration=4,
+        effective_max_iter=8,
+        loop_messages=[{"role": "user", "content": "run the tests"}],
+        observation_log="$ pytest\nCommand failed",
+        active_adapter=adapter,
+        intent=Intent.SHELL,
+        obs=None,
+    )
+    assert is_final is True
+    assert adapter.replan_calls == []
+    assert "consecutive failures" in suffix
+    assert "shell" in suffix
+
+
+@pytest.mark.asyncio
+async def test_gate_verifier_path_below_cap_still_replans():
+    """Session 192 — one verifier failure below the cap must keep the
+    existing replan behavior (strategy change is still allowed)."""
+    loop = AgentLoop(adapter=MagicMock())
+    trace = AgentTrace(success_criteria=["pytest passes"])
+    trace.steps.append(
+        AgentStep(iteration=1, thought="a", tool_name="shell", tool_input="pytest",
+                  observation="$ pytest\n1 passed", tool_failed=False)
+    )
+    trace.steps.append(
+        AgentStep(iteration=2, thought="b", tool_name="shell", tool_input="pytest",
+                  observation="Command failed: timed out after 20s", tool_failed=True)
+    )
+    adapter = _ReplanAdapter()
+    suffix, is_final = await loop._acceptance_gate_at_final_answer(
+        trace=trace,
+        iteration=2,
+        effective_max_iter=8,
+        loop_messages=[{"role": "user", "content": "run the tests"}],
+        observation_log="$ pytest\nCommand failed",
+        active_adapter=adapter,
+        intent=Intent.SHELL,
+        obs=None,
+    )
+    assert is_final is False
+    assert suffix == ""
+    assert len(adapter.replan_calls) == 1
