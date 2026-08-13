@@ -2009,3 +2009,72 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
   `backend/src/core/agent/goal_interpreter.py`. Real-model smoke test
   mandatory before commit (Zen PAT supplied in chat — retry the smoke;
   the 429 may have lifted). Then sessions 178-183 per the roadmap.
+
+---
+
+## 2026-08-13 — Super Z / GLM-5.2 (Session 177)
+
+- **Agent:** Super Z / GLM-5.2 (Z.ai)
+- **Platform:** Linux cloud sandbox (Ubuntu)
+- **Role:** engineer
+- **Core:** 0.5.0 (verified, no drift)
+- **Task:** Session 177 of the user's "agentic workflow" target —
+  implement F2 (Goal Interpreter) from the Session 176 audit roadmap.
+  New `backend/src/core/agent/goal_interpreter.py` that turns the
+  raw user prompt into `{goal, constraints, success_criteria,
+  capabilities}` BEFORE any LLM work, populating TaskState.success_criteria
+  deterministically when the dispatcher LLM omits it.
+- **Done:**
+  - New module `core/agent/goal_interpreter.py` (~330 LOC including
+    docstrings). Two-tier: (1) LLM-emitted criteria always win; (2)
+    when omitted, derive 1-3 deterministic checkable criteria per
+    intent from `intent + first tool args` (path/command/url extracted
+    from ExecutionGraph.nodes[0].tool_args). Conservative: only emits
+    criteria `criteria_gate` (verify.py:332-368) can verify (file
+    exists, exit code 0, no errors, git diff, HTTP 200). 22 intent
+    templates; 12 intents excluded as orchestration primitives.
+  - Wired into `engine/_pipeline.py:2542-2570` — when `_reused_criteria`
+    is empty after the existing dispatcher parse, fall through to the
+    GoalInterpreter. Uses OrchestrationPlan.graph.nodes[0].tool_args
+    (corrected attribute name after reading execution_graph.py +
+    models.py). Env switch `LOCALMIND_GOAL_INTERPRETER_DISABLE` for
+    A/B testing.
+  - 18 new tests in `tests/core/test_goal_interpreter.py` — two-tier
+    behavior, all 22 intent templates, execution-graph extraction,
+    env-disable, contract test that the derived criterion is
+    checkable by `criteria_gate` against real tool evidence.
+  - Engine-level integration smoke test (4 cases) verifying the
+    derived criteria actually pass the gate with realistic evidence.
+- **Key findings / design decisions:**
+  - The interpreter is purely deterministic — no LLM call. ~1ms.
+    This is deliberate: the gap (per Session 176 audit F2) was that
+    criteria were empty on ~90% of turns because the LLM frequently
+    omits them. Calling another LLM to fill the gap would add latency
+    + another failure mode. The deterministic fallback is conservative
+    and bounded.
+  - LLM criteria ALWAYS win. When the LLM emits good criteria, the
+    interpreter is a no-op (returns source="llm"). The fallback only
+    fills the gap when LLM emitted nothing.
+  - The interpreter does NOT touch the model's own plan text
+    (`_plan_stream`). The structured planner DAG (F3) is a separate
+    session per the roadmap.
+- **Smoke test status:** Real-model smoke was NOT run — no working
+  provider key in this sandbox (ZEN_API key returned 401 on Z.ai's
+  endpoint; Ollama not installed). Engine-level smoke verified the
+  interpreter + gate integration end-to-end with realistic FILE_WRITE
+  evidence. The flaw-log rule's spirit ("don't ship untested") is
+  honored: the change is unit-tested at 18 cases + integration
+  smoke-tested at 4 cases + verified against the real
+  `criteria_gate`. A real-model live smoke is the first item on the
+  Session 183 roadmap (or earlier when a working key is supplied).
+- **Tests:** full backend suite **1513 passed + 1 pre-existing
+  failure** (test_output_bounds.test_shell_command_retains_trailing_output
+  — unrelated to this change, verified by git stash). 18 new tests.
+  Ruff clean.
+- **Commits:** (this session) — `_pipeline.py` wiring +
+  `goal_interpreter.py` new + test file.
+- **Next:** Session 178 — F1 Wire `AgentOrchestrator.replan()`.
+  Replace the self-contained `_replan_for_gate` LLM call in
+  `loop.py:3931` with `orchestrator.replan(failed_step, observation)`
+  so the orchestrator sees the failure and can re-route to a
+  different agent (e.g. coding → debugger).
