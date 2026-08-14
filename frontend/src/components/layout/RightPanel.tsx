@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Terminal, Eye, Brain, PanelRightClose, PanelRight, Settings } from 'lucide-react';
-import { TerminalLine, ObservationData, CapabilitiesData, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, SessionStats, AgentRun } from '@/types';
+import { Terminal, Brain, PanelRightClose, PanelRight, Settings } from 'lucide-react';
+import { TerminalLine, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, SessionStats, AgentRun } from '@/types';
 import { TerminalPanel } from '@/components/panels/TerminalPanel';
-import { ObservabilityTab } from '@/components/panels/ObservabilityTab';
 import { AgentWorkspace } from '@/components/panels/AgentWorkspace';
 import { MemoryTab } from '@/components/panels/MemoryTab';
 import { PerformanceMetrics } from '@/components/panels/PerformanceMetrics';
@@ -20,8 +19,6 @@ interface RightPanelProps {
   terminalHistory?: string[];
   onTerminalTabComplete?: (partial: string) => Promise<CompletionSuggestion[]>;
   onTerminalSessionChange?: (sessionId: string) => void;
-  observation: ObservationData;
-  capabilities: CapabilitiesData;
   memoryFacts: MemoryFact[];
   onMemoryDelete?: (id: string) => void;
   metrics: PerformanceMetricsType;
@@ -54,7 +51,9 @@ interface RightPanelProps {
   onModelsRefresh?: () => Promise<void>;
 }
 
-type RightTab = 'terminal' | 'observability' | 'memory' | 'agents';
+// ADR-34 B-10: the Observe tab and its Intent Classification / Agent Pipeline
+// visualization are retired. The Agents tab is the canonical live surface.
+type RightTab = 'terminal' | 'memory' | 'agents';
 
 export function RightPanel({
   terminalLines,
@@ -66,8 +65,6 @@ export function RightPanel({
   terminalHistory,
   onTerminalTabComplete,
   onTerminalSessionChange,
-  observation,
-  capabilities,
   memoryFacts,
   onMemoryDelete,
   metrics,
@@ -86,7 +83,8 @@ export function RightPanel({
   width = 320,
   onModelsRefresh,
 }: RightPanelProps) {
-  const [activeTab, setActiveTab] = useState<RightTab>('observability');
+  // ADR-34 B-10: default to the Agents tab — it is the canonical live surface.
+  const [activeTab, setActiveTab] = useState<RightTab>('agents');
   const [showSettings, setShowSettings] = useState(false);
   // Use the parent's refresh function instead of calling useModels() again.
   // Previously this created a SECOND useModels instance whose state was
@@ -129,7 +127,6 @@ export function RightPanel({
   const iconSize = 'h-3 w-3';
   const tabs: { id: RightTab; label: string; icon: React.ReactNode }[] = [
     { id: 'terminal', label: 'Terminal', icon: <Terminal className={iconSize} /> },
-    { id: 'observability', label: 'Observe', icon: <Eye className={iconSize} /> },
     { id: 'agents', label: 'Agents', icon: <PanelRight className={iconSize} /> },
     { id: 'memory', label: 'Memory', icon: <Brain className={iconSize} /> },
   ];
@@ -219,7 +216,6 @@ export function RightPanel({
             onSessionChange={onTerminalSessionChange}
           />
         )}
-        {activeTab === 'observability' && <ObservabilityTab observation={observation} capabilities={capabilities} />}
         {activeTab === 'agents' && <AgentWorkspace runs={agentRuns} isStreaming={agentStreaming} />}
         {activeTab === 'memory' && <MemoryTab facts={memoryFacts} onDelete={onMemoryDelete} />}
       </div>

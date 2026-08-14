@@ -4,7 +4,6 @@ import { useRef, useEffect } from 'react';
 import {
   Cpu,
   Brain,
-  Wrench,
   Wifi,
   WifiOff,
   Shield,
@@ -14,19 +13,9 @@ import { ChatMessage as ChatMessageType, ModelOption } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 
-// Human-readable labels for intent values shown in the header badge.
-// Previously the raw snake_case value (e.g. "code", "general_question")
-// was displayed directly — inconsistent with the Observability tab.
-const INTENT_LABELS: Record<string, string> = {
-  code: 'Code',
-  file: 'File',
-  chat: 'Chat',
-  search: 'Search',
-  shell: 'Shell',
-  memory: 'Memory',
-  general_question: 'Chat',
-  general: 'Chat',
-};
+// ADR-34 B-10: the intent badge and INTENT_LABELS map are retired.
+// Intent classification is no longer a product-facing surface — the
+// Agent Workspace is the canonical live UI for agent state.
 
 interface HealthState {
   status: 'online' | 'offline' | 'checking';
@@ -59,7 +48,6 @@ interface CenterPanelProps {
   onSend: (message: string, tool?: string) => void;
   onAbort: () => void;
   onSteer?: (message: string) => void;
-  currentIntent?: string;
   memoryCount: number;
   sessionId?: string;
   /** The active model's max input-token budget (adapter effective context
@@ -77,7 +65,6 @@ export function CenterPanel({
   onSend,
   onAbort,
   onSteer,
-  currentIntent,
   memoryCount,
   sessionId,
   contextWindowSize,
@@ -171,15 +158,6 @@ export function CenterPanel({
             <Brain className="h-3 w-3 text-brand-amber" />
             <span className="text-[10px] text-brand-green-muted">{memoryCount}</span>
           </div>
-          {/* Intent badge */}
-          {currentIntent && (
-            <div className="flex items-center gap-1.5" title={`Intent: ${currentIntent}`}>
-              <Wrench className="h-3 w-3 text-brand-green-muted" />
-              <span className="text-[10px] text-brand-green-muted">
-                {INTENT_LABELS[currentIntent] || currentIntent}
-              </span>
-            </div>
-          )}
           <div className="w-px h-3 bg-brand-border" />
           {/* Online/offline status */}
           <div className="flex items-center gap-1" title={isOnline ? 'Online' : 'Offline'}>

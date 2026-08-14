@@ -112,8 +112,6 @@ function setup(overrides: SetupOverrides = {}) {
   mockHooks.useChat.mockReturnValue({
     messages: [],
     isStreaming: overrides.isStreaming ?? false,
-    currentIntent: 'CONVERSATION',
-    currentConfidence: 0.98,
     activeToolCalls: overrides.activeToolCalls ?? [],
     liveObservation: overrides.liveObservation !== undefined ? overrides.liveObservation : null,
     lastMetrics: null,
@@ -226,10 +224,9 @@ describe('WorkspaceLayout', () => {
     expect(center.health).toMatchObject({ status: 'online', version: '0.5.16' });
     // currentModel fallback resolves to the backend-reported model.
     expect(center.selectedModel).toMatchObject({ id: 'm1', name: 'Model One', provider: 'zen' });
-    expect(center.currentIntent).toBe('CONVERSATION');
-    // Stats split: the redundant confidence badge is gone from the top bar —
-    // it only lives in the Observe panel now. Its slot is the context-window
-    // occupancy meter, fed by the model's window size + live prompt tokens.
+    // ADR-34 B-10: the intent badge is retired — currentIntent is no longer
+    // a CenterPanel prop. The context-window occupancy meter fills the slot.
+    expect(center.currentIntent).toBeUndefined();
     expect(center.currentConfidence).toBeUndefined();
     expect(center.contextWindowSize).toBeUndefined();
     expect(center.contextTokens).toBe(0);
@@ -263,12 +260,14 @@ describe('WorkspaceLayout', () => {
     expect(right.isTerminalRunning).toBe(false);
     expect(right.terminalCwd).toBe('/tmp');
     expect(right.metrics).toMatchObject({ totalTokens: 0, latency: 0 });
-    expect(right.observation).toMatchObject({ contextTokens: 0, latency: 0 });
+    // ADR-34 B-10: the Observe tab is retired — observation and capabilities
+    // are no longer RightPanel props. The Agents tab is the canonical surface.
+    expect(right.observation).toBeUndefined();
+    expect(right.capabilities).toBeUndefined();
     // Stats split wiring: the corner bar receives the session totals + the
     // live-stream flag so it can show cumulative values (with live overrides).
     expect(right.sessionStats).toMatchObject({ promptTokens: 0, completionTokens: 0, turnCount: 0 });
     expect(right.isStreaming).toBe(false);
-    expect(right.capabilities).toEqual({ families: [] });
     expect(right.memoryFacts).toEqual([]);
     expect(typeof right.onTerminalExecute).toBe('function');
     expect(typeof right.onMemoryDelete).toBe('function');
@@ -350,8 +349,9 @@ describe('WorkspaceLayout', () => {
     });
     const right = mockPanelProps.right;
     expect(right.forceAgentsTab).toBe(true);
-    expect(right.agentRuns).toHaveLength(1);
-    expect(right.agentRuns[0].role).toBe('parent');
+    const runs = (right.agentRuns as Array<Record<string, unknown>>) ?? [];
+    expect(runs).toHaveLength(1);
+    expect(runs[0].role).toBe('parent');
   });
 
   it('falls back to the persisted model when the backend reports no current model', () => {
@@ -370,9 +370,10 @@ describe('WorkspaceLayout', () => {
   });
 
   // Regression: the live per-turn contextTokens (including a truthful 0 from
-  // a fast-path turn that built no context) must win over a stale polled
-  // value — the old `||` chain let the polled observation mask the current
-  // turn's number.
+  // ADR-34 B-10: the Observe tab is retired. The context-window occupancy
+  // meter now lives in CenterPanel (center.contextTokens), fed by the same
+  // liveObservationForPanel merge. These tests verify the merge logic still
+  // prefers live per-turn values over stale polled ones.
   it('prefers live per-turn contextTokens over a stale polled observation', () => {
     setup({
       observation: { contextTokens: 3500, latency: 0, stages: [], vectorHits: 0, status: 'idle' },
@@ -385,9 +386,8 @@ describe('WorkspaceLayout', () => {
         latency: 2300,
       },
     });
-    const right = mockPanelProps.right;
-    const obs = right.observation as { contextTokens: number };
-    expect(obs.contextTokens).toBe(0);
+    const center = mockPanelProps.center;
+    expect(center.contextTokens).toBe(0);
   });
 
   it('falls back to the polled observation when the stream has not reported a turn yet', () => {
@@ -395,8 +395,20 @@ describe('WorkspaceLayout', () => {
       observation: { contextTokens: 3500, latency: 2900, stages: [], vectorHits: 0, status: 'idle' },
       liveObservation: null,
     });
+    const center = mockPanelProps.center;
+    expect(center.contextTokens).toBe(3500);
+  });
+
+  it('does NOT pass observation/capabilities/currentIntent to any panel (ADR-34 B-10)', () => {
+    // The Observe tab and intent badge are retired. No panel should receive
+    // these props — they are internal compat only.
+    setup();
     const right = mockPanelProps.right;
-    const obs = right.observation as { contextTokens: number };
-    expect(obs.contextTokens).toBe(3500);
+    const center = mockPanelProps.center;
+    expect(right.observation).toBeUndefined();
+    expect(right.capabilities).toBeUndefined();
+    expect(center.currentIntent).toBeUndefined();
+    // The RightTab union no longer includes 'observability'.
+    expect(right.forceAgentsTab).toBe(false); // no parent running → no force
   });
 });

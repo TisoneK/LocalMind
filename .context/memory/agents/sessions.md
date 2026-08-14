@@ -3176,3 +3176,16 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-14-10 (Retire Observe tab + intents) is next. The `agentRunsReducer` extraction was deferred — current ad-hoc state updates work correctly.
 - **Report:** `.context/memory/reviews/2026-08-15-review-30.md`
 - **Notes:** The rising-edge design prevents `forceAgentsTab` from fighting `forceTerminalTab` — Agents fires once at turn start, Terminal fires later when a shell/code_exec tool starts and takes priority.
+
+---
+
+## 2026-08-15 — Session 227
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai) | **Platform:** Z.ai cloud sandbox (Linux 6.5) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-34-realtime-workspace
+- **Task:** B-2026-08-14-10 — Retire Observe tab + product-facing intents (ADR-34 P2). Remove the right-panel Observe tab, Intent Classification UI/events, and the Intent Classify → ... → Execute visualization.
+- **Commits:** 1 product (`feat(ui): retire Observe tab and intent badge, default to Agents (ADR-34 B-10)`)
+- **Outcome:** done — deleted `ObservabilityTab.tsx` (457 lines). Removed the Observe tab from RightPanel (default is now 'agents'). Removed the intent badge + INTENT_LABELS map from CenterPanel. Removed `useCapabilities` hook usage, `currentIntent` prop, and `observation`/`capabilities` prop passes from WorkspaceLayout. Internal compat fields (ObservationData.intent, currentIntent state, intent_classified SSE handler) are retained — backend still emits them, but no UI renders them. 1 new regression test + 4 updated tests. 180 frontend tests pass, 1,725 backend tests pass.
+- **Open items:** B-2026-08-14-11 (Chat-shell cleanup: title bar, duplicated tool cards, Autonomous work) is next.
+- **Report:** `.context/memory/reviews/2026-08-15-review-31.md`
+- **Notes:** The `useObservability` hook is retained — it feeds `CenterPanel.contextTokens` (the context-window occupancy meter), not the Observe tab. The Anomaly Alerts / Runtime Snapshot from ObservabilityTab can be re-extracted as reusable components in a future session if needed.

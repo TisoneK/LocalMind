@@ -14,7 +14,6 @@ import {
   useObjectives,
   useTerminal,
   useObservability,
-  useCapabilities,
   useMetrics,
   useModels,
   useMemory,
@@ -116,14 +115,15 @@ export function WorkspaceLayout() {
   // Hook data — useChat receives the terminal event callback
   const health = useHealth();
   const { sessions, refresh: refreshSessions, deleteSession } = useSessions();
-  const { messages, isStreaming, currentIntent, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages } =
+  const { messages, isStreaming, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files } = useFileTree();
   const { todos, toggleTodo, addTodo } = useTodos(currentSessionId);
   const { objectives, create: createObjective, pause: pauseObjective, resume: resumeObjective, cancel: cancelObjective } = useObjectives(currentSessionId);
   const { observation } = useObservability(currentSessionId);
-  const capabilities = useCapabilities();
+  // ADR-34 B-10: useCapabilities() was retired — the Capability Catalog was
+  // only rendered in the Observe tab, which is now removed.
   const { metrics: polledMetrics } = useMetrics(isStreaming);
   const { models, current: currentModelId, provider: modelProvider, selectModel, refresh: refreshModels } = useModels();
   const { facts: memoryFacts, deleteFact } = useMemory();
@@ -380,7 +380,6 @@ export function WorkspaceLayout() {
           onSend={handleSend}
           onAbort={abort}
           onSteer={steer}
-          currentIntent={currentIntent}
           memoryCount={memoryFacts.length}
           sessionId={currentSessionId || undefined}
           // Context-window occupancy meter: the freed top-bar slot that used
@@ -417,8 +416,6 @@ export function WorkspaceLayout() {
           terminalHistory={terminal.history}
           onTerminalTabComplete={terminal.tabComplete}
           onTerminalSessionChange={terminal.changeSession}
-          observation={liveObservationForPanel}
-          capabilities={capabilities}
           memoryFacts={memoryFacts}
           onMemoryDelete={deleteFact}
           metrics={metrics}
