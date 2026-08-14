@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { LeftPanel } from './LeftPanel';
 import { CenterPanel } from './CenterPanel';
 import { RightPanel } from './RightPanel';
@@ -254,6 +254,29 @@ export function WorkspaceLayout() {
     }
   }, [activeToolCalls, rightPanelCollapsed]);
 
+  // ADR-34 B-9: Auto-switch right panel to Agents tab when a parent turn
+  // starts. The Agents workspace is the canonical live surface for
+  // parent/child agent state — the user should see the initialization
+  // events (ack, understanding, plan, tool evidence, synthesis) arrive
+  // in real-time, not be hidden behind the Observe tab.
+  const [forceAgentsTab, setForceAgentsTab] = useState(false);
+  const prevParentRunning = useRef(false);
+  useEffect(() => {
+    const parentRunning = (agentRuns || []).some(
+      (r) => r.role === 'parent' && r.status === 'running'
+    );
+    // Fire only on the rising edge (turn start), not on every render while
+    // streaming. This prevents the effect from re-fighting forceTerminalTab
+    // after a shell/code_exec tool starts.
+    if (parentRunning && !prevParentRunning.current) {
+      setForceAgentsTab(true);
+      if (rightPanelCollapsed) {
+        setRightPanelCollapsed(false);
+      }
+    }
+    prevParentRunning.current = parentRunning;
+  }, [agentRuns, rightPanelCollapsed]);
+
   // Handle new chat
   const handleNewChat = useCallback(() => {
     const newId = `session-${Date.now()}`;
@@ -409,6 +432,8 @@ export function WorkspaceLayout() {
           onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
           forceTerminalTab={forceTerminalTab}
           onTerminalTabShown={() => setForceTerminalTab(false)}
+          forceAgentsTab={forceAgentsTab}
+          onAgentsTabShown={() => setForceAgentsTab(false)}
           width={rightPanelWidth}
           onModelsRefresh={refreshModels}
         />

@@ -8,7 +8,10 @@ import {
   ChevronRight,
   Circle,
   Clock,
+  FileInput,
+  Lightbulb,
   Loader2,
+  MessageSquareText,
   Wrench,
   XCircle,
 } from 'lucide-react';
@@ -63,7 +66,11 @@ function RunNode({
   const [expanded, setExpanded] = useState(run.status === 'running' || depth === 0);
   const runningTools = run.tools.filter((tool) => isActiveToolStatus(tool.status)).length;
   const completedTools = run.tools.filter((tool) => tool.status === 'done').length;
-  const hasDetails = children.length > 0 || run.tools.length > 0 || Boolean(run.error);
+  // ADR-34 B-7/B-9: expand the node when initialization events or evidence
+  // arrive, so the user sees the live thinker + evidence without clicking.
+  const hasInitEvents = Boolean(run.acknowledgement || run.understanding);
+  const hasEvidence = Boolean(run.evidence && run.evidence.length > 0);
+  const hasDetails = children.length > 0 || run.tools.length > 0 || Boolean(run.error) || hasInitEvents || hasEvidence;
   const elapsed = run.completedAt !== undefined ? run.completedAt - run.startedAt : undefined;
   const running = run.status === 'running';
 
@@ -119,6 +126,36 @@ function RunNode({
               {runningTools > 0 && <span className="text-brand-amber">{runningTools} running</span>}
               {completedTools > 0 && <span className="text-brand-green">{completedTools} done</span>}
             </div>
+
+            {/* ADR-34 B-7: model-owned acknowledgement streamed during init */}
+            {run.acknowledgement && (
+              <div className="flex items-start gap-1.5 rounded bg-brand-green/5 border border-brand-green/20 px-2 py-1">
+                <MessageSquareText className="h-2.5 w-2.5 mt-0.5 text-brand-green shrink-0" />
+                <span className="text-[9px] text-brand-green-soft break-words">{run.acknowledgement}</span>
+              </div>
+            )}
+
+            {/* ADR-34 B-7: bounded thinker line streamed during init */}
+            {run.understanding && (
+              <div className="flex items-start gap-1.5 rounded bg-brand-amber/5 border border-brand-amber/20 px-2 py-1">
+                <Lightbulb className="h-2.5 w-2.5 mt-0.5 text-brand-amber shrink-0" />
+                <span className="text-[9px] text-brand-green-soft break-words">{run.understanding}</span>
+              </div>
+            )}
+
+            {/* ADR-34 B-8: evidence entries handed to the parent model */}
+            {run.evidence && run.evidence.length > 0 && (
+              <div className="space-y-0.5">
+                {run.evidence.map((entry, idx) => (
+                  <div key={`${entry.tool}-${entry.iteration}-${idx}`} className="flex items-center gap-1.5 text-[8px] text-brand-green-muted font-mono">
+                    <FileInput className={`h-2 w-2 shrink-0 ${entry.failed ? 'text-brand-red' : 'text-brand-green-faint'}`} />
+                    <span className="truncate">evidence ← {entry.tool}</span>
+                    <span className="text-brand-green-faint">({entry.evidenceChars} chars)</span>
+                    {entry.failed && <span className="text-brand-red">failed</span>}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {run.tools.length > 0 && (
               <div className="space-y-1">

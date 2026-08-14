@@ -913,6 +913,49 @@ export function useChat(
                   }
                   break;
                 }
+                // ADR-34 B-7: model-owned initialization events — surface as
+                // live fields on the parent AgentRun so the Agent Workspace
+                // renders the acknowledgement and understanding in real-time.
+                if (obs.type === 'agent_initialization_ack') {
+                  const ackData = obs.data || obs;
+                  const ackText = String(ackData.acknowledgement || '').slice(0, 180);
+                  if (ackText) {
+                    setAgentRuns((prev) => updateAgentRun(prev, rootRunId, {
+                      acknowledgement: ackText,
+                    }));
+                  }
+                  break;
+                }
+                if (obs.type === 'agent_initialization_understanding') {
+                  const undData = obs.data || obs;
+                  const undText = String(undData.understanding || '').slice(0, 600);
+                  if (undText) {
+                    setAgentRuns((prev) => updateAgentRun(prev, rootRunId, {
+                      understanding: undText,
+                    }));
+                  }
+                  break;
+                }
+                // ADR-34 B-8: evidence boundary — tool results are handed to
+                // the parent model. Record as an EvidenceEntry on the parent
+                // run so the Agent Workspace can show evidence flowing in.
+                if (obs.type === 'evidence_to_parent') {
+                  const evData = obs.data || obs;
+                  const entry = {
+                    tool: String(evData.tool || 'unknown'),
+                    iteration: Number(evData.iteration || 0),
+                    evidenceChars: Number(evData.evidence_chars || 0),
+                    failed: Boolean(evData.failed),
+                    timestamp: Date.now(),
+                  };
+                  setAgentRuns((prev) => {
+                    const run = prev.find((r) => r.id === rootRunId);
+                    if (!run) return prev;
+                    const evidence = [...(run.evidence || []), entry];
+                    return updateAgentRun(prev, rootRunId, { evidence });
+                  });
+                  break;
+                }
                 // ADR-18 P3 (Session 176): delegation streaming — the
                 // sub-agent's lifecycle shows as one running tool step
                 // ("Delegating to research…") in the Actions panel; the

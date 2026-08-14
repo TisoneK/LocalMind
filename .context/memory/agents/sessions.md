@@ -3163,3 +3163,16 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-14-9 (Agent Workspace as canonical live UI) is next — the `evidence_to_parent` event needs to be rendered as a live node.
 - **Report:** `.context/memory/reviews/2026-08-15-review-29.md`
 - **Notes:** The `_authoritative_sysinfo_answer` and `_is_current_system_query` helpers remain in `text_tools.py` for the shell→sysinfo correction path (`_normalize_system_tool_call`). Only the loop shortcut that bypassed parent synthesis was removed.
+
+---
+
+## 2026-08-15 — Session 226
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai) | **Platform:** Z.ai cloud sandbox (Linux 6.5) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-34-realtime-workspace
+- **Task:** B-2026-08-14-9 — Agent Workspace as canonical live UI (ADR-34 P1). Auto-activate Agents when initialization starts; render understanding, acknowledgement, plan/todos, tool evidence, and synthesis as live nodes.
+- **Commits:** 1 product (`feat(ui): auto-activate Agents tab, render ack/understanding/evidence in Agent Workspace (ADR-34 B-9)`)
+- **Outcome:** done — added `forceAgentsTab` prop to RightPanel (mirrors `forceTerminalTab`), wired in WorkspaceLayout with a rising-edge trigger on "parent run is active". Extended `AgentRun` type with `acknowledgement`, `understanding`, and `evidence` fields. Added 3 new SSE handlers in `useLocalMind.ts` for `agent_initialization_ack`, `agent_initialization_understanding`, `evidence_to_parent`. Updated `AgentWorkspace.tsx` to render these as live cards (green ack, amber understanding, monospace evidence lines). 1 new frontend test, 179 total pass.
+- **Open items:** B-2026-08-14-10 (Retire Observe tab + intents) is next. The `agentRunsReducer` extraction was deferred — current ad-hoc state updates work correctly.
+- **Report:** `.context/memory/reviews/2026-08-15-review-30.md`
+- **Notes:** The rising-edge design prevents `forceAgentsTab` from fighting `forceTerminalTab` — Agents fires once at turn start, Terminal fires later when a shell/code_exec tool starts and takes priority.

@@ -43,6 +43,12 @@ interface RightPanelProps {
   forceTerminalTab?: boolean;
   /** Called after the terminal tab has been shown */
   onTerminalTabShown?: () => void;
+  /** ADR-34 B-9: Force the Agents tab to be active when a parent turn starts
+   * (initialization begins). The Agents workspace is the canonical live
+   * surface for parent/child agent state. */
+  forceAgentsTab?: boolean;
+  /** Called after the Agents tab has been shown */
+  onAgentsTabShown?: () => void;
   width?: number;
   /** Called when settings change so the parent can refresh its model list */
   onModelsRefresh?: () => Promise<void>;
@@ -75,6 +81,8 @@ export function RightPanel({
   onToggleCollapse,
   forceTerminalTab,
   onTerminalTabShown,
+  forceAgentsTab,
+  onAgentsTabShown,
   width = 320,
   onModelsRefresh,
 }: RightPanelProps) {
@@ -94,6 +102,18 @@ export function RightPanel({
       onTerminalTabShown?.();
     }
   }, [forceTerminalTab, activeTab, onTerminalTabShown]);
+
+  // ADR-34 B-9: When a parent turn starts (initialization begins), auto-activate
+  // the Agents tab so the user sees the canonical live workspace immediately.
+  // This does NOT fight forceTerminalTab — forceTerminalTab fires later (when a
+  // shell/code_exec tool starts) and takes priority because it's a more specific
+  // signal. forceAgentsTab fires once at turn start and is cleared by the parent.
+  useEffect(() => {
+    if (forceAgentsTab && activeTab !== 'agents') {
+      setActiveTab('agents');
+      onAgentsTabShown?.();
+    }
+  }, [forceAgentsTab, activeTab, onAgentsTabShown]);
 
   // Listen for 'localmind:activate-terminal' from code block Run buttons
   useEffect(() => {

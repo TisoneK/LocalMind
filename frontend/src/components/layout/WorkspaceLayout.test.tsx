@@ -51,6 +51,8 @@ interface SetupOverrides {
   persistedSettings?: Record<string, unknown>;
   liveObservation?: Record<string, unknown> | null;
   observation?: Record<string, unknown>;
+  agentRuns?: Array<Record<string, unknown>>;
+  isStreaming?: boolean;
 }
 
 vi.mock('./LeftPanel', () => ({
@@ -109,7 +111,7 @@ function setup(overrides: SetupOverrides = {}) {
   });
   mockHooks.useChat.mockReturnValue({
     messages: [],
-    isStreaming: false,
+    isStreaming: overrides.isStreaming ?? false,
     currentIntent: 'CONVERSATION',
     currentConfidence: 0.98,
     activeToolCalls: overrides.activeToolCalls ?? [],
@@ -117,6 +119,8 @@ function setup(overrides: SetupOverrides = {}) {
     lastMetrics: null,
     elapsedMs: 0,
     sessionStats: { promptTokens: 0, completionTokens: 0, latencyMs: 0, genTimeMs: 0, turnCount: 0 },
+    agentRuns: overrides.agentRuns ?? [],
+    agentStreaming: overrides.isStreaming ?? false,
     send: fns.send,
     abort: fns.abort,
     steer: fns.steer,
@@ -327,6 +331,27 @@ describe('WorkspaceLayout', () => {
     expect(right.forceTerminalTab).toBe(true);
     // Terminal lines are bridged from the active tool call into the panel.
     expect(right.terminalLines).toEqual([]);
+  });
+
+  it('auto-activates the Agents tab when a parent turn starts (ADR-34 B-9)', () => {
+    setup({
+      isStreaming: true,
+      agentRuns: [
+        {
+          id: 'parent-1',
+          name: 'parent',
+          role: 'parent',
+          status: 'running',
+          depth: 0,
+          startedAt: Date.now(),
+          tools: [],
+        },
+      ],
+    });
+    const right = mockPanelProps.right;
+    expect(right.forceAgentsTab).toBe(true);
+    expect(right.agentRuns).toHaveLength(1);
+    expect(right.agentRuns[0].role).toBe('parent');
   });
 
   it('falls back to the persisted model when the backend reports no current model', () => {

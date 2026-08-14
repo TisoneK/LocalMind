@@ -34,6 +34,16 @@ export interface ThinkingStep {
 /** One visible parent or delegated child execution in the agent workspace. */
 export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'canceled';
 
+/** ADR-34 B-8: bounded evidence entry handed to the parent model. */
+export interface EvidenceEntry {
+  tool: string;
+  iteration: number;
+  evidenceChars: number;
+  failed: boolean;
+  /** Wall-clock timestamp (ms) when the evidence was emitted. */
+  timestamp: number;
+}
+
 export interface AgentRun {
   id: string;
   name: string;
@@ -46,6 +56,12 @@ export interface AgentRun {
   completedAt?: number;
   error?: string;
   tools: ToolCall[];
+  /** ADR-34 B-7: model-owned acknowledgement streamed during initialization. */
+  acknowledgement?: string;
+  /** ADR-34 B-7: bounded thinker line streamed during initialization. */
+  understanding?: string;
+  /** ADR-34 B-8: evidence entries handed to the parent model after each tool. */
+  evidence?: EvidenceEntry[];
 }
 
 export interface PendingWrite {
