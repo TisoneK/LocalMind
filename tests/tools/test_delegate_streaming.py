@@ -25,7 +25,13 @@ def test_child_obs_proxy_forwards_only_visible_events():
     parent = ObsCollector()
     proxy = ChildObsProxy(parent, "research")
 
-    proxy.emit("tool_call", tool="web_search", label="Searching", status="done")
+    proxy.emit(
+        "tool_call",
+        tool="web_search",
+        label="Searching",
+        status="done",
+        output="private search result",
+    )
     proxy.emit("agent_loop_start", intent="chat")  # must NOT leak to parent
     proxy.emit("tool_status", tool="web_search", status="done")
     proxy.emit("turn_complete", total_latency_ms=123)  # must NOT leak
@@ -36,11 +42,13 @@ def test_child_obs_proxy_forwards_only_visible_events():
     assert "agent_loop_start" not in parent_events
     assert "turn_complete" not in parent_events
 
-    # Forwarded tool_call carries the child agent tag.
+    # Forwarded tool_call carries the child agent tag but not its raw output.
     fwd = next(e for e in parent.history() if e.type == "tool_call")
     assert fwd.data.get("agent") == "research"
+    assert "output" not in fwd.data
 
-    # The child's own list still has everything (its internal behavior —
+    # The child's own list still retains the raw output for its internal
+    # execution/trace (the parent receives the final result separately).
     # failure memory, SSE — is unchanged).
     child_events = [e.type for e in proxy.history()]
     assert "agent_loop_start" in child_events

@@ -67,12 +67,12 @@ class ObsCollector:
 
 
 # ADR-18 P3 (Session 176): delegation streaming/UX — the sub-agent's
-# work must be visible to the user. A delegated child gets a
+# progress is visible to the user, but its raw tool results stay internal
+# to the child/parent agent contract. A delegated child gets a
 # ChildObsProxy instead of a bare collector: the child behaves exactly
 # as before (its own event list drives its internal behavior — failure
-# memory, SSE, etc.), but its user-visible tool activity is ALSO
-# forwarded to the parent's collector, so the frontend Actions panel
-# shows the sub-agent's tool calls interleaved with the parent's.
+# memory, SSE, etc.), while only progress metadata is forwarded to the
+# parent's collector.
 #
 # Deliberately NOT forwarded: agent_loop_start/agent_loop_done,
 # turn_complete, intent_classified, stage_timing — those are the
@@ -83,8 +83,9 @@ class ChildObsProxy(ObsCollector):
     """Delegated child's observability collector.
 
     Keeps its own event list (the child's internal behavior is
-    unchanged) AND forwards user-visible tool activity to the parent
-    collector so the sub-agent's work streams into the UI.
+    unchanged) AND forwards user-visible progress to the parent
+    collector. Raw child tool output remains internal so the parent agent,
+    not the presentation layer, consumes it.
     """
 
     # Event types the frontend renders as tool progress (the chat.py
@@ -100,5 +101,10 @@ class ChildObsProxy(ObsCollector):
         super().emit(event_type, **data)
         if event_type in self._FORWARD_TYPES and self._parent is not None:
             tagged = dict(data)
+            if event_type == "tool_call":
+                # The child loop already consumes this output and returns its
+                # final result to the parent. Forward labels/status only — raw
+                # observations must never become user-facing child output.
+                tagged.pop("output", None)
             tagged["agent"] = self._agent  # which sub-agent did this
             self._parent.emit(event_type, **tagged)

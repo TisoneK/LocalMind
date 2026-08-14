@@ -44,6 +44,23 @@ from core.title_generator import generate_title_smart, refine_title_async
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+_INTERNAL_DELEGATION_TOOLS = frozenset({"delegate", "delegate_parallel", "delegate_inline"})
+
+
+def _visible_tool_output(tool_name: str, agent_name: str | None, output: str) -> str:
+    """Keep delegated child results inside the parent-agent contract.
+
+    Child progress is useful in the Actions panel, but the child's raw tool
+    result and the parent delegate envelope are intermediate model context,
+    not user-facing content. The parent AgentLoop receives the full result
+    through its internal ``tool`` message; this function protects the SSE
+    presentation boundary as a second line of defense.
+    """
+    if agent_name or tool_name in _INTERNAL_DELEGATION_TOOLS:
+        return ""
+    return output
+
+
 _engine = Engine()
 MAX_FILE_BYTES = settings.localmind_max_file_size_mb * 1024 * 1024
 
@@ -176,10 +193,14 @@ async def _event_stream(
                     _status = evt.data.get("status", "running")
                     _iteration = evt.data.get("iteration", "")
                     _latency_ms = evt.data.get("latency_ms", "")
-                    _output = evt.data.get("output", "")
                     # ADR-18 P3 (Session 176): which sub-agent performed this
                     # tool call (delegation streaming). Empty for parent tools.
                     _agent = evt.data.get("agent", "") or None
+                    _output = _visible_tool_output(
+                        _tool,
+                        _agent,
+                        evt.data.get("output", ""),
+                    )
                     # Session 120: which plan todo this action serves.
                     _todo_id = evt.data.get("todo_id") or None
                     # Session 122: the model's reasoning that led to this tool call.
