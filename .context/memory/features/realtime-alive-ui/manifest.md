@@ -56,11 +56,15 @@ protocol session; the dark-green brand identity is preserved throughout.
   `AgentWorkspace` run tree — parent/child nodes + tool rows animate in
   (framer-motion) as delegated work spawns, running run gets an amber
   ring, reduced-motion honoured. +1 test. Run-tree logic unchanged.
-- [ ] S215 — Shared motion primitive + a11y: extract the `motion.div`
+- [x] **S215 — Live terminal** (done 2026-08-14, `21f88db`, closes
+  B-2026-08-14-4): idle prompt block cursor + live "executing…" cursor
+  line + auto-scroll on `isRunning`. Deliberately NO output animation
+  (high-volume output must not stutter). CSS blink steady under
+  prefers-reduced-motion. Added `TerminalPanel.test.tsx` (4).
+- [ ] S216 — Shared motion primitive + a11y: extract the `motion.div`
   enter + `useReducedMotion` guard now duplicated across ToolSteps /
-  ThinkingBlock / TodoList / ActionHistory into one component/hook;
-  consider an ADR.
-- [ ] (backlog) B-2026-08-14-4 — Terminal panel alive/realtime pass.
+  ThinkingBlock / TodoList / ActionHistory / AgentWorkspace into one
+  component/hook; consider an ADR. Quality/DRY, not user-facing.
 
 ## Constraints / invariants (do not regress)
 

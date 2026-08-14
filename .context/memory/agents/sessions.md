@@ -3024,3 +3024,17 @@ program + ADR-22). -->
 - **Report:** `.context/memory/reviews/2026-08-14-review-19.md`.
 - **Feature status:** 5 alive surfaces shipped (S210-214). Remaining: B-2026-08-14-4 Terminal, S215 shared motion primitive, live visual pass.
 - **Limitation:** live-app visual pass deferred (provider credential needed).
+
+---
+## 2026-08-14 — Session 215
+
+- **Agent:** Claude Code / claude-opus-4-8 | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** realtime-alive-ui (Session 6) — closes B-2026-08-14-4
+- **Task:** Alive/realtime pass on the terminal panel without disturbing I/O.
+- **Commits:** 2 product (`21f88db` feat(ui), `662ff85` docs) + 1 context closeout (SHA after push).
+- **Outcome:** done — `TerminalPanel` gets an idle prompt block cursor and a live "executing…" cursor line while a command runs (auto-scroll now fires on `isRunning`). Deliberately NO per-line output animation (high-volume output must not stutter); CSS blink holds steady under prefers-reduced-motion. Emulator I/O, tab completion, history, keyboard handling untouched.
+- **Also:** `TerminalPanel` had zero tests — added `TerminalPanel.test.tsx` (4 cases).
+- **Validation:** frontend 170 passed (was 166); `tsc -b` clean; ESLint 0 errors / 64 warnings; `vite build` passes.
+- **Report:** `.context/memory/reviews/2026-08-14-review-20.md`.
+- **Feature status:** every user-named surface now alive (S210-215). Remaining: S216 shared motion primitive (DRY), live visual pass.
+- **Limitation:** live-app visual pass deferred (provider credential needed).

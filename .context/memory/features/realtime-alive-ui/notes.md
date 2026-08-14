@@ -116,3 +116,23 @@ session), S215 shared motion primitive (the `motion.div` enter +
 TodoList/ActionHistory/AgentWorkspace — extract into e.g. `<MotionItem>`
 + `useEnterMotion()`; consider an ADR), and live-app visual verification
 (provider credential needed).
+
+---
+## Session 215 (2026-08-14) — Live terminal cursor (closes B-2026-08-14-4)
+
+`TerminalPanel`: idle prompt block cursor (`!isRunning && input===''`),
+live "executing…" cursor line at output bottom while `isRunning`,
+auto-scroll effect now also depends on `isRunning`. CSS `.terminal-cursor`
+blink in globals.css with a `prefers-reduced-motion` steady override —
+NOT framer-motion (this is a high-frequency component). **Deliberately no
+per-line output animation** — terminal output is high-volume and must not
+stutter; the liveness cue is the cursor + run-state, not the stream.
+Added `TerminalPanel.test.tsx` (4). 170 tests / tsc / lint(0 err) / build
+green. `21f88db` + changelog `662ff85`.
+
+**Every user-named surface now alive** (S210 Actions, S211 Thinking, S212
+Todos, S213 panel actions, S214 Agents, S215 Terminal). Remaining: S216
+shared motion primitive (DRY refactor — the `motion.div` enter +
+`useReducedMotion` guard is duplicated in 5 components; extract into e.g.
+`<MotionItem>` + `useEnterMotion()`, consider an ADR) and live-app visual
+verification (needs a provider credential).
