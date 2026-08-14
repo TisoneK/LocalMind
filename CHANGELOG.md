@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings dialog now supports keyboard navigation — Escape closes the modal, Tab is trapped inside (can't escape to elements behind the backdrop), and focus is restored to the element that opened the modal when it closes. Screen readers announce the dialog via `role="dialog"` and `aria-modal`
 - Regression tests for the SSRF redirect bypass fix — verifies that redirects to private IPs (cloud metadata, localhost) are blocked, redirects to public URLs are followed, and multi-hop redirect chains are validated at every hop
 
+### Added
+- Themes. Settings now has an Appearance section where you can pick between three color themes — Graphite, Midnight Iris, and Warm Ink — and choose Light, Dark, or System (follows your OS). Your choice is remembered and applies instantly, with no flash when the app starts.
+
 ### Changed
 - Refreshed the color scheme. The interface no longer uses green for everything — the default is now a calm, neutral graphite with emerald used only as an accent, which is easier on the eyes and lets your content stand out. Under the hood this is a full theming system: three palettes (Graphite, Midnight Iris, Warm Ink), each in light and dark, are ready to ship — a picker to switch between them in Settings is coming next.
 - The terminal now has a blinking cursor at the prompt when it's ready, and shows a live "executing…" cursor while a command is running so you can tell the shell is working even before any output appears. Command output itself is not animated, so fast output stays smooth.
