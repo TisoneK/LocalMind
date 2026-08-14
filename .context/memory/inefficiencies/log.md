@@ -562,3 +562,23 @@ if literally nothing slowed you down.
   vite entry, and confirm the browser pane is displayed before relying on
   `computer{screenshot}`. Live-app visual verification still needs a
   provider credential to produce a real streaming turn.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 220)
+
+- **Problem:** The Claude Code handoff ended during closeout while the full
+  suite was still running, leaving ADR-32's loop-level remainder and memory
+  records unfinished.
+- **Cost:** No product rework was needed beyond the handoff's in-progress
+  changes; one closeout pass was required to reconcile the adapter and loop
+  stages and record the completed suite.
+- **Cause:** The session exhausted its token budget after product validation
+  but before the separate review/backlog/session-memory closeout.
+- **Workaround / fix:** Resumed from the committed handoff, completed the
+  loop/runtime fail-fast propagation, waited for the full suite result, then
+  recorded the review, feature manifest, backlog closure, and append-only logs
+  as separate context work.
+- **Prevent next time:** Treat closeout as a required phase with its own
+  bounded checklist; do not mark an ADR complete until the full suite result,
+  review, backlog, feature memory, session log, and clean-tree verification are
+  all recorded.

@@ -3087,3 +3087,15 @@ program + ADR-22). -->
 - **Validation:** tsc clean; 178 tests; ESLint 0 errors; build green.
 - **Report:** `.context/memory/reviews/2026-08-14-review-24.md`.
 - **Open items:** human visual/taste pass per palette (v1, tunable in globals.css).
+
+---
+## 2026-08-14 — Session 220
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** fail-fast-provider-errors | **ADR:** ADR-32
+- **Task:** Continue the Claude Code handoff and complete loop-level fail-fast propagation for terminal provider errors.
+- **Commits:** product `1762509` (adapter handoff, pushed first) + `6014254` (loop/runtime completion); context closeout follows separately.
+- **Outcome:** done — terminal exhausted-quota 429, 401, 402, and 403 errors now stop before parent tool iteration and reach the canonical SSE error-card boundary; transient 429 retry behavior remains intact; greetings retain the zero-provider-call boundary.
+- **Validation:** backend `1,773 passed, 2 skipped`; frontend `178 passed`; TypeScript/build/Ruff passed; ESLint 0 errors / 64 existing warnings; focused ADR-32 tests 70 passed; no live-provider smoke because credentials were unavailable.
+- **Report:** `.context/memory/reviews/2026-08-14-review-25.md`. **Notes:** `.context/memory/sessions/2026-08-14-220/notes.md`; feature `.context/memory/features/fail-fast-provider-errors/`.
+- **Open items:** No ADR-32 implementation items remain. A live provider check with a deliberately invalid or exhausted non-production credential remains desirable.

@@ -848,3 +848,22 @@ After the smoke test passes, test a multi-step task (e.g. "Create hello world re
 - **Consequences:** Users on exhausted free tiers / bad keys get an instant, honest error instead of a 20s dead wait. Must NOT regress: the deterministic conversational boundary (`Hi` makes zero provider calls — Session 206) must stay zero-call (no preflight for trivial/greeting turns); the acknowledgement-first UX (Sessions 207/208) stays, but a provider error now overtakes it. Add a regression test: a mocked adapter raising a 429 on the first call yields a terminal error SSE within one round-trip (not after a full loop), and `Hi` still makes zero calls.
 - **Files (starting points):** `backend/src/core/agent_runtime.py` (acknowledgement + `generate` sites 394/639), `backend/src/core/thinking_dispatcher.py` (fast-path acknowledgement 449/476/518 + profile), `backend/src/api/routes/chat.py` (`_event_stream` first-event ordering), error normalization from ADR-20 (`adr-20-error-normalization`) + ADR-21 (`adr-21-provider-agnostic-errors`), and the adapter 429-retry path.
 - **Relates to:** ADR-20, ADR-21; Sessions 205-208 (acknowledgement/latency), Session 206 (conversational boundary).
+
+**Update (Session 220):** Partially implemented. The adapter-level
+fail-fast landed (`1762509`): `OpenAICompatAdapter._send_streaming_with_retry`
+now classifies a permanent quota/billing 429 (via `_is_permanent_429`) and
+does NOT retry it — it surfaces immediately through the existing
+`normalize_error` → error-card path, killing the 2s+4s×N backoff waste.
+Remaining (backlog B-2026-08-14-5): the loop-level short-circuit — ensure
+a terminal pre-generation provider error on the FIRST `parent.run` call
+ends the turn immediately rather than iterating; and confirm 401/402/403
+(not just 429) reach the error card without a full loop. Status: proposed → **partially implemented.**
+
+**Completion update (Session 220 continuation):** The loop-level remainder is
+now implemented in product commit `6014254`. Terminal planning errors propagate
+through `TerminalProviderError`; `AgentRuntime` forwards terminal error chunks
+instead of converting them into a generic no-answer fallback; the shared
+ADR-20/21 classifier covers exhausted-quota 429 plus 401/402/403; transient
+429s remain retryable. The permanent-429 adapter path also avoids its former
+extra response-refresh request. ADR-32 is **accepted + implemented**. Feature
+manifest: `.context/memory/features/fail-fast-provider-errors/manifest.md`.

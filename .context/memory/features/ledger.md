@@ -27,3 +27,6 @@ archived or deleted **only after** its ledger line records the outcome
 - **theming-multi-palette** — started 2026-08-14 · active · finished — (3 palettes Graphite/Iris/Warm × light+dark, user-selectable in Settings; reverses Session-103 dark-only; S217 token architecture + 6 palettes)
 
 - **theming-multi-palette** — started 2026-08-14 · **COMPLETE** — S217 token architecture + 6 palettes `40930e0` (ADR-31) + S218 switcher/Settings picker `810323b` + S219 light-mode correctness `6979fe3`. 3 themes (Graphite/Iris/Warm) × light/dark, Settings-selectable + persisted + no-flash. 178 frontend tests / build green. Palettes v1 — tunable in globals.css anchors; human visual pass is the only follow-up. · finished 2026-08-14
+
+- **fail-fast-provider-errors** — started 2026-08-14 · active · S220 adapter-level fix `1762509` (ADR-32); loop-level short-circuit backlogged B-2026-08-14-5 · finished —
+- **fail-fast-provider-errors** — started 2026-08-14 · merged `1762509` + `6014254` · finished 2026-08-14 (ADR-32 complete; adapter + parent-loop fail-fast and canonical error propagation; see feature manifest)
