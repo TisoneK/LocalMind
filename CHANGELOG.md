@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `human_size` byte-formatting helper is now shared from `core/utils.py` instead of being duplicated in `shell.py` and `filesystem.py`. A bug fix or new unit will now propagate to all callers automatically
 
 ### Fixed
+- Usage-limit and quota errors now appear right away. If your provider reports that you're out of free/daily quota or credits, LocalMind stops immediately and shows the error, instead of retrying for 20+ seconds first.
 - Polished light mode: fixed a few spots (the decision strip under replies, file names on hover, and some row hovers) that used fixed colors and could look wrong or vanish on the new light themes.
 - Fixed greetings and simple acknowledgments entering the parent tool loop. Messages such as `Hi` now use the deterministic conversational boundary with zero tool calls and no provider wait, while conversational questions use direct chat without tool planning.
 - Fixed the live chat stream going silent while the parent agent waited on a slow model or tool. Heartbeats now flush pending parent tool progress and bounded results immediately, while preserving delegated child-output privacy and the normal metrics/observation queue.

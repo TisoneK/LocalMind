@@ -395,6 +395,51 @@ def _extract(raw: Any) -> tuple[str | None, int | None, str, str, Any]:
     return None, None, text, "", text
 
 
+# ADR-32: these are provider failures that cannot be repaired by another
+# parent-loop iteration. Keep the classification here with the canonical
+# envelope parser so the loop does not grow a second provider-error parser.
+_PERMANENT_QUOTA_MARKERS = (
+    "insufficient_quota",
+    "freeusagelimiterror",
+    "free usage limit",
+    "daily quota",
+    "daily limit",
+    "out of credits",
+    "insufficient credits",
+    "quota reached",
+    "quota exceeded",
+)
+
+
+def is_permanent_quota_429(raw: Any) -> bool:
+    """Return True for a 429 that represents exhausted quota/billing.
+
+    The adapter uses a provider response body, while the parent loop receives
+    the adapter's normalized ``"provider returned 429: body"`` string. Both
+    shapes go through the same ADR-21 envelope extraction here.
+    """
+    provider, status, text, type_token, raw_src = _extract(raw)
+    if status != 429:
+        return False
+    haystack = " ".join(
+        str(part or "") for part in (text, type_token, raw_src)
+    ).lower()
+    return any(marker in haystack for marker in _PERMANENT_QUOTA_MARKERS)
+
+
+def is_terminal_pre_generation_error(raw: Any) -> bool:
+    """Return True when a provider error must end the turn immediately.
+
+    Authentication, payment, and permission failures are terminal by status or
+    structured error type. A 429 is terminal only when its envelope identifies
+    exhausted quota/credits; ordinary burst limits remain retryable.
+    """
+    normalized = normalize_error(raw)
+    if normalized["code"] in {AUTH_ERROR, PAYMENT_REQUIRED}:
+        return True
+    return normalized["code"] == RATE_LIMIT and is_permanent_quota_429(raw)
+
+
 def normalize_error(
     raw: Any,
     *,

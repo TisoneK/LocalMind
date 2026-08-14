@@ -22,7 +22,7 @@ from typing import AsyncIterator, Optional
 
 from agents.parent import ParentAgent
 from core.agent.constants import AGENT_ALLOWED_TOOLS
-from core.agent.loop import AgentLoop
+from core.agent.loop import AgentLoop, TerminalProviderError
 from core.anomalies import detect_turn_anomalies
 from core.config import settings
 from core.context_builder import build as build_context
@@ -661,6 +661,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             ):
                 if chunk.usage:
                     usage.update(chunk.usage)
+                # Error chunks are terminal transport events. Do not let the
+                # parent runtime's completion bookkeeping turn a provider
+                # failure into the generic "no usable answer" fallback.
+                if chunk.error:
+                    yield chunk
+                    return
                 if chunk.text:
                     response_chunks.append(chunk.text)
                     if chunk.done:
@@ -672,6 +678,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 if chunk.done:
                     continue
                 yield chunk
+        except TerminalProviderError as exc:
+            collector.emit("agent_loop_error", error=exc.raw[:120], terminal=True)
+            # chat.py owns the one canonical normalization/presentation
+            # boundary; keep the raw adapter string internal to this chunk.
+            yield StreamChunk(text="", done=True, error=exc.raw)
+            return
         except AgentAbortedError:
             collector.emit("agent_runtime_aborted", agent="parent")
             yield StreamChunk(text="⏹ Stopped by user.", done=False)

@@ -117,6 +117,15 @@ from core.workspace_state import snapshot as workspace_snapshot
 
 logger = logging.getLogger(__name__)
 
+
+class TerminalProviderError(RuntimeError):
+    """A provider error that must terminate the current turn immediately."""
+
+    def __init__(self, raw: str):
+        self.raw = str(raw)
+        super().__init__(self.raw)
+
+
 # ── Tool Definitions (OpenAI function-calling format) ──────────────────────────
 
 TOOL_DEFINITIONS = [
@@ -4567,10 +4576,12 @@ class AgentLoop:
 
         try:
             _plan_timeout = PLAN_TIMEOUT_SECS
+            from core.error_normalizer import is_terminal_pre_generation_error
 
             # Use a queue for real-time streaming with timeout
             _plan_queue: asyncio.Queue = asyncio.Queue()
             _SENTINEL = object()
+            _terminal_error: list[TerminalProviderError] = []
 
             async def _stream_plan():
                 try:
@@ -4580,6 +4591,8 @@ class AgentLoop:
                         intent="chat",
                     ):
                         if chunk.error:
+                            if is_terminal_pre_generation_error(chunk.error):
+                                _terminal_error.append(TerminalProviderError(chunk.error))
                             logger.warning("[agent.loop] plan stream adapter error: %s", chunk.error[:120])
                             break
                         text = _filter_system_leaks(chunk.text)
@@ -4613,12 +4626,20 @@ class AgentLoop:
                 # NOT catch in py3.8+ — it would escape and kill the whole
                 # request. gather(return_exceptions=True) absorbs it.
                 try:
-                    await asyncio.wait_for(
+                    _task_results = await asyncio.wait_for(
                         asyncio.gather(_task, return_exceptions=True),
                         timeout=5,
                     )
                 except Exception:
                     _task.cancel()
+                    _task_results = []
+                if _terminal_error:
+                    raise _terminal_error[0]
+                for _task_result in _task_results:
+                    if isinstance(_task_result, TerminalProviderError):
+                        raise _task_result
+                    if isinstance(_task_result, Exception) and is_terminal_pre_generation_error(_task_result):
+                        raise TerminalProviderError(str(_task_result))
             except asyncio.CancelledError:
                 # External cancellation of the generator itself (client abort):
                 # cancel the child task, then propagate cleanly.
@@ -4628,7 +4649,13 @@ class AgentLoop:
                 _task.cancel()
                 raise
 
+        except TerminalProviderError:
+            raise
         except Exception as exc:
+            from core.error_normalizer import is_terminal_pre_generation_error
+
+            if is_terminal_pre_generation_error(exc):
+                raise TerminalProviderError(str(exc)) from exc
             logger.warning(f"[agent.loop] planning stream failed (non-fatal): {exc}")
 
     # ------------------------------------------------------------------

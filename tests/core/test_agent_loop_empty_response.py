@@ -18,7 +18,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from core.agent.loop import AgentLoop
+from core.agent.loop import AgentLoop, TerminalProviderError
 from core.models import Intent, StreamChunk
 
 
@@ -96,6 +96,85 @@ class TestEmptyResponseFastFail:
 
         full = "".join(c.text for c in chunks)
         assert "All good - nothing to do." in full, f"expected normal text, got {full!r}"
+
+    @pytest.mark.asyncio
+    async def test_terminal_planning_error_stops_before_tool_call(self):
+        """ADR-32: a terminal provider error on the first provider call must
+        not be swallowed by planning and retried in the parent loop."""
+        loop = AgentLoop(adapter=MagicMock())
+        seen = {"planning": 0, "tool_calls": 0}
+        error = (
+            'zen returned 429: {"error":{"type":"FreeUsageLimitError",'
+            '"message":"free daily quota exceeded"}}'
+        )
+
+        async def failing_plan(messages, temperature=0.1, intent="chat"):
+            seen["planning"] += 1
+            yield StreamChunk(text="", done=True, error=error)
+
+        async def tool_call_should_not_run(**kwargs):
+            seen["tool_calls"] += 1
+            raise AssertionError("terminal planning error entered tool loop")
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat = failing_plan
+        mock_adapter.chat_with_tools = tool_call_should_not_run
+
+        with patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), pytest.raises(
+            TerminalProviderError
+        ) as raised:
+            async for _chunk in loop.run(
+                messages=[{"role": "user", "content": "check the project"}],
+                intent=Intent.SHELL,
+                initial_tool_result=None,
+                available_tools=[],
+                adapter=mock_adapter,
+            ):
+                pass
+
+        assert isinstance(raised.value, TerminalProviderError)
+        assert str(raised.value) == error
+        assert seen == {"planning": 1, "tool_calls": 0}
+
+    @pytest.mark.asyncio
+    async def test_transient_planning_error_keeps_existing_loop_path(self):
+        """A plain transient 429 remains non-terminal and reaches the normal
+        parent decision call rather than being treated as auth/quota failure."""
+        loop = AgentLoop(adapter=MagicMock())
+        seen = {"planning": 0, "tool_calls": 0}
+        transient = 'zen returned 429: {"error":{"type":"requests","message":"per minute"}}'
+
+        async def failing_plan(messages, temperature=0.1, intent="chat"):
+            seen["planning"] += 1
+            yield StreamChunk(text="", done=True, error=transient)
+
+        async def final_chat(**kwargs):
+            seen["tool_calls"] += 1
+
+            async def _stream():
+                yield StreamChunk(text="Recovered", done=False)
+                yield StreamChunk(text="", done=True)
+
+            return _stream()
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat = failing_plan
+        mock_adapter.chat_with_tools = final_chat
+
+        with patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x):
+            chunks = [
+                chunk
+                async for chunk in loop.run(
+                    messages=[{"role": "user", "content": "check the project"}],
+                    intent=Intent.SHELL,
+                    initial_tool_result=None,
+                    available_tools=[],
+                    adapter=mock_adapter,
+                )
+            ]
+
+        assert seen == {"planning": 1, "tool_calls": 1}
+        assert "Recovered" in "".join(chunk.text for chunk in chunks)
 
     @pytest.mark.asyncio
     async def test_stream_error_propagates_adapter_message(self):

@@ -20,6 +20,8 @@ from core.error_normalizer import (
     SOURCE_PROVIDER,
     TIMEOUT,
     is_canonical_error,
+    is_permanent_quota_429,
+    is_terminal_pre_generation_error,
     normalize_error,
 )
 
@@ -93,6 +95,28 @@ class TestClassification:
         assert err["code"] == expected_code
         assert err["retryable"] is expected_retryable
         assert err["source"] == SOURCE_PROVIDER
+
+
+class TestADR32TerminalProviderErrors:
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            'zen returned 401: {"error":{"type":"invalid_api_key","message":"bad key"}}',
+            'zen returned 402: {"error":{"type":"billing_error","message":"top up"}}',
+            'zen returned 403: {"error":{"type":"forbidden","message":"denied"}}',
+        ],
+    )
+    def test_auth_payment_permission_errors_are_terminal(self, raw):
+        assert is_terminal_pre_generation_error(raw) is True
+
+    def test_exhausted_quota_429_is_terminal(self):
+        assert is_permanent_quota_429(ZEN_429) is True
+        assert is_terminal_pre_generation_error(ZEN_429) is True
+
+    def test_per_minute_429_remains_retryable(self):
+        raw = 'zen returned 429: {"error":{"type":"requests","message":"per minute"}}'
+        assert is_permanent_quota_429(raw) is False
+        assert is_terminal_pre_generation_error(raw) is False
 
 
 class TestGenericAndInternal:

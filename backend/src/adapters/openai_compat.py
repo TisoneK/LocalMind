@@ -767,7 +767,6 @@ class OpenAICompatAdapter(BaseAdapter):
             # backoff window (and, across an agent loop, tens of seconds)
             # before surfacing an error the user could have seen instantly.
             body_text = (await response.aread()).decode(errors="replace")
-            await response.aclose()
             retry_after = response.headers.get("retry-after")
 
             if self._is_permanent_429(body_text, retry_after):
@@ -775,8 +774,19 @@ class OpenAICompatAdapter(BaseAdapter):
                     "[adapter] permanent quota/billing 429 from %s — not retrying, surfacing immediately",
                     self._provider_name,
                 )
-                break
+                # Keep this response open for the caller. Its body is already
+                # buffered, so the caller can read it once more and close it;
+                # most importantly, do not issue the old extra request below.
+                return response
 
+            if attempt == 2:
+                # The final transient attempt has already been read. Return
+                # this response directly instead of sending a fourth request
+                # merely to obtain a fresh response object.
+                logger.warning("[adapter] transient 429 from %s after 3 attempts — giving up", self._provider_name)
+                return response
+
+            await response.aclose()
             if attempt < 2:  # don't sleep after the last attempt
                 # Respect Retry-After header if the provider sent one
                 if retry_after:
@@ -796,18 +806,9 @@ class OpenAICompatAdapter(BaseAdapter):
                 )
                 await asyncio.sleep(wait_secs)
 
-        # All 3 attempts returned 429 — return the last response so the
-        # caller's status-code check surfaces the error normally.
-        logger.warning("[adapter] 429 from %s after 3 attempts — giving up", self._provider_name)
-        # Re-send to get a fresh response object (the previous one was closed)
-        request = self._client.build_request(
-            "POST",
-            url,
-            json=request_payload,
-            headers=req_headers,
-            timeout=req_timeout,
-        )
-        return await self._client.send(request, stream=True)
+        # The loop returns from every 429 attempt (permanent or final
+        # transient). This guard is defensive if the retry policy changes.
+        raise RuntimeError("429 retry loop exited without a response")
 
     # ─────────────────────────────────────────────────────────────────────
     # Properties
