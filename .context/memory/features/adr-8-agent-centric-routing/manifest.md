@@ -368,3 +368,19 @@ Four implementation phases (multi-session):
 - **Validation:** frontend **141 tests passed**, TypeScript/build passed,
   ESLint 0 errors / 64 existing warnings.
 - **Report:** `.context/memory/reviews/2026-08-14-review-8.md`.
+
+## Session 204 — Authoritative current time/date handling (completed)
+
+- **What:** corrected the parent-agent clock-query failure where a free-tier
+  model emitted rejected `shell(Get-Date)` before using sysinfo, then corrupted
+  the verified date during final synthesis.
+- **Implementation:** the parent contract now requires sysinfo exclusively for
+  current time/date/day questions; the AgentLoop corrects accidental shell clock
+  calls to sysinfo and returns the exact verified sysinfo line without a second
+  paraphrase call. Added focused regression coverage and environment guidance.
+- **Validation:** full CI passed with **1748 backend tests, 2 skipped**, Ruff/tsc
+  clean, and ESLint 0 errors / 64 existing warnings.
+- **Product commit:** `ef03365`.
+- **Report:** `.context/memory/reviews/2026-08-14-review-9.md`.
+- **Limitation:** no new live-provider smoke was run; no local provider
+  credentials were available/used.

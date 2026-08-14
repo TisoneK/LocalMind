@@ -1014,3 +1014,17 @@ backgrounds, panels, borders, secondary text, and status colors across the
 workspace. No component layout or behavior changed. Frontend validation passed
 with 141 tests, TypeScript/build clean, and ESLint 0 errors / 64 existing
 warnings. Review: `.context/memory/reviews/2026-08-14-review-8.md`.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 204)
+
+A live trace for `whats the time?` showed the LocalMind parent first emitting
+`shell(command="Get-Date")`, which the structured shell contract rejected, then
+calling `sysinfo` successfully while the final model paraphrase changed August
+14 to August 1. Strengthened the parent contract with an explicit sysinfo-only
+clock rule, added a narrow deterministic shell→sysinfo correction in both
+single- and multi-tool loop paths, and made successful clock queries terminate
+with the exact verified `Current date/time:` line. Added pure regression tests
+and updated environment guidance. Full CI passed with 1748 backend tests, 2
+skips, Ruff/tsc clean, and ESLint 0 errors / 64 existing warnings. Product
+commit: `ef03365`; review: `.context/memory/reviews/2026-08-14-review-9.md`.

@@ -2876,3 +2876,15 @@ program + ADR-22). -->
 - **Validation:** frontend 141 tests passed, TypeScript/build passed, ESLint 0 errors / 64 existing warnings.
 - **Report:** `.context/memory/reviews/2026-08-14-review-8.md`.
 - **Notes:** `.context/memory/sessions/2026-08-14-203/notes.md`.
+
+---
+## 2026-08-14 — Session 204
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Fix parent-agent current time/date handling after `whats the time?` emitted rejected `shell(Get-Date)` and corrupted the verified date during synthesis.
+- **Commits:** product `ef03365`; context closeout recorded separately after validation.
+- **Outcome:** done — current time/date/day requests now use authoritative sysinfo; accidental shell clock calls are corrected inside the parent loop, and successful clock results are returned unchanged.
+- **Validation:** focused 61 passed; full backend 1748 passed / 2 skipped; Ruff clean; frontend TypeScript clean; ESLint 0 errors / 64 existing warnings; `git diff --check` clean.
+- **Report:** `.context/memory/reviews/2026-08-14-review-9.md`.
+- **Limitation:** no new live-provider smoke; no local provider credentials were available/used.

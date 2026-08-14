@@ -442,3 +442,18 @@ if literally nothing slowed you down.
   commit command successfully.
 - **Prevent next time:** Keep heredoc commit messages free of shell-sensitive
   punctuation or use a quoted message without nested apostrophes.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 204)
+
+- **Problem:** The current-time regression needed to be fixed in a large
+  parent-loop module with multiple single-/multi-tool seams, and the first
+  focused test assertion used `August 1` as a substring that also matched the
+  valid `August 14` result.
+- **Cost:** One focused test failure and one small test correction; no product
+  behavior was lost.
+- **Cause:** The assertion checked a non-boundaried date prefix.
+- **Workaround / fix:** Changed the assertion to reject the complete invalid
+  date `August 1, 2026`; then reran focused, full, and CI validation.
+- **Prevent next time:** Use complete date tokens or regex boundaries when
+  asserting that one calendar date is absent from another date's text.
