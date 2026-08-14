@@ -46,9 +46,18 @@ protocol session; the dark-green brand identity is preserved throughout.
   — an existing plan now stays visible while tools run. Added
   `TodoList.test.tsx` (6 cases). Matches Todos.png. **All three
   user-screenshotted surfaces (Actions/Thinking/Todos) now shipped.**
-- [ ] S213 — Terminal panel realtime feel (`TerminalPanel`).
-- [ ] S214 — Agents workspace realtime feel (`AgentWorkspace`).
-- [ ] S215 — Shared motion/design polish sweep + reduced-motion a11y.
+- [x] **S213 — Alive left-panel action trace** (done 2026-08-14, `7392c73`):
+  `ActionHistory` (panel twin of the S210 chat timeline) — framer-motion
+  step enter, running-step emphasis (amber ring + pulsing numbered
+  badge), status-colored badges, reduced-motion. Added
+  `ActionHistory.test.tsx` (4). Re-scoped from "Terminal" — the 721-line
+  `TerminalPanel` is broad and already streams → backlog **B-2026-08-14-4**.
+- [ ] S214 — Agents workspace realtime feel (`AgentWorkspace`, 197 lines).
+- [ ] S215 — Shared motion primitive + a11y: extract the `motion.div`
+  enter + `useReducedMotion` guard now duplicated across ToolSteps /
+  ThinkingBlock / TodoList / ActionHistory into one component/hook;
+  consider an ADR.
+- [ ] (backlog) B-2026-08-14-4 — Terminal panel alive/realtime pass.
 
 ## Constraints / invariants (do not regress)
 

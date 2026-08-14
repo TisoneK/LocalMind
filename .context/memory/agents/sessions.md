@@ -2997,3 +2997,17 @@ program + ADR-22). -->
 - **Milestone:** all three user-screenshotted surfaces (Actions/Thinking/Todos) shipped across S210–212.
 - **Limitation:** live-app visual pass deferred (provider credential needed).
 - **Open items:** S213 Terminal, S214 Agents, S215 polish.
+
+---
+## 2026-08-14 — Session 213
+
+- **Agent:** Claude Code / claude-opus-4-8 | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** realtime-alive-ui (Session 4)
+- **Task:** Extend the alive motion vocabulary to the left-panel action trace (`ActionHistory`); triage terminal/agents.
+- **Commits:** 2 product (`7392c73` feat(ui), `3da8f72` docs) + 1 context closeout (SHA after push).
+- **Outcome:** done — `ActionHistory` now animates steps in (framer-motion), emphasises the running step (amber card ring + pulsing numbered badge), and colours done/failed badges; reduced-motion honoured; grouping unchanged. Backlogged the terminal pass (B-2026-08-14-4) as its own session — 721-line emulator, already streams, too broad for a bolt-on.
+- **Also:** `ActionHistory` had zero tests — added `ActionHistory.test.tsx` (4 cases).
+- **Validation:** frontend 165 passed (was 161); `tsc -b` clean; ESLint 0 errors / 64 warnings; `vite build` passes.
+- **Report:** `.context/memory/reviews/2026-08-14-review-18.md`.
+- **Limitation:** live-app visual pass deferred (provider credential needed).
+- **Open items:** B-2026-08-14-4 Terminal; S214 Agents; S215 shared motion primitive + a11y.

@@ -81,3 +81,20 @@ treatment): S213 `TerminalPanel`, S214 `AgentWorkspace`, S215 shared
 motion/a11y polish (extract the repeated framer-motion enter + reduced-
 motion guard into a shared primitive; consider an ADR). Each still needs
 a live-app visual pass once a provider credential is available.
+
+---
+## Session 213 (2026-08-14) — Alive left-panel action trace
+
+`ActionHistory`: framer-motion `AnimatePresence` enter per chain row,
+running-step emphasis (amber card ring + pulsing numbered badge),
+status-colored badges (green done / red failed), `useReducedMotion`,
+`isRunning()` helper. Grouping logic untouched. Added
+`ActionHistory.test.tsx` (4). 165 tests / tsc / lint(0 err) / build green.
+`7392c73` + changelog `3da8f72`.
+
+Triaged the remaining user-named surfaces: `TerminalPanel` (721 lines,
+already streams) is broad → backlogged as B-2026-08-14-4 (its own
+session). Remaining feature sessions: S214 `AgentWorkspace`, S215 shared
+motion primitive + a11y (extract the repeated `motion.div` enter +
+`useReducedMotion` guard now duplicated across ToolSteps/ThinkingBlock/
+TodoList/ActionHistory into one component/hook; consider an ADR).
