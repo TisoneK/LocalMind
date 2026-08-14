@@ -155,3 +155,56 @@ shape. File writing stays inline precisely because it *is* the reasoning task.
 2. Should the dispatcher be an "orchestrator with zero tools except spawning"
    (the radical Codebuff variant) or keep direct trivial-reply capability?
    LocalMind's current direction: keep direct replies (ADR-14 fan-out #1).
+
+## 10. Official contract verification (2026-08-14, Session 196)
+
+The uploaded Freebuff/Codebuff research was checked against the official
+Codebuff documentation and published agent definitions. The verified core
+contract is:
+
+- An agent definition owns `model`, `toolNames`, `spawnableAgents`,
+  `spawnerPrompt`, `systemPrompt`, `instructionsPrompt`, optional
+  `includeMessageHistory`, and an output mode/schema.
+- The exact spawn payload is
+  `spawn_agents({ agents: [{ agent_type, prompt?, params? }] })`.
+  Multiple entries run in parallel; the child allowlist comes from
+  `spawnableAgents`.
+- `handleSteps` can yield deterministic tool calls, `STEP`, or `STEP_ALL`;
+  `set_output` returns a structured result to the parent.
+- Child history is isolated by default (`includeMessageHistory: false`), while
+  specific agents opt into history. Published examples confirm specialized
+  contracts: file-picker uses `find_files`, code-searcher uses `code_search` +
+  `set_output`, reviewer uses only `run_file_change_hooks` + `end_turn`, and
+  context-pruner uses `set_messages`.
+- Freebuff's public README confirms specialized agents and isolated parallel
+  Desktop workspaces, but that workspace isolation is a product-surface claim;
+  it should not be confused with generic parallel child execution.
+
+The uploaded claims about Google A2A endpoints, `/api/v1/agent-runs`,
+`codebuff_metadata`, and `ancestorRunIds` were not found in the official sources
+reviewed. Third-party reverse-engineering/proxy pages mention similar private
+transport details, but they are not implementation requirements for LocalMind.
+
+LocalMind already has the durable equivalents that matter: scoped directory
+agents, per-agent model routing, immutable bounded delegation packets, handoff
+and parallel delegation, an inline context-pruner, fixed reviewer output schema,
+parent/child run IDs, and final-output-only child message histories. Remaining
+follow-ups are tracked as B-2026-08-14-1 (legacy heuristic removal),
+B-2026-08-14-2 (parallel workspace safety), and B-2026-08-14-3 (bounded parent
+result content).
+
+### Official references
+
+- https://www.codebuff.com/docs/agents/overview
+- https://www.codebuff.com/docs/walkthroughs/creating-your-first-agent
+- https://www.codebuff.com/docs/advanced/sdk
+- https://www.codebuff.com/publishers/codebuff/agents/base/0.0.18
+- https://www.codebuff.com/publishers/codebuff/agents/researcher-file-explorer/0.0.3
+- https://www.codebuff.com/publishers/codebuff/agents/file-picker/0.0.4
+- https://www.codebuff.com/publishers/codebuff/agents/code-searcher/0.0.19
+- https://www.codebuff.com/publishers/codebuff/agents/reviewer/0.0.10
+- https://www.codebuff.com/publishers/codebuff/agents/context-pruner/0.0.22
+- https://www.codebuff.com/publishers/codebuff/agents/editor/0.0.6
+- https://www.codebuff.com/publishers/codebuff/agents/thinker-best-of-n-gpt-5/0.0.15
+- https://github.com/CodebuffAI/freebuff
+- https://news.codebuff.com/p/codebuff-goes-open-source-beats-claude
