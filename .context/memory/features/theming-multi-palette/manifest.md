@@ -3,7 +3,7 @@
 
 - **Slug:** theming-multi-palette
 - **Started:** 2026-08-14 (Session 217)
-- **Status:** active
+- **Status:** COMPLETE (S217-219 shipped) — palettes are v1, tunable in globals.css anchors; a human visual pass per palette is the only follow-up
 - **Ledger:** see `.context/memory/features/ledger.md`
 
 ## Goal
@@ -29,8 +29,11 @@ ZERO component changes. Applied via `<html data-theme data-mode>`. ANSI
   `useTheme` hook (persist + apply data-attrs + system matchMedia), no-flash
   init script in index.html, Appearance section in SettingsModal (3 theme
   cards + Light/Dark/System). +5 tests; init path browser-verified.
-- [ ] S219 — light-mode contrast sweep + hunt hardcoded hex that dodges
-  the tokens (grep components for literal `#`/`rgb(`); real visual pass.
+- [x] **S219 — light-mode color correctness** (done 2026-08-14, `6979fe3`):
+  swept components for non-token colors — fixed AgentPhases (hardcoded
+  `*-400` + 3 undefined `brand-muted` classes that rendered no color) and
+  FileExplorer hover text-white + invisible `bg-white/[0.0x]` hovers.
+  Left correct-in-both modal backdrops + shadcn button text.
 
 ## Constraints
 - Zero component churn (anchor mapping preserves `--brand-*` names).

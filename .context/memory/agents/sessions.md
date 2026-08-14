@@ -3075,3 +3075,15 @@ program + ADR-22). -->
 - **Validation:** `useTheme.test.ts` (5) + browser-verified no-flash init (iris/light pre-paint); 178 tests / tsc / build green; ESLint 0 errors.
 - **Report:** `.context/memory/reviews/2026-08-14-review-23.md`.
 - **Open items:** S219 light-mode contrast sweep + hardcoded-hex hunt.
+
+---
+## 2026-08-14 — Session 219
+
+- **Agent:** Claude Code / claude-opus-4-8 | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** theming-multi-palette (Session 3 — completes the feature)
+- **Task:** Light-mode color correctness — remove hardcoded colors that bypass the token system.
+- **Commits:** 2 product (`6979fe3` fix(ui), `b4fbfd7` docs) + 1 context closeout (SHA after push).
+- **Outcome:** done — fixed AgentPhases (hardcoded `*-400` + 3 UNDEFINED `brand-muted` classes that rendered no color — latent bug), FileExplorer hover text-white (invisible on light), and `bg-white/[0.0x]` hovers. Modal backdrops + shadcn button text left (correct both modes). theming-multi-palette now COMPLETE.
+- **Validation:** tsc clean; 178 tests; ESLint 0 errors; build green.
+- **Report:** `.context/memory/reviews/2026-08-14-review-24.md`.
+- **Open items:** human visual/taste pass per palette (v1, tunable in globals.css).

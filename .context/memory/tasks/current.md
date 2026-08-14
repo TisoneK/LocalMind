@@ -1,12 +1,11 @@
 # Current Task
 
-- **Session:** 219
-- **Feature:** theming-multi-palette
-- **Agent:** Claude Code / claude-opus-4-8 | **Platform:** macOS 15
-- **Role:** engineer
-- **Target:** S219 — light-mode correctness: grep all components for
-  hardcoded hex/rgb/rgba/oklch colors that bypass the token system and
-  fix them to use `--brand-*`/anchor tokens (they break in light mode);
-  spot-check contrast. Themes are already selectable (S217/S218).
-- **Status:** in progress
-- **Push policy:** push to main after each commit.
+No active task.
+
+The next session must read `.context/kickoff.md` before starting work.
+
+Last: Session 219 (Claude Code / claude-opus-4-8) — completed the
+`theming-multi-palette` feature (S217-219): 3 palettes (Graphite, Midnight
+Iris, Warm Ink) × light/dark, selectable in Settings, persisted, no-flash.
+Palettes are v1 and tunable purely in the `globals.css` anchor blocks; a
+human visual/taste pass per palette is the only follow-up.

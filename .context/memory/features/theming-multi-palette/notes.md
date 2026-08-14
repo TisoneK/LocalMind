@@ -31,3 +31,18 @@ section (3 theme cards + Light/Dark/System toggle). Browser-verified the
 no-flash init (iris/light applied pre-paint on reload). 178 tests / tsc /
 build green. `810323b` + changelog `fdac625`. Next S219: light-mode
 contrast sweep + grep components for hardcoded hex/rgb that dodge tokens.
+
+## Session 219 (2026-08-14) — light-mode color correctness (feature COMPLETE)
+Grepped `src/components` for non-token colors. Fixed AgentPhases
+(`text-*-400` → brand tokens; undefined `text-brand-muted/60`,
+`text-brand-fg-muted`, `text-brand-muted/70` → real tokens — these
+rendered NO color, a latent bug), FileExplorer `group-hover:text-white`
+→ `text-brand-green`, and `bg-white/[0.0x]` hovers → `bg-brand-border/4x`.
+Kept modal `bg-black/50` backdrops + shadcn filled-button `text-white`
+(correct both modes). 178 tests / tsc / build green. `6979fe3`.
+
+**FEATURE COMPLETE (S217-219):** 3 palettes × light/dark, Settings-
+selectable + persisted + no-flash. Palettes are v1 — a human visual/taste
+pass per palette (esp. warm-light muddiness, accent contrast on light) is
+the only remaining follow-up, tunable purely in the globals.css anchor
+blocks. Grep to re-audit: `grep -rnE '#[0-9a-fA-F]{6}|bg-white/|-(blue|green|amber|red|purple)-[0-9]{3}' frontend/src/components`.
