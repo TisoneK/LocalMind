@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Terminal, Eye, Brain, PanelRightClose, PanelRight, Settings } from 'lucide-react';
-import { TerminalLine, ObservationData, CapabilitiesData, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, SessionStats } from '@/types';
+import { TerminalLine, ObservationData, CapabilitiesData, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, SessionStats, AgentRun } from '@/types';
 import { TerminalPanel } from '@/components/panels/TerminalPanel';
 import { ObservabilityTab } from '@/components/panels/ObservabilityTab';
+import { AgentWorkspace } from '@/components/panels/AgentWorkspace';
 import { MemoryTab } from '@/components/panels/MemoryTab';
 import { PerformanceMetrics } from '@/components/panels/PerformanceMetrics';
 import { SettingsModal } from '@/components/shared/SettingsModal';
@@ -32,6 +33,10 @@ interface RightPanelProps {
   isStreaming?: boolean;
   /** Cumulative per-chat totals (stats split) */
   sessionStats?: SessionStats | null;
+  /** Live parent/child run tree for the Agent workspace. */
+  agentRuns?: AgentRun[];
+  /** Whether the parent loop is currently streaming. */
+  agentStreaming?: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
   /** FIX 4: Force the terminal tab to be active when agent runs shell/code_exec */
@@ -43,7 +48,7 @@ interface RightPanelProps {
   onModelsRefresh?: () => Promise<void>;
 }
 
-type RightTab = 'terminal' | 'observability' | 'memory' | 'actions';
+type RightTab = 'terminal' | 'observability' | 'memory' | 'agents';
 
 export function RightPanel({
   terminalLines,
@@ -64,6 +69,8 @@ export function RightPanel({
   elapsedMs,
   isStreaming,
   sessionStats,
+  agentRuns = [],
+  agentStreaming = false,
   collapsed,
   onToggleCollapse,
   forceTerminalTab,
@@ -103,6 +110,7 @@ export function RightPanel({
   const tabs: { id: RightTab; label: string; icon: React.ReactNode }[] = [
     { id: 'terminal', label: 'Terminal', icon: <Terminal className={iconSize} /> },
     { id: 'observability', label: 'Observe', icon: <Eye className={iconSize} /> },
+    { id: 'agents', label: 'Agents', icon: <PanelRight className={iconSize} /> },
     { id: 'memory', label: 'Memory', icon: <Brain className={iconSize} /> },
   ];
 
@@ -192,6 +200,7 @@ export function RightPanel({
           />
         )}
         {activeTab === 'observability' && <ObservabilityTab observation={observation} capabilities={capabilities} />}
+        {activeTab === 'agents' && <AgentWorkspace runs={agentRuns} isStreaming={agentStreaming} />}
         {activeTab === 'memory' && <MemoryTab facts={memoryFacts} onDelete={onMemoryDelete} />}
       </div>
 

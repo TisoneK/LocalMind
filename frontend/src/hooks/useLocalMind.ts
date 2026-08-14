@@ -37,6 +37,7 @@ import type {
   Objective,
   SessionStats,
   AgentPhase,
+  AgentRun,
 } from '@/types';
 
 // ─── Session stats (stats split — bottom-right corner) ────────────────────
@@ -194,6 +195,7 @@ interface ChatState {
   currentIntent?: string;
   currentConfidence?: number;
   activeToolCalls: ToolCall[];
+  agentRuns: AgentRun[];
   liveObservation: ObservationData | null;
   lastMetrics: PerformanceMetrics | null;
   elapsedMs: number;
@@ -210,6 +212,28 @@ interface ChatState {
   onTerminalEvent?: (event: TerminalEventData) => void;
 }
 
+function updateAgentRun(runs: AgentRun[], runId: string, patch: Partial<AgentRun>): AgentRun[] {
+  return runs.map((run) => run.id === runId ? { ...run, ...patch } : run);
+}
+
+function attachToolToAgentRun(runs: AgentRun[], rootRunId: string, tool: ToolCall): AgentRun[] {
+  const target = tool.runId
+    ? runs.find((run) => run.id === tool.runId)
+    : tool.agent
+      ? [...runs].reverse().find((run) => run.role !== 'parent' && run.name === tool.agent && run.status === 'running')
+      : undefined;
+  const targetId = (target || runs.find((item) => item.id === rootRunId))?.id;
+  if (!targetId) return runs;
+  return runs.map((run) => {
+    if (run.id !== targetId) return run;
+    const existingIndex = run.tools.findIndex((item) => item.id === tool.id);
+    const tools = [...run.tools];
+    if (existingIndex >= 0) tools[existingIndex] = { ...tools[existingIndex], ...tool };
+    else tools.push(tool);
+    return { ...run, tools };
+  });
+}
+
 export function useChat(
   sessionId: string | null,
   onTerminalEvent?: (event: TerminalEventData) => void
@@ -219,6 +243,7 @@ export function useChat(
   const [currentIntent, setCurrentIntent] = useState<string | undefined>();
   const [currentConfidence, setCurrentConfidence] = useState<number | undefined>();
   const [activeToolCalls, setActiveToolCalls] = useState<ToolCall[]>([]);
+  const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [liveObservation, setLiveObservation] = useState<ObservationData | null>(null);
   const [lastMetrics, setLastMetrics] = useState<PerformanceMetrics | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -431,6 +456,7 @@ export function useChat(
           setCurrentIntent(undefined);
           setCurrentConfidence(undefined);
           setActiveToolCalls([]);
+          setAgentRuns([]);
           // B-2026-08-09-3: don't let the previous session's metrics attach
           // to a different session's messages on the next turn.
           setLastMetrics(null);
@@ -444,11 +470,12 @@ export function useChat(
       // Clear stale data from the previous session immediately so the
       // Observe/Actions panels don't show the old session's data while
       // the new history loads.
-      if (prevSessionIdRef.current && prevSessionIdRef.current !== sessionId) {
+      if (prevSessionIdRef.current !== sessionId) {
         setLiveObservation(null);
         setCurrentIntent(undefined);
         setCurrentConfidence(undefined);
         setActiveToolCalls([]);
+        setAgentRuns([]);
         // B-2026-08-09-3: clearing lastMetrics on session switch prevents the
         // attach-on-complete effect from stamping the OLD session's turn
         // metrics onto the newly loaded history's last message (review fix).
@@ -551,6 +578,18 @@ export function useChat(
       setLastMetrics(null);
       setActiveToolCalls([]);
       setLiveObservation(null);
+      const rootRunId = `parent-${Date.now()}`;
+      const runTree: AgentRun[] = [{
+        id: rootRunId,
+        name: 'parent',
+        role: 'parent',
+        task: message,
+        status: 'running',
+        depth: 0,
+        startedAt: Date.now(),
+        tools: [],
+      }];
+      setAgentRuns([...runTree]);
 
       let currentContent = '';
       let thinkingContent = '';
@@ -715,6 +754,8 @@ export function useChat(
                   iteration: tc.iteration !== undefined && tc.iteration !== '' ? Number(tc.iteration) : undefined,
                   todoId: tc.todo_id as string | undefined,
                   reasoning: tc.thought || tc.reasoning,
+                  agent: tc.agent || undefined,
+                  runId: tc.run_id || tc.runId || undefined,
                   timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
                 };
                 // Deduplicate by ID: if a tool_call with the same ID already
@@ -744,6 +785,7 @@ export function useChat(
                   toolsUsedSet.add(toolCall.name);
                 }
                 setActiveToolCalls([...toolCalls]);
+                setAgentRuns((prev) => attachToolToAgentRun(prev, rootRunId, toolCall));
                 setLiveObservation((prev) => ({
                   intent: _toolToIntent(toolCall.name, prev?.intent || currentIntent || 'chat') as any,
                   confidence: prev?.confidence ?? currentConfidence ?? 0,
@@ -790,6 +832,7 @@ export function useChat(
                   toolsUsedSet.add(toolCall.name);
                 }
                 setActiveToolCalls([...toolCalls]);
+                setAgentRuns((prev) => attachToolToAgentRun(prev, rootRunId, toolCalls[idx !== -1 ? idx : toolCalls.length - 1]));
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
@@ -884,6 +927,26 @@ export function useChat(
                   const delId = `delegation-${obsDel.run_id || agentName}`;
                   const delName = `delegate→${agentName}`;
                   if (obs.type === 'delegation_started') {
+                    const childRunId = String(obsDel.run_id || `child-${agentName}-${Date.now()}`);
+                    const childTask = String(obsDel.task || '');
+                    const childDepth = Number(obsDel.depth || 1);
+                    setAgentRuns((prev) => {
+                      if (prev.some((run) => run.id === childRunId)) return prev;
+                      return [
+                        ...prev,
+                        {
+                          id: childRunId,
+                          name: agentName,
+                          role: 'child' as const,
+                          parentId: rootRunId,
+                          task: childTask,
+                          status: 'running' as const,
+                          depth: childDepth,
+                          startedAt: Date.now(),
+                          tools: [],
+                        },
+                      ];
+                    });
                     const delCall: ToolCall = {
                       id: delId,
                       name: delName,
@@ -899,6 +962,17 @@ export function useChat(
                     }
                     setActiveToolCalls([...toolCalls]);
                   } else {
+                    const childRunId = String(obsDel.run_id || `child-${agentName}`);
+                    const childStatus = obsDel.status === 'completed'
+                      ? 'completed' as const
+                      : obsDel.status === 'timed_out'
+                        ? 'timed_out' as const
+                        : 'failed' as const;
+                    setAgentRuns((prev) => updateAgentRun(prev, childRunId, {
+                      status: childStatus,
+                      completedAt: Date.now(),
+                      error: obsDel.error_type ? String(obsDel.error_type) : undefined,
+                    }));
                     const doneStatus = obsDel.status === 'completed' ? 'done' as const : 'failed' as const;
                     const doneIdx = toolCalls.findIndex((t) => t.id === delId);
                     if (doneIdx !== -1) {
@@ -1404,6 +1478,10 @@ export function useChat(
           streamStartedAtRef.current = null;
           streamingSessionRef.current = null;
           abortRef.current = null;
+          setAgentRuns((prev) => updateAgentRun(prev, rootRunId, {
+            status: 'completed',
+            completedAt: Date.now(),
+          }));
           // Finalize the closure-owned list synchronously, then publish the
           // same snapshot to both the Actions state and assistant message.
           // Reading values populated inside a React state updater here is racy:
@@ -1439,6 +1517,11 @@ export function useChat(
           streamStartedAtRef.current = null;
           streamingSessionRef.current = null;
           abortRef.current = null;
+          setAgentRuns((prev) => updateAgentRun(prev, rootRunId, {
+            status: 'failed',
+            completedAt: Date.now(),
+            error: 'The parent agent stream failed.',
+          }));
           setMessages((prev) => {
             const updated = [...prev];
             const last = updated[updated.length - 1];
@@ -1483,6 +1566,10 @@ export function useChat(
     streamingSessionRef.current = null;
     setIsStreaming(false);
     streamStartedAtRef.current = null;
+    setAgentRuns((prev) => prev.map((run) => run.status === 'running'
+      ? { ...run, status: 'canceled' as const, completedAt: Date.now() }
+      : run
+    ));
     // Mark any running tool calls as done on abort
     setActiveToolCalls((prev) => {
       const hasRunning = prev.some((tc) => isActiveToolStatus(tc.status));
@@ -1495,7 +1582,7 @@ export function useChat(
     });
   }, []);
 
-  return { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, onTerminalEvent };
+  return { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, onTerminalEvent };
 }
 
 // ─── Prompt leak detection (FIX 1) ────────────────────────────────────

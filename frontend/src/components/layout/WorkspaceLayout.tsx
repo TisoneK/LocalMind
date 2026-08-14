@@ -116,7 +116,7 @@ export function WorkspaceLayout() {
   // Hook data — useChat receives the terminal event callback
   const health = useHealth();
   const { sessions, refresh: refreshSessions, deleteSession } = useSessions();
-  const { messages, isStreaming, currentIntent, activeToolCalls, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages } =
+  const { messages, isStreaming, currentIntent, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files } = useFileTree();
@@ -403,6 +403,8 @@ export function WorkspaceLayout() {
           elapsedMs={elapsedMs}
           isStreaming={isStreaming}
           sessionStats={sessionStats}
+          agentRuns={agentRuns}
+          agentStreaming={isStreaming}
           collapsed={rightPanelCollapsed}
           onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
           forceTerminalTab={forceTerminalTab}

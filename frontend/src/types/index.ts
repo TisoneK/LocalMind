@@ -5,6 +5,10 @@ export type IntentType = 'code' | 'file' | 'chat' | 'search' | 'shell' | 'memory
 export interface ToolCall {
   id: string;
   name: string;
+  /** Name of the delegated child agent when this is child progress. */
+  agent?: string;
+  /** Parent/child run identifier when supplied by the runtime. */
+  runId?: string;
   label?: string;
   status: ToolStatus;
   input: string;
@@ -25,6 +29,23 @@ export interface ThinkingStep {
   id: string;
   content: string;
   collapsed: boolean;
+}
+
+/** One visible parent or delegated child execution in the agent workspace. */
+export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'timed_out' | 'canceled';
+
+export interface AgentRun {
+  id: string;
+  name: string;
+  role: 'parent' | 'child' | 'parallel';
+  parentId?: string;
+  task?: string;
+  status: AgentRunStatus;
+  depth: number;
+  startedAt: number;
+  completedAt?: number;
+  error?: string;
+  tools: ToolCall[];
 }
 
 export interface PendingWrite {
