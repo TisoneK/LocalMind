@@ -384,3 +384,18 @@ Four implementation phases (multi-session):
 - **Report:** `.context/memory/reviews/2026-08-14-review-9.md`.
 - **Limitation:** no new live-provider smoke was run; no local provider
   credentials were available/used.
+
+## Session 205 — Live parent-agent interaction during slow tools (completed)
+
+- **What:** kept the user-facing chat active while the parent agent waited on a
+  slow model or tool instead of hiding all progress until the next engine chunk.
+- **Implementation:** shielded SSE wait timeouts, selective observation draining,
+  heartbeat-flushed parent tool/terminal events, bounded parent results, and
+  preserved delegated child-output privacy. No frontend transport change was
+  needed because the existing UI already renders these event types.
+- **Validation:** backend **1751 passed, 2 skipped**; frontend **141 passed**;
+  TypeScript/build/Ruff clean; ESLint 0 errors / 64 existing warnings.
+- **Product commit:** `6538296`.
+- **Report:** `.context/memory/reviews/2026-08-14-review-10.md`.
+- **Limitation:** no live-provider smoke was run; local provider credentials
+  were unavailable.

@@ -1026,5 +1026,26 @@ clock rule, added a narrow deterministic shell→sysinfo correction in both
 single- and multi-tool loop paths, and made successful clock queries terminate
 with the exact verified `Current date/time:` line. Added pure regression tests
 and updated environment guidance. Full CI passed with 1748 backend tests, 2
-skips, Ruff/tsc clean, and ESLint 0 errors / 64 existing warnings. Product
-commit: `ef03365`; review: `.context/memory/reviews/2026-08-14-review-9.md`.
+skips, Ruff/tsc clean, and ESLint 0 errors / 64 existing warnings.Product commit: `ef03365`; review: `.context/memory/reviews/2026-08-14-review-9.md`.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 205)
+
+The user reported that LocalMind invoked tools and then went silent while
+waiting for a slow result. The existing SSE comments kept the connection alive
+but did not expose observations because `chat.py` drained `ObsCollector` only
+after `Engine.process()` yielded another chunk.
+
+Added a shielded `_with_keepalives()` transport iterator and selective
+`ObsCollector.drain_matching()`. During a timeout, the route now flushes
+`tool_call`, `tool_status`, and `terminal_output` events, including bounded
+parent results, while retaining unrelated planning/metrics events for the
+normal bridge. Delegated child progress remains visible, but child raw output
+is still filtered at the SSE presentation boundary. The existing frontend
+already handles these event types, so no frontend rewrite was needed.
+
+Regression coverage proves selective draining, heartbeat-time tool progress,
+parent result visibility, and delegated-output privacy. Full backend validation
+passed with 1751 tests / 2 skips; frontend had 141 tests, TypeScript/build/Ruff
+were clean, and ESLint had 0 errors / 64 existing warnings. Product commit:
+`6538296`; review: `.context/memory/reviews/2026-08-14-review-10.md`.

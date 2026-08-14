@@ -457,3 +457,19 @@ if literally nothing slowed you down.
   date `August 1, 2026`; then reran focused, full, and CI validation.
 - **Prevent next time:** Use complete date tokens or regex boundaries when
   asserting that one calendar date is absent from another date's text.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 205)
+
+- **Problem:** The first live-SSE implementation added a shielded pending task,
+  but tool observations still remained queued until the next engine chunk.
+- **Cost:** One implementation pass and an additional selective-drain helper
+  were needed before the transport actually exposed tool results during a slow
+  operation.
+- **Cause:** Connection keepalive and user-visible progress were treated as the
+  same concern; a comment heartbeat does not flush application observations.
+- **Workaround / fix:** Added `ObsCollector.drain_matching()` and a heartbeat
+  bridge for tool/terminal events, leaving unrelated observations queued.
+- **Prevent next time:** When adding streaming heartbeats, test event ordering
+  while the producer is deliberately pending; an HTTP keepalive-only test is
+  insufficient.

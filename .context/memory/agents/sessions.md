@@ -2888,3 +2888,16 @@ program + ADR-22). -->
 - **Validation:** focused 61 passed; full backend 1748 passed / 2 skipped; Ruff clean; frontend TypeScript clean; ESLint 0 errors / 64 existing warnings; `git diff --check` clean.
 - **Report:** `.context/memory/reviews/2026-08-14-review-9.md`.
 - **Limitation:** no new live-provider smoke; no local provider credentials were available/used.
+
+---
+## 2026-08-14 — Session 205
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Keep the LocalMind parent agent visibly interacting with the user while slow tools/models are pending.
+- **Commits:** product `6538296`; context closeout committed separately.
+- **Outcome:** done — shielded SSE wait timeouts now flush pending parent tool/terminal progress and bounded parent results; delegated child raw output remains private; no frontend transport change was needed.
+- **Validation:** backend 1751 passed / 2 skipped; frontend 141 passed; TypeScript/build/Ruff clean; ESLint 0 errors / 64 existing warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review-10.md`.
+- **Notes:** `.context/memory/sessions/2026-08-14-205/notes.md`.
+- **Limitation:** no live-provider smoke; local provider credentials were unavailable.
