@@ -17,7 +17,12 @@ import {
   ListChecks,
 } from 'lucide-react';
 import { useState } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ActionItem } from '@/types';
+
+function isRunning(status: ActionItem['status']): boolean {
+  return status === 'running' || status === 'started' || status === 'in_progress';
+}
 
 interface ActionHistoryProps {
   actions: ActionItem[];
@@ -123,10 +128,15 @@ function ActionCard({ action }: { action: ActionItem }) {
   const status = statusConfig[action.status] ?? statusConfig.pending;
   const hasBody = Boolean(action.output || action.error);
   const verbatim = action.input || action.detail || '';
+  const running = isRunning(action.status);
 
   return (
     <div
-      className="rounded border border-brand-border/60 overflow-hidden hover:border-brand-border transition-colors"
+      className={`rounded border overflow-hidden transition-colors ${
+        running
+          ? 'border-brand-amber/40 bg-brand-amber/[0.04] shadow-[0_0_0_1px_rgba(240,180,60,0.08)]'
+          : 'border-brand-border/60 hover:border-brand-border'
+      }`}
     >
       <button
         onClick={() => setExpanded(!expanded)}
@@ -230,6 +240,7 @@ function ActionCard({ action }: { action: ActionItem }) {
 }
 
 export function ActionHistory({ actions }: ActionHistoryProps) {
+  const reduceMotion = !!useReducedMotion();
   if (actions.length === 0) {
     return (
       <div className="px-2.5 py-4 text-center text-[10px] text-brand-green-muted">
@@ -279,17 +290,40 @@ export function ActionHistory({ actions }: ActionHistoryProps) {
 
           {/* Numbered chain — connector line + step badges */}
           <div className="relative">
-            {chain.map((action, i) => (
-              <div key={action.id} className="relative pl-6 pb-1.5">
-                <span className="absolute left-0 top-1.5 h-4 w-4 rounded-full border border-brand-border bg-brand-bg-base flex items-center justify-center text-[8px] font-mono text-brand-green-muted">
-                  {i + 1}
-                </span>
-                {i < chain.length - 1 && (
-                  <span className="absolute left-[7px] top-5 bottom-0 w-px bg-brand-border/70" />
-                )}
-                <ActionCard action={action} />
-              </div>
-            ))}
+            <AnimatePresence initial={false}>
+              {chain.map((action, i) => {
+                const running = isRunning(action.status);
+                return (
+                  <motion.div
+                    key={action.id}
+                    layout={!reduceMotion}
+                    initial={reduceMotion ? false : { opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={reduceMotion ? undefined : { opacity: 0 }}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    className="relative pl-6 pb-1.5"
+                  >
+                    <span
+                      className={`absolute left-0 top-1.5 h-4 w-4 rounded-full border flex items-center justify-center text-[8px] font-mono ${
+                        running
+                          ? `border-brand-amber/50 bg-brand-amber/15 text-brand-amber ${reduceMotion ? '' : 'animate-pulse'}`
+                          : action.status === 'done'
+                            ? 'border-brand-green/40 bg-brand-green/10 text-brand-green'
+                            : action.status === 'failed'
+                              ? 'border-brand-red/40 bg-brand-red/10 text-brand-red'
+                              : 'border-brand-border bg-brand-bg-base text-brand-green-muted'
+                      }`}
+                    >
+                      {i + 1}
+                    </span>
+                    {i < chain.length - 1 && (
+                      <span className="absolute left-[7px] top-5 bottom-0 w-px bg-brand-border/70" />
+                    )}
+                    <ActionCard action={action} />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
           </div>
         </div>
         ))}
