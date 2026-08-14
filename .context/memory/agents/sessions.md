@@ -2817,3 +2817,15 @@ program + ADR-22). -->
 - **Validation:** focused freshness suite 4 passed; full `sh scripts/ci-check.sh` passed with 1752 backend tests, Ruff clean, frontend TypeScript clean, and ESLint 0 errors / 64 existing warnings; `git diff --check` clean.
 - **Report:** `.context/memory/reviews/2026-08-14-review-3.md`.
 - **Open items:** prior ADR-8 follow-ups B-2026-08-14-1..3 remain open; no new backlog item.
+
+---
+## 2026-08-14 — Session 199
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Stop delegated child tool output from being presented directly to the user; preserve parent-agent interception and synthesis.
+- **Commits:** 1 product + 1 context closeout; SHAs recorded after push.
+- **Outcome:** done — the delegation path already returned complete child results to the parent loop, but `ChildObsProxy` forwarded raw child `tool_call.output` through the parent observability stream. Child output is now stripped before forwarding, while child progress remains visible. The chat SSE bridge adds a second filter for child-tagged calls and delegation envelopes; parent-owned output remains visible.
+- **Validation:** focused delegation/API tests 47 passed; full `sh scripts/ci-check.sh` passed with 1759 backend tests, Ruff clean, frontend TypeScript clean, ESLint 0 errors / 64 existing warnings; `git diff --check` clean.
+- **Report:** `.context/memory/reviews/2026-08-14-review-4.md`.
+- **Open items:** prior ADR-8 follow-ups B-2026-08-14-1..3 remain open.

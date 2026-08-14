@@ -914,6 +914,22 @@ Focused test passed; full CI passed with 1748 backend tests. No live provider
 call was needed after the failure was reproduced from the local call contract.
 
 ---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 199)
+
+The delegation trace separated two channels that had been conflated: the
+parent AgentLoop already consumed the complete child `ToolResult`, but the
+child observability proxy forwarded raw `tool_call.output` into the parent's
+SSE stream. That made intermediate child results appear directly to the user.
+
+`ChildObsProxy` now forwards only tagged progress metadata, retaining complete
+child events locally. The chat SSE boundary also hides output for child-tagged
+calls and delegation envelopes while preserving parent-owned tool output. The
+parent's internal result/synthesis contract is unchanged. Focused delegation
+and API tests: 47 passed; full CI: 1759 backend tests passed, Ruff and tsc
+clean, ESLint 0 errors / 64 existing warnings. Report:
+`.context/memory/reviews/2026-08-14-review-4.md`.
+
+---
 ## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 198)
 
 The Kitengela screenshot exposed a synthesis evidence-selection defect: search

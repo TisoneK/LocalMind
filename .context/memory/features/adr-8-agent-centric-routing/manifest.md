@@ -301,3 +301,16 @@ Four implementation phases (multi-session):
 - **Fix:** time-sensitive queries now parse explicit dates in numbered result blocks, filter non-current dated blocks when a same-day block exists, and return an honest gap report when dated evidence is stale-only. Undated and non-time-sensitive research remains unchanged.
 - **Tests:** `tests/core/test_synthesizer_freshness.py` — 4 focused tests; full backend **1752 green**, Ruff/tsc clean, ESLint 0 errors / 64 existing warnings.
 - **Report:** `.context/memory/reviews/2026-08-14-review-3.md`.
+
+## Session 199 — Delegated output interception (shipped)
+
+- **What:** preserved the parent-agent interception contract for delegation.
+  Child progress remains observable, but raw child tool output is no longer
+  forwarded into the user-facing Actions/SSE payload. The parent still receives
+  the complete delegated result internally and synthesizes the final answer.
+- **Files:** `core/obs.py` strips child output from forwarded `tool_call`
+  metadata; `api/routes/chat.py` applies a second SSE presentation filter;
+  delegation/API regression tests cover both boundaries.
+- **Validation:** focused delegation/API tests 47 passed; full backend **1759
+  green**, Ruff/tsc clean, ESLint 0 errors / 64 existing warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review-4.md`.

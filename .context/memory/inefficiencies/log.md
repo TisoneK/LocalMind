@@ -381,3 +381,18 @@ if literally nothing slowed you down.
 - **Cause:** Incremental test edits were validated before the fixture had reached its final contract.
 - **Workaround / fix:** Re-read the current test and implementation, reran the focused suite from the final working tree, then ran the full CI gate.
 - **Prevent next time:** Capture the full focused-test output on the first failure instead of relying on a progress summary, and rerun the focused suite after the final edit before starting the full gate.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 199)
+
+- **Problem:** The initial delegation trace had to distinguish the internal
+  parent `ToolResult` path from the separate observability/SSE path; treating
+  all child output as one channel would have either leaked raw results or
+  hidden useful progress.
+- **Cost:** One clarification turn and a targeted boundary review.
+- **Workaround / fix:** Kept complete child events in the child collector,
+  forwarded only progress metadata through `ChildObsProxy`, and added a second
+  SSE presentation filter for child-tagged/delegation events.
+- **Prevent next time:** When debugging agent interception, trace internal
+  tool messages and user-facing observability events separately before changing
+  the parent loop.
