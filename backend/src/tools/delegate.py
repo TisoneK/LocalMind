@@ -4,8 +4,8 @@ Delegate tool — ADR-8 Phase 3 (Session 34): agent-initiated delegation.
 Per ADR-8 Principle 3: "Agents collaborate — a coding task needing
 research delegates to the ResearchAgent — either parallel (both work
 simultaneously) or handoff (ResearchAgent returns results, CodingAgent
-continues). This replaces the current should_use_sub_agents() keyword
-heuristic with agent-initiated delegation."
+continues). This replaces the retired pre-loop keyword heuristic with agent-initiated
+delegation."
 
 This tool is the agent-initiated delegation primitive. Any agent with
 `delegate` in its allowed_tools can call:
@@ -18,8 +18,8 @@ runs it via `agent.run()`, and returns the sub-agent's response as the
 ToolResult content. The calling agent continues with the sub-agent's
 output in its context.
 
-Why this replaces should_use_sub_agents():
-- The OLD approach: a keyword heuristic in the engine decided whether
+Why this is the authoritative delegation path:
+- The retired approach: a keyword heuristic in the engine decided whether
   to decompose a task into sub-tasks BEFORE the agent loop ran. The
   model had no say in whether delegation was appropriate.
 - The NEW approach: the model decides to delegate mid-loop, based on

@@ -3624,104 +3624,14 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             # weather data → I'll search for 'Kitengela weather today'" and
             # that reasoning should appear in the thinking block.
 
-            # ── Sub-agent delegation for complex multi-domain tasks ────────────
-            # When the request is complex enough to need multiple specialized
-            # agents (e.g., "build a todo app and write a README"), we decompose
-            # the task and delegate to sub-agents instead of using the standard
-            # agent loop. This gives each sub-task a focused persona and
-            # restricted tool set, reducing hallucination and improving quality.
-            from core.agent.sub_agent import (
-                SubAgentRegistry,
-                decompose_task,
-                execute_sub_tasks,
-                should_use_sub_agents,
-            )
-
-            if should_use_sub_agents(message, effective_intent, confidence):
-                _obs.emit("sub_agent_delegation", intent=effective_intent.value)
-                logger.info(
-                    "[engine] sub-agent delegation for session=%s intent=%s",
-                    session_id[:8],
-                    effective_intent.value,
-                )
-                try:
-                    _registry = SubAgentRegistry()
-                    sub_tasks = await decompose_task(message, _registry, active_adapter)
-                    if sub_tasks and len(sub_tasks) >= 2:
-                        _obs.emit("sub_agent_decomposed", task_count=len(sub_tasks))
-                        execution = await execute_sub_tasks(
-                            message=message,
-                            sub_tasks=sub_tasks,
-                            registry=_registry,
-                            adapter=active_adapter,
-                            obs=_obs,
-                        )
-                        if execution.success and execution.final_output:
-                            response_text = execution.final_output
-                            _clock.mark("generate", 0, "done")
-                            _clock.mark("execute", 0, "done")
-                            yield StreamChunk(text=response_text, done=False)
-                            yield StreamChunk(text="", done=True)
-
-                            # Persist assistant message
-                            self._persist_assistant_message(session_id, response_text)
-                            total_ms = round((time.monotonic() - t0) * 1000)
-                            self._metrics.record(
-                                effective_intent.value,
-                                latency_ms=total_ms,
-                                success=True,
-                            )
-                            _obs.emit(
-                                "turn_complete",
-                                intent=effective_intent.value,
-                                confidence=round(confidence, 2),
-                                tokens_approx=_approx_tokens(response_text),
-                                prompt_tokens_approx=_provider_usage.get("prompt_tokens", 0),
-                                provider_usage=dict(_provider_usage),
-                                total_latency_ms=total_ms,
-                                memory_facts=len(memory_facts),
-                                agent_mode=True,
-                                sub_agents=len(sub_tasks),
-                                synthesized=execution.synthesized,
-                            )
-                            # Post-response memory
-                            _safe_task(
-                                self._maybe_store_response_facts(
-                                    response_text,
-                                    session_id,
-                                    _obs,
-                                    user_message=message,
-                                )
-                            )
-                            # P12: Reflection on sub-agent results
-                            # Sub-agent results are especially prone to fabrication
-                            # because each sub-agent operates with limited context.
-                            # Run reflection to catch cross-agent inconsistencies.
-                            if REFLECT_ENABLED and effective_intent in REFLECT_INTENTS:
-                                _safe_task(
-                                    self._reflect_on_answer(
-                                        response_text,
-                                        effective_intent,
-                                        message,
-                                        session_id,
-                                        _obs,
-                                    )
-                                )
-                            return
-                        else:
-                            # Sub-agent execution failed — fall through to
-                            # standard agent loop as a recovery path.
-                            logger.info(
-                                "[engine] sub-agent execution failed — falling back to agent loop (session=%s)",
-                                session_id[:8],
-                            )
-                    # else: decomposition returned <2 tasks — not multi-domain,
-                    # fall through to standard agent loop.
-                except Exception as e:
-                    logger.warning(
-                        "[engine] sub-agent delegation error: %s — falling back to agent loop",
-                        e,
-                    )
+            # ADR-8: all agent orchestration starts in the selected parent
+            # AgentLoop. Cross-domain work is delegated by that agent through
+            # its scoped `delegate` / `delegate_parallel` tools, so the
+            # parent retains the full task context and synthesizes child
+            # results. The removed legacy path used a pre-loop keyword
+            # heuristic and a separate direct-chat sub-agent framework;
+            # keeping routing here authoritative prevents two orchestration
+            # systems from competing for the same request.
 
             # ── Small-model fast-paths for CODE_EXEC and MEMORY_OP ────────────
             # gemma3:1b / phi3:mini / ≤3B models cannot produce valid tool-call JSON.

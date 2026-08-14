@@ -14,7 +14,7 @@ Internals are split across sub-modules:
     search       — web-search result helpers (truncation, extractive summary)
     dispatch     — tool dispatch with exponential-backoff retry
     loop         — AgentLoop class (the actual think→act→observe→reflect cycle)
-    sub_agent    — sub-agent framework: decomposition, execution, synthesis (P9/P12)
+    delegation  — parent/child run context and delegation contracts
     orchestrator — AgentOrchestrator: the middle layer of the three-layer pipeline
                    (Chat Agent → Orchestrator → Execution Agent)
 """

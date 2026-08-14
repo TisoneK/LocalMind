@@ -196,9 +196,9 @@ the engine) are still in force and must not be regressed.
 2. **Wire `build_context()` into `BaseAgent.run()`** — playbook files
    finally reach the model. Highest-leverage piece. Backlog item
    already filed (Session 33).
-3. **Agent-initiated delegation** — replace `should_use_sub_agents()`
-   keyword heuristic with agent-initiated delegation (parallel or
-   handoff).
+3. **Agent-initiated delegation** — completed: the retired pre-loop
+   keyword heuristic is removed; agents delegate through scoped `delegate`,
+   `delegate_parallel`, and `delegate_inline` tools (parallel or handoff).
 4. **Task-type classifier** — replace or augment the intent classifier
    so "create hello world repo" routes to `task_type=coding` (not
    `intent=SHELL`).

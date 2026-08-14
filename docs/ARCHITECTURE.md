@@ -61,7 +61,7 @@ The central coordinator (`core/engine/`). The v4.0 pipeline has 6 layers:
 
 Key sub-modules:
 - **ThinkingDispatcher** (`core/thinking_dispatcher.py`) — the SOLE routing mechanism (no regex classifier). Uses LLM capability inference.
-- **AgentLoop** (`core/agent/loop.py`) — multi-turn agent with tool calling, verification, and parallel dispatch.
+- **AgentLoop** (`core/agent/loop.py`) — multi-turn parent agent with tool calling, verification, and delegation dispatch.
 - **ExecutionGraph** (`core/execution_graph.py`) — DAG-based parallel capability execution.
 - **Flywheel** (`core/flywheel.py`) — learns from routing outcomes to improve future dispatching.
 - **MetricsStore** (`core/metrics.py`) — aggregated p50/p95 latency per intent + tool success rates.
@@ -177,7 +177,7 @@ LocalMind/
 │   │   │   ├── agent/         Agent loop (multi-turn tool calling)
 │   │   │   │   ├── loop.py         AgentLoop
 │   │   │   │   ├── orchestrator.py AgentOrchestrator
-│   │   │   │   ├── sub_agent.py    Sub-agent dispatcher
+│   │   │   │   ├── delegation.py  Parent/child run context and delegation contracts
 │   │   │   │   ├── prompts.py      Agent system prompt builder
 │   │   │   │   ├── tool_dispatch.py Tool dispatch with retry
 │   │   │   │   ├── synthesizer.py  Multi-source synthesis

@@ -337,74 +337,37 @@ class TestP10ExpertPersonas:
         assert "memory" in prompt_lower or "fact" in prompt_lower or "store" in prompt_lower
 
 
-# ── P11: Sub-agent framework ──────────────────────────────────────────────
+# ── ADR-8: Agent-owned delegation routing ─────────────────────────────────
 
-class TestP11SubAgentFramework:
-    """Verify the sub-agent delegation and orchestration framework."""
+class TestAgentOwnedDelegationRouting:
+    """The parent agent owns cross-domain delegation; no legacy heuristic remains."""
 
-    def test_sub_agent_registry_has_four_agents(self):
-        from core.agent.sub_agent import SubAgentRegistry
-        registry = SubAgentRegistry()
-        agents = registry.list_agents()
-        assert len(agents) >= 4, f"Expected at least 4 sub-agents, found {len(agents)}"
+    def test_legacy_sub_agent_module_is_removed(self):
+        from pathlib import Path
 
-    def test_sub_agent_types_are_defined(self):
-        from core.agent.sub_agent import CODER_AGENT, OPERATOR_AGENT, RESEARCHER_AGENT, WRITER_AGENT
-        assert CODER_AGENT.name == "coder"
-        assert RESEARCHER_AGENT.name == "researcher"
-        assert WRITER_AGENT.name == "writer"
-        assert OPERATOR_AGENT.name == "operator"
+        module_path = Path(__file__).parents[2] / "backend" / "src" / "core" / "agent" / "sub_agent.py"
+        assert not module_path.exists()
 
-    def test_sub_agents_have_restricted_tools(self):
-        from core.agent.sub_agent import CODER_AGENT, RESEARCHER_AGENT, WRITER_AGENT
-        # Researcher should NOT have file_write or code_exec
-        assert "file_write" not in RESEARCHER_AGENT.allowed_tools
-        assert "code_exec" not in RESEARCHER_AGENT.allowed_tools
-        # Writer should NOT have web_search or shell
-        assert "web_search" not in WRITER_AGENT.allowed_tools
-        assert "shell" not in WRITER_AGENT.allowed_tools
-        # Coder should NOT have web_search
-        assert "web_search" not in CODER_AGENT.allowed_tools
+    def test_task_profile_selects_coding_agent_with_delegation_tools(self):
+        from agents import select_agent_by_task_profile
+        from core.models import Intent
 
-    def test_should_use_sub_agents_multi_domain(self):
-        from core.agent.sub_agent import should_use_sub_agents
-        # Multi-domain request: build + document
-        assert should_use_sub_agents(
-            "Build a todo app and write a README for it",
-            Intent.CODE_EXEC, 0.9
-        ) is True
+        agent_class = select_agent_by_task_profile("shell_command", Intent.SHELL)
+        assert agent_class is not None
+        config = agent_class(adapter=None).config()
+        assert config.name == "coding"
+        assert "delegate" in config.allowed_tools
+        assert "delegate_parallel" in config.allowed_tools
 
-    def test_should_use_sub_agents_simple_request(self):
-        from core.agent.sub_agent import should_use_sub_agents
-        # Simple single-intent request
-        assert should_use_sub_agents(
-            "What is 2+2?",
-            Intent.CHAT, 0.9
-        ) is False
+    def test_task_profile_selects_research_agent_for_web_search(self):
+        from agents import select_agent_by_task_profile
+        from core.models import Intent
 
-    def test_should_use_sub_agents_short_message(self):
-        from core.agent.sub_agent import should_use_sub_agents
-        # Too short for sub-agent overhead
-        assert should_use_sub_agents(
-            "hi",
-            Intent.CHAT, 0.9
-        ) is False
-
-    def test_should_use_sub_agents_search_and_code(self):
-        from core.agent.sub_agent import should_use_sub_agents
-        # Search + code pattern
-        assert should_use_sub_agents(
-            "Search for the latest Python web frameworks and write a comparison script",
-            Intent.CODE_EXEC, 0.9
-        ) is True
-
-    def test_sub_agent_feature_flag(self):
-        from core.agent.sub_agent import SUB_AGENT_ENABLED
-        assert SUB_AGENT_ENABLED is True, "Sub-agents should be enabled by default"
-
-    def test_sub_agent_max_subtasks_cap(self):
-        from core.agent.sub_agent import SUB_AGENT_MAX_SUBTASKS
-        assert SUB_AGENT_MAX_SUBTASKS <= 4, "Max subtasks should be capped at 4"
+        agent_class = select_agent_by_task_profile("web_search", Intent.WEB_SEARCH)
+        assert agent_class is not None
+        config = agent_class(adapter=None).config()
+        assert config.name == "research"
+        assert "delegate" in config.allowed_tools
 
 
 # ── P12: Cross-session memory warm-start ──────────────────────────────────
