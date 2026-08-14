@@ -448,6 +448,14 @@ function createTray() {
 // ---------------------------------------------------------------------------
 
 function createMainWindow() {
+  // ADR-34 B-11: deliberate LocalMind chrome.
+  // macOS: 'hiddenInset' keeps the native traffic lights but removes the
+  //   title text, letting our TitleBar component render in the inset space.
+  // Windows/Linux: keep the default frame for now — native min/max/close
+  //   buttons remain. The TitleBar component still renders as a header
+  //   strip but without custom window-control buttons (hasElectron=false
+  //   guard in the component).
+  const titleBarStyle = process.platform === 'darwin' ? 'hiddenInset' : 'default';
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -456,6 +464,7 @@ function createMainWindow() {
     title: 'LocalMind',
     backgroundColor: '#1a1a2e',
     show: false, // shown after backend is ready
+    titleBarStyle,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

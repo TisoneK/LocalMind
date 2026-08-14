@@ -206,7 +206,8 @@ describe('WorkspaceLayout', () => {
     expect(left.sessions).toEqual([]);
     expect(left.models).toHaveLength(1);
     expect(left.selectedModel).toBe('m1');
-    expect(left.objectives).toEqual([]);
+    // ADR-34 B-11: objective props are retired from the sidebar.
+    expect(left.objectives).toBeUndefined();
     expect(left.currentSessionId).toBeNull();
     // Callback props are all wired as functions.
     expect(typeof left.onSelectSession).toBe('function');

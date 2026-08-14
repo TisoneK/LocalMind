@@ -3189,3 +3189,16 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-14-11 (Chat-shell cleanup: title bar, duplicated tool cards, Autonomous work) is next.
 - **Report:** `.context/memory/reviews/2026-08-15-review-31.md`
 - **Notes:** The `useObservability` hook is retained — it feeds `CenterPanel.contextTokens` (the context-window occupancy meter), not the Observe tab. The Anomaly Alerts / Runtime Snapshot from ObservabilityTab can be re-extracted as reusable components in a future session if needed.
+
+---
+
+## 2026-08-15 — Session 228
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai) | **Platform:** Z.ai cloud sandbox (Linux 6.5) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-34-realtime-workspace
+- **Task:** B-2026-08-14-11 — Chat-shell cleanup (ADR-34 P2). Custom title bar, remove duplicated tool cards from chat, remove Autonomous Work block from sidebar.
+- **Commits:** 1 product (`feat(ui): custom title bar, compact chat tool chips, retire Autonomous Work block (ADR-34 B-11)`)
+- **Outcome:** done — (1) New `TitleBar.tsx` component with draggable header + Electron window controls (browser fallback hides them). `electron/main.js` sets `titleBarStyle: 'hiddenInset'` on macOS. (2) `ChatMessage.tsx` now passes `compact` to `<ToolSteps>` — chat shows chip-row status only; full detail lives in the Agent Workspace. (3) Removed `<ObjectivesPanel>` from LeftPanel + its props; `useObjectives` hook still runs for backend sync. 5 new TitleBar tests, 185 frontend tests pass, 1,725 backend tests pass.
+- **Open items:** B-2026-08-14-12 (Stage-specific prompt budget) is the last ADR-34 session.
+- **Report:** `.context/memory/reviews/2026-08-15-review-32.md`
+- **Notes:** Windows/Linux keep the default OS frame for now — macOS-only `hiddenInset` is the safe first step. The `ObjectivesPanel.tsx` file is kept dormant for potential re-mount behind a flag.

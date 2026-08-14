@@ -680,8 +680,13 @@ export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps)
               output. Previously the toolCalls array was populated by the SSE
               handler but never rendered, so the user saw only a spinner and
               then a wall of text — the agent's work was invisible. */}
+          {/* ADR-34 B-11: chat shows compact tool chips only — the full
+              expandable timeline + per-step code/output cards live in the
+              Agent Workspace (the canonical live surface per B-9). This
+              removes the duplication where the chat transcript mirrored the
+              Actions panel's detailed view. */}
           {message.toolCalls && message.toolCalls.length > 0 && (
-            <ToolSteps toolCalls={message.toolCalls} isStreaming={isStreaming} />
+            <ToolSteps compact toolCalls={message.toolCalls} isStreaming={isStreaming} />
           )}
 
           {/* ADR-20: canonical error card — a failed reply renders this

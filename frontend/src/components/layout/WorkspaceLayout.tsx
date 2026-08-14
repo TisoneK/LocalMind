@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { LeftPanel } from './LeftPanel';
 import { CenterPanel } from './CenterPanel';
 import { RightPanel } from './RightPanel';
+import { TitleBar } from './TitleBar';
 import { ToolExecutionEvent, ActionItem } from '@/types';
 import {
   useSessions,
@@ -120,7 +121,11 @@ export function WorkspaceLayout() {
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files } = useFileTree();
   const { todos, toggleTodo, addTodo } = useTodos(currentSessionId);
-  const { objectives, create: createObjective, pause: pauseObjective, resume: resumeObjective, cancel: cancelObjective } = useObjectives(currentSessionId);
+  // ADR-34 B-11: useObjectives keeps running for backend sync, but the
+  // sidebar no longer renders the ObjectivesPanel. The create/pause/resume/
+  // cancel functions are intentionally unused — the objective persistence
+  // layer stays warm for a future product decision.
+  useObjectives(currentSessionId);
   const { observation } = useObservability(currentSessionId);
   // ADR-34 B-10: useCapabilities() was retired — the Capability Catalog was
   // only rendered in the Observe tab, which is now removed.
@@ -337,7 +342,11 @@ export function WorkspaceLayout() {
   );
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-brand-bg-base">
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-brand-bg-base">
+      {/* ADR-34 B-11: deliberate LocalMind title-bar chrome */}
+      <TitleBar version="v0.5.16" />
+      {/* Three-panel workspace */}
+      <div className="flex flex-1 min-h-0">
       {/* Left Panel */}
       <div style={{ width: leftPanelWidth }} className="shrink-0 relative">
         <LeftPanel
@@ -345,11 +354,6 @@ export function WorkspaceLayout() {
           actions={actions}
           files={files}
           todos={todos}
-          objectives={objectives}
-          onCreateObjective={createObjective}
-          onPauseObjective={pauseObjective}
-          onResumeObjective={resumeObjective}
-          onCancelObjective={cancelObjective}
           activeToolCalls={activeToolCalls}
           models={models}
           selectedModel={effectiveModelId}
@@ -434,6 +438,7 @@ export function WorkspaceLayout() {
           width={rightPanelWidth}
           onModelsRefresh={refreshModels}
         />
+      </div>
       </div>
     </div>
   );
