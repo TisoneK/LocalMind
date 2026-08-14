@@ -396,3 +396,19 @@ if literally nothing slowed you down.
 - **Prevent next time:** When debugging agent interception, trace internal
   tool messages and user-facing observability events separately before changing
   the parent loop.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 200)
+
+- **Problem:** Several scoped `code_search` calls failed because the vendored
+  ripgrep executable path was unavailable, and combined reads of large context
+  files were truncated.
+- **Cost:** Minor navigation delay during the legacy-path trace.
+- **Cause:** The local Codebuff search wrapper's configured rg path was stale;
+  the repository's session logs and pipeline files are large.
+- **Workaround / fix:** Used one-directory searches where available, direct
+  bounded file windows, and read-only shell inspection (`grep`, `tail`, `sed`)
+  for large memory files. No product behavior depended on the failed searches.
+- **Prevent next time:** Start with bounded file windows and fall back quickly
+  to direct read-only shell inspection when the search wrapper reports a missing
+  vendored rg binary.

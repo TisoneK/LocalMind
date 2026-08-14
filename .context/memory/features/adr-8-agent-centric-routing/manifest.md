@@ -314,3 +314,16 @@ Four implementation phases (multi-session):
 - **Validation:** focused delegation/API tests 47 passed; full backend **1759
   green**, Ruff/tsc clean, ESLint 0 errors / 64 existing warnings.
 - **Report:** `.context/memory/reviews/2026-08-14-review-4.md`.
+
+## Session 200 — Legacy delegation path removed (shipped)
+
+- **What:** removed the pre-loop `should_use_sub_agents()` heuristic,
+  decomposition, and direct-chat sub-agent framework. The selected parent
+  AgentLoop is now the sole delegation entry point; cross-domain work uses its
+  scoped `delegate` / `delegate_parallel` / `delegate_inline` tools.
+- **Files:** `_pipeline.py` no longer imports or invokes the heuristic;
+  `core/agent/sub_agent.py` was deleted; stale docs and legacy tests were
+  replaced with parent-routing regressions.
+- **Validation:** focused delegation/routing tests 110 passed; full backend
+  **1753 green**, Ruff/tsc clean, ESLint 0 errors / 64 existing warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review-5.md`.

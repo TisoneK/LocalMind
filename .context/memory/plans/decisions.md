@@ -695,3 +695,25 @@ After the smoke test passes, test a multi-step task (e.g. "Create hello world re
 - **No-regression list:** Session 31/32 contracts; ADR-18/19 read paths (the hint appends after the failure/decision hints at the same merge point — the merge-point comment explicitly names Episodic as a future category routed there); Session 188/189 (deterministic social replies, SO_REUSEADDR port pre-check, PowerShell routing).
 - **Baseline (Session 190 start):** backend 1647 green. End: 1660 green (+13 tests), ruff clean.
 - **Builds on:** ADR-18 P2 (the Remember stage), ADR-19 P2 (durable table + read-hint pattern). Supersedes nothing.
+
+---
+## ADR-24: Parent AgentLoop is the sole delegation entry point (2026-08-14)
+
+- **Author:** Buffy / openai/gpt-5.6-luna (Session 200)
+- **Status:** accepted + implemented
+- **Context:** LocalMind had a modern ADR-8 path where a selected scoped agent
+  runs through `BaseAgent.run()` and can call `delegate`,
+  `delegate_parallel`, or `delegate_inline`. `_pipeline.py` also retained a
+  separate `should_use_sub_agents()` heuristic that could intercept complex
+  requests before the parent loop, run a legacy decomposition/direct-chat
+  framework, and return synthesized prose outside the parent context.
+- **Decision:** Remove the pre-loop heuristic and legacy decomposition framework.
+  Task-profile routing selects the parent agent; that parent AgentLoop owns all
+  cross-domain delegation through its scoped delegation tools. Child results
+  return through the parent's internal tool context and the parent synthesizes
+  the final answer.
+- **Consequences:** There is one orchestration contract, no duplicate
+  decomposition LLM call, and no legacy direct-chat bypass. Future delegation
+  features must be implemented as scoped parent-agent tools or AgentLoop
+  behavior, not as engine-level keyword routing. Parallel workspace safety and
+  bounded child results remain separate follow-ups.

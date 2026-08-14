@@ -930,6 +930,24 @@ clean, ESLint 0 errors / 64 existing warnings. Report:
 `.context/memory/reviews/2026-08-14-review-4.md`.
 
 ---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 200)
+
+Session 200 traced the duplicate delegation architecture. `_pipeline.py` had
+one production caller of `should_use_sub_agents()`, which could intercept a
+complex request before the selected ADR-8 parent agent and run the legacy
+`SubAgentRegistry`/decomposer/direct-chat framework. The modern path already
+selected a scoped agent by task profile and exposed delegation tools inside its
+AgentLoop.
+
+Removed the legacy pipeline branch and deleted `core/agent/sub_agent.py`.
+Replaced its P11 heuristic tests with regressions asserting the old module is
+gone and Coding/Research task-profile selections expose parent-agent
+delegation tools. Backend search found zero legacy references. Focused tests
+passed 110; full CI passed 1753 backend tests, Ruff and tsc clean, ESLint 0
+errors / 64 existing warnings. ADR-24 records the sole-entry-point decision.
+Report: `.context/memory/reviews/2026-08-14-review-5.md`.
+
+---
 ## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 198)
 
 The Kitengela screenshot exposed a synthesis evidence-selection defect: search
