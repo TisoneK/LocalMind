@@ -293,3 +293,11 @@ Four implementation phases (multi-session):
   passed with **1748 backend tests**, Ruff clean, frontend TypeScript clean,
   and ESLint 0 errors / 64 existing warnings.
 - **Report:** `.context/memory/reviews/2026-08-14-review-2.md`.
+
+## Session 198 — Current-weather freshness guard (completed)
+
+- **Scope:** deterministic freshness enforcement at the web-search extraction and synthesis boundary.
+- **Finding:** a same-day August 14 search result and an older August 8 result reached synthesis together; the model selected the stale evidence. The machine clock and Git state were current.
+- **Fix:** time-sensitive queries now parse explicit dates in numbered result blocks, filter non-current dated blocks when a same-day block exists, and return an honest gap report when dated evidence is stale-only. Undated and non-time-sensitive research remains unchanged.
+- **Tests:** `tests/core/test_synthesizer_freshness.py` — 4 focused tests; full backend **1752 green**, Ruff/tsc clean, ESLint 0 errors / 64 existing warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review-3.md`.

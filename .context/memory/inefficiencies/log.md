@@ -372,3 +372,12 @@ if literally nothing slowed you down.
   calls for source navigation.
 - **Prevent next time:** Start runtime probes with the recorded venv path and
   keep each code search scoped to one directory.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 198)
+
+- **Problem:** The focused freshness test command returned non-zero several times while the new test fixture and import ordering were being adjusted; the historical progress output did not retain the failure details.
+- **Cost:** A few short reruns and inspections before the final focused suite passed.
+- **Cause:** Incremental test edits were validated before the fixture had reached its final contract.
+- **Workaround / fix:** Re-read the current test and implementation, reran the focused suite from the final working tree, then ran the full CI gate.
+- **Prevent next time:** Capture the full focused-test output on the first failure instead of relying on a progress summary, and rerun the focused suite after the final edit before starting the full gate.

@@ -912,3 +912,21 @@ trace schema change was needed. Added `tests/core/test_web_search_handler.py`
 to exercise the async handler with the exact keyword and verify terminal output.
 Focused test passed; full CI passed with 1748 backend tests. No live provider
 call was needed after the failure was reproduced from the local call contract.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 198)
+
+The Kitengela screenshot exposed a synthesis evidence-selection defect: search
+returned both an August 14 result and an August 8 result, but the model could
+choose the older snippet for an August 14 current-weather question. The clock
+and Git state were current; the missing contract was deterministic freshness
+handling between search output and synthesis.
+
+Added date-aware web-search extraction for time-sensitive queries. Numbered
+result blocks now parse month-name, ISO, and numeric dates. When a same-day
+block exists, explicitly dated non-current blocks are removed before
+sufficiency checking and synthesis. If all dated blocks are non-current, the
+synthesizer emits an honest gap report instead of presenting stale data as
+current. Added four regression tests. Full CI passed with 1752 backend tests;
+no real-model call was needed because the fix is a deterministic evidence
+filter, not an adapter or agent-loop change.

@@ -2805,3 +2805,15 @@ program + ADR-22). -->
 - **Validation:** focused test 1 passed; full `sh scripts/ci-check.sh` passed: 1748 backend tests, Ruff clean, frontend TypeScript clean, ESLint 0 errors / 64 existing warnings.
 - **Report:** `.context/memory/reviews/2026-08-14-review-2.md`.
 - **Open items:** none from the bug fix; prior ADR-8 follow-ups B-2026-08-14-1..3 remain open.
+
+---
+## 2026-08-14 — Session 198
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Prevent current-weather synthesis from presenting an older dated search result when a same-day result is available.
+- **Commits:** 1 product (`1fabb9e`) + 1 docs(review) (`8d2a2ce`) + 1 context closeout.
+- **Outcome:** done — added deterministic freshness-aware web-search extraction. Time-sensitive queries now parse dates in numbered result blocks, filter stale dated evidence when current evidence exists, and return an honest gap report for stale-only dated results. Ordinary undated/non-time-sensitive research remains unchanged.
+- **Validation:** focused freshness suite 4 passed; full `sh scripts/ci-check.sh` passed with 1752 backend tests, Ruff clean, frontend TypeScript clean, and ESLint 0 errors / 64 existing warnings; `git diff --check` clean.
+- **Report:** `.context/memory/reviews/2026-08-14-review-3.md`.
+- **Open items:** prior ADR-8 follow-ups B-2026-08-14-1..3 remain open; no new backlog item.
