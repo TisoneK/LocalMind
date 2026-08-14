@@ -1,14 +1,34 @@
 <!DOCTYPE html>
 <!--
-  LocalMind is a dark-only app: the dark palette is defined as the default
-  in globals.css :root (light variables and the `.dark` variant machinery
-  were removed in the theming decision, Session 103).
+  LocalMind ships three palettes (graphite | iris | warm) in light and dark
+  (theming-multi-palette, Sessions 217-218; the Session-103 dark-only
+  decision was reversed). The inline script below applies the user's stored
+  choice to <html> before first paint so there is no theme flash; useTheme.ts
+  is the runtime source of truth. Default = graphite dark.
 -->
-<html lang="en">
+<html lang="en" data-theme="graphite" data-mode="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LocalMind</title>
+    <script>
+      (function () {
+        try {
+          var el = document.documentElement;
+          var raw = localStorage.getItem('localmind-theme');
+          var s = raw ? JSON.parse(raw) : null;
+          var theme = s && ['graphite', 'iris', 'warm'].indexOf(s.theme) >= 0 ? s.theme : 'graphite';
+          var mode = s && ['light', 'dark', 'system'].indexOf(s.mode) >= 0 ? s.mode : 'dark';
+          if (mode === 'system') {
+            mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          el.setAttribute('data-theme', theme);
+          el.setAttribute('data-mode', mode);
+        } catch (e) {
+          /* keep the html defaults */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit } from 'lucide-react';
+import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
+import { useTheme, THEMES, type ModePref } from '@/hooks/useTheme';
 
 // ── Provider definitions ──
 // Only `id` and `name` (display label) are hardcoded here — these are
@@ -62,7 +63,14 @@ interface SettingsModalProps {
 
 type Status = 'idle' | 'saving' | 'success' | 'error';
 
+const MODE_OPTIONS: { id: ModePref; label: string; icon: typeof Sun }[] = [
+  { id: 'light', label: 'Light', icon: Sun },
+  { id: 'dark', label: 'Dark', icon: Moon },
+  { id: 'system', label: 'System', icon: Monitor },
+];
+
 export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
+  const { theme, mode, setTheme, setMode } = useTheme();
   const [adapter, setAdapter] = useState('ollama');
   const [model, setModel] = useState('');
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
@@ -366,6 +374,62 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               <span>{message}</span>
             </div>
           )}
+
+          {/* ── Appearance ── */}
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <Palette className="h-4 w-4 text-brand-green" />
+              Appearance
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              Pick a color theme and light or dark mode. The change applies instantly.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTheme(t.id)}
+                  aria-pressed={theme === t.id}
+                  className={`flex flex-col items-start gap-1.5 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                    theme === t.id
+                      ? 'border-brand-green bg-brand-green/10'
+                      : 'border-brand-border hover:border-brand-green/30'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="h-3.5 w-3.5 rounded-full shrink-0"
+                      style={{ backgroundColor: t.swatch }}
+                    />
+                    <span className={`text-sm font-medium ${theme === t.id ? 'text-brand-green' : 'text-brand-green-soft'}`}>
+                      {t.label}
+                    </span>
+                  </span>
+                  <span className="text-[11px] leading-tight text-brand-green-muted">{t.blurb}</span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 inline-flex rounded-lg border border-brand-border p-0.5">
+              {MODE_OPTIONS.map((m) => {
+                const Icon = m.icon;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setMode(m.id)}
+                    aria-pressed={mode === m.id}
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      mode === m.id
+                        ? 'bg-brand-green/15 text-brand-green'
+                        : 'text-brand-green-muted hover:text-brand-green-soft'
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
 
           {/* ── Adapter Selection ── */}
           <section>
