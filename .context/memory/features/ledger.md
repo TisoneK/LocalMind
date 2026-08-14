@@ -19,3 +19,5 @@ archived or deleted **only after** its ledger line records the outcome
 - **adr-21-provider-agnostic-errors** — started 2026-08-12 · active · Session 169 (design + provider-envelope classifier) · finished —
 
 - **adr-19-task-aware-context** — started 2026-08-12 · **COMPLETE** — all phases shipped: P0 (Sessions 160-163) + P1 hierarchy/level-aware retrieval (177, 5f4f8a8) + P2 decision ledger (178, c348633) + P3 LLM value scoring opt-in (179, e2caafb) · full suite 1550 green · live smoke Zen-429 blocked (flaw log)
+
+- **realtime-alive-ui** — started 2026-08-14 · active · finished — (multi-session frontend overhaul: make actions/todos/terminal/tools/agents/chat/thinking feel alive & async, matching uploaded `ui_improvement/` screenshots; S210 live Actions timeline)

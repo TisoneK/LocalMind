@@ -535,3 +535,30 @@ if literally nothing slowed you down.
 - **Prevent next time:** When adding a special tool handler, test that successful
   output re-enters the parent loop and that only a verified parent response emits
   `done`; never infer completion from tool success alone.
+
+---
+## 2026-08-14 — Claude Code / claude-opus-4-8 (Session 210)
+
+- **Problem:** Wanted a visual screenshot of the redesigned Actions
+  timeline. Built a throwaway vite dev harness (`harness.html` + a small
+  `src/harness.tsx` mounting the real component with mock `ToolCall`
+  data). The harness threw React "Invalid hook call / Cannot read
+  properties of null (reading 'useState')" — a dev-server dual-React
+  resolution quirk for an extra entry point that pulls in framer-motion
+  hooks — and separately the in-app browser pane wouldn't composite
+  frames ("pane is not displayed"), so no screenshot was possible.
+- **Cost:** ~15 min on the harness + browser round-trips, abandoned.
+- **Cause:** (1) The in-app Browser blocks `navigate` to `localhost`;
+  `preview_start {url}` opens it but the pane stayed hidden this session.
+  (2) A second vite entry that imports framer-motion can resolve a
+  duplicate React in dev optimize-deps, breaking hooks — the app's own
+  build/tests are fine (production `vite build` + jsdom vitest pass).
+- **Workaround / fix:** Dropped the harness; verified with a durable
+  `ToolSteps.test.tsx` (9 jsdom render cases) + `vite build`. This is
+  better anyway — permanent coverage instead of a throwaway screenshot.
+- **Prevent next time:** For a pure component visual check, prefer a
+  jsdom render test over a live harness. If a real screenshot is needed,
+  drive the actual app (single React graph) rather than a bespoke second
+  vite entry, and confirm the browser pane is displayed before relying on
+  `computer{screenshot}`. Live-app visual verification still needs a
+  provider credential to produce a real streaming turn.

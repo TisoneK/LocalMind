@@ -2953,3 +2953,18 @@ program + ADR-22). -->
 - **Report:** `.context/memory/reviews/2026-08-14-review-14.md`.
 - **Notes:** `.context/memory/sessions/2026-08-14-209/notes.md`.
 - **Limitation:** no live-provider smoke; local provider credentials were unavailable.
+
+---
+## 2026-08-14 — Session 210
+
+- **Agent:** Claude Code / claude-opus-4-8 | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** realtime-alive-ui (Session 1 of a multi-session UI overhaul)
+- **Task:** Analyze the uploaded `ui_improvement/` screenshots and start making the post-pipeline agent-loop UI feel alive and async. S210 redesigns the chat tool trace (the "Actions" surface).
+- **Commits:** 2 product (`3ba4945` feat(ui) timeline, `dbcb8e3` docs changelog) + 1 context closeout (SHA after push).
+- **Outcome:** done — rewrote `ToolSteps` full mode into a grouped, animated live Actions timeline: live natural-language summary header, connected step timeline with status dots, framer-motion enter animation, pulsing running step, auto-expand-while-streaming / auto-collapse-after, and a Done / "Done with errors" / working terminal row. Honours `prefers-reduced-motion`. Compact mode, per-step detail, plan-step badge, and every `ToolCall` field preserved; no backend/SSE change.
+- **Also fixed:** `ToolSteps` had zero tests — added `ToolSteps.test.tsx` (9 cases).
+- **Validation:** frontend 150 passed (was 141); `tsc -b` clean; ESLint 0 errors / 64 warnings (net zero); `vite build` passes.
+- **Report:** `.context/memory/reviews/2026-08-14-review-15.md`.
+- **Notes:** `.context/memory/features/realtime-alive-ui/notes.md`.
+- **Limitation:** live-app visual pass against `Actions*.png` deferred — harness dual-React quirk + hidden browser pane blocked screenshots; needs a provider credential to drive a real turn.
+- **Open items:** S211 Thinking, S212 Todos, S213 Terminal, S214 Agents, S215 polish (feature manifest); live visual verification.
