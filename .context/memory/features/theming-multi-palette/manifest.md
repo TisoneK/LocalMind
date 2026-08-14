@@ -25,9 +25,10 @@ ZERO component changes. Applied via `<html data-theme data-mode>`. ANSI
   ADR-31): anchor layer + all 6 theme×mode blocks; default graphite dark;
   accent-tinted selection. Verified all 6 combos resolve via data attrs
   (incl. shadcn `--background`), default renders clean, 173 tests/build green.
-- [ ] S218 — runtime: `useTheme` hook (persist localStorage + apply data
-  attrs + system-mode matchMedia listener), no-FOUC init script in
-  index.html, theme+mode picker in SettingsModal.
+- [x] **S218 — runtime switcher + Settings picker** (done 2026-08-14, `810323b`):
+  `useTheme` hook (persist + apply data-attrs + system matchMedia), no-flash
+  init script in index.html, Appearance section in SettingsModal (3 theme
+  cards + Light/Dark/System). +5 tests; init path browser-verified.
 - [ ] S219 — light-mode contrast sweep + hunt hardcoded hex that dodges
   the tokens (grep components for literal `#`/`rgb(`); real visual pass.
 

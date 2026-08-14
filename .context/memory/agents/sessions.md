@@ -3063,3 +3063,15 @@ program + ADR-22). -->
 - **Validation:** in-browser flip of all 6 data-attr combos → correct computed colors incl. shadcn `--background`; default renders clean (body #12161d), no console errors; 173 tests / build green; ESLint 0 errors.
 - **Report:** `.context/memory/reviews/2026-08-14-review-22.md`. **Notes:** `.context/memory/features/theming-multi-palette/notes.md`.
 - **Open items:** S218 runtime switcher + Settings picker; S219 light-mode contrast sweep + hardcoded-hex hunt.
+
+---
+## 2026-08-14 — Session 218
+
+- **Agent:** Claude Code / claude-opus-4-8 | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** theming-multi-palette (Session 2)
+- **Task:** Make the 6 palettes user-selectable at runtime (hook + no-flash init + Settings picker).
+- **Commits:** 2 product (`810323b` feat(ui), `fdac625` docs) + 1 context closeout (SHA after push).
+- **Outcome:** done — `useTheme` hook (persist/apply/system-matchMedia via useSyncExternalStore), no-flash init script in index.html, SettingsModal Appearance section (3 theme cards + Light/Dark/System). Applies instantly.
+- **Validation:** `useTheme.test.ts` (5) + browser-verified no-flash init (iris/light pre-paint); 178 tests / tsc / build green; ESLint 0 errors.
+- **Report:** `.context/memory/reviews/2026-08-14-review-23.md`.
+- **Open items:** S219 light-mode contrast sweep + hardcoded-hex hunt.

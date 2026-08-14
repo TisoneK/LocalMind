@@ -22,3 +22,12 @@ key e.g. `localmind-theme` = {theme, mode}; apply `data-theme`/`data-mode`
 on `<html>`; for mode='system' add a matchMedia('(prefers-color-scheme:
 dark)') listener. Add a no-FOUC inline script in index.html that reads
 localStorage and sets the attributes BEFORE first paint.
+
+## Session 218 (2026-08-14) — runtime switcher + Settings picker
+`useTheme` hook (useSyncExternalStore module store; localStorage
+`localmind-theme`; applies data-theme/data-mode; system-mode matchMedia
+listener). No-flash inline script in index.html. SettingsModal Appearance
+section (3 theme cards + Light/Dark/System toggle). Browser-verified the
+no-flash init (iris/light applied pre-paint on reload). 178 tests / tsc /
+build green. `810323b` + changelog `fdac625`. Next S219: light-mode
+contrast sweep + grep components for hardcoded hex/rgb that dodge tokens.
