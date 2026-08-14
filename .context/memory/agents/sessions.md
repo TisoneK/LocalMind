@@ -3038,3 +3038,16 @@ program + ADR-22). -->
 - **Report:** `.context/memory/reviews/2026-08-14-review-20.md`.
 - **Feature status:** every user-named surface now alive (S210-215). Remaining: S216 shared motion primitive (DRY), live visual pass.
 - **Limitation:** live-app visual pass deferred (provider credential needed).
+
+---
+## 2026-08-14 — Session 216
+
+- **Agent:** Claude Code / claude-opus-4-8 | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** realtime-alive-ui (Session 7 — final planned session; implementation complete)
+- **Task:** Extract the duplicated framer-motion enter + reduced-motion pattern into one primitive; record an ADR.
+- **Commits:** 1 product (`fb86e25` refactor(ui)) + 1 context closeout (SHA after push). No changelog (internal refactor).
+- **Outcome:** done — `useEnterMotion()` hook (`lib/localmind/motion.ts`) is the canonical reduced-motion-aware enter; adopted in ToolSteps/ThinkingBlock/TodoList/ActionHistory/AgentWorkspace (all dropped their `useReducedMotion` imports). Behaviour-preserving. Recorded ADR-30. Added `motion.test.ts` (3 cases).
+- **Validation:** frontend 173 passed (was 170); `tsc -b` clean; ESLint 0 errors / 64 warnings; `vite build` passes.
+- **Report:** `.context/memory/reviews/2026-08-14-review-21.md`.
+- **Feature status:** realtime-alive-ui implementation COMPLETE (S210-216). Only follow-up: live-app visual verification (provider credential).
+- **Limitation:** no live visual pass — provider credential unavailable, as every session since S201.

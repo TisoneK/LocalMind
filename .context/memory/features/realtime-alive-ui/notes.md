@@ -136,3 +136,23 @@ shared motion primitive (DRY refactor — the `motion.div` enter +
 `useReducedMotion` guard is duplicated in 5 components; extract into e.g.
 `<MotionItem>` + `useEnterMotion()`, consider an ADR) and live-app visual
 verification (needs a provider credential).
+
+---
+## Session 216 (2026-08-14) — Shared motion primitive (feature complete)
+
+`useEnterMotion()` in `lib/localmind/motion.ts` returns `{ reduce, enter }`;
+`enter({x,y,duration})` → spreadable `initial/animate/transition`
+(`initial:false` under reduced motion). Adopted in ToolSteps,
+ThinkingBlock, TodoList, ActionHistory, AgentWorkspace (dropped their
+`useReducedMotion` imports). Behaviour-preserving. ADR-30. +3 tests
+(`motion.test.ts`; note: mock framer-motion with `vi.hoisted` + `vi.mock`
+— ESM exports can't be `vi.spyOn`'d). 173 tests / tsc / lint(0 err) /
+build green. `fb86e25`.
+
+**FEATURE IMPLEMENTATION COMPLETE (S210-216).** Every user-named surface
+is alive & async; motion is unified + reduced-motion by construction.
+The only open item is a live-app visual verification vs
+`ui_improvement/*.png` — needs a provider credential (standing gap since
+S201). If a future agent gets a Zen/local key: run a real turn, watch the
+Actions timeline / thinking caret / todos check-off / agents tree /
+terminal executing cursor, and confirm they match the screenshots' feel.

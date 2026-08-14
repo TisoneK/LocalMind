@@ -4,7 +4,8 @@
 
 - **Slug:** realtime-alive-ui
 - **Started:** 2026-08-14 (Session 210)
-- **Status:** active
+- **Status:** implementation complete (S210–216 shipped) — only a
+  live-app visual verification remains (provider-credential blocked)
 - **Owner sessions:** 210–…
 - **Ledger:** see `.context/memory/features/ledger.md`
 
@@ -61,10 +62,15 @@ protocol session; the dark-green brand identity is preserved throughout.
   line + auto-scroll on `isRunning`. Deliberately NO output animation
   (high-volume output must not stutter). CSS blink steady under
   prefers-reduced-motion. Added `TerminalPanel.test.tsx` (4).
-- [ ] S216 — Shared motion primitive + a11y: extract the `motion.div`
-  enter + `useReducedMotion` guard now duplicated across ToolSteps /
-  ThinkingBlock / TodoList / ActionHistory / AgentWorkspace into one
-  component/hook; consider an ADR. Quality/DRY, not user-facing.
+- [x] **S216 — Shared motion primitive** (done 2026-08-14, `fb86e25`,
+  ADR-30): `useEnterMotion()` in `lib/localmind/motion.ts` — canonical
+  reduced-motion-aware "fade + slide" enter. Adopted in all 5 components
+  (dropped their `useReducedMotion` imports). Behaviour-preserving; +3
+  tests. Terminal CSS cursor stays as-is by design.
+
+**Remaining (not a code task):** live-app visual verification of all
+surfaces against `ui_improvement/*.png` once a provider credential is
+available — the standing live-smoke gap since Sessions 201-215.
 
 ## Constraints / invariants (do not regress)
 
