@@ -2864,3 +2864,15 @@ program + ADR-22). -->
 - **Validation:** frontend 142 tests passed, TypeScript/build passed, ESLint 0 errors / 64 existing warnings, diff check clean.
 - **Report:** `.context/memory/reviews/2026-08-14-review-7.md`.
 - **Limitation:** live-turn tree only; historical replay and per-child retry/resume controls remain deferred.
+
+---
+## 2026-08-14 — Session 203
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Make the LocalMind UI a bit lighter while preserving the dark green identity.
+- **Commits:** 1 product + 1 context; product `0c759b7`, context recorded after closeout.
+- **Outcome:** done — raised shared UI palette contrast for backgrounds, panels, borders, secondary text, and status colors; no layout or behavior changes.
+- **Validation:** frontend 141 tests passed, TypeScript/build passed, ESLint 0 errors / 64 existing warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review-8.md`.
+- **Notes:** `.context/memory/sessions/2026-08-14-203/notes.md`.

@@ -1003,3 +1003,14 @@ Added hook and component regression tests. Frontend validation passed: 142
 Vitest tests, TypeScript, production build, and ESLint with 0 errors / 64
 existing warnings. Historical run-tree replay and per-child retry/resume
 controls remain deferred. Review: `.context/memory/reviews/2026-08-14-review-7.md`.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 203)
+
+The user requested that the UI be "a bit light." ADR-1's dark-only decision
+remains in force, so this session lightened the existing green-black palette
+rather than adding a second theme. Central CSS variables now use brighter
+backgrounds, panels, borders, secondary text, and status colors across the
+workspace. No component layout or behavior changed. Frontend validation passed
+with 141 tests, TypeScript/build clean, and ESLint 0 errors / 64 existing
+warnings. Review: `.context/memory/reviews/2026-08-14-review-8.md`.

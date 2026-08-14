@@ -357,3 +357,14 @@ Four implementation phases (multi-session):
   ESLint 0 errors / 64 existing warnings.
 - **Report:** `.context/memory/reviews/2026-08-14-review-7.md`.
 - **Deferred:** historical run-tree replay and per-child retry/resume controls.
+
+## Session 203 — Lighter dark UI theme (completed)
+
+- **What:** increased readability of the existing dark green workspace without
+  introducing a light-mode toggle.
+- **Implementation:** raised shared generic and LocalMind brand surface,
+  border, secondary-text, and status-color variables in `frontend/src/globals.css`;
+  added the public Unreleased changelog entry.
+- **Validation:** frontend **141 tests passed**, TypeScript/build passed,
+  ESLint 0 errors / 64 existing warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review-8.md`.

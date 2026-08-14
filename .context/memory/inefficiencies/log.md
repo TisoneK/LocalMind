@@ -430,3 +430,15 @@ if literally nothing slowed you down.
 - **Prevent next time:** Treat names in prior-art research as examples unless
   the repository ADR explicitly requires them; confirm product identity from
   the active architecture records before creating new modules.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 203)
+
+- **Problem:** The first product commit command failed because shell heredoc
+  quoting interacted poorly with an apostrophe in the commit body.
+- **Cost:** One retry; no repository changes were lost.
+- **Cause:** Embedded shell quoting in a generated commit command.
+- **Workaround / fix:** Removed the apostrophe from the message and reran the
+  commit command successfully.
+- **Prevent next time:** Keep heredoc commit messages free of shell-sensitive
+  punctuation or use a quoted message without nested apostrophes.
