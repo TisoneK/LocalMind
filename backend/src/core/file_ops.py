@@ -76,15 +76,33 @@ class FileOpsSpec:
     max_results: int = 25
     read_requested: bool = False
     identity: str = ""  # user name for match picking ("tisone")
+    # Session 194 catalog continuation — filters applied in memory against
+    # the cached walk (instant follow-ups, no re-scan).
+    offset: int = 0  # page offset ("show more")
+    ext: str = ""  # extension filter ("pdf", "pdf,docx")
+    subpath: str = ""  # relative folder filter ("Documents")
+    kind: str = ""  # "file" | "dir"
+    exact: bool = False  # exact name match
 
     def to_find_path_args(self) -> str:
-        """Serialize the find_path dispatch argument (JSON, like the loop)."""
+        """Serialize the find_path dispatch argument (JSON, like the loop).
+
+        all_paths=True: the deterministic picker must choose from the FULL
+        catalog, not the display page (the transcript failure: 25 capped
+        results hid the right CV).
+        """
         return json.dumps(
             {
                 "name": self.pattern,
                 "root": self.root,
                 "max_depth": self.max_depth,
                 "max_results": self.max_results,
+                "offset": self.offset,
+                "ext": self.ext,
+                "subpath": self.subpath,
+                "kind": self.kind,
+                "exact": self.exact,
+                "all_paths": True,
             }
         )
 
@@ -99,6 +117,13 @@ class FileOpsResult:
     content: Optional[str] = None
     error: Optional[str] = None  # deterministic error text (not provider JSON)
     read_blocked: bool = False  # found but outside allowed folders
+    # Session 194 catalog: scale + shape of the full result set, so the
+    # presentation can show the catalog (never a silently-truncated list).
+    total: int = 0
+    groups: dict = field(default_factory=dict)
+    extensions: dict = field(default_factory=dict)
+    walk_complete: bool = True
+    scanned: int = 0
 
 
 def detect_read_request(message: str) -> tuple[bool, str]:
@@ -116,14 +141,38 @@ def detect_read_request(message: str) -> tuple[bool, str]:
     return read_requested, identity
 
 
-def pick_best_match(matches: list[str], pattern: str, identity: str = "") -> Optional[str]:
-    """Deterministically pick the best match for a file read.
+def _score_match(match: str, pattern: str, identity: str = "") -> float:
+    """Deterministic match-scoring (pure string/path heuristics, no LLM).
 
-    Scoring (all pure string/path heuristics, no LLM):
+    Single source of truth for BOTH the picker and the ranked shortlist
+    (code review, Session 194): the top candidate shown in the ambiguous
+    ask must be exactly the file the picker would have chosen. Rules:
       1. Identity hit (filename contains the user's name) — decisive.
       2. Exact-name hit (filename contains the search pattern) — strong.
       3. Regular file over directory.
       4. Shallower path preferred.
+    """
+    s = 0.0
+    name = Path(match).name.lower()
+    full = match.lower()
+    ident_l = (identity or "").lower()
+    pat_l = (pattern or "").lower().strip("* ?")
+    if ident_l and ident_l in full:
+        s += 100.0
+    if pat_l and (pat_l in name or pat_l in full):
+        s += 50.0
+    try:
+        if Path(match).is_file():
+            s += 10.0
+    except OSError:
+        pass
+    s -= len(Path(match).parts)  # shallower = better
+    return s
+
+
+def pick_best_match(matches: list[str], pattern: str, identity: str = "") -> Optional[str]:
+    """Deterministically pick the best match for a file read.
+
     Returns None when the top two are too close → the engine presents the
     list and asks the user instead of guessing (reading the wrong CV is
     worse than asking).
@@ -133,27 +182,9 @@ def pick_best_match(matches: list[str], pattern: str, identity: str = "") -> Opt
     if len(matches) == 1:
         return matches[0]
 
-    pat_l = (pattern or "").lower().strip("* ?")
-    ident_l = (identity or "").lower()
-
-    def score(match: str) -> float:
-        s = 0.0
-        name = Path(match).name.lower()
-        full = match.lower()
-        if ident_l and ident_l in full:
-            s += 100.0
-        if pat_l and (pat_l in name or pat_l in full):
-            s += 50.0
-        try:
-            if Path(match).is_file():
-                s += 10.0
-        except OSError:
-            pass
-        s -= len(Path(match).parts)  # shallower = better
-        return s
-
-    ranked = sorted(matches, key=score, reverse=True)
-    top, second = score(ranked[0]), score(ranked[1])
+    ranked = sorted(matches, key=lambda m: _score_match(m, pattern, identity), reverse=True)
+    top = _score_match(ranked[0], pattern, identity)
+    second = _score_match(ranked[1], pattern, identity)
     if top - second >= 10.0:  # decisive winner
         return ranked[0]
     return None  # ambiguous → ask
@@ -234,6 +265,14 @@ async def execute_file_ops(spec: FileOpsSpec) -> FileOpsResult:
         return result
 
     result.matches = _parse_match_paths(tool_result)
+    # Session 194: carry the catalog (scale + shape) onto the result so the
+    # presentation can show totals/groups instead of a truncated page.
+    _meta = getattr(tool_result, "metadata", None) or {}
+    result.total = int(_meta.get("total", len(result.matches)))
+    result.groups = _meta.get("groups") or {}
+    result.extensions = _meta.get("extensions") or {}
+    result.walk_complete = bool(_meta.get("walk_complete", True))
+    result.scanned = int(_meta.get("scanned", 0))
     if not result.matches:
         result.error = (
             f"No files or folders matching '{spec.target}' were found"
@@ -257,8 +296,9 @@ async def execute_file_ops(spec: FileOpsSpec) -> FileOpsResult:
 
 
 def format_match_list(result: FileOpsResult, limit: int = 25) -> str:
-    """Deterministic, user-facing rendering of the match list."""
-    lines = [f"Found {len(result.matches)} match(es) for '{result.spec.target}':"]
+    """Deterministic, user-facing rendering of the match list (catalog-aware)."""
+    total = result.total or len(result.matches)
+    lines = [f"Found {total:,} match(es) for '{result.spec.target}':"]
     for m in result.matches[:limit]:
         try:
             kind = "📁" if Path(m).is_dir() else "📄"
@@ -266,7 +306,53 @@ def format_match_list(result: FileOpsResult, limit: int = 25) -> str:
             kind = "📄"
         lines.append(f"  {kind}  {m}")
     if len(result.matches) > limit:
-        lines.append(f"  … more matches exist (capped at {limit})")
+        lines.append(f"  … more matches exist (showing {limit} of {total:,})")
+    if result.groups:
+        lines.append(
+            "Catalog: "
+            + " · ".join(f"{k} {v:,}" for k, v in result.groups.items())
+        )
+    if result.extensions:
+        lines.append(
+            "Types:   " + " · ".join(f".{k} {v:,}" for k, v in result.extensions.items())
+        )
+    if not result.walk_complete:
+        lines.append(
+            "Note: the scan hit its time budget and may be incomplete — "
+            'narrow with "only pdf" or "in <folder>" to search deeper.'
+        )
+    return "\n".join(lines)
+
+
+def format_top_candidates(result: FileOpsResult, limit: int = 5) -> str:
+    """The closest matches, ranked by the same deterministic picker score.
+
+    Used when the picker cannot decide (ambiguous request) — instead of
+    dumping the whole catalog, present the top candidates and ask. The
+    ranking is pure string/path heuristics (identity → exact-name → file
+    over dir → shallower), identical to pick_best_match's.
+    """
+    if not result.matches:
+        return format_match_list(result)
+    # Same _score_match as pick_best_match — the shortlist's top candidate
+    # is exactly what the picker would have chosen.
+    ranked = sorted(
+        result.matches,
+        key=lambda m: _score_match(m, result.spec.pattern, result.spec.identity),
+        reverse=True,
+    )[:limit]
+    lines = [f"Found {result.total or len(result.matches):,} matches for '{result.spec.target}'."]
+    lines.append("Closest matches:")
+    for m in ranked:
+        try:
+            kind = "📁" if Path(m).is_dir() else "📄"
+        except OSError:
+            kind = "📄"
+        lines.append(f"  {kind}  {m}")
+    if result.groups:
+        lines.append(
+            "Catalog: " + " · ".join(f"{k} {v:,}" for k, v in result.groups.items())
+        )
     return "\n".join(lines)
 
 

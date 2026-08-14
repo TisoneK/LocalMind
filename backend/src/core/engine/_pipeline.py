@@ -2036,6 +2036,7 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 execute_file_ops,
                 format_match_list,
                 format_read_evidence,
+                format_top_candidates,
             )
 
             _clock.start("context_build")
@@ -2053,6 +2054,14 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 max_results=int(_fo_args.get("max_results", 25) or 25),
                 read_requested=_read_requested,
                 identity=_identity,
+                # Session 194: continuation filters from the signal
+                # ("show more" / "only pdf" / "in Documents") flow straight
+                # into the deterministic chain.
+                offset=int(_fo_args.get("offset", 0) or 0),
+                ext=str(_fo_args.get("ext", "") or ""),
+                subpath=str(_fo_args.get("subpath", "") or ""),
+                kind=str(_fo_args.get("kind", "") or ""),
+                exact=bool(_fo_args.get("exact", False)),
             )
             _clock.end("context_build")
             _clock.start("execute")
@@ -2178,18 +2187,26 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
             else:
                 # Find-only request OR ambiguous match list — deterministic
                 # presentation, no model needed at all.
-                response_text = format_match_list(_fo_result)
+                if _fo_result.spec.read_requested and _fo_result.chosen is None:
+                    # Ambiguous: show the CLOSEST candidates (ranked by the
+                    # same deterministic picker score) and ask — never dump
+                    # the whole catalog.
+                    response_text = format_top_candidates(_fo_result)
+                    response_text += (
+                        "\n\nWhich one would you like me to read? Tell me the "
+                        "name and I'll open it."
+                    )
+                else:
+                    response_text = format_match_list(_fo_result)
                 _obs.emit(
                     "file_ops_listed",
                     matches=len(_fo_result.matches),
-                    ambiguous=not _fo_result.spec.read_requested or _fo_result.chosen is None,
+                    total=_fo_result.total,
+                    ambiguous=(
+                        _fo_result.spec.read_requested and _fo_result.chosen is None
+                    ),
                 )
                 _clock.skip("generate")
-                if _fo_result.spec.read_requested and _fo_result.chosen is None:
-                    response_text += (
-                        "\n\nWhich one would you like me to read? Tell me the name "
-                        "and I'll open it."
-                    )
                 yield StreamChunk(text=response_text, done=False)
 
             self._persist_assistant_message(session_id, response_text)

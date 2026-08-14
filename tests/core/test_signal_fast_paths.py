@@ -461,3 +461,64 @@ def test_file_ops_signal_preserves_dispatch_step():
     assert plan is not None
     assert plan.dispatch_steps
     assert plan.dispatch_steps[0]["intent"] == "find_path"
+
+
+# ── 5. Catalog continuation phrasing → filter/offset args (Session 194) ─
+# "show more" / "only pdf" / "in Documents" are continuation filters on the
+# cached catalog walk — zero-LLM, same signal, different find_path args.
+
+
+def _node_args(message):
+    plan = _file_search_plan(message)
+    assert plan is not None, f"{message!r} must be a file-search signal"
+    return plan.graph.nodes[0].tool_args
+
+
+def test_show_more_sets_offset():
+    args = _node_args("find my cv, show more")
+    assert args["offset"] == 25
+    assert args["name"] == "cv"
+
+
+def test_only_ext_sets_ext_filter():
+    args = _node_args("find my cv, only pdf")
+    assert args["ext"] == "pdf"
+    assert args["name"] == "cv"
+
+
+def test_only_ext_sets_ext_filter_with_files_word():
+    args = _node_args("find my cv, only pdf files")
+    assert args["ext"] == "pdf"
+
+
+def test_bare_folder_location_sets_subpath():
+    args = _node_args("find my cv in Documents")
+    assert args["subpath"] == "Documents"
+    assert args["root"] == ""
+
+
+def test_absolute_location_still_sets_root():
+    args = _node_args("find my cv in /tmp/work")
+    assert args["root"] == "/tmp/work"
+    assert "subpath" not in args
+
+
+def test_direct_read_location_sets_subpath():
+    plan = _file_ops_plan("read my cv in Documents")
+    assert plan is not None
+    args = plan.graph.nodes[0].tool_args
+    assert args["subpath"] == "Documents"
+    assert plan.profile.primary_domain == "file_ops"
+
+
+def test_show_more_survives_and_conjunction():
+    # Code review (Session 194): "and show more" must page the catalog even
+    # though the branch splits on "and".
+    args = _node_args("find my cv and show more")
+    assert args["offset"] == 25
+    assert args["name"] == "cv"
+
+
+def test_show_more_without_find_anchor_falls_through():
+    # No file-search anchor → not the signal's job (follow-up routing owns it).
+    assert _file_search_plan("show more") is None

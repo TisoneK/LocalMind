@@ -25,6 +25,7 @@ from core.file_ops import (
     execute_file_ops,
     format_match_list,
     format_read_evidence,
+    format_top_candidates,
     pick_best_match,
 )
 
@@ -318,3 +319,117 @@ async def test_engine_file_ops_respects_tool_fence(tmp_path, monkeypatch):
             pass
 
     assert dispatched == []
+
+
+# ── Catalog continuation through the deterministic chain (Session 194) ──
+
+
+@pytest.mark.asyncio
+async def test_execute_filters_by_extension(tmp_path: Path, monkeypatch):
+    """The catalog ext filter flows through find_path into the read chain."""
+    _allow_tmp(monkeypatch, tmp_path)
+    (tmp_path / "cv.txt").write_text("txt-content", encoding="utf-8")
+    (tmp_path / "cv.docx").write_text("x", encoding="utf-8")
+    spec = FileOpsSpec(
+        target="cv", pattern="cv", root=str(tmp_path), read_requested=True, ext="txt"
+    )
+    result = await execute_file_ops(spec)
+    assert result.error is None
+    assert result.matches == [str(tmp_path / "cv.txt")]
+    assert result.chosen == str(tmp_path / "cv.txt")
+    assert "txt-content" in (result.content or "")
+
+
+@pytest.mark.asyncio
+async def test_execute_subpath_filter(tmp_path: Path, monkeypatch):
+    """A bare-folder location narrows the catalog to that folder."""
+    _allow_tmp(monkeypatch, tmp_path)
+    docs = tmp_path / "Documents"
+    docs.mkdir()
+    (docs / "cv.txt").write_text("in docs", encoding="utf-8")
+    (tmp_path / "cv.txt").write_text("in root", encoding="utf-8")
+    spec = FileOpsSpec(
+        target="cv", pattern="cv", root=str(tmp_path), read_requested=True,
+        subpath="Documents",
+    )
+    result = await execute_file_ops(spec)
+    assert result.error is None
+    assert result.matches == [str(docs / "cv.txt")]
+
+
+@pytest.mark.asyncio
+async def test_execute_result_carries_catalog(tmp_path: Path, monkeypatch):
+    """The deterministic chain sees the FULL catalog, not a capped page."""
+    _allow_tmp(monkeypatch, tmp_path)
+    for name in ["cv-a.txt", "cv-b.txt", "cv-c.txt"]:
+        (tmp_path / name).write_text("x", encoding="utf-8")
+    spec = FileOpsSpec(target="cv", pattern="cv", root=str(tmp_path))
+    result = await execute_file_ops(spec)
+    assert result.total == 3
+    assert len(result.matches) == 3  # all_paths → full catalog for the picker
+    assert result.groups.get("(root)") == 3
+    assert result.extensions.get("txt") == 3
+    assert result.walk_complete is True
+
+
+def test_format_top_candidates_ranks_identity_first(tmp_path: Path):
+    """The ambiguous-ask shortlist ranks by the same picker score."""
+    (tmp_path / "CV-JOHN.txt").touch()
+    (tmp_path / "CV-TisoneKironget.txt").touch()
+    spec = type(
+        "S",
+        (),
+        {"target": "cv", "pattern": "cv", "identity": "tisone"},
+    )()
+    result = type(
+        "R",
+        (),
+        {
+            "spec": spec,
+            "matches": [
+                str(tmp_path / "CV-JOHN.txt"),
+                str(tmp_path / "CV-TisoneKironget.txt"),
+            ],
+            "total": 2,
+            "groups": {},
+        },
+    )()
+    out = format_top_candidates(result)
+    lines = out.splitlines()
+    assert "Closest matches" in out
+    # lines[0]=header, lines[1]="Closest matches:", lines[2]=top-ranked.
+    assert lines[2].endswith("CV-TisoneKironget.txt")
+
+
+@pytest.mark.asyncio
+async def test_engine_file_ops_ambiguous_asks_ranked_candidates(tmp_path, monkeypatch):
+    """Two equal CVs, no identity → deterministic ranked shortlist + ask,
+    zero model calls (the catalog replaces the capped guess)."""
+    from unittest.mock import MagicMock, patch
+
+    from core.engine import Engine
+
+    _allow_tmp(monkeypatch, tmp_path)
+    (tmp_path / "CV-JOHN.txt").write_text("john", encoding="utf-8")
+    (tmp_path / "CV-MORGAN.txt").write_text("morgan", encoding="utf-8")
+
+    engine = Engine()
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        raise AssertionError("no model call on the ambiguous ask path")
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+    mock_adapter.effective_context_window = 8192
+
+    with patch("core.engine.get_adapter", return_value=mock_adapter):
+        chunks = [
+            c
+            async for c in engine.process(
+                f"find my cv in {tmp_path} and read it", "sess-fo-amb"
+            )
+        ]
+
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert "Closest matches" in text
+    assert "Which one" in text

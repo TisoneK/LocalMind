@@ -996,6 +996,28 @@ class ThinkingDispatcher:
         _find_m = _FIND_VERB.match(_msg_for_find)
         if _find_m and not _FIND_INVESTIGATION.search(msg):
             _rest = _msg_for_find[_find_m.end() :]
+            # Session 194 (code review): continuation phrases must survive
+            # the split below (which truncates at and/but/then/so/please) —
+            # "find my cv AND SHOW MORE" must still page the catalog, and
+            # "find my cv, ONLY PDF" must still filter. Extract them from
+            # the raw rest FIRST.
+            _cont_filters: dict[str, object] = {}
+            if re.search(
+                r"\b(?:show|see|list|get)\s+(?:me\s+)?more\b", _rest, re.IGNORECASE
+            ):
+                _cont_filters["offset"] = 25  # page 2 of the cached catalog
+                _rest = re.sub(
+                    r"\b(?:and\s+)?(?:show|see|list|get)\s+(?:me\s+)?more\b",
+                    "",
+                    _rest,
+                    flags=re.IGNORECASE,
+                )
+            _cont_ext = re.search(
+                r"\bonly\s+([a-zA-Z0-9]+)\s*(?:files?)?\s*$", _rest, re.IGNORECASE
+            )
+            if _cont_ext:
+                _cont_filters["ext"] = _cont_ext.group(1).lower()
+                _rest = _rest[: _cont_ext.start()]
             _rest = _FIND_SPLIT.split(_rest, 1)[0].strip().strip("\"'")
             if _rest.lower().startswith("where"):
                 _rest = ""  # "find where X is" — too ambiguous to parse
@@ -1008,15 +1030,24 @@ class ThinkingDispatcher:
                     _FIND_SHELLISH.search(_first_tok) or re.search(r"\s-", _rest)
                 )
                 _root = ""
+                # Session 194 (catalog contract): continuation filters become
+                # instant in-memory narrowing of the cached walk. "show more"
+                # and "only <ext>" were extracted pre-split (above) so they
+                # survive "and"; here absolute locations stay the search ROOT
+                # and bare folder names ("in Documents") become a SUBPATH
+                # filter.
+                _filters: dict[str, object] = dict(_cont_filters)
                 _loc_m = _FIND_LOCATION.search(_rest)
                 if _loc_m:
-                    _loc = _loc_m.group(1).strip().strip("\"'").rstrip("/\\")
-                    # Only trust absolute-looking locations; bare folder names
-                    # resolve against home by find_path's default anyway.
+                    _loc = _loc_m.group(1).strip().strip("\"'").rstrip("/\\,;.")
                     if re.match(r"^(?:[A-Za-z]:[\\/]|/|~)", _loc):
                         _root = _loc
+                    elif _loc:
+                        _filters["subpath"] = _loc
                     _rest = _rest[: _loc_m.start()].strip()
-                _target = _FIND_TRAILING_NOUN.sub("", _rest).strip().strip("\"'")
+                _target = (
+                    _FIND_TRAILING_NOUN.sub("", _rest).strip().strip("\"'").strip(",;.")
+                )
                 if (
                     not _shellish
                     and _target
@@ -1058,6 +1089,7 @@ class ThinkingDispatcher:
                                         "root": _root,
                                         "max_depth": 4,
                                         "max_results": 25,
+                                        **_filters,
                                     },
                                     "depends_on": [],
                                     "label": f"Searching for: {_target[:50]}",
@@ -1124,8 +1156,22 @@ class ThinkingDispatcher:
             _rest = _msg_for_find[_read_m.end() :]
             _rest = _FIND_SPLIT.split(_rest, 1)[0].strip().strip("\"'")
             _rest = _FIND_POSSESSIVE.sub("", _rest).strip()
+            # Session 194: "read my cv in Documents" — absolute location →
+            # search root; bare folder → subpath filter on the cached walk.
+            _root_r = ""
+            _filters_r: dict[str, object] = {}
+            _loc_m = _FIND_LOCATION.search(_rest)
+            if _loc_m:
+                _loc = _loc_m.group(1).strip().strip("\"'").rstrip("/\\,;.")
+                if re.match(r"^(?:[A-Za-z]:[\\/]|/|~)", _loc):
+                    _root_r = _loc
+                elif _loc:
+                    _filters_r["subpath"] = _loc
+                _rest = _rest[: _loc_m.start()].strip()
             if _rest and not _READ_LISTING.search(_rest) and not _READ_PATHISH.search(_rest):
-                _target = _FIND_TRAILING_NOUN.sub("", _rest).strip().strip("\"'")
+                _target = (
+                    _FIND_TRAILING_NOUN.sub("", _rest).strip().strip("\"'").strip(",;.")
+                )
                 # Doc-noun guard checks the FULL rest (pre trailing-noun
                 # strip) so "display the license document" matches on
                 # "document" while "review my code" still falls through.
@@ -1164,9 +1210,10 @@ class ThinkingDispatcher:
                                     "tool": "find_path",
                                     "args": {
                                         "name": _pattern,
-                                        "root": "",
+                                        "root": _root_r,
                                         "max_depth": 4,
                                         "max_results": 25,
+                                        **_filters_r,
                                     },
                                     "depends_on": [],
                                     "label": f"Searching for: {_target[:50]}",
