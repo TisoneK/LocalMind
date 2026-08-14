@@ -473,3 +473,16 @@ if literally nothing slowed you down.
 - **Prevent next time:** When adding streaming heartbeats, test event ordering
   while the producer is deliberately pending; an HTTP keepalive-only test is
   insufficient.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 206)
+
+- **Problem:** Restoring the trivial-input runtime call initially caused a
+  circular import during test collection.
+- **Cost:** One failed focused test invocation and a small import adjustment.
+- **Cause:** `trivial_input` imports `core.engine._helpers`, while the
+  `core.engine` package initializer imports `AgentRuntime`.
+- **Workaround / fix:** Loaded the trivial/conversational helpers lazily inside
+  `AgentRuntime._process_unlocked()` at the boundary where they are needed.
+- **Prevent next time:** Treat helpers imported by `core.engine` submodules as
+  lazy-import candidates when wiring them into the runtime module.

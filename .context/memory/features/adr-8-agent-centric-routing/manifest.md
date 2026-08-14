@@ -399,3 +399,18 @@ Four implementation phases (multi-session):
 - **Report:** `.context/memory/reviews/2026-08-14-review-10.md`.
 - **Limitation:** no live-provider smoke was run; local provider credentials
   were unavailable.
+
+## Session 206 — Greeting fast path restored (completed)
+
+- **What:** stopped greetings and simple conversational inputs from entering
+  the parent tool loop and spending 30+ seconds in silent reasoning.
+- **Implementation:** restored the existing deterministic/direct helpers at the
+  `AgentRuntime` boundary; `Hi` makes zero provider/tool calls, while
+  conversational questions use direct chat without tool planning. Substantive
+  work remains on the single parent-agent path.
+- **Validation:** backend **1752 passed, 2 skipped**; frontend **141 passed**;
+  TypeScript/build/Ruff clean; ESLint 0 errors / 64 existing warnings.
+- **Product commit:** `8aefc51`.
+- **Report:** `.context/memory/reviews/2026-08-14-review-11.md`.
+- **Limitation:** no live-provider smoke; local provider credentials were
+  unavailable.

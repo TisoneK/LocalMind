@@ -1047,5 +1047,27 @@ already handles these event types, so no frontend rewrite was needed.
 Regression coverage proves selective draining, heartbeat-time tool progress,
 parent result visibility, and delegated-output privacy. Full backend validation
 passed with 1751 tests / 2 skips; frontend had 141 tests, TypeScript/build/Ruff
-were clean, and ESLint had 0 errors / 64 existing warnings. Product commit:
-`6538296`; review: `.context/memory/reviews/2026-08-14-review-10.md`.
+were clean, and ESLint had 0 errors / 64 existing warnings.Product commit: `6538296`; review: `.context/memory/reviews/2026-08-14-review-10.md`.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 206)
+
+The user clarified that the critical failure was a simple `Hi` entering the
+parent agent, spending more than 30 seconds in silent reasoning/tool activity,
+and making LocalMind feel detached. `core/trivial_input.py` already contained
+the intended deterministic social/direct helpers, but the request-pipeline
+migration had removed their production caller.
+
+Restored the boundary inside `AgentRuntime` before memory retrieval, tool
+planning, and parent-loop execution. Social inputs do not acquire an adapter at
+all. Clearly conversational questions use direct chat without tool definitions
+or parent planning. Both paths preserve persistence, stage timing, observations,
+turn completion, and token accounting; substantive tasks retain the single
+parent-agent execution path.
+
+The regression forbids both adapter acquisition and `ParentAgent.run()` for
+`Hi`, asserts no tool events, and checks direct stage statuses. The first run
+found a circular import from loading `trivial_input` at module import time; the
+helper import is now lazy at the runtime boundary. Focused tests passed after
+that correction. Product commit: `8aefc51`; review:
+`.context/memory/reviews/2026-08-14-review-11.md`.

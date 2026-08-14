@@ -744,3 +744,21 @@ After the smoke test passes, test a multi-step task (e.g. "Create hello world re
   caller-provided plan/hint must be evaluated by the parent and cannot bypass
   planning. This supersedes the old general-request pipeline shape while
   preserving ADR-5's closed-loop and ADR-8's agent-centric/delegation contracts.
+
+---
+## ADR-26: Conversational turns bypass tool planning (2026-08-14)
+
+- **Status:** accepted + implemented
+- **Context:** After the request-pipeline removal, the existing trivial-input
+  helpers had no production caller. Even a greeting such as `Hi` entered the
+  full parent tool loop, causing provider reasoning/tool calls and long silent
+  waits for a request with no tool objective.
+- **Decision:** `AgentRuntime` recognizes deterministic social inputs and clearly
+  conversational questions before memory/tool planning. Social inputs use the
+  zero-provider `trivial_response` boundary; conversational questions use
+  direct chat without tool definitions or parent planning. Every substantive
+  turn still enters the single `ParentAgent → AgentLoop` path.
+- **Consequences:** Greetings are immediate and tool-free while substantive
+  tasks retain the parent-agent closed loop. The direct boundary must preserve
+  persistence, observations, stage timing, and completion semantics, and must
+  not grow into a second substantive router.
