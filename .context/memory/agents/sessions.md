@@ -3150,3 +3150,16 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-14-8 (evidence/final-synthesis boundary) is next. B-2026-08-14-12 (prompt budget) will further reduce init latency.
 - **Report:** `.context/memory/reviews/2026-08-15-review-28.md`
 - **Notes:** New module `core/agent/init_stream.py` (preview extraction + rendering). Streaming initializer uses an asyncio.Queue producer/consumer pattern to decouple adapter streaming from SSE yielding. The old non-streaming `_initialize_parent` is retained as a compatibility wrapper.
+
+---
+
+## 2026-08-15 — Session 225
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai) | **Platform:** Z.ai cloud sandbox (Linux 6.5) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-34-realtime-workspace
+- **Task:** B-2026-08-14-8 — parent evidence and final-synthesis boundary (ADR-34 P0). Make tool results a bounded parent context/evidence envelope first. Prevent tool output, worker reports, or child prose from populating the assistant final-answer channel. Parent synthesis must explicitly reconcile evidence and produce the only final chat content.
+- **Commits:** 1 product (`feat(agent): remove authoritative sysinfo shortcut, enforce evidence/synthesis boundary (ADR-34 B-8)`)
+- **Outcome:** done — removed the "authoritative sysinfo" code shortcut in loop.py that yielded raw sysinfo tool output directly as the final assistant answer. Added `evidence_to_parent` obs event marking the boundary where tool results are handed to the parent model. Strengthened the `_force_final_answer` synthesis directive with an explicit "do NOT copy tool output verbatim" instruction. Live Zen smoke confirms: model now synthesizes its own response ("The current date and time is **Friday, August 14, ...") instead of parroting the raw "Current date/time:" line. 4 new tests, 1,725 total pass.
+- **Open items:** B-2026-08-14-9 (Agent Workspace as canonical live UI) is next — the `evidence_to_parent` event needs to be rendered as a live node.
+- **Report:** `.context/memory/reviews/2026-08-15-review-29.md`
+- **Notes:** The `_authoritative_sysinfo_answer` and `_is_current_system_query` helpers remain in `text_tools.py` for the shell→sysinfo correction path (`_normalize_system_tool_call`). Only the loop shortcut that bypassed parent synthesis was removed.

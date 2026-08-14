@@ -104,10 +104,8 @@ from core.agent.text_tools import (
     _MAX_TOOL_TALK_RECOVERIES,
     _MINIMAX_PARTIAL_RE,
     _STANDALONE_PARTIAL_RE,
-    _authoritative_sysinfo_answer,
     _extract_tool_input,
     _has_minimax_tool_call,
-    _is_current_system_query,
     _is_filler_step,  # noqa: F401 — re-exported for backward compat (Session 129)
     _is_tool_talk,
     _normalize_dsml,
@@ -3190,37 +3188,28 @@ class AgentLoop:
                     }
                 )
 
-                # The local clock is authoritative. Do not spend another
-                # model call asking a small model to paraphrase a verified
-                # date/time — that is where values such as August 14 can be
-                # corrupted into August 1. The parent loop still performed,
-                # observed, and recorded the tool action before this clean
-                # terminal response.
-                if (
-                    tool_name == "sysinfo"
-                    and not tool_failed
-                    and _is_current_system_query(_user_message_text(messages))
-                ):
-                    authoritative_answer = _authoritative_sysinfo_answer(
-                        observation,
-                        _user_message_text(messages),
+                # ADR-34 B-8: tool output must NOT become the final assistant
+                # answer. The parent model receives the evidence as a tool
+                # message and synthesizes its own response on the next
+                # iteration. The previous "authoritative sysinfo" shortcut
+                # extracted the raw "Current date/time: ..." line and yielded
+                # it directly — that violated the evidence/synthesis boundary
+                # (tool output was the final chat content, not parent
+                # synthesis). The model may still choose to report the
+                # date/time verbatim, but that is the model's decision, not
+                # a code shortcut.
+                if _obs:
+                    _obs.emit(
+                        "evidence_to_parent",
+                        tool=tool_name,
+                        iteration=iteration + 1,
+                        evidence_chars=len(safe_observation),
+                        failed=tool_failed,
                     )
-                    trace.final_response = authoritative_answer
-                    _complete_current_plan_step()
-                    self._emit_failure_memory(trace, intent, _obs)
-                    if _obs:
-                        _obs.emit(
-                            "agent_loop_done",
-                            intent=intent.value,
-                            iterations=iteration + 1,
-                            reason="authoritative sysinfo result",
-                        )
-                    yield StreamChunk(text=authoritative_answer, done=False)
-                    yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
-                    return
 
                 # Continue the loop — the model will see the tool result
-                # and decide whether to use another tool or answer directly.
+                # and decide whether to use another tool or synthesize a
+                # final answer from the evidence.
                 continue
 
             # ── Handle streaming text (model chose NOT to use tools) ───
@@ -5386,7 +5375,11 @@ class AgentLoop:
                 "ANTI-FABRICATION: Your answer MUST be based EXACTLY on the tool "
                 "results shown above. Do NOT invent file names, folder contents, "
                 "or any data that was not in the tool output. If a tool showed "
-                "3 items, report 3 items — never add items that 'seem typical'."
+                "3 items, report 3 items — never add items that 'seem typical'.\n\n"
+                "SYNTHESIS: Do NOT copy the tool output verbatim. Synthesize a "
+                "natural-language answer that addresses the user's question using "
+                "the evidence. Report exact values (dates, numbers, names) from "
+                "the tool output, but frame them in your own words."
             )
         else:
             _directive = (
@@ -5396,7 +5389,11 @@ class AgentLoop:
                 "ANTI-FABRICATION: Your answer MUST be based EXACTLY on the tool "
                 "results shown above. Do NOT invent file names, folder contents, "
                 "or any data that was not in the tool output. If a tool showed "
-                "3 items, report 3 items — never add items that 'seem typical'."
+                "3 items, report 3 items — never add items that 'seem typical'.\n\n"
+                "SYNTHESIS: Do NOT copy the tool output verbatim. Synthesize a "
+                "natural-language answer that addresses the user's question using "
+                "the evidence. Report exact values (dates, numbers, names) from "
+                "the tool output, but frame them in your own words."
             )
 
         force_msg = clean_messages + [
