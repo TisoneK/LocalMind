@@ -250,7 +250,7 @@ function TimelineRow({
       <div className="min-w-0 flex-1 pb-1.5">
         <button
           onClick={() => hasDetail && setExpanded((e) => !e)}
-          className={`group/row flex w-full items-center gap-2 rounded px-1.5 py-1 text-left transition-colors ${hasDetail ? 'hover:bg-white/[0.03]' : 'cursor-default'}`}
+          className={`group/row flex w-full items-center gap-2 rounded px-1.5 py-1 text-left transition-colors ${hasDetail ? 'hover:bg-brand-border/50' : 'cursor-default'}`}
         >
           <span className={`${status.color} shrink-0 ${isRunning ? 'animate-pulse' : ''}`}>{icon}</span>
           <span className="shrink-0 font-mono text-[11px] text-brand-green-soft">{label}</span>
@@ -350,7 +350,7 @@ function ActionTimeline({ toolCalls, isStreaming }: { toolCalls: ToolCall[]; isS
     >
       <button
         onClick={() => setCollapsed((c) => !c)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/[0.02]"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-brand-border/40"
       >
         <Zap className={`h-3.5 w-3.5 shrink-0 ${headerColor} ${active ? 'animate-pulse' : ''}`} />
         <span className={`truncate text-[11px] font-medium ${headerColor}`}>{headerText}</span>

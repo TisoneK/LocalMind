@@ -83,7 +83,7 @@ function RunNode({
         <button
           type="button"
           onClick={() => hasDetails && setExpanded((value) => !value)}
-          className="flex items-start gap-2 w-full px-2.5 py-2 text-left hover:bg-white/[0.02] transition-colors"
+          className="flex items-start gap-2 w-full px-2.5 py-2 text-left hover:bg-brand-border/40 transition-colors"
           aria-expanded={hasDetails ? expanded : undefined}
         >
           {hasDetails ? (

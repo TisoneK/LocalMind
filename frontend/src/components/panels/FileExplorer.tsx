@@ -39,7 +39,7 @@ function FileTreeNode({ node, depth = 0, onFileOpen }: { node: FileNode; depth?:
         title={node.path}
       >
         {getFileIcon(node.name)}
-        <span className="text-[11px] text-brand-green-soft truncate group-hover:text-white transition-colors">
+        <span className="text-[11px] text-brand-green-soft truncate group-hover:text-brand-green transition-colors">
           {node.name}
         </span>
       </div>
@@ -63,7 +63,7 @@ function FileTreeNode({ node, depth = 0, onFileOpen }: { node: FileNode; depth?:
         ) : (
           <Folder className="h-3.5 w-3.5 text-brand-amber shrink-0" />
         )}
-        <span className="text-[11px] text-brand-green-soft truncate font-medium group-hover:text-white transition-colors">
+        <span className="text-[11px] text-brand-green-soft truncate font-medium group-hover:text-brand-green transition-colors">
           {node.name}
         </span>
       </div>

@@ -141,7 +141,7 @@ function ActionCard({ action }: { action: ActionItem }) {
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-white/[0.02] transition-colors text-left"
+        className="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-brand-border/40 transition-colors text-left"
       >
         {verbatim || hasBody ? (
           expanded ? (

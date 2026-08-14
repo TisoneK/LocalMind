@@ -40,14 +40,14 @@ const PHASE_META: Record<
   AgentPhase['type'],
   { icon: string; color: string; label: string }
 > = {
-  plan_created: { icon: '📋', color: 'text-blue-400', label: 'Plan built' },
-  node_advanced: { icon: '→', color: 'text-green-400', label: 'Step advanced' },
-  gate_passed: { icon: '✓', color: 'text-green-400', label: 'Verified' },
-  gate_failed_replan: { icon: '⚠', color: 'text-amber-400', label: 'Replanning' },
-  orchestrator_replan_start: { icon: '🔄', color: 'text-purple-400', label: 'Orchestrator notified' },
-  orchestrator_replan_done: { icon: '🔄', color: 'text-purple-400', label: 'Orchestrator replanned' },
-  orchestrator_replan_failed: { icon: '🔄', color: 'text-purple-400', label: 'Orchestrator replan failed' },
-  agent_loop_failure: { icon: '✗', color: 'text-red-400', label: 'Agent loop failed' },
+  plan_created: { icon: '📋', color: 'text-brand-blue', label: 'Plan built' },
+  node_advanced: { icon: '→', color: 'text-brand-green', label: 'Step advanced' },
+  gate_passed: { icon: '✓', color: 'text-brand-green', label: 'Verified' },
+  gate_failed_replan: { icon: '⚠', color: 'text-brand-amber', label: 'Replanning' },
+  orchestrator_replan_start: { icon: '🔄', color: 'text-brand-purple', label: 'Orchestrator notified' },
+  orchestrator_replan_done: { icon: '🔄', color: 'text-brand-purple', label: 'Orchestrator replanned' },
+  orchestrator_replan_failed: { icon: '🔄', color: 'text-brand-purple', label: 'Orchestrator replan failed' },
+  agent_loop_failure: { icon: '✗', color: 'text-brand-red', label: 'Agent loop failed' },
 };
 
 function AgentPhasesBase({ phases, isStreaming }: AgentPhasesProps) {
@@ -84,16 +84,16 @@ function AgentPhasesBase({ phases, isStreaming }: AgentPhasesProps) {
                     {meta.label}
                   </span>
                   {phase.iteration !== undefined && (
-                    <span className="text-brand-muted/60 text-[10px]">
+                    <span className="text-brand-green-faint text-[10px]">
                       iter {phase.iteration}
                     </span>
                   )}
                 </div>
-                <div className="text-brand-fg-muted text-xs leading-tight mt-0.5 break-words">
+                <div className="text-brand-green-muted text-xs leading-tight mt-0.5 break-words">
                   {phase.label}
                 </div>
                 {phase.detail && (
-                  <div className="text-brand-muted/70 text-[11px] leading-tight mt-0.5 break-words">
+                  <div className="text-brand-green-faint text-[11px] leading-tight mt-0.5 break-words">
                     {phase.detail}
                   </div>
                 )}
