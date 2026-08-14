@@ -9,7 +9,7 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
-| Buffy | openai/gpt-5.6-luna (lately deepseek/deepseek-v4-flash — see Observations) | 2026-07-31 | 2026-08-09 | 14 |
+| Buffy | openai/gpt-5.6-luna (lately deepseek/deepseek-v4-flash — see Observations) | 2026-07-31 | 2026-08-14 | 16 |
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 
@@ -142,3 +142,8 @@ Updated registry row:
   conditional sites); `_plan_stream` is free-text injected into the
   system prompt with no structured DAG; frontend ignores 4 of 5
   verify/replan/failure events. No product code changed. (2026-08-13)
+
+- **Buffy / openai/gpt-5.6-luna:** Session 197 reproduced and fixed a
+  production web-search contract mismatch: the AgentLoop passed `reasoning`
+  into `_handle_web_search_result()` but the handler signature rejected it.
+  Full CI passed with 1748 backend tests. (2026-08-14)

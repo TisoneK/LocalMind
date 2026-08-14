@@ -2770,3 +2770,38 @@ program + ADR-22). -->
 - **Next (backlog):** deterministic engine web_search fast-path for the weather signal
   (the Session 193 file-ops pattern) so even the agent-loop's web_search call is
   guaranteed; wire the ambiguous file-ask reply through the deterministic chain.
+
+---
+## 2026-08-14 — Session 196
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Review the uploaded Freebuff/Codebuff orchestration research against official
+  Codebuff/Freebuff sources and LocalMind's current runtime; record verified contracts,
+  correct unsupported claims, and identify remaining implementation gaps.
+- **Commits:** 1 docs(review) (`af324f5`); context closeout follows. No product behavior
+  was changed.
+- **Done:** Wrote `.context/memory/reviews/2026-08-14-review.md`, updated
+  `docs/prior-art-codebuff-freebuff-architecture.md`, and added backlog items
+  B-2026-08-14-1..3 for legacy heuristic removal, parallel workspace safety, and
+  bounded parent-facing child results. The review confirms scoped agent definitions,
+  child allowlists, isolated-by-default history, structured outputs, generator
+  controls, and narrow specialist contracts; it rejects unverified A2A/hosted
+  transport claims as LocalMind requirements.
+- **Validation:** `sh scripts/ci-check.sh` passed before review: 1747 backend tests,
+  Ruff clean, frontend TypeScript clean, ESLint 0 errors / 64 existing warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review.md`.
+- **Open items:** B-2026-08-14-1..3; no product changes in this session.
+
+---
+## 2026-08-14 — Session 197
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Fix the Kitengela weather web-search failure where
+  `AgentLoop._handle_web_search_result()` rejected the `reasoning` keyword.
+- **Commits:** 1 product (`c073386`) + 1 docs(review) (`7f32c72`); context closeout follows.
+- **Outcome:** done — added the optional `reasoning` parameter at the handler boundary and a focused regression test. No routing or provider changes.
+- **Validation:** focused test 1 passed; full `sh scripts/ci-check.sh` passed: 1748 backend tests, Ruff clean, frontend TypeScript clean, ESLint 0 errors / 64 existing warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review-2.md`.
+- **Open items:** none from the bug fix; prior ADR-8 follow-ups B-2026-08-14-1..3 remain open.

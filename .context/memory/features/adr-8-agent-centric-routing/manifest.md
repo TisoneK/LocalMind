@@ -260,3 +260,36 @@ Four implementation phases (multi-session):
 - **Flaw-log compliance:** no agent-loop change — the deterministic path
   bypasses the loop rather than modifying it, so no real-model test gate
   applies (the executor tests exercise real find_path/file_reader).
+
+## Session 196 — Freebuff / Codebuff orchestration review (completed)
+
+- **Scope:** research and architecture review only; no product behavior changes.
+- **Result:** official Codebuff definitions/docs verify scoped agent contracts,
+  child allowlists, isolated-by-default history, output modes/schemas,
+  generator controls, narrow specialist tools, and structured parent results.
+  Freebuff's README verifies specialized agents and isolated Desktop workspaces.
+- **Corrections:** hosted `/api/v1/agent-runs`, `codebuff_metadata`,
+  `ancestorRunIds`, Google A2A endpoints, universal reviewer enforcement, and
+  an exact public Basher prompt/schema remain unverified and are not LocalMind
+  requirements.
+- **Durable findings:** H1 legacy `should_use_sub_agents()` branch, H2 shared
+  workspace in parallel delegation, and M1 unbounded parent-facing child prose
+  were added to the review and backlog as B-2026-08-14-1..3.
+- **Validation:** `sh scripts/ci-check.sh` passed before the review: 1747 backend
+  tests, Ruff clean, frontend TypeScript clean, ESLint 0 errors / 64 existing
+  warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review.md`.
+
+## Session 197 — Web-search reasoning contract fix (completed)
+
+- **Scope:** narrow backend bug fix; no routing or orchestration redesign.
+- **Root cause:** the primary AgentLoop web-search path passed
+  `reasoning=_step_reasoning()` to `_handle_web_search_result()`, but the
+  handler signature did not accept that keyword, so the search result crashed
+  before synthesis.
+- **Fix:** added the optional `reasoning` parameter to the handler boundary;
+  existing raw `thought` trace behavior remains unchanged.
+- **Validation:** focused regression passed; full `sh scripts/ci-check.sh`
+  passed with **1748 backend tests**, Ruff clean, frontend TypeScript clean,
+  and ESLint 0 errors / 64 existing warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review-2.md`.

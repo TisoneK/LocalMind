@@ -881,3 +881,34 @@ Product commit: `8f253bf`; review:
 ## 2026-08-01 — Buffy / openai/gpt-5.6-luna (Session 64)
 
 The backend prompt-token telemetry slice is additive to the ADR-8 runtime. It does not alter agent routing, delegation, or playbook contracts. Provider adapters now normalize real usage, and the closed-loop AgentLoop/Engine boundary carries usage through tool results, streaming terminal frames, forced synthesis, and evidence fallbacks so the Observe panel can distinguish real prompt counts from estimates. The OpenAI-compatible adapter retries once without optional `stream_options.include_usage` when a provider rejects that field. Focused validation passed; the one full-suite todo-plan wording failure remains unrelated.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 196)
+
+Reviewed the uploaded Freebuff/Codebuff orchestration research against official
+Codebuff docs, published agent definitions, the Freebuff README, and LocalMind's
+runtime. Confirmed the useful contract (scoped agents, spawn allowlists,
+isolated child history by default, structured outputs, deterministic generator
+steps, and narrow specialist workers), rejected unverified hosted transport/A2A
+claims as requirements, and recorded three LocalMind follow-ups: legacy routing
+branch removal, parallel workspace safety, and bounded parent-facing child
+results. No product behavior changed. Baseline CI was already green: 1747
+backend tests, Ruff clean, frontend TypeScript clean, ESLint 0 errors / 64
+existing warnings. Report: `.context/memory/reviews/2026-08-14-review.md`.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 197)
+
+The Kitengela weather request exposed a production contract mismatch in the
+AgentLoop web-search terminal path. The path passed structured
+`reasoning=_step_reasoning()` to `_handle_web_search_result()`, but the handler
+accepted only `safe_obs`, `query`, `thought`, `iteration`, `trace`, and its
+existing optional context. This raised `TypeError` after a successful search,
+so the user saw a failed tool result instead of weather data.
+
+Added `reasoning: str = ""` to the handler boundary as a backward-compatible
+acceptance fix. The current `AgentStep` model stores the raw `thought`, so no
+trace schema change was needed. Added `tests/core/test_web_search_handler.py`
+to exercise the async handler with the exact keyword and verify terminal output.
+Focused test passed; full CI passed with 1748 backend tests. No live provider
+call was needed after the failure was reproduced from the local call contract.

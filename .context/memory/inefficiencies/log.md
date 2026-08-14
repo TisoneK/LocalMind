@@ -356,3 +356,19 @@ if literally nothing slowed you down.
 - 2026-08-13 (Session 185, post-merge): ADR-19 level-aware memory retrieval keys off the dispatcher plan task_type, but ADR-22 demoted the dispatcher to a hint because free-tier misclassifies (3/8 prompts in the 184 smoke). A misclassified task retrieves the wrong memory levels. Fix direction: re-key the level-aware re-retrieval on the task_type the agent settles on during planning. Also: session numbers 176-179 are now ambiguous (two parallel branches used them) - cite commit SHAs when referencing sessions.
 
 - 2026-08-13 (Session 186): RESOLVED the ADR-19 x ADR-22 composition finding above. Level-aware memory retrieval + decision-ledger recall + decision sink + summarizer policy now key off `_settled_task_type = resolve_task_type(hint, intent)` — the task type the agent settles on during planning (intent is the settled routing for AGENT turns). Explicit canonical hints still win except a 'chat' hint on a non-CHAT routing (definitionally a misclassification). Full backend 1635 green.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 197)
+
+- **Problem:** The first `python --version` probe failed because this macOS
+  shell has no `python` alias; an initial compound probe stopped before the
+  remaining runtime output was shown. Two `code_search` calls also failed when
+  a compound/file `cwd` was supplied, and one later call hit the vendored-rg
+  executable path error.
+- **Cost:** Minor diagnostic delay; no product impact.
+- **Cause:** macOS PATH and project search-tool invocation constraints.
+- **Workaround / fix:** Used `python3` for discovery, the project
+  `backend/.venv/bin/python` for all checks, and single-directory `code_search`
+  calls for source navigation.
+- **Prevent next time:** Start runtime probes with the recorded venv path and
+  keep each code search scoped to one directory.
