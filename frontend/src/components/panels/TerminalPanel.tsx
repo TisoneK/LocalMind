@@ -114,11 +114,13 @@ export function TerminalPanel({
   }, []);
 
   // ── Auto-scroll ──
+  // Also re-scroll when execution starts so the live "executing…" cursor is
+  // visible immediately, before the first output line lands.
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [lines]);
+  }, [lines, isRunning]);
 
   // ── Focus input on mount ──
   useEffect(() => {
@@ -602,6 +604,15 @@ export function TerminalPanel({
             </div>
           );
         })}
+        {/* Live execution cursor — a blinking block + "executing…" while a
+            command runs, so the panel shows the shell working in realtime
+            even before the first output line lands. */}
+        {isRunning && (
+          <div className="flex items-center gap-1.5 px-1 pt-1" data-testid="terminal-executing">
+            <span className="terminal-cursor inline-block w-[7px] h-[13px] bg-brand-green align-middle" />
+            <span className="text-[10px] text-brand-green-muted">executing…</span>
+          </div>
+        )}
       </div>
 
       {/* ── Autocomplete Suggestions ── */}
@@ -641,6 +652,13 @@ export function TerminalPanel({
         <div className="flex items-center gap-1 px-2 py-1.5 bg-brand-bg-dark border-t border-brand-border">
           <span className="text-brand-green text-[11px] shrink-0">$</span>
           <div className="relative flex-1">
+            {/* Idle prompt cursor — a blinking block at the start of an empty
+                prompt so the terminal looks live and ready to type. Hidden
+                once the user types (the native caret takes over) or while a
+                command is running. */}
+            {!isRunning && input === '' && (
+              <span className="terminal-cursor pointer-events-none absolute left-0 top-1/2 h-[12px] w-[6px] -translate-y-1/2 bg-brand-green/70" />
+            )}
             <input
               ref={inputRef}
               type="text"
