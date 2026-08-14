@@ -31,6 +31,7 @@ import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -239,38 +240,148 @@ def _extract_relevant_section(content: str, user_question: str) -> str:
 
 # ── Extraction Templates ────────────────────────────────────────────
 
+_TIME_SENSITIVE_QUERY_RE = re.compile(
+    r"\b(weather|temperature|price|score|result|fixture|schedule|news|today|"
+    r"yesterday|current|forecast|rain|sunny|snow|wind|humidity|air\s+quality)\b",
+    re.IGNORECASE,
+)
+_MONTH_DATE_RE = re.compile(
+    r"\b(?P<month>Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+    r"Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+"
+    r"(?P<day>\d{1,2})(?:st|nd|rd|th)?(?:,\s*|\s+)(?P<year>\d{4})\b",
+    re.IGNORECASE,
+)
+_ISO_DATE_RE = re.compile(r"\b(?P<year>\d{4})-(?P<month>\d{1,2})-(?P<day>\d{1,2})\b")
+_NUMERIC_DATE_RE = re.compile(r"\b(?P<month>\d{1,2})/(?P<day>\d{1,2})/(?P<year>\d{4})\b")
 
-def _extract_web_search(content: str) -> ExtractedData:
-    """
-    Extract structured data from web search output.
 
-    Searches for URL patterns, snippet text, and titles in the
-    formatted search results.
+def _is_time_sensitive_query(user_question: str) -> bool:
+    return bool(_TIME_SENSITIVE_QUERY_RE.search(user_question or ""))
+
+
+def _dates_in_text(text: str) -> list[date]:
+    """Extract unambiguous calendar dates from a search-result block."""
+    dates: list[date] = []
+    for match in _MONTH_DATE_RE.finditer(text):
+        month = match.group("month").rstrip(".")
+        try:
+            parsed = datetime.strptime(
+                f"{month} {match.group('day')} {match.group('year')}",
+                "%B %d %Y",
+            )
+        except ValueError:
+            parsed = datetime.strptime(
+                f"{month} {match.group('day')} {match.group('year')}",
+                "%b %d %Y",
+            )
+        dates.append(parsed.date())
+    for pattern in (_ISO_DATE_RE, _NUMERIC_DATE_RE):
+        for match in pattern.finditer(text):
+            try:
+                dates.append(
+                    date(
+                        int(match.group("year")),
+                        int(match.group("month")),
+                        int(match.group("day")),
+                    )
+                )
+            except ValueError:
+                continue
+    return list(dict.fromkeys(dates))
+
+
+def _sanitize_time_sensitive_search(
+    content: str,
+    user_question: str,
+    today: date,
+) -> tuple[str, dict[str, object]]:
+    """Remove explicitly stale result blocks before current-data synthesis.
+
+    Search providers commonly return a mixture of current and archived pages.
+    The model must not choose an older dated block merely because it contains
+    a concrete value while a same-day result is also present.
     """
-    urls = re.findall(r'https?://[^\s<>"\')\]]+', content)
-    # Check for specific values (temperatures, prices, dates, etc.)
+    freshness: dict[str, object] = {
+        "checked": _is_time_sensitive_query(user_question),
+        "today": today.isoformat(),
+        "dated_blocks": 0,
+        "current_blocks": 0,
+        "stale_blocks": 0,
+        "filtered_blocks": 0,
+        "stale_only": False,
+    }
+    if not freshness["checked"]:
+        return content, freshness
+
+    blocks = [block for block in re.split(r"(?m)(?=^\s*\d+\.\s)", content) if block.strip()]
+    dated_blocks: list[tuple[str, list[date]]] = []
+    for block in blocks:
+        dated_blocks.append((block, _dates_in_text(block)))
+
+    dated = [(block, dates) for block, dates in dated_blocks if dates]
+    current = [
+        (block, dates)
+        for block, dates in dated
+        if today in dates
+    ]
+    stale = [
+        (block, dates)
+        for block, dates in dated
+        if any(item < today for item in dates) and today not in dates
+    ]
+    freshness["dated_blocks"] = len(dated)
+    freshness["current_blocks"] = len(current)
+    freshness["stale_blocks"] = len(stale)
+
+    if not dated:
+        return content, freshness
+
+    if current:
+        kept = [
+            block
+            for block, dates in dated_blocks
+            if not dates or today in dates
+        ]
+        freshness["filtered_blocks"] = len(blocks) - len(kept)
+        return "\n".join(kept).strip(), freshness
+
+    # No result is explicitly dated today. Keep only undated evidence; the
+    # caller will return an honest gap report instead of presenting old data.
+    kept = [block for block, dates in dated_blocks if not dates]
+    freshness["stale_only"] = True
+    freshness["filtered_blocks"] = len(blocks) - len(kept)
+    return "\n".join(kept).strip(), freshness
+
+
+def _extract_web_search(
+    content: str,
+    today: Optional[date] = None,
+    user_question: str = "",
+) -> ExtractedData:
+    """Extract search data and enforce freshness for live-data questions."""
+    today = today or date.today()
+    sanitized, freshness = _sanitize_time_sensitive_search(content, user_question, today)
+    urls = re.findall(r'https?://[^\s<>"\')\]]+', sanitized)
     has_values = bool(
-        re.search(r"\d+\.?\d*\s*°[CF]", content)  # Temperature
-        or re.search(r"\$\d+[\d,.]*", content)  # Price
-        or re.search(r"\d{1,2}:\d{2}\s*(AM|PM)", content, re.IGNORECASE)  # Time
-        or re.search(r"\d{1,2}\s+(vs|v\.?)\s+\d{1,2}", content)  # Score
+        re.search(r"\d+\.?\d*\s*°[CF]", sanitized)
+        or re.search(r"\$\d+[\d,.]*", sanitized)
+        or re.search(r"\d{1,2}:\d{2}\s*(AM|PM)", sanitized, re.IGNORECASE)
+        or re.search(r"\d{1,2}\s+(vs|v\.?)\s+\d{1,2}", sanitized)
     )
-
-    # Check if results are link-only (URLs without substantive content)
     snippet_lines = [
         line
-        for line in content.split("\n")
-        if line.strip() and not line.strip().startswith("http") and len(line.strip()) > 20  # Non-trivial text
+        for line in sanitized.split("\n")
+        if line.strip() and not line.strip().startswith("http") and len(line.strip()) > 20
     ]
-
     return ExtractedData(
         intent=Intent.WEB_SEARCH,
-        raw_content=content,
+        raw_content=sanitized,
         fields={
             "urls": urls[:10],
             "url_count": len(urls),
             "snippet_lines": snippet_lines[:5],
             "has_substantive_content": len(snippet_lines) >= 2,
+            "freshness": freshness,
         },
         source_urls=urls[:5],
         has_specific_values=has_values,
@@ -387,15 +498,22 @@ def _check_sufficiency(
             reason=f"Tool returned an error: {extracted.raw_content[:200]}",
         )
 
-    if extracted.is_empty:
-        return SufficiencyResult(
-            level=SufficiencyLevel.INSUFFICIENT,
-            reason="Tool returned empty output",
-        )
-
     # ── Intent-specific sufficiency rules ────────────────────────
 
     if extracted.intent == Intent.WEB_SEARCH:
+        freshness = extracted.fields.get("freshness", {})
+        if isinstance(freshness, dict) and freshness.get("stale_only"):
+            today = freshness.get("today", "today")
+            return SufficiencyResult(
+                level=SufficiencyLevel.INSUFFICIENT,
+                reason=f"Search results contained only dated data older than {today}; current data was not verified",
+            )
+
+        if extracted.is_empty:
+            return SufficiencyResult(
+                level=SufficiencyLevel.INSUFFICIENT,
+                reason="Tool returned empty output",
+            )
         # Search snippets are almost never sufficient for real answers.
         # They are teasers that point to full pages. Only mark SUFFICIENT
         # when snippets contain the exact answer (specific values).
@@ -408,15 +526,7 @@ def _check_sufficiency(
         # If search has substantive content in snippets
         if extracted.fields.get("has_substantive_content"):
             # Check if the question is about time-sensitive data
-            is_time_sensitive = bool(
-                re.search(
-                    r"\b(weather|temperature|price|score|result|fixture|"
-                    r"schedule|news|today|yesterday|current|forecast|rain|"
-                    r"sunny|snow|wind|humidity|air\s+quality)\b",
-                    user_question,
-                    re.IGNORECASE,
-                )
-            )
+            is_time_sensitive = _is_time_sensitive_query(user_question)
             if is_time_sensitive and not extracted.has_specific_values:
                 urls = extracted.source_urls
                 if urls:
@@ -451,6 +561,12 @@ def _check_sufficiency(
         return SufficiencyResult(
             level=SufficiencyLevel.INSUFFICIENT,
             reason="Search returned no results",
+        )
+
+    if extracted.is_empty:
+        return SufficiencyResult(
+            level=SufficiencyLevel.INSUFFICIENT,
+            reason="Tool returned empty output",
         )
 
     if extracted.intent == Intent.WEB_FETCH:
@@ -503,8 +619,9 @@ _SYNTHESIS_PROMPTS = {
         "2. Cite sources by referencing the URLs\n"
         "3. If the data does not contain the answer, say so honestly\n"
         "4. Never fabricate specific numbers, dates, or facts\n"
-        "5. If the data is insufficient, suggest what would help\n"
-        "6. Be concise but complete"
+        "5. If the data is insufficient, say so honestly instead of filling gaps from memory\n"
+        "6. For current/time-sensitive questions, never present an explicitly older dated result as current\n"
+        "7. Be concise but complete"
     ),
     Intent.WEB_FETCH: (
         "You are LocalMind's answer synthesizer. The user asked a question, and "
@@ -714,7 +831,7 @@ class AnswerSynthesizer:
 
         try:
             # ── Phase 1: Extraction ───────────────────────────────
-            extracted = self._extract(tool_results, intent)
+            extracted = self._extract(tool_results, intent, user_question)
 
             # ── Phase 2: Sufficiency Check ────────────────────────
             sufficiency = _check_sufficiency(extracted, user_question)
@@ -882,10 +999,20 @@ class AnswerSynthesizer:
                 is_synthesized=False,
             )
 
-    def _extract(self, tool_results: list[ToolResult], intent: Intent) -> ExtractedData:
+    def _extract(
+        self,
+        tool_results: list[ToolResult],
+        intent: Intent,
+        user_question: str = "",
+    ) -> ExtractedData:
         """Run extraction on the accumulated tool results."""
-        # Combine all tool results into a single content string
         combined_content = "\n\n".join(r.content for r in tool_results if r.content)
+        if intent == Intent.WEB_SEARCH:
+            return _extract_web_search(
+                combined_content,
+                today=date.today(),
+                user_question=user_question,
+            )
 
         extractor = _EXTRACTORS.get(intent, _extract_generic)
         return extractor(combined_content)
