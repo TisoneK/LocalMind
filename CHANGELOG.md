@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `human_size` byte-formatting helper is now shared from `core/utils.py` instead of being duplicated in `shell.py` and `filesystem.py`. A bug fix or new unit will now propagate to all callers automatically
 
 ### Fixed
+- Fixed greetings and simple acknowledgments entering the parent tool loop. Messages such as `Hi` now use the deterministic conversational boundary with zero tool calls and no provider wait, while conversational questions use direct chat without tool planning.
 - Fixed the live chat stream going silent while the parent agent waited on a slow model or tool. Heartbeats now flush pending parent tool progress and bounded results immediately, while preserving delegated child-output privacy and the normal metrics/observation queue.
 - Fixed current time/date requests accidentally emitting rejected shell commands such as `Get-Date`. The parent loop now corrects clock queries to `sysinfo` and returns the verified local date/time unchanged, preventing synthesis from corrupting dates.
 - Removed the legacy pre-loop sub-agent heuristic and decomposition path. Cross-domain delegation now starts inside the selected parent agent through scoped delegation tools, preserving parent context and synthesis.

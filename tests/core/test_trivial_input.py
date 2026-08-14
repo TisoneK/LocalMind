@@ -665,3 +665,26 @@ async def test_engine_conversational_question_emits_prompt_tokens():
     # The stored per-session observation carries the same prompt count.
     stored = engine._last_observation.get("sess-conv-usage")
     assert stored and stored.get("context_tokens") == 84
+
+
+@pytest.mark.asyncio
+async def test_engine_greeting_bypasses_parent_tools_and_provider():
+    """A greeting must not enter the parent loop or acquire an adapter."""
+    from core.engine import Engine
+    from core.obs import ObsCollector
+
+    engine = Engine()
+    obs = ObsCollector()
+    with (
+        patch("core.agent_runtime.get_adapter", side_effect=AssertionError("greeting acquired adapter")),
+        patch("core.agent_runtime.ParentAgent.run", side_effect=AssertionError("greeting entered parent loop")),
+    ):
+        chunks = [c async for c in engine.process("Hi", "sess-greeting-direct", obs=obs)]
+
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert "localmind" in text.lower()
+    assert any(getattr(c, "done", False) for c in chunks)
+    assert not any(event.type == "tool_call" for event in obs.history())
+    assert [event.data["status"] for event in obs.history() if event.type == "stage_timing"] == [
+        "skipped", "skipped", "skipped", "done", "skipped"
+    ]
