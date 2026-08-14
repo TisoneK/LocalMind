@@ -1465,6 +1465,9 @@ class AgentLoop:
                     tool_names=initialization.tool_names,
                     plan_steps=initialization.plan_steps,
                     confidence=initialization.confidence,
+                    # ADR-34 B-12: record the init prompt budget so init vs
+                    # execution sizes are measured independently.
+                    init_prompt_chars=initialization.init_prompt_chars,
                 )
 
             if initialization.is_direct:
@@ -4801,11 +4804,14 @@ class AgentLoop:
                             await event_queue.put(("understanding", line))
                 # Stream ended — parse the full JSON and emit the final decision.
                 decision = parse_initialization("".join(chunks))
+                # ADR-34 B-12: record the init prompt size for budget measurement.
+                decision.init_prompt_chars = len(prompt)
                 logger.info(
-                    "[agent.loop] parent initialization mode=%s tools=%s steps=%d",
+                    "[agent.loop] parent initialization mode=%s tools=%s steps=%d prompt_chars=%d",
                     decision.mode,
                     decision.tool_names,
                     len(decision.plan_steps),
+                    decision.init_prompt_chars,
                 )
                 await event_queue.put(("decision", decision))
                 decision_sent = True

@@ -33,6 +33,9 @@ class InitializationDecision:
     success_criteria: list[str] = field(default_factory=list)
     confidence: float = 0.0
     raw: str = ""
+    # ADR-34 B-12: record the init prompt size so init vs execution budgets
+    # are measured independently. Set by the streaming initializer.
+    init_prompt_chars: int = 0
 
     @property
     def is_direct(self) -> bool:
@@ -58,6 +61,69 @@ class InitializationDecision:
         return "\n".join(lines)[:1800]
 
 
+def _compact_capability_summary(available_tools: Iterable[dict[str, Any]]) -> str:
+    """Build a compact, categorized capability summary for the init prompt.
+
+    ADR-34 B-12: the initializer does NOT need the full 180-char description
+    of every tool. It only needs to know WHAT CATEGORIES of capability exist
+    so it can decide direct/clarify/execute and name the likely tool_names.
+    Full tool schemas are loaded only for the execution path after the
+    decision is made.
+
+    Returns a single string like:
+      file ops: file_task, file_write, file_edit, find_path
+      code: code_exec, shell, git, process
+      web: web_search, web_fetch, browse
+      ...
+    """
+    # Map tool names to coarse capability categories. The categories are
+    # deliberately broad — the model only needs to recognize the shape of
+    # work it can delegate to, not the exact schema.
+    category_keywords: dict[str, list[str]] = {
+        "file ops": [
+            "file_task", "file_write", "file_edit", "find_path",
+            "propose_write_file", "propose_str_replace", "apply_proposed_edit",
+            "csv", "json", "sql",
+        ],
+        "code": ["code_exec", "shell", "git", "process"],
+        "web": ["web_search", "web_fetch", "browse"],
+        "memory": ["memory_op", "skill"],
+        "system": ["sysinfo", "observe", "diagnostics"],
+        "planning": ["add_subgoal", "update_subgoal", "create_plan"],
+        "delegation": ["delegate", "delegate_parallel", "delegate_inline", "best_of_n_edit"],
+        "math": ["calculate"],
+    }
+    # Collect all tool names
+    tool_names: list[str] = []
+    for tool in available_tools:
+        name = str(tool.get("intent") or tool.get("name") or "").strip()
+        if name:
+            tool_names.append(name)
+    if not tool_names:
+        return "(no tools available)"
+    # Bucket each tool into its category
+    categorized: dict[str, list[str]] = {cat: [] for cat in category_keywords}
+    uncategorized: list[str] = []
+    for name in tool_names:
+        placed = False
+        for cat, keywords in category_keywords.items():
+            if any(name == kw or name.startswith(kw) for kw in keywords):
+                categorized[cat].append(name)
+                placed = True
+                break
+        if not placed:
+            uncategorized.append(name)
+    # Build the summary
+    lines: list[str] = []
+    for cat in category_keywords:
+        tools_in_cat = categorized[cat]
+        if tools_in_cat:
+            lines.append(f"- {cat}: {', '.join(tools_in_cat)}")
+    if uncategorized:
+        lines.append(f"- other: {', '.join(uncategorized)}")
+    return "\n".join(lines)
+
+
 def build_initialization_prompt(
     user_message: str,
     available_tools: Iterable[dict[str, Any]],
@@ -66,16 +132,15 @@ def build_initialization_prompt(
 ) -> str:
     """Build the model-owned request interpretation prompt.
 
-    The model is asked for a decision, not chain-of-thought.  The response is
-    intentionally suitable for streaming internally and parsing at the
-    parent/runtime boundary.
+    ADR-34 B-12: the init prompt uses a COMPACT CAPABILITY SUMMARY instead
+    of listing all 30 tools with 180-char descriptions. The model only needs
+    to recognize the shape of work it can delegate to (file ops, code, web,
+    memory, system, planning, delegation, math) — full tool schemas are
+    loaded only for the execution path after the decision is made.
+
+    The response is intentionally suitable for streaming internally and
+    parsing at the parent/runtime boundary.
     """
-    tool_lines = []
-    for tool in available_tools:
-        name = str(tool.get("intent") or tool.get("name") or "").strip()
-        description = str(tool.get("description") or "").strip()
-        if name:
-            tool_lines.append(f"- {name}: {description[:180]}")
     history_lines = []
     for item in list(history or [])[-6:]:
         role = str(item.get("role", ""))
@@ -84,21 +149,18 @@ def build_initialization_prompt(
             history_lines.append(f"{role}: {content}")
 
     history_block = "\nRecent conversation:\n" + "\n".join(history_lines) if history_lines else ""
-    tools_block = "\n".join(tool_lines) or "(no tools available)"
-    return f"""You are the initialization and goal-understanding stage of LocalMind's parent agent.
+    tools_block = _compact_capability_summary(available_tools)
+    return f"""You are the initialization stage of LocalMind's parent agent.
 
-Your only job is to decide how the parent should handle the user's latest
-request. Do not execute tools. Do not invent tool results. Do not reveal
-private chain-of-thought. Return ONLY one JSON object matching the schema below.
+Decide how the parent should handle the user's latest request. Do not
+execute tools. Return ONLY one JSON object matching the schema.
 
-Decision modes:
-- direct: the request needs no tools; put the complete user-facing answer in response.
-- clarify: a necessary detail is missing or genuinely ambiguous; put one concise
-  question in clarifying_question and do not execute tools.
-- execute: tools or multi-step reasoning are needed; provide an acknowledgement,
-  a bounded goal-level plan, the tool names likely needed, and success criteria.
+Modes:
+- direct: no tools needed; put the complete answer in response.
+- clarify: a material detail is missing; put one question in clarifying_question.
+- execute: tools/multi-step reasoning needed; provide acknowledgement, plan, tool_names, success_criteria.
 
-Available tools:
+Capabilities (use these names in tool_names):
 {tools_block}
 
 {env_context}{history_block}
@@ -106,7 +168,7 @@ Available tools:
 JSON schema:
 {{
   "mode": "direct|clarify|execute",
-  "acknowledgement": "short user-facing acknowledgement",
+  "acknowledgement": "short user-facing acknowledgement (<=180 chars)",
   "response": "complete answer only for direct mode",
   "objective": "what the user actually wants",
   "clarifying_question": "one question only for clarify mode",
@@ -117,13 +179,10 @@ JSON schema:
 }}
 
 Rules:
-- Use direct for greetings, casual conversation, and general questions that need no local or live data.
-- Use execute for anything requiring current information, files, the machine,
-  code, browser, memory, or external evidence.
-- Use clarify only when proceeding would require guessing a material requirement.
-- The plan must describe the next actions, not hidden reasoning.
-- Keep acknowledgement under 180 characters, response under 1200 characters,
-  plan_steps at most 8, tool_names at most 8, and success_criteria at most 4.
+- direct for greetings and general questions needing no local/live data.
+- execute for anything requiring current info, files, code, browser, memory, or evidence.
+- clarify only when proceeding would require guessing a material requirement.
+- acknowledgement <=180 chars, response <=1200 chars, plan_steps <=8, tool_names <=8, success_criteria <=4.
 
 User request:
 {user_message}

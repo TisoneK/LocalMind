@@ -3202,3 +3202,16 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-14-12 (Stage-specific prompt budget) is the last ADR-34 session.
 - **Report:** `.context/memory/reviews/2026-08-15-review-32.md`
 - **Notes:** Windows/Linux keep the default OS frame for now — macOS-only `hiddenInset` is the safe first step. The `ObjectivesPanel.tsx` file is kept dormant for potential re-mount behind a flag.
+
+---
+
+## 2026-08-15 — Session 229
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai) | **Platform:** Z.ai cloud sandbox (Linux 6.5) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-34-realtime-workspace
+- **Task:** B-2026-08-14-12 — Stage-specific prompt budget and model profile (ADR-34 P3). Replace the full initialization tool catalog with compact capability summaries, load full schemas only after execute is selected, compress static prompts, record init vs execution budgets independently.
+- **Commits:** 1 product (`feat(agent): compact init prompt capability summary, record init_prompt_chars budget (ADR-34 B-12)`)
+- **Outcome:** done — new `_compact_capability_summary()` groups 30 tools into 8 coarse categories (file ops, code, web, memory, system, planning, delegation, math). The init prompt now shows tool NAMES only, not 180-char descriptions. Init prompt reduced from 7,039 chars (1,759 tokens) to 1,795 chars (448 tokens) — 74% reduction. With env_context in live smoke: 3,730 chars (was ~7,039+). Added `init_prompt_chars` field to `InitializationDecision`, emitted in `agent_initialization_done` obs event. 8 new tests, 1,733 backend tests pass, 185 frontend tests pass. This completes all 6 ADR-34 backlog items.
+- **Open items:** None — ADR-34 is fully implemented. The 5s ack SLO is not met with the free Zen model (6.3s), but ADR-34 §2 explicitly allows this ("a complete remote/free provider answer is not guaranteed under 5s"). A faster paid model would benefit directly from the 74% smaller prompt.
+- **Report:** `.context/memory/reviews/2026-08-15-review-33.md`
+- **Notes:** ADR-34 completion summary: 6 sessions (224-229), 37 new tests, 1,918 total tests pass. All contract events fire in order: ack → understanding → plan → tool → evidence → synthesis.

@@ -1,5 +1,5 @@
 # Current Task
 
 - **Status:** idle
-- **Last completed:** Session 228 — B-2026-08-14-11 Chat-shell cleanup (ADR-34 P2). Custom TitleBar component, compact tool chips in chat, removed Autonomous Work block. 5 new TitleBar tests, 185 frontend tests pass.
-- **Next:** Session 229 — B-2026-08-14-12 Stage-specific prompt budget and model profile (ADR-34 P3). Measure initialization separately from execution. Replace the full initialization tool catalog with compact capability summaries, load full schemas only after execute is selected, and compress static prompts/tool descriptions. Evaluate a low-latency thinker model/profile without adding a dispatcher or intent classifier.
+- **Last completed:** Session 229 — B-2026-08-14-12 Stage-specific prompt budget (ADR-34 P3). Compact capability summary replaces full tool descriptions in init prompt. 74% prompt reduction (7,039 → 1,795 chars). init_prompt_chars recorded independently. 8 new tests, 1,733 backend + 185 frontend tests pass. **ADR-34 is fully implemented.**
+- **Next:** ADR-34 is complete. All 6 backlog items (B-7 through B-12) are done. The next work item is at the user's discretion — potential follow-ups include: (1) a faster thinker model profile when a paid Zen key is available, (2) extracting the Anomaly Alerts / Runtime Snapshot from the deleted ObservabilityTab into the Agent Workspace, (3) a Windows/Linux custom title-bar overlay, (4) the agentRunsReducer refactor (deferred from B-9).
