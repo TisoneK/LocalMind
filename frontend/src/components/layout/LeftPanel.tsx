@@ -348,8 +348,11 @@ export function LeftPanel({
 
       {/* Todos — always show so users can add tasks even when the list is empty.
           Previously the `todos.length > 0` condition made it impossible to
-          create the first todo via the UI (chicken-and-egg). */}
-      {activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length === 0 && (
+          create the first todo via the UI (chicken-and-egg).
+          Session 212 (realtime-alive-ui): keep an EXISTING plan visible while
+          tools run so the user watches steps check off live; only the empty
+          "add a task" state is hidden during active work to reduce clutter. */}
+      {(activeToolCalls.filter(tc => isActiveToolStatus(tc.status)).length === 0 || todos.length > 0) && (
         <div className="border-t border-brand-border p-3">
           <div className="flex items-center gap-1.5 mb-2">
             <CheckSquare className="h-3 w-3 text-brand-amber" />
