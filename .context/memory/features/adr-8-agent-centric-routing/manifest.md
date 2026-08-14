@@ -414,3 +414,20 @@ Four implementation phases (multi-session):
 - **Report:** `.context/memory/reviews/2026-08-14-review-11.md`.
 - **Limitation:** no live-provider smoke; local provider credentials were
   unavailable.
+
+## Session 207 — User-visible parent workflow progress (completed)
+
+- **What:** made substantive parent-agent turns visibly acknowledge, plan, act,
+  and verify instead of exposing raw planner/reasoning text or appearing silent.
+- **Implementation:** `AgentRuntime` emits an immediate acknowledgement;
+  `AgentLoop` emits concise planning, next-action, and verification statuses;
+  raw provider planning/reasoning remains internal to `TaskState` and evidence.
+  Native tool/delegation/acceptance behavior is unchanged.
+- **Validation:** backend **1754 passed, 2 skipped**; frontend **141 passed**;
+  TypeScript/build passed; changed-file Ruff clean; ESLint 0 errors / 64 existing
+  warnings. Repository-wide Ruff retains unrelated pre-existing test findings.
+- **Product commit:** `0f65c22`.
+- **Report:** `.context/memory/reviews/2026-08-14-review-12.md`.
+- **Notes:** `.context/memory/sessions/2026-08-14-207/notes.md`.
+- **Limitation:** no live-provider smoke; local provider credentials were
+  unavailable.

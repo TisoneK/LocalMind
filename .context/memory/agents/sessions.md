@@ -2914,3 +2914,16 @@ program + ADR-22). -->
 - **Report:** `.context/memory/reviews/2026-08-14-review-11.md`.
 - **Notes:** `.context/memory/sessions/2026-08-14-206/notes.md`.
 - **Limitation:** no live-provider smoke; local provider credentials were unavailable.
+
+---
+## 2026-08-14 — Session 207
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Make substantive LocalMind parent-agent turns visibly acknowledge, plan, act, and verify like the example agent, without exposing raw provider planner/reasoning text.
+- **Commits:** product `0f65c22`; context closeout committed separately.
+- **Outcome:** done — `AgentRuntime` acknowledges before expensive work; `AgentLoop` emits concise planning, next-action, and verification statuses; raw planner/provider reasoning stays internal to task state/evidence; native tools, delegation, acceptance, and SSE result behavior remain unchanged.
+- **Validation:** backend 1754 passed / 2 skipped; frontend 141 passed; TypeScript/build passed; changed-file Ruff clean; ESLint 0 errors / 64 existing warnings. Repository-wide Ruff retains unrelated pre-existing test findings.
+- **Report:** `.context/memory/reviews/2026-08-14-review-12.md`.
+- **Notes:** `.context/memory/sessions/2026-08-14-207/notes.md`.
+- **Limitation:** no live-provider smoke; local provider credentials were unavailable.

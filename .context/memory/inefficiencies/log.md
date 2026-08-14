@@ -486,3 +486,18 @@ if literally nothing slowed you down.
   `AgentRuntime._process_unlocked()` at the boundary where they are needed.
 - **Prevent next time:** Treat helpers imported by `core.engine` submodules as
   lazy-import candidates when wiring them into the runtime module.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 207)
+
+- **Problem:** The first workflow-progress test fixture used a shortened
+  `STEPS:` format that LocalMind's parser intentionally rejects, so the test
+  could not observe the parsed plan summary.
+- **Cost:** One focused test failure and one fixture correction.
+- **Cause:** The fixture omitted the planner contract's `UNDERSTANDING`/
+  `ARGS_PRECHECK` framing and used filler step labels that the parser filters.
+- **Workaround / fix:** Made the fixture match the real structured planner
+  format and use concrete tool-bearing steps; the focused workflow tests then
+  passed.
+- **Prevent next time:** Reuse the actual planner output contract when testing
+  plan parsing, including concrete step wording that survives filler filtering.

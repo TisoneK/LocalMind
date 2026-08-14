@@ -762,3 +762,30 @@ After the smoke test passes, test a multi-step task (e.g. "Create hello world re
   tasks retain the parent-agent closed loop. The direct boundary must preserve
   persistence, observations, stage timing, and completion semantics, and must
   not grow into a second substantive router.
+
+---
+## ADR-27: Parent workflow progress is a user-facing lifecycle contract (2026-08-14)
+
+- **Author:** Buffy / openai/gpt-5.6-luna (Session 207)
+- **Status:** accepted + implemented
+- **Context:** LocalMind already performed parent-agent planning, tool execution,
+  observation, acceptance verification, and replanning, but substantive turns
+  could appear detached. The runtime did not acknowledge the request before
+  memory/provider work, and raw planner/provider reasoning was forwarded as
+  frontend thinking content. A user therefore saw long silence or garbled
+  internal text instead of the example-agent behavior: acknowledge → plan → act
+  → verify → report.
+- **Decision:** Treat concise lifecycle progress as part of the parent-agent
+  contract. Substantive turns emit an acknowledgement before expensive work,
+  summarize planning after the internal plan is parsed, report that the parent
+  is selecting its next action during provider waits, and announce verification
+  before the acceptance gate. Raw provider planner/reasoning tokens remain
+  internal evidence and task-state context; they are not a user-facing answer.
+- **Consequences:** The existing SSE `status_update` path becomes the primary
+  progress surface while native tool-call and bounded tool-result events remain
+  visible. The parent loop, not a new router or UI-specific agent, owns the
+  lifecycle. Direct greetings/conversation remain governed by ADR-26 and do not
+  receive substantive workflow statuses. Future workflow phases should add
+  concise status events rather than exposing raw chain-of-thought/provider
+  markup.
+- **Product commit:** `0f65c22`.

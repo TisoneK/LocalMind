@@ -1071,3 +1071,30 @@ found a circular import from loading `trivial_input` at module import time; the
 helper import is now lazy at the runtime boundary. Focused tests passed after
 that correction. Product commit: `8aefc51`; review:
 `.context/memory/reviews/2026-08-14-review-11.md`.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 207)
+
+The user wants LocalMind to behave like the example agent: acknowledge the
+request, work through a visible plan, act through tools, verify evidence, and
+continue/replan rather than appearing detached or exposing raw internal
+reasoning.
+
+The parent runtime already had the substantive workflow pieces: planning,
+TaskState, todos, evidence, acceptance criteria, replanning, delegation, and
+SSE tool progress. The missing contract was at the presentation boundary. A
+substantive request could spend time in memory/provider work without an
+acknowledgement, and raw provider planner/reasoning text was emitted as
+frontend thinking content.
+
+Session 207 adds an immediate runtime acknowledgement and concise parent
+statuses for plan creation, parsed plan summary, next-action selection during
+provider waits, and final verification. The full plan remains internal to the
+parent prompt/task state; raw provider planner/reasoning is not streamed as chat
+thinking. Native tool events, bounded results, delegation privacy, acceptance
+gates, and the single parent-agent execution path remain unchanged.
+
+Added deterministic workflow-progress regressions and updated the parent
+runtime contract test to consume the new acknowledgement before inspecting
+captured loop arguments. Product commit: `0f65c22`; review:
+`.context/memory/reviews/2026-08-14-review-12.md`.
