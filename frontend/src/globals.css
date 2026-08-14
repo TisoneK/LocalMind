@@ -87,24 +87,23 @@
   --color-brand-gh-green-border: var(--brand-gh-green-border);
 }
 
-/* LocalMind is dark-only by design: the dark palette is the default.
-   (Light theme variables and the `.dark` variant machinery were removed —
-   see the theming decision, Session 103.) */
+/* LocalMind keeps a dark-only design, using a lighter green-black palette
+   for improved readability and less visual heaviness. */
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.145 0 0);
+  --background: oklch(0.19 0 0);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: oklch(0.24 0 0);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
+  --popover: oklch(0.24 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
+  --primary: oklch(0.94 0 0);
+  --primary-foreground: oklch(0.22 0 0);
+  --secondary: oklch(0.32 0 0);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
+  --muted: oklch(0.32 0 0);
+  --muted-foreground: oklch(0.78 0 0);
+  --accent: oklch(0.32 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
@@ -125,35 +124,35 @@
   --sidebar-ring: oklch(0.556 0 0);
 
   /* ── LocalMind brand palette (dark-only) ── */
-  --brand-green: #39d353;
-  --brand-green-soft: #d4e8d4;
-  --brand-green-bright: #5af75a;
-  --brand-green-muted: #8ab08a;
-  --brand-green-faint: #5a7a5a;
-  --brand-green-line: #3a5a3a;
-  --brand-green-inline: #7ddf7d;
-  --brand-green-deleted: #6a8a6a;
-  --brand-green-code: #a8d8a8;
-  --brand-green-table-border: #27622e;
-  --brand-amber: #e8a420;
-  --brand-amber-warm: #f5a623;
-  --brand-amber-soft: #f5e0a0;
-  --brand-red: #e05555;
-  --brand-blue: #4a9eff;
-  --brand-purple: #9b8afb;
-  --brand-purple-soft: #d4a8ff;
-  --brand-border: #1a2a1a;
-  --brand-border-strong: #2a3a2a;
-  --brand-border-soft: #1a3d1a;
-  --brand-bg-deep: #040804;
-  --brand-bg-dark: #080d08;
-  --brand-bg-base: #0a0f0a;
-  --brand-bg-code: #0a120a;
-  --brand-bg-panel: #0d140d;
-  --brand-bg-panel-alt: #0d120d;
-  --brand-bg-chat-input: #0d150d;
-  --brand-bg-table: #0d110d;
-  --brand-bg-rail: #111a11;
+  --brand-green: #48d866;
+  --brand-green-soft: #e0f0e1;
+  --brand-green-bright: #76ff86;
+  --brand-green-muted: #a4c6aa;
+  --brand-green-faint: #75957b;
+  --brand-green-line: #52705a;
+  --brand-green-inline: #9be7a2;
+  --brand-green-deleted: #86a98c;
+  --brand-green-code: #c0e8c4;
+  --brand-green-table-border: #3f824d;
+  --brand-amber: #f0b43c;
+  --brand-amber-warm: #ffc052;
+  --brand-amber-soft: #f8e6ad;
+  --brand-red: #ed6b6b;
+  --brand-blue: #6bb2ff;
+  --brand-purple: #b2a5ff;
+  --brand-purple-soft: #e2c5ff;
+  --brand-border: #2a3d2d;
+  --brand-border-strong: #405847;
+  --brand-border-soft: #36583e;
+  --brand-bg-deep: #081008;
+  --brand-bg-dark: #0f1711;
+  --brand-bg-base: #141e16;
+  --brand-bg-code: #18261b;
+  --brand-bg-panel: #1c2b20;
+  --brand-bg-panel-alt: #19271d;
+  --brand-bg-chat-input: #1e2e22;
+  --brand-bg-table: #1b291f;
+  --brand-bg-rail: #25372a;
   --brand-bg-vsc-track: #0d1117;
   --brand-bg-vsc-thumb: #30363d;
   --brand-bg-vsc-hover: #484f58;
@@ -164,12 +163,12 @@
   --brand-gh-amber: #d29922;
   --brand-gh-green: #3fb950;
   --brand-gh-purple: #a371f7;
-  --brand-gh-text: #c9d1d9;
-  --brand-gh-red-soft: #df7d7d;
-  --brand-gh-green-soft: #a8c8a8;
-  --brand-gh-red-bg: #3a1a1a;
-  --brand-gh-green-bg: #111d11;
-  --brand-gh-green-border: #1a3a1a;
+  --brand-gh-text: #d7e2da;
+  --brand-gh-red-soft: #ef9999;
+  --brand-gh-green-soft: #b9d9bd;
+  --brand-gh-red-bg: #4a2424;
+  --brand-gh-green-bg: #18281b;
+  --brand-gh-green-border: #2d5535;
 }
 
 @layer base {
