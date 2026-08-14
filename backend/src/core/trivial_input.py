@@ -66,6 +66,9 @@ _GREETINGS = [
     r"hello+",
     r"hey+",
     r"heya+",
+    # Addressed greetings are still social turns: "Hey LM" and
+    # "Hello LocalMind" must not enter the parent/tool loop.
+    r"(?:hi+|hello+|hey+|heya+)\s+(?:lm|localmind)",
     r"howdy",
     r"sup\b",
     r"yo\b",

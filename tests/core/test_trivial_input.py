@@ -38,6 +38,13 @@ def test_greeting_hey():
     assert is_trivial_input("heya") is True
 
 
+def test_greeting_addressed_to_localmind():
+    """An addressed social greeting must stay on the zero-LLM path."""
+    for message in ("Hey LM", "hi lm", "Hello LocalMind", "hey localmind!"):
+        assert is_trivial_input(message) is True
+        assert trivial_intent(message) == "greeting"
+
+
 def test_greeting_good_morning():
     assert is_trivial_input("good morning") is True
     assert is_trivial_input("Good evening") is True
@@ -667,9 +674,10 @@ async def test_engine_conversational_question_emits_prompt_tokens():
     assert stored and stored.get("context_tokens") == 84
 
 
+@pytest.mark.parametrize("message", ["Hi", "Hey LM", "Hello LocalMind"])
 @pytest.mark.asyncio
-async def test_engine_greeting_bypasses_parent_tools_and_provider():
-    """A greeting must not enter the parent loop or acquire an adapter."""
+async def test_engine_greeting_bypasses_parent_tools_and_provider(message):
+    """A social greeting must not enter the parent loop or acquire an adapter."""
     from core.engine import Engine
     from core.obs import ObsCollector
 
@@ -679,7 +687,7 @@ async def test_engine_greeting_bypasses_parent_tools_and_provider():
         patch("core.agent_runtime.get_adapter", side_effect=AssertionError("greeting acquired adapter")),
         patch("core.agent_runtime.ParentAgent.run", side_effect=AssertionError("greeting entered parent loop")),
     ):
-        chunks = [c async for c in engine.process("Hi", "sess-greeting-direct", obs=obs)]
+        chunks = [c async for c in engine.process(message, f"sess-greeting-direct-{message}", obs=obs)]
 
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert "localmind" in text.lower()
