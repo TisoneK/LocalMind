@@ -4393,6 +4393,7 @@ class AgentLoop:
         iteration: int,
         trace: AgentTrace,
         user_question: str = "",
+        reasoning: str = "",
         adapter=None,
         allowed_tool_names: Optional[frozenset[str]] = None,
     ) -> AsyncIterator[StreamChunk]:

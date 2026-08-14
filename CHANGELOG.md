@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `human_size` byte-formatting helper is now shared from `core/utils.py` instead of being duplicated in `shell.py` and `filesystem.py`. A bug fix or new unit will now propagate to all callers automatically
 
 ### Fixed
+- Fixed weather web searches failing after the provider returned results because the agent loop passed a structured `reasoning` keyword that the web-search result handler did not accept. The handler now accepts that existing call contract, with regression coverage.
 - Fixed provider prompt-token telemetry not reaching the Observe panel. OpenAI-compatible and Ollama adapters now normalize real prompt/completion usage, preserve terminal/tool-call usage through AgentLoop and Engine paths, and fall back safely when a provider rejects optional streaming usage fields.
 - Fixed the Observe panel's live performance metrics staying blank during streaming. Latency now follows the active request clock, current prompt-token telemetry is used for Context Tokens when available, and completion tokens are never mislabeled as context.
 - Fixed file-upload failures being silently buried as an empty assistant response. Upload/storage errors now use the same typed streaming events as other chat failures, so the UI displays the error and cleanly ends the response.
