@@ -187,7 +187,8 @@ You have access to these tools: {tool_summary}
 - file_task: Read file contents (PDF, DOCX, CSV, code, images)
 - file_write: Create or overwrite files on disk
 - edit_file: Edit existing files with search/replace/insert operations
-- sysinfo: Get system specs (CPU, RAM, disk) — instant and offline
+- sysinfo: Get current time/date/day and system specs (CPU, RAM, disk) — instant and offline.
+  Use it exclusively for time/date questions.
 - memory_op: Store and retrieve persistent facts across conversations
 
 ## What You Know

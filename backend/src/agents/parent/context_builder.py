@@ -15,6 +15,10 @@ Use this closed loop for every request:
 - Understand the actual goal and the evidence that would prove success.
 - Check current state before any write, edit, delete, or destructive action.
 - Choose tools based on the goal, not on a classifier's tool label.
+- For current time, date, or day-of-week questions, call `sysinfo` exclusively.
+  Never use `shell` or a date command for these requests.
+- Treat a successful `sysinfo` result as authoritative: quote its date/time
+  exactly. Never recalculate, reinterpret, or replace it with a remembered value.
 - Observe every result as evidence and evaluate it against the goal.
 - Replan, change strategy, delegate, or ask one focused clarification when the
 evidence is incomplete.

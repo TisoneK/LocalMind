@@ -275,6 +275,62 @@ def _has_minimax_tool_call(text: str) -> bool:
     )
 
 
+# ── Deterministic system-query guard ─────────────────────────────────────────
+
+_CURRENT_SYSTEM_QUERY_RE = re.compile(
+    r"(?:\bwhat(?:'s|s)?\s+(?:the\s+)?(?:current\s+)?(?:time|date|day)\b"
+    r"|\bwhat\s+is\s+(?:the\s+)?(?:current\s+)?(?:time|date|day)\b"
+    r"|\bwhat\s+time\s+is\s+it\b"
+    r"|\bwhat\s+day\s+is\s+it\b"
+    r"|\bcurrent\s+(?:time|date|day)\b"
+    r"|\btoday'?s\s+date\b)",
+    re.IGNORECASE,
+)
+
+
+def _is_current_system_query(text: str) -> bool:
+    """Return whether a request needs the authoritative local clock.
+
+    This is intentionally narrow: it catches current time/date/day questions
+    but does not classify arbitrary system or shell requests.
+    """
+    return bool(_CURRENT_SYSTEM_QUERY_RE.search(text or ""))
+
+
+def _normalize_system_tool_call(
+    user_question: str,
+    tool_name: str,
+    tool_args: dict,
+) -> tuple[str, dict, bool]:
+    """Correct a shell call when the parent is answering a clock question.
+
+    Small models sometimes emit ``shell(command='Get-Date')`` even though the
+    request is a local time query. The shell contract correctly rejects that
+    natural-language/legacy shape, but making the model spend an iteration on
+    the rejected call is avoidable. Keep the correction inside the parent loop
+    so the request remains agentic and the action is observable as ``sysinfo``.
+    """
+    if tool_name == "shell" and _is_current_system_query(user_question):
+        return "sysinfo", {"query": user_question}, True
+    return tool_name, tool_args, False
+
+
+def _authoritative_sysinfo_answer(content: str, user_question: str) -> str:
+    """Return the exact clock line for a current time/date answer.
+
+    The local sysinfo tool is the source of truth. A smaller model may turn
+    ``August 14`` into ``August 1`` during a final paraphrase, so current clock
+    queries terminate with the verified line instead of asking the model to
+    recalculate it.
+    """
+    if not _is_current_system_query(user_question):
+        return content.strip()
+    for line in (content or "").splitlines():
+        if line.strip().lower().startswith("current date/time:"):
+            return line.strip()
+    return (content or "").strip()
+
+
 # ── Observation truncation ────────────────────────────────────────────────────
 
 

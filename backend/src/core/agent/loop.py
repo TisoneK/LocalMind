@@ -94,11 +94,14 @@ from core.agent.text_tools import (
     _MAX_TOOL_TALK_RECOVERIES,
     _MINIMAX_PARTIAL_RE,
     _STANDALONE_PARTIAL_RE,
+    _authoritative_sysinfo_answer,
     _extract_tool_input,
     _has_minimax_tool_call,
+    _is_current_system_query,
     _is_filler_step,  # noqa: F401 — re-exported for backward compat (Session 129)
     _is_tool_talk,
     _normalize_dsml,
+    _normalize_system_tool_call,
     _parse_minimax_tool_call,
     _parse_plan_steps,
     _strip_minimax_tool_calls,
@@ -2013,9 +2016,20 @@ class AgentLoop:
 
                 # Validate and filter: separate valid from rejected calls
                 valid_calls: list[tuple[ToolCallResult, str]] = []  # (call, tool_input)
+                _system_question = _user_message_text(messages)
                 for call in result.calls:
-                    _name = call.tool_name
-                    _args = call.tool_args
+                    _name, _args, _corrected = _normalize_system_tool_call(
+                        _system_question,
+                        call.tool_name,
+                        call.tool_args,
+                    )
+                    if _corrected:
+                        logger.info(
+                            "[agent.loop] corrected shell clock call to sysinfo for %r",
+                            _system_question[:80],
+                        )
+                        call.tool_name = _name
+                        call.tool_args = _args
                     _inp = _extract_tool_input(_name, _args)
 
                     # Apply same validations as single-tool path
@@ -2246,6 +2260,23 @@ class AgentLoop:
                     yield StreamChunk(text="", done=False, usage=dict(_provider_usage))
                 tool_name = result.tool_name
                 tool_args = result.tool_args
+                tool_name, tool_args, corrected_system_call = _normalize_system_tool_call(
+                    _user_message_text(messages),
+                    tool_name,
+                    tool_args,
+                )
+                if corrected_system_call:
+                    logger.info(
+                        "[agent.loop] corrected shell clock call to sysinfo for current system query"
+                    )
+                    if _obs:
+                        _obs.emit(
+                            "tool_call_corrected",
+                            from_tool="shell",
+                            to_tool="sysinfo",
+                            reason="current time/date/day queries use the authoritative local clock",
+                            iteration=iteration + 1,
+                        )
                 tool_input = _extract_tool_input(tool_name, tool_args)
 
                 # Debug: log description from LLM
@@ -3028,6 +3059,35 @@ class AgentLoop:
                         "content": safe_observation,
                     }
                 )
+
+                # The local clock is authoritative. Do not spend another
+                # model call asking a small model to paraphrase a verified
+                # date/time — that is where values such as August 14 can be
+                # corrupted into August 1. The parent loop still performed,
+                # observed, and recorded the tool action before this clean
+                # terminal response.
+                if (
+                    tool_name == "sysinfo"
+                    and not tool_failed
+                    and _is_current_system_query(_user_message_text(messages))
+                ):
+                    authoritative_answer = _authoritative_sysinfo_answer(
+                        observation,
+                        _user_message_text(messages),
+                    )
+                    trace.final_response = authoritative_answer
+                    _complete_current_plan_step()
+                    self._emit_failure_memory(trace, intent, _obs)
+                    if _obs:
+                        _obs.emit(
+                            "agent_loop_done",
+                            intent=intent.value,
+                            iterations=iteration + 1,
+                            reason="authoritative sysinfo result",
+                        )
+                    yield StreamChunk(text=authoritative_answer, done=False)
+                    yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
+                    return
 
                 # Continue the loop — the model will see the tool result
                 # and decide whether to use another tool or answer directly.

@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `human_size` byte-formatting helper is now shared from `core/utils.py` instead of being duplicated in `shell.py` and `filesystem.py`. A bug fix or new unit will now propagate to all callers automatically
 
 ### Fixed
+- Fixed current time/date requests accidentally emitting rejected shell commands such as `Get-Date`. The parent loop now corrects clock queries to `sysinfo` and returns the verified local date/time unchanged, preventing synthesis from corrupting dates.
 - Removed the legacy pre-loop sub-agent heuristic and decomposition path. Cross-domain delegation now starts inside the selected parent agent through scoped delegation tools, preserving parent context and synthesis.
 - Fixed delegated child tool results appearing as user-facing output. Child progress remains visible in the Actions panel, while raw child results stay inside the parent-agent tool context for synthesis.
 - Fixed current-weather synthesis selecting an older dated search result when a same-day result was available. Time-sensitive search extraction now filters stale dated blocks and returns an honest gap report when current evidence cannot be verified, with regression coverage.
