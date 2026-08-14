@@ -25,6 +25,7 @@ SSE payload types:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import time
@@ -45,6 +46,8 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 _INTERNAL_DELEGATION_TOOLS = frozenset({"delegate", "delegate_parallel", "delegate_inline"})
+LIVE_PROGRESS_INTERVAL_S = 15
+LIVE_TOOL_EVENT_TYPES = frozenset({"tool_call", "tool_status", "terminal_output"})
 
 
 def _visible_tool_output(tool_name: str, agent_name: str | None, output: str) -> str:
@@ -67,6 +70,93 @@ MAX_FILE_BYTES = settings.localmind_max_file_size_mb * 1024 * 1024
 
 def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
+
+
+def _tool_call_payload(evt, session_id: str) -> dict:
+    """Build the same bounded tool event used by the normal SSE bridge.
+
+    This helper is also used by the heartbeat path, where a tool may finish
+    while the parent engine is still waiting for its next model chunk.
+    """
+    data = evt.data
+    tool = data.get("tool", "unknown")
+    label = data.get("label", tool)
+    status = data.get("status", "running")
+    iteration = data.get("iteration", "")
+    latency_ms = data.get("latency_ms", "")
+    agent = data.get("agent", "") or None
+    output = _visible_tool_output(tool, agent, data.get("output", ""))
+    todo_id = data.get("todo_id") or None
+    thought = data.get("thought") or None
+    reasoning = data.get("reasoning") or thought
+    args_str = data.get("tool_args", "")
+    args_hash = f"-{hashlib.md5(args_str.encode()).hexdigest()[:6]}" if args_str else ""
+    action_id = f"tc-{tool}-iter{iteration}{args_hash}"
+
+    try:
+        if status in ("started", "pending", "in_progress"):
+            _engine._store.create_action(
+                session_id=session_id,
+                tool_name=tool,
+                status="running",
+                label=label,
+                input=args_str,
+                action_id=action_id,
+                iteration=int(iteration) if str(iteration).isdigit() else None,
+                todo_id=todo_id,
+                reasoning=reasoning,
+            )
+        elif status in ("done", "failed"):
+            _engine._store.update_action(
+                action_id=action_id,
+                status="done" if status == "done" else "failed",
+                output=output or None,
+                duration=float(latency_ms) / 1000.0 if latency_ms else None,
+            )
+    except Exception as exc:
+        logger.warning(f"[actions] live record failed: {exc}")
+
+    return {
+        "type": "tool_call",
+        "tool_call": {
+            "id": action_id,
+            "name": tool,
+            "label": label,
+            "status": status,
+            "iteration": iteration,
+            "latency_ms": latency_ms,
+            "output": output,
+            "tool_args": args_str,
+            "arguments": args_str,
+            "todo_id": todo_id,
+            "thought": thought,
+            "reasoning": reasoning,
+            "agent": agent,
+        },
+    }
+
+
+async def _drain_live_tool_events(obs: ObsCollector, session_id: str):
+    """Forward tool progress/results produced while the engine is pending."""
+    for evt in obs.drain_matching(LIVE_TOOL_EVENT_TYPES):
+        yield _sse(evt.to_sse_dict())
+        if evt.type in ("tool_call", "tool_status"):
+            yield _sse(_tool_call_payload(evt, session_id))
+        elif evt.type == "terminal_output":
+            yield _sse(
+                {
+                    "type": "terminal_event",
+                    "terminal_event": {
+                        "tool": evt.data.get("tool", "unknown"),
+                        "command": evt.data.get("command", ""),
+                        "output": evt.data.get("output", ""),
+                        "success": evt.data.get("success", True),
+                        "latencyMs": int(evt.data.get("latency_ms", 0)),
+                        "label": evt.data.get("label", ""),
+                        "toolArgs": evt.data.get("tool_args", ""),
+                    },
+                }
+            )
 
 
 def _finalize_plan_todos(session_id: str) -> list[dict]:
@@ -98,6 +188,35 @@ def _sse_comment(comment: str = "keepalive") -> str:
     never fires for comment lines, so the frontend is unaffected.
     """
     return f": {comment}\n\n"
+
+
+async def _with_keepalives(source, interval_s: float):
+    """Yield engine chunks while retaining a pending tool/model operation.
+
+    ``wait_for(anext(source))`` would cancel the engine when the timeout fires,
+    which aborts the very tool call the heartbeat is meant to cover. A shielded
+    pending task lets this transport emit progress while AgentLoop continues
+    interacting with the tool, then delivers the real chunk when it arrives.
+    ``None`` is the transport-only heartbeat sentinel and is never sent as an
+    engine chunk.
+    """
+    iterator = source.__aiter__()
+    pending = None
+    try:
+        while True:
+            if pending is None:
+                pending = asyncio.create_task(iterator.__anext__())
+            try:
+                yield await asyncio.wait_for(asyncio.shield(pending), timeout=interval_s)
+            except asyncio.TimeoutError:
+                yield None
+            except StopAsyncIteration:
+                return
+            else:
+                pending = None
+    finally:
+        if pending is not None and not pending.done():
+            pending.cancel()
 
 
 def _is_first_turn(session_id: str) -> bool:
@@ -148,17 +267,49 @@ async def _event_stream(
 
     try:
         _response_chunks: list[str] = []
-        async for chunk in _engine.process(
-            message=message,
-            session_id=session_id,
-            file=file_bytes,
-            filename=filename,
-            content_type=content_type,
-            obs=obs,
-            original_path=original_path,
-            client_intent=client_intent,
-            client_confidence=client_confidence,
+        async for chunk in _with_keepalives(
+            _engine.process(
+                message=message,
+                session_id=session_id,
+                file=file_bytes,
+                filename=filename,
+                content_type=content_type,
+                obs=obs,
+                original_path=original_path,
+                client_intent=client_intent,
+                client_confidence=client_confidence,
+            ),
+            LIVE_PROGRESS_INTERVAL_S,
         ):
+            if chunk is None:
+                # The parent agent and tool continue running in the shielded
+                # pending task. Keep the user informed instead of showing a
+                # dead spinner while a slow provider/tool is working.
+                if disconnect and await disconnect():
+                    logger.info(f"Client disconnected for session {session_id}")
+                    try:
+                        _engine.abort(session_id)
+                    except Exception:
+                        pass
+                    break
+                live_tool_events = False
+                async for live_event in _drain_live_tool_events(obs, session_id):
+                    live_tool_events = True
+                    yield live_event
+                    _last_sent_time = time.monotonic()
+                yield _sse({
+                    "type": "status_update",
+                    "status": (
+                        "Agent is working with tools — the latest result is shown above."
+                        if live_tool_events
+                        else "Agent is still working — waiting for a tool result…"
+                    ),
+                })
+                yield _sse_comment("agent-working")
+                _last_sent_time = time.monotonic()
+                await asyncio.sleep(0)
+                continue
+
             if disconnect and await disconnect():
                 logger.info(f"Client disconnected for session {session_id}")
                 # B-2026-08-02-2 (A2): the client closed the stream — stop

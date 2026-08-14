@@ -61,6 +61,20 @@ class ObsCollector:
         """Return pending events without clearing them."""
         return list(self._events)
 
+    def drain_matching(self, event_types: set[str] | frozenset[str]) -> list[ObsEvent]:
+        """Remove and return only events whose type is in ``event_types``.
+
+        The SSE transport uses this while the engine is awaiting a slow model
+        or tool: progress events can be delivered immediately without stealing
+        unrelated observations from the normal bridge.
+        """
+        matched: list[ObsEvent] = []
+        remaining: list[ObsEvent] = []
+        for event in self._events:
+            (matched if event.type in event_types else remaining).append(event)
+        self._events = remaining
+        return matched
+
     def history(self) -> list[ObsEvent]:
         """Return every event emitted during this request, without clearing."""
         return list(self._history)

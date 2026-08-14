@@ -50,6 +50,18 @@ def test_from_collector_captures_without_draining():
     assert len(collector.all()) == 1
 
 
+def test_drain_matching_preserves_unrelated_pending_events():
+    """Live tool flushing must not remove metrics or planning observations."""
+    collector = ObsCollector()
+    collector.emit("tool_call", tool="shell", status="done")
+    collector.emit("turn_complete", total_latency_ms=42)
+
+    flushed = collector.drain_matching({"tool_call", "tool_status"})
+
+    assert [event.type for event in flushed] == ["tool_call"]
+    assert [event.type for event in collector.all()] == ["turn_complete"]
+
+
 def test_format_context_keeps_only_newest_events():
     """Formatting bounds event growth while retaining the newest observations."""
     events = [ObsEvent(type=f"event_{i}", data={"i": i}) for i in range(4)]

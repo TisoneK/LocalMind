@@ -6,6 +6,7 @@ Engine is mocked so tests run without Ollama.
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 from unittest.mock import AsyncMock, patch
@@ -194,6 +195,67 @@ class TestChat:
         assert tc_events[0].get("reasoning") == (
             "List the contents of the dev directory to show all projects"
         )
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_can_flush_tool_progress_before_engine_chunk(self):
+        """A slow pending engine still exposes its already-emitted tool event."""
+        from api.routes.chat import _drain_live_tool_events, _with_keepalives
+        from core.models import StreamChunk
+        from core.obs import ObsCollector
+
+        obs = ObsCollector()
+
+        async def slow_engine():
+            obs.emit("tool_call", tool="web_search", status="started", output="")
+            await asyncio.sleep(0.02)
+            yield StreamChunk(text="finished", done=True)
+
+        pending = _with_keepalives(slow_engine(), interval_s=0.001)
+        assert await anext(pending) is None
+        live_events = [event async for event in _drain_live_tool_events(obs, "heartbeat-test")]
+        assert any('"type": "tool_call"' in event and '"started"' in event for event in live_events)
+        assert await anext(pending) is None
+        await pending.aclose()
+
+    def test_live_tool_result_is_visible_but_delegated_output_stays_hidden(self, client):
+        """Tool results must reach the user while child raw output remains private."""
+        async def _process(self, message, session_id, file=None, filename=None,
+                           content_type=None, obs=None, original_path=None,
+                           client_intent=None, client_confidence=0.0, **kwargs):
+            if obs:
+                obs.emit(
+                    "tool_call",
+                    tool="web_search",
+                    label="Searching the web",
+                    status="done",
+                    output="Kitengela is sunny, 26°C.",
+                    latency_ms=12,
+                    tool_args="Kitengela weather",
+                    iteration=1,
+                )
+                obs.emit(
+                    "tool_call",
+                    tool="web_search",
+                    label="Child search",
+                    status="done",
+                    output="private child result",
+                    agent="research",
+                    latency_ms=8,
+                    tool_args="internal query",
+                    iteration=1,
+                )
+            from core.models import StreamChunk
+            yield StreamChunk(text="Verified result", done=True)
+
+        with patch("core.engine.Engine.process", _process):
+            response = client.post(
+                "/api/chat", data={"message": "weather", "session_id": "live-result"}
+            )
+
+        events = _parse_sse(response.text)
+        tool_events = [event["tool_call"] for event in events if event.get("type") == "tool_call"]
+        assert any(event.get("output") == "Kitengela is sunny, 26°C." for event in tool_events)
+        assert all(event.get("output") != "private child result" for event in tool_events)
 
     def test_emits_intent_convenience_payload(self, client):
         with _mock_stream(intent="memory_op", confidence=0.82):
