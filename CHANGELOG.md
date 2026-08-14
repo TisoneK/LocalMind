@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Regression tests for the SSRF redirect bypass fix — verifies that redirects to private IPs (cloud metadata, localhost) are blocked, redirects to public URLs are followed, and multi-hop redirect chains are validated at every hop
 
 ### Changed
+- Refreshed the color scheme. The interface no longer uses green for everything — the default is now a calm, neutral graphite with emerald used only as an accent, which is easier on the eyes and lets your content stand out. Under the hood this is a full theming system: three palettes (Graphite, Midnight Iris, Warm Ink), each in light and dark, are ready to ship — a picker to switch between them in Settings is coming next.
 - The terminal now has a blinking cursor at the prompt when it's ready, and shows a live "executing…" cursor while a command is running so you can tell the shell is working even before any output appears. Command output itself is not animated, so fast output stays smooth.
 - The Agents view now animates parent and delegated child agents (and their tool steps) into the tree as they start, and highlights the agent that's currently working, so you can follow delegated work as it happens.
 - The action list in the side panel now animates each step in as it happens and clearly marks the step running right now, so it matches the live "Actions" card in the chat.
