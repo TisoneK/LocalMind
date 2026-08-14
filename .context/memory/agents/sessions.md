@@ -3099,3 +3099,15 @@ program + ADR-22). -->
 - **Validation:** backend `1,773 passed, 2 skipped`; frontend `178 passed`; TypeScript/build/Ruff passed; ESLint 0 errors / 64 existing warnings; focused ADR-32 tests 70 passed; no live-provider smoke because credentials were unavailable.
 - **Report:** `.context/memory/reviews/2026-08-14-review-25.md`. **Notes:** `.context/memory/sessions/2026-08-14-220/notes.md`; feature `.context/memory/features/fail-fast-provider-errors/`.
 - **Open items:** No ADR-32 implementation items remain. A live provider check with a deliberately invalid or exhausted non-production credential remains desirable.
+
+---
+## 2026-08-14 — Session 221
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none
+- **Task:** Trace the apparent parent-loop/provider failure in the `Hey LM` transcript and keep addressed social greetings off the provider path.
+- **Commits:** product `3dca77e`; context closeout follows separately.
+- **Outcome:** done — confirmed `Hey LM` was not recognized as a greeting because the detector required the whole message to be `hey`; addressed greetings now use the deterministic zero-provider-call boundary. Confirmed ADR-32 terminal provider errors are not evidence of skipped LLM calls: they are provider-call failures surfaced through the canonical boundary.
+- **Validation:** backend `1,776 passed, 2 skipped`; frontend `178 passed`; TypeScript/build/Ruff passed; ESLint 0 errors / 64 existing warnings; focused suite 124 passed; no live-provider smoke because credentials were unavailable.
+- **Report:** `.context/memory/reviews/2026-08-14-review-26.md`. **Notes:** `.context/memory/sessions/2026-08-14-221/notes.md`.
+- **Open items:** No product item remains from this investigation. Provider/model latency for substantive calls remains an environment-dependent limitation; future observability could label direct-chat versus parent-agent execution more explicitly.

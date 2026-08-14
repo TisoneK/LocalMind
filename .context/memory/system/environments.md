@@ -110,6 +110,8 @@ block (and its "last verified" date) every time you run on it again.
   - `cd frontend && npm test -- --run` → 141 passed; `npx tsc -b && npm run lint && npm run build` → passed; ESLint 0 errors / 64 warnings (2026-08-14, Session 208)
   - `sh scripts/ci-check.sh` → backend 1,773 passed / 2 skipped; Ruff clean; frontend TypeScript clean; ESLint 0 errors / 64 warnings (2026-08-14, Session 220)
   - `cd frontend && npm test -- --run` → 178 passed; `npx tsc -b` → passed; `npm run build` → passed (2026-08-14, Session 220)
+  - `sh scripts/ci-check.sh` → backend 1,776 passed / 2 skipped; Ruff clean; frontend TypeScript clean; ESLint 0 errors / 64 warnings (2026-08-14, Session 221)
+  - `cd frontend && npm test -- --run` → 178 passed; `npx tsc -b` → passed; `npm run build` → passed (2026-08-14, Session 221)
 - **Quirks:** The `python` command is unavailable and system `python3` is 3.9.6, below the backend's `>=3.10` requirement; use `backend/.venv/bin/python` (Python 3.12.13 via uv). Backend Ruff currently reports 132 E501 findings plus 3 non-E501 findings. `npm ci` reported 18 dependency vulnerabilities (17 high, 1 critical) and deprecated transitive packages. Local agent uses the user's existing git credentials and does not need a PAT for this public clone. The optional `agent-browser` CLI is not installed; BrowserAgent tests must mock `_run_browser_cmd` unless the CLI is installed for live smoke testing.
   - `sh scripts/ci-check.sh` → all pass: ruff clean; pytest 1293 passed (61.18s); tsc clean; eslint 0 errors / 61 warnings (2026-08-12, Session 152)
 

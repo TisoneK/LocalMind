@@ -582,3 +582,23 @@ if literally nothing slowed you down.
   bounded checklist; do not mark an ADR complete until the full suite result,
   review, backlog, feature memory, session log, and clean-tree verification are
   all recorded.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 221)
+
+- **Problem:** The screenshot mixed two symptoms—an addressed greeting taking
+  a provider round-trip and provider errors appearing after a wait—so the
+  first diagnosis needed a source trace rather than assuming the parent loop
+  was broken.
+- **Cost:** One focused trace across `AgentRuntime`, `trivial_input`,
+  `AgentLoop`, the adapter, and the SSE boundary; no broad rework.
+- **Cause:** `Hey LM` was not covered by the whole-message greeting regex.
+  The provider-error cards were a separate real-call failure path, already
+  covered by ADR-32's terminal propagation tests.
+- **Workaround / fix:** Added addressed-greeting matching and runtime tests
+  for zero adapter acquisition/parent entry; documented the distinction
+  between direct-chat provider latency and parent-loop execution.
+- **Prevent next time:** Classify the transcript by execution mode first—
+  deterministic social, direct conversational, or substantive parent—then
+  inspect provider error timing within that mode instead of treating every
+  assistant turn as one loop shape.
