@@ -412,3 +412,21 @@ if literally nothing slowed you down.
 - **Prevent next time:** Start with bounded file windows and fall back quickly
   to direct read-only shell inspection when the search wrapper reports a missing
   vendored rg binary.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 201)
+
+- **Problem:** The first replacement slice temporarily treated the reference
+  name “Buffy” as a LocalMind product agent, then had to be reverted after the
+  user clarified that Buffy/Codebuff/Freebuff were research references only.
+- **Cost:** A mistaken uncommitted implementation slice and several inspections;
+  no incorrect product code was retained.
+- **Cause:** The reference research used “Buffy” as the orchestrator identity,
+  and the implementation note was read as a naming requirement instead of an
+  architectural behavior reference.
+- **Workaround / fix:** Removed the accidental `agents/buffy/` tree completely,
+  reread ADR-8 and the LocalMind feature records, and implemented the runtime
+  under the neutral LocalMind-native `ParentAgent` name.
+- **Prevent next time:** Treat names in prior-art research as examples unless
+  the repository ADR explicitly requires them; confirm product identity from
+  the active architecture records before creating new modules.

@@ -964,3 +964,26 @@ synthesizer emits an honest gap report instead of presenting stale data as
 current. Added four regression tests. Full CI passed with 1752 backend tests;
 no real-model call was needed because the fix is a deterministic evidence
 filter, not an adapter or agent-loop change.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 201)
+
+The user clarified that the target was removal, not a compatibility mapping:
+LocalMind needed one parent-agent execution contract, while Buffy/Codebuff/
+Freebuff were reference research only. The former `_pipeline.py` was therefore
+removed rather than retained as a shell.
+
+Added `core.agent_runtime.AgentRuntime` as the lifecycle boundary and a
+LocalMind-owned `agents/parent/ParentAgent` as the only user-facing coordinator.
+Every non-blocked request now enters the parent AgentLoop; specialized agents
+are reached through scoped delegation tools. Safety, persistence, memory,
+attachments, session CWD, abort/steering, metrics, observations, reflection,
+and failure memory remain runtime services, not routing branches. Dispatcher,
+graph, and workspace-orchestrator modules have no live request-path callers.
+
+Updated the active prompt/source contracts so caller plans are hints the parent
+must evaluate, not directives. Deleted pipeline-era references from active
+source and architecture docs, while retaining isolated dispatcher/graph data
+contracts for standalone tests and migration tooling. Full CI passed with 1742
+backend tests, 2 skips, Ruff/tsc clean, and ESLint 0 errors / 64 existing
+warnings. Review: `.context/memory/reviews/2026-08-14-review-6.md`.

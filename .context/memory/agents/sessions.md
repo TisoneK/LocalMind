@@ -2841,3 +2841,15 @@ program + ADR-22). -->
 - **Validation:** focused delegation/routing suites 110 passed; full `sh scripts/ci-check.sh` passed with 1753 backend tests, Ruff clean, frontend TypeScript clean, ESLint 0 errors / 64 existing warnings; `git diff --check` clean.
 - **Report:** `.context/memory/reviews/2026-08-14-review-5.md`.
 - **Open items:** B-2026-08-14-2 workspace safety for parallel mutation; B-2026-08-14-3 bounded parent-facing delegated results; ADR-8 task-type classifier.
+
+---
+## 2026-08-14 — Session 201
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Remove the request-time pipeline and make LocalMind's parent AgentLoop the sole user-facing execution path. Buffy/Codebuff/Freebuff were references only.
+- **Outcome:** done — deleted `core/engine/_pipeline.py`; added `AgentRuntime` and LocalMind's `ParentAgent`; moved request execution to one parent loop while retaining lifecycle services and parent-owned delegation.
+- **Validation:** full `sh scripts/ci-check.sh` passed with 1742 backend tests, 2 skipped, Ruff clean, frontend TypeScript clean, ESLint 0 errors / 64 existing warnings; source audit found no live dispatcher/graph/workspace-orchestrator request path.
+- **Report:** `.context/memory/reviews/2026-08-14-review-6.md`.
+- **Limitation:** no local provider credential for a new real-model smoke; existing deterministic AgentLoop contracts and full CI passed.
+- **Open items:** live parent/delegation smoke; B-2026-08-14-2 workspace safety for parallel mutation; B-2026-08-14-3 bounded parent-facing delegated results.

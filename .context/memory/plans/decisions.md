@@ -717,3 +717,30 @@ After the smoke test passes, test a multi-step task (e.g. "Create hello world re
   features must be implemented as scoped parent-agent tools or AgentLoop
   behavior, not as engine-level keyword routing. Parallel workspace safety and
   bounded child results remain separate follow-ups.
+
+---
+## ADR-25: LocalMind parent-agent runtime replaces the request pipeline (2026-08-14)
+
+- **Author:** Buffy / openai/gpt-5.6-luna (Session 201)
+- **Status:** accepted + implemented
+- **Context:** The user clarified that the goal was to remove the request-time
+  pipeline, not preserve it behind a compatibility wrapper or merely map more
+  intents through it. Codebuff/Freebuff/Buffy are prior-art references only.
+  The old pipeline mixed lifecycle services with dispatcher classification,
+  direct-tool shortcuts, execution graphs, and agent-loop entry decisions.
+- **Decision:** `AgentRuntime` is LocalMind's lifecycle boundary and
+  `ParentAgent → BaseAgent.run() → AgentLoop` is the sole live request execution
+  contract for non-blocked turns. The parent owns tool choice, native calls,
+  delegation, evidence evaluation, replanning, acceptance, and final synthesis.
+  Specialized agents remain available only through the parent's scoped
+  delegation tools. `Engine` remains an import-compatible public alias, not a
+  second execution implementation. Delete `_pipeline.py` rather than retaining
+  it as a shell.
+- **Consequences:** Safety, history, persistence, memory, attachments, session
+  CWD, observations, metrics, reflection, failure memory, abort, and steering
+  remain reusable lifecycle services. Dispatcher, execution-graph, and workspace
+  orchestrator modules may remain as isolated data contracts/tests, but they are
+  not request-time routers or executors. Parent prompt context is advisory: any
+  caller-provided plan/hint must be evaluated by the parent and cannot bypass
+  planning. This supersedes the old general-request pipeline shape while
+  preserving ADR-5's closed-loop and ADR-8's agent-centric/delegation contracts.

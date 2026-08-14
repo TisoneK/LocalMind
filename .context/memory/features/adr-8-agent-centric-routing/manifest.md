@@ -327,3 +327,20 @@ Four implementation phases (multi-session):
 - **Validation:** focused delegation/routing tests 110 passed; full backend
   **1753 green**, Ruff/tsc clean, ESLint 0 errors / 64 existing warnings.
 - **Report:** `.context/memory/reviews/2026-08-14-review-5.md`.
+
+## Session 201 — Parent-agent runtime replaces request pipeline (completed)
+
+- **Scope:** remove the request-time `_pipeline.py` execution architecture,
+  not map around it.
+- **Implementation:** deleted `_pipeline.py`; added LocalMind's own
+  `ParentAgent` and `AgentRuntime`; made `Engine` an import-compatible alias
+  for the runtime; retained lifecycle services while moving tool choice,
+  delegation, evaluation, replanning, and synthesis into the parent loop.
+- **Contract:** every non-blocked request enters one parent AgentLoop. Specialized
+  agents are reached only through parent-owned scoped delegation tools. Dispatcher,
+  execution-graph, and workspace-orchestrator modules have no production
+  request-path callers.
+- **Validation:** full CI **1742 passed, 2 skipped**, Ruff/tsc clean, ESLint 0
+  errors / 64 existing warnings. No local provider credential was available
+  for a new real-model smoke; this is recorded in review-6.
+- **Report:** `.context/memory/reviews/2026-08-14-review-6.md`.
