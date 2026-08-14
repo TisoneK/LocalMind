@@ -12,7 +12,7 @@ accordingly).
 | Buffy | openai/gpt-5.6-luna (lately deepseek/deepseek-v4-flash — see Observations) | 2026-07-31 | 2026-08-14 | 19 |
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
-| Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-14 | 7 |
+| Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-14 | 8 |
 
 ## Observations
 

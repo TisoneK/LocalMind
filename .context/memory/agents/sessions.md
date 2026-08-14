@@ -3051,3 +3051,15 @@ program + ADR-22). -->
 - **Report:** `.context/memory/reviews/2026-08-14-review-21.md`.
 - **Feature status:** realtime-alive-ui implementation COMPLETE (S210-216). Only follow-up: live-app visual verification (provider credential).
 - **Limitation:** no live visual pass — provider credential unavailable, as every session since S201.
+
+---
+## 2026-08-14 — Session 217
+
+- **Agent:** Claude Code / claude-opus-4-8 | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** theming-multi-palette (Session 1) | **ADR:** ADR-31
+- **Task:** Redesign the "too green" UI into a themeable system — 3 palettes × light/dark, Settings-selectable. S217 = token foundation.
+- **Commits:** 2 product (`40930e0` feat(ui), `ca4801a` docs) + 1 context closeout (SHA after push).
+- **Outcome:** done — restructured `globals.css` into a semantic anchor layer (~25 anchors); mapped all `--brand-*` + shadcn/ui tokens onto them; shipped all 6 palettes (Graphite/Iris/Warm × light/dark) via `<html data-theme data-mode>`; default graphite dark; accent-tinted selection. Zero component changes. Reverses Session-103 dark-only (ADR-31).
+- **Validation:** in-browser flip of all 6 data-attr combos → correct computed colors incl. shadcn `--background`; default renders clean (body #12161d), no console errors; 173 tests / build green; ESLint 0 errors.
+- **Report:** `.context/memory/reviews/2026-08-14-review-22.md`. **Notes:** `.context/memory/features/theming-multi-palette/notes.md`.
+- **Open items:** S218 runtime switcher + Settings picker; S219 light-mode contrast sweep + hardcoded-hex hunt.
