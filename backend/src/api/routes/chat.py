@@ -255,6 +255,17 @@ async def _event_stream(
     _last_sent_time = time.monotonic()
     _KEEPALIVE_INTERVAL_S = 15  # seconds between keepalive comments
 
+    # The first server event must not wait for title persistence, memory
+    # retrieval, adapter setup, or model generation. The frontend also has a
+    # local placeholder, but emitting this on the wire makes the transport
+    # contract truthful for slow/cold clients and gives proxies an immediate
+    # response payload.
+    _response_chunks: list[str] = []
+    yield _sse({
+        "type": "status_update",
+        "status": "LocalMind received your message — preparing the next step…",
+    })
+
     # ── Stage 1: write heuristic placeholder title immediately ────────────
     # This ensures the sidebar shows something before the LLM title arrives.
     if is_first:
@@ -266,7 +277,6 @@ async def _event_stream(
             logger.warning(f"[title] placeholder write failed: {exc}")
 
     try:
-        _response_chunks: list[str] = []
         async for chunk in _with_keepalives(
             _engine.process(
                 message=message,

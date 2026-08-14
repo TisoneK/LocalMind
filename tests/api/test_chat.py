@@ -142,6 +142,17 @@ class TestChat:
         full = "".join(e.get("content", "") for e in events if e.get("type") == "token")
         assert "Hello world" in full
 
+    def test_first_sse_event_is_immediate_acknowledgement(self, client):
+        """The wire must acknowledge a turn before engine/model work starts."""
+        with _mock_stream():
+            r = client.post("/api/chat", data={"message": "inspect the project", "session_id": "t-ack"})
+        events = _parse_sse(r.text)
+        assert events
+        assert events[0] == {
+            "type": "status_update",
+            "status": "LocalMind received your message — preparing the next step…",
+        }
+
     def test_emits_done_true(self, client):
         with _mock_stream():
             r = client.post("/api/chat", data={"message": "hi", "session_id": "t4"})

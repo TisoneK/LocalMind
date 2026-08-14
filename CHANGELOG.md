@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Lightened the dark green UI palette across backgrounds, panels, borders, and secondary text to improve readability while preserving the dark-only identity.
+- Chat now emits a server-side acknowledgement as its first SSE event, before title persistence, memory retrieval, adapter setup, or model generation, so slow turns never appear silent while the agent starts.
 - Replaced the request-time execution pipeline with the LocalMind parent-agent runtime. `Engine` now enters one parent `AgentLoop` for every non-blocked turn; lifecycle services retain safety, persistence, memory, observability, abort, and steering while tool choice, delegation, evaluation, replanning, and synthesis stay inside the parent loop. The legacy `_pipeline.py` module is deleted.
 - Substantive parent-agent turns now expose a concise lifecycle — acknowledgement, planning summary, next-action progress, and verification — while keeping raw provider planner/reasoning tokens internal to the task state and evidence loop.
 - Redesigned the API Keys section in Settings — removed the confusing dual-list pattern (stored keys list + separate "Select provider" dropdown) and replaced it with a single unified list where each provider has an inline "Add Key" or "Update" button that expands the key form right there. No more scrolling through a dropdown to find a provider — just click the button on the provider you want
