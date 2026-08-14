@@ -174,49 +174,12 @@ class TestSummarizerValueSlice:
         assert "fallback summary" in joined
 
 
-class TestEngineWiring:
-    @pytest.mark.asyncio
-    async def test_flag_off_returns_none(self):
-        """Default (flag OFF) → no value scoring call — regression-safe."""
-        from core.config import settings
-        from core.engine._pipeline import _maybe_score_history
+class TestParentContextBoundary:
+    """The parent runtime assembles context directly; no value-scoring
+    method belongs to the removed request pipeline."""
 
-        original = settings.localmind_llm_value_scoring
-        settings.localmind_llm_value_scoring = False
-        try:
-            assert await _maybe_score_history([{"role": "user", "content": "hi"}], object()) is None
-        finally:
-            settings.localmind_llm_value_scoring = original
+    def test_value_scoring_remains_an_explicit_library(self):
+        from core import value_scoring
 
-    @pytest.mark.asyncio
-    async def test_flag_on_small_conversation_skips_scoring(self):
-        """With the flag on but a small conversation, no scoring call is
-        made (Session 179 review: a 2-message chat must not pay an extra
-        LLM call every turn)."""
-        from core.config import settings
-        from core.engine._pipeline import _maybe_score_history
-
-        original = settings.localmind_llm_value_scoring
-        settings.localmind_llm_value_scoring = True
-        try:
-            msgs = [{"role": "system", "content": "s"}, {"role": "user", "content": "hi"}]
-            assert await _maybe_score_history(msgs, object()) is None
-        finally:
-            settings.localmind_llm_value_scoring = original
-
-    @pytest.mark.asyncio
-    async def test_flag_on_large_conversation_scores(self):
-        from core.config import settings
-        from core.engine._pipeline import _maybe_score_history
-
-        msgs = [{"role": "system", "content": "s"}]
-        for i in range(10):
-            msgs.append({"role": "user", "content": f"message {i}"})
-        original = settings.localmind_llm_value_scoring
-        settings.localmind_llm_value_scoring = True
-        try:
-            adapter = _fake_adapter("[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]")
-            scores = await _maybe_score_history(msgs, adapter)
-            assert scores == [0.5] * 10
-        finally:
-            settings.localmind_llm_value_scoring = original
+        assert callable(value_scoring.score_messages)
+        assert callable(value_scoring.lowest_value_indices)

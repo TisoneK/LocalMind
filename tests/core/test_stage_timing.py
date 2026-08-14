@@ -26,7 +26,7 @@ from core.obs import ObsCollector
 class TestStageClock:
     def _make_clock(self):
         obs = ObsCollector()
-        from core.engine._pipeline import _StageClock
+        from core.engine.stage_clock import _StageClock
         clock = _StageClock(obs)
         return clock, obs
 
@@ -101,8 +101,9 @@ class TestEngineStageTiming:
         timings = [e for e in obs.history() if e.type == "stage_timing"]
         by_stage = {e.data["stage"]: e.data for e in timings}
 
-        # intent_classify + generate ran (done); no tools → skipped.
-        assert by_stage["intent_classify"]["status"] == "done"
+        # No classifier runs in the parent-agent architecture; parent
+        # reasoning is represented by the generate stage.
+        assert by_stage["intent_classify"]["status"] == "skipped"
         assert by_stage["generate"]["status"] == "done"
         assert by_stage["tool_select"]["status"] == "skipped"
         assert by_stage["execute"]["status"] == "skipped"
@@ -133,7 +134,7 @@ class TestEngineStageTiming:
         timings = [e for e in obs.history() if e.type == "stage_timing"]
         by_stage = {e.data["stage"]: e.data for e in timings}
 
-        assert by_stage["intent_classify"]["status"] == "done"
+        assert by_stage["intent_classify"]["status"] == "skipped"
         assert by_stage["generate"]["status"] == "done"
         assert by_stage["tool_select"]["status"] == "skipped"
         assert by_stage["execute"]["status"] == "skipped"

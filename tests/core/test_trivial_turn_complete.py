@@ -58,15 +58,14 @@ class TestTrivialTurnComplete:
         completes = [e for e in obs.history() if e.type == "turn_complete"]
         assert len(completes) == 1
         data = completes[0].data
-        assert data["intent"] == "chat"
+        assert data["intent"] == "parent"
         assert data["tokens_approx"] > 0
         assert data["total_latency_ms"] >= 0
-        assert data["memory_facts"] == 0
-        assert data["agent_mode"] is False
+        assert data["agent_mode"] is True
 
         stored = engine._last_observation.get("sess-tc-trivial")
         assert stored is not None
-        assert stored["intent"] == "chat"
+        assert stored["intent"] == "parent"
         assert stored["tools_used"] == ""
         assert stored["latency_ms"] >= 0
         # The stage clock marked tool_select/execute skipped — the stored
@@ -89,13 +88,13 @@ class TestTrivialTurnComplete:
         completes = [e for e in obs.history() if e.type == "turn_complete"]
         assert len(completes) == 1
         data = completes[0].data
-        assert data["intent"] == "chat"
+        assert data["intent"] == "parent"
         assert data["tokens_approx"] > 0
         assert data["total_latency_ms"] >= 0
 
         stored = engine._last_observation.get("sess-tc-conv")
         assert stored is not None
-        assert stored["intent"] == "chat"
+        assert stored["intent"] == "parent"
         assert stored["tools_used"] == ""
 
 

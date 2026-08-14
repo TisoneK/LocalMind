@@ -1,7 +1,7 @@
 """
 core.agent — Agent loop package.
 
-Public API (imported by engine.py and anywhere else that needs agent primitives):
+Public API (imported by the parent runtime and anywhere else that needs agent primitives):
 
     from core.agent import AgentLoop, AgentTrace, AgentStep, AGENT_INTENTS
     from core.agent.orchestrator import AgentOrchestrator, OrchestrationResult
@@ -15,8 +15,8 @@ Internals are split across sub-modules:
     dispatch     — tool dispatch with exponential-backoff retry
     loop         — AgentLoop class (the actual think→act→observe→reflect cycle)
     delegation  — parent/child run context and delegation contracts
-    orchestrator — AgentOrchestrator: the middle layer of the three-layer pipeline
-                   (Chat Agent → Orchestrator → Execution Agent)
+    orchestrator — optional replan/coordination service used by loop tests and
+                   explicit callers; the parent AgentLoop owns live request flow
 """
 
 from core.agent.constants import AGENT_INTENTS

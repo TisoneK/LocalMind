@@ -202,11 +202,11 @@ class TestIterationLimitFallbackMessage:
         the wrong diagnosis the user pushed back on."""
         from pathlib import Path
 
-        pipeline_path = (
+        runtime_path = (
             Path(__file__).resolve().parent.parent.parent
-            / "backend" / "src" / "core" / "engine" / "_pipeline.py"
+            / "backend" / "src" / "core" / "agent_runtime.py"
         )
-        source = pipeline_path.read_text()
+        source = runtime_path.read_text()
         assert "almost always a free-tier model issue" not in source, (
             "Engine fallback must NOT guess 'free-tier model issue' — that's "
             "the unverified self-diagnosis the user pushed back on."

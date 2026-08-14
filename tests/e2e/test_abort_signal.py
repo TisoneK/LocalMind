@@ -207,8 +207,7 @@ class TestEngineAbort:
                 yield  # pragma: no cover — makes this an async generator
 
         engine._agent_loop = _FakeLoop()
-        with patch("core.engine._pipeline.AGENT_SELECTION_ENABLED", False), \
-             patch("core.engine._pipeline._should_use_orchestrator", return_value=False):
+        with patch.object(engine, "_agent_loop", engine._agent_loop):
             chunks = [
                 c
                 async for c in engine.process(

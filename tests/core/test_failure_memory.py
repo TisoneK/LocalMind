@@ -391,11 +391,9 @@ async def test_engine_persists_failure_and_recalls_it(tmp_path, monkeypatch):
     mock_adapter.chat_with_tools = chat_with_tools
     mock_adapter.chat = chat
 
-    with patch("core.engine._pipeline.ThinkingDispatcher", _CapDispatcher), patch(
-        "core.engine.get_adapter", return_value=mock_adapter
-    ), patch("core.engine._pipeline.AGENT_SELECTION_ENABLED", False), patch(
-        "core.agent.loop.MAX_ITERATIONS", 1
-    ), patch("core.agent.loop.PLAN_ENABLED", False):
+    with patch("core.engine.get_adapter", return_value=mock_adapter), patch(
+            "core.agent.loop.MAX_ITERATIONS", 1
+        ), patch("core.agent.loop.PLAN_ENABLED", False):
         # Force the loop to hit the cap (1 iteration, empty streams) so the
         # failure event fires even though the engine's fallback text exists.
         obs1 = ObsCollector()
@@ -410,6 +408,6 @@ async def test_engine_persists_failure_and_recalls_it(tmp_path, monkeypatch):
     assert captured_failures, "engine must persist the loop failure event"
 
     # Turn 2: recall — the failure hint is appended to memory_facts.
-    recalled = engine._store.recall_failures("build the frontend app", intent="shell")
+    recalled = engine._store.recall_failures("build the frontend app", intent="analyze")
     assert recalled, "the persisted failure must be recallable"
     assert "frontend" in recalled[0]["message"] or "build" in recalled[0]["message"]

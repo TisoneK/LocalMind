@@ -22,14 +22,14 @@ logger = logging.getLogger(__name__)
 
 
 def get_adapter(*args, **kwargs):
-    """Deferred-lookup wrapper — see _pipeline.py for rationale."""
+    """Deferred lookup keeps the public engine adapter seam patchable."""
     from core.engine import get_adapter as _real
 
     return _real(*args, **kwargs)
 
 
 class _ReflectionMixin:
-    """Post-response reflection methods, mixed into Engine."""
+    """Post-response reflection methods, mixed into AgentRuntime."""
 
     async def _reflect_on_answer(
         self,

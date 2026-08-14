@@ -1,16 +1,16 @@
 """
 Trivial-input detector — short-circuits greetings/simple chat before
-the full intent-classification pipeline runs.
+normal request handling runs.
 
 Problem (Session 21): A one-word greeting like "Hi" was burning 11.5s
-and ~4.8k tokens because it hit the full ThinkingDispatcher (JSON-schema
-capability inference LLM call) before being classified as CHAT. That's
-massive overkill for inputs that are obviously conversational.
+and ~4.8k tokens because it entered capability inference before being
+classified as CHAT. That's massive overkill for inputs that are obviously
+conversational.
 
 Fix: detect trivial inputs (greetings, thanks, farewells, yes/no, simple
 acknowledgments) and short-circuit them to a direct chat response — no
-dispatcher call, no JSON-schema planning, no agent loop. The model just
-streams a direct reply.
+capability inference, tool planning, or tool loop. The model just streams a
+direct reply.
 
 Session 68 / ADR-11 (B-2026-08-09-1): also short-circuit obviously
 conversational QUESTIONS ("What can you do?", "Who are you?", "Tell me
@@ -18,16 +18,17 @@ about yourself"). Before this, such a question paid TWO sequential LLM
 calls (dispatcher capability-inference + chat generation) — verified as
 the root cause of ~40s latency on "What can you do?". The new detector
 is deliberately conservative: any tool/realtime/system keyword (weather,
-time, ram, search, file, code, ...) falls through to the full pipeline
-so routing still works ("what is today's EPL games?" still reaches
-WEB_SEARCH; "what time is it" still reaches SYSINFO).
+time, ram, search, file, code, ...) falls through to the parent runtime
+so capability handling still works ("what is today's EPL games?" still
+reaches web search; "what time is it" still reaches system info).
 
 This is deterministic and free (no LLM call for classification). The
-detector is conservative — it only short-circuits when the input is
-truly conversational. Anything ambiguous falls through to the normal
-pipeline.
+detector
+is conservative — it only short-circuits when the input is truly
+conversational. Anything ambiguous falls through to normal request handling.
 
-Usage (in engine._pipeline.process()):
+Usage: a caller may opt into these deterministic/conversational helpers
+before entering the parent-agent runtime:
     from core.trivial_input import is_trivial_input, trivial_response
     from core.trivial_input import is_conversational_question, conversational_response
 
@@ -216,7 +217,7 @@ _CONVERSATIONAL_OPENER_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Keywords that force a message through the full pipeline. Word-boundary
+# Keywords that force a message through normal parent-agent handling. Word-boundary
 # matched, case-insensitive. Organized by why they must NOT be fast-pathed:
 #  - realtime/data → dispatcher adds WEB_SEARCH + realtime_sensitive
 #  - time/date → dispatcher SYSINFO signal
@@ -491,7 +492,7 @@ async def _direct_chat_response(
         yield StreamChunk(text="", done=True, usage=_done_usage)
     except Exception:
         # If the direct chat fails, yield a minimal fallback and done.
-        # Do NOT fall through to the full pipeline — that would defeat
+        # Do NOT fall through to the parent-agent runtime — that would defeat
         # the purpose of the short-circuit.
         yield StreamChunk(
             text="Hi! I'm LocalMind. How can I help you?",
@@ -568,9 +569,8 @@ async def trivial_response(
     """
     Stream a direct chat response for a trivial input.
 
-    This bypasses the ThinkingDispatcher entirely — no JSON-schema
-    planning, no capability inference, no agent loop. The model just
-    streams a direct reply.
+    This is a lightweight conversational response — no capability inference
+    or tool execution is needed. The model just streams a direct reply.
 
     Session 187: pure social intents (greeting/farewell/thanks/
     acknowledgment) are answered DETERMINISTICALLY with zero LLM calls —

@@ -1134,18 +1134,16 @@ class AgentLoop:
         memory_facts: Optional[list[str]] = None,
         orchestrator_context: Optional[str] = None,
         skip_planning: bool = False,
-        # Session 134: when the caller (engine) skips the separate planning
-        # call because the ThinkingDispatcher already produced an
-        # execution_plan, pass those step labels here. They seed the Todos
-        # panel (same plan-{i} ids the planner would emit) and drive the
-        # plan cursor, so the UI still shows a real plan + progress.
+        # Optional caller-provided plan labels. They seed the Todos panel
+        # (same plan-{i} ids the planner would emit) and drive the plan
+        # cursor, so the UI still shows a real plan + progress.
         plan_steps: Optional[list[str]] = None,
-        # ADR-18 P0: typed success criteria from the dispatcher's
-        # execution_plan (or the model's create_plan). The acceptance gate
+        # ADR-18 P0: typed success criteria from an explicit plan
+        # (or the model's create_plan). The acceptance gate
         # evaluates these against tool evidence + workspace; "done" requires
         # receipts. None = no contract (legacy model-assertion path).
         success_criteria: Optional[list[str]] = None,
-        # ADR-19: explicit task type from the dispatcher's execution_plan.
+        # ADR-19: explicit task type from a caller-provided plan.
         # Selects the task-aware context policy (which tool results/history
         # stay verbatim vs. get stubbed). Empty = legacy positional behavior.
         task_type: str = "",
@@ -1183,18 +1181,12 @@ class AgentLoop:
         3. If max iterations hit, force a final answer
 
         Args:
-            orchestrator_context: Optional context from the Orchestrator layer
-                (three-layer pipeline). Contains the structured execution plan
-                and confidence assessment. When present, the Execution Agent
-                should follow this plan rather than planning independently.
-                Session 134: also set by the engine when the dispatcher's own
-                execution_plan is reused in place of the separate planning
-                call (plan_steps carries the same steps as Todos).
-            plan_steps: Optional list of step labels (Session 134). When the
-                caller skips the separate planning call because the
-                ThinkingDispatcher's execution_plan is being reused, these
-                seed the Todos panel (plan-{i} ids) and drive the plan
-                cursor as the model narrates each step.
+            orchestrator_context: Optional caller-provided context or hint.
+                The parent may evaluate, adapt, or reject it before acting;
+                it is never a directive that bypasses parent planning.
+            plan_steps: Optional list of caller-provided step labels. These
+                seed the Todos panel (plan-{i} ids) and drive the plan cursor
+                as the model narrates each step.
             agent_config: Optional AgentConfig from the selected BaseAgent
                 subclass (ADR-6). When provided, its `max_iterations` and
                 `max_wall_clock_secs` override the module-level defaults
@@ -1369,10 +1361,9 @@ class AgentLoop:
         # eliminating the trial-and-error pattern where it fumbles with
         # incomplete args for 3-5 iterations.
         #
-        # v0.11: skip_planning=True when the ThinkingDispatcher already
-        # classified intent with high confidence (≥0.7). The dispatcher's
-        # reformulation already serves as a "plan" — running another LLM
-        # call here just adds 2-6s of latency for no value.
+        # The parent runtime leaves skip_planning=False so the parent can
+        # reason before acting. An explicit caller may set it only when a
+        # verified plan is already available.
         plan_context = ""
         iteration_offset = 0  # how many iterations the planning phase consumed
         if PLAN_ENABLED and intent in AGENT_INTENTS and not initial_tool_result and not skip_planning:
@@ -1573,8 +1564,8 @@ class AgentLoop:
         # ── Inject agent system prompt (with plan context) ──────────────
         loop_messages = list(messages)
 
-        # Use the new prompt builder that supports plan context, memory facts,
-        # and orchestrator context (three-layer pipeline)
+        # Build the parent execution prompt with plan context, memory facts,
+        # and any caller-provided routing hint
         system_prompt = build_agent_system_prompt(
             intent=intent,
             available_tools=scoped_available,

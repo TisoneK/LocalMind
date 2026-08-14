@@ -23,10 +23,9 @@ Usage:
     # Or instantiate with an adapter
     agent = select_agent(Intent.SHELL)(adapter=some_adapter)
 
-Non-breaking: this module is opt-in. The existing engine pipeline
-doesn't call it yet — it still uses AgentLoop directly. A future session
-(or the user) can wire it in by replacing `AgentLoop(adapter).run(...)`
-with `select_agent(intent)(adapter).run(...)`.
+The parent runtime does not use this module for request-time routing.
+It remains a registry lookup utility for UI metadata and explicit child-agent
+selection; the parent delegates through the native delegation tools.
 
 Per ADR-6 point 5: explicit user selection (UI picker) is preferred over
 LLM-based routing. This intent-based mapping is the fallback for when
@@ -139,21 +138,16 @@ def list_intent_mappings() -> list[tuple[Intent, str]]:
     return list(_INTENT_TO_AGENT.items())
 
 
-# ── ADR-8 Phase 4: task-type-based agent selection ─────────────────────────
+# ── Registry metadata selection ────────────────────────────────────────────
 #
-# Per ADR-8 Principle 1: "Classification by task type, not tool. 'Create
-# hello world repo' is a *coding* task → CodingAgent — not a SHELL
-# intent → CodingAgent."
-#
-# The TaskProfile's `primary_domain` field (populated by
-# ThinkingDispatcher) is the task-type signal. It's set to values like
+# The parent runtime does not classify user turns into these mappings. The
+# helpers remain useful for UI metadata and explicit child-agent selection.
+# They classify by task type rather than by individual tool:
 # "browse", "web_fetch", "file_analysis", "system_info",
 # "shell_command" — these map to AGENTS (not intents). This is the
 # Phase 4 routing key.
 #
-# The intent classifier still exists as a SIGNAL (used for tool dispatch
-# and prompt construction), but it's no longer the ROUTING key for
-# agent selection. The task type (primary_domain) is the routing key.
+# The request runtime intentionally has no pre-classification stage.
 
 # Map primary_domain → agent name. When primary_domain is set
 # (non-empty), it takes precedence over the intent-based map.
@@ -181,7 +175,7 @@ _DOMAIN_TO_AGENT: dict[str, str] = {
 def primary_domain_to_agent_name(primary_domain: str) -> Optional[str]:
     """Map a TaskProfile.primary_domain value to an agent name.
 
-    Per ADR-8 Phase 4: when the ThinkingDispatcher populates
+    When a caller provides a task profile with
     primary_domain (e.g., "shell_command", "web_fetch", "browse"), this
     function maps it to the appropriate agent. Returns None for
     unknown/empty domains (caller falls back to intent-based selection).
@@ -207,7 +201,7 @@ def select_agent_by_task_profile(
     falling back to intent-based selection.
 
     Per ADR-8 Principle 1: "Classification by task type, not tool." The
-    primary_domain (populated by ThinkingDispatcher) is the task-type
+    primary_domain is the task-type
     signal. When available, it takes precedence over the intent-based
     map. When unavailable (empty or unknown), fall back to the intent-
     based map (Phase 1-3 behavior).

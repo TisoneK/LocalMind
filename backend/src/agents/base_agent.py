@@ -14,27 +14,16 @@ DirectAgent) supplies its own:
                           reliable selection on gemma3:1b-class models)
     - is_done()        — its own stop condition
 
-What's shared here (and eventually in the loop itself, once the
-existing AgentLoop is fully decomposed):
+What's shared here:
     - The 5-step loop shape
     - Hard iteration cap + wall-clock cap (ADR-5 requirement)
     - Token budget & compaction (ADR-5 / B-2026-07-26-2)
     - Streaming interface back to the frontend
     - Permission checking (the upgraded safety_gate from ADR-5)
 
-Phase 1 (this session, Session 15): BaseAgent is a structural skeleton.
-It defines the interface and delegates run() to the existing AgentLoop
-for backward compatibility. The existing AgentLoop continues to handle
-all traffic; BrowserAgent is wired into the registry but the actual
-routing migration happens in a future session.
-
-Phase 2 (future session): extract the loop body from AgentLoop into
-BaseAgent._run_loop(), with per-agent hooks for build_context() and
-is_done(). The existing AgentLoop becomes a thin shim that constructs
-a default agent and calls its run() method.
-
-Phase 3 (future session): CodingAgent, ResearchAgent, DirectAgent
-subclasses. The intent router / model_router becomes a registry lookup.
+The parent runtime constructs one AgentLoop and passes it into the selected
+agent. Specialized agents are reached through the parent's delegation tools;
+there is no route-time intent-to-tool execution branch.
 """
 
 from __future__ import annotations
@@ -127,17 +116,21 @@ class BaseAgent(ABC):
         - is_done()          — stop condition (tests pass / enough sources / ...)
         - description()      — human-readable tool description for the model
 
-    The run() method is shared — it delegates to the existing AgentLoop
-    in Phase 1, and will host the actual 5-step loop in Phase 2.
+    The run() method is shared — it wires this agent's contract into the
+    parent-owned AgentLoop.
     """
 
-    def __init__(self, adapter):
+    def __init__(self, adapter, loop=None):
         """
         Args:
             adapter: the model adapter (Ollama, OpenAI-compat, etc.) used
-                for LLM calls. Passed in by the engine at construction time.
+                for LLM calls. Passed in by the runtime at construction time.
+            loop: optional parent-owned AgentLoop instance. The runtime uses
+                one shared execution seam so transport tests and abort/steer
+                controls observe the exact loop that handles the turn.
         """
         self._adapter = adapter
+        self._loop = loop
 
     # ------------------------------------------------------------------
     # Abstract interface — each concrete agent must supply these
@@ -206,7 +199,7 @@ class BaseAgent(ABC):
         """
 
     # ------------------------------------------------------------------
-    # Shared loop — delegates to existing AgentLoop in Phase 1
+    # Shared loop — wires the agent contract into the parent AgentLoop
     # ------------------------------------------------------------------
 
     async def run(
@@ -223,15 +216,15 @@ class BaseAgent(ABC):
         orchestrator_context: Optional[str] = None,
         skip_planning: bool = False,
         # Session 134: when the engine skips the separate planning call
-        # because the ThinkingDispatcher already produced an
-        # execution_plan, those step labels come through here and seed
+        # when a caller has an explicit plan, those step labels come through
+        # here and seed
         # the Todos panel (same plan-{i} ids the planner would emit).
         # Must be forwarded to AgentLoop.run() — forgetting this param
         # crashes with "got an unexpected keyword argument 'plan_steps'"
         # (Session 141 regression fix).
         plan_steps: Optional[list[str]] = None,
-        # ADR-18 P0: typed success criteria (dispatcher execution_plan or
-        # model create_plan). Forwarded to AgentLoop.run() — the acceptance
+        # ADR-18 P0: typed success criteria from an explicit plan or the
+        # model's create_plan tool. Forwarded to AgentLoop.run() — the acceptance
         # gate evaluates them against tool evidence; "done" requires
         # receipts. None = no contract (legacy path).
         success_criteria: Optional[list[str]] = None,
@@ -246,15 +239,7 @@ class BaseAgent(ABC):
         reformulated_message: str = "",
     ) -> AsyncIterator[StreamChunk]:
         """
-        Run the agent loop.
-
-        Phase 1 (this session): delegates to the existing AgentLoop.
-        This keeps the new abstraction non-breaking — all existing
-        traffic continues to flow through AgentLoop unchanged. The
-        BaseAgent subclass is wired into the registry but the actual
-        routing migration happens in a future session.
-
-        Phase 2 (future): this method hosts the actual 5-step loop:
+        Run this agent through the parent-owned AgentLoop:
             1. assemble prompt from build_context() + workspace_state
             2. call model (plan · tool calls · stream)
             3. parse calls · route · permissions
@@ -266,9 +251,7 @@ class BaseAgent(ABC):
         here regardless of is_done()'s answer — that's the "OR limit"
         from ADR-5.
         """
-        # Phase 1 delegation: construct an AgentLoop and call its run().
-        # Import is local to avoid circular imports at module load time
-        # (core.agent.loop imports from core.agent.constants, etc.).
+        # Import is local to avoid circular imports at module load time.
         from core.agent.loop import AgentLoop
 
         cfg = self.config()
@@ -321,9 +304,9 @@ class BaseAgent(ABC):
                 cfg.name,
             )
 
-        loop = AgentLoop(adapter=effective_adapter)
+        loop = self._loop or AgentLoop(adapter=effective_adapter)
 
-        # ADR-8 Phase 2 (Session 34): call build_context() and pass the
+        # Build the agent context and pass the
         # result as `agent_context` to AgentLoop.run(). This is the
         # load-bearing piece — the agent's playbook file
         # (agents/coding/playbook.md, agents/research/playbook.md) is
@@ -348,7 +331,7 @@ class BaseAgent(ABC):
             )
             agent_context_str = ""
 
-        # B-2026-08-09-15 (ADR-15 §1): append the fixed output contract so
+        # Append the fixed output contract so
         # the model's system prompt demands the JSON shape. Gated to
         # DELEGATED child runs only (the delegate tools set a current run
         # id via core.agent.delegation): a top-level user query routed to
@@ -377,7 +360,7 @@ class BaseAgent(ABC):
             skip_planning=skip_planning,
             plan_steps=plan_steps,  # Session 134: dispatcher plan reuse
             # ADR-18 P0: the acceptance gate — pass this agent's real
-            # is_done() (criteria-verified stop) + the dispatcher criteria.
+            # is_done() (criteria-verified stop) plus any explicit criteria.
             is_done_fn=self.is_done,
             success_criteria=success_criteria,
             task_type=task_type,

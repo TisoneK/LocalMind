@@ -580,31 +580,24 @@ async def test_loop_without_gate_fn_unchanged():
 # the model asserts done or the iteration cap hits.
 
 
-def test_default_acceptance_gate_delegates_to_is_coding_done():
-    """The wired gate is is_coding_done (safe no-op without criteria,
-    criteria-verified stop with evidence)."""
-    from core.engine._pipeline import _default_acceptance_gate
+def test_parent_acceptance_gate_requires_current_tool_evidence():
+    """The parent gate is the only request-level acceptance hook and it
+    refuses to pass before this run has tool evidence."""
+    from agents.parent import ParentAgent
 
-    # No criteria → (False, "") — legacy loop termination unchanged.
-    done, reason = _default_acceptance_gate(1, 1.0, None, AgentTrace())
+    parent = ParentAgent(adapter=MagicMock())
+    done, reason = parent.is_done(1, 1.0, None, AgentTrace())
     assert done is False
     assert reason == ""
 
-    # Criteria + evidence → verified stop.
     trace = _trace_with_steps(
         [_shell_step("pytest tests -q", "3 passed in 0.5s")],
         criteria=["pytest passes"],
     )
-    done, reason = _default_acceptance_gate(3, 10.0, None, trace)
+    done, reason = parent.is_done(3, 10.0, None, trace)
     assert done is True
     assert "criteria met" in reason
     assert trace.gate_passed is True
-
-    # Criteria, no tool evidence yet → keep going (run-scoped guard).
-    trace2 = _trace_with_steps([], criteria=["hello.py exists with content"])
-    with patch("core.agent.verify.os.path.isfile", return_value=True):
-        done2, _ = _default_acceptance_gate(1, 1.0, None, trace2)
-    assert done2 is False
 
 
 class _CriteriaPlanDispatcher:
@@ -687,8 +680,6 @@ async def test_engine_direct_loop_wires_acceptance_gate():
     """The direct `self._agent_loop.run()` call (agent selection OFF) must
     pass is_done_fn — before Session 173 the Verify stage was dead there."""
     from core.engine import Engine
-    from core.engine._pipeline import _default_acceptance_gate
-
     engine = Engine()
     obs = ObsCollector()
     mock_adapter = MagicMock()
@@ -696,11 +687,9 @@ async def test_engine_direct_loop_wires_acceptance_gate():
 
     captured, fake_run = _engine_loop_recorder()
 
-    with patch("core.engine._pipeline.ThinkingDispatcher", _CriteriaPlanDispatcher), patch(
-        "core.engine.get_adapter", return_value=mock_adapter
-    ), patch("core.engine._pipeline.AGENT_SELECTION_ENABLED", False), patch.object(
-        engine._agent_loop, "run", fake_run
-    ):
+    with patch("core.engine.get_adapter", return_value=mock_adapter), patch(
+        "core.thinking_dispatcher.ThinkingDispatcher"
+    ) as dispatcher, patch.object(engine._agent_loop, "run", fake_run):
         chunks = [
             c
             async for c in engine.process(
@@ -708,12 +697,12 @@ async def test_engine_direct_loop_wires_acceptance_gate():
             )
         ]
 
-    # The direct loop got BOTH the contract AND the Verify stage.
-    assert captured.get("success_criteria") == [
-        "hello.py exists with content",
-        "pytest passes",
-    ]
-    assert captured.get("is_done_fn") is _default_acceptance_gate
+    # The LocalMind parent loop owns the turn and receives its own acceptance
+    # hook; no dispatcher contract is injected ahead of it.
+    dispatcher.assert_not_called()
+    assert captured.get("agent_config").name == "parent"
+    assert callable(captured.get("is_done_fn"))
+    assert "Parent-Agent" in captured.get("agent_context", "")
 
     # User-visible reply still streams normally.
     full_text = "".join(getattr(c, "text", "") or "" for c in chunks)
@@ -736,9 +725,9 @@ async def test_engine_escalate_path_wires_acceptance_gate():
     # local DSML adapter + real detection (no patching of the detector).
     dsml_adapter = _make_dsml_adapter()
 
-    with patch("core.engine._pipeline.ThinkingDispatcher", _DirectPlanDispatcher), patch(
-        "core.engine.get_adapter", return_value=dsml_adapter
-    ), patch.object(engine._agent_loop, "run", fake_run):
+    with patch("core.engine.get_adapter", return_value=dsml_adapter), patch(
+        "core.thinking_dispatcher.ThinkingDispatcher"
+    ) as dispatcher, patch.object(engine._agent_loop, "run", fake_run):
         chunks = [
             c
             async for c in engine.process(
@@ -746,9 +735,9 @@ async def test_engine_escalate_path_wires_acceptance_gate():
             )
         ]
 
-    from core.engine._pipeline import _default_acceptance_gate
-
-    assert captured.get("is_done_fn") is _default_acceptance_gate
+    dispatcher.assert_not_called()
+    assert captured.get("agent_config").name == "parent"
+    assert callable(captured.get("is_done_fn"))
     assert any(getattr(c, "done", False) for c in chunks)
 
 
@@ -800,30 +789,22 @@ def test_is_verifier_done_real_implementation():
     assert done3 is False
 
 
-def test_acceptance_gate_for_selects_verifier_for_high_stakes():
-    """FILE_WRITE/FILE_EDIT/CODE_EXEC gate on the verifier; others on the
-    coding gate. Both are safe no-ops without criteria."""
-    from core.engine._pipeline import (
-        _acceptance_gate_for,
-        _default_acceptance_gate,
-    )
+def test_parent_agent_owns_the_acceptance_hook():
+    """The parent loop owns one acceptance implementation; routing no longer
+    selects a separate verifier gate in the request pipeline."""
+    from agents.parent import ParentAgent
 
-    verifier_gate = _acceptance_gate_for(Intent.FILE_WRITE)
-    assert verifier_gate is not _default_acceptance_gate
-    # It behaves like the verifier (delegates to is_verifier_done).
+    parent = ParentAgent(adapter=MagicMock())
     trace = _trace_with_steps(
         [_shell_step("pytest tests -q", "3 passed in 0.5s")],
         criteria=["pytest passes"],
     )
-    done, _ = verifier_gate(3, 10.0, None, trace)
+    done, reason = parent.is_done(1, 1.0, None, trace)
     assert done is True
+    assert "criteria met" in reason
 
-    assert _acceptance_gate_for(Intent.FILE_EDIT) is not _default_acceptance_gate
-    assert _acceptance_gate_for(Intent.CODE_EXEC) is not _default_acceptance_gate
-    # Non-high-stakes intents keep the coding gate.
-    assert _acceptance_gate_for(Intent.SHELL) is _default_acceptance_gate
-    assert _acceptance_gate_for(Intent.WEB_SEARCH) is _default_acceptance_gate
-    assert _acceptance_gate_for(Intent.CHAT) is _default_acceptance_gate
+
+
 
 
 @pytest.mark.asyncio
@@ -856,21 +837,17 @@ async def test_engine_wires_verifier_gate_for_high_stakes_intent():
                 dispatch_steps=[{"intent": "file_write", "detail": "Write hello.py"}],
             )
 
-    with patch("core.engine._pipeline.ThinkingDispatcher", _FileWriteDispatcher), patch(
-        "core.engine.get_adapter", return_value=mock_adapter
-    ), patch("core.engine._pipeline.AGENT_SELECTION_ENABLED", False), patch.object(
-        engine._agent_loop, "run", fake_run
-    ):
+    with patch("core.engine.get_adapter", return_value=mock_adapter), patch(
+        "core.thinking_dispatcher.ThinkingDispatcher"
+    ) as dispatcher, patch.object(engine._agent_loop, "run", fake_run):
         chunks = [
             c
             async for c in engine.process("write hello.py", "sess-engine-verifier-gate", obs=obs)
         ]
 
-    from core.engine._pipeline import _acceptance_gate_for, _default_acceptance_gate
-
-    assert captured.get("success_criteria") == ["hello.py exists with content"]
-    assert captured.get("is_done_fn") is not _default_acceptance_gate
-    assert captured.get("is_done_fn") is _acceptance_gate_for(Intent.FILE_WRITE)
+    dispatcher.assert_not_called()
+    assert captured.get("agent_config").name == "parent"
+    assert callable(captured.get("is_done_fn"))
     assert any(getattr(c, "done", False) for c in chunks)
 
 
@@ -924,8 +901,6 @@ async def test_fast_path_criteria_verify_via_initial_tool_step():
 
     # Use the real gate as is_done_fn — it must see the initial-tool step
     # as evidence and terminate cleanly on the first iteration head.
-    from core.engine._pipeline import _default_acceptance_gate
-
     initial = ToolResult(
         content="Listing contents of dev:\n  frontend\n  backend\n  docs",
         source="shell",
@@ -939,7 +914,7 @@ async def test_fast_path_criteria_verify_via_initial_tool_step():
         available_tools=[],
         adapter=_GateLoopAdapter(),
         success_criteria=["the listing for dev was shown"],
-        is_done_fn=_default_acceptance_gate,
+        is_done_fn=__import__("agents.parent", fromlist=["ParentAgent"]).ParentAgent(adapter=MagicMock()).is_done,
     ):
         chunks.append(chunk)
 

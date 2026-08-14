@@ -24,7 +24,7 @@ from adapters.openai_compat import OpenAICompatAdapter
 
 def test_cleanup_session_removes_intent_history(tmp_path, monkeypatch):
     """cleanup_session() removes the session from _intent_history."""
-    from core.engine._pipeline import Engine
+    from core.engine import Engine
 
     monkeypatch.setenv("LOCALMIND_DB_PATH", str(tmp_path / "test.db"))
     engine = Engine()
@@ -40,7 +40,7 @@ def test_cleanup_session_removes_intent_history(tmp_path, monkeypatch):
 
 def test_cleanup_session_removes_pending_writes(tmp_path, monkeypatch):
     """cleanup_session() removes pending writes."""
-    from core.engine._pipeline import Engine
+    from core.engine import Engine
 
     monkeypatch.setenv("LOCALMIND_DB_PATH", str(tmp_path / "test.db"))
     engine = Engine()
@@ -56,7 +56,7 @@ def test_cleanup_session_removes_pending_writes(tmp_path, monkeypatch):
 
 def test_cleanup_session_removes_pending_clarification(tmp_path, monkeypatch):
     """cleanup_session() removes pending clarifications."""
-    from core.engine._pipeline import Engine
+    from core.engine import Engine
 
     monkeypatch.setenv("LOCALMIND_DB_PATH", str(tmp_path / "test.db"))
     engine = Engine()
@@ -72,7 +72,7 @@ def test_cleanup_session_removes_pending_clarification(tmp_path, monkeypatch):
 
 def test_cleanup_session_removes_last_code(tmp_path, monkeypatch):
     """cleanup_session() removes cached code."""
-    from core.engine._pipeline import Engine
+    from core.engine import Engine
 
     monkeypatch.setenv("LOCALMIND_DB_PATH", str(tmp_path / "test.db"))
     engine = Engine()
@@ -88,7 +88,7 @@ def test_cleanup_session_removes_last_code(tmp_path, monkeypatch):
 
 def test_cleanup_session_removes_last_observation(tmp_path, monkeypatch):
     """cleanup_session() removes cached observations."""
-    from core.engine._pipeline import Engine
+    from core.engine import Engine
 
     monkeypatch.setenv("LOCALMIND_DB_PATH", str(tmp_path / "test.db"))
     engine = Engine()
@@ -104,7 +104,7 @@ def test_cleanup_session_removes_last_observation(tmp_path, monkeypatch):
 
 def test_cleanup_session_does_not_affect_other_sessions(tmp_path, monkeypatch):
     """cleanup_session() only removes the specified session — not others."""
-    from core.engine._pipeline import Engine
+    from core.engine import Engine
 
     monkeypatch.setenv("LOCALMIND_DB_PATH", str(tmp_path / "test.db"))
     engine = Engine()
@@ -126,7 +126,7 @@ def test_cleanup_session_does_not_affect_other_sessions(tmp_path, monkeypatch):
 
 def test_cleanup_session_idempotent(tmp_path, monkeypatch):
     """cleanup_session() on a non-existent session doesn't crash."""
-    from core.engine._pipeline import Engine
+    from core.engine import Engine
 
     monkeypatch.setenv("LOCALMIND_DB_PATH", str(tmp_path / "test.db"))
     engine = Engine()
@@ -212,7 +212,7 @@ def test_adapter_chat_logs_unsupported_kwargs(caplog):
 def test_new_session_gets_fresh_intent_history(tmp_path, monkeypatch):
     """A new session_id gets an empty intent history — no leakage from
     a previous session that used the same ID (after cleanup)."""
-    from core.engine._pipeline import Engine
+    from core.engine import Engine
     from core.models import Intent
 
     monkeypatch.setenv("LOCALMIND_DB_PATH", str(tmp_path / "test.db"))

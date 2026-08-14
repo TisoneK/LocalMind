@@ -23,19 +23,15 @@ def test_engine_fallback_does_not_call_obs_drain():
     — it must use _obs.all() (read-only). drain() steals events from the
     SSE bridge."""
 
-    pipeline_path = (
+    runtime_path = (
         Path(__file__).resolve().parent.parent.parent
-        / "backend" / "src" / "core" / "engine" / "_pipeline.py"
+        / "backend" / "src" / "core" / "agent_runtime.py"
     )
-    source = pipeline_path.read_text()
+    source = runtime_path.read_text()
 
-    # Verify _obs.all() is used (the fix)
-    assert "_obs.all()" in source, (
-        "Engine fallback must use _obs.all() (read-only) to check for "
-        "hit_limit — NOT _obs.drain() (destructive). drain() steals "
-        "events from the SSE bridge, causing the frontend's tool_status "
-        "spinner to stick forever."
-    )
+    # The parent runtime inspects collector history without consuming the
+    # event stream; the SSE route remains the only destructive consumer.
+    assert "collector.history()" in source
 
     # Check that _obs.drain() does NOT appear as actual CODE (only in comments).
     # Strip comments and check the remaining code.
@@ -49,11 +45,9 @@ def test_engine_fallback_does_not_call_obs_drain():
         code_lines.append(line)
     code_only = '\n'.join(code_lines)
 
-    # The hit_limit check section should use _obs.all(), not _obs.drain()
-    # in actual executable code
-    assert "_obs.drain()" not in code_only or "_obs.all()" in code_only, (
-        "Engine fallback must use _obs.all() (read-only), not _obs.drain() "
-        "(destructive) in actual code."
+    assert ".drain(" not in code_only, (
+        "The parent runtime must not consume the observation stream; "
+        "the SSE bridge owns draining."
     )
 
 

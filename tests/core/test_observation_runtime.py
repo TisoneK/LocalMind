@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 
-from core.engine._pipeline import Engine
+from core.engine import Engine
 from core.obs import ObsCollector
 
 

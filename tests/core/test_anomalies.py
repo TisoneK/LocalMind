@@ -147,7 +147,7 @@ class TestEngineWiring:
     @staticmethod
     def _engine(monkeypatch, tmp_path):
         from core.config import settings
-        from core.engine._pipeline import Engine
+        from core.engine import Engine
 
         db_path = str(tmp_path / "anomalies.db")
         monkeypatch.setenv("LOCALMIND_DB_PATH", db_path)

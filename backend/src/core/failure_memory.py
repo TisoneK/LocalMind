@@ -17,8 +17,8 @@ retrieval-centric). This module closes that gap:
     next similar turn's context (alongside memory facts): "past similar
     failures to avoid".
 
-Wire-in (engine/_pipeline.py):
-  - WRITE: after the agent loop converges, scan obs for the loop's
+Wire-in (core/agent_runtime.py):
+  - WRITE: after the parent agent loop converges, scan obs for the loop's
     termination event and record via SessionStore.record_failure.
   - READ: before building the loop prompt, SessionStore.recall_failures
     returns matching past failures; format_recall_hint appends them to

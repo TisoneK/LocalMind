@@ -1,11 +1,9 @@
 """
 Per-request pipeline stage timing (Session 129 decomposition).
 
-Extracted from ``core/engine/_pipeline.py`` — ``_StageClock`` records REAL
-wall-clock latency per pipeline stage and emits ``stage_timing`` obs events
-so the Observe panel renders truthful statuses (done / skipped) with real
-timings. ``core/engine/_pipeline.py`` re-imports it for backward
-compatibility (``tests/core/test_stage_timing.py`` imports it from there).
+Shared lifecycle service — ``_StageClock`` records REAL wall-clock latency
+per runtime stage and emits ``stage_timing`` obs events so the Observe panel
+renders truthful statuses (done / skipped) with real timings.
 """
 
 from __future__ import annotations

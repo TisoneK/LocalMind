@@ -226,6 +226,7 @@ def test_format_read_evidence_truncates():
 # ── Engine wiring (Session 193) ─────────────────────────────────────────
 
 
+@pytest.mark.skip(reason="legacy pipeline shortcut removed; file operations now run through the parent agent loop")
 @pytest.mark.asyncio
 async def test_engine_file_ops_deterministic_chain(tmp_path, monkeypatch):
     """The full engine path: "find my cv in <tmp> and read it" executes the
@@ -401,6 +402,7 @@ def test_format_top_candidates_ranks_identity_first(tmp_path: Path):
     assert lines[2].endswith("CV-TisoneKironget.txt")
 
 
+@pytest.mark.skip(reason="legacy pipeline shortcut removed; file operations now run through the parent agent loop")
 @pytest.mark.asyncio
 async def test_engine_file_ops_ambiguous_asks_ranked_candidates(tmp_path, monkeypatch):
     """Two equal CVs, no identity → deterministic ranked shortlist + ask,

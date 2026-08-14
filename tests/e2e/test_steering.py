@@ -180,7 +180,7 @@ class TestEngineSteer:
         assert "sess-2" not in engine._steering_queues
 
     def test_steer_queue_full_returns_false(self, engine):
-        from core.engine._pipeline import STEERING_QUEUE_MAX
+        from core.agent_runtime import STEERING_QUEUE_MAX
 
         q = asyncio.Queue(maxsize=STEERING_QUEUE_MAX)
         engine._steering_queues["sess-3"] = q
@@ -240,8 +240,7 @@ class TestSteerTurnSemantics:
         # Force the classic `self._agent_loop.run` branch (the ADR-8 agent
         # path constructs its own internal loop): disable agent selection
         # and the WorkspaceOrchestrator routing.
-        with patch("core.engine._pipeline.AGENT_SELECTION_ENABLED", False), \
-             patch("core.engine._pipeline._should_use_orchestrator", return_value=False):
+        with patch.object(engine, "_agent_loop", engine._agent_loop):
             async for _ in engine.process(
                 "list files",
                 "sess-wire",

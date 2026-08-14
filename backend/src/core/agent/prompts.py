@@ -439,11 +439,9 @@ def build_agent_system_prompt(
         memory_facts:         Optional list of memory facts retrieved for this turn.
                               Injected into the prompt so the agent has context about
                               the user across all intents, not just CHAT.
-        orchestrator_context: Optional context from the Orchestrator layer
-                              (three-layer pipeline). Contains the structured
-                              execution plan and confidence assessment. When
-                              present, the Execution Agent should follow this
-                              plan rather than planning independently.
+        orchestrator_context: Optional caller-provided routing hint or context.
+                              The parent agent evaluates it before acting; it is
+                              not a directive that replaces parent planning.
         agent_context:        Optional agent-specific context from the selected
                               BaseAgent subclass's build_context() method (ADR-8
                               Phase 2). When the CodingAgent is selected, this
@@ -826,16 +824,18 @@ the Coding Agent; enough-sources + cite-dates for the Research Agent;
 etc.). Your scoped toolset is the WHAT; this playbook is the HOW.
 """
 
-    # Inject orchestrator context if available (three-layer pipeline)
+    # Inject caller context as a hint; the parent remains responsible for
+    # evaluating the suggestion and choosing the next action.
     orchestrator_section = ""
     if orchestrator_context:
         orchestrator_section = f"""
-ORCHESTRATOR PLAN — follow this plan from the Orchestrator layer:
+ROUTING HINT — evaluate this suggestion before acting:
 {orchestrator_context}
 
-The Orchestrator has analyzed the Chat Agent's reformulated instruction and produced
-this execution plan. Follow it closely — call the tools specified, in the order given.
-You may deviate ONLY if a tool call fails and you need an alternative approach.
+This hint may be incomplete or wrong. Verify it against the user's goal and
+current evidence, then choose the appropriate tool, delegate, clarification,
+or next reasoning step yourself. Do not treat it as an instruction to call a
+specific tool or follow a fixed order.
 """
 
     return f"""You are an Execution Agent. Your ONLY job is to call tools. You NEVER narrate, describe, or explain what you would do — you just DO it.

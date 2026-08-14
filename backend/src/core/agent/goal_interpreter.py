@@ -64,8 +64,8 @@ USAGE
     )
     # `criteria` is a list[str] — pass as `success_criteria=` to AgentLoop.run
 
-The engine wraps the existing `_reused_criteria` initialization in
-`_pipeline.py:2528-2534` to call the interpreter when that's empty.
+The parent runtime may use the interpreter when an explicit success
+contract is absent; standalone callers can also use this deterministic helper.
 """
 
 from __future__ import annotations
@@ -369,7 +369,7 @@ class GoalInterpreter:
 
 # ── Module-level singleton ───────────────────────────────────────────────────
 # The interpreter is stateless; one shared instance is fine. Imported by
-# the engine in _pipeline.py to avoid creating a new object per turn.
+# the runtime to avoid creating a new object per turn.
 
 _default_interpreter = GoalInterpreter()
 

@@ -1,14 +1,9 @@
 """
-Routing + planning helpers for the engine (Session 129 decomposition).
+Legacy planning helpers retained only for isolated data-model tests.
 
-Extracted from ``core/engine/_pipeline.py`` — the pure planning-skip and
-fallback-plan decisions, kept module-level so tests can import the exact
-source of truth (``tests/core/test_planning_skip.py`` imports
-``_should_skip_planning``; ``tests/e2e/test_todo_system.py`` derives its
-expectations from ``_fallback_todo_plan``).
-
-``core/engine/_pipeline.py`` re-imports every symbol here for backward
-compatibility.
+The request runtime does not import this module: planning and tool selection
+belong to the LocalMind parent AgentLoop. These pure helpers remain available
+for independent tests and migration tooling, but are not an execution path.
 """
 
 from __future__ import annotations

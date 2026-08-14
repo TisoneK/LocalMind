@@ -396,11 +396,11 @@ class TestEngineFallbackMessage:
         """The exact old message string must no longer appear in the source."""
         from pathlib import Path
 
-        pipeline_path = (
+        runtime_path = (
             Path(__file__).resolve().parent.parent.parent
-            / "backend" / "src" / "core" / "engine" / "_pipeline.py"
+            / "backend" / "src" / "core" / "agent_runtime.py"
         )
-        source = pipeline_path.read_text()
+        source = runtime_path.read_text()
         # The old message attributed failure to the user's phrasing —
         # this mis-attribution is the core UX bug we're fixing.
         assert "Please try rephrasing your request" not in source, (
@@ -418,19 +418,15 @@ class TestEngineFallbackMessage:
         one-step-at-a-time isolation."""
         from pathlib import Path
 
-        pipeline_path = (
+        runtime_path = (
             Path(__file__).resolve().parent.parent.parent
-            / "backend" / "src" / "core" / "engine" / "_pipeline.py"
+            / "backend" / "src" / "core" / "agent_runtime.py"
         )
-        source = pipeline_path.read_text()
-        # New message must mention at least one concrete next step
-        assert "one step at a time" in source, (
-            "New fallback should suggest doing one step at a time"
-        )
-        assert "Terminal" in source or "terminal" in source, (
-            "New fallback should point the user to the Terminal panel where "
-            "the actual tool outputs are visible"
-        )
+        source = runtime_path.read_text()
+        # The parent runtime names the concrete internal evidence surface
+        # instead of blaming the user's phrasing.
+        assert "iteration limit" in source.lower()
+        assert "Actions panel" in source
         # Session 31 revised: must NOT guess "overload" in the engine fallback
         # (the loop's evidence-based fallback handles that case better)
         assert "almost always a free-tier model issue" not in source, (

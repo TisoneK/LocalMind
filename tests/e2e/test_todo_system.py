@@ -206,7 +206,7 @@ def test_engine_emit_todo_plan_skips_agent_intents(tmp_path, monkeypatch):
     LLM planner instead, which produces real plan steps via _plan_stream.
     """
     from core.config import settings
-    from core.engine._pipeline import Engine
+    from core.engine import Engine
     from core.models import Intent
     from core.obs import ObsCollector
 
@@ -258,7 +258,7 @@ def test_engine_emit_todo_plan_skips_agent_intents(tmp_path, monkeypatch):
 def test_engine_emit_todo_plan_skips_chat(tmp_path, monkeypatch):
     """Engine._emit_todo_plan does NOT create todos for CHAT intent
     (single-step, no plan needed)."""
-    from core.engine._pipeline import Engine
+    from core.engine import Engine
     from core.models import Intent
     from core.obs import ObsCollector
 

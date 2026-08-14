@@ -138,7 +138,7 @@ REFLECT_INTENTS: frozenset = frozenset(
 # ── Capability Orchestration (v3.0) ───────────────────────────────────────────
 
 CAPABILITY_ORCHESTRATION_ENABLED: bool = True
-"""Always True in v4.0. The ThinkingDispatcher is the sole routing mechanism."""
+"""Enabled for the parent-agent runtime's native tool loop."""
 
 ORCHESTRATOR_TIMEOUT_SECS: float = 10.0
 ORCHESTRATOR_TEMPERATURE: float = 0.2

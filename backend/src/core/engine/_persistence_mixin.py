@@ -35,7 +35,7 @@ class _PersistenceMixin:
         If the generator was interrupted (client disconnect, exception, GC
         cleanup), the append() calls never executed and the conversation
         history was silently lost. On the next turn, get_history() returned
-        empty, and the ThinkingDispatcher said "No prior exchange exists."
+        empty, and the next parent turn had no prior exchange context.
 
         Now: the user message is persisted BEFORE any LLM calls or streaming,
         guaranteeing it's saved even if the generator crashes mid-stream.

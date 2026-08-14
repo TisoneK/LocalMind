@@ -42,6 +42,7 @@ from agents.browser.agent import BrowserAgent
 from agents.coding.agent import CodingAgent
 from agents.debugger.agent import DebuggerAgent
 from agents.direct.agent import DirectAgent
+from agents.parent.agent import ParentAgent
 from agents.registry import auto_discover_agents, get_agent, is_registered, list_agents, register
 from agents.research.agent import ResearchAgent
 from agents.reviewer.agent import ReviewerAgent
@@ -66,6 +67,7 @@ __all__ = [
     "BaseAgent",
     "AgentConfig",
     "BrowserAgent",
+    "ParentAgent",
     "CodingAgent",
     "DirectAgent",
     "ResearchAgent",

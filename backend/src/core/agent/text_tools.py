@@ -20,7 +20,7 @@ no dependency on the AgentLoop class:
   string the dispatch system expects.
 
 ``core/agent/loop.py`` re-imports every symbol here for backward
-compatibility (tests and ``_pipeline.py`` import from ``core.agent.loop``).
+compatibility (tests and callers import these helpers from ``core.agent.loop``).
 """
 
 from __future__ import annotations

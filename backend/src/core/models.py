@@ -2,19 +2,21 @@
 Shared Pydantic models used across LocalMind layers.
 No business logic here — pure data shapes.
 
-v4.0 — Unified Dynamic Capability Orchestration
-──────────────────────────────────────────────────
-Consolidated all routing into ThinkingDispatcher as the sole Layer 2.
-Removed backward-compat aliases and deprecated modules.
+Shared request and agent data models.
+
+The live request path is the parent-agent runtime. TaskProfile,
+OrchestrationPlan, and ExecutionGraph remain data contracts for isolated
+planning/model tests and migration tooling; they are not request-time routing
+or execution owners.
 
 Canonical types defined here:
   - Capability enum — composable capability descriptors
-  - TaskProfile — multi-dimensional capability profile (replaces single Intent)
-  - OrchestrationPlan — complete output of ThinkingDispatcher
-  - ExecutionGraph — DAG-based parallel execution model
+  - TaskProfile — multi-dimensional capability profile
+  - OrchestrationPlan — structured planning data
+  - ExecutionGraph — DAG-based planning data model
   - ExecutionConstraints — bounded execution parameters
-  - UnderstandingResult — Layer 1 structured input parsing
-  - ValidationResult — Layer 5 quality/fabrication assessment
+  - UnderstandingResult — structured input parsing
+  - ValidationResult — quality/fabrication assessment
 """
 
 from __future__ import annotations

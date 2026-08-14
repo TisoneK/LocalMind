@@ -164,31 +164,14 @@ def test_select_agent_intent_based_still_works():
 # ── Engine uses select_agent_by_task_profile (import inspection) ──────────
 
 
-def test_engine_imports_select_agent_by_task_profile():
-    """The engine's agent-selection code uses select_agent_by_task_profile.
+def test_parent_agent_replaces_engine_agent_selection():
+    """The request runtime starts one LocalMind parent; specialized agent
+    selection is now an internal delegation decision, not an engine branch."""
+    from agents.parent import ParentAgent
+    from core.engine import AgentRuntime, Engine
 
-    Per ADR-8 Phase 4: the engine should call select_agent_by_task_profile
-    (not the old select_agent). Verified via source inspection — if
-    someone reverts to select_agent, this test fails.
-    """
-    import inspect
-    from core.engine import _pipeline
-
-    source = inspect.getsource(_pipeline)
-    assert "select_agent_by_task_profile" in source, (
-        "engine/_pipeline.py should call select_agent_by_task_profile "
-        "(ADR-8 Phase 4 task-type-based selection)"
-    )
-    # Also verify the OLD select_agent(intent) is NOT used for agent
-    # selection in the main path (it may still be imported for tests or
-    # fallback paths, but the main selection call should use the new fn)
-    # Look for the pattern 'select_agent(effective_intent)' which would
-    # indicate the old behavior
-    assert "select_agent(effective_intent)" not in source, (
-        "engine/_pipeline.py should NOT call select_agent(effective_intent) "
-        "directly — use select_agent_by_task_profile(primary_domain, intent) "
-        "instead (ADR-8 Phase 4)"
-    )
+    assert Engine is AgentRuntime
+    assert ParentAgent(adapter=None).config().name == "parent"
 
 
 # ── _DOMAIN_TO_AGENT map covers all primary_domain values ─────────────────
