@@ -83,3 +83,75 @@ async def test_parent_does_not_turn_provider_planner_text_into_user_thinking():
     assert all("STEPS:" not in (chunk.text or "") for chunk in chunks)
     assert all("UNDERSTANDING:" not in (chunk.thinking or "") for chunk in chunks)
     assert all("STEPS:" not in (chunk.thinking or "") for chunk in chunks)
+
+
+@pytest.mark.asyncio
+async def test_tool_observation_returns_to_parent_before_final_answer():
+    """A search result is evidence for the parent, not the user's final reply.
+
+    The parent must get another decision turn after the tool result so it can
+    fetch/verify/replan before producing the final response.
+    """
+    from unittest.mock import patch
+
+    from adapters.ollama import ToolCallResult
+    from core.models import RiskLevel, ToolResult
+
+    class _SearchAdapter(_WorkflowAdapter):
+        def __init__(self):
+            self.tool_call_messages = []
+            self.calls = 0
+
+        async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None):
+            self.calls += 1
+            if self.calls == 1:
+                return ToolCallResult(
+                    tool_name="web_search",
+                    tool_args={"query": "current weather in Kitengela"},
+                    raw_content="I should search for current conditions.",
+                )
+
+            self.tool_call_messages.append(messages)
+
+            async def _stream():
+                yield StreamChunk(
+                    text="I checked the search evidence and verified the result before answering.",
+                    done=False,
+                )
+                yield StreamChunk(text="", done=True)
+
+            return _stream()
+
+    adapter = _SearchAdapter()
+    search_result = ToolResult(
+        content="Kitengela: sunny, 26°C. Source: https://example.test/weather",
+        risk=RiskLevel.LOW,
+        source="web_search",
+        success=True,
+    )
+
+    with patch("core.agent.loop.dispatch_with_retry", return_value=(search_result, False, 0)):
+        chunks = [
+            chunk
+            async for chunk in AgentLoop(adapter=adapter).run(
+                messages=[{"role": "user", "content": "What's the weather in Kitengela?"}],
+                intent=Intent.WEB_SEARCH,
+                initial_tool_result=None,
+                available_tools=[],
+                adapter=adapter,
+            )
+        ]
+
+    text = "".join(chunk.text for chunk in chunks)
+    statuses = [chunk.status for chunk in chunks if chunk.status]
+    assert adapter.calls == 2, "the parent must make a post-observation decision"
+    assert adapter.tool_call_messages, "the second decision must receive tool context"
+    assert any(
+        message.get("role") == "tool" and "26°C" in message.get("content", "")
+        for message in adapter.tool_call_messages[0]
+    )
+    assert "I checked the search evidence" in text
+    assert "Kitengela: sunny, 26°C" not in text
+    assert any(status.startswith("Done — Searching") for status in statuses)
+    assert any("verifying the result" in status for status in statuses)
+    assert sum(chunk.done for chunk in chunks) == 1

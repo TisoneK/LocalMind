@@ -2809,41 +2809,13 @@ class AgentLoop:
                                 f"[Tool '{tool_name}' returned error_type={tool_result.error_type!r}]\n" + safe_obs
                             )
 
-                        # Web-search: synthesize results into a user-facing answer.
-                        if tool_intent == Intent.WEB_SEARCH:
-                            # Extract original user question from messages for synthesis
-                            _user_q = ""
-                            for m in messages:
-                                if m.get("role") == "user":
-                                    _user_q = m.get("content", "")
-                                    break
-                            async for chunk in self._handle_web_search_result(
-                                safe_obs=safe_obs,
-                                query=tool_input,
-                                thought=result.raw_content or "", reasoning=_step_reasoning(),
-                                iteration=iteration,
-                                trace=trace,
-                                user_question=_user_q,
-                                adapter=active_adapter,
-                                allowed_tool_names=effective_allowed,
-                            ):
-                                yield chunk
-                            if _obs:
-                                _obs.emit(
-                                    "tool_call",
-                                    tool=tool_name,
-                                    label=action_label,
-                                    status="done",
-                                    output=_truncate_observation(safe_obs),
-                                    latency_ms=latency_ms,
-                                    tool_args=tool_input,
-                                    iteration=iteration + 1,
-                                    todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                                    thought=result.raw_content or "", reasoning=_step_reasoning(),
-                                )
-                                _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
-                            return  # web search is always terminal in agent loop
-
+                        # Search results are an intermediate observation, not
+                        # the answer. The parent must receive them as a tool
+                        # message and decide whether to fetch, replan, verify,
+                        # or synthesize a final response on the next iteration.
+                        # The old web-search shortcut called the synthesizer
+                        # here and emitted `done`, which detached the agent
+                        # from its own evidence loop.
                         observation = safe_obs
                         _call_cache[call_fingerprint] = safe_obs
 
@@ -3315,39 +3287,9 @@ class AgentLoop:
                                         + safe_obs
                                     )
 
-                                # Web-search: synthesize results into a user-facing answer
-                                if tool_intent == Intent.WEB_SEARCH:
-                                    _user_q = ""
-                                    for m in messages:
-                                        if m.get("role") == "user":
-                                            _user_q = m.get("content", "")
-                                            break
-                                    async for chunk in self._handle_web_search_result(
-                                        safe_obs=safe_obs,
-                                        query=tool_input,
-                                        thought=_strip_minimax_tool_calls(_minimax_buffer),
-                                        iteration=iteration,
-                                        trace=trace,
-                                        user_question=_user_q,
-                                        adapter=active_adapter,
-                                        allowed_tool_names=effective_allowed,
-                                    ):
-                                        yield chunk
-                                    if _obs:
-                                        _obs.emit(
-                                            "tool_call",
-                                            tool=tc_name,
-                                            label=action_label,
-                                            status="done",
-                                            output=_truncate_observation(safe_obs),
-                                            latency_ms=latency_ms,
-                                tool_args=tool_input,
-                                iteration=iteration + 1,
-                                todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                                thought=result.raw_content or "", reasoning=_step_reasoning(),
-                            )
-                                    return  # web search is terminal
-
+                                # A text-encoded search call follows the same
+                                # intermediate-observation contract as a native
+                                # tool call. Do not synthesize or finish here.
                                 observation = safe_obs
 
                                 # Yield completion status
@@ -3752,25 +3694,10 @@ class AgentLoop:
                                     if _late_result
                                     else f"[Tool {_tc_name} returned no result]"
                                 )
-                                if Intent(_tc_name) == Intent.WEB_SEARCH:
-                                    _user_q = ""
-                                    for m in messages:
-                                        if m.get("role") == "user":
-                                            _user_q = m.get("content", "")
-                                            break
-                                    async for chunk in self._handle_web_search_result(
-                                        safe_obs=_late_obs,
-                                        query=_tc_input,
-                                        thought=_strip_minimax_tool_calls(_minimax_buffer),
-                                        iteration=iteration,
-                                        trace=trace,
-                                        user_question=_user_q,
-                                        adapter=active_adapter,
-                                        allowed_tool_names=effective_allowed,
-                                    ):
-                                        yield chunk
-                                    return
-
+                                # Late/intercepted search calls are also
+                                # observations for the parent, never terminal
+                                # user output. Feed the result back through the
+                                # normal tool-message continuation below.
                                 trace.steps.append(
                                     AgentStep(
                                         iteration=iteration + 1,
