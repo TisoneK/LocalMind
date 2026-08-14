@@ -468,33 +468,45 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         except Exception:
             pass
 
-        memory_facts = await self._memory_facts(message, session_id)
-        try:
-            failures = self._store.recall_failures(message=message, intent=Intent.ANALYZE.value)
-            hint = format_recall_hint(failures)
-            if hint:
-                memory_facts.append(hint)
-        except Exception:
-            logger.debug("[agent-runtime] failure memory recall skipped", exc_info=True)
-        try:
-            hint = format_ledger_hint(self._store.recall_decisions(task_type=""))
-            if hint:
-                memory_facts.append(hint)
-        except Exception:
-            logger.debug("[agent-runtime] decision memory recall skipped", exc_info=True)
-        attachment = None
-        if file and filename:
+        # ADR-34 B-7: kick off nonessential memory + attachment work as a
+        # concurrent task so the model-owned initializer can start without
+        # waiting behind it.  The initializer only needs the user message +
+        # recent history + tool catalog; memory_facts and attachment context
+        # are consumed by the execution loop AFTER the initializer returns.
+        # On a healthy provider the initializer takes multi-second TTFB, so
+        # overlapping it with memory retrieval saves the full memory latency
+        # instead of serializing it.
+        async def _gather_nonessential() -> tuple[list[str], Optional[dict]]:
+            facts = await self._memory_facts(message, session_id)
             try:
-                from tools.file_reader import parse_file
-                attachment = await parse_file(
-                    data=file,
-                    filename=filename,
-                    content_type=content_type or "application/octet-stream",
-                    chunk_size=settings.localmind_chunk_size_tokens,
-                    original_path=original_path,
-                )
-            except Exception as exc:
-                collector.emit("attachment_failed", error=str(exc)[:120])
+                failures = self._store.recall_failures(message=message, intent=Intent.ANALYZE.value)
+                hint = format_recall_hint(failures)
+                if hint:
+                    facts.append(hint)
+            except Exception:
+                logger.debug("[agent-runtime] failure memory recall skipped", exc_info=True)
+            try:
+                hint = format_ledger_hint(self._store.recall_decisions(task_type=""))
+                if hint:
+                    facts.append(hint)
+            except Exception:
+                logger.debug("[agent-runtime] decision memory recall skipped", exc_info=True)
+            attach = None
+            if file and filename:
+                try:
+                    from tools.file_reader import parse_file
+                    attach = await parse_file(
+                        data=file,
+                        filename=filename,
+                        content_type=content_type or "application/octet-stream",
+                        chunk_size=settings.localmind_chunk_size_tokens,
+                        original_path=original_path,
+                    )
+                except Exception as exc:
+                    collector.emit("attachment_failed", error=str(exc)[:120])
+            return facts, attach
+
+        nonessential_task = asyncio.create_task(_gather_nonessential())
 
         adapter = self._adapter_for_parent()
         if not inspect.iscoroutinefunction(getattr(adapter, "chat_with_tools", None)):
@@ -502,6 +514,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         context_window = getattr(adapter, "effective_context_window", 8192)
         if not isinstance(context_window, (int, float)) or context_window <= 0:
             context_window = 8192
+
+        # Await nonessential work before build_context — but the task has been
+        # running concurrently with the adapter setup above, so the effective
+        # wait is only the unoverlapped tail.
+        try:
+            memory_facts, attachment = await nonessential_task
+        except Exception:
+            logger.debug("[agent-runtime] nonessential gather failed; proceeding with empty context", exc_info=True)
+            memory_facts, attachment = [], None
+
         collector.emit("agent_context_ready", memory_facts=len(memory_facts), attachment=bool(attachment))
         self._metrics.start_request()
         clock = _StageClock(collector)

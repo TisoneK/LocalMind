@@ -1,0 +1,123 @@
+"""Streaming helpers for parent-agent initialization (ADR-34 B-7).
+
+The initializer must produce visible, bounded, model-owned events as soon as
+the provider starts responding — not a single parsed blob at the end.  These
+helpers extract progressive public fields from a partial JSON stream without
+ever exposing raw chain-of-thought or the full initialization JSON envelope.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+
+# Bounded extractors — each regex finds ONE string field inside a partial JSON
+# payload.  We never expose the surrounding envelope; only the field's value
+# is surfaced to the user.  Length caps match parse_initialization's _MAX_TEXT
+# so a streaming preview cannot exceed the final bounded value.
+_FIELD_PATTERNS: dict[str, re.Pattern[str]] = {
+    "acknowledgement": re.compile(
+        r'"acknowledgement"\s*:\s*"((?:[^"\\]|\\.)*)"', re.DOTALL
+    ),
+    "objective": re.compile(r'"objective"\s*:\s*"((?:[^"\\]|\\.)*)"', re.DOTALL),
+    "response": re.compile(r'"response"\s*:\s*"((?:[^"\\]|\\.)*)"', re.DOTALL),
+    "clarifying_question": re.compile(
+        r'"clarifying_question"\s*:\s*"((?:[^"\\]|\\.)*)"', re.DOTALL
+    ),
+    "mode": re.compile(r'"mode"\s*:\s*"((?:[^"\\]|\\.)*)"'),
+}
+
+# Hard cap on any single streamed preview.  The final parse_initialization
+# call enforces the canonical limits; this is a streaming safety net so a
+# runaway model output cannot push a half-million-char preview to the UI
+# before the JSON closes.
+_PREVIEW_CAP = 600
+
+
+@dataclass
+class InitializationPreview:
+    """Progressive public fields extracted from a partial init response."""
+
+    acknowledgement: str = ""
+    objective: str = ""
+    response: str = ""
+    clarifying_question: str = ""
+    mode: str = ""
+
+    def diff(self, other: "InitializationPreview") -> dict[str, str]:
+        """Return only the fields that changed AND are non-empty."""
+        out: dict[str, str] = {}
+        for field in (
+            "acknowledgement",
+            "objective",
+            "response",
+            "clarifying_question",
+            "mode",
+        ):
+            new = getattr(other, field) or ""
+            old = getattr(self, field) or ""
+            if new and new != old:
+                out[field] = new
+        return out
+
+
+def _decode_json_string(raw: str) -> str:
+    """Decode JSON string escapes without raising on partial input."""
+    try:
+        # json.loads handles escape sequences (\n, \", \uXXXX, etc.) correctly
+        # and is the safest decoder for a slice of JSON text content.
+        import json
+
+        return json.loads(f'"{raw}"')
+    except Exception:
+        # Partial JSON (e.g. an unescaped newline before the closing quote)
+        # should still surface as readable text — strip obviously broken
+        # escapes and return the raw slice.
+        return raw.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+
+
+def extract_preview(buffer: str) -> InitializationPreview:
+    """Extract a bounded preview from a partial initialization JSON stream.
+
+    Returns empty strings for fields that have not yet appeared.  Never raises.
+    """
+    preview = InitializationPreview()
+    if not buffer:
+        return preview
+    for field, pattern in _FIELD_PATTERNS.items():
+        match = pattern.search(buffer)
+        if not match:
+            continue
+        decoded = _decode_json_string(match.group(1))
+        # Cap each preview to _PREVIEW_CAP chars to prevent a runaway field
+        # from flooding the SSE channel before the JSON closes.
+        setattr(preview, field, decoded[:_PREVIEW_CAP])
+    return preview
+
+
+def render_understanding(preview: InitializationPreview, decision_mode: str = "") -> str:
+    """Render a bounded, human-readable 'thinker' line from a preview.
+
+    ADR-34: the thinker must be visible and fast.  We surface the model's own
+    acknowledgement + objective as a single bounded line; raw JSON, full plan
+    steps, and chain-of-thought never appear in this channel.
+    """
+    parts: list[str] = []
+    if preview.objective:
+        parts.append(preview.objective.rstrip("."))
+    if preview.clarifying_question and not parts:
+        parts.append(f"Clarifying: {preview.clarifying_question}")
+    if not parts and preview.response:
+        # Direct mode often streams the response before the objective; surface
+        # a short prefix of it so the user sees the answer is coming.
+        parts.append(preview.response[:160].rstrip())
+    if not parts and decision_mode:
+        parts.append(f"Mode: {decision_mode}")
+    return " ".join(parts)[: _PREVIEW_CAP]
+
+
+__all__ = [
+    "InitializationPreview",
+    "extract_preview",
+    "render_understanding",
+]

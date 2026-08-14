@@ -86,6 +86,11 @@ from core.agent.delegation import (
     snapshot_messages,
     validate_rewritten_history,
 )
+from core.agent.init_stream import (
+    InitializationPreview,
+    extract_preview,
+    render_understanding,
+)
 from core.agent.initialization import (
     InitializationDecision,
     build_initialization_prompt,
@@ -1406,13 +1411,47 @@ class AgentLoop:
             initialization_started = time.monotonic()
             if _obs:
                 _obs.emit("agent_initialization_start", intent=intent.value)
-            initialization = await self._initialize_parent(
+            # ADR-34 B-7: consume the streaming initializer so the user sees
+            # the model's acknowledgement and understanding within the 5s SLO.
+            # Each ("ack", str) event becomes a StreamChunk(status=...) — a
+            # model-owned transport acknowledgement, never raw chain-of-thought.
+            # Each ("understanding", str) event becomes a StreamChunk(thinking=...)
+            # so the frontend's ThinkingBlock renders the bounded thinker line.
+            initialization: Optional[InitializationDecision] = None
+            streaming_ack_emitted = False
+            async for event_type, payload in self._initialize_parent_streaming(
                 active_adapter=active_adapter,
                 messages=messages,
                 available_tools=available_tools,
                 env_context=env_context,
                 intent_history=intent_history,
-            )
+            ):
+                if event_type == "ack" and isinstance(payload, str):
+                    streaming_ack_emitted = True
+                    if _obs:
+                        _obs.emit(
+                            "agent_initialization_ack",
+                            acknowledgement=payload[:180],
+                            elapsed_ms=round((time.monotonic() - initialization_started) * 1000),
+                        )
+                    yield StreamChunk(text="", done=False, status=payload[:180])
+                elif event_type == "understanding" and isinstance(payload, str):
+                    if _obs:
+                        _obs.emit(
+                            "agent_initialization_understanding",
+                            understanding=payload[:600],
+                            elapsed_ms=round((time.monotonic() - initialization_started) * 1000),
+                        )
+                    # Surface the bounded thinker line in the ThinkingBlock so
+                    # the user watches the model's understanding arrive in
+                    # real-time, not 7+ seconds later as a single blob.
+                    yield StreamChunk(text="", done=False, thinking=payload[:600])
+                elif event_type == "decision" and isinstance(payload, InitializationDecision):
+                    initialization = payload
+            if initialization is None:
+                # The streaming contract guarantees a final decision event;
+                # if we somehow didn't get one, fall back safely.
+                initialization = parse_initialization("")
             iteration_offset = 1
             if _obs:
                 _obs.emit(
@@ -1468,7 +1507,11 @@ class AgentLoop:
                 )
                 for i, step in enumerate(_plan_steps):
                     _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
-            if initialization.acknowledgement:
+            # The streaming ack already surfaced the model's acknowledgement
+            # earlier in the turn; only emit a status line here if the
+            # streaming path did NOT already show one (e.g. the model produced
+            # no acknowledgement field but did produce an execute decision).
+            if initialization.acknowledgement and not streaming_ack_emitted:
                 yield StreamChunk(text="", done=False, status=initialization.acknowledgement)
             _first_step = _plan_steps[0].rstrip(".")[:120] if _plan_steps else "the first verifiable action"
             yield StreamChunk(
@@ -4640,11 +4683,50 @@ class AgentLoop:
     ) -> InitializationDecision:
         """Ask the parent model how this request should be handled.
 
-        This is the only request-shape decision in the live parent runtime.
-        It replaces deterministic greeting/question routing with a generic
-        model-owned contract. The result is deliberately not streamed as raw
-        model text: only the parsed acknowledgement, plan, and final direct
-        response are user-visible.
+        Non-streaming compatibility wrapper around :meth:`_initialize_parent_streaming`.
+        New callers should consume the streaming variant directly so the user
+        sees the model's acknowledgement and understanding within the ADR-34
+        SLO (≤5s to first public thinker event under a healthy provider).
+        """
+        decision: Optional[InitializationDecision] = None
+        async for _event, decision in self._initialize_parent_streaming(
+            active_adapter=active_adapter,
+            messages=messages,
+            available_tools=available_tools,
+            env_context=env_context,
+            intent_history=intent_history,
+        ):
+            # The streaming variant yields the final decision as its last
+            # event; we just need to drain the iterator.
+            pass
+        return decision or parse_initialization("")
+
+    async def _initialize_parent_streaming(
+        self,
+        active_adapter,
+        messages: list[dict],
+        available_tools: list[dict],
+        env_context: str,
+        intent_history: Optional[list[str]] = None,
+    ):
+        """Stream the parent initializer with progressive public events.
+
+        ADR-34 B-7: the user must see a model-owned acknowledgement and a
+        bounded understanding line as soon as the provider emits them —
+        not a single parsed blob 7+ seconds in.  This generator yields
+        ``(event_type, payload)`` tuples that the parent runtime forwards
+        to the SSE boundary as bounded ``StreamChunk`` events.
+
+        Yielded events (in order):
+        - ``("ack", str)`` — the model's acknowledgement, ≤600 chars.
+        - ``("understanding", str)`` — a bounded thinker line combining
+          objective + clarifying question + mode.  Emitted at most once
+          per turn, after ack.
+        - ``("decision", InitializationDecision)`` — the final parsed
+          decision.  Always yielded exactly once, last.
+
+        Raw chain-of-thought, full JSON envelope, and tool-schema prose
+        are NEVER yielded.  Only bounded public fields surface to the user.
         """
         user_message = _user_message_text(messages)
         conversation_history = [
@@ -4662,52 +4744,137 @@ class AgentLoop:
             {"role": "system", "content": prompt},
             {"role": "user", "content": user_message},
         ]
-        chunks: list[str] = []
         from core.error_normalizer import is_terminal_pre_generation_error
 
-        async def _collect() -> None:
-            async for chunk in active_adapter.chat(
-                init_messages,
-                temperature=0.1,
-                intent="chat",
-            ):
-                if chunk.error:
-                    if is_terminal_pre_generation_error(chunk.error):
-                        raise TerminalProviderError(chunk.error)
-                    logger.warning(
-                        "[agent.loop] initialization adapter error: %s",
-                        chunk.error[:120],
-                    )
-                    break
-                text = _filter_system_leaks(chunk.text)
-                text = _strip_minimax_tool_calls(text)
-                if text:
+        chunks: list[str] = []
+        # Event queue: the producer task pushes ("ack", str) / ("understanding", str)
+        # / ("decision", InitializationDecision) / ("error", Exception) tuples.
+        # The consumer generator pulls them in order.  This decouples streaming
+        # from yielding and propagates exceptions cleanly.
+        event_queue: asyncio.Queue = asyncio.Queue()
+        last_preview = InitializationPreview()
+
+        async def _stream_producer() -> None:
+            ack_sent = False
+            understanding_sent = False
+            decision_sent = False
+            try:
+                async for chunk in active_adapter.chat(
+                    init_messages,
+                    temperature=0.1,
+                    intent="chat",
+                ):
+                    if chunk.error:
+                        if is_terminal_pre_generation_error(chunk.error):
+                            await event_queue.put(("error", TerminalProviderError(chunk.error)))
+                            return
+                        logger.warning(
+                            "[agent.loop] initialization adapter error: %s",
+                            chunk.error[:120],
+                        )
+                        # Non-terminal error (e.g. transient 503) — fall open
+                        # to execute mode so the parent loop can retry or
+                        # surface a clean error.  Do NOT hang the consumer.
+                        decision = parse_initialization("".join(chunks))
+                        await event_queue.put(("decision", decision))
+                        decision_sent = True
+                        return
+                    text = _filter_system_leaks(chunk.text)
+                    text = _strip_minimax_tool_calls(text)
+                    if not text:
+                        continue
                     chunks.append(text)
+                    # Progressive extraction: surface new public fields as soon
+                    # as the partial JSON contains them.  We never yield raw
+                    # JSON or chain-of-thought — only the bounded values of
+                    # acknowledgement / objective / response / clarifying_question.
+                    preview = extract_preview("".join(chunks))
+                    diff = last_preview.diff(preview)
+                    # Update last_preview in place so the next diff only fires
+                    # for genuinely new content.
+                    for field, new_value in diff.items():
+                        setattr(last_preview, field, new_value)
+                    # Emit ack at most once — the first time the model produces
+                    # an acknowledgement field, regardless of how it grows.
+                    if not ack_sent and last_preview.acknowledgement:
+                        ack_sent = True
+                        await event_queue.put(("ack", last_preview.acknowledgement[:600]))
+                    # Emit understanding at most once — when the objective,
+                    # clarifying_question, or (direct mode) response first appears.
+                    if not understanding_sent and (
+                        last_preview.objective
+                        or last_preview.clarifying_question
+                        or (last_preview.mode == "direct" and last_preview.response)
+                    ):
+                        understanding_sent = True
+                        line = render_understanding(last_preview)
+                        if line:
+                            await event_queue.put(("understanding", line))
+                # Stream ended — parse the full JSON and emit the final decision.
+                decision = parse_initialization("".join(chunks))
+                logger.info(
+                    "[agent.loop] parent initialization mode=%s tools=%s steps=%d",
+                    decision.mode,
+                    decision.tool_names,
+                    len(decision.plan_steps),
+                )
+                await event_queue.put(("decision", decision))
+                decision_sent = True
+            except Exception as exc:
+                if is_terminal_pre_generation_error(exc):
+                    await event_queue.put(("error", TerminalProviderError(str(exc))))
+                    return
+                logger.warning("[agent.loop] initialization producer failed: %s", exc)
+                # Still produce a final decision so the consumer doesn't hang.
+                if not decision_sent:
+                    decision = parse_initialization("".join(chunks))
+                    await event_queue.put(("decision", decision))
+                    decision_sent = True
+            finally:
+                # Safety net: if the producer exited without putting any event
+                # (e.g. adapter returned immediately with no chunks and no
+                # error), put a fail-open decision so the consumer unblocks.
+                if not decision_sent:
+                    try:
+                        decision = parse_initialization("".join(chunks))
+                    except Exception:
+                        decision = parse_initialization("")
+                    await event_queue.put(("decision", decision))
+
+        producer_task = asyncio.create_task(_stream_producer())
 
         try:
-            await asyncio.wait_for(_collect(), timeout=PLAN_TIMEOUT_SECS)
-        except TerminalProviderError:
-            raise
-        except asyncio.TimeoutError:
-            logger.warning(
-                "[agent.loop] initialization timed out after %.0fs",
-                PLAN_TIMEOUT_SECS,
-            )
-            return parse_initialization("")
-        except Exception as exc:
-            if is_terminal_pre_generation_error(exc):
-                raise TerminalProviderError(str(exc)) from exc
-            logger.warning("[agent.loop] initialization failed: %s", exc)
-            return parse_initialization("")
-
-        decision = parse_initialization("".join(chunks))
-        logger.info(
-            "[agent.loop] parent initialization mode=%s tools=%s steps=%d",
-            decision.mode,
-            decision.tool_names,
-            len(decision.plan_steps),
-        )
-        return decision
+            while True:
+                # Wait for the next event with a timeout so we can also check
+                # whether the producer has finished without blocking forever.
+                try:
+                    event_type, payload = await asyncio.wait_for(
+                        event_queue.get(), timeout=PLAN_TIMEOUT_SECS
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "[agent.loop] initialization timed out after %.0fs",
+                        PLAN_TIMEOUT_SECS,
+                    )
+                    yield ("decision", parse_initialization(""))
+                    return
+                if event_type == "error":
+                    if isinstance(payload, TerminalProviderError):
+                        raise payload
+                    # Non-terminal error → fall back to execute mode.
+                    yield ("decision", parse_initialization(""))
+                    return
+                if event_type == "decision":
+                    yield (event_type, payload)
+                    return
+                yield (event_type, payload)
+        finally:
+            if not producer_task.done():
+                producer_task.cancel()
+                try:
+                    await producer_task
+                except (asyncio.CancelledError, Exception):
+                    pass
 
     # ------------------------------------------------------------------
     # Planning phase (child-agent compatibility)

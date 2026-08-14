@@ -3137,3 +3137,16 @@ program + ADR-22). -->
 - **Validation:** context-only audit; no product suite run by design. Prior product baseline remains backend 1,784 passed / 2 skipped and frontend 178 passed; no live-provider validation available in this session.
 - **Report:** `.context/memory/reviews/2026-08-14-review-28.md`. **Notes:** `.context/memory/sessions/2026-08-14-223/notes.md`.
 - **Open items:** all ADR-34 implementation items remain intentionally open for product sessions; B-2026-08-14-6 remains the live ADR-33 smoke prerequisite.
+
+---
+
+## 2026-08-15 — Session 224
+
+- **Agent:** Super Z | **Model:** GLM-5.2 (Z.ai) | **Platform:** Z.ai cloud sandbox (Linux 6.5) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-34-realtime-workspace
+- **Task:** B-2026-08-14-7 — parent bootstrap + fast public thinker (ADR-34 P0). Reorder the parent turn so the transport acknowledgement is immediate and the compact model-owned initializer starts without waiting behind nonessential memory/attachment/full-context work. Emit bounded public understanding, acknowledgement, next action, and plan events; never expose raw chain-of-thought or initialization JSON.
+- **Commits:** 1 product (`feat(agent): streaming parent initializer + nonessential memory reorder (ADR-34 B-7)`)
+- **Outcome:** done — 19 new tests pass, 1,721 total tests pass (0 failures). Live Zen `laguna-s-2.1-free` smoke confirms: model-owned ack at 1.8s (was: nothing until 7.6s), understanding at 3.1s, total turn 3.4s (was: 12.7s) — 73% latency reduction. Both ADR-34 §2 SLOs met (ack ≤250ms, first public thinker event ≤5s). Raw JSON / chain-of-thought never leaks. Terminal errors propagate; non-terminal errors fail open without hanging.
+- **Open items:** B-2026-08-14-8 (evidence/final-synthesis boundary) is next. B-2026-08-14-12 (prompt budget) will further reduce init latency.
+- **Report:** `.context/memory/reviews/2026-08-15-review-28.md`
+- **Notes:** New module `core/agent/init_stream.py` (preview extraction + rendering). Streaming initializer uses an asyncio.Queue producer/consumer pattern to decouple adapter streaming from SSE yielding. The old non-streaming `_initialize_parent` is retained as a compatibility wrapper.
