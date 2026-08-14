@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { Check, Plus, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ActionItem, TodoItem } from '@/types';
+import { useEnterMotion } from '@/lib/localmind/motion';
 
 interface TodoListProps {
   todos: TodoItem[];
@@ -16,7 +17,7 @@ interface TodoListProps {
 }
 
 export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps) {
-  const reduceMotion = !!useReducedMotion();
+  const { reduce: reduceMotion, enter } = useEnterMotion();
   const [newTodoText, setNewTodoText] = useState('');
   const [showInput, setShowInput] = useState(false);
 
@@ -135,10 +136,8 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
               <motion.div
                 key={todo.id}
                 layout={!reduceMotion}
-                initial={reduceMotion ? false : { opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
+                {...enter({ x: -6 })}
                 exit={reduceMotion ? undefined : { opacity: 0, x: -6 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
                 data-testid="todo-row"
                 data-active={isActive || undefined}
                 className={`flex items-center gap-2 px-1.5 py-1 rounded transition-colors group cursor-pointer ${

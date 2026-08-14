@@ -17,8 +17,9 @@ import {
   ListChecks,
 } from 'lucide-react';
 import { useState } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ActionItem } from '@/types';
+import { useEnterMotion } from '@/lib/localmind/motion';
 
 function isRunning(status: ActionItem['status']): boolean {
   return status === 'running' || status === 'started' || status === 'in_progress';
@@ -240,7 +241,7 @@ function ActionCard({ action }: { action: ActionItem }) {
 }
 
 export function ActionHistory({ actions }: ActionHistoryProps) {
-  const reduceMotion = !!useReducedMotion();
+  const { reduce: reduceMotion, enter } = useEnterMotion();
   if (actions.length === 0) {
     return (
       <div className="px-2.5 py-4 text-center text-[10px] text-brand-green-muted">
@@ -297,10 +298,8 @@ export function ActionHistory({ actions }: ActionHistoryProps) {
                   <motion.div
                     key={action.id}
                     layout={!reduceMotion}
-                    initial={reduceMotion ? false : { opacity: 0, x: -6 }}
-                    animate={{ opacity: 1, x: 0 }}
+                    {...enter({ x: -6 })}
                     exit={reduceMotion ? undefined : { opacity: 0 }}
-                    transition={{ duration: 0.2, ease: 'easeOut' }}
                     className="relative pl-6 pb-1.5"
                   >
                     <span

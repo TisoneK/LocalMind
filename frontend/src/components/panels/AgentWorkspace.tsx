@@ -12,9 +12,10 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { AgentRun, AgentRunStatus, ToolCall } from '@/types';
 import { formatLatency, isActiveToolStatus } from '@/lib/localmind/progress';
+import { useEnterMotion } from '@/lib/localmind/motion';
 
 interface AgentWorkspaceProps {
   runs: AgentRun[];
@@ -58,7 +59,7 @@ function RunNode({
   childMap: Map<string, AgentRun[]>;
   depth: number;
 }) {
-  const reduceMotion = !!useReducedMotion();
+  const { reduce: reduceMotion, enter } = useEnterMotion();
   const [expanded, setExpanded] = useState(run.status === 'running' || depth === 0);
   const runningTools = run.tools.filter((tool) => isActiveToolStatus(tool.status)).length;
   const completedTools = run.tools.filter((tool) => tool.status === 'done').length;
@@ -69,9 +70,7 @@ function RunNode({
   return (
     <motion.div
       layout={!reduceMotion}
-      initial={reduceMotion ? false : { opacity: 0, x: depth > 0 ? -8 : 0, y: depth > 0 ? 0 : 4 }}
-      animate={{ opacity: 1, x: 0, y: 0 }}
-      transition={{ duration: 0.24, ease: 'easeOut' }}
+      {...enter({ x: depth > 0 ? -8 : 0, y: depth > 0 ? 0 : 4, duration: 0.24 })}
       className={depth > 0 ? 'ml-3 border-l border-brand-border pl-2' : ''}
     >
       <div
@@ -128,9 +127,7 @@ function RunNode({
                   <motion.div
                     key={tool.id}
                     layout={!reduceMotion}
-                    initial={reduceMotion ? false : { opacity: 0, x: -6 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    {...enter({ x: -6, duration: 0.18 })}
                     className="flex items-center gap-1.5 min-w-0 rounded bg-brand-bg-base px-2 py-1"
                   >
                     <span className={`shrink-0 ${tool.status === 'failed' ? 'text-brand-red' : isActiveToolStatus(tool.status) ? 'text-brand-amber' : 'text-brand-green'}`}>

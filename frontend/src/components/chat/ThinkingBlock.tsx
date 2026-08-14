@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, Brain, Terminal } from 'lucide-react';
 import { ThinkingStep } from '@/types';
+import { useEnterMotion } from '@/lib/localmind/motion';
 
 // v0.13: Dispatch steps replace LLM-generated thinking prose. A step line
 // looks like "[Web Search] Search: Nairobi weather" — the label is shown as
@@ -52,7 +53,7 @@ function ThinkingDots({ reduceMotion }: { reduceMotion: boolean }) {
 }
 
 export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockProps) {
-  const reduceMotion = !!useReducedMotion();
+  const { reduce: reduceMotion, enter } = useEnterMotion();
   // Start expanded during streaming so thinking content is visible.
   // Collapse automatically when streaming finishes.
   const [collapsed, setCollapsed] = useState(!isStreaming);
@@ -78,9 +79,7 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
 
   return (
     <motion.div
-      initial={reduceMotion ? false : { opacity: 0, y: 3 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.22, ease: 'easeOut' }}
+      {...enter({ y: 3, duration: 0.22 })}
       className={`mb-2 overflow-hidden rounded-md border ${
         isStreaming ? 'border-brand-amber/30' : 'border-brand-border'
       }`}

@@ -15,9 +15,10 @@ import {
   ChevronRight,
   Zap,
 } from 'lucide-react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
 import { ToolCall } from '@/types';
+import { useEnterMotion } from '@/lib/localmind/motion';
 
 interface ToolStepsProps {
   toolCalls: ToolCall[];
@@ -198,12 +199,11 @@ function StepDetail({ toolCall }: { toolCall: ToolCall }) {
 function TimelineRow({
   toolCall,
   isLast,
-  reduceMotion,
 }: {
   toolCall: ToolCall;
   isLast: boolean;
-  reduceMotion: boolean;
 }) {
+  const { reduce: reduceMotion, enter } = useEnterMotion();
   const [expanded, setExpanded] = useState(false);
   const status = statusConfig[toolCall.status] || statusConfig.pending;
   const icon = toolIcons[toolCall.name] || <Terminal className="h-3 w-3" />;
@@ -230,9 +230,7 @@ function TimelineRow({
   return (
     <motion.div
       layout={!reduceMotion}
-      initial={reduceMotion ? false : { opacity: 0, x: -6 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.22, ease: 'easeOut' }}
+      {...enter({ x: -6, duration: 0.22 })}
       className="flex items-stretch gap-2"
     >
       {/* Rail: connector line + status dot */}
@@ -313,7 +311,7 @@ function TimelineRow({
 
 // ── Grouped Action timeline (full mode) ─────────────────────────────────────
 function ActionTimeline({ toolCalls, isStreaming }: { toolCalls: ToolCall[]; isStreaming?: boolean }) {
-  const reduceMotion = !!useReducedMotion();
+  const { reduce: reduceMotion, enter } = useEnterMotion();
   const [collapsed, setCollapsed] = useState(false);
 
   const active = toolCalls.some((tc) => tc.status === 'running' || tc.status === 'pending');
@@ -344,9 +342,7 @@ function ActionTimeline({ toolCalls, isStreaming }: { toolCalls: ToolCall[]; isS
 
   return (
     <motion.div
-      initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: 'easeOut' }}
+      {...enter({ y: 4, duration: 0.25 })}
       className={`mb-2 overflow-hidden rounded-lg border bg-brand-bg-code/60 ${
         active ? 'border-brand-amber/30 shadow-[0_0_0_1px_rgba(240,180,60,0.08)]' : 'border-brand-border'
       }`}
@@ -387,7 +383,6 @@ function ActionTimeline({ toolCalls, isStreaming }: { toolCalls: ToolCall[]; isS
                     key={tc.id}
                     toolCall={tc}
                     isLast={false}
-                    reduceMotion={reduceMotion}
                   />
                 ))}
               </AnimatePresence>
