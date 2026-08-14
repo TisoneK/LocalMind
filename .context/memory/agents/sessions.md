@@ -2982,3 +2982,18 @@ program + ADR-22). -->
 - **Report:** `.context/memory/reviews/2026-08-14-review-16.md`.
 - **Limitation:** live-app visual pass deferred (provider credential needed).
 - **Open items:** S212 Todos, S213 Terminal, S214 Agents, S215 polish.
+
+---
+## 2026-08-14 — Session 212
+
+- **Agent:** Claude Code / claude-opus-4-8 | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** realtime-alive-ui (Session 3)
+- **Task:** Make the Todos surface feel alive (Todos.png) — current-step highlight + animated plan.
+- **Commits:** 2 product (`cd02072` feat(ui), `3f1368a` docs) + 1 context closeout (SHA after push).
+- **Outcome:** done — `TodoList` highlights the executing step (spinner + amber ring + bold, from `todo.status` or running actions), animates the tick-in / row enter / progress bar (framer-motion), honours reduced motion. Also fixed `LeftPanel` hiding the Todos section during active tool work — an existing plan now stays visible while tools run so steps check off live. No backend change.
+- **Also:** `TodoList` had zero tests — added `TodoList.test.tsx` (6 cases).
+- **Validation:** frontend 161 passed (was 155); `tsc -b` clean; ESLint 0 errors / 64 warnings; `vite build` passes.
+- **Report:** `.context/memory/reviews/2026-08-14-review-17.md`.
+- **Milestone:** all three user-screenshotted surfaces (Actions/Thinking/Todos) shipped across S210–212.
+- **Limitation:** live-app visual pass deferred (provider credential needed).
+- **Open items:** S213 Terminal, S214 Agents, S215 polish.

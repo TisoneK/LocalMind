@@ -62,3 +62,22 @@ Process S211). Next: S212 Todos (`ui_improvement/Todos.png`) — the
 Tasks panel `TodoList` / plan checklist. Same principle: data already
 streams; make check-off feel alive (animated tick, progress, current
 highlight). Keep the shared motion vocabulary.
+
+---
+## Session 212 (2026-08-14) — Live plan checklist
+
+`TodoList`: active-step highlight (`isActive` = not completed AND
+(`todo.status` running/started/in_progress OR a running action under it))
+→ spinner + amber ring + bold amber text; framer-motion tick scale-in +
+row enter + eased progress bar; `useReducedMotion`; `data-testid=todo-row`
++ `data-active` for tests. Fixed `LeftPanel` gate that hid Todos during
+active tools — now shows when idle OR `todos.length > 0`. Added
+`TodoList.test.tsx` (6). 161 tests / tsc / lint(0 err) / build green.
+`cd02072` + changelog `3f1368a`.
+
+**All three user screenshots now shipped** (Actions S210, Thought Process
+S211, Todos S212). Remaining feature surfaces (not screenshotted, same
+treatment): S213 `TerminalPanel`, S214 `AgentWorkspace`, S215 shared
+motion/a11y polish (extract the repeated framer-motion enter + reduced-
+motion guard into a shared primitive; consider an ADR). Each still needs
+a live-app visual pass once a provider credential is available.

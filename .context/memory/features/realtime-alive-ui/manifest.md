@@ -39,8 +39,13 @@ protocol session; the dark-green brand identity is preserved throughout.
   honoured; step parsing + auto-collapse preserved; removed dead
   `DispatchStep`/`parseDispatchSteps`. Added `ThinkingBlock.test.tsx`
   (5 cases). Matches Thought Process.png.
-- [ ] S212 — Todos live: animated check-off, progress bar, current-item
-  highlight in the Tasks panel / `TodoList`. Matches Todos.png.
+- [x] **S212 — Todos live** (done 2026-08-14, `cd02072`): active-step
+  highlight (spinner + amber ring + bold) from `todo.status`/running
+  actions, animated tick-in + row enter (framer-motion), eased progress
+  bar. Also fixed `LeftPanel` hiding the Todos section during active work
+  — an existing plan now stays visible while tools run. Added
+  `TodoList.test.tsx` (6 cases). Matches Todos.png. **All three
+  user-screenshotted surfaces (Actions/Thinking/Todos) now shipped.**
 - [ ] S213 — Terminal panel realtime feel (`TerminalPanel`).
 - [ ] S214 — Agents workspace realtime feel (`AgentWorkspace`).
 - [ ] S215 — Shared motion/design polish sweep + reduced-motion a11y.
