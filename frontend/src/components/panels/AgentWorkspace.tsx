@@ -12,6 +12,7 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import type { AgentRun, AgentRunStatus, ToolCall } from '@/types';
 import { formatLatency, isActiveToolStatus } from '@/lib/localmind/progress';
 
@@ -57,15 +58,29 @@ function RunNode({
   childMap: Map<string, AgentRun[]>;
   depth: number;
 }) {
+  const reduceMotion = !!useReducedMotion();
   const [expanded, setExpanded] = useState(run.status === 'running' || depth === 0);
   const runningTools = run.tools.filter((tool) => isActiveToolStatus(tool.status)).length;
   const completedTools = run.tools.filter((tool) => tool.status === 'done').length;
   const hasDetails = children.length > 0 || run.tools.length > 0 || Boolean(run.error);
   const elapsed = run.completedAt !== undefined ? run.completedAt - run.startedAt : undefined;
+  const running = run.status === 'running';
 
   return (
-    <div className={depth > 0 ? 'ml-3 border-l border-brand-border pl-2' : ''}>
-      <div className="rounded-md border border-brand-border bg-brand-bg-code/70 overflow-hidden">
+    <motion.div
+      layout={!reduceMotion}
+      initial={reduceMotion ? false : { opacity: 0, x: depth > 0 ? -8 : 0, y: depth > 0 ? 0 : 4 }}
+      animate={{ opacity: 1, x: 0, y: 0 }}
+      transition={{ duration: 0.24, ease: 'easeOut' }}
+      className={depth > 0 ? 'ml-3 border-l border-brand-border pl-2' : ''}
+    >
+      <div
+        className={`rounded-md border bg-brand-bg-code/70 overflow-hidden ${
+          running
+            ? 'border-brand-amber/40 shadow-[0_0_0_1px_rgba(240,180,60,0.08)]'
+            : 'border-brand-border'
+        }`}
+      >
         <button
           type="button"
           onClick={() => hasDetails && setExpanded((value) => !value)}
@@ -108,8 +123,16 @@ function RunNode({
 
             {run.tools.length > 0 && (
               <div className="space-y-1">
+                <AnimatePresence initial={false}>
                 {run.tools.map((tool) => (
-                  <div key={tool.id} className="flex items-center gap-1.5 min-w-0 rounded bg-brand-bg-base px-2 py-1">
+                  <motion.div
+                    key={tool.id}
+                    layout={!reduceMotion}
+                    initial={reduceMotion ? false : { opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    className="flex items-center gap-1.5 min-w-0 rounded bg-brand-bg-base px-2 py-1"
+                  >
                     <span className={`shrink-0 ${tool.status === 'failed' ? 'text-brand-red' : isActiveToolStatus(tool.status) ? 'text-brand-amber' : 'text-brand-green'}`}>
                       {isActiveToolStatus(tool.status) ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : tool.status === 'failed' ? <XCircle className="h-2.5 w-2.5" /> : <CheckCircle2 className="h-2.5 w-2.5" />}
                     </span>
@@ -117,8 +140,9 @@ function RunNode({
                       {toolLabel(tool)}
                     </span>
                     {tool.duration !== undefined && <span className="ml-auto text-[8px] text-brand-green-faint font-mono shrink-0">{formatLatency(tool.duration)}</span>}
-                  </div>
+                  </motion.div>
                 ))}
+                </AnimatePresence>
               </div>
             )}
 
@@ -126,13 +150,15 @@ function RunNode({
 
             {children.length > 0 && (
               <div className="space-y-1.5">
-                {children.map((child) => <RunNode key={child.id} run={child} children={childMap.get(child.id) ?? []} childMap={childMap} depth={depth + 1} />)}
+                <AnimatePresence initial={false}>
+                  {children.map((child) => <RunNode key={child.id} run={child} children={childMap.get(child.id) ?? []} childMap={childMap} depth={depth + 1} />)}
+                </AnimatePresence>
               </div>
             )}
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -184,9 +210,11 @@ export function AgentWorkspace({ runs, isStreaming = false }: AgentWorkspaceProp
       </div>
 
       <div className="space-y-2">
-        {roots.map((root) => (
-          <RunNode key={root.id} run={root} children={childMap.get(root.id) ?? []} childMap={childMap} depth={0} />
-        ))}
+        <AnimatePresence initial={false}>
+          {roots.map((root) => (
+            <RunNode key={root.id} run={root} children={childMap.get(root.id) ?? []} childMap={childMap} depth={0} />
+          ))}
+        </AnimatePresence>
       </div>
 
       <div className="flex items-center gap-2 text-[9px] text-brand-green-faint border-t border-brand-border pt-2">

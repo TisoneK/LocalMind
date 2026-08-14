@@ -53,4 +53,11 @@ describe('AgentWorkspace', () => {
     render(<AgentWorkspace runs={[]} />);
     expect(screen.getByText(/workspace will appear when a turn starts/i)).toBeInTheDocument();
   });
+
+  it('surfaces a running (alive) run in the header count and status', () => {
+    render(<AgentWorkspace runs={runs} />);
+    // parent-1 is running → header shows an active count and the node "working".
+    expect(screen.getByText('1 active')).toBeInTheDocument();
+    expect(screen.getByText('working')).toBeInTheDocument();
+  });
 });
