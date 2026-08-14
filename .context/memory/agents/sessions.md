@@ -3011,3 +3011,16 @@ program + ADR-22). -->
 - **Report:** `.context/memory/reviews/2026-08-14-review-18.md`.
 - **Limitation:** live-app visual pass deferred (provider credential needed).
 - **Open items:** B-2026-08-14-4 Terminal; S214 Agents; S215 shared motion primitive + a11y.
+
+---
+## 2026-08-14 — Session 214
+
+- **Agent:** Claude Code / claude-opus-4-8 | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** realtime-alive-ui (Session 5)
+- **Task:** Make the Agents workspace feel alive as delegated work spawns.
+- **Commits:** 2 product (`b2bd48e` feat(ui), `0594961` docs) + 1 context closeout (SHA after push).
+- **Outcome:** done — `AgentWorkspace` run tree now animates parent/child nodes + tool rows in (framer-motion) as runs start, and gives a running run an amber ring; reduced-motion honoured; run-tree logic unchanged. +1 test.
+- **Validation:** frontend 166 passed (was 165); `tsc -b` clean; ESLint 0 errors / 64 warnings; `vite build` passes.
+- **Report:** `.context/memory/reviews/2026-08-14-review-19.md`.
+- **Feature status:** 5 alive surfaces shipped (S210-214). Remaining: B-2026-08-14-4 Terminal, S215 shared motion primitive, live visual pass.
+- **Limitation:** live-app visual pass deferred (provider credential needed).

@@ -52,7 +52,10 @@ protocol session; the dark-green brand identity is preserved throughout.
   badge), status-colored badges, reduced-motion. Added
   `ActionHistory.test.tsx` (4). Re-scoped from "Terminal" — the 721-line
   `TerminalPanel` is broad and already streams → backlog **B-2026-08-14-4**.
-- [ ] S214 — Agents workspace realtime feel (`AgentWorkspace`, 197 lines).
+- [x] **S214 — Alive agent workspace** (done 2026-08-14, `b2bd48e`):
+  `AgentWorkspace` run tree — parent/child nodes + tool rows animate in
+  (framer-motion) as delegated work spawns, running run gets an amber
+  ring, reduced-motion honoured. +1 test. Run-tree logic unchanged.
 - [ ] S215 — Shared motion primitive + a11y: extract the `motion.div`
   enter + `useReducedMotion` guard now duplicated across ToolSteps /
   ThinkingBlock / TodoList / ActionHistory into one component/hook;

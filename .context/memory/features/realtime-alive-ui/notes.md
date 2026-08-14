@@ -98,3 +98,21 @@ session). Remaining feature sessions: S214 `AgentWorkspace`, S215 shared
 motion primitive + a11y (extract the repeated `motion.div` enter +
 `useReducedMotion` guard now duplicated across ToolSteps/ThinkingBlock/
 TodoList/ActionHistory into one component/hook; consider an ADR).
+
+---
+## Session 214 (2026-08-14) — Alive agent workspace
+
+`AgentWorkspace`: framer-motion `AnimatePresence` enter for parent/child
+`RunNode`s + tool rows + root list, running-run amber ring,
+`useReducedMotion` (called in RunNode). Run-tree logic unchanged. +1
+test (running-run assertion). 166 tests / tsc / lint(0 err) / build green.
+`b2bd48e` + changelog `0594961`.
+
+**Feature status:** 5 alive surfaces shipped (S210 chat Actions, S211
+Thinking, S212 Todos, S213 panel action trace, S214 Agents). All 3 user
+screenshots + panel twins done. Remaining: B-2026-08-14-4 Terminal (own
+session), S215 shared motion primitive (the `motion.div` enter +
+`useReducedMotion` guard is now duplicated in ToolSteps/ThinkingBlock/
+TodoList/ActionHistory/AgentWorkspace — extract into e.g. `<MotionItem>`
++ `useEnterMotion()`; consider an ADR), and live-app visual verification
+(provider credential needed).
