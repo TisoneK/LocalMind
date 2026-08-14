@@ -54,6 +54,23 @@ _MINIMAX_BARE_KEYWORD = re.compile(
     re.IGNORECASE,
 )
 
+# Bare <tool_call>NAME<arg_key>..</arg_key><arg_value>..</arg_value></tool_call>
+# (Session 195): a MiniMax/Claude-style tool-call format that leaked RAW into
+# the chat bubble when the intent was misrouted to the no-tools DIRECT path.
+# Strip the complete block so it can never render as user-facing text.
+_TOOL_CALL_TAG_PATTERN = re.compile(
+    r"<tool_call>.*?</tool_call>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+# Unterminated <tool_call> ... (streaming chunk boundary) — strip the opening
+# tag and any partial arg_key/arg_value up to the end of the chunk.
+_TOOL_CALL_PARTIAL = re.compile(
+    r"<tool_call>\s*[a-zA-Z_][a-zA-Z0-9_]*\s*"
+    r"(?:<arg_key>\s*[^<]*\s*)?(?:<arg_value>\s*[^<]*)?\s*$",
+    re.IGNORECASE,
+)
+
 
 def _filter_system_leaks(text: str) -> str:
     """
@@ -80,6 +97,9 @@ def _filter_system_leaks(text: str) -> str:
     cleaned = _MINIMAX_TOOL_CALL_PREFIX.sub("", cleaned)
     cleaned = _MINIMAX_PARTIAL_TAG.sub("", cleaned)
     cleaned = _MINIMAX_BARE_KEYWORD.sub("", cleaned)
+    # Session 195: strip bare <tool_call> blocks (complete + streaming partials)
+    cleaned = _TOOL_CALL_TAG_PATTERN.sub("", cleaned)
+    cleaned = _TOOL_CALL_PARTIAL.sub("", cleaned)
     # Collapse runs of blank lines left by removal (max 2 consecutive)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
 

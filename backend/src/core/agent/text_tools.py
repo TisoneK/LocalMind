@@ -129,6 +129,22 @@ _STANDALONE_INVOKE_RE = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 
+# Bare <tool_call> format (Session 195): the model emits
+#   <tool_call>web_search<arg_key>query</arg_key><arg_value>Kitengela ...</arg_value></tool_call>
+# instead of the structured tool_calls API or the invoke/parameter form.
+# This leaked RAW into the chat bubble (transcript: "whats the weather like
+# in Kitengela now?" → intent misrouted to CHAT → the DIRECT path has no
+# tool interception for this format → the full XML streamed as the answer).
+_TOOL_CALL_RE = re.compile(
+    r"<tool_call>\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(.*?)</tool_call>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+_ARG_KEY_VALUE_RE = re.compile(
+    r"<arg_key>\s*([^<]+?)\s*</arg_key>\s*<arg_value>\s*(.*?)\s*</arg_value>",
+    re.DOTALL | re.IGNORECASE,
+)
+
 # DSML (DeepSeek Markup Language) tool-call tags use a fullwidth-bar prefix
 # (U+FF5C): <｜DSML｜invoke name="shell"> with a `string="true"` attribute on
 # <｜DSML｜parameter>. Normalize the prefix away so the existing invoke/parameter
@@ -218,6 +234,16 @@ def _parse_minimax_tool_call(text: str) -> list[tuple[str, dict, str]]:
                 args[pm.group(1).strip()] = pm.group(2).strip()
             calls.append((tool_name, args, raw_xml))
 
+    # Format 3: bare <tool_call>NAME<arg_key>..</arg_key><arg_value>..</arg_value></tool_call>
+    # (Session 195 — see _TOOL_CALL_RE). args use arg_key/arg_value pairs.
+    if not calls:
+        for m in _TOOL_CALL_RE.finditer(text):
+            tool_name = m.group(1).strip()
+            args = {}
+            for am in _ARG_KEY_VALUE_RE.finditer(m.group(2)):
+                args[am.group(1).strip()] = am.group(2).strip()
+            calls.append((tool_name, args, m.group(0)))
+
     return calls
 
 
@@ -226,6 +252,7 @@ def _strip_minimax_tool_calls(text: str) -> str:
     text = _normalize_dsml(text)
     cleaned = _MINIMAX_TOOL_CALL_RE.sub("", text)
     cleaned = _STANDALONE_INVOKE_RE.sub("", cleaned)
+    cleaned = _TOOL_CALL_RE.sub("", cleaned)
     cleaned = _MINIMAX_PARTIAL_RE.sub("", cleaned)
     cleaned = _STANDALONE_PARTIAL_RE.sub("", cleaned)
     # Also strip bare minimax:tool_call keyword
@@ -241,7 +268,11 @@ def _strip_minimax_tool_calls(text: str) -> str:
 def _has_minimax_tool_call(text: str) -> bool:
     """Quick check if text contains a MiniMax-style tool call pattern."""
     text = _normalize_dsml(text)
-    return bool(_MINIMAX_TOOL_CALL_RE.search(text) or _STANDALONE_INVOKE_RE.search(text))
+    return bool(
+        _MINIMAX_TOOL_CALL_RE.search(text)
+        or _STANDALONE_INVOKE_RE.search(text)
+        or _TOOL_CALL_RE.search(text)
+    )
 
 
 # ── Observation truncation ────────────────────────────────────────────────────

@@ -924,6 +924,107 @@ class ThinkingDispatcher:
                 fast_path=True,
             )
 
+        # Weather queries → WEB_SEARCH (Session 195). "Whats the weather like
+        # in Kitengela now?" is the canonical realtime query, but the LLM
+        # classifier sometimes misroutes it to CHAT (the live transcript:
+        # intent=Conversation, confidence 0.30, tools none — and the model
+        # then leaked a web_search <tool_call> as raw text in the bubble). A
+        # weather keyword + a place makes it unambiguous: route to a
+        # SINGLE_TOOL web_search plan with zero dispatcher LLM calls (same
+        # pattern as the file-search signal). The classifier prompt still
+        # owns INDIRECT weather phrasing ("should I carry an umbrella?").
+        _WEATHER_KW = re.compile(
+            r"\b(weather|temperature|forecast|humidity|uv\s*(?:index)?|rain(?:ing)?|"
+            r"snow(?:ing)?|sunny|cloudy|overcast|storm|thunderstorm|wind(?:y| speed)?|"
+            r"hot|cold|warm|chilly|freezing|scorching)\b",
+            re.IGNORECASE,
+        )
+        _WEATHER_PLACE = re.compile(
+            r"\b(?:in|at|for|around|near|like in)\s+([A-Za-z][A-Za-z0-9 .'\-]*"
+            r"(?:[,/]\s*[A-Za-z][A-Za-z0-9 .'\-]*)?)\s*[?.!]?\s*$",
+            re.IGNORECASE,
+        )
+        # File/read phrasing must NOT become a weather search ("find the
+        # weather report", "read the weather file", "weather log").
+        _WEATHER_NOT_FILE = re.compile(
+            r"\b(file|files|folder|folders|directory|report|log|document|doc|"
+            r"read|open|search for|locate|find)\b",
+            re.IGNORECASE,
+        )
+        # Code-review guard (Session 195): adjectives alone ("hot", "cold",
+        # "windy") appear in casual statements — "It's getting hot in here",
+        # "It's cold in the office today" — which must NOT become nonsense web
+        # searches. Fire when the message has a weather NOUN (weather,
+        # temperature, raining...) OR is a request/interrogative form
+        # ("how hot is it in X?", "is it raining in X?"). Statements fall
+        # through to the LLM classifier.
+        _WEATHER_NOUN = re.compile(
+            r"\b(weather|temperature|forecast|humidity|uv\s*index|rain(?:ing)?|"
+            r"snow(?:ing)?|storm|thunderstorm|sunny|cloudy|overcast)\b",
+            re.IGNORECASE,
+        )
+        _WEATHER_QUESTION = re.compile(
+            r"^(?:what|whats|what's|what is|how|hows|how's|how is|is it|will it|"
+            r"does it|can you|could you|please|check|show me|tell me|get me)\b",
+            re.IGNORECASE,
+        )
+        # A TIME word is not a place — "what is the forecast for tomorrow"
+        # must not become a search for "tomorrow". Leave time-only phrasing
+        # to the LLM classifier.
+        _WEATHER_TIME_WORDS = {
+            "tomorrow", "today", "tonight", "now", "later", "weekend",
+            "week", "morning", "afternoon", "evening", "night",
+            "yesterday", "this week", "next week", "this weekend",
+        }
+        _weather_m = _WEATHER_PLACE.search(msg)
+        if (
+            _WEATHER_KW.search(msg)
+            and (_WEATHER_NOUN.search(msg) or _WEATHER_QUESTION.match(msg))
+            and _weather_m
+            and not _WEATHER_NOT_FILE.search(msg)
+        ):
+            _place = re.sub(
+                r"\b(now|today|right now|please|thanks|asap)\b\s*$",
+                "",
+                _weather_m.group(1).strip(),
+                flags=re.IGNORECASE,
+            ).strip()
+            # "forecast for TOMORROW" — a time word is not a place; skip the
+            # signal and let the LLM classifier own time-only phrasing.
+            if _place and _place.lower() not in _WEATHER_TIME_WORDS:
+                _wq = f"{_place} current weather temperature conditions"
+                profile = TaskProfile(
+                    capabilities=[Capability.WEB_SEARCH, Capability.SYNTHESIS],
+                    requires_grounding=True,
+                    requires_tools=True,
+                    realtime_sensitive=True,
+                    execution_mode=ExecutionMode.SINGLE_TOOL,
+                    safety_level=SafetyLevel.LOW,
+                    confidence=0.92,
+                    primary_domain="web_search",
+                    reformulated=f"Search the web for the current weather in {_place}",
+                    acknowledgement=f"Let me check the current weather in {_place}...",
+                )
+                return OrchestrationPlan(
+                    profile=profile,
+                    graph=build_graph_from_plan_steps(
+                        [
+                            {
+                                "id": "weather_search",
+                                "capability": "web_search",
+                                "tool": "web_search",
+                                "args": {"query": _wq},
+                                "depends_on": [],
+                                "label": f"Searching: {_wq[:50]}",
+                            }
+                        ]
+                    ),
+                    dispatch_steps=_build_dispatch_steps(
+                        Intent.WEB_SEARCH, message, f"Weather: {_place[:60]}"
+                    ),
+                    fast_path=True,
+                )
+
         # File-search phrasing → FIND_PATH (Session 191, ADR-17 track 2).
         # "find my CV", "locate the invoice", "search for resume files",
         # "where is the config file" are unambiguous NAME-SEARCH requests,

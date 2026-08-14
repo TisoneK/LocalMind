@@ -76,13 +76,17 @@ def _clear_cache():
 
 @pytest.mark.asyncio
 async def test_repeat_request_skips_llm_call():
+    # NB: weather phrasing is now a zero-LLM signal (Session 195) — it would
+    # never reach the LLM, so this cache contract is exercised with a
+    # non-signal research question (same precedent as the Session 149 git
+    # signal note below).
     adapter = CountingJSONAdapter()
     d = td.ThinkingDispatcher(adapter)
-    await _collect(d, "what is the weather in kitengela")
+    await _collect(d, "explain how quantum computing differs from classical computing")
     assert adapter.chat_calls == 1
 
     # Identical message again — the LLM call is skipped entirely.
-    await _collect(d, "what is the weather in kitengela")
+    await _collect(d, "explain how quantum computing differs from classical computing")
     assert adapter.chat_calls == 1, "repeat request must not re-call the LLM"
 
 
@@ -94,11 +98,11 @@ async def test_near_duplicate_phrasing_hits_cache():
     # non-signal message so this test exercises the cache normalization.
     adapter = CountingJSONAdapter()
     d = td.ThinkingDispatcher(adapter)
-    await _collect(d, "What is the weather in kitengela?")
+    await _collect(d, "What is the latest news on quantum computing?")
     assert adapter.chat_calls == 1
 
     # Near-duplicate (case/whitespace/punctuation) must reuse the plan.
-    items = await _collect(d, "what  is the weather in  Kitengela")
+    items = await _collect(d, "what  is the latest news on  quantum computing")
     assert adapter.chat_calls == 1
     plans = _plans(items)
     assert plans, "cache hit must still yield an OrchestrationPlan"
@@ -192,12 +196,12 @@ async def test_low_confidence_plan_never_cached():
     adapter = CountingJSONAdapter()
     adapter.payload = _LOW_CONF_JSON
     d = td.ThinkingDispatcher(adapter)
-    await _collect(d, "what is the weather in kitengela")
+    await _collect(d, "explain how quantum computing differs from classical computing")
     assert adapter.chat_calls == 1
     assert len(td._PLAN_CACHE) == 0, "low-confidence plan must not be cached"
 
     # Same message again — must re-run the LLM (nothing was cached).
-    await _collect(d, "what is the weather in kitengela")
+    await _collect(d, "explain how quantum computing differs from classical computing")
     assert adapter.chat_calls == 2
 
 

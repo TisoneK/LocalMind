@@ -522,3 +522,79 @@ def test_show_more_survives_and_conjunction():
 def test_show_more_without_find_anchor_falls_through():
     # No file-search anchor → not the signal's job (follow-up routing owns it).
     assert _file_search_plan("show more") is None
+
+
+# ── 6. Weather queries → WEB_SEARCH signal (Session 195) ─────────────────
+# "Whats the weather like in Kitengela now?" was misrouted to CHAT by the
+# LLM classifier (live transcript: intent=Conversation, confidence 0.30) and
+# the model then leaked a web_search <tool_call> as raw text. A weather
+# keyword + a place is unambiguous — this signal routes to web_search with
+# zero LLM calls (the classifier prompt still owns indirect phrasing like
+# "should I carry an umbrella?").
+
+
+def _weather_plan(message):
+    """Return the plan ONLY if it is the deterministic weather signal."""
+    plans = _signal_plan(message)
+    if not plans:
+        return None
+    plan = plans[0]
+    if plan.fast_path is True and plan.profile.primary_domain == "web_search":
+        return plan
+    return None
+
+
+def test_weather_query_is_a_signal():
+    # The exact transcript phrasing.
+    plan = _weather_plan("Whats the weather like in Kitengela now?")
+    assert plan is not None
+    assert plan.profile.realtime_sensitive is True
+    args = plan.graph.nodes[0].tool_args
+    assert "kitengela" in args["query"].lower()
+    assert plan.profile.acknowledgement == "Let me check the current weather in Kitengela..."
+
+
+def test_weather_variants_are_signals():
+    for msg in [
+        "Show me the weather in Nairobi",
+        "is it raining in Mombasa",
+        "how hot is it in Kisumu today",
+        "what's the temperature in Eldoret",
+        "weather forecast for Lamu",
+        "check the weather at Nakuru",
+    ]:
+        assert _weather_plan(msg) is not None, f"{msg!r} must be a weather signal"
+
+
+def test_weather_not_file_or_read_phrasing():
+    # File/read phrasing must NOT become a weather web search.
+    for msg in [
+        "find the weather report file",
+        "read the weather log",
+        "search for the weather file in Documents",
+    ]:
+        assert _weather_plan(msg) is None, f"{msg!r} must NOT be a weather signal"
+
+
+def test_time_only_weather_phrasing_falls_through():
+    # "forecast for tomorrow" has no place — the LLM classifier owns it.
+    assert _weather_plan("what is the forecast for tomorrow") is None
+
+
+def test_casual_weather_statements_do_not_fire():
+    # Code-review guard (Session 195): adjectives alone in casual statements
+    # must NOT become nonsense web searches — the LLM classifier owns them.
+    for msg in [
+        "It's getting hot in here",
+        "It's cold in the office today",
+        "The water is cold in the tank",
+        "The wind is strong in Nairobi",
+    ]:
+        assert _weather_plan(msg) is None, f"{msg!r} must NOT be a weather signal"
+
+
+def test_weather_signal_not_a_listing_or_shell_signal():
+    # The pre-existing guard test: weather must never be a shell listing.
+    plans = _signal_plan("Show me the weather in Nairobi")
+    plan = plans[0]
+    assert plan.profile.primary_domain == "web_search"

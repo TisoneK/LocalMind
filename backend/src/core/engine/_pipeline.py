@@ -1754,6 +1754,11 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 if chunk.error:
                     yield StreamChunk(text="", done=True, error=chunk.error)
                     return
+                # Session 195: buffer the RAW chunk first — _filter_system_leaks
+                # now strips complete <tool_call> blocks, so detection must run
+                # on the unfiltered text or the escalation below would never
+                # fire (the call would be silently dropped instead of executed).
+                _direct_dsml_buffer += chunk.text or ""
                 safe_text = _filter_system_leaks(chunk.text)
                 # Session 127: the DIRECT fast-path has NO tool interception,
                 # so when the dispatcher times out (free-tier overload) and the
@@ -1761,7 +1766,6 @@ Respond with ONLY the reformulated instruction — no acknowledgement, no questi
                 # that would otherwise stream raw as the final answer. Detect
                 # it and escalate to the agent loop (which intercepts + runs
                 # the tool).
-                _direct_dsml_buffer += safe_text
                 if _has_minimax_tool_call(_direct_dsml_buffer):
                     _parsed = _parse_minimax_tool_call(_direct_dsml_buffer)
                     if _parsed:
