@@ -87,88 +87,166 @@
   --color-brand-gh-green-border: var(--brand-gh-green-border);
 }
 
-/* LocalMind keeps a dark-only design, using a lighter green-black palette
-   for improved readability and less visual heaviness. */
+/* ═══════════════════════════════════════════════════════════════════════
+   Theming system (Session 217 — theming-multi-palette). Supersedes the
+   Session-103 dark-only decision. Components keep referencing the legacy
+   --brand-* tokens; those map ONCE onto a compact set of semantic anchors
+   (--acc*, --s-*, --t-*, --line*, --warn/--danger/--info/--alt, --code-text).
+   Each theme × mode below sets ONLY the anchors, so every component AND
+   shadcn/ui retheme automatically. Applied via
+   <html data-theme="graphite|iris|warm" data-mode="light|dark">.
+   No attributes = graphite dark (the default). The ANSI palette
+   (--brand-gh-*) and scrollbars vary by MODE only, not by theme.
+   ═══════════════════════════════════════════════════════════════════════ */
 :root {
   --radius: 0.625rem;
-  --background: oklch(0.19 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.24 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.24 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.94 0 0);
-  --primary-foreground: oklch(0.22 0 0);
-  --secondary: oklch(0.32 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.32 0 0);
-  --muted-foreground: oklch(0.78 0 0);
-  --accent: oklch(0.32 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+
+  /* Structural chart/sidebar tokens */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: var(--s-2);
+  --sidebar-foreground: var(--t-primary);
+  --sidebar-primary: var(--acc);
+  --sidebar-primary-foreground: var(--s-base);
+  --sidebar-accent: var(--s-3);
+  --sidebar-accent-foreground: var(--t-primary);
+  --sidebar-border: var(--line);
+  --sidebar-ring: var(--acc);
 
-  /* ── LocalMind brand palette (dark-only) ── */
-  --brand-green: #48d866;
-  --brand-green-soft: #e0f0e1;
-  --brand-green-bright: #76ff86;
-  --brand-green-muted: #a4c6aa;
-  --brand-green-faint: #75957b;
-  --brand-green-line: #52705a;
-  --brand-green-inline: #9be7a2;
-  --brand-green-deleted: #86a98c;
-  --brand-green-code: #c0e8c4;
-  --brand-green-table-border: #3f824d;
-  --brand-amber: #f0b43c;
-  --brand-amber-warm: #ffc052;
-  --brand-amber-soft: #f8e6ad;
-  --brand-red: #ed6b6b;
-  --brand-blue: #6bb2ff;
-  --brand-purple: #b2a5ff;
-  --brand-purple-soft: #e2c5ff;
-  --brand-border: #2a3d2d;
-  --brand-border-strong: #405847;
-  --brand-border-soft: #36583e;
-  --brand-bg-deep: #081008;
-  --brand-bg-dark: #0f1711;
-  --brand-bg-base: #141e16;
-  --brand-bg-code: #18261b;
-  --brand-bg-panel: #1c2b20;
-  --brand-bg-panel-alt: #19271d;
-  --brand-bg-chat-input: #1e2e22;
-  --brand-bg-table: #1b291f;
-  --brand-bg-rail: #25372a;
-  --brand-bg-vsc-track: #0d1117;
-  --brand-bg-vsc-thumb: #30363d;
-  --brand-bg-vsc-hover: #484f58;
+  /* shadcn/ui tokens routed through the anchors so those components theme too */
+  --background: var(--s-base);
+  --foreground: var(--t-primary);
+  --card: var(--s-2);
+  --card-foreground: var(--t-primary);
+  --popover: var(--s-2);
+  --popover-foreground: var(--t-primary);
+  --primary: var(--t-primary);
+  --primary-foreground: var(--s-base);
+  --secondary: var(--s-3);
+  --secondary-foreground: var(--t-primary);
+  --muted: var(--s-2);
+  --muted-foreground: var(--t-secondary);
+  --accent: var(--s-3);
+  --accent-foreground: var(--t-primary);
+  --destructive: var(--danger);
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--acc);
 
-  /* GitHub-dark syntax palette */
-  --brand-gh-blue: #58a6ff;
-  --brand-gh-red: #f85149;
-  --brand-gh-amber: #d29922;
-  --brand-gh-green: #3fb950;
-  --brand-gh-purple: #a371f7;
-  --brand-gh-text: #d7e2da;
-  --brand-gh-red-soft: #ef9999;
-  --brand-gh-green-soft: #b9d9bd;
-  --brand-gh-red-bg: #4a2424;
-  --brand-gh-green-bg: #18281b;
-  --brand-gh-green-border: #2d5535;
+  /* Legacy brand tokens → semantic anchors (mapped once, never per theme) */
+  --brand-green: var(--acc);
+  --brand-green-bright: var(--acc-bright);
+  --brand-green-soft: var(--t-primary);
+  --brand-green-muted: var(--t-secondary);
+  --brand-green-faint: var(--t-muted);
+  --brand-green-line: var(--t-faint);
+  --brand-green-inline: var(--acc-soft);
+  --brand-green-deleted: var(--t-muted);
+  --brand-green-code: var(--code-text);
+  --brand-green-table-border: var(--acc-strong);
+  --brand-amber: var(--warn);
+  --brand-amber-warm: var(--warn-bright);
+  --brand-amber-soft: var(--warn-soft);
+  --brand-red: var(--danger);
+  --brand-blue: var(--info);
+  --brand-purple: var(--alt);
+  --brand-purple-soft: var(--alt-soft);
+  --brand-border: var(--line);
+  --brand-border-strong: var(--line-strong);
+  --brand-border-soft: var(--line-soft);
+  --brand-bg-deep: var(--s-deep);
+  --brand-bg-dark: var(--s-0);
+  --brand-bg-base: var(--s-base);
+  --brand-bg-code: var(--s-1);
+  --brand-bg-panel: var(--s-2);
+  --brand-bg-panel-alt: var(--s-1);
+  --brand-bg-chat-input: var(--s-2);
+  --brand-bg-table: var(--s-1);
+  --brand-bg-rail: var(--s-3);
+  --brand-bg-vsc-track: var(--s-deep);
+  --brand-bg-vsc-thumb: var(--line-strong);
+  --brand-bg-vsc-hover: var(--t-faint);
+
+  /* ── Graphite · dark (default anchors) ── */
+  --s-deep: #0a0c10; --s-0: #0e1218; --s-base: #12161d; --s-1: #191e26; --s-2: #1f2530; --s-3: #2a313d;
+  --t-primary: #e6edf3; --t-secondary: #9aa7b4; --t-muted: #6b7684; --t-faint: #4c5560;
+  --line: #262d38; --line-soft: #1f2530; --line-strong: #38414e;
+  --acc: #34d399; --acc-bright: #6ee7b7; --acc-soft: #a7f3d0; --acc-strong: #059669;
+  --warn: #fbbf24; --warn-bright: #fcd34d; --warn-soft: #fde68a;
+  --danger: #f87171; --info: #60a5fa; --alt: #a78bfa; --alt-soft: #c4b5fd;
+  --code-text: #c9d1d9;
+
+  /* ANSI syntax palette — dark (mode-scoped, theme-independent) */
+  --brand-gh-blue: #58a6ff; --brand-gh-red: #f85149; --brand-gh-amber: #d29922;
+  --brand-gh-green: #3fb950; --brand-gh-purple: #a371f7; --brand-gh-text: #d7e2da;
+  --brand-gh-red-soft: #ef9999; --brand-gh-green-soft: #b9d9bd;
+  --brand-gh-red-bg: #4a2424; --brand-gh-green-bg: #18281b; --brand-gh-green-border: #2d5535;
+}
+
+/* ── Graphite · light ── */
+:root[data-theme="graphite"][data-mode="light"] {
+  --s-deep: #e9edf2; --s-0: #f6f8fa; --s-base: #ffffff; --s-1: #f2f5f8; --s-2: #eaeef3; --s-3: #dee4ea;
+  --t-primary: #1a222c; --t-secondary: #48525f; --t-muted: #6b7684; --t-faint: #97a1ad;
+  --line: #dde3ea; --line-soft: #e8ecf1; --line-strong: #c5cdd7;
+  --acc: #059669; --acc-bright: #10b981; --acc-soft: #047857; --acc-strong: #065f46;
+  --warn: #b45309; --warn-bright: #d97706; --warn-soft: #92400e;
+  --danger: #dc2626; --info: #2563eb; --alt: #7c3aed; --alt-soft: #6d28d9;
+  --code-text: #1a222c;
+}
+
+/* ── Midnight Iris · dark ── */
+:root[data-theme="iris"][data-mode="dark"] {
+  --s-deep: #070810; --s-0: #0b0d15; --s-base: #0f1220; --s-1: #171a29; --s-2: #1c2135; --s-3: #282e46;
+  --t-primary: #e8eaf4; --t-secondary: #a2a8c4; --t-muted: #71778f; --t-faint: #4f5570;
+  --line: #242a44; --line-soft: #1d2338; --line-strong: #333a58;
+  --acc: #818cf8; --acc-bright: #a5b4fc; --acc-soft: #c7d2fe; --acc-strong: #6366f1;
+  --warn: #fbbf24; --warn-bright: #fcd34d; --warn-soft: #fde68a;
+  --danger: #fb7185; --info: #38bdf8; --alt: #2dd4bf; --alt-soft: #99f6e4;
+  --code-text: #d7dbf2;
+}
+
+/* ── Midnight Iris · light ── */
+:root[data-theme="iris"][data-mode="light"] {
+  --s-deep: #ebedf7; --s-0: #f5f6fc; --s-base: #ffffff; --s-1: #f1f2fb; --s-2: #e9ebf6; --s-3: #dde0f0;
+  --t-primary: #1a1e33; --t-secondary: #4a5070; --t-muted: #71778f; --t-faint: #9ea3bd;
+  --line: #dfe1f0; --line-soft: #e9ebf6; --line-strong: #c6c9e2;
+  --acc: #6366f1; --acc-bright: #818cf8; --acc-soft: #4f46e5; --acc-strong: #4338ca;
+  --warn: #b45309; --warn-bright: #d97706; --warn-soft: #92400e;
+  --danger: #e11d48; --info: #0284c7; --alt: #0d9488; --alt-soft: #0f766e;
+  --code-text: #1a1e33;
+}
+
+/* ── Warm Ink · dark ── */
+:root[data-theme="warm"][data-mode="dark"] {
+  --s-deep: #100d09; --s-0: #16120c; --s-base: #1a1610; --s-1: #221d15; --s-2: #29231a; --s-3: #362f24;
+  --t-primary: #f1ece2; --t-secondary: #b6ab99; --t-muted: #877b67; --t-faint: #5f5647;
+  --line: #322c22; --line-soft: #29231b; --line-strong: #453d2f;
+  --acc: #f0b429; --acc-bright: #fbca4d; --acc-soft: #f8dfa0; --acc-strong: #d69e2e;
+  --warn: #e08a3c; --warn-bright: #ee9f52; --warn-soft: #f3c896;
+  --danger: #e5807a; --info: #7fb0c9; --alt: #8fbf7d; --alt-soft: #bcd9ad;
+  --code-text: #e7dccb;
+}
+
+/* ── Warm Ink · light ── */
+:root[data-theme="warm"][data-mode="light"] {
+  --s-deep: #efe8db; --s-0: #f7f1e6; --s-base: #fbf8f2; --s-1: #f2ebdd; --s-2: #ebe3d2; --s-3: #ded3bf;
+  --t-primary: #2a2317; --t-secondary: #5d5342; --t-muted: #877b67; --t-faint: #a99d87;
+  --line: #e4dccb; --line-soft: #eee7d8; --line-strong: #cabda3;
+  --acc: #b06f16; --acc-bright: #ca8a1e; --acc-soft: #8a5410; --acc-strong: #74450d;
+  --warn: #c2410c; --warn-bright: #dd6b20; --warn-soft: #9a3412;
+  --danger: #c0362e; --info: #2c7a7b; --alt: #4d7c3f; --alt-soft: #3f6a33;
+  --code-text: #2a2317;
+}
+
+/* ANSI syntax palette — light (any theme in light mode) */
+:root[data-mode="light"] {
+  --brand-gh-blue: #0969da; --brand-gh-red: #cf222e; --brand-gh-amber: #9a6700;
+  --brand-gh-green: #1a7f37; --brand-gh-purple: #8250df; --brand-gh-text: #1f2328;
+  --brand-gh-red-soft: #a40e26; --brand-gh-green-soft: #116329;
+  --brand-gh-red-bg: #ffebe9; --brand-gh-green-bg: #dafbe1; --brand-gh-green-border: #2da44e;
 }
 
 @layer base {
@@ -271,10 +349,10 @@ code:not(pre code) {
   border-radius: 2px;
 }
 
-/* Selection color */
+/* Selection color — theme-aware (tints the active accent) */
 ::selection {
-  background: rgba(57, 211, 83, 0.2);
-  color: var(--brand-green-soft);
+  background: color-mix(in srgb, var(--acc) 24%, transparent);
+  color: var(--t-primary);
 }
 
 /* Custom scrollbar for VS Code-style code blocks */
