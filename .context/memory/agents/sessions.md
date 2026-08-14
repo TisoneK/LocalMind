@@ -3111,3 +3111,16 @@ program + ADR-22). -->
 - **Validation:** backend `1,776 passed, 2 skipped`; frontend `178 passed`; TypeScript/build/Ruff passed; ESLint 0 errors / 64 existing warnings; focused suite 124 passed; no live-provider smoke because credentials were unavailable.
 - **Report:** `.context/memory/reviews/2026-08-14-review-26.md`. **Notes:** `.context/memory/sessions/2026-08-14-221/notes.md`.
 - **Open items:** No product item remains from this investigation. Provider/model latency for substantive calls remains an environment-dependent limitation; future observability could label direct-chat versus parent-agent execution more explicitly.
+
+---
+## 2026-08-14 — Session 222
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **ADR:** ADR-33 — model-owned parent initialization for every user turn.
+- **Task:** Replace the prompt-shaped greeting/conversational runtime shortcut with a generic parent initialization decision that asks the LLM whether to answer, clarify, or execute.
+- **Commits:** product `a7d5b30`; context closeout follows separately.
+- **Outcome:** done — every live user turn now enters the parent agent. The first parent model call returns `direct`, `clarify`, or `execute`; execute decisions expose acknowledgement/plan/todos and continue through the parent tool observation loop; direct answers complete from that same call. Removed the runtime direct-conversation method and added the `agent_initialize` Observe stage.
+- **Validation:** backend `1,784 passed, 2 skipped`; frontend `178 passed`; TypeScript/build/Ruff passed; ESLint 0 errors / 64 existing warnings; no live-provider smoke because credentials were unavailable.
+- **Report:** `.context/memory/reviews/2026-08-14-review-27.md`. **Notes:** `.context/memory/sessions/2026-08-14-222/notes.md`.
+- **Open items:** real-model smoke should verify initialization JSON speed/robustness and the live acknowledgement → plan → action → evidence sequence.

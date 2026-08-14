@@ -602,3 +602,24 @@ if literally nothing slowed you down.
   deterministic social, direct conversational, or substantive parent—then
   inspect provider error timing within that mode instead of treating every
   assistant turn as one loop shape.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 222)
+
+- **Problem:** Session 221 fixed one addressed greeting with another prompt-shaped
+  exception, but that left the architectural complaint unresolved: the model was
+  still not the owner of the initial meaning/response decision.
+- **Cost:** One additional architecture trace and a deliberate rewrite of the
+  previous session's runtime-routing tests; no live-provider test was possible.
+- **Cause:** The request runtime had accumulated two execution shapes—deterministic
+  direct helpers and the parent loop—rather than one parent initialization contract.
+  The existing free-form planner was not typed and could not choose direct,
+  clarify, or execute.
+- **Workaround / fix:** Added a bounded model-owned initialization decision, removed
+  the live direct runtime branch, reused execute decisions as the parent plan, and
+  surfaced an authoritative `agent_initialize` stage. Compatibility regex helpers
+  remain but are no longer routing owners.
+- **Prevent next time:** When a user calls out an architectural failure, do not add a
+  new prompt exception to the old boundary. Trace the owner of the decision, move
+  that decision into the correct runtime primitive, and add a regression proving the
+  old branch is not live.

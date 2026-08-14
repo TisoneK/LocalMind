@@ -467,3 +467,22 @@ Four implementation phases (multi-session):
 - **Notes:** `.context/memory/sessions/2026-08-14-209/notes.md`.
 - **Limitation:** no live-provider smoke; local provider credentials were
   unavailable.
+
+## Session 222 — Model-owned parent initialization (completed)
+
+- **What:** replaced the live prompt-shaped conversational shortcut with a
+  generic parent-agent initialization decision. Every turn now asks the parent
+  model to choose `direct`, `clarify`, or `execute` before any tool action.
+- **Implementation:** added the bounded `InitializationDecision` contract and
+  parser; the parent emits initialization/plan statuses and todos, direct
+  answers complete from the same call, and execute decisions continue into the
+  existing parent observation/verification loop. Removed the runtime's direct
+  conversation method and added `agent_initialize` to Observe.
+- **Validation:** backend **1784 passed, 2 skipped**; frontend **178 passed**;
+  TypeScript/build/Ruff passed; ESLint **0 errors / 64 warnings**.
+- **Product commit:** `a7d5b30`.
+- **Report:** `.context/memory/reviews/2026-08-14-review-27.md`.
+- **Notes:** `.context/memory/sessions/2026-08-14-222/notes.md`.
+- **Limitation:** no live-provider smoke; next validation must confirm that the
+  selected free model emits valid initialization JSON quickly and that the
+  visible event order is acknowledgement → plan → action → evidence.

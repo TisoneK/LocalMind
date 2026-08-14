@@ -9,7 +9,7 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
-| Buffy | openai/gpt-5.6-luna (lately deepseek/deepseek-v4-flash — see Observations) | 2026-07-31 | 2026-08-14 | 19 |
+| Buffy | openai/gpt-5.6-luna (lately deepseek/deepseek-v4-flash — see Observations) | 2026-07-31 | 2026-08-14 | 20 |
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 | Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-14 | 10 |
@@ -153,6 +153,12 @@ Updated registry row:
   sub-agent heuristic and direct-chat decomposition framework, preserving the
   ADR-8 parent-AgentLoop delegation contract. Focused routing/delegation tests
   passed; full CI passed with 1753 backend tests. (2026-08-14)
+- **Buffy / openai/gpt-5.6-luna:** Session 222 moved request interpretation into
+  a typed parent initialization call rather than adding another prompt-shaped
+  route exception. Added direct/clarify/execute parsing, parent initialization
+  lifecycle events, and regressions proving direct decisions do not enter the
+  tool execution call. Full backend/frontend gates passed; no live provider was
+  available to verify initialization JSON behavior on a free model. (2026-08-14)
 - **Claude Code / claude-opus-4-8:** Session 210 — first session of the
   `realtime-alive-ui` feature. Redesigned the chat tool trace into a grouped,
   animated live Actions timeline (framer-motion + prefers-reduced-motion),

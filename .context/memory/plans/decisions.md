@@ -867,3 +867,39 @@ ADR-20/21 classifier covers exhausted-quota 429 plus 401/402/403; transient
 429s remain retryable. The permanent-429 adapter path also avoids its former
 extra response-refresh request. ADR-32 is **accepted + implemented**. Feature
 manifest: `.context/memory/features/fail-fast-provider-errors/manifest.md`.
+
+---
+## ADR-33: Parent-owned model initialization for every user turn (2026-08-14)
+
+- **Author:** Buffy / openai/gpt-5.6-luna (Session 222)
+- **Status:** accepted + implemented (`a7d5b30`)
+- **Context:** Session 221 patched one missed greeting phrase, but the underlying
+  live runtime still decided direct conversation versus agent work with
+  `trivial_input` regexes before the parent agent existed. That architecture
+  cannot scale: every new phrasing becomes another prompt-specific exception,
+  and the model is not asked what the user's request means or how it should be
+  handled.
+- **Decision:** Every user turn enters `AgentRuntime → ParentAgent → AgentLoop`.
+  The parent makes one bounded initialization model call with the complete
+  available tool catalog and returns a typed decision: `direct`, `clarify`, or
+  `execute`. Direct mode returns the initialization answer without a second
+  execution call. Clarify mode asks one question. Execute mode emits the
+  acknowledgement and goal-level plan/todos, then continues through the
+  existing parent tool-call → observation → verification/replan → synthesis
+  loop. Raw initialization JSON and private provider reasoning never become
+  chat content.
+- **Failure behavior:** malformed initialization output fails open to bounded
+  execute mode; terminal provider errors still propagate through the existing
+  canonical error boundary. Deterministic conversational helpers remain only
+  as compatibility utilities and are not live routing owners.
+- **Consequences:** ordinary direct conversation now requires one real provider
+  call, while tool work reuses initialization as its planning call instead of
+  adding a separate prompt-shaped classifier. Provider/model latency remains
+  environment-dependent. Observe exposes an authoritative `agent_initialize`
+  stage alongside context, tool, generation, and execution stages.
+- **Supersedes:** the live request-routing behavior introduced by Session 206
+  and the addressed-greeting patch from Session 221; it does not delete the
+  compatibility helper APIs or change the parent-owned tool/delegation contract.
+- **Validation:** backend 1,784 passed / 2 skipped; frontend 178 passed;
+  TypeScript/build/Ruff passed; ESLint 0 errors / 64 existing warnings. No
+  live-provider smoke was available.

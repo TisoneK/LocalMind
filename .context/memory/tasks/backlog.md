@@ -251,3 +251,6 @@ don't remove the line.
 
 ---
 - [x] **[High] B-2026-08-14-5 — Loop-level fail-fast for terminal provider errors (ADR-32 remainder)** — completed in Session 220 continuation, product `6014254`; adapter handoff `1762509` was pushed first. Terminal quota/auth/payment/permission errors now stop before parent tool iteration and reach canonical SSE normalization; transient 429s retain retry behavior; `Hi` remains zero-provider-call. Full CI passed: backend 1,773 passed / 2 skipped; frontend 178 passed; TypeScript/build/Ruff passed; ESLint 0 errors / 64 warnings.
+
+---
+- [ ] **[Medium] B-2026-08-14-6 — Live-model validation for parent initialization (ADR-33)** — when a free provider credential is available, run a real LocalMind smoke matrix for direct conversation, clarification, current-data tool work, a multi-step local task, malformed initialization output, and terminal provider failure. Verify the visible order `acknowledgement → agent_initialize → plan/todos → action → evidence → final synthesis`, initialization JSON latency, and no raw JSON/reasoning leakage. See `.context/memory/reviews/2026-08-14-review-27.md`.

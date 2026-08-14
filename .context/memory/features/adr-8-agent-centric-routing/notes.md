@@ -1148,3 +1148,30 @@ warnings. No live-provider smoke due unavailable local credentials.
 
 Product commit: `5c2cfbd`; review:
 `.context/memory/reviews/2026-08-14-review-14.md`.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 222)
+
+The user rejected the Session 221 addressed-greeting matcher as a real fix. The
+actual architectural problem was confirmed: `AgentRuntime` could decide direct
+conversation versus parent-agent work using prompt-shaped helpers before the
+parent existed. That made routing brittle and prevented the model from first
+understanding the request.
+
+Session 222 added `core/agent/initialization.py` with a bounded
+`InitializationDecision`: `direct`, `clarify`, or `execute`. The live parent loop
+now makes this decision first. Direct mode returns the initialization answer
+without an execution call; clarify mode asks one question; execute mode exposes
+an acknowledgement, plan, and todos before entering the existing tool/evidence
+loop. Malformed JSON fails open to execute mode. The old runtime direct method
+and live trivial/conversational branch were removed; `trivial_input.py` remains
+only as compatibility utility code.
+
+The Observe panel now includes the authoritative `agent_initialize` stage.
+Raw initialization JSON and provider reasoning remain private; only concise
+status/plan/action/evidence events reach the UI.
+
+Validation: backend 1784 passed / 2 skipped; frontend 178 passed;
+TypeScript/build/Ruff passed; ESLint 0 errors / 64 warnings. Product commit
+`a7d5b30`; review `.context/memory/reviews/2026-08-14-review-27.md`.
+No live-provider smoke was available.
