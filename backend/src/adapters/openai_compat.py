@@ -656,6 +656,47 @@ class OpenAICompatAdapter(BaseAdapter):
             payload["thinking"] = {"type": "disabled"}
         return payload
 
+    @staticmethod
+    def _is_permanent_429(body_text: str, retry_after: str | None) -> bool:
+        """True when a 429 is a permanent quota/billing exhaustion (daily or
+        free-tier limit, out of credits) rather than a transient per-minute
+        burst.
+
+        ADR-32: a permanent 429 must NOT be retried. Retrying only burns the
+        backoff window and — across an agent loop's several calls — tens of
+        seconds, before surfacing an error the user could have seen in the
+        first round-trip. Quota markers win over a generic "rate limit"
+        phrase so a "free daily rate limit exceeded" body is treated as
+        permanent.
+        """
+        text = (body_text or "").lower()
+        permanent_markers = (
+            "insufficient_quota",
+            "insufficient credits",
+            "out of credits",
+            "quota",
+            "daily limit",
+            "daily quota",
+            "free tier",
+            "free-tier",
+            "usage limit",
+            "usage_limit",
+            "billing",
+            "add credits",
+            "upgrade your plan",
+            "exceeded your current",
+        )
+        if any(marker in text for marker in permanent_markers):
+            return True
+        # A very long Retry-After (>= 10 minutes) is a quota window, not a burst.
+        if retry_after:
+            try:
+                if float(retry_after) >= 600:
+                    return True
+            except ValueError:
+                pass
+        return False
+
     async def _send_streaming_with_retry(
         self,
         url: str,
@@ -719,13 +760,25 @@ class OpenAICompatAdapter(BaseAdapter):
                         continue
                 return response  # success (200) or non-retryable error
 
-            # Got 429 — read the body for logging, then close and retry
-            await response.aread()
+            # Got 429 — read the body so we can distinguish a transient
+            # per-minute burst (worth a short retry) from a permanent quota /
+            # billing exhaustion (daily or free-tier limit). ADR-32: a
+            # permanent 429 must NOT be retried — retrying only burns the
+            # backoff window (and, across an agent loop, tens of seconds)
+            # before surfacing an error the user could have seen instantly.
+            body_text = (await response.aread()).decode(errors="replace")
             await response.aclose()
+            retry_after = response.headers.get("retry-after")
+
+            if self._is_permanent_429(body_text, retry_after):
+                logger.warning(
+                    "[adapter] permanent quota/billing 429 from %s — not retrying, surfacing immediately",
+                    self._provider_name,
+                )
+                break
 
             if attempt < 2:  # don't sleep after the last attempt
                 # Respect Retry-After header if the provider sent one
-                retry_after = response.headers.get("retry-after")
                 if retry_after:
                     try:
                         wait_secs = float(retry_after)
@@ -736,7 +789,7 @@ class OpenAICompatAdapter(BaseAdapter):
                     wait_secs = 2.0 * (2**attempt)  # 2s, then 4s
 
                 logger.warning(
-                    "[adapter] 429 from %s (attempt %d/3), retrying in %.1fs",
+                    "[adapter] transient 429 from %s (attempt %d/3), retrying in %.1fs",
                     self._provider_name,
                     attempt + 1,
                     wait_secs,
