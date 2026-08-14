@@ -30,16 +30,15 @@ async def test_runtime_enters_one_parent_loop_without_dispatcher():
     obs = ObsCollector()
     with patch("core.engine.get_adapter", return_value=adapter), patch(
         "core.thinking_dispatcher.ThinkingDispatcher"
-    ) as dispatcher:
-        with patch.object(engine._agent_loop, "run", fake_run):
-            chunks = [
-                chunk
-                async for chunk in engine.process(
-                    "check the project and report the result",
-                    "parent-runtime-1",
-                    obs=obs,
-                )
-            ]
+    ) as dispatcher, patch.object(engine._agent_loop, "run", fake_run):
+        chunks = [
+            chunk
+            async for chunk in engine.process(
+                "check the project and report the result",
+                "parent-runtime-1",
+                obs=obs,
+            )
+        ]
 
     dispatcher.assert_not_called()
     assert captured["agent_config"].name == "parent"
@@ -65,12 +64,16 @@ async def test_runtime_preserves_parent_tool_and_delegation_contract():
     with patch("core.engine.get_adapter", return_value=adapter), patch.object(
         engine._agent_loop, "run", fake_run
     ):
-        await anext(
-            engine.process(
+        # The parent runtime now emits an immediate acknowledgement before
+        # entering the loop. Consume the stream like the real SSE client so
+        # the parent contract is observed after that progress event.
+        _chunks = [
+            chunk
+            async for chunk in engine.process(
                 "research this and compare the sources",
                 "parent-runtime-2",
             )
-        )
+        ]
 
     names = {tool["intent"] for tool in captured["available_tools"]}
     assert {"delegate", "delegate_parallel", "delegate_inline"}.issubset(names)

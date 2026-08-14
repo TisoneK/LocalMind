@@ -559,6 +559,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 yield chunk
             return
 
+        # User-facing lifecycle acknowledgement: substantive turns should
+        # feel attended to before memory retrieval or the first model call.
+        # The parent still owns all planning and tool decisions; this is only
+        # transport-level progress, not a pre-router.
+        yield StreamChunk(
+            text="",
+            done=False,
+            status="I’m understanding the request and preparing a plan…",
+        )
+
         try:
             from api.routes.terminal import _terminal_sessions
             terminal = _terminal_sessions.get(session_id)

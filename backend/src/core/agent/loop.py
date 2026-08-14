@@ -1282,6 +1282,13 @@ class AgentLoop:
 
         if _obs:
             _obs.emit("agent_loop_start", intent=intent.value)
+        # Keep the user connected while the parent prepares its first action.
+        # This is a concise lifecycle update, never raw model reasoning.
+        yield StreamChunk(
+            text="",
+            done=False,
+            status="I’m preparing an execution plan before using tools…",
+        )
 
         # ── Clarification gate ─────────────────────────────────────────
         if confidence < CLARIFICATION_THRESHOLD and intent in AGENT_INTENTS:
@@ -1374,14 +1381,19 @@ class AgentLoop:
             # can take a full model call.
             if abort_signal is not None and abort_signal.is_set():
                 raise AgentAbortedError("aborted by user before planning")
-            # Stream the plan in real-time as thinking tokens so the user
-            # sees the model's reasoning (UNDERSTANDING, STEPS, ARGS_PRECHECK)
-            # as it happens — not after the full plan is generated.
-            yield StreamChunk(text="", done=False, thinking="start")
+            # Keep planning visible without exposing raw chain-of-thought or
+            # provider-specific planning markup. The user gets a concise
+            # lifecycle status; the complete plan remains internal evidence
+            # for the execution prompt and task state.
+            yield StreamChunk(
+                text="",
+                done=False,
+                status="I’m creating a short plan before I act…",
+            )
             if _obs:
                 _obs.emit("agent_planning_start", intent=intent.value)
 
-            # Collect plan while streaming thinking tokens to the user
+            # Collect the plan internally while it streams from the provider.
             plan_chunks: list[str] = []
             async for plan_chunk in self._plan_stream(
                 active_adapter=active_adapter,
@@ -1393,11 +1405,7 @@ class AgentLoop:
             ):
                 if plan_chunk:
                     plan_chunks.append(plan_chunk)
-                    # Stream as thinking token — the frontend shows this in
-                    # the thinking block in real-time
-                    yield StreamChunk(text="", done=False, thinking=plan_chunk)
 
-            yield StreamChunk(text="", done=False, thinking="end")
             plan_context = "".join(plan_chunks).strip()
 
             # Truncate plan to prevent context bloat
@@ -1418,6 +1426,18 @@ class AgentLoop:
             # Parse plan steps and emit as todo items via obs
             # so the frontend's Todos panel shows the execution plan
             _plan_steps = _parse_plan_steps(plan_context)
+            if _plan_steps:
+                _first_step = _plan_steps[0].strip().rstrip(".")[:120]
+                _plan_status = (
+                    f"Plan ready ({len(_plan_steps)} step"
+                    f"{'s' if len(_plan_steps) != 1 else ''}). Starting with: {_first_step}"
+                )
+            else:
+                _plan_status = (
+                    "I couldn’t make a structured plan, so I’m checking the request "
+                    "directly and will verify the result."
+                )
+            yield StreamChunk(text="", done=False, status=_plan_status)
             if _plan_steps and _obs:
                 for i, step in enumerate(_plan_steps):
                     _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
@@ -1942,6 +1962,13 @@ class AgentLoop:
                 )
 
             # ── LLM call with tools ───────────────────────────────────
+            # Keep the user informed during the provider wait. The actual
+            # decision and tool call remain owned by this parent loop.
+            yield StreamChunk(
+                text="",
+                done=False,
+                status="I’m deciding the next action from the current evidence…",
+            )
             # Session 25/31: wrap with a hard timeout to prevent "thinking
             # forever" when the model hangs. Uses PER_CALL_TIMEOUT_SECS
             # (45s) — SHORTER than the adapter's 120s HTTP timeout so the
@@ -1995,19 +2022,15 @@ class AgentLoop:
             # This is safe because independent tool calls (e.g., file_task + sysinfo)
             # have no side-effect dependencies between them.
             if isinstance(result, MultiToolCallResult):
-                # Emit thinking content from the first call
-                if result.raw_content:
-                    _filtered_thinking = _filter_system_leaks(result.raw_content[:2000])
-                    if _filtered_thinking.strip():
-                        yield StreamChunk(text="", done=False, thinking="start")
-                        yield StreamChunk(text="", done=False, thinking=_filtered_thinking)
-                        yield StreamChunk(text="", done=False, thinking="end")
-                    if _obs:
-                        _obs.emit(
-                            "thinking",
-                            text=_filter_system_leaks(result.raw_content[:500]),
-                            iteration=iteration + 1,
-                        )
+                # Keep provider reasoning internal. User-visible progress is
+                # carried by concise lifecycle statuses and tool events, not
+                # raw chain-of-thought or provider markup.
+                if result.raw_content and _obs:
+                    _obs.emit(
+                        "thinking",
+                        text=_filter_system_leaks(result.raw_content[:500]),
+                        iteration=iteration + 1,
+                    )
 
                 logger.info(
                     f"[agent.loop] iter={iteration + 1} multi_tool_call: "
@@ -2282,26 +2305,15 @@ class AgentLoop:
                 # Debug: log description from LLM
                 logger.info(f"[agent.loop] tool_args description: {tool_args.get('description', 'NONE')}")
 
-                # FIX: Yield thinking content as proper SSE events so the
-                # frontend ThinkingBlock shows the model's reasoning in real-time.
-                # Previously, raw_content was only emitted to obs (invisible to
-                # the frontend). Now we emit thinking_start → thinking_token →
-                # thinking_end as structured SSE events that the frontend can
-                # consume directly.
-                # ANTI-FABRICATION: Filter MiniMax proprietary tool_call text
-                # from the thinking content — it should never be user-visible.
-                if result.raw_content:
-                    _filtered_thinking = _filter_system_leaks(result.raw_content[:2000])
-                    if _filtered_thinking.strip():
-                        yield StreamChunk(text="", done=False, thinking="start")
-                        yield StreamChunk(text="", done=False, thinking=_filtered_thinking)
-                        yield StreamChunk(text="", done=False, thinking="end")
-                    if _obs:
-                        _obs.emit(
-                            "thinking",
-                            text=_filter_system_leaks(result.raw_content[:500]),
-                            iteration=iteration + 1,
-                        )
+                # Keep provider reasoning internal. The frontend receives
+                # concise lifecycle status and tool events instead of raw
+                # chain-of-thought or provider-specific markup.
+                if result.raw_content and _obs:
+                    _obs.emit(
+                        "thinking",
+                        text=_filter_system_leaks(result.raw_content[:500]),
+                        iteration=iteration + 1,
+                    )
 
                 logger.info(
                     f"[agent.loop] iter={iteration + 1} tool_call={tool_name} args={json.dumps(tool_args)[:120]}"
@@ -3844,6 +3856,11 @@ class AgentLoop:
                     # ADR-18 P0: the model saying "done" is not enough — gate
                     # the claim against the success criteria (replan or honest
                     # report). Only finish when the gate is satisfied or capped.
+                    yield StreamChunk(
+                        text="",
+                        done=False,
+                        status="I’m verifying the result against the objective…",
+                    )
                     _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
                         trace=trace,
                         iteration=iteration,
@@ -3939,6 +3956,11 @@ class AgentLoop:
                 # ADR-18 P0: gate the model's "done" claim (replan or honest
                 # report) BEFORE the turn-end events — the loop is only done
                 # when the gate is satisfied or the caps force an honest close.
+                yield StreamChunk(
+                    text="",
+                    done=False,
+                    status="I’m verifying the result against the objective…",
+                )
                 _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
                     trace=trace,
                     iteration=iteration,
