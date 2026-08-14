@@ -1,6 +1,10 @@
 """
-Trivial-input detector — short-circuits greetings/simple chat before
-normal request handling runs.
+Legacy conversational classifiers and direct-response helpers.
+
+The live request runtime no longer invokes these functions for routing. Every
+turn enters the parent agent, whose model-owned initialization decision chooses
+between a direct response, clarification, and tool execution. These helpers
+remain available for isolated utilities and compatibility tests only.
 
 Problem (Session 21): A one-word greeting like "Hi" was burning 11.5s
 and ~4.8k tokens because it entered capability inference before being
@@ -27,8 +31,7 @@ detector
 is conservative — it only short-circuits when the input is truly
 conversational. Anything ambiguous falls through to normal request handling.
 
-Usage: a caller may opt into these deterministic/conversational helpers
-before entering the parent-agent runtime:
+Compatibility usage (not used by the live parent runtime):
     from core.trivial_input import is_trivial_input, trivial_response
     from core.trivial_input import is_conversational_question, conversational_response
 

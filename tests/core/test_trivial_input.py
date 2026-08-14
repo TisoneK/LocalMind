@@ -676,23 +676,39 @@ async def test_engine_conversational_question_emits_prompt_tokens():
 
 @pytest.mark.parametrize("message", ["Hi", "Hey LM", "Hello LocalMind"])
 @pytest.mark.asyncio
-async def test_engine_greeting_bypasses_parent_tools_and_provider(message):
-    """A social greeting must not enter the parent loop or acquire an adapter."""
+async def test_engine_greeting_is_decided_by_parent_initialization(message):
+    """Social wording is handled by the generic parent decision, not a regex route."""
     from core.engine import Engine
     from core.obs import ObsCollector
 
     engine = Engine()
     obs = ObsCollector()
-    with (
-        patch("core.agent_runtime.get_adapter", side_effect=AssertionError("greeting acquired adapter")),
-        patch("core.agent_runtime.ParentAgent.run", side_effect=AssertionError("greeting entered parent loop")),
-    ):
+    calls = 0
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        nonlocal calls
+        calls += 1
+        yield MagicMock(
+            text=(
+                '{"mode":"direct","acknowledgement":"Hi!",'
+                '"response":"Hi! I am LocalMind. How can I help?"}'
+            ),
+            done=False,
+            error=None,
+            usage={"prompt_tokens": 20, "completion_tokens": 12},
+        )
+        yield MagicMock(text="", done=True, error=None, usage={})
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    with patch("core.agent_runtime.get_adapter", return_value=mock_adapter):
         chunks = [c async for c in engine.process(message, f"sess-greeting-direct-{message}", obs=obs)]
 
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert "localmind" in text.lower()
     assert any(getattr(c, "done", False) for c in chunks)
+    assert calls == 1
+    initialization = [event for event in obs.history() if event.type == "agent_initialization_done"]
+    assert initialization and initialization[0].data["mode"] == "direct"
     assert not any(event.type == "tool_call" for event in obs.history())
-    assert [event.data["status"] for event in obs.history() if event.type == "stage_timing"] == [
-        "skipped", "skipped", "skipped", "done", "skipped"
-    ]

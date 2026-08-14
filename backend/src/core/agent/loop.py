@@ -86,6 +86,11 @@ from core.agent.delegation import (
     snapshot_messages,
     validate_rewritten_history,
 )
+from core.agent.initialization import (
+    InitializationDecision,
+    build_initialization_prompt,
+    parse_initialization,
+)
 from core.agent.models import AgentStep, AgentTrace
 from core.agent.prompts import build_agent_system_prompt, build_planning_prompt
 from core.agent.synthesizer import AnswerSynthesizer
@@ -1373,19 +1378,108 @@ class AgentLoop:
                 logger.warning("[agent_loop] workspace_state failed: %s", ws_exc)
                 workspace_context = ""
 
-        # ── Phase 0: Planning ────────────────────────────────────────────
-        # Run a separate LLM call (no tools) to produce a step-by-step plan.
-        # The plan is then injected into the execution-phase system prompt
-        # so the model knows exactly what to do on its first iteration,
-        # eliminating the trial-and-error pattern where it fumbles with
-        # incomplete args for 3-5 iterations.
+        # ── Phase 0: Parent initialization / planning ───────────────────
+        # The user-facing parent does not inherit a prompt-shaped route. Its
+        # first model call decides whether this is direct conversation,
+        # clarification, or tool work. Tool work gets a bounded plan that is
+        # then injected into the execution loop; direct/clarify decisions
+        # finish here without a second model call.
         #
-        # The parent runtime leaves skip_planning=False so the parent can
-        # reason before acting. An explicit caller may set it only when a
-        # verified plan is already available.
+        # Non-parent callers retain the older plan-stream contract for child
+        # agents and isolated loop tests. The request runtime always supplies
+        # the ParentAgent config, so all user turns use initialization.
         plan_context = ""
-        iteration_offset = 0  # how many iterations the planning phase consumed
-        if PLAN_ENABLED and intent in AGENT_INTENTS and not initial_tool_result and not skip_planning:
+        iteration_offset = 0  # how many initialization/planning calls consumed
+        _parent_initialization = (
+            getattr(agent_config, "name", "") == "parent"
+            and not initial_tool_result
+            and not skip_planning
+        )
+        if _parent_initialization:
+            if abort_signal is not None and abort_signal.is_set():
+                raise AgentAbortedError("aborted by user before initialization")
+            yield StreamChunk(
+                text="",
+                done=False,
+                status="I’m understanding the request and deciding how to help…",
+            )
+            initialization_started = time.monotonic()
+            if _obs:
+                _obs.emit("agent_initialization_start", intent=intent.value)
+            initialization = await self._initialize_parent(
+                active_adapter=active_adapter,
+                messages=messages,
+                available_tools=available_tools,
+                env_context=env_context,
+                intent_history=intent_history,
+            )
+            iteration_offset = 1
+            if _obs:
+                _obs.emit(
+                    "stage_timing",
+                    stage="agent_initialize",
+                    latency_ms=round((time.monotonic() - initialization_started) * 1000),
+                    status="done",
+                )
+                _obs.emit(
+                    "agent_initialization_done",
+                    mode=initialization.mode,
+                    objective=initialization.objective,
+                    tool_names=initialization.tool_names,
+                    plan_steps=initialization.plan_steps,
+                    confidence=initialization.confidence,
+                )
+
+            if initialization.is_direct:
+                if _obs:
+                    _obs.emit("agent_loop_done", intent=intent.value, direct=True)
+                if initialization.acknowledgement:
+                    yield StreamChunk(
+                        text="",
+                        done=False,
+                        status=initialization.acknowledgement,
+                    )
+                yield StreamChunk(text=initialization.response, done=False)
+                yield StreamChunk(text="", done=True)
+                return
+
+            if initialization.is_clarification:
+                if _obs:
+                    _obs.emit("agent_loop_done", intent=intent.value, clarification=True)
+                clarification = "\n\n".join(
+                    part
+                    for part in (initialization.acknowledgement, initialization.clarifying_question)
+                    if part
+                ) or "Could you clarify what you would like me to do?"
+                yield StreamChunk(text=clarification, done=False)
+                yield StreamChunk(text="", done=True)
+                return
+
+            trace.success_criteria = list(initialization.success_criteria)
+            plan_context = initialization.plan_text()
+            trace.plan_text = plan_context
+            _plan_steps = list(initialization.plan_steps)
+            if _obs:
+                _obs.emit(
+                    "agent_planning_done",
+                    intent=intent.value,
+                    plan_len=len(plan_context),
+                    iterations_cost=iteration_offset,
+                )
+                for i, step in enumerate(_plan_steps):
+                    _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
+            if initialization.acknowledgement:
+                yield StreamChunk(text="", done=False, status=initialization.acknowledgement)
+            _first_step = _plan_steps[0].rstrip(".")[:120] if _plan_steps else "the first verifiable action"
+            yield StreamChunk(
+                text="",
+                done=False,
+                status=(
+                    f"Plan ready ({len(_plan_steps)} step"
+                    f"{'s' if len(_plan_steps) != 1 else ''}). Starting with: {_first_step}"
+                ),
+            )
+        elif PLAN_ENABLED and intent in AGENT_INTENTS and not initial_tool_result and not skip_planning:
             # B-2026-08-02-2 (A2): check abort before the planning phase — it
             # can take a full model call.
             if abort_signal is not None and abort_signal.is_set():
@@ -4533,7 +4627,90 @@ class AgentLoop:
         yield StreamChunk(text="", done=True)
 
     # ------------------------------------------------------------------
-    # Planning phase
+    # Parent initialization phase
+    # ------------------------------------------------------------------
+
+    async def _initialize_parent(
+        self,
+        active_adapter,
+        messages: list[dict],
+        available_tools: list[dict],
+        env_context: str,
+        intent_history: Optional[list[str]] = None,
+    ) -> InitializationDecision:
+        """Ask the parent model how this request should be handled.
+
+        This is the only request-shape decision in the live parent runtime.
+        It replaces deterministic greeting/question routing with a generic
+        model-owned contract. The result is deliberately not streamed as raw
+        model text: only the parsed acknowledgement, plan, and final direct
+        response are user-visible.
+        """
+        user_message = _user_message_text(messages)
+        conversation_history = [
+            message
+            for message in messages
+            if message.get("role") in {"user", "assistant"}
+        ]
+        prompt = build_initialization_prompt(
+            user_message=user_message,
+            available_tools=available_tools,
+            env_context=env_context,
+            history=conversation_history,
+        )
+        init_messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": user_message},
+        ]
+        chunks: list[str] = []
+        from core.error_normalizer import is_terminal_pre_generation_error
+
+        async def _collect() -> None:
+            async for chunk in active_adapter.chat(
+                init_messages,
+                temperature=0.1,
+                intent="chat",
+            ):
+                if chunk.error:
+                    if is_terminal_pre_generation_error(chunk.error):
+                        raise TerminalProviderError(chunk.error)
+                    logger.warning(
+                        "[agent.loop] initialization adapter error: %s",
+                        chunk.error[:120],
+                    )
+                    break
+                text = _filter_system_leaks(chunk.text)
+                text = _strip_minimax_tool_calls(text)
+                if text:
+                    chunks.append(text)
+
+        try:
+            await asyncio.wait_for(_collect(), timeout=PLAN_TIMEOUT_SECS)
+        except TerminalProviderError:
+            raise
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[agent.loop] initialization timed out after %.0fs",
+                PLAN_TIMEOUT_SECS,
+            )
+            return parse_initialization("")
+        except Exception as exc:
+            if is_terminal_pre_generation_error(exc):
+                raise TerminalProviderError(str(exc)) from exc
+            logger.warning("[agent.loop] initialization failed: %s", exc)
+            return parse_initialization("")
+
+        decision = parse_initialization("".join(chunks))
+        logger.info(
+            "[agent.loop] parent initialization mode=%s tools=%s steps=%d",
+            decision.mode,
+            decision.tool_names,
+            len(decision.plan_steps),
+        )
+        return decision
+
+    # ------------------------------------------------------------------
+    # Planning phase (child-agent compatibility)
     # ------------------------------------------------------------------
 
     async def _plan_stream(

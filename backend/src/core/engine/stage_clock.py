@@ -23,9 +23,9 @@ class _StageClock:
     latency per stage and emits ``stage_timing`` obs events so the panel can
     render truthful statuses (done / skipped) with real timings.
 
-    Stages: intent_classify, context_build, tool_select, generate, execute.
-    Stages that never ran are emitted as "skipped" so the UI never shows a
-    stuck "running" state for work that didn't happen.
+    Stages: intent_classify, context_build, agent_initialize, tool_select,
+    generate, execute. Stages that never ran are emitted as "skipped" so the
+    UI never shows a stuck "running" state for work that didn't happen.
     """
 
     def __init__(self, obs: ObsCollector):

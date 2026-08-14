@@ -5,10 +5,11 @@ safety, history, context assembly, streaming, persistence, and observability.
 The ParentAgent owns the actual decision loop and tool/delegation choices.
 
 The old engine pipeline classified each request, selected a tool, and then
-chose an agent. This runtime deliberately does none of that. Every substantive
-turn enters one parent AgentLoop with the full parent tool contract; clearly
-conversational turns use a deterministic/direct boundary with no tools.
-Specialized agents are reached only through the parent's delegation tools.
+chose an agent. This runtime deliberately does none of that. Every user turn
+enters one parent AgentLoop with the full parent tool contract. The parent's
+initialization call decides whether the turn is direct conversation,
+clarification, or tool work. Specialized agents are reached only through the
+parent's delegation tools.
 """
 
 from __future__ import annotations
@@ -80,8 +81,9 @@ class _ParentAdapterCompat:
 class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
     """Single front door for LocalMind's parent-agent execution model.
 
-    Clearly conversational turns are intentionally handled before the parent
-    tool loop; substantive work still has one parent-agent execution path.
+    Every user turn crosses the same parent boundary. Request interpretation
+    belongs to the parent's model-owned initialization stage, not to a
+    runtime regex or deterministic prompt shortcut.
     """
 
     def __init__(self):
@@ -370,87 +372,6 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         self._last_turn_prompt_tokens = int(merged.get("context_tokens", 0) or 0)
         self._last_turn_session_id = session_id
 
-    async def _process_direct_conversation(
-        self,
-        message: str,
-        session_id: str,
-        history: list[dict],
-        collector: ObsCollector,
-        response_stream: AsyncIterator[StreamChunk],
-        started: float,
-    ) -> AsyncIterator[StreamChunk]:
-        """Complete an obviously conversational turn without parent tools.
-
-        This is a runtime boundary, not a second router: greetings and
-        clearly conversational questions have no tool objective. Keeping them
-        out of the parent tool loop prevents a simple ``Hi`` from triggering
-        planning, tool calls, or long provider reasoning.
-        """
-        self._metrics.start_request()
-        clock = _StageClock(collector)
-        clock.skip("intent_classify")
-        clock.skip("context_build")
-        clock.skip("tool_select")
-        clock.start("generate")
-        response_chunks: list[str] = []
-        usage: dict[str, int] = {}
-
-        async for chunk in response_stream:
-            if isinstance(chunk.usage, dict):
-                usage.update(chunk.usage)
-            if chunk.text:
-                response_chunks.append(chunk.text)
-                yield chunk.model_copy(update={"done": False})
-            elif chunk.error:
-                # Preserve the typed provider error for the SSE boundary, but
-                # let this runtime own the final completion marker.
-                yield chunk.model_copy(update={"done": False})
-
-        clock.end("generate")
-        clock.skip("execute")
-        response_text = "".join(response_chunks).strip()
-        prompt_tokens = int(
-            usage.get("prompt_tokens", 0)
-            or _approx_tokens("".join(str(item.get("content", "")) for item in history) + message)
-        )
-        completion_tokens = int(
-            usage.get("completion_tokens", 0) or _approx_tokens(response_text)
-        )
-        self._persist_assistant(session_id, response_text)
-        self._metrics.record_streaming_complete(
-            total_tokens=prompt_tokens + completion_tokens,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-        )
-        total_ms = round((time.monotonic() - started) * 1000)
-        collector.emit(
-            "agent_runtime_done",
-            agent="parent",
-            elapsed_ms=total_ms,
-            response_chars=len(response_text),
-        )
-        collector.emit(
-            "turn_complete",
-            intent="parent",
-            confidence=1.0,
-            tokens_approx=completion_tokens,
-            prompt_tokens_approx=prompt_tokens,
-            total_latency_ms=total_ms,
-            memory_facts=0,
-            agent_mode=True,
-            provider_usage=usage,
-        )
-        self._store_observation(
-            session_id,
-            collector,
-            intent="parent",
-            confidence=1.0,
-            memory_hits=0,
-            context_tokens=prompt_tokens,
-            latency_ms=total_ms,
-        )
-        yield StreamChunk(text="", done=True, usage=usage)
-
     async def process(
         self,
         message: str,
@@ -505,14 +426,6 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             return
 
         collector.emit("agent_runtime_start", agent="parent")
-        # Import lazily: trivial_input imports core.engine._helpers, while
-        # core.engine's package initializer imports AgentRuntime.
-        from core.trivial_input import (
-            conversational_response,
-            is_conversational_question,
-            is_trivial_input,
-            trivial_response,
-        )
         if client_intent:
             collector.emit(
                 "routing_hint_ignored",
@@ -530,34 +443,6 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             file_size=len(file) if file else None,
             file_type=content_type,
         )
-
-        # Social greetings/acknowledgments and clearly conversational
-        # questions have no tool objective. They must not enter the parent
-        # tool loop: a simple "Hi" should be immediate and tool-free.
-        direct_trivial = is_trivial_input(message)
-        if direct_trivial or is_conversational_question(message):
-            adapter = None
-            if not direct_trivial:
-                adapter = self._adapter_for_parent()
-            history_payload = [
-                {"role": item.role.value, "content": item.content}
-                for item in history
-            ]
-            response_stream = (
-                trivial_response(message, adapter, history_payload)
-                if direct_trivial
-                else conversational_response(message, adapter, history_payload)
-            )
-            async for chunk in self._process_direct_conversation(
-                message=message,
-                session_id=session_id,
-                history=history_payload,
-                collector=collector,
-                response_stream=response_stream,
-                started=started,
-            ):
-                yield chunk
-            return
 
         # User-facing lifecycle acknowledgement: substantive turns should
         # feel attended to before memory retrieval or the first model call.

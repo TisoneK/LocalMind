@@ -93,10 +93,11 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
   const hasCompletion = observation.latency !== undefined && observation.latency > 0;
 
   // Canonical pipeline stages — keys match the engine's _StageClock names.
-  const STAGE_KEYS = ['intent_classify', 'context_build', 'tool_select', 'generate', 'execute'] as const;
+  const STAGE_KEYS = ['intent_classify', 'context_build', 'agent_initialize', 'tool_select', 'generate', 'execute'] as const;
   const STAGE_LABELS: Record<string, string> = {
     intent_classify: 'Intent Classify',
     context_build: 'Context Build',
+    agent_initialize: 'Agent Initialize',
     tool_select: 'Tool Select',
     generate: 'Generate',
     execute: 'Execute',
@@ -106,6 +107,7 @@ export function ObservabilityTab({ observation, capabilities = { families: [] } 
     switch (key) {
       case 'intent_classify': return hasIntent ? 'done' : 'pending';
       case 'context_build': return hasIntent ? (hasToolCall || hasCompletion ? 'done' : 'running') : 'pending';
+      case 'agent_initialize': return hasCompletion ? 'done' : hasIntent ? 'running' : 'pending';
       // No tools used + turn complete → the stage never ran → skipped.
       case 'tool_select': return hasToolCall ? 'done' : hasCompletion ? 'skipped' : hasIntent ? 'running' : 'pending';
       case 'generate': return hasCompletion ? 'done' : hasIntent ? 'running' : 'pending';
