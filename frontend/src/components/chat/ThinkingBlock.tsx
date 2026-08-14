@@ -1,29 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ChevronRight, Brain, Terminal } from 'lucide-react';
 import { ThinkingStep } from '@/types';
 
-// v0.13: Dispatch steps replace LLM-generated thinking prose.
-// Each step is formatted like: "[Web Search] Search: Nairobi weather"
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface DispatchStep {
-  label: string;   // e.g. "Web Search"
-  detail: string; // e.g. "Search: Nairobi weather"
-  icon?: string;   // intent name for coloring
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function parseDispatchSteps(text: string): string {
-  // If the thinking text is a structured step line, parse and render it.
-  // Format: "[Label] Detail text"
-  const match = text.match(/^\[(.+?)\]\s*(.+)$/);
-  if (match) {
-    return `${match[1]}: ${match[2]}`;
-  }
-  return text;
-}
-
+// v0.13: Dispatch steps replace LLM-generated thinking prose. A step line
+// looks like "[Web Search] Search: Nairobi weather" — the label is shown as
+// a colored chip and the detail as the body.
 function getIntentColor(intent: string): string {
   const colors: Record<string, string> = {
     chat: 'text-brand-green-muted',
@@ -45,12 +29,30 @@ interface ThinkingBlockProps {
   thinking: ThinkingStep | string;
   thinkMs?: number;
   /** Whether the parent message is still being streamed. When true, the
-   *  block starts expanded so the user sees the thinking process in real-time.
-   *  Once streaming ends, it auto-collapses to save space. */
+   *  block starts expanded so the user watches the reasoning arrive in
+   *  real-time (with a live caret + animated indicator). Once streaming
+   *  ends, it auto-collapses to save space. */
   isStreaming?: boolean;
 }
 
+// Three-dot "thinking" indicator — pulses while the model is reasoning.
+function ThinkingDots({ reduceMotion }: { reduceMotion: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-0.5" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="h-1 w-1 rounded-full bg-brand-amber"
+          animate={reduceMotion ? { opacity: 0.8 } : { opacity: [0.25, 1, 0.25] }}
+          transition={reduceMotion ? undefined : { duration: 1.1, repeat: Infinity, ease: 'easeInOut', delay: i * 0.18 }}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockProps) {
+  const reduceMotion = !!useReducedMotion();
   // Start expanded during streaming so thinking content is visible.
   // Collapse automatically when streaming finishes.
   const [collapsed, setCollapsed] = useState(!isStreaming);
@@ -66,7 +68,7 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
   }, [isStreaming]);
 
   const content = typeof thinking === 'string' ? thinking : thinking.content;
-  const duration = thinkMs || (typeof thinking === 'object' ? undefined : undefined);
+  const duration = thinkMs;
 
   // v0.13: Parse structured step lines from the thinking stream.
   // A step line looks like: "[Web Search] Search: Nairobi weather"
@@ -75,38 +77,80 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
   const stepColor = stepLabel ? getIntentColor(stepLabel.replace(/\s+/g, '_').toLowerCase()) : '';
 
   return (
-    <div className="mb-2 border border-brand-border rounded-md overflow-hidden">
+    <motion.div
+      initial={reduceMotion ? false : { opacity: 0, y: 3 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, ease: 'easeOut' }}
+      className={`mb-2 overflow-hidden rounded-md border ${
+        isStreaming ? 'border-brand-amber/30' : 'border-brand-border'
+      }`}
+    >
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center gap-2 w-full px-3 py-1.5 bg-brand-bg-code hover:bg-brand-bg-rail transition-colors text-left"
+        className="flex w-full items-center gap-2 bg-brand-bg-code px-3 py-1.5 text-left transition-colors hover:bg-brand-bg-rail"
       >
         <ChevronRight
-          className={`h-3 w-3 text-brand-green-muted transition-transform shrink-0 ${
-            !collapsed ? 'rotate-90' : ''
+          className={`h-3 w-3 shrink-0 text-brand-green-muted transition-transform ${!collapsed ? 'rotate-90' : ''}`}
+        />
+        <Brain
+          className={`h-3 w-3 shrink-0 ${stepColor || (isStreaming ? 'text-brand-amber' : 'text-brand-green-muted')} ${
+            isStreaming && !reduceMotion ? 'animate-pulse' : ''
           }`}
         />
-        <Brain className={`h-3 w-3 shrink-0 ${stepColor || 'text-brand-amber'}`} />
-        <span className={`text-[10px] uppercase tracking-wider font-medium ${stepColor || 'text-brand-green-muted'}`}>
-          {stepLabel || 'Thinking'}
+        <span className={`text-[10px] font-medium uppercase tracking-wider ${stepColor || (isStreaming ? 'text-brand-amber' : 'text-brand-green-muted')}`}>
+          {stepLabel || (isStreaming ? 'Thinking' : 'Thought process')}
         </span>
-        {duration !== undefined && duration > 0 && (
-          <span className="text-[9px] text-brand-amber ml-auto">
-            {duration >= 1000 ? `${(duration / 1000).toFixed(1)}s` : `${duration}ms`}
-          </span>
+        {isStreaming ? (
+          <ThinkingDots reduceMotion={reduceMotion} />
+        ) : (
+          duration !== undefined && duration > 0 && (
+            <span className="ml-auto text-[9px] text-brand-amber">
+              {duration >= 1000 ? `${(duration / 1000).toFixed(1)}s` : `${duration}ms`}
+            </span>
+          )
         )}
       </button>
-      {!collapsed && (
-        <div className="px-3 py-2 text-[11px] text-brand-green-muted whitespace-pre-wrap leading-relaxed border-t border-brand-border bg-brand-bg-dark break-words overflow-hidden">
-          {stepLabel ? (
-            <div className="flex items-start gap-2">
-              <Terminal className={`h-3 w-3 mt-0.5 shrink-0 ${stepColor}`} />
-              <span>{content}</span>
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            initial={reduceMotion ? false : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={reduceMotion ? undefined : { opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="overflow-hidden border-t border-brand-border bg-brand-bg-dark"
+          >
+            <div className="whitespace-pre-wrap break-words px-3 py-2 text-[11px] leading-relaxed text-brand-green-muted">
+              {stepLabel ? (
+                <div className="flex items-start gap-2">
+                  <Terminal className={`mt-0.5 h-3 w-3 shrink-0 ${stepColor}`} />
+                  <span>
+                    {content}
+                    {isStreaming && <LiveCaret reduceMotion={reduceMotion} />}
+                  </span>
+                </div>
+              ) : (
+                <>
+                  {content}
+                  {isStreaming && <LiveCaret reduceMotion={reduceMotion} />}
+                </>
+              )}
             </div>
-          ) : (
-            content
-          )}
-        </div>
-      )}
-    </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// Blinking caret rendered at the end of the streaming reasoning text, so the
+// block reads as if it is being written live token-by-token.
+function LiveCaret({ reduceMotion }: { reduceMotion: boolean }) {
+  return (
+    <motion.span
+      className="ml-0.5 inline-block h-[0.95em] w-[2px] translate-y-[2px] bg-brand-green"
+      aria-hidden="true"
+      animate={reduceMotion ? { opacity: 1 } : { opacity: [1, 0.15, 1] }}
+      transition={reduceMotion ? undefined : { duration: 0.9, repeat: Infinity, ease: 'linear' }}
+    />
   );
 }
