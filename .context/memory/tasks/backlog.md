@@ -254,3 +254,21 @@ don't remove the line.
 
 ---
 - [ ] **[Medium] B-2026-08-14-6 — Live-model validation for parent initialization (ADR-33)** — when a free provider credential is available, run a real LocalMind smoke matrix for direct conversation, clarification, current-data tool work, a multi-step local task, malformed initialization output, and terminal provider failure. Verify the visible order `acknowledgement → agent_initialize → plan/todos → action → evidence → final synthesis`, initialization JSON latency, and no raw JSON/reasoning leakage. See `.context/memory/reviews/2026-08-14-review-27.md`.
+
+---
+- [ ] **[Critical] B-2026-08-14-7 — Parent bootstrap and fast public thinker (ADR-34 P0)** — Reorder the parent turn so the transport acknowledgement is immediate and the compact model-owned initializer starts without waiting behind nonessential memory/attachment/full-context work. Emit bounded public understanding, acknowledgement, next action, and plan events; never expose raw chain-of-thought or initialization JSON. Acceptance: acknowledgement ≤250ms, first public thinker/next-action event ≤5s with a healthy provider, direct/clarify/execute all remain parent-owned, and terminal provider errors still fail fast. Real-provider smoke is mandatory.
+
+---
+- [ ] **[Critical] B-2026-08-14-8 — Parent evidence and final-synthesis boundary (ADR-34 P0)** — Make tool results a bounded parent context/evidence envelope first. Stream evidence separately to Agent/Actions/Terminal nodes, but prevent tool output, worker reports, or child prose from populating the assistant final-answer channel. Parent synthesis must explicitly reconcile evidence and produce the only final chat content. Add regressions for search/tool result conflict, tool failure, delegated output, and empty synthesis.
+
+---
+- [ ] **[High] B-2026-08-14-9 — Agent Workspace as the canonical live UI (ADR-34 P1)** — Auto-activate Agents when initialization starts and replace the passive run/tool tree with a normalized event reducer for understanding, acknowledgement, plan/todos, tool start/evidence/completion, child agents, verification, replan, errors, and synthesis. Keep Actions for action detail, Terminal for shell detail, and chat for user/parent conversation. The same reducer must drive all live nodes to avoid panel drift.
+
+---
+- [ ] **[High] B-2026-08-14-10 — Retire Observe/pipeline and product-facing intents (ADR-34 P2)** — Remove the right-panel Observe tab, `Intent Classification`, intent badges/SSE presentation, and the `Intent Classify → ... → Execute` visualization. Fold useful stage timing and diagnostics into Agent Workspace node details. Keep internal compatibility fields only during migration; no new routing may use intent. Add UI regressions proving no Observe/intent surface is rendered.
+
+---
+- [ ] **[High] B-2026-08-14-11 — Chat-shell cleanup: title bar, duplicated tool cards, Autonomous work (ADR-34 P2)** — Add a deliberate cross-platform Electron title-bar shell; remove duplicated full ToolSteps/tool-result presentation from chat while retaining concise status; remove the normal-chat `Autonomous work` block and preserve objective APIs until a separate background-work decision. Add browser/Electron-safe interaction and accessibility tests.
+
+---
+- [ ] **[High] B-2026-08-14-12 — Stage-specific prompt budget and model profile (ADR-34 P3)** — Measure initialization separately from execution. Replace the full initialization tool catalog with compact capability summaries, load full schemas only after execute is selected, and compress static prompts/tool descriptions. Evaluate a low-latency thinker model/profile without adding a dispatcher or intent classifier. Acceptance: initialization and execution budgets are recorded independently; first public decision meets the 5s healthy-provider target where the model permits; real-model smoke covers malformed output and provider failure.

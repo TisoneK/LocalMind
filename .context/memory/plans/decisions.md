@@ -903,3 +903,82 @@ manifest: `.context/memory/features/fail-fast-provider-errors/manifest.md`.
 - **Validation:** backend 1,784 passed / 2 skipped; frontend 178 passed;
   TypeScript/build/Ruff passed; ESLint 0 errors / 64 existing warnings. No
   live-provider smoke was available.
+
+---
+## ADR-34: Parent-first realtime workspace contract (2026-08-14)
+
+- **Author:** Buffy / openai/gpt-5.6-luna (Session 223)
+- **Status:** proposed — context/research only; no product code changed
+- **Context:** ADR-33 correctly moved request interpretation into a model-owned
+  parent initialization call, but code-verified review shows the initialization
+  call still waits behind memory retrieval, attachment parsing, and full context
+  assembly. The UI then splits one execution across chat `ToolSteps`, the left
+  Actions tab, the right Observe pipeline, Terminal, and a mostly passive Agents
+  tab. Tool evidence can therefore look like the final assistant answer, while
+  the user does not see a coherent parent-agent lifecycle.
+- **Decision:** LocalMind's user-facing execution contract is one parent-owned
+  realtime loop:
+
+  ```text
+  receive → acknowledge → fast thinker/understand → plan → act
+  → evidence to parent + live nodes → verify/replan → parent synthesize → done
+  ```
+
+  1. **Parent initialization stays the sole interpretation boundary.** Do not
+     add prompt-specific regexes, deterministic greeting exceptions, or a new
+     intent classifier. The initializer returns bounded public fields for
+     understanding, acknowledgement, mode, next action/plan, capabilities,
+     clarification, and success criteria. Raw chain-of-thought and raw JSON
+     remain private.
+  2. **Bootstrap is visible and latency-bounded.** Emit a transport-level
+     acknowledgement immediately, without pretending it is model thinking.
+     Start the compact thinker without waiting for nonessential memory/context
+     assembly. Target: acknowledgement ≤250ms and first public understanding or
+     next-action event ≤5s when the provider is healthy. A complete remote/free
+     provider answer is not guaranteed under 5s; time-to-first-feedback and
+     time-to-first-decision are the measurable SLOs.
+  3. **Evidence has one owner.** Every tool result is returned to the parent
+     model as bounded evidence/context before synthesis. The UI may stream the
+     same evidence into Agent, Actions, and Terminal nodes, but tool output must
+     not populate the assistant's final answer. Only parent synthesis may emit
+     final chat content.
+  4. **Agent Workspace is the primary live surface.** Initialization activates
+     the Agents tab automatically. A normalized event reducer renders parent
+     and child nodes with public understanding, acknowledgement, plan/todos,
+     tool calls, evidence, verification, replan, errors, and synthesis state.
+     Actions and Terminal remain focused detail surfaces; chat remains the
+     conversation/final-answer surface.
+  5. **Retire Observe as a product pipeline.** Remove the user-facing Observe
+     tab and its `Intent Classify → ... → Execute` visualization. Preserve
+     backend timing/diagnostic telemetry, but render useful stage data inside
+     the relevant Agent node or run details instead of a parallel pipeline UI.
+  6. **Retire intent as a product contract.** Remove intent badges, intent
+     classification UI/events, and intent-based routing decisions from the new
+     surface. Internal `Intent` compatibility fields may remain temporarily at
+     migration seams, but no new routing, UI, or lifecycle behavior may depend
+     on them.
+  7. **Simplify the shell.** Replace the default Electron title-bar experience
+     with a deliberate LocalMind chrome design while preserving native window
+     controls, platform drag/accessibility behavior, and browser fallback. Remove
+     the normal-chat `Autonomous work` block from the sidebar; background
+     objective persistence/API requires a separate product decision before any
+     deletion.
+  8. **Budget the prompts by stage.** Initialization receives a compact
+     capability summary, not the full tool JSON schema. Full tool contracts are
+     loaded only for the selected execution path. Measure initialization and
+     execution prompts independently; do not pay the old 5K+ static floor on
+     every chained call.
+- **Consequences:** The Agent Workspace becomes the canonical visual model of
+  agent state, and the chat transcript can no longer be mistaken for a tool
+  console. The first model call becomes a fast public decision stage, while
+  tool execution remains a closed loop with parent-mediated synthesis. Internal
+  telemetry survives the Observe UI removal, so debugging does not regress.
+- **Acceptance evidence:** A live matrix must show the event order
+  `acknowledgement → agent_initialize/understanding → plan → action → evidence
+  → parent synthesis`, no tool result as final assistant content, automatic
+  Agents activation, no user-facing intent/Observe pipeline, first public
+  thinker event within 5s under a healthy provider, and initialization/tool
+  prompts below their stage budgets. Real-provider validation is mandatory.
+- **Builds on:** ADR-5, ADR-8, ADR-17, ADR-18, ADR-22, ADR-30, ADR-32, and
+  ADR-33. It supersedes the user-facing Observe pipeline and intent surfaces,
+  not the backend observability collector or parent/delegation runtime.

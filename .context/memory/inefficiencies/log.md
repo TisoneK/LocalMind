@@ -623,3 +623,20 @@ if literally nothing slowed you down.
   new prompt exception to the old boundary. Trace the owner of the decision, move
   that decision into the correct runtime primitive, and add a regression proving the
   old branch is not live.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 223)
+
+- **Problem:** After ADR-33, it was tempting to declare the agent UX solved
+  because every turn now reaches a model-owned initializer. The user correctly
+  identified that the visible experience still starts with context work, splits
+  tool output across chat/Actions/Observe, and leaves the Agents workspace passive.
+- **Cause:** The runtime ownership fix and the presentation/transport contract
+  were treated as separate concerns, but the user experiences them as one loop.
+  Initialization is model-owned in code yet not first in the observable timeline;
+  evidence is parent-owned in code yet not clearly separated from final chat
+  content.
+- **Prevent next time:** For agentic UX work, audit event ordering and rendering
+  ownership together. A typed decision is insufficient unless its public lifecycle
+  events, evidence boundary, active workspace, and final synthesis channel are
+  all explicit and tested end-to-end.

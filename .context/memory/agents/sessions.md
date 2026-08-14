@@ -3124,3 +3124,16 @@ program + ADR-22). -->
 - **Validation:** backend `1,784 passed, 2 skipped`; frontend `178 passed`; TypeScript/build/Ruff passed; ESLint 0 errors / 64 existing warnings; no live-provider smoke because credentials were unavailable.
 - **Report:** `.context/memory/reviews/2026-08-14-review-27.md`. **Notes:** `.context/memory/sessions/2026-08-14-222/notes.md`.
 - **Open items:** real-model smoke should verify initialization JSON speed/robustness and the live acknowledgement → plan → action → evidence sequence.
+
+---
+## 2026-08-14 — Session 223
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none (context/research only)
+- **ADR:** ADR-34 — Parent-first realtime workspace contract.
+- **Task:** Research and record the architecture/UI changes needed for visible fast parent thinking, acknowledgement-first execution, parent-mediated tool evidence, Agent Workspace activation, Observe/intent retirement, shell cleanup, and prompt-budget latency targets.
+- **Commits:** context closeout only; no product code changed.
+- **Outcome:** done — code-verified that ADR-33 owns interpretation but starts initialization after memory/context assembly; Actions and chat both render tool detail; Observe remains the default pipeline surface; Agents is passive; Electron uses default chrome; Autonomous work remains in the sidebar; and historical ADR-17 measurements still explain the >5s experience. ADR-34 and backlog items B-2026-08-14-7 through -12 record the unified implementation direction.
+- **Validation:** context-only audit; no product suite run by design. Prior product baseline remains backend 1,784 passed / 2 skipped and frontend 178 passed; no live-provider validation available in this session.
+- **Report:** `.context/memory/reviews/2026-08-14-review-28.md`. **Notes:** `.context/memory/sessions/2026-08-14-223/notes.md`.
+- **Open items:** all ADR-34 implementation items remain intentionally open for product sessions; B-2026-08-14-6 remains the live ADR-33 smoke prerequisite.

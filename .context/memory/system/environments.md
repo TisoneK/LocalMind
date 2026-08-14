@@ -131,6 +131,10 @@ block (and its "last verified" date) every time you run on it again.
   - `cd backend && sed 's|readme = "../README.md"|readme = "README.local.md"|' pyproject.toml > pyproject.install.toml && cp ../README.md ./README.local.md && mv pyproject.toml pyproject.orig.toml && mv pyproject.install.toml pyproject.toml && uv pip install --python .venv/bin/python -e '.[dev]' && mv pyproject.orig.toml pyproject.toml && rm -f README.local.md` → workaround for hatchling refusing `readme = "../README.md"` outside project dir. **Hatchling bug — uv `sync` doesn't work directly.** Use this pattern.
   - `cd backend && .venv/bin/ruff check .` → clean
   - `cd backend && .venv/bin/python -m pytest --co -q` → 1496 tests collected (matches Session 175's run)
+  - Session 223 context-only audit (macOS 15 / Darwin 24.6.0): no product
+    validation run by design; prior Session 222 backend/frontend baseline is
+    retained above. `context-sync verify` and `context-sync status` were run
+    before the audit.
 - **Quirks:** The `python` command is 3.12.13 (good). Hatchling rejects
   `readme = "../README.md"` in `pyproject.toml` because the path is
   outside the backend project dir — workaround documented above. The
