@@ -200,6 +200,25 @@ Four implementation phases (multi-session):
      is likely involved") rather than the router. Or it could be
      removed entirely if the task-type classifier is good enough. TBD.
 
+## Session 194 — Phase 4 track 2: find_path catalog contract (glob/grep-style, shipped)
+
+- **What:** the user's design push — "why can't find_path work like Glob or Grep:
+  find ALL files and paths once, then the agent filters or asks clarification?"
+  find_path evolved from a one-shot capped lookup into a CATALOG enumeration:
+  walk once (2.5s time budget, not a result cap), cache the walk (bounded TTL),
+  and serve every follow-up — "show more", "only pdf", "in Documents" — as
+  instant in-memory filtering/pagination. Output is a catalog (total + folder/
+  type breakdown + small page) so context stays bounded while NOTHING is
+  silently hidden. The deterministic file-ops picker now chooses from the FULL
+  catalog (all_paths), and the ambiguous ask shows a ranked shortlist.
+- **Files:** `tools/find_path.py` (walker/cache/filters/pagination/catalog),
+  `core/file_ops.py` (spec filters, catalog fields, format_top_candidates,
+  shared _score_match), `thinking_dispatcher.py` (continuation signal args),
+  `engine/_pipeline.py` (spec pass-through, ranked ambiguous ask).
+- **Tests:** 22 new; backend **1728 green**. Backlog: route the ambiguous-ask
+  reply ("open CV-Tisone.docx") through the deterministic chain, not the
+  agent-loop follow-up path.
+
 ## Session 193 — Phase 4 track 2: deterministic file-ops execution layer (shipped)
 
 - **What:** file operations became RUNTIME behavior, not model choices, for
