@@ -2853,3 +2853,14 @@ program + ADR-22). -->
 - **Report:** `.context/memory/reviews/2026-08-14-review-6.md`.
 - **Limitation:** no local provider credential for a new real-model smoke; existing deterministic AgentLoop contracts and full CI passed.
 - **Open items:** live parent/delegation smoke; B-2026-08-14-2 workspace safety for parallel mutation; B-2026-08-14-3 bounded parent-facing delegated results.
+
+---
+## 2026-08-14 — Session 202
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Implement the full frontend Agent workspace for LocalMind's parent and delegated child runs.
+- **Outcome:** done — added live `AgentRun` state to `useChat`, nested `AgentWorkspace` presentation, and an `Agents` tab in the right workspace panel. Existing SSE delegation lifecycle and tagged child-tool events are reused; no backend transport change.
+- **Validation:** frontend 142 tests passed, TypeScript/build passed, ESLint 0 errors / 64 existing warnings, diff check clean.
+- **Report:** `.context/memory/reviews/2026-08-14-review-7.md`.
+- **Limitation:** live-turn tree only; historical replay and per-child retry/resume controls remain deferred.

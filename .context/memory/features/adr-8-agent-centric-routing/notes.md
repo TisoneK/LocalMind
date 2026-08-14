@@ -987,3 +987,19 @@ source and architecture docs, while retaining isolated dispatcher/graph data
 contracts for standalone tests and migration tooling. Full CI passed with 1742
 backend tests, 2 skips, Ruff/tsc clean, and ESLint 0 errors / 64 existing
 warnings. Review: `.context/memory/reviews/2026-08-14-review-6.md`.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 202)
+
+Implemented the first full frontend Agent workspace slice after the parent
+runtime migration. The backend already exposes delegation lifecycle events and
+ChildObsProxy forwards tagged child tool progress, so the UI needed no new SSE
+transport. `useChat` now maintains a live parent-rooted run tree, `AgentRun`
+metadata identifies child ownership, and `AgentWorkspace` renders expandable
+parent/child nodes with task, status, timing, tool counts, child tools, and
+failure detail. The right workspace panel exposes it as an `Agents` tab.
+
+Added hook and component regression tests. Frontend validation passed: 142
+Vitest tests, TypeScript, production build, and ESLint with 0 errors / 64
+existing warnings. Historical run-tree replay and per-child retry/resume
+controls remain deferred. Review: `.context/memory/reviews/2026-08-14-review-7.md`.

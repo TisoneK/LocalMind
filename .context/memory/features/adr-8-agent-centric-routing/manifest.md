@@ -344,3 +344,16 @@ Four implementation phases (multi-session):
   errors / 64 existing warnings. No local provider credential was available
   for a new real-model smoke; this is recorded in review-6.
 - **Report:** `.context/memory/reviews/2026-08-14-review-6.md`.
+
+## Session 202 — Full frontend Agent workspace (completed)
+
+- **What:** exposed the LocalMind parent/child run tree in the existing
+  workspace without changing backend SSE transport.
+- **Implementation:** `useChat` now projects delegation lifecycle and tagged
+  child tool events into live `AgentRun` state; `AgentWorkspace` renders the
+  expandable nested tree; `RightPanel` adds the `Agents` tab and
+  `WorkspaceLayout` wires the state through.
+- **Validation:** frontend **142 tests passed**, TypeScript/build passed,
+  ESLint 0 errors / 64 existing warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review-7.md`.
+- **Deferred:** historical run-tree replay and per-child retry/resume controls.
