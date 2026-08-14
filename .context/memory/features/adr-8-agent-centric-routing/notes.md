@@ -1119,3 +1119,32 @@ and was rerun correctly; ESLint finished with 0 errors and 64 existing warnings.
 
 Product commit: `06943b6`; review:
 `.context/memory/reviews/2026-08-14-review-13.md`.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 209)
+
+The supplied example agent makes tool work visibly intermediate: it acknowledges,
+plans, acts, shows evidence, then decides what to do next before reporting a
+final result. LocalMind still violated that contract for web search because
+three AgentLoop branches called `_handle_web_search_result()` and returned after
+the first search.
+
+Removed the terminal shortcut from native, MiniMax/text-encoded, and late
+intercepted search calls. Search results now enter the parent conversation as a
+normal tool observation, allowing a second parent decision for fetch, replan,
+verification, delegation, or final synthesis. The helper remains for compatibility
+unit coverage but is no longer a live terminal path.
+
+Added a deterministic parent-loop regression proving that the second model
+decision receives the actual search output and that the search evidence is not
+itself emitted as the final chat answer. Existing SSE/UI handling already exposes
+plan todos, tool actions/results, terminal output, statuses, and final tokens, so
+no frontend change was necessary. Raw provider chain-of-thought remains private;
+concise plan/action/verification statuses are the visible thinking surface.
+
+Validation: full backend 1756 passed / 2 skipped; frontend 141 passed;
+TypeScript/build passed; changed-file Ruff passed; ESLint 0 errors / 64 existing
+warnings. No live-provider smoke due unavailable local credentials.
+
+Product commit: `5c2cfbd`; review:
+`.context/memory/reviews/2026-08-14-review-14.md`.

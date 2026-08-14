@@ -799,3 +799,13 @@ After the smoke test passes, test a multi-step task (e.g. "Create hello world re
 - **Decision:** `_event_stream()` must emit a concise `status_update` as its first SSE event, before title persistence, memory retrieval, adapter setup, or model generation. This is a transport acknowledgement, not a second router or a substitute for the parent-agent workflow.
 - **Consequences:** Native clients and proxies receive an immediate payload and can distinguish transport delay from provider generation latency. Greetings remain deterministic and tool-free; substantive turns still use the parent-agent loop. The first acknowledgement does not reduce the selected model's final-answer generation time.
 - **Product commit:** `06943b6`.
+
+---
+## ADR-29: Tool observations remain inside the parent workflow (2026-08-14)
+
+- **Author:** Buffy / openai/gpt-5.6-luna (Session 209)
+- **Status:** accepted + implemented
+- **Context:** LocalMind exposed plan/status/tool events, but the live `web_search` path treated a successful search as terminal. It synthesized and emitted the search result before the parent could inspect evidence, fetch a source, replan, verify, or produce a separate final answer. This reduced the workflow to `user → tool → answer` instead of the example-agent loop.
+- **Decision:** A tool result is always an intermediate observation unless a runtime-owned completion contract explicitly closes the turn. Search results must be appended to the parent conversation as a tool message; the parent then owns the next decision and may continue, delegate, verify, replan, or synthesize. Native and text-encoded/intercepted tool calls follow the same boundary.
+- **Consequences:** Tool cards, terminal output, todos, and concise lifecycle statuses remain visible in real time through the existing SSE bridge. The frontend does not need a second tool-result-to-chat path. Raw provider chain-of-thought remains private; user-visible thinking is structured plan/action/verification progress. The compatibility web-search helper remains available for direct unit callers but is not a live terminal shortcut.
+- **Product commit:** `5c2cfbd`.

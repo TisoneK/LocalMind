@@ -448,3 +448,22 @@ Four implementation phases (multi-session):
 - **Notes:** `.context/memory/sessions/2026-08-14-208/notes.md`.
 - **Limitation:** no live-provider smoke; final answer latency remains dependent
   on the selected provider/model.
+
+## Session 209 — Parent-owned tool observation workflow (completed)
+
+- **What:** restored the missing parent-agent continuation boundary. Successful
+  web searches no longer become terminal chat answers before the parent can
+  inspect, follow up, verify, replan, or synthesize.
+- **Implementation:** removed the web-search terminal shortcuts from native,
+  MiniMax/text-encoded, and late-intercepted AgentLoop branches. Search output
+  now returns as a normal `tool` observation and the parent makes the next
+  decision. The existing SSE/UI event surface already renders todos, actions,
+  terminal output, statuses, and final tokens, so no frontend change was needed.
+- **Validation:** backend **1756 passed, 2 skipped**; frontend **141 passed**;
+  TypeScript/build passed; changed-file Ruff passed; ESLint 0 errors / 64
+  existing warnings.
+- **Product commit:** `5c2cfbd`.
+- **Report:** `.context/memory/reviews/2026-08-14-review-14.md`.
+- **Notes:** `.context/memory/sessions/2026-08-14-209/notes.md`.
+- **Limitation:** no live-provider smoke; local provider credentials were
+  unavailable.

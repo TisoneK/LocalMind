@@ -517,3 +517,21 @@ if literally nothing slowed you down.
 - **Prevent next time:** Use the recorded package boundary: backend checks from
   the repo root with `backend/.venv/bin/python`; frontend npm checks from
   `frontend/`.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 209)
+
+- **Problem:** The user-facing transcript still felt like `prompt → tool →
+  answer`, despite existing plan/status/tool UI. The live web-search path ended
+  the parent turn before the parent could decide what to do with search evidence.
+- **Cost:** One architecture trace and one focused regression slice; no frontend
+  rewrite was needed.
+- **Cause:** Three duplicated web-search branches in AgentLoop called the legacy
+  synthesis helper and returned terminal chunks directly. The normal tool-message
+  continuation path was bypassed only for web search.
+- **Workaround / fix:** Removed the terminal shortcut from native, MiniMax/text,
+  and late-intercepted calls. Search results now follow the ordinary tool-message
+  path and the parent makes the next decision. Added a second-decision regression.
+- **Prevent next time:** When adding a special tool handler, test that successful
+  output re-enters the parent loop and that only a verified parent response emits
+  `done`; never infer completion from tool success alone.
