@@ -1098,3 +1098,24 @@ Added deterministic workflow-progress regressions and updated the parent
 runtime contract test to consume the new acknowledgement before inspecting
 captured loop arguments. Product commit: `0f65c22`; review:
 `.context/memory/reviews/2026-08-14-review-12.md`.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 208)
+
+The user reported 9–15 seconds before LocalMind visibly responded. Investigation
+separated the existing zero-LLM social greeting path from provider generation:
+greetings were already deterministic, but the backend chat transport emitted no
+server event until after its synchronous request prelude.
+
+The chat SSE generator now yields `status_update` as its first event, before
+first-turn title persistence, memory retrieval, adapter construction, and model
+generation. This makes the wire-level acknowledgement immediate without adding a
+router, bypassing the parent agent, or claiming to reduce model generation time.
+
+Added an API regression for first-event ordering. Full backend (1755 passed, 2
+skipped), frontend (141), TypeScript/build, and changed-file Ruff passed. The
+initial frontend command was run from the repository root instead of `frontend/`
+and was rerun correctly; ESLint finished with 0 errors and 64 existing warnings.
+
+Product commit: `06943b6`; review:
+`.context/memory/reviews/2026-08-14-review-13.md`.

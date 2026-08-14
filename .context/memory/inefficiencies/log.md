@@ -501,3 +501,19 @@ if literally nothing slowed you down.
   passed.
 - **Prevent next time:** Reuse the actual planner output contract when testing
   plan parsing, including concrete step wording that survives filler filtering.
+
+---
+## 2026-08-14 — Buffy / openai/gpt-5.6-luna (Session 208)
+
+- **Problem:** The first frontend validation command ran from the repository root,
+  where no `package.json` or root `tsconfig.json` exists; both npm test and
+  TypeScript failed before running project checks.
+- **Cost:** One parallel validation pass and a short rerun.
+- **Cause:** The frontend package is under `frontend/`, while backend commands use
+  the repository root with the project-local backend venv.
+- **Workaround / fix:** Read `frontend/package.json` and reran `npm test -- --run`
+  plus `npx tsc -b && npm run lint && npm run build` with `cwd=frontend`; all
+  passed.
+- **Prevent next time:** Use the recorded package boundary: backend checks from
+  the repo root with `backend/.venv/bin/python`; frontend npm checks from
+  `frontend/`.

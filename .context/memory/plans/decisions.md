@@ -789,3 +789,13 @@ After the smoke test passes, test a multi-step task (e.g. "Create hello world re
   concise status events rather than exposing raw chain-of-thought/provider
   markup.
 - **Product commit:** `0f65c22`.
+
+---
+## ADR-28: First SSE event is transport acknowledgement (2026-08-14)
+
+- **Author:** Buffy / openai/gpt-5.6-luna (Session 208)
+- **Status:** accepted + implemented
+- **Context:** The frontend had a local assistant placeholder, but the chat endpoint performed synchronous prelude work before emitting any server event. Slow/cold clients could see 9–15 seconds of apparent silence even when the agent had begun handling the request.
+- **Decision:** `_event_stream()` must emit a concise `status_update` as its first SSE event, before title persistence, memory retrieval, adapter setup, or model generation. This is a transport acknowledgement, not a second router or a substitute for the parent-agent workflow.
+- **Consequences:** Native clients and proxies receive an immediate payload and can distinguish transport delay from provider generation latency. Greetings remain deterministic and tool-free; substantive turns still use the parent-agent loop. The first acknowledgement does not reduce the selected model's final-answer generation time.
+- **Product commit:** `06943b6`.

@@ -431,3 +431,20 @@ Four implementation phases (multi-session):
 - **Notes:** `.context/memory/sessions/2026-08-14-207/notes.md`.
 - **Limitation:** no live-provider smoke; local provider credentials were
   unavailable.
+
+## Session 208 — Immediate SSE acknowledgement (completed)
+
+- **What:** separated transport acknowledgement latency from provider/model
+  generation latency after the user reported 9–15 seconds of apparent silence.
+- **Implementation:** `_event_stream()` now emits a first-class `status_update`
+  before title persistence, memory retrieval, adapter setup, or model generation.
+  Parent-agent routing, direct greeting behavior, SSE keepalives, persistence, and
+  delegated-output privacy remain unchanged.
+- **Validation:** backend **1755 passed, 2 skipped**; frontend **141 passed**;
+  TypeScript/build passed; changed-file Ruff passed; ESLint **0 errors / 64
+  existing warnings**.
+- **Product commit:** `06943b6`.
+- **Report:** `.context/memory/reviews/2026-08-14-review-13.md`.
+- **Notes:** `.context/memory/sessions/2026-08-14-208/notes.md`.
+- **Limitation:** no live-provider smoke; final answer latency remains dependent
+  on the selected provider/model.

@@ -2927,3 +2927,16 @@ program + ADR-22). -->
 - **Report:** `.context/memory/reviews/2026-08-14-review-12.md`.
 - **Notes:** `.context/memory/sessions/2026-08-14-207/notes.md`.
 - **Limitation:** no live-provider smoke; local provider credentials were unavailable.
+
+---
+## 2026-08-14 — Session 208
+
+- **Agent:** Buffy / openai/gpt-5.6-luna | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-8-agent-centric-routing
+- **Task:** Reduce apparent chat latency by making the first server response immediate and distinguish transport delay from provider generation.
+- **Commits:** product `06943b6`; context closeout committed separately.
+- **Outcome:** done — `_event_stream()` emits a first-class acknowledgement as the first SSE event, before title persistence and runtime/model prelude work; parent routing and final-answer behavior are unchanged.
+- **Validation:** backend 1755 passed / 2 skipped; frontend 141 passed; TypeScript/build passed; changed-file Ruff passed; ESLint 0 errors / 64 existing warnings.
+- **Report:** `.context/memory/reviews/2026-08-14-review-13.md`.
+- **Notes:** `.context/memory/sessions/2026-08-14-208/notes.md`.
+- **Limitation:** no live-provider smoke; final response time remains provider/model dependent.
