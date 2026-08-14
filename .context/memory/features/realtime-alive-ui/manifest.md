@@ -32,8 +32,13 @@ protocol session; the dark-green brand identity is preserved throughout.
   Done / "Done with errors" / working terminal row. `prefers-reduced-motion`
   honoured; compact mode + all `ToolCall` fields preserved; added
   `ToolSteps.test.tsx` (9 cases). No backend change. Matches Actions*.png.
-- [ ] S211 — Thinking stream: make `ThinkingBlock` feel like live
-  reasoning (streaming cursor, smooth reveal). Matches Thought Process.png.
+- [x] **S211 — Thinking stream** (done 2026-08-14, `779eda3`): live
+  blinking caret trailing the streamed reasoning, pulsing three-dot
+  indicator + brain icon while thinking, framer-motion reveal, idle
+  label "Thought process" + elapsed time. `prefers-reduced-motion`
+  honoured; step parsing + auto-collapse preserved; removed dead
+  `DispatchStep`/`parseDispatchSteps`. Added `ThinkingBlock.test.tsx`
+  (5 cases). Matches Thought Process.png.
 - [ ] S212 — Todos live: animated check-off, progress bar, current-item
   highlight in the Tasks panel / `TodoList`. Matches Todos.png.
 - [ ] S213 — Terminal panel realtime feel (`TerminalPanel`).

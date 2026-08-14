@@ -44,3 +44,21 @@ enter, `useReducedMotion` guard, auto-expand-while-streaming) so the
 surfaces feel like one system. `ThinkingBlock` already parses `[Label]
 Detail` step lines and auto-collapses; make the reveal feel like live
 reasoning (streaming cursor / smooth token reveal).
+
+---
+## Session 211 (2026-08-14) — Live thinking stream
+
+Reworked `ThinkingBlock`: `LiveCaret` (blinking bar at end of streamed
+text — thinking content already streams via `thinking_token`), pulsing
+`ThinkingDots` + brain icon in header while streaming, framer-motion
+reveal + `useReducedMotion`, idle label "Thought process" + elapsed
+time. Preserved `[Label] detail` step parsing + auto-collapse. Removed
+dead `DispatchStep`/`parseDispatchSteps`. Added `ThinkingBlock.test.tsx`
+(5 cases). 155 tests / tsc / lint(0 err) / build green. `779eda3` +
+changelog `7f15512`.
+
+Two of the three user screenshots now shipped (Actions S210, Thought
+Process S211). Next: S212 Todos (`ui_improvement/Todos.png`) — the
+Tasks panel `TodoList` / plan checklist. Same principle: data already
+streams; make check-off feel alive (animated tick, progress, current
+highlight). Keep the shared motion vocabulary.

@@ -2968,3 +2968,17 @@ program + ADR-22). -->
 - **Notes:** `.context/memory/features/realtime-alive-ui/notes.md`.
 - **Limitation:** live-app visual pass against `Actions*.png` deferred — harness dual-React quirk + hidden browser pane blocked screenshots; needs a provider credential to drive a real turn.
 - **Open items:** S211 Thinking, S212 Todos, S213 Terminal, S214 Agents, S215 polish (feature manifest); live visual verification.
+
+---
+## 2026-08-14 — Session 211
+
+- **Agent:** Claude Code / claude-opus-4-8 | **Platform:** macOS 15 (Darwin 24.6.0) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** realtime-alive-ui (Session 2)
+- **Task:** Make the reasoning surface feel alive (Thought Process.png) — live-writing thinking stream.
+- **Commits:** 2 product (`779eda3` feat(ui), `7f15512` docs) + 1 context closeout (SHA after push).
+- **Outcome:** done — `ThinkingBlock` now shows a blinking caret trailing the streamed reasoning, a pulsing three-dot indicator + brain icon while thinking, framer-motion reveal, and an idle "Thought process" label with elapsed time. `prefers-reduced-motion` honoured; step parsing + auto-collapse preserved; removed dead `DispatchStep`/`parseDispatchSteps`. No backend change.
+- **Also:** `ThinkingBlock` had zero tests — added `ThinkingBlock.test.tsx` (5 cases).
+- **Validation:** frontend 155 passed (was 150); `tsc -b` clean; ESLint 0 errors / 64 warnings; `vite build` passes.
+- **Report:** `.context/memory/reviews/2026-08-14-review-16.md`.
+- **Limitation:** live-app visual pass deferred (provider credential needed).
+- **Open items:** S212 Todos, S213 Terminal, S214 Agents, S215 polish.
