@@ -200,6 +200,25 @@ Four implementation phases (multi-session):
      is likely involved") rather than the router. Or it could be
      removed entirely if the task-type classifier is good enough. TBD.
 
+## Session 195 — Phase 4 track 2: weather signal + bare <tool_call> leak defense (shipped)
+
+- **What:** live transcript bug — "Whats the weather like in Kitengela now?" misrouted
+  to CHAT (LLM classifier confidence 0.30) and the model's
+  `<tool_call>web_search<arg_key>…</arg_key><arg_value>…</arg_value></tool_call>` markup
+  streamed raw into the bubble. Root fix: deterministic weather→WEB_SEARCH signal
+  (zero LLM, realtime_sensitive; noun-or-question guard so "It's hot in here" never
+  fires). Defense fix: the bare <tool_call>/arg_key/arg_value format added to the
+  Session 127 interception (parse/detect/strip) and the DIRECT path now buffers RAW
+  text so detection can't be hidden by the strip — misrouted requests escalate to the
+  agent loop and the search actually RUNS instead of leaking.
+- **Files:** `thinking_dispatcher.py` (weather signal), `agent/text_tools.py`
+  (`_TOOL_CALL_RE`/`_ARG_KEY_VALUE_RE` format 3), `core/filters.py`
+  (`_TOOL_CALL_TAG_PATTERN`/`_TOOL_CALL_PARTIAL`), `engine/_pipeline.py` (raw-buffer
+  detection).
+- **Tests:** 19 new; backend **1747 green**. Backlog: deterministic engine web_search
+  fast-path for weather (Session 193 file-ops pattern); wire the ambiguous file-ask
+  reply through the deterministic chain.
+
 ## Session 194 — Phase 4 track 2: find_path catalog contract (glob/grep-style, shipped)
 
 - **What:** the user's design push — "why can't find_path work like Glob or Grep:

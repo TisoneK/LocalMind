@@ -2743,3 +2743,30 @@ program + ADR-22). -->
 - **Review:** code-reviewer findings all fixed — honest wording for partial scans (filters narrow the cached walk, they don't search deeper), 60s TTL (was 300s — desktop freshness), capped cached match list (20k) with exact totals, shared `_score_match`, continuation survives the split.
 - **Tests:** 22 new (9 find_path catalog incl. walk-once cache spy, 6 file_ops incl. engine ambiguous-ask zero-model, 7 signal continuation). Full backend **1728 green** (+22 from 1706), ruff clean.
 - **Next:** close the loop on the ambiguous ask — the user's reply ("open CV-Tisone.docx") still routes through the agent-loop follow-up path, not the deterministic chain; wire file follow-ups to the deterministic exact-name read. (backlog)
+---
+## 2026-08-13 — Session 195 (weather signal + bare <tool_call> leak defense)
+- **Agent:** Buffy / deepseek-v4-flash | **Platform:** macOS | **Role:** engineer | **Core:** 0.5.0
+- **Task:** Live transcript bug — "Whats the weather like in Kitengela now?" was misrouted
+  to CHAT (LLM classifier: intent=Conversation, confidence 0.30, tools none) and the
+  model's raw `<tool_call>web_search<arg_key>query</arg_key><arg_value>…</arg_value></tool_call>`
+  markup streamed into the chat bubble. ADR-8 Phase 4 track 2 continuation (signal work).
+- **Done — two layers:**
+  - ROOT (`thinking_dispatcher.py`): deterministic weather→WEB_SEARCH signal — weather
+    noun/verb + place phrase → SINGLE_TOOL web_search plan, zero LLM calls, realtime
+    sensitive. Guards: file/read phrasing blocked; time words not places ("forecast for
+    tomorrow"); code-review tightening — adjectives alone in casual statements ("It's hot
+    in here") don't fire, noun OR interrogative/request form required.
+  - DEFENSE (`text_tools.py` + `filters.py` + `engine/_pipeline.py`): the bare
+    `<tool_call><arg_key>/<arg_value>` format (MiniMax/Claude-style) was invisible to the
+    Session 127 interception — now parsed (`_TOOL_CALL_RE`), detected
+    (`_has_minimax_tool_call`), stripped (`_strip_minimax_tool_calls` +
+    `_filter_system_leaks` incl. unterminated partials), and the DIRECT path buffers RAW
+    chunk text for detection (so the new strip can't hide the escalation trigger) →
+    misrouted requests ESCALATE to the agent loop and the web_search actually runs.
+- **Tests:** 19 new (5 filters, 6 DSML parse/strip, 1 DIRECT <tool_call> escalation
+  asserting intent web_search, 7 weather signal incl. casual-statement guard); 3
+  dispatcher-cache tests moved to non-signal messages (weather is now a zero-LLM signal;
+  Session 149 git precedent). Full backend **1747 green**, ruff clean.
+- **Next (backlog):** deterministic engine web_search fast-path for the weather signal
+  (the Session 193 file-ops pattern) so even the agent-loop's web_search call is
+  guaranteed; wire the ambiguous file-ask reply through the deterministic chain.
