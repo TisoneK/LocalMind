@@ -658,3 +658,12 @@ if literally nothing slowed you down.
 - **Cause:** Freshness logic computes `today = today or date.today()` internally, but the test fixture used a literal date instead of deriving it from `date.today()`.
 - **Workaround / fix:** Fixture dates now relative to today (today + today−6d) via a `_block_date()` helper; assertions reference the same computed strings.
 - **Prevent next time:** Any test whose assertions depend on a calendar date (freshness, "today", aging, TTL) must build fixtures from `date.today()`, never a literal. Also: when a session adds custom window chrome, gate it on the platform that is actually frameless — the previous gate (`window.electronAPI` exists) duplicated native controls on macOS and Windows.
+
+---
+## 2026-08-15 — Claude Code / claude-opus-4-8 (Session 237)
+
+- **Problem:** Could not diagnose/fix the Thinker's real behavior — the zen free tier is exhausted (persistent 429 `FreeUsageLimitError`), so every `/api/chat` request fails immediately. This is THE recurring meta-blocker for Thinker development: ADR-36 mandates live-model validation, but the only configured provider (zen free) is both slow AND rate-limit-exhausted, and has blocked live validation across many sessions.
+- **Cost:** A session that could only diagnose the blocker, not do the requested work.
+- **Cause:** Free-tier provider quota exhaustion + no fallback provider configured.
+- **Fix / recommendation:** For Thinker (and general) development, configure a MORE GENEROUS, FAST free provider — Cerebras (1M tokens/day free) or Groq — instead of relying on zen's small free quota. This unblocks live validation AND fixes the latency complaints. Then Thinker work can actually be observed and validated live (backend from source + curl `/api/chat`, capturing `understanding`/`understanding_details`/`mode`).
+- **Prevent next time:** Before starting a live-validation-dependent session, confirm the provider isn't exhausted (`curl /api/chat` once). If it is, unblock the provider FIRST.
