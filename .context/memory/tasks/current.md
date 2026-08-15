@@ -1,15 +1,12 @@
 # Current Task
 
-No active task (handoff pending).
+No active task.
 
 The next session must read `.context/kickoff.md` before starting work.
 
-- **Next (B-2026-08-15-2 / ADR-35):** greeting latency + token bloat.
-  Measured Session 232: init/classify is only ~880 tok; the ~5k/turn is
-  greetings entering the full EXECUTE loop (big agent system prompt + tool
-  schemas) via weak-model misclassification or `direct`-with-empty-response
-  downgrade (`initialization.py:256-267, 284-286`). Fix: robust direct path
-  (empty-response → single lightweight chat, not the full loop) + init
-  prompt tuning + compact init env_context. **Needs a live zen/laguna
-  trace** (local session can't run the model). Coordinate with Super Z
-  (ADR-34 area). See ADR-35.
+Last: Session 233 (Claude Code / claude-opus-4-8, local) — fixed the
+Settings-modal focus theft (couldn't paste API key) and, via the first
+live zen/laguna trace, fixed the greeting token metric (was counting the
+full unsent context; now reports what was sent — verified 5,138→932).
+B-2026-08-15-2 resolved. Minor perf follow-up: defer build_context for
+direct turns (wasted CPU, not tokens).

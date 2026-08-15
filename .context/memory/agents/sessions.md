@@ -3255,3 +3255,16 @@ program + ADR-22). -->
 - **Outcome:** diagnosed — measured the init/classify call at only ~880 tokens (env ~470 + compact tools), so the ~5k/turn means greetings are entering the FULL execute loop (big agent system prompt + tool schemas), via the weak model returning execute/unparseable JSON or `direct`-with-empty-`response` downgrading to execute (`initialization.py:256-267, 284-286`). Latency is dominated by the free model's ~2.4 tok/s + the large execute prompt. Fix plan in ADR-35 / B-2026-08-15-2.
 - **Coordination:** did NOT ship into Super Z's freshly-built ADR-34 init/routing code blind on a low token budget without a provider trace; handed off as ADR-35 + backlog instead.
 - **Open items:** B-2026-08-15-2 (needs live zen/laguna trace).
+
+---
+
+## 2026-08-15 — Session 233
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS 15 (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** bugfixes — Settings focus + greeting token metric (live-traced)
+- **Task:** User: (1) Settings input loses focus every second (can't paste API key); (2) latency fixed but tokens "doubled" for greetings.
+- **Commits:** 3 product/docs (`09f23b7` fix(ui) focus, `45b75ef` fix(agent) tokens, + 2 changelog) — SHAs `0bbee97`,`c9ef5dd`. Context closeout after push.
+- **Outcome:** done. (1) SettingsModal focus/keydown effect depended on `[onClose]`; RightPanel passes an inline onClose and a live tick re-renders ~every second → effect re-ran and stole input focus. Fixed: run once, latest onClose via ref; +regression test. (2) **First live trace this project** (user added the zen key via Settings; I ran the backend from source + curled `/api/chat`). Found: greeting is already mode=direct, ~2s, one ~930-token call. The ~5k token number was a metric bug — `agent_runtime` approximated the full unsent `build_context` when the provider omitted usage. Fixed to estimate from `init_prompt_chars` for no-tool turns. **Live-verified 5,138→932.**
+- **Coordination:** unloaded `com.localmind.backend` launchd job earlier (user request to stop the app); handled the user's zen key only via the app's own Settings UI (never in chat, never wrote it myself) per the credential-safety rule.
+- **Validation:** frontend 186 pass; backend 1815 pass (4 pre-existing macOS shell/powershell env failures, unrelated — confirmed on baseline). Live trace before/after captured.
+- **Open items:** B-2026-08-15-2 resolved; minor perf follow-up (defer build_context for direct turns).
