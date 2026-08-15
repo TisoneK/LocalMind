@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `human_size` byte-formatting helper is now shared from `core/utils.py` instead of being duplicated in `shell.py` and `filesystem.py`. A bug fix or new unit will now propagate to all callers automatically
 
 ### Fixed
+- Fixed missing spaces in quick replies and the thought process (text like "Hey!Notmuch,justhere…"). Streamed text was having the spaces between fragments trimmed away before being shown; they're now preserved, so replies and reasoning read normally.
 - The "Thought process" now shows the agent's actual reasoning about your request, not a copy of the final answer. Previously, for quick replies, the same text appeared as both the thinking and the answer (and again in the Agent panel); the thinking line now reflects what the agent understood you wanted, kept separate from its reply.
 - Usage-limit and quota errors now appear right away. If your provider reports that you're out of free/daily quota or credits, LocalMind stops immediately and shows the error, instead of retrying for 20+ seconds first.
 - Polished light mode: fixed a few spots (the decision strip under replies, file names on hover, and some row hovers) that used fixed colors and could look wrong or vanish on the new light themes.
