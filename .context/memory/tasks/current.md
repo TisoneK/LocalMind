@@ -58,7 +58,18 @@ Move reasoning INTO the loop, onto evidence:
   synthesis fix ensures a real final answer. NOTE: the Session 238 live trace
   still ends with "✓ 1/1 criteria met" gate text instead of the listing — the
   ADR-37 B-11 synthesis gap is user-visible (B-2026-08-15-11).
-- Then: three-tier routing, rate-limit backoff/recovery for transient RPM.
+- Then: three-tier routing. **Rate-limit backoff/recovery for transient RPM:
+  DONE (Session 240, `6c77b72`)** — gemini's per-minute 429 was misclassified
+  permanent (it embeds "retry in Ns" in the BODY, and says "billing details"
+  on every 429); now a short window recovers invisibly and a long one surfaces
+  in ~600ms instead of hanging. Truly-spent free-tier quota still can't be
+  retried — the durable fix is fewer calls + the prompt diet below.
+- **Prompt diet (NEXT highest-leverage token/latency win, Session 240 measured).**
+  The execute system prompt (`agent/prompts.py build_agent_system_prompt`) is
+  ~6.2k tokens re-sent EVERY loop iteration (~9k prompt tokens/call, ~18k for a
+  2-call "list a folder"). De-dupe (anti-fabrication appears twice) + tier-load
+  rarely-needed rules; validate each cut live (those rules fixed real bugs).
+  Target ~6.2k→~3k. Tools already scoped per intent (Session 124).
 
 ## Already shipped this arc (KEEP; not the cure but real): spacing fix,
 token-metric fix, paste buttons, no trivial theater (direct mode), act-not-ask
