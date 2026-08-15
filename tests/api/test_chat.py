@@ -142,16 +142,17 @@ class TestChat:
         full = "".join(e.get("content", "") for e in events if e.get("type") == "token")
         assert "Hello world" in full
 
-    def test_first_sse_event_is_immediate_acknowledgement(self, client):
-        """The wire must acknowledge a turn before engine/model work starts."""
+    def test_first_sse_event_is_immediate_control_event(self, client):
+        """ADR-37: no hardcoded narration — the first wire event is an immediate
+        obs/control event, not a delayed model token or a stage-name status."""
         with _mock_stream():
             r = client.post("/api/chat", data={"message": "inspect the project", "session_id": "t-ack"})
         events = _parse_sse(r.text)
         assert events
-        assert events[0] == {
-            "type": "status_update",
-            "status": "LocalMind received your message — preparing the next step…",
-        }
+        # The first event is an immediate obs control event (not a narration
+        # status or a model token).
+        assert "obs_event" in events[0]
+        assert events[0]["obs_event"]["type"] == "intent_classified"
 
     def test_emits_done_true(self, client):
         with _mock_stream():

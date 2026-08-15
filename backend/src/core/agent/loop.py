@@ -1301,13 +1301,6 @@ class AgentLoop:
 
         if _obs:
             _obs.emit("agent_loop_start", intent=intent.value)
-        # Keep the user connected while the parent prepares its first action.
-        # This is a concise lifecycle update, never raw model reasoning.
-        yield StreamChunk(
-            text="",
-            done=False,
-            status="I’m preparing an execution plan before using tools…",
-        )
 
         # ── Clarification gate ─────────────────────────────────────────
         if confidence < CLARIFICATION_THRESHOLD and intent in AGENT_INTENTS:
@@ -1403,11 +1396,6 @@ class AgentLoop:
         if _parent_initialization:
             if abort_signal is not None and abort_signal.is_set():
                 raise AgentAbortedError("aborted by user before initialization")
-            yield StreamChunk(
-                text="",
-                done=False,
-                status="I’m understanding the request and deciding how to help…",
-            )
             initialization_started = time.monotonic()
             if _obs:
                 _obs.emit("agent_initialization_start", intent=intent.value)
@@ -1522,29 +1510,11 @@ class AgentLoop:
             # no acknowledgement field but did produce an execute decision).
             if initialization.acknowledgement and not streaming_ack_emitted:
                 yield StreamChunk(text="", done=False, status=initialization.acknowledgement)
-            _first_step = _plan_steps[0].rstrip(".")[:120] if _plan_steps else "the first verifiable action"
-            yield StreamChunk(
-                text="",
-                done=False,
-                status=(
-                    f"Plan ready ({len(_plan_steps)} step"
-                    f"{'s' if len(_plan_steps) != 1 else ''}). Starting with: {_first_step}"
-                ),
-            )
         elif PLAN_ENABLED and intent in AGENT_INTENTS and not initial_tool_result and not skip_planning:
             # B-2026-08-02-2 (A2): check abort before the planning phase — it
             # can take a full model call.
             if abort_signal is not None and abort_signal.is_set():
                 raise AgentAbortedError("aborted by user before planning")
-            # Keep planning visible without exposing raw chain-of-thought or
-            # provider-specific planning markup. The user gets a concise
-            # lifecycle status; the complete plan remains internal evidence
-            # for the execution prompt and task state.
-            yield StreamChunk(
-                text="",
-                done=False,
-                status="I’m creating a short plan before I act…",
-            )
             if _obs:
                 _obs.emit("agent_planning_start", intent=intent.value)
 
@@ -1581,18 +1551,6 @@ class AgentLoop:
             # Parse plan steps and emit as todo items via obs
             # so the frontend's Todos panel shows the execution plan
             _plan_steps = _parse_plan_steps(plan_context)
-            if _plan_steps:
-                _first_step = _plan_steps[0].strip().rstrip(".")[:120]
-                _plan_status = (
-                    f"Plan ready ({len(_plan_steps)} step"
-                    f"{'s' if len(_plan_steps) != 1 else ''}). Starting with: {_first_step}"
-                )
-            else:
-                _plan_status = (
-                    "I couldn’t make a structured plan, so I’m checking the request "
-                    "directly and will verify the result."
-                )
-            yield StreamChunk(text="", done=False, status=_plan_status)
             if _plan_steps and _obs:
                 for i, step in enumerate(_plan_steps):
                     _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
@@ -2127,13 +2085,6 @@ class AgentLoop:
                 )
 
             # ── LLM call with tools ───────────────────────────────────
-            # Keep the user informed during the provider wait. The actual
-            # decision and tool call remain owned by this parent loop.
-            yield StreamChunk(
-                text="",
-                done=False,
-                status="I’m deciding the next action from the current evidence…",
-            )
             # Session 25/31: wrap with a hard timeout to prevent "thinking
             # forever" when the model hangs. Uses PER_CALL_TIMEOUT_SECS
             # (45s) — SHORTER than the adapter's 120s HTTP timeout so the
@@ -3939,11 +3890,6 @@ class AgentLoop:
                     # ADR-18 P0: the model saying "done" is not enough — gate
                     # the claim against the success criteria (replan or honest
                     # report). Only finish when the gate is satisfied or capped.
-                    yield StreamChunk(
-                        text="",
-                        done=False,
-                        status="I’m verifying the result against the objective…",
-                    )
                     _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
                         trace=trace,
                         iteration=iteration,
@@ -4039,11 +3985,6 @@ class AgentLoop:
                 # ADR-18 P0: gate the model's "done" claim (replan or honest
                 # report) BEFORE the turn-end events — the loop is only done
                 # when the gate is satisfied or the caps force an honest close.
-                yield StreamChunk(
-                    text="",
-                    done=False,
-                    status="I’m verifying the result against the objective…",
-                )
                 _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
                     trace=trace,
                     iteration=iteration,

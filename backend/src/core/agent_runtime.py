@@ -444,15 +444,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             file_type=content_type,
         )
 
-        # User-facing lifecycle acknowledgement: substantive turns should
-        # feel attended to before memory retrieval or the first model call.
-        # The parent still owns all planning and tool decisions; this is only
-        # transport-level progress, not a pre-router.
-        yield StreamChunk(
-            text="",
-            done=False,
-            status="I’m understanding the request and preparing a plan…",
-        )
+        # ADR-37: no hardcoded stage narration. The parent's real model
+        # output (acknowledgement + thinking stream) is the status signal;
+        # the frontend's neutral fallback covers the pre-first-token gap.
 
         try:
             from api.routes.terminal import _terminal_sessions

@@ -255,16 +255,11 @@ async def _event_stream(
     _last_sent_time = time.monotonic()
     _KEEPALIVE_INTERVAL_S = 15  # seconds between keepalive comments
 
-    # The first server event must not wait for title persistence, memory
-    # retrieval, adapter setup, or model generation. The frontend also has a
-    # local placeholder, but emitting this on the wire makes the transport
-    # contract truthful for slow/cold clients and gives proxies an immediate
-    # response payload.
+    # ADR-37: no hardcoded narration here. The frontend's own neutral
+    # status fallback ("Working on it…" / "Thinking") covers the gap before
+    # the first real model event; the immediate obs_event (agent_runtime_start)
+    # is the wire-level acknowledgement for slow/cold clients and proxies.
     _response_chunks: list[str] = []
-    yield _sse({
-        "type": "status_update",
-        "status": "LocalMind received your message — preparing the next step…",
-    })
 
     # ── Stage 1: write heuristic placeholder title immediately ────────────
     # This ensures the sidebar shows something before the LLM title arrives.

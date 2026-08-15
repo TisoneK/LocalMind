@@ -8,6 +8,7 @@ planning/reasoning tokens are internal execution context, not chat UI content.
 from __future__ import annotations
 
 import pytest
+
 from core.agent.loop import AgentLoop
 from core.models import Intent, StreamChunk
 
@@ -53,11 +54,15 @@ async def test_parent_exposes_lifecycle_status_not_raw_planner_text():
     thinking = [chunk.thinking for chunk in chunks if chunk.thinking]
     text = "".join(chunk.text for chunk in chunks)
 
-    assert statuses[0] == "I’m preparing an execution plan before using tools…"
-    assert "I’m creating a short plan before I act…" in statuses
-    assert any(status.startswith("Plan ready (2 steps).") for status in statuses)
-    assert "I’m deciding the next action from the current evidence…" in statuses
-    assert "I’m verifying the result against the objective…" in statuses
+    # ADR-37: the hardcoded stage-name narration is gone. The parent no longer
+    # emits theater status lines ("preparing an execution plan…", "creating a
+    # short plan…", "Plan ready…", "deciding the next action…", "verifying the
+    # result…") — real model output (ack + thinking) is the only status signal.
+    assert not any("preparing an execution plan" in s for s in statuses)
+    assert not any("creating a short plan" in s for s in statuses)
+    assert not any(s.startswith("Plan ready") for s in statuses)
+    assert not any("deciding the next action" in s for s in statuses)
+    assert not any("verifying the result" in s for s in statuses)
     assert thinking == []
     assert "The requested work is complete." in text
     assert any(chunk.done for chunk in chunks)
@@ -153,5 +158,4 @@ async def test_tool_observation_returns_to_parent_before_final_answer():
     assert "I checked the search evidence" in text
     assert "Kitengela: sunny, 26°C" not in text
     assert any(status.startswith("Done — Searching") for status in statuses)
-    assert any("verifying the result" in status for status in statuses)
     assert sum(chunk.done for chunk in chunks) == 1
