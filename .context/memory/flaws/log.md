@@ -383,3 +383,13 @@ Flaws from Session 7 are now **fixed**:
   the kickoff, followed it, stored secrets per the contract, wrote
   review to `.context/memory/reviews/`). Protocol package change still
   required (carried from Session 65's open status).
+
+---
+
+## 2026-08-15 — Buffy / z-ai/glm-5.2 (Session 238)
+
+- **Flaw:** I violated the append-only rule on `memory/agents/sessions.md` — the first commit of my Session 238 entry (`b0e51ff`) REPLACED the Session 236 entry instead of appending.
+- **Symptom:** `git diff` of the commit showed the Session 236 entry's 10 lines as deletions and my Session 238 entry as insertions in the same position; the file dropped from 3316 to 3314 lines.
+- **Root cause:** I used an edit tool that matches an oldString (a full existing entry's text) and substitutes newString (my new entry) — the tool does in-place replacement, not appending. For append-only files, "append at the bottom" must be done by anchoring on a UNIQUE, SHORT tail anchor (or a shell `cat >>` append), never by matching an entire existing entry as the replacement context. I anchored on the LAST entry's full text — which is exactly the entry I was about to duplicate structurally, so the replacement was indistinguishable from the intended edit.
+- **Suggested fix:** (1) Add a binding rule/pitfall to the protocol: "For append-only files, never use a whole existing entry as a str_replace oldString. Append by anchoring on the file's final line or use a shell heredoc append (`cat >>`). After ANY append, verify `git diff` shows zero removed lines (rule 4) before committing." (2) The exit-checklist Step 17 already says appends must show no removed lines — make the verification step explicit for every append-only file, not just at commit review time.
+- **Status:** open — corrected in-repo in Session 238 (Session 236's entry restored verbatim from the base commit, Session 238's entry re-appended at the bottom, flaw referenced in the correction note). Protocol package change still required.
