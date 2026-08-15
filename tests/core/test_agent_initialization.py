@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+
 from adapters.ollama import ToolCallResult
 from agents.parent import ParentAgent
 from core.agent.initialization import (
@@ -17,7 +18,10 @@ from core.models import Intent, StreamChunk, ToolResult
 from core.obs import ObsCollector
 
 
-def test_parse_execute_decision_preserves_plan_and_contract():
+def test_parse_execute_decision_is_classify_only():
+    """Step 1 (ADR-38): legacy plan/tool/criteria fields are ignored — only
+    the classify fields parse. A model that returns them anyway must not
+    resurrect a committed plan."""
     decision = parse_initialization(
         '{"mode":"execute","acknowledgement":"I understand.",'
         '"objective":"Find the current weather",'
@@ -28,10 +32,11 @@ def test_parse_execute_decision_preserves_plan_and_contract():
 
     assert isinstance(decision, InitializationDecision)
     assert decision.mode == "execute"
-    assert decision.tool_names == ["web_search", "web_fetch"]
-    assert decision.plan_steps[0].startswith("Search")
-    assert decision.success_criteria == ["current source found"]
-    assert "UNDERSTANDING: Find the current weather" in decision.plan_text()
+    assert decision.objective == "Find the current weather"
+    assert not hasattr(decision, "tool_names")
+    assert not hasattr(decision, "plan_steps")
+    assert not hasattr(decision, "success_criteria")
+    assert decision.objective_line() == "UNDERSTANDING: Find the current weather"
 
 
 def test_parse_direct_decision_returns_complete_answer():
@@ -58,7 +63,9 @@ def test_invalid_or_empty_output_fails_open_to_parent_execution():
     decision = parse_initialization("not JSON from a provider")
 
     assert decision.mode == "execute"
-    assert decision.plan_steps
+    # Step 1 (ADR-38): fail-open does NOT invent a plan — the loop picks
+    # the first action from evidence.
+    assert decision.objective_line() == "UNDERSTANDING: Determine and complete the user's request."
     assert decision.raw == "not JSON from a provider"
 
 
@@ -66,7 +73,7 @@ def test_missing_direct_response_cannot_end_the_turn():
     decision = parse_initialization('{"mode":"direct","response":""}')
 
     assert decision.mode == "execute"
-    assert decision.plan_steps
+    # No invented plan either — the plan emerges from the loop.
 
 
 @pytest.mark.asyncio
@@ -119,15 +126,23 @@ async def test_parent_initialization_precedes_tool_execution():
             self.execution_calls = 0
 
         async def chat(self, messages, temperature=0.1, intent="chat"):
-            self.initialization_calls += 1
-            yield StreamChunk(
-                text=(
-                    '{"mode":"execute","acknowledgement":"I will inspect it.",'
-                    '"objective":"Run the requested command",'
-                    '"tool_names":["shell"],"plan_steps":["Run `pwd`"],'
-                    '"success_criteria":["command completed without error"]}'
+            # The init call is the only plain-chat call at temperature=0.1;
+            # the post-loop final-answer synthesis call (Session 147 rescue)
+            # uses temperature=0.4 and must yield a real answer, not the
+            # init JSON.
+            if temperature == 0.1:
+                self.initialization_calls += 1
+                yield StreamChunk(
+                    text=(
+                        '{"mode":"execute","acknowledgement":"I will inspect it.",'
+                        '"objective":"Run the requested command"}'
+                    )
                 )
+                return
+            yield StreamChunk(
+                text="The command completed. The working directory is /workspace."
             )
+            yield StreamChunk(text="", done=True)
 
         async def chat_with_tools(self, *args, **kwargs):
             self.execution_calls += 1
@@ -165,17 +180,20 @@ async def test_parent_initialization_precedes_tool_execution():
     assert "The command completed." in "".join(chunk.text for chunk in chunks)
 
 
-def test_initialization_prompt_exposes_all_tools_without_route_hint():
+def test_initialization_prompt_is_classify_only():
+    """Step 1 (ADR-38): the init prompt classifies the tier only — tool
+    names, plans, and upfront assessment fields are gone (they emerge
+    mid-loop on gathered evidence)."""
     prompt = build_initialization_prompt(
         "What is the weather?",
-        [
-            {"intent": "web_search", "description": "Search live sources"},
-            {"intent": "shell", "description": "Run a local command"},
-        ],
         env_context="Current date: 2026-08-14",
     )
 
-    assert "web_search" in prompt
-    assert "shell" in prompt
+    assert "web_search" not in prompt
+    assert "shell" not in prompt
+    assert "plan_steps" not in prompt
+    assert "facts" not in prompt
+    assert "ambiguities" not in prompt
     assert 'mode": "direct|clarify|execute"' in prompt
     assert "intent classifier determined" not in prompt.lower()
+    assert "Current date: 2026-08-14" in prompt

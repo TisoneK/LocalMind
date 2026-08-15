@@ -2,21 +2,22 @@
 Shared Pydantic models used across LocalMind layers.
 No business logic here — pure data shapes.
 
-Shared request and agent data models.
-
-The live request path is the parent-agent runtime. TaskProfile,
-OrchestrationPlan, and ExecutionGraph remain data contracts for isolated
-planning/model tests and migration tooling; they are not request-time routing
-or execution owners.
+The live request path is the parent-agent runtime: every non-blocked turn
+enters one parent AgentLoop, which owns tool selection, delegation,
+evaluation, and synthesis. The legacy ThinkingDispatcher contracts
+(TaskProfile, OrchestrationPlan, ExecutionConstraints, UnderstandingResult,
+ValidationResult, ExecutionMode, SafetyLevel) were deleted — nothing in the
+request path consumes them.
 
 Canonical types defined here:
-  - Capability enum — composable capability descriptors
-  - TaskProfile — multi-dimensional capability profile
-  - OrchestrationPlan — structured planning data
-  - ExecutionGraph — DAG-based planning data model
-  - ExecutionConstraints — bounded execution parameters
-  - UnderstandingResult — structured input parsing
-  - ValidationResult — quality/fabrication assessment
+  - Role / Intent — foundational enums
+  - Capability — composable capability descriptors
+  - RiskLevel — tool risk classification
+  - Message / FileAttachment / ChatRequest / ChatResponse — chat shapes
+  - StreamChunk — SSE transport chunk
+  - ToolResult — tool execution result
+  - AgentAbortedError — user-abort signal
+  - EngineContext — prompt assembly input
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ import time
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Role & Intent — foundational enums
@@ -78,7 +79,7 @@ class Intent(str, Enum):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Capability — composable capability enum (replaces single-label Intent routing)
+# Capability — composable capability enum
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
@@ -133,89 +134,12 @@ class Capability(str, Enum):
     PREDICTION = "prediction"
 
 
-# ── Capability → Intent Mapping ──────────────────────────────────────────────
-
-CAPABILITY_TO_INTENT: dict[Capability, Intent] = {
-    Capability.SYSINFO: Intent.SYSINFO,
-    Capability.OBSERVE: Intent.OBSERVE,
-    Capability.CALCULATE: Intent.CALCULATE,
-    Capability.CSV: Intent.CSV,
-    Capability.JSON: Intent.JSON,
-    Capability.SQL: Intent.SQL,
-    Capability.WEB_SEARCH: Intent.WEB_SEARCH,
-    Capability.WEB_FETCH: Intent.WEB_FETCH,
-    Capability.BROWSE: Intent.BROWSE,
-    Capability.CODE_EXEC: Intent.CODE_EXEC,
-    Capability.SHELL: Intent.SHELL,
-    Capability.FILE_WRITE: Intent.FILE_WRITE,
-    Capability.FILE_EDIT: Intent.FILE_EDIT,
-    Capability.FILE_READ: Intent.FILE_TASK,
-    Capability.MEMORY_STORE: Intent.MEMORY_OP,
-    Capability.MEMORY_RETRIEVE: Intent.MEMORY_OP,
-}
-
-TOOL_CAPABILITIES: set[Capability] = {
-    Capability.WEB_SEARCH,
-    Capability.WEB_FETCH,
-    Capability.BROWSE,
-    Capability.CODE_EXEC,
-    Capability.SHELL,
-    Capability.FILE_READ,
-    Capability.FILE_WRITE,
-    Capability.FILE_EDIT,
-    Capability.MEMORY_STORE,
-    Capability.MEMORY_RETRIEVE,
-    Capability.SYSINFO,
-    Capability.OBSERVE,  # B-2026-07-31-9: desktop awareness
-    Capability.CALCULATE,  # B-2026-07-31-10: safe arithmetic
-    Capability.CSV,  # B-2026-07-31-10: bounded CSV parsing
-    Capability.JSON,  # B-2026-07-31-10: bounded JSON parse/query
-    Capability.SQL,  # B-2026-07-31-10: read-only SQLite queries
-}
-
-COGNITIVE_CAPABILITIES: set[Capability] = {
-    Capability.REASONING,
-    Capability.COMPARISON,
-    Capability.SYNTHESIS,
-    Capability.PLANNING,
-    Capability.PREDICTION,
-}
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
-# Execution & Safety enums (unified)
+# Risk level
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 class RiskLevel(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-
-
-class ExecutionMode(str, Enum):
-    """How the request should be executed.
-
-    v3.0 unified: merges the old models.ExecutionMode (direct_chat, etc.)
-    with capability.ExecutionMode (direct, etc.) into a single enum.
-
-    DIRECT         → Pure conversation, no tools needed.
-    SINGLE_TOOL    → One tool call, no orchestration.
-    MULTI_TOOL     → Multiple tools, may be parallelizable via DAG.
-    AGENT_LOOP     → Plan→Execute→Verify workflow. Full agent loop.
-    MULTI_PHASE    → Complex: multi-phase planning with dependencies.
-    """
-
-    DIRECT = "direct"
-    SINGLE_TOOL = "single_tool"
-    MULTI_TOOL = "multi_tool"
-    AGENT_LOOP = "agent_loop"
-    MULTI_PHASE = "multi_phase"
-
-
-class SafetyLevel(str, Enum):
-    """Safety constraint level for execution."""
-
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -280,274 +204,6 @@ class ToolResult(BaseModel):
     success: bool = True
     error_type: str = ""
     error_message: str = ""
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Execution Constraints
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class ExecutionConstraints(BaseModel):
-    """Bounded execution parameters for the orchestration plan.
-
-    These constraints are enforced at every layer of the 6-layer pipeline:
-    - Layer 3 (Planning): uses max_iterations for agent loop bounds
-    - Layer 4 (Execution): uses per-tool timeout and retry limits
-    - Layer 5 (Validation): uses max_fabrication_risk to force stops
-    """
-
-    max_retries: int = 1
-    max_iterations: int = 5
-    timeout_total_secs: float = 120.0
-    timeout_per_tool_secs: float = 30.0
-    timeout_llm_secs: float = 12.0
-    allow_parallel: bool = True
-    require_confirmation: bool = False
-    fallback_to_chat: bool = True
-    max_fabrication_risk: int = 3
-    tool_retry_base_delay: float = 0.3
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# TaskProfile — the central routing object (v3.0 unified)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class TaskProfile(BaseModel):
-    """Multi-dimensional capability profile replacing single Intent label.
-
-    v3.0: Merges the old TaskProfile (models.py) and the new TaskProfile
-    (capability.py) into a single canonical definition. The capabilities
-    list is the source of truth — primary_intent and required_tools are
-    derived from it, not independently set.
-
-    Design principle: "What capabilities are required to satisfy this
-    correctly?" instead of "What type of message is this?"
-
-    Examples:
-      "What is today's EPL fixtures?" ->
-        capabilities=[WEB_SEARCH, SYNTHESIS],
-        requires_grounding=True,
-        realtime_sensitive=True,
-        execution_mode=SINGLE_TOOL
-
-      "Compare my system specs with game requirements" ->
-        capabilities=[SYSINFO, WEB_SEARCH, COMPARISON],
-        requires_grounding=True,
-        requires_reasoning=True,
-        execution_mode=MULTI_TOOL
-
-      "Hello, how are you?" ->
-        capabilities=[],
-        execution_mode=DIRECT
-    """
-
-    # ── Capability flags (derived from capabilities list, but also settable) ──
-    requires_grounding: bool = False
-    requires_tools: bool = False
-    requires_planning: bool = False
-    requires_memory: bool = False
-    requires_reasoning: bool = False
-    requires_execution: bool = False
-    requires_file_access: bool = False
-    realtime_sensitive: bool = False
-
-    # ── Classification metadata ──
-    capabilities: list[Capability] = Field(default_factory=list)
-    safety_level: SafetyLevel = SafetyLevel.LOW
-    confidence: float = Field(default=0.7, ge=0.0, le=1.0)
-    execution_mode: ExecutionMode = ExecutionMode.DIRECT
-    primary_domain: str = ""
-
-    # ── Execution constraints ──
-    constraints: ExecutionConstraints = Field(default_factory=ExecutionConstraints)
-
-    # ── User-facing ──
-    reformulated: str = ""
-    acknowledgement: str = ""
-
-    # ── Metadata ──
-    reasoning: str = ""
-    fast_path: bool = False
-    dispatch_steps: list[dict] = Field(default_factory=list)
-
-    # ── Derived Intent accessors (for backward compat with tool dispatch) ──
-
-    def primary_intent(self) -> Intent:
-        """Derive the primary Intent from the capability profile.
-
-        Maps the capability list to the single Intent that best
-        represents the dominant capability. Used by the tool registry
-        and model router which still key on Intent.
-        """
-        for cap in self.capabilities:
-            if cap in CAPABILITY_TO_INTENT:
-                return CAPABILITY_TO_INTENT[cap]
-        return Intent.CHAT
-
-    def secondary_intent(self) -> Optional[Intent]:
-        """Derive secondary Intent from capabilities."""
-        primary = self.primary_intent()
-        for cap in self.capabilities:
-            if cap in CAPABILITY_TO_INTENT:
-                intent = CAPABILITY_TO_INTENT[cap]
-                if intent != primary:
-                    return intent
-        return None
-
-    def all_intents(self) -> list[Intent]:
-        """Get all derived Intents from capabilities."""
-        intents = []
-        seen: set[Intent] = set()
-        for cap in self.capabilities:
-            if cap in CAPABILITY_TO_INTENT:
-                intent = CAPABILITY_TO_INTENT[cap]
-                if intent not in seen:
-                    intents.append(intent)
-                    seen.add(intent)
-        return intents
-
-    def is_chat_only(self) -> bool:
-        """True when no tool capabilities are needed."""
-        return not any(cap in TOOL_CAPABILITIES for cap in self.capabilities)
-
-    def tool_capabilities(self) -> list[Capability]:
-        """Return only the tool-type capabilities."""
-        return [cap for cap in self.capabilities if cap in TOOL_CAPABILITIES]
-
-    def cognitive_capabilities(self) -> list[Capability]:
-        """Return only the cognitive-type capabilities."""
-        return [cap for cap in self.capabilities if cap in COGNITIVE_CAPABILITIES]
-
-    def required_tools(self) -> list[str]:
-        """Derive required tool names from capabilities.
-
-        Replaces the old required_tools field with a derived list.
-        The ThinkingDispatcher sets capabilities; this method
-        maps them to tool dispatch names.
-        """
-        _CAPABILITY_TO_TOOL: dict[Capability, str] = {
-            Capability.WEB_SEARCH: "web_search",
-            Capability.WEB_FETCH: "web_fetch",
-            Capability.CODE_EXEC: "code_exec",
-            Capability.SHELL: "shell",
-            Capability.FILE_READ: "file_task",
-            Capability.FILE_WRITE: "file_write",
-            Capability.FILE_EDIT: "edit_file",
-            Capability.MEMORY_STORE: "memory_op",
-            Capability.MEMORY_RETRIEVE: "memory_op",
-            Capability.SYSINFO: "sysinfo",
-            Capability.OBSERVE: "observe",  # B-2026-07-31-9: desktop awareness
-            Capability.CALCULATE: "calculator",  # B-2026-07-31-10: safe arithmetic
-            Capability.CSV: "csv",  # B-2026-07-31-10: bounded CSV parsing
-            Capability.JSON: "json",  # B-2026-07-31-10: bounded JSON parse/query
-            Capability.SQL: "sql",  # B-2026-07-31-10: read-only SQLite queries
-        }
-        tools: list[str] = []
-        seen: set[str] = set()
-        for cap in self.capabilities:
-            if cap in _CAPABILITY_TO_TOOL:
-                tool = _CAPABILITY_TO_TOOL[cap]
-                if tool not in seen:
-                    tools.append(tool)
-                    seen.add(tool)
-        # Supplement from flags
-        if self.realtime_sensitive and "web_search" not in seen:
-            tools.append("web_search")
-        return tools
-
-    def auto_correct(self) -> None:
-        """Auto-correct inconsistencies between flags and capabilities.
-
-        Ensures that if tool capabilities exist, requires_tools is True,
-        and if grounding capabilities exist, requires_grounding is True.
-        Called by the ThinkingDispatcher after parsing LLM output.
-        """
-        if any(cap in TOOL_CAPABILITIES for cap in self.capabilities):
-            self.requires_tools = True
-        if Capability.WEB_SEARCH in self.capabilities or Capability.WEB_FETCH in self.capabilities:
-            self.requires_grounding = True
-        if self.realtime_sensitive:
-            self.requires_grounding = True
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Layer 1: Understanding Result
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class UnderstandingResult(BaseModel):
-    """Structured output of Layer 1: Understanding.
-
-    No classification, no regex — just structured extraction
-    of everything the downstream layers need from the raw input.
-    """
-
-    message: str
-    session_id: str
-    has_attachment: bool = False
-    attachment_filename: Optional[str] = None
-    attachment_content_type: Optional[str] = None
-    attachment_size: Optional[int] = None
-    session_cwd: str = ""
-    history_window: list[Message] = Field(default_factory=list)
-    is_followup: bool = False
-    followup_context: Optional[dict] = None
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Layer 5: Validation Result
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class ValidationResult(BaseModel):
-    """Layer 5 output: quality and fabrication assessment.
-
-    Used to decide whether to re-execute, synthesize, or
-    deliver the result to the user.
-    """
-
-    satisfied: bool = True
-    fabrication_risk: int = 0
-    needs_synthesis: bool = False
-    needs_reflection: bool = False
-    missing_capabilities: list[Capability] = Field(default_factory=list)
-    quality_score: float = 1.0
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# OrchestrationPlan — complete output of ThinkingDispatcher (Layer 2)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-class OrchestrationPlan(BaseModel):
-    """Complete output of the ThinkingDispatcher (Layer 2).
-
-    Contains the TaskProfile, optional execution graph, and all
-    metadata needed for the 6-layer pipeline. The ExecutionGraph
-    is imported lazily to avoid circular references.
-    """
-
-    profile: TaskProfile
-    graph: object = None  # ExecutionGraph, set lazily
-    reasoning: str = ""
-    dispatch_steps: list[dict] = Field(default_factory=list)
-    fast_path: bool = False
-    success_criteria: list[str] = Field(default_factory=list)
-    """Typed, checkable success criteria from the plan (ADR-18 P0). The
-    acceptance gate evaluates these against tool evidence + workspace;
-    the model must not report done until every criterion has receipts."""
-    task_type: str = ""
-    """Explicit task type from the plan's execution_plan (ADR-19). The
-    context policy layer (core/context_policy.py) uses it to decide which
-    tool results/history stay verbatim vs. get stubbed. Empty = legacy
-    positional behavior (no-op policy)."""
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    def set_graph(self, graph: object) -> None:
-        """Set the execution graph after lazy import."""
-        self.graph = graph
 
 
 class AgentAbortedError(Exception):

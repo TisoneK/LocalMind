@@ -343,14 +343,13 @@ _CONVERSATIONAL_MAX_WORDS = 20
 def is_conversational_question(message: str) -> bool:
     """
     Detect whether a message is an OBVIOUSLY-conversational question that
-    can be answered with a single direct chat call — no dispatcher.
+    can be answered with a single direct chat call — no tools.
 
     Conservative by design: the message must start with an interrogative
     opener AND contain none of the tool/realtime/system keywords, so
     routing-sensitive queries ("what is today's EPL games?", "what time is
     it", "how much RAM do I have", "who wrote app.py") always fall through
-    to the full ThinkingDispatcher. Anything ambiguous → False (full
-    pipeline).
+    to the parent agent loop. Anything ambiguous → False (full pipeline).
 
     Args:
         message: the user's message text.
@@ -633,9 +632,9 @@ async def conversational_response(
     Stream a direct chat response for a conversational question.
 
     Same single-call fast path as `trivial_response`, with a prompt that
-    asks for a natural answer to the user's question. Bypasses the
-    ThinkingDispatcher — verified fix for the ~40s "What can you do?"
-    latency (ADR-11 / B-2026-08-09-1).
+    asks for a natural answer to the user's question. Bypasses the parent
+    agent loop — verified fix for the ~40s "What can you do?" latency
+    (ADR-11 / B-2026-08-09-1).
 
     Args:
         message: the user's conversational question.

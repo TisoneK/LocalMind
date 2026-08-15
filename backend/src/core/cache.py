@@ -2,7 +2,7 @@
 Shared cache primitives (Session 135 addendum).
 
 Consolidates the ad-hoc TTL caches that previously lived inline in several
-modules (thinking_dispatcher._PLAN_CACHE, api/routes/health.py reachability,
+modules (api/routes/health.py reachability,
 tools/installed_programs.py windows list, ...) into ONE tested primitive so
 future caches get TTL + bounded eviction + optional deep-copy-on-read for
 free instead of re-implementing the same monotonic-clock dance per file.

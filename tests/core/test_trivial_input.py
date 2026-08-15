@@ -609,7 +609,7 @@ async def test_yes_no_still_streams_from_adapter():
 @pytest.mark.asyncio
 async def test_engine_conversational_question_skips_dispatcher():
     """The engine must short-circuit a conversational question BEFORE the
-    ThinkingDispatcher is invoked (single LLM call — the ADR-11 fix)."""
+    parent agent loop (single LLM call — the ADR-11 fix)."""
     from core.engine import Engine
 
     engine = Engine()
@@ -621,12 +621,9 @@ async def test_engine_conversational_question_skips_dispatcher():
     mock_adapter = MagicMock()
     mock_adapter.chat = mock_chat
 
-    with patch("core.engine.get_adapter", return_value=mock_adapter), \
-            patch("core.thinking_dispatcher.ThinkingDispatcher.dispatch") as mock_dispatch:
+    with patch("core.engine.get_adapter", return_value=mock_adapter):
         chunks = [c async for c in engine.process("What can you do?", "sess-conv-fast")]
 
-    # The dispatcher must NEVER run for a conversational question.
-    mock_dispatch.assert_not_called()
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert "help" in text.lower()
 

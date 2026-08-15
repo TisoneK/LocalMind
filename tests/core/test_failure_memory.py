@@ -334,7 +334,6 @@ async def test_engine_persists_failure_and_recalls_it(tmp_path, monkeypatch):
     """End-to-end: a failed run is persisted; a similar next turn recalls
     the hint into memory_facts (Remember→Continue)."""
     from core.engine import Engine
-    from core.models import ExecutionMode, OrchestrationPlan, TaskProfile
     from core.obs import ObsCollector
 
     # Point the engine at a scratch DB BEFORE constructing it, so the
@@ -351,23 +350,6 @@ async def test_engine_persists_failure_and_recalls_it(tmp_path, monkeypatch):
         _orig_record_failure(session_id, intent, message, failure_type, summary)
 
     engine._store.record_failure = spy_record_failure
-
-    class _CapDispatcher:
-        def __init__(self, adapter):
-            self._adapter = adapter
-
-        async def dispatch(self, **kwargs):
-            yield OrchestrationPlan(
-                profile=TaskProfile(
-                    capabilities=["shell"],
-                    execution_mode=ExecutionMode.AGENT_LOOP,
-                    confidence=0.9,
-                    reformulated="build the frontend app",
-                    acknowledgement="Building...",
-                ),
-                fast_path=False,
-                dispatch_steps=[{"intent": "shell", "detail": "build"}],
-            )
 
     mock_adapter = MagicMock()
     mock_adapter.effective_context_window = 8192

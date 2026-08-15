@@ -15,7 +15,8 @@ a global default with per-task overrides).
 
 Locked decisions (Session 159):
   - Full P0 scope (build order steps 1-6).
-  - The dispatcher emits an explicit `task_type` in execution_plan.
+  - The agent loop settles an explicit `task_type` (from a plan block or
+    the intent/domain fallback) and keys the policy on it.
   - Per-task KEEP tables (each task type overrides its own markers).
   - CAN DISCARD implemented but OFF by default in P0 (stub-only ships).
 """
@@ -27,16 +28,16 @@ from typing import Optional
 
 # ── Task types ───────────────────────────────────────────────────────────────
 
-# Canonical task types the policy layer understands. The dispatcher's
-# `task_type` field should use these; anything unknown falls back to
+# Canonical task types the policy layer understands. The agent's settled
+# `task_type` should use these; anything unknown falls back to
 # "default" (legacy positional behavior).
 TASK_TYPES = frozenset(
     {"debug", "plan", "code", "research", "chat", "verify", "default"}
 )
 
-# Dispatcher primary_domain → task_type hints. Kept conservative: only map
+# Task-type primary_domain → task_type hints. Kept conservative: only map
 # domains where the mapping is unambiguous; everything else stays "default"
-# (legacy behavior) unless the dispatcher emits an explicit task_type.
+# (legacy behavior) unless an explicit task_type is provided.
 _DOMAIN_HINTS = {
     "shell": "code",
     "code": "code",

@@ -1,38 +1,40 @@
-"""Parent-agent initialization contract.
+"""Parent-agent initialization contract — CLASSIFY-ONLY (rebuild Step 1).
 
 The request runtime must not decide from prompt-shaped shortcuts whether a
 turn is conversation, clarification, or tool work.  The parent agent's first
-model call owns that decision.  This module keeps the wire contract small and
-machine-readable while deliberately excluding hidden chain-of-thought.
+model call owns that decision — but ONLY the tier decision (ADR-37 three-tier:
+trivial / needs-thought / needs-tools) plus the opening line and the objective.
+
+ADR-38 (Thinker/Agent rebuild, Step 1): the upfront init call no longer
+commits a plan, success criteria, tool names, or facts/ambiguities — the
+old monolithic call reasoned BEFORE any tool ran, so its assessment could
+only narrate assumptions ("assumed dev-folder path"). The plan EMERGES from
+the loop on gathered evidence, and the Thinker's real facts/ambiguities
+consult happens mid-loop (Step 2). The legacy fields were DELETED, not
+preserved: a model that emits them anyway is ignored — only the classify
+fields (mode/acknowledgement/response/objective/clarifying_question) parse.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Iterable
 
 INITIALIZATION_MODES = frozenset({"direct", "clarify", "execute"})
 _MAX_TEXT = 600
-_MAX_STEPS = 10
-_MAX_TOOLS = 12
 
 
 @dataclass
 class InitializationDecision:
-    """The parent agent's first-turn decision."""
+    """The parent agent's first-turn decision (classify-only)."""
 
     mode: str = "execute"
     acknowledgement: str = ""
     response: str = ""
     objective: str = ""
     clarifying_question: str = ""
-    facts: list[str] = field(default_factory=list)
-    ambiguities: list[str] = field(default_factory=list)
-    tool_names: list[str] = field(default_factory=list)
-    plan_steps: list[str] = field(default_factory=list)
-    success_criteria: list[str] = field(default_factory=list)
     confidence: float = 0.0
     raw: str = ""
     # ADR-34 B-12: record the init prompt size so init vs execution budgets
@@ -47,101 +49,33 @@ class InitializationDecision:
     def is_clarification(self) -> bool:
         return self.mode == "clarify"
 
-    def plan_text(self) -> str:
-        """Render bounded structured plan context for the execution model."""
-        lines: list[str] = []
+    def objective_line(self) -> str:
+        """Render the bounded objective context for the execution model.
+
+        No plan, tool list, or criteria — the plan emerges from the loop on
+        gathered evidence (ADR-38 Step 1).
+        """
         if self.objective:
-            lines.append(f"UNDERSTANDING: {self.objective}")
-        if self.tool_names:
-            lines.append(f"TOOLS: {', '.join(self.tool_names)}")
-        if self.plan_steps:
-            lines.append("STEPS:")
-            lines.extend(f"{i}. {step}" for i, step in enumerate(self.plan_steps, 1))
-        if self.success_criteria:
-            lines.append("SUCCESS_CRITERIA:")
-            lines.extend(f"- {criterion}" for criterion in self.success_criteria)
-        return "\n".join(lines)[:1800]
-
-
-def _compact_capability_summary(available_tools: Iterable[dict[str, Any]]) -> str:
-    """Build a compact, categorized capability summary for the init prompt.
-
-    ADR-34 B-12: the initializer does NOT need the full 180-char description
-    of every tool. It only needs to know WHAT CATEGORIES of capability exist
-    so it can decide direct/clarify/execute and name the likely tool_names.
-    Full tool schemas are loaded only for the execution path after the
-    decision is made.
-
-    Returns a single string like:
-      file ops: file_task, file_write, file_edit, find_path
-      code: code_exec, shell, git, process
-      web: web_search, web_fetch, browse
-      ...
-    """
-    # Map tool names to coarse capability categories. The categories are
-    # deliberately broad — the model only needs to recognize the shape of
-    # work it can delegate to, not the exact schema.
-    category_keywords: dict[str, list[str]] = {
-        "file ops": [
-            "file_task", "file_write", "file_edit", "find_path",
-            "propose_write_file", "propose_str_replace", "apply_proposed_edit",
-            "csv", "json", "sql",
-        ],
-        "code": ["code_exec", "shell", "git", "process"],
-        "web": ["web_search", "web_fetch", "browse"],
-        "memory": ["memory_op", "skill"],
-        "system": ["sysinfo", "observe", "diagnostics"],
-        "planning": ["add_subgoal", "update_subgoal", "create_plan"],
-        "delegation": ["delegate", "delegate_parallel", "delegate_inline", "best_of_n_edit"],
-        "math": ["calculate"],
-    }
-    # Collect all tool names
-    tool_names: list[str] = []
-    for tool in available_tools:
-        name = str(tool.get("intent") or tool.get("name") or "").strip()
-        if name:
-            tool_names.append(name)
-    if not tool_names:
-        return "(no tools available)"
-    # Bucket each tool into its category
-    categorized: dict[str, list[str]] = {cat: [] for cat in category_keywords}
-    uncategorized: list[str] = []
-    for name in tool_names:
-        placed = False
-        for cat, keywords in category_keywords.items():
-            if any(name == kw or name.startswith(kw) for kw in keywords):
-                categorized[cat].append(name)
-                placed = True
-                break
-        if not placed:
-            uncategorized.append(name)
-    # Build the summary
-    lines: list[str] = []
-    for cat in category_keywords:
-        tools_in_cat = categorized[cat]
-        if tools_in_cat:
-            lines.append(f"- {cat}: {', '.join(tools_in_cat)}")
-    if uncategorized:
-        lines.append(f"- other: {', '.join(uncategorized)}")
-    return "\n".join(lines)
+            return f"UNDERSTANDING: {self.objective}"[:1800]
+        return ""
 
 
 def build_initialization_prompt(
     user_message: str,
-    available_tools: Iterable[dict[str, Any]],
     env_context: str = "",
     history: Iterable[dict[str, Any]] | None = None,
 ) -> str:
-    """Build the model-owned request interpretation prompt.
+    """Build the CLASSIFY-ONLY initialization prompt (rebuild Step 1, ADR-38).
 
-    ADR-34 B-12: the init prompt uses a COMPACT CAPABILITY SUMMARY instead
-    of listing all 30 tools with 180-char descriptions. The model only needs
-    to recognize the shape of work it can delegate to (file ops, code, web,
-    memory, system, planning, delegation, math) — full tool schemas are
-    loaded only for the execution path after the decision is made.
-
-    The response is intentionally suitable for streaming internally and
-    parsing at the parent/runtime boundary.
+    The init call decides ONLY the tier (direct / clarify / execute), the
+    opening acknowledgement, and the one-line objective. It no longer
+    commits a plan, success criteria, tool names, or facts/ambiguities —
+    the old monolithic call reasoned BEFORE any tool ran, so its "facts"
+    were assumptions and its plan was committed blind. The plan EMERGES
+    from the loop on gathered evidence; the Thinker's real assessment
+    happens mid-loop (Step 2). The tool catalog is deliberately NOT
+    injected: a classifier does not need it to pick a tier (and dropping
+    it shrank the init prompt ~40%).
     """
     history_lines = []
     for item in list(history or [])[-6:]:
@@ -151,19 +85,19 @@ def build_initialization_prompt(
             history_lines.append(f"{role}: {content}")
 
     history_block = "\nRecent conversation:\n" + "\n".join(history_lines) if history_lines else ""
-    tools_block = _compact_capability_summary(available_tools)
     return f"""You are the initialization stage of LocalMind's parent agent.
 
 Decide how the parent should handle the user's latest request. Do not
 execute tools. Return ONLY one JSON object matching the schema.
 
-Modes:
-- direct: no tools needed; put the complete answer in response.
-- clarify: a material detail is missing; put one question in clarifying_question.
-- execute: tools/multi-step reasoning needed; provide acknowledgement, plan, tool_names, success_criteria.
-
-Capabilities (use these names in tool_names):
-{tools_block}
+Modes (choose the tier):
+- direct: trivial or conversational — no tools, no lookups needed; put the
+  complete answer in response.
+- clarify: a material detail is missing that NO search or inspection could
+  resolve; put one question in clarifying_question.
+- execute: anything needing current info, files, code, browser, memory, or
+  multi-step work. Do NOT plan the steps here — the agent will look at the
+  actual state first and decide step by step from what it finds.
 
 {env_context}{history_block}
 
@@ -172,35 +106,27 @@ JSON schema:
   "mode": "direct|clarify|execute",
   "acknowledgement": "short user-facing acknowledgement (<=180 chars)",
   "response": "complete answer only for direct mode",
-  "objective": "what the user actually wants",
+  "objective": "what the user actually wants — one concise line (<=200 chars)",
   "clarifying_question": "one question only for clarify mode",
-  "facts": ["what you actually know about the request or context (execute only)"],
-  "ambiguities": ["what you would have to assume to proceed (execute only)"],
-  "tool_names": ["tool_name"],
-  "plan_steps": ["goal-level step with concrete tool/arguments"],
-  "success_criteria": ["observable evidence that proves completion"],
   "confidence": 0.0
 }}
 
 Rules:
 - direct for greetings and general questions needing no local/live data.
-- execute for anything requiring current info, files, code, browser, memory, or evidence.
-- BIAS STRONGLY TOWARD execute, and ACT rather than ask. If a detail is
-  unknown but DISCOVERABLE — a file to find, a folder to list, a value to look
-  up — do NOT clarify: execute and discover it. Example: "read my CV" →
-  search the home directory for *cv*/*resume*.{{pdf,docx,doc}} and read the
-  best match; NEVER ask for a filename or path you could find yourself.
+- execute for anything requiring current info, files, code, browser, memory,
+  or evidence. BIAS STRONGLY TOWARD execute, and ACT rather than ask. If a
+  detail is unknown but DISCOVERABLE — a file to find, a folder to list, a
+  value to look up — do NOT clarify: execute and discover it. Example:
+  "read my CV" → search the home directory for *cv*/*resume*.{{pdf,docx,doc}}
+  and read the best match; NEVER ask for a filename or path you could find
+  yourself.
 - clarify is a LAST RESORT — only when the request is genuinely underspecified
   in a way NO search or inspection could resolve AND guessing would risk a
   wrong irreversible action. When in doubt, execute with a reasonable default.
-- Ambiguities are things you ASSUME and proceed on (record them in
-  `ambiguities`), NEVER things to stop and ask about.
-- Keep plan_steps MINIMAL — the fewest steps that reach the goal. A find+read
-  is 1-2 steps, not 6. Fewer steps = fewer model calls = faster, and avoids
-  tripping provider per-minute rate limits.
-- acknowledgement <=180 chars, response <=1200 chars, plan_steps <=5, tool_names <=6, success_criteria <=3.
-- facts <=3, ambiguities <=2 (use empty arrays when none — do not invent ambiguity).
-- facts are what you KNOW; ambiguities are what you must ASSUME. Keep them separate.
+- The plan is NOT decided here. You only classify the tier, acknowledge, and
+  state the objective. The agent gathers real evidence first, then decides
+  each next step from what it actually finds.
+- acknowledgement <=180 chars, response <=1200 chars, objective <=200 chars.
 
 User request:
 {user_message}
@@ -246,37 +172,27 @@ def _first_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
-def _bounded_strings(value: Any, limit: int, max_chars: int = _MAX_TEXT) -> list[str]:
-    if isinstance(value, str):
-        value = [value]
-    if not isinstance(value, (list, tuple)):
-        return []
-    result: list[str] = []
-    for item in value:
-        text = str(item).strip()
-        if text:
-            result.append(text[:max_chars])
-        if len(result) >= limit:
-            break
-    return result
-
-
 def parse_initialization(text: str) -> InitializationDecision:
     """Parse a model decision and fail safely into execute mode.
 
     An unparsable initialization response must never cause a prompt-shaped
     routing fallback.  Execute mode preserves the parent loop's ability to
     inspect the request and choose a tool; the raw response is retained only
-    as bounded internal plan context.
+    as bounded internal context.
+
+    Rebuild Step 1 (ADR-38): the init is classify-only, so a decision with
+    NO plan is legitimate — the plan emerges from the loop. Legacy fields
+    (facts/ambiguities/tool_names/plan_steps/success_criteria) were DELETED:
+    a model that returns them is ignored, not preserved.
     """
     raw = (text or "").strip()
     payload = _first_json_object(raw)
     if payload is None:
-        fallback_step = raw[:_MAX_TEXT] if raw else "Inspect the request and determine the required action."
+        # Fail open into execute WITHOUT inventing a plan — the loop will
+        # look at the request and pick the first action from evidence.
         return InitializationDecision(
             mode="execute",
             objective="Determine and complete the user's request.",
-            plan_steps=[fallback_step],
             raw=raw[:1800],
         )
 
@@ -289,11 +205,6 @@ def parse_initialization(text: str) -> InitializationDecision:
         response=str(payload.get("response", "")).strip()[:1200],
         objective=str(payload.get("objective", "")).strip()[:_MAX_TEXT],
         clarifying_question=str(payload.get("clarifying_question", "")).strip()[:_MAX_TEXT],
-        facts=_bounded_strings(payload.get("facts"), 3, 200),
-        ambiguities=_bounded_strings(payload.get("ambiguities"), 2, 200),
-        tool_names=_bounded_strings(payload.get("tool_names"), _MAX_TOOLS, 80),
-        plan_steps=_bounded_strings(payload.get("plan_steps"), _MAX_STEPS),
-        success_criteria=_bounded_strings(payload.get("success_criteria"), 4),
         raw=raw[:1800],
     )
     try:
@@ -306,6 +217,4 @@ def parse_initialization(text: str) -> InitializationDecision:
         decision.mode = "execute"
     if decision.mode == "clarify" and not decision.clarifying_question:
         decision.mode = "execute"
-    if decision.mode == "execute" and not decision.plan_steps:
-        decision.plan_steps = ["Inspect the request and choose the first verifiable action."]
     return decision

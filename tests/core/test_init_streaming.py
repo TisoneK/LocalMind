@@ -18,7 +18,6 @@ import pytest
 from core.agent.init_stream import (
     InitializationPreview,
     extract_preview,
-    render_assessment_details,
     render_understanding,
 )
 from core.agent.initialization import InitializationDecision, parse_initialization
@@ -56,8 +55,6 @@ async def test_streaming_initializer_emits_ack_before_decision():
         '{"mode": "execute", ',
         '"acknowledgement": "Let me check the time for you.", ',
         '"objective": "Get current time", ',
-        '"tool_names": ["sysinfo"], ',
-        '"plan_steps": ["Call sysinfo"], ',
         '"confidence": 0.95}',
     ]
     adapter = _FakeAdapter(json_chunks)
@@ -67,7 +64,7 @@ async def test_streaming_initializer_emits_ack_before_decision():
     async for event_type, payload in loop._initialize_parent_streaming(
         active_adapter=adapter,
         messages=[{"role": "user", "content": "whats the time?"}],
-        available_tools=[{"intent": "sysinfo", "description": "system info"}],
+
         env_context="",
         intent_history=None,
     ):
@@ -86,7 +83,7 @@ async def test_streaming_initializer_emits_ack_before_decision():
     decision = events[dec_idx][1]
     assert isinstance(decision, InitializationDecision)
     assert decision.mode == "execute"
-    assert decision.tool_names == ["sysinfo"]
+    assert decision.objective == "Get current time"
 
 
 @pytest.mark.asyncio
@@ -105,7 +102,7 @@ async def test_streaming_initializer_never_exposes_raw_json():
     async for event_type, payload in loop._initialize_parent_streaming(
         active_adapter=adapter,
         messages=[{"role": "user", "content": "hey"}],
-        available_tools=[],
+
         env_context="",
         intent_history=None,
     ):
@@ -138,7 +135,7 @@ async def test_streaming_initializer_terminal_error_propagates():
         async for _event_type, _payload in loop._initialize_parent_streaming(
             active_adapter=adapter,
             messages=[{"role": "user", "content": "hi"}],
-            available_tools=[],
+
             env_context="",
             intent_history=None,
         ):
@@ -155,7 +152,7 @@ async def test_streaming_initializer_fails_open_on_unparsable_output():
     async for event_type, payload in loop._initialize_parent_streaming(
         active_adapter=adapter,
         messages=[{"role": "user", "content": "do something"}],
-        available_tools=[],
+
         env_context="",
         intent_history=None,
     ):
@@ -164,7 +161,8 @@ async def test_streaming_initializer_fails_open_on_unparsable_output():
 
     assert decision is not None
     assert decision.mode == "execute"  # fail-open
-    assert len(decision.plan_steps) >= 1
+    # Step 1 (ADR-38): fail-open must NOT invent a plan — the plan emerges
+    # from the loop on gathered evidence.
 
 
 @pytest.mark.asyncio
@@ -183,7 +181,7 @@ async def test_streaming_initializer_non_terminal_error_does_not_hang():
     async for event_type, payload in loop._initialize_parent_streaming(
         active_adapter=adapter,
         messages=[{"role": "user", "content": "hi"}],
-        available_tools=[],
+
         env_context="",
         intent_history=None,
     ):
@@ -205,7 +203,7 @@ async def test_streaming_initializer_empty_stream_does_not_hang():
     async for event_type, payload in loop._initialize_parent_streaming(
         active_adapter=adapter,
         messages=[{"role": "user", "content": "hi"}],
-        available_tools=[],
+
         env_context="",
         intent_history=None,
     ):
@@ -223,7 +221,6 @@ async def test_streaming_initializer_emits_understanding_for_execute_mode():
         '{"mode": "execute", ',
         '"acknowledgement": "On it.", ',
         '"objective": "Read the file and summarize its contents", ',
-        '"plan_steps": ["Read file"], ',
         '"confidence": 0.8}',
     ]
     adapter = _FakeAdapter(json_chunks)
@@ -233,7 +230,7 @@ async def test_streaming_initializer_emits_understanding_for_execute_mode():
     async for event_type, payload in loop._initialize_parent_streaming(
         active_adapter=adapter,
         messages=[{"role": "user", "content": "summarize foo.py"}],
-        available_tools=[{"intent": "file_task", "description": "read a file"}],
+
         env_context="",
         intent_history=None,
     ):
@@ -261,7 +258,7 @@ async def test_streaming_initializer_emits_understanding_for_clarify_mode():
     async for event_type, payload in loop._initialize_parent_streaming(
         active_adapter=adapter,
         messages=[{"role": "user", "content": "summarize the file"}],
-        available_tools=[],
+
         env_context="",
         intent_history=None,
     ):
@@ -283,7 +280,6 @@ async def test_streaming_initializer_emits_each_event_at_most_once():
         '"acknowledgement_extra": "ignore", ',  # noise
         '"objective": "check", ',
         '"mode": "execute", ',
-        '"plan_steps": ["x"], ',
         '"confidence": 0.5}',
     ]
     adapter = _FakeAdapter(json_chunks)
@@ -294,7 +290,7 @@ async def test_streaming_initializer_emits_each_event_at_most_once():
     async for event_type, _payload in loop._initialize_parent_streaming(
         active_adapter=adapter,
         messages=[{"role": "user", "content": "test"}],
-        available_tools=[],
+
         env_context="",
         intent_history=None,
     ):
@@ -407,75 +403,25 @@ def test_preview_diff_ignores_empty_new_values():
     assert old.diff(new) == {}
 
 
-# ── ADR-36: Thinker facts + ambiguities ─────────────────────────────────
+# ── Legacy init fields (ADR-38 Step 1) ─────────────────────────────────
 
 
-def test_render_assessment_details_renders_facts_and_ambiguities():
-    """The Thinker separates what it knows from what it must assume."""
-    decision = InitializationDecision(
-        mode="execute",
-        objective="List projects in the dev folder",
-        facts=["the user named C:/Users/tison/dev"],
-        ambiguities=["the dev folder may not exist yet"],
-    )
-    details = render_assessment_details(decision)
-    assert "Facts: the user named C:/Users/tison/dev" in details
-    assert "Ambiguities: the dev folder may not exist yet" in details
-
-
-def test_render_assessment_details_empty_when_none():
-    """No facts/ambiguities -> no detail block (objective-only thinking)."""
-    decision = InitializationDecision(mode="execute", objective="Do the thing")
-    assert render_assessment_details(decision) == ""
-
-
-def test_parse_initialization_extracts_facts_and_ambiguities():
-    """The bounded parser must carry facts + ambiguities into the decision."""
+def test_parse_initialization_ignores_legacy_fields():
+    """Step 1 (ADR-38): facts/ambiguities/plan_steps/tool_names were DELETED
+    from the classify-only contract — a model that returns them anyway must
+    not resurrect them."""
     text = (
         '{"mode": "execute", "acknowledgement": "On it.", '
         '"objective": "List projects", '
         '"facts": ["target is the dev folder", "platform is windows"], '
         '"ambiguities": ["folder may not exist"], '
+        '"tool_names": ["shell"], '
         '"plan_steps": ["list the directory"], "confidence": 0.8}'
     )
     decision = parse_initialization(text)
-    assert decision.facts == ["target is the dev folder", "platform is windows"]
-    assert decision.ambiguities == ["folder may not exist"]
-
-
-@pytest.mark.asyncio
-async def test_streaming_initializer_emits_understanding_details():
-    """When the model returns facts/ambiguities, the initializer emits a
-    follow-up detail event AFTER the objective understanding."""
-    json_chunks = [
-        '{"mode": "execute", ',
-        '"acknowledgement": "On it.", ',
-        '"objective": "List projects in the dev folder", ',
-        '"facts": ["the user named C:/Users/tison/dev"], ',
-        '"ambiguities": ["the dev folder may not exist"], ',
-        '"plan_steps": ["list the directory"], ',
-        '"confidence": 0.8}',
-    ]
-    adapter = _FakeAdapter(json_chunks)
-    loop = _make_loop()
-
-    events: list[tuple[str, object]] = []
-    async for event_type, payload in loop._initialize_parent_streaming(
-        active_adapter=adapter,
-        messages=[{"role": "user", "content": "list the projects in the dev folder"}],
-        available_tools=[{"intent": "shell", "description": "run commands"}],
-        env_context="",
-        intent_history=None,
-    ):
-        events.append((event_type, payload))
-
-    details_events = [p for t, p in events if t == "understanding_details"]
-    assert len(details_events) == 1
-    details = details_events[0]
-    assert "Facts: the user named C:/Users/tison/dev" in details
-    assert "Ambiguities: the dev folder may not exist" in details
-
-    # Order: objective understanding precedes the detail block, which precedes
-    # the final decision.
-    types = [t for t, _ in events]
-    assert types.index("understanding") < types.index("understanding_details") < types.index("decision")
+    assert decision.objective == "List projects"
+    assert not hasattr(decision, "facts")
+    assert not hasattr(decision, "ambiguities")
+    assert not hasattr(decision, "tool_names")
+    assert not hasattr(decision, "plan_steps")
+    assert decision.objective_line() == "UNDERSTANDING: List projects"

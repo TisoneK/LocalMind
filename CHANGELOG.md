@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- Deleted the legacy request-time intent system: `thinking_dispatcher.py`, `execution_graph.py`, `workspace/orchestrator.py` (+ `workspace/manager.py`), and `engine/routing_helpers.py` had no production callers since the parent-agent runtime replaced the request pipeline (Session 201). Their data contracts (`TaskProfile`, `OrchestrationPlan`, `ExecutionMode`, `SafetyLevel`, `ExecutionConstraints`, `UnderstandingResult`, `ValidationResult`) and dead constants/helpers were deleted with them. The parent AgentLoop is the only routing path — every turn classifies the tier, then the plan EMERGES from tool evidence.
+- Parent initialization is now strictly classify-only (rebuild Step 1): the init decision no longer carries `facts`/`ambiguities`/`tool_names`/`plan_steps`/`success_criteria` (parsed fields, `plan_text()` rendering, the streaming `understanding_details` block, upfront `todo_created` events, and the init-fed acceptance criteria were all deleted). A model that returns legacy fields is ignored, not preserved. The tool catalog is no longer accepted by `build_initialization_prompt`.
+
 ### Added
 - Long shell and Python execution output now keeps both its beginning and end within the 4000-character limit, so trailing errors remain visible.
 - Browser automation can now inspect rendered DOM/HTML, captured network requests, and browser console messages, with bounded output and sensitive-data guidance

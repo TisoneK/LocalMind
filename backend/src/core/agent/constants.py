@@ -1,10 +1,10 @@
 """
 Agent constants — all tunable values in one place.
 
-v3.0: Updated for Dynamic Capability Orchestration architecture.
-- CAPABILITY_ORCHESTRATION_ENABLED is now always True (no rollback)
-- Removed all DEPRECATED legacy switches
-- Capability-aware constants only
+The legacy dispatcher-era switches (THINKING_DISPATCH_*, CHAT_AGENT_*,
+CAPABILITY_ORCHESTRATION_ENABLED, AGENT_SELECTION_ENABLED) were deleted
+with the ThinkingDispatcher (Session 239). Only constants consumed by the
+live parent-agent runtime remain.
 """
 
 import os
@@ -70,16 +70,6 @@ PER_CALL_TIMEOUT_SECS: float = 45.0
 # diagram — the literal difference between a harness and a bare API.
 WORKSPACE_STATE_ENABLED: bool = True
 
-# ── Agent selection (ADR-6) ──────────────────────────────────────────────────
-# Whether the engine uses agents.registry.select_agent(intent) to pick
-# the agent for a given intent, instead of calling AgentLoop directly.
-# When True, the engine constructs the selected agent and calls its
-# run() method — which passes the agent's scoped toolset to AgentLoop
-# (ADR-6: a coding agent sees only 5 tools, a browser agent sees only 1,
-# etc.). When False, the engine calls AgentLoop directly with the global
-# AGENT_ALLOWED_TOOLS (pre-ADR-6 behavior).
-AGENT_SELECTION_ENABLED: bool = True
-
 # ── Context window protection ─────────────────────────────────────────────────
 
 OBS_LOG_MAX_CHARS: int = 2000
@@ -93,25 +83,15 @@ TOOL_RETRY_BASE_DELAY: float = 0.3
 
 FILE_OP_TIMEOUT_SECONDS: float = 10.0
 FILE_READ_MAX_BYTES: int = 512 * 1024
-SHELL_OP_TIMEOUT_SECONDS: float = 20.0
-
-# ── Follow-up detection ───────────────────────────────────────────────────────
-
-FOLLOWUP_HISTORY_DEPTH: int = 6
 
 # ── Web-search result limits ──────────────────────────────────────────────────
 
 WEB_SEARCH_MAX_CHARS_PER_RESULT: int = 1000
 WEB_SEARCH_MAX_RESULTS: int = 5
 
-# ── Agent response streaming ──────────────────────────────────────────────────
-
-AGENT_THINKING_MIN_CHARS: int = 20
-
 # ── Planning phase ────────────────────────────────────────────────────────────
 
 PLAN_ENABLED: bool = True
-PLAN_MAX_TOKENS: int = 512
 
 # ── Verification phase ────────────────────────────────────────────────────────
 
@@ -122,7 +102,6 @@ VERIFY_CODE_EXEC: bool = True
 # ── Reflection phase ─────────────────────────────────────────────────────────
 
 REFLECT_ENABLED: bool = True
-REFLECT_MAX_TOKENS: int = 256
 
 REFLECT_INTENTS: frozenset = frozenset(
     {
@@ -134,14 +113,6 @@ REFLECT_INTENTS: frozenset = frozenset(
         Intent.WEB_FETCH,
     }
 )
-
-# ── Capability Orchestration (v3.0) ───────────────────────────────────────────
-
-CAPABILITY_ORCHESTRATION_ENABLED: bool = True
-"""Enabled for the parent-agent runtime's native tool loop."""
-
-ORCHESTRATOR_TIMEOUT_SECS: float = 10.0
-ORCHESTRATOR_TEMPERATURE: float = 0.2
 
 # ── Intent routing ────────────────────────────────────────────────────────────
 
@@ -312,28 +283,7 @@ SYNTHESIS_INTENTS: frozenset[Intent] = frozenset(
 
 SYNTHESIS_TEMPLATE_FALLBACK: bool = True
 
-# ── Legacy DEPRECATED constants ──────────────────────────────────────────────
-# Kept ONLY for import compatibility during migration. Still referenced by
-# the v3.0 pipeline: CHAT_AGENT_ENABLED, CHAT_AGENT_MIN_COMPLEXITY,
-# CHAT_AGENT_SKIP_PATTERNS, CHAT_AGENT_TIMEOUT_SECS. Removed as dead
-# (B-2026-08-09-11): THINKING_DISPATCH_ENABLED, THINKING_DISPATCH_TIMEOUT_SECS,
-# DISPATCHER_HIGH_CONFIDENCE_SKIP, CHAT_AGENT_MAX_TOKENS. The dispatcher
-# timeout now lives in thinking_dispatcher.py as DISPATCHER_TIMEOUT_SECS =
-# 30.0 (the single source of truth — chosen because GLM/Z.ai dispatches in
-# ~18s typical).
-
-CHAT_AGENT_ENABLED: bool = True
-CHAT_AGENT_MIN_COMPLEXITY: float = 0.4
-CHAT_AGENT_TIMEOUT_SECS: float = 8.0
-CHAT_AGENT_SKIP_PATTERNS: list[str] = [
-    r"^(hi|hello|hey|howdy|greetings)\s*$",
-    r"^(thanks?|thank you|thx)\s*$",
-    r"^(ok|okay|yes|no|sure|alright|yep|nope)\s*$",
-    r"^[\s\W]{0,15}$",
-]
-
 ORCHESTRATOR_ENABLED: bool = True
-ORCHESTRATOR_MAX_TOKENS: int = 400
 ORCHESTRATOR_TIMEOUT_SECS: float = 10.0
 ORCHESTRATOR_CONFIDENCE_HIGH: float = 0.7
 ORCHESTRATOR_CONFIDENCE_MEDIUM: float = 0.4

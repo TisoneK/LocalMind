@@ -1,7 +1,7 @@
 """ADR-19 wiring tests (Session 163, re-keyed Session 186).
 
 The policy computed at the loop head must reach the compactor, and the
-engine must resolve it from the OrchestrationPlan.task_type.
+engine must resolve it from the settled task_type.
 
 Session 186 (ADR-19 x ADR-22 re-key): the dispatcher task_type is now a
 HINT — the agent SETTLES the task type during planning from its actual
@@ -132,19 +132,8 @@ async def test_settlement_emits_task_type_settled_event():
 
 @pytest.mark.asyncio
 async def test_resolve_from_plan_smoke():
-    """OrchestrationPlan.task_type flows into policy_for (engine side)."""
+    """A settled task_type flows into policy_for (engine side)."""
     from core.context_policy import policy_for
-    from core.models import OrchestrationPlan, TaskProfile
 
-    profile = TaskProfile(
-        intent=Intent.SHELL,
-        primary_domain="shell",
-        execution_mode="agent_loop",
-        safety_level="low",
-        confidence=0.9,
-        reformulated="fix it",
-        capabilities=[Intent.SHELL],
-    )
-    plan = OrchestrationPlan(profile=profile, task_type="debug")
-    policy = policy_for(str(getattr(plan, "task_type", "") or ""))
+    policy = policy_for("debug")
     assert policy.task_type == "debug"

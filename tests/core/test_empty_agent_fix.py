@@ -461,10 +461,6 @@ class TestAgentConstants:
         from core.agent.constants import REFLECT_ENABLED
         assert REFLECT_ENABLED is True
 
-    def test_reflect_max_tokens_reasonable(self):
-        from core.agent.constants import REFLECT_MAX_TOKENS
-        assert 100 <= REFLECT_MAX_TOKENS <= 512, "Reflection tokens should be reasonable"
-
     def test_reflect_intents_excludes_chat(self):
         from core.agent.constants import REFLECT_INTENTS
         assert Intent.CHAT not in REFLECT_INTENTS, "CHAT should not be reflected"

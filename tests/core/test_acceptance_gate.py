@@ -1,13 +1,13 @@
 """ADR-18 P0 acceptance-gate wiring tests (Session 156).
 
-Covers the four wiring points of the locked P0 design:
-  1. The dispatcher parses typed success_criteria from execution_plan.
-  2. The model's create_plan tool stores success_criteria on the scratchpad.
-  3. is_coding_done() evaluates criteria against trace evidence (real gate).
-  4. AgentLoop.run() calls is_done_fn at the iteration head and terminates
+Covers the wiring points of the locked P0 design:
+  1. Explicit success_criteria flow via the loop's `success_criteria=`
+     parameter and the model's create_plan tool.
+  2. is_coding_done() evaluates criteria against trace evidence (real gate).
+  3. AgentLoop.run() calls is_done_fn at the iteration head and terminates
      CLEANLY (not via the hit-limit path) when the gate passes.
 
-Session 173: 5. The ENGINE's direct AgentLoop path (agent selection
+Session 173: 4. The ENGINE's direct AgentLoop path (agent selection
    disabled/failed — the common free-tier fallback) now passes
    is_done_fn=_default_acceptance_gate, so the Verify stage runs there
    too, not only via BaseAgent.run() on the ADR-8 selection path.
@@ -22,90 +22,10 @@ import pytest
 
 from core.agent.loop import _SAME_TOOL_REPLAN_CAP, AgentLoop, same_tool_failure_streak
 from core.agent.models import AgentStep, AgentTrace
-from core.models import (
-    ExecutionMode,
-    Intent,
-    OrchestrationPlan,
-    StreamChunk,
-    TaskProfile,
-)
+from core.models import Intent, StreamChunk
 from core.obs import ObsCollector
 
-# ── 1. Dispatcher parses success_criteria ───────────────────────────────────
-
-_CRITERIA_JSON = (
-    '{"capabilities":["shell"],"flags":{"requires_grounding":false,'
-    '"requires_tools":true,"requires_planning":true,"requires_memory":false,'
-    '"requires_reasoning":false,"requires_execution":true,'
-    '"requires_file_access":true,"realtime_sensitive":false},'
-    '"execution_mode":"agent_loop","safety_level":"low","confidence":0.9,'
-    '"primary_domain":"shell","reformulated_query":"create a hello world repo",'
-    '"acknowledgement":"Setting that up...",'
-    '"execution_plan":{"steps":[{"id":"s1","capability":"shell","tool":"shell",'
-    '"args":{},"depends_on":[],"label":"Create hello.py"},'
-    '{"id":"s2","capability":"shell","tool":"shell","args":{},"depends_on":["s1"],'
-    '"label":"Run pytest"}],'
-    '"success_criteria":["pytest passes","hello.py exists with content"]}}'
-)
-
-
-class CriteriaJSONAdapter:
-    """Adapter yielding the capability JSON with success_criteria."""
-
-    async def chat(self, messages, temperature=0.7, **kwargs):
-        yield StreamChunk(text=_CRITERIA_JSON)
-
-
-async def _dispatch(dispatcher, message="create a hello world repo"):
-    from core.obs import ObsCollector
-
-    plan = None
-    async for item in dispatcher.dispatch(
-        message=message,
-        history=[],
-        memory_facts=[],
-        has_attachment=False,
-        obs=ObsCollector(),
-        session_id="test-session",
-    ):
-        plan = item
-    return plan
-
-
-@pytest.mark.asyncio
-async def test_dispatcher_parses_success_criteria():
-    from core import thinking_dispatcher as td
-
-    dispatcher = td.ThinkingDispatcher(base_adapter=CriteriaJSONAdapter())
-    plan = await _dispatch(dispatcher)
-    assert plan is not None
-    assert plan.success_criteria == ["pytest passes", "hello.py exists with content"]
-
-
-@pytest.mark.asyncio
-async def test_dispatcher_caps_and_filters_criteria():
-    from core import thinking_dispatcher as td
-
-    noisy = _CRITERIA_JSON.replace(
-        '"success_criteria":["pytest passes","hello.py exists with content"]',
-        '"success_criteria":["a","pytest passes","  ","hello.py exists with content",'
-        '"tsc clean","git diff contains hello.py","build ok","one too many"]',
-    )
-
-    class NoisyAdapter:
-        async def chat(self, messages, temperature=0.7, **kwargs):
-            yield StreamChunk(text=noisy)
-
-    dispatcher = td.ThinkingDispatcher(base_adapter=NoisyAdapter())
-    plan = await _dispatch(dispatcher)
-    assert plan is not None
-    # Blanks dropped, single-char dropped, capped at 6.
-    assert "pytest passes" in plan.success_criteria
-    assert all(len(c) >= 2 for c in plan.success_criteria)
-    assert len(plan.success_criteria) <= 6
-
-
-# ── 2. create_plan tool stores success_criteria ─────────────────────────────
+# ── 1. create_plan tool stores success_criteria ─────────────────────────────
 
 
 @pytest.mark.asyncio
@@ -606,10 +526,10 @@ async def test_loop_without_gate_fn_unchanged():
 # The Verify stage was dead code on the engine's DIRECT loop path: both
 # `self._agent_loop.run()` call sites passed success_criteria but never
 # is_done_fn, so the acceptance gate only ran when agent selection (ADR-8
-# Phase 4) succeeded. On free-tier models the dispatcher LLM frequently
-# fails → fallback CHAT plan → select_agent_by_task_profile returns None →
-# the direct loop path runs WITHOUT any verification: Act→Act→Act until
-# the model asserts done or the iteration cap hits.
+# Phase 4) succeeded. On free-tier models the classifier frequently fails →
+# fallback intent → select_agent_by_task_profile returns None → the direct
+# loop path runs WITHOUT any verification: Act→Act→Act until the model
+# asserts done or the iteration cap hits.
 
 
 def test_parent_acceptance_gate_requires_current_tool_evidence():
@@ -630,47 +550,6 @@ def test_parent_acceptance_gate_requires_current_tool_evidence():
     assert done is True
     assert "criteria met" in reason
     assert trace.gate_passed is True
-
-
-class _CriteriaPlanDispatcher:
-    """Dispatcher stub yielding an AGENT_LOOP plan with success_criteria
-    (mirrors the real dispatcher's execution_plan contract)."""
-
-    def __init__(self, adapter):
-        self._adapter = adapter
-
-    async def dispatch(self, **kwargs):
-        yield OrchestrationPlan(
-            profile=TaskProfile(
-                capabilities=["shell"],
-                execution_mode=ExecutionMode.AGENT_LOOP,
-                confidence=0.9,
-                reformulated="create hello world repo",
-                acknowledgement="Setting that up...",
-            ),
-            success_criteria=["hello.py exists with content", "pytest passes"],
-            fast_path=False,
-            dispatch_steps=[{"intent": "shell", "detail": "Create hello.py"}],
-        )
-
-
-class _DirectPlanDispatcher:
-    """Dispatcher stub returning a DIRECT (no-tools) plan immediately.
-    Local copy — keeps the escalation test self-contained instead of
-    importing from test_direct_escalation (cross-test-module coupling)."""
-
-    def __init__(self, adapter):
-        self._adapter = adapter
-
-    async def dispatch(self, **kwargs):
-        yield OrchestrationPlan(
-            profile=TaskProfile(
-                capabilities=[],
-                execution_mode=ExecutionMode.DIRECT,
-                confidence=0.5,
-                reformulated=kwargs.get("message", ""),
-            )
-        )
 
 
 _DSML = (
@@ -719,9 +598,9 @@ async def test_engine_direct_loop_wires_acceptance_gate():
 
     captured, fake_run = _engine_loop_recorder()
 
-    with patch("core.engine.get_adapter", return_value=mock_adapter), patch(
-        "core.thinking_dispatcher.ThinkingDispatcher"
-    ) as dispatcher, patch.object(engine._agent_loop, "run", fake_run):
+    with patch("core.engine.get_adapter", return_value=mock_adapter), patch.object(
+        engine._agent_loop, "run", fake_run
+    ):
         chunks = [
             c
             async for c in engine.process(
@@ -729,9 +608,6 @@ async def test_engine_direct_loop_wires_acceptance_gate():
             )
         ]
 
-    # The LocalMind parent loop owns the turn and receives its own acceptance
-    # hook; no dispatcher contract is injected ahead of it.
-    dispatcher.assert_not_called()
     assert captured.get("agent_config").name == "parent"
     assert callable(captured.get("is_done_fn"))
     assert "Parent-Agent" in captured.get("agent_context", "")
@@ -757,9 +633,9 @@ async def test_engine_escalate_path_wires_acceptance_gate():
     # local DSML adapter + real detection (no patching of the detector).
     dsml_adapter = _make_dsml_adapter()
 
-    with patch("core.engine.get_adapter", return_value=dsml_adapter), patch(
-        "core.thinking_dispatcher.ThinkingDispatcher"
-    ) as dispatcher, patch.object(engine._agent_loop, "run", fake_run):
+    with patch("core.engine.get_adapter", return_value=dsml_adapter), patch.object(
+        engine._agent_loop, "run", fake_run
+    ):
         chunks = [
             c
             async for c in engine.process(
@@ -767,7 +643,6 @@ async def test_engine_escalate_path_wires_acceptance_gate():
             )
         ]
 
-    dispatcher.assert_not_called()
     assert captured.get("agent_config").name == "parent"
     assert callable(captured.get("is_done_fn"))
     assert any(getattr(c, "done", False) for c in chunks)
@@ -851,33 +726,14 @@ async def test_engine_wires_verifier_gate_for_high_stakes_intent():
     mock_adapter.effective_context_window = 8192
     captured, fake_run = _engine_loop_recorder()
 
-    class _FileWriteDispatcher:
-        def __init__(self, adapter):
-            self._adapter = adapter
-
-        async def dispatch(self, **kwargs):
-            yield OrchestrationPlan(
-                profile=TaskProfile(
-                    capabilities=["file_write"],
-                    execution_mode=ExecutionMode.AGENT_LOOP,
-                    confidence=0.9,
-                    reformulated="write hello.py",
-                    acknowledgement="Writing that for you...",
-                ),
-                success_criteria=["hello.py exists with content"],
-                fast_path=False,
-                dispatch_steps=[{"intent": "file_write", "detail": "Write hello.py"}],
-            )
-
-    with patch("core.engine.get_adapter", return_value=mock_adapter), patch(
-        "core.thinking_dispatcher.ThinkingDispatcher"
-    ) as dispatcher, patch.object(engine._agent_loop, "run", fake_run):
+    with patch("core.engine.get_adapter", return_value=mock_adapter), patch.object(
+        engine._agent_loop, "run", fake_run
+    ):
         chunks = [
             c
             async for c in engine.process("write hello.py", "sess-engine-verifier-gate", obs=obs)
         ]
 
-    dispatcher.assert_not_called()
     assert captured.get("agent_config").name == "parent"
     assert callable(captured.get("is_done_fn"))
     assert any(getattr(c, "done", False) for c in chunks)

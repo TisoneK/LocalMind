@@ -173,16 +173,15 @@ _DOMAIN_TO_AGENT: dict[str, str] = {
 
 
 def primary_domain_to_agent_name(primary_domain: str) -> Optional[str]:
-    """Map a TaskProfile.primary_domain value to an agent name.
+    """Map a task-type primary_domain value to an agent name.
 
-    When a caller provides a task profile with
-    primary_domain (e.g., "shell_command", "web_fetch", "browse"), this
-    function maps it to the appropriate agent. Returns None for
-    unknown/empty domains (caller falls back to intent-based selection).
+    When a caller provides a task type (e.g., "shell_command",
+    "web_fetch", "browse"), this function maps it to the appropriate
+    agent. Returns None for unknown/empty domains (caller falls back to
+    intent-based selection).
 
     Args:
-        primary_domain: the TaskProfile.primary_domain string. May be
-            empty (ThinkingDispatcher didn't populate it).
+        primary_domain: the task-type string. May be empty.
 
     Returns:
         The agent name (e.g., "coding", "research"), or None if the
@@ -207,8 +206,7 @@ def select_agent_by_task_profile(
     based map (Phase 1-3 behavior).
 
     Args:
-        primary_domain: the TaskProfile.primary_domain string. May be
-            empty.
+        primary_domain: the task-type string. May be empty.
         fallback_intent: the Intent derived from the task profile
             (used when primary_domain is empty or unknown).
 

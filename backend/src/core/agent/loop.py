@@ -89,7 +89,6 @@ from core.agent.delegation import (
 from core.agent.init_stream import (
     InitializationPreview,
     extract_preview,
-    render_assessment_details,
     render_understanding,
 )
 from core.agent.initialization import (
@@ -1420,7 +1419,6 @@ class AgentLoop:
             async for event_type, payload in self._initialize_parent_streaming(
                 active_adapter=active_adapter,
                 messages=messages,
-                available_tools=available_tools,
                 env_context=env_context,
                 intent_history=intent_history,
             ):
@@ -1444,12 +1442,6 @@ class AgentLoop:
                     # the user watches the model's understanding arrive in
                     # real-time, not 7+ seconds later as a single blob.
                     yield StreamChunk(text="", done=False, thinking=payload[:600])
-                elif event_type == "understanding_details" and isinstance(payload, str):
-                    # ADR-36: facts/ambiguities follow the objective line. A
-                    # thinking separator makes the ThinkingBlock render the
-                    # detail block as a distinct section beneath the goal.
-                    yield StreamChunk(text="", done=False, thinking="start")
-                    yield StreamChunk(text="", done=False, thinking=payload[:600])
                 elif event_type == "decision" and isinstance(payload, InitializationDecision):
                     initialization = payload
             if initialization is None:
@@ -1468,8 +1460,6 @@ class AgentLoop:
                     "agent_initialization_done",
                     mode=initialization.mode,
                     objective=initialization.objective,
-                    tool_names=initialization.tool_names,
-                    plan_steps=initialization.plan_steps,
                     confidence=initialization.confidence,
                     # ADR-34 B-12: record the init prompt budget so init vs
                     # execution sizes are measured independently.
@@ -1501,10 +1491,12 @@ class AgentLoop:
                 yield StreamChunk(text="", done=True)
                 return
 
-            trace.success_criteria = list(initialization.success_criteria)
-            plan_context = initialization.plan_text()
+            plan_context = initialization.objective_line()
             trace.plan_text = plan_context
-            _plan_steps = list(initialization.plan_steps)
+            # Step 1 (ADR-38): the init commits NO plan — the plan emerges
+            # from the loop on gathered evidence. The todo cursor machinery
+            # below stays a no-op (empty step list) until a plan exists.
+            _plan_steps = []
             if _obs:
                 _obs.emit(
                     "agent_planning_done",
@@ -1512,8 +1504,6 @@ class AgentLoop:
                     plan_len=len(plan_context),
                     iterations_cost=iteration_offset,
                 )
-                for i, step in enumerate(_plan_steps):
-                    _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
             # The streaming ack already surfaced the model's acknowledgement
             # earlier in the turn; only emit a status line here if the
             # streaming path did NOT already show one (e.g. the model produced
@@ -4802,39 +4792,10 @@ class AgentLoop:
     # Parent initialization phase
     # ------------------------------------------------------------------
 
-    async def _initialize_parent(
-        self,
-        active_adapter,
-        messages: list[dict],
-        available_tools: list[dict],
-        env_context: str,
-        intent_history: Optional[list[str]] = None,
-    ) -> InitializationDecision:
-        """Ask the parent model how this request should be handled.
-
-        Non-streaming compatibility wrapper around :meth:`_initialize_parent_streaming`.
-        New callers should consume the streaming variant directly so the user
-        sees the model's acknowledgement and understanding within the ADR-34
-        SLO (≤5s to first public thinker event under a healthy provider).
-        """
-        decision: Optional[InitializationDecision] = None
-        async for _event, decision in self._initialize_parent_streaming(
-            active_adapter=active_adapter,
-            messages=messages,
-            available_tools=available_tools,
-            env_context=env_context,
-            intent_history=intent_history,
-        ):
-            # The streaming variant yields the final decision as its last
-            # event; we just need to drain the iterator.
-            pass
-        return decision or parse_initialization("")
-
     async def _initialize_parent_streaming(
         self,
         active_adapter,
         messages: list[dict],
-        available_tools: list[dict],
         env_context: str,
         intent_history: Optional[list[str]] = None,
     ):
@@ -4865,7 +4826,6 @@ class AgentLoop:
         ]
         prompt = build_initialization_prompt(
             user_message=user_message,
-            available_tools=available_tools,
             env_context=env_context,
             history=conversation_history,
         )
@@ -4962,21 +4922,10 @@ class AgentLoop:
                 # ADR-34 B-12: record the init prompt size for budget measurement.
                 decision.init_prompt_chars = len(prompt)
                 logger.info(
-                    "[agent.loop] parent initialization mode=%s tools=%s steps=%d prompt_chars=%d",
+                    "[agent.loop] parent initialization mode=%s prompt_chars=%d",
                     decision.mode,
-                    decision.tool_names,
-                    len(decision.plan_steps),
                     decision.init_prompt_chars,
                 )
-                # ADR-36: surface the Thinker's facts/ambiguities as a
-                # follow-up detail block (the objective already streamed as
-                # the early understanding). Emitted only when present, so the
-                # ThinkingBlock gains real resolution reasoning instead of a
-                # one-line objective.
-                if decision.facts or decision.ambiguities:
-                    details = render_assessment_details(decision)
-                    if details:
-                        await event_queue.put(("understanding_details", details))
                 await event_queue.put(("decision", decision))
                 decision_sent = True
             except Exception as exc:

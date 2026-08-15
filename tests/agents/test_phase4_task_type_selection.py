@@ -5,7 +5,7 @@ Per ADR-8 Principle 1: "Classification by task type, not tool. 'Create
 hello world repo' is a *coding* task → CodingAgent — not a SHELL
 intent → CodingAgent."
 
-The TaskProfile's `primary_domain` field (populated by
+The task-type `primary_domain` field (populated by
 ThinkingDispatcher) is the task-type signal. Phase 4 wires it into
 agent selection: when primary_domain is set, it routes to the
 appropriate agent directly, bypassing the intent→agent map.
@@ -177,28 +177,24 @@ def test_parent_agent_replaces_engine_agent_selection():
 # ── _DOMAIN_TO_AGENT map covers all primary_domain values ─────────────────
 
 
-def test_domain_to_agent_map_covers_thinking_dispatcher_domains():
-    """The _DOMAIN_TO_AGENT map covers all primary_domain values that
-    ThinkingDispatcher can populate.
-
-    ThinkingDispatcher sets primary_domain to: 'browse', 'web_fetch',
-    'file_analysis', 'system_info', 'shell_command' (per the
-    fast-path heuristics) plus whatever the LLM returns (free-form
-    string). This test verifies the known fast-path values are mapped.
-    """
+def test_domain_to_agent_map_covers_known_task_types():
+    """The _DOMAIN_TO_AGENT map covers the known task-type values so
+    task-type selection (ADR-8 Phase 4) doesn't silently fall back to
+    intent-based selection for them."""
     from agents.selection import _DOMAIN_TO_AGENT
 
-    # Known ThinkingDispatcher fast-path primary_domain values
-    known_dispatcher_domains = {
+    # Known task-type primary_domain values (fast-path task types + LLM
+    # task types the runtime can settle on).
+    known_domains = {
         "browse",
         "web_fetch",
         "file_analysis",
         "system_info",
         "shell_command",
     }
-    for domain in known_dispatcher_domains:
+    for domain in known_domains:
         assert domain in _DOMAIN_TO_AGENT, (
-            f"ThinkingDispatcher fast-path domain {domain!r} not in "
+            f"task-type domain {domain!r} not in "
             f"_DOMAIN_TO_AGENT map — agent selection will fall back to "
             f"intent-based (Phase 1-3 behavior) for this domain"
         )

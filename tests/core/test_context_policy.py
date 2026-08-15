@@ -3,7 +3,7 @@
 Covers:
   1. policy_for() per-task tables + legacy no-op default.
   2. resolve_task_type() priority (explicit > domain hint > intent > phase).
-  3. Dispatcher parses task_type from execution_plan + fallbacks.
+  3. parse_task_type_from_plan fallbacks.
   4. The default policy reproduces legacy positional behavior (no keep,
      no drop) — wiring safety.
 """
@@ -148,108 +148,7 @@ def test_parse_none_is_legacy():
     assert parse_task_type_from_plan(42) == ""
 
 
-# ── 4. Dispatcher parses task_type from execution_plan ──────────────────────
-
-_CRITERIA_JSON_TT = (
-    '{"capabilities":["shell"],"flags":{"requires_grounding":false,'
-    '"requires_tools":true,"requires_planning":true,"requires_memory":false,'
-    '"requires_reasoning":false,"requires_execution":true,'
-    '"requires_file_access":true,"realtime_sensitive":false},'
-    '"execution_mode":"agent_loop","safety_level":"low","confidence":0.9,'
-    '"primary_domain":"shell","reformulated_query":"fix the failing test",'
-    '"acknowledgement":"On it...",'
-    '"execution_plan":{"steps":[{"id":"s1","capability":"shell","tool":"shell",'
-    '"args":{},"depends_on":[],"label":"Reproduce failure"}],'
-    '"success_criteria":["pytest passes"],"task_type":"debug"}}'
-)
-
-
-class _TTAdapter:
-    async def chat(self, messages, temperature=0.7, **kwargs):
-        from core.models import StreamChunk
-
-        yield StreamChunk(text=_CRITERIA_JSON_TT)
-
-
-@pytest.mark.asyncio
-async def test_dispatcher_parses_task_type():
-    from core import thinking_dispatcher as td
-
-    td._PLAN_CACHE.clear()
-    dispatcher = td.ThinkingDispatcher(base_adapter=_TTAdapter())
-    plan = None
-    async for item in dispatcher.dispatch(
-        message="fix the failing test A",
-        history=[],
-        memory_facts=[],
-        has_attachment=False,
-        obs=__import__("core.obs", fromlist=["ObsCollector"]).ObsCollector(),
-        session_id="test-session-tt",
-    ):
-        plan = item
-    assert plan is not None
-    assert plan.task_type == "debug"
-
-
-@pytest.mark.asyncio
-async def test_dispatcher_task_type_absent_is_legacy():
-    from core import thinking_dispatcher as td
-    from core.models import StreamChunk
-
-    class _NoTTAdapter:
-        async def chat(self, messages, temperature=0.7, **kwargs):
-            yield StreamChunk(text=_CRITERIA_JSON_TT.replace(',"task_type":"debug"', ""))
-
-    td._PLAN_CACHE.clear()
-    dispatcher = td.ThinkingDispatcher(base_adapter=_NoTTAdapter())
-    plan = None
-    async for item in dispatcher.dispatch(
-        message="fix the failing test B",
-        history=[],
-        memory_facts=[],
-        has_attachment=False,
-        obs=__import__("core.obs", fromlist=["ObsCollector"]).ObsCollector(),
-        session_id="test-session-tt2",
-    ):
-        plan = item
-    assert plan is not None
-    # No explicit task_type → primary_domain hint (shell→code).
-    assert plan.task_type == "code"
-
-
-@pytest.mark.asyncio
-async def test_dispatcher_malformed_execution_plan_does_not_throw():
-    """A malformed execution_plan (list instead of dict) must not crash the
-    dispatcher — both success_criteria and task_type parses stay safe."""
-    from core import thinking_dispatcher as td
-    from core.models import StreamChunk
-
-    malformed = _CRITERIA_JSON_TT.replace(
-        '"primary_domain":"shell",',
-        '"primary_domain":"",',
-    ).replace(
-        '"execution_plan":{"steps":[{"id":"s1","capability":"shell","tool":"shell",'
-        '"args":{},"depends_on":[],"label":"Reproduce failure"}],'
-        '"success_criteria":["pytest passes"],"task_type":"debug"}',
-        '"execution_plan":["not", "a", "dict"]',
-    )
-
-    class _MalformedAdapter:
-        async def chat(self, messages, temperature=0.7, **kwargs):
-            yield StreamChunk(text=malformed)
-
-    td._PLAN_CACHE.clear()
-    dispatcher = td.ThinkingDispatcher(base_adapter=_MalformedAdapter())
-    plan = None
-    async for item in dispatcher.dispatch(
-        message="malformed plan C",
-        history=[],
-        memory_facts=[],
-        has_attachment=False,
-        obs=__import__("core.obs", fromlist=["ObsCollector"]).ObsCollector(),
-        session_id="test-session-tt3",
-    ):
-        plan = item
-    assert plan is not None
-    assert plan.success_criteria == []
-    assert plan.task_type == ""
+# ── 4. Legacy dispatcher task_type parse tests removed ─────────────────────
+# The ThinkingDispatcher was deleted (Session 239). task_type parsing is
+# covered above by parse_task_type_from_plan; the agent loop settles
+# task_type itself (see core.agent.loop task_type_settled event).

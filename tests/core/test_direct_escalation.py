@@ -28,9 +28,9 @@ async def test_runtime_enters_one_parent_loop_without_dispatcher():
     adapter = MagicMock()
     adapter.effective_context_window = 8192
     obs = ObsCollector()
-    with patch("core.engine.get_adapter", return_value=adapter), patch(
-        "core.thinking_dispatcher.ThinkingDispatcher"
-    ) as dispatcher, patch.object(engine._agent_loop, "run", fake_run):
+    with patch("core.engine.get_adapter", return_value=adapter), patch.object(
+        engine._agent_loop, "run", fake_run
+    ):
         chunks = [
             chunk
             async for chunk in engine.process(
@@ -40,7 +40,6 @@ async def test_runtime_enters_one_parent_loop_without_dispatcher():
             )
         ]
 
-    dispatcher.assert_not_called()
     assert captured["agent_config"].name == "parent"
     assert captured["reformulated_message"] == "check the project and report the result"
     assert "delegate" in captured["allowed_tool_names"]

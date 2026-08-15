@@ -3,32 +3,31 @@ GoalInterpreter — deterministic success-criteria fallback (ADR-18 P0+).
 
 PURPOSE
 =======
-The `ThinkingDispatcher` already ASKS the LLM to emit `success_criteria`
-in its capability-inference JSON (see
-`core/thinking_dispatcher.py:_CAPABILITY_INFERENCE_SYSTEM` line ~327).
-But on free-tier small models the LLM frequently omits them — leaving
-`TaskState.success_criteria == []`, which causes the ADR-18 P0/P1
+The parent agent's plan may carry explicit `success_criteria` (from the
+`create_plan` tool, the loop's `success_criteria=` parameter, or a plan
+block). But on free-tier small models the LLM frequently omits them —
+leaving `TaskState.success_criteria == []`, which causes the ADR-18 P0/P1
 acceptance gate (`core.agent.verify.criteria_gate`,
 `agents/{coding,verifier}/is_done.py`) to short-circuit at
-`verify.py:354-355` and the legacy model-asserted "done" path runs
-unchanged.
+`verify.py:354-355` and the model-asserted "done" path runs unchanged.
 
 ADR-18 P0 only wired the gate; it did not guarantee a contract the
-gate can check. This module is the contract-side fix: when the
-dispatcher LLM omitted criteria, the GoalInterpreter derives them
-DETERMINISTICALLY from the routing intent + capability set + first
-tool args. The LLM is NOT called again.
+gate can check. This module is the contract-side fix: when no explicit
+criteria exist, the GoalInterpreter derives them DETERMINISTICALLY from
+the routing intent + capability set + first tool args. The LLM is NOT
+called again.
 
 DESIGN
 ======
-The interpreter runs INSIDE the engine, AFTER `ThinkingDispatcher`
-produced `_orchestration_plan` (so the capabilities, intent, and
-execution_plan are already known) but BEFORE `AgentLoop.run()` is
-invoked (so the gate sees the contract from iteration 0).
+The interpreter runs inside the parent runtime BEFORE `AgentLoop.run()`
+is invoked (so the gate sees the contract from iteration 0). The
+legacy request-time dispatcher that used to emit criteria is gone — the
+interpreter works from whatever the runtime actually knows: intent,
+plan steps, and first tool args.
 
 Two-tier:
-  1. If `_orchestration_plan.success_criteria` is non-empty → use as-is
-     (LLM did its job; the interpreter is a no-op).
+  1. If explicit `llm_criteria` are non-empty → use as-is (the caller
+     already has a contract; the interpreter is a no-op).
   2. Otherwise → derive 1-3 deterministic criteria per intent, sourced
      from the intent + (where applicable) the first planned tool args.
 
@@ -39,15 +38,15 @@ the gate cannot verify.
 
 WHAT THIS DOES NOT DO
 ====================
-- It does NOT replace the LLM planner. When the LLM emits good
+- It does NOT replace the LLM planner. When the caller passes explicit
   criteria, those win.
 - It does NOT call the LLM. It is purely deterministic, runs in <1ms.
 - It does NOT add criteria to pure-chat / trivial turns. If
   `effective_intent == CHAT` or the trivial fast-path applies, return
   `[]` (no contract — matching the existing
   `criteria_gate` short-circuit behavior).
-- It does NOT touch the model's own plan text (`_plan_stream`). The
-  structured planner DAG (F3) is a separate session.
+- It does NOT touch the model's own plan text. The structured planner
+  DAG (F3) is a separate session.
 
 USAGE
 =====
@@ -57,9 +56,9 @@ USAGE
     criteria = interpreter.interpret(
         message=user_message,
         intent=effective_intent,
-        capabilities=_orchestration_plan.capabilities,
-        execution_plan_steps=_orchestration_plan.execution_graph.steps,
-        llm_criteria=_orchestration_plan.success_criteria,
+        capabilities=capabilities,
+        execution_plan_steps=plan_steps,
+        llm_criteria=explicit_criteria,
         first_tool_args=_extract_first_tool_args(...),  # optional
     )
     # `criteria` is a list[str] — pass as `success_criteria=` to AgentLoop.run
@@ -187,7 +186,7 @@ _TEMPLATES: dict[Intent, list[str]] = {
 
 
 # ── First-tool-args extractor ────────────────────────────────────────────────
-# When the dispatcher emitted an `execution_plan.steps[]`, the first
+# When a plan block provided `steps[]`, the first
 # step often carries the path/command/url the model intends to act on.
 # We try to extract it; if we can, we substitute into the template. If
 # not, the generic intent-level criterion is used (no substitution).
@@ -285,11 +284,11 @@ class GoalInterpreter:
         Args:
             message: the raw user message (used only for debugging logs;
                 never affects the derived criteria).
-            intent: the routing intent from ThinkingDispatcher.
+            intent: the routing intent (the agent's settled intent).
             capabilities: the capability list (currently unused —
                 reserved for future cross-capability criteria).
-            execution_plan_steps: the dispatcher's plan steps, used to
-                extract the first tool args (path/command/url).
+            execution_plan_steps: the plan steps, used to extract the
+                first tool args (path/command/url).
             llm_criteria: criteria the LLM emitted in its
                 execution_plan. If non-empty, these win and the
                 interpreter is a no-op.

@@ -201,10 +201,10 @@ class TestSteerTurnSemantics:
 
     @pytest.mark.asyncio
     async def test_process_replaces_queue_dropping_stale_steers(self, engine):
-        """A steer left over from a previous turn (e.g. queued during a
-        WorkspaceOrchestrator run, which doesn't thread the queue) must be
-        DROPPED when the next turn starts — not injected into it as the
-        most-recent user message."""
+        """A steer left over from a previous turn (e.g. queued during an
+        earlier turn that didn't thread the queue) must be DROPPED when
+        the next turn starts — not injected into it as the most-recent
+        user message."""
         assert engine.steer("sess-turn", "stale instruction") is True
         stale_queue = engine._steering_queues["sess-turn"]
         assert stale_queue.qsize() == 1
@@ -240,7 +240,7 @@ class TestSteerTurnSemantics:
         engine._agent_loop = _FakeLoop()
         # Force the classic `self._agent_loop.run` branch (the ADR-8 agent
         # path constructs its own internal loop): disable agent selection
-        # and the WorkspaceOrchestrator routing.
+        # and the orchestrator routing.
         with patch.object(engine, "_agent_loop", engine._agent_loop):
             async for _ in engine.process(
                 "list files",

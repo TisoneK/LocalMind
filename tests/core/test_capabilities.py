@@ -11,7 +11,7 @@ from core.capabilities import (
     capabilities_for_family,
     capability_metadata,
 )
-from core.models import Capability, TaskProfile
+from core.models import Capability
 
 
 def test_catalog_covers_every_capability():
@@ -49,12 +49,3 @@ def test_all_capability_families_matches_enum():
 def test_catalog_is_read_only():
     with pytest.raises(TypeError):
         CAPABILITY_CATALOG[Capability.FILE_READ] = capability_metadata(Capability.FILE_READ)  # type: ignore[index]
-
-
-def test_catalog_does_not_change_existing_task_profile_behavior():
-    profile = TaskProfile(capabilities=[Capability.FILE_READ, Capability.SYNTHESIS])
-
-    assert profile.primary_intent().value == "file_task"
-    assert profile.required_tools() == ["file_task"]
-    assert profile.cognitive_capabilities() == [Capability.SYNTHESIS]
-    assert profile.tool_capabilities() == [Capability.FILE_READ]
