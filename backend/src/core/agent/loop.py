@@ -3608,22 +3608,74 @@ class AgentLoop:
                         ]
                     )
                 ):
-                    logger.warning(f"[agent.loop] iter={iteration + 1} — error in stream, aborting")
-                    # Session 187: prefer the adapter's error message (preserved
-                    # during MiniMax buffering) so the SSE error event carries
-                    # the real cause (e.g. rate limit / provider 429) instead of
-                    # an empty string that renders as a silent spinner.
+                    # A provider error after a successful tool call is a
+                    # degraded synthesis, not a failed tool execution. This
+                    # is common with per-minute provider limits: the first
+                    # model call succeeds, the tool succeeds, and the next
+                    # model call that should summarize the evidence gets a
+                    # 429. Returning the error here discards the evidence and
+                    # makes the whole turn look like the tool failed.
                     _stream_err = _minimax_error_msg or initial_buffer
-                    if _obs:
-                        _obs.emit("agent_loop_error", error=_stream_err[:120], iteration=iteration + 1)
-                    yield StreamChunk(
-                        text=(
-                            "⚠️ The model ran into an issue. Please try again, "
-                            "or switch to a larger model for this task."
-                        ),
-                        done=True,
-                        error=_stream_err[:200],
+                    from core.error_normalizer import normalize_error
+
+                    _normalized_stream_error = normalize_error(_stream_err)
+                    _has_successful_evidence = any(
+                        step.tool_name and not step.tool_failed
+                        for step in trace.steps
                     )
+                    _can_preserve_evidence = (
+                        _has_successful_evidence
+                        and _normalized_stream_error.get("source") == "model_provider"
+                        and bool(_normalized_stream_error.get("retryable"))
+                    )
+                    if _can_preserve_evidence:
+                        logger.warning(
+                            "[agent.loop] iter=%d — provider synthesis failed after "
+                            "successful tool work; preserving evidence (%s)",
+                            iteration + 1,
+                            _normalized_stream_error.get("code", "provider_error"),
+                        )
+                        if _obs:
+                            _obs.emit(
+                                "agent_loop_degraded",
+                                iteration=iteration + 1,
+                                provider_error_code=_normalized_stream_error.get("code", "error"),
+                                evidence_preserved=True,
+                            )
+                        _evidence_summary = self._summarize_trace_for_user(
+                            trace,
+                            observation_log,
+                            synthesis_failure_reason=(
+                                "the provider rate-limited the final synthesis call"
+                                if _normalized_stream_error.get("code") == "rate_limit"
+                                else "the provider failed the final synthesis call"
+                            ),
+                        )
+                        if _evidence_summary:
+                            yield StreamChunk(
+                                text=_evidence_summary,
+                                done=False,
+                                usage=dict(_provider_usage),
+                            )
+                        yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
+                    else:
+                        logger.warning(
+                            f"[agent.loop] iter={iteration + 1} — error in stream, aborting"
+                        )
+                        if _obs:
+                            _obs.emit(
+                                "agent_loop_error",
+                                error=_stream_err[:120],
+                                iteration=iteration + 1,
+                            )
+                        yield StreamChunk(
+                            text=(
+                                "⚠️ The model ran into an issue. Please try again, "
+                                "or switch to a larger model for this task."
+                            ),
+                            done=True,
+                            error=_stream_err[:200],
+                        )
                     # Drain remaining chunks from the stream
                     if not stream_ended_early:
                         async for _ in result:

@@ -20,7 +20,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from core.agent.loop import AgentLoop, TerminalProviderError
 from core.models import Intent, StreamChunk
 
@@ -230,3 +229,71 @@ class TestEmptyResponseFastFail:
         errs = [c.error for c in chunks if c.error]
         assert errs, f"expected a non-empty chunk.error, got {chunks!r}"
         assert any("429" in e for e in errs), f"expected the 429 text to survive, got {errs!r}"
+
+    @pytest.mark.asyncio
+    async def test_retryable_error_after_successful_tool_preserves_evidence(self):
+        """A rate limit on the post-tool synthesis call must not erase a
+        successful tool result or turn the whole request into an error.
+
+        This is the exact user-visible failure mode: Cerebras completes
+        web_search, then rejects the follow-up model call with HTTP 429.
+        """
+        from adapters.ollama import ToolCallResult
+        from core.models import ToolResult
+        from core.obs import ObsCollector
+
+        loop = AgentLoop(adapter=MagicMock())
+        seen = {"calls": 0}
+        rate_limit = (
+            'cerebras returned 429: {"error":{"type":"rate_limit_exceeded",'
+            '"message":"Too many requests"}}'
+        )
+
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+            seen["calls"] += 1
+            if seen["calls"] == 1:
+                return ToolCallResult(
+                    tool_name="web_search",
+                    tool_args={"query": "trending news August 15 2026"},
+                )
+
+            async def _stream():
+                yield StreamChunk(text="", done=True, error=rate_limit)
+
+            return _stream()
+
+        async def dispatch(*args, **kwargs):
+            return (
+                ToolResult(
+                    source="web_search",
+                    content="Headline A — verified search result",
+                ),
+                False,
+                0,
+            )
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_with_tools = chat_with_tools
+        mock_adapter.chat = lambda *args, **kwargs: iter(())
+        obs = ObsCollector()
+        with patch("core.agent.loop.dispatch_with_retry", dispatch):
+            chunks = [
+                chunk
+                async for chunk in loop.run(
+                    messages=[{"role": "user", "content": "whats trending today"}],
+                    intent=Intent.WEB_SEARCH,
+                    initial_tool_result=None,
+                    available_tools=[],
+                    adapter=mock_adapter,
+                    obs=obs,
+                    skip_planning=True,
+                )
+            ]
+
+        full = "".join(chunk.text for chunk in chunks)
+        assert seen["calls"] == 2
+        assert not [chunk.error for chunk in chunks if chunk.error]
+        assert "rate-limited the final synthesis call" in full
+        assert "Headline A" in full
+        assert any(event.type == "agent_loop_degraded" for event in obs.history())
+        assert any(event.type == "tool_call" for event in obs.history())

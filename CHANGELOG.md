@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Themes. Settings now has an Appearance section where you can pick between three color themes — Graphite, Midnight Iris, and Warm Ink — and choose Light, Dark, or System (follows your OS). Your choice is remembered and applies instantly, with no flash when the app starts.
 
 ### Changed
+- When a provider rate-limits the follow-up synthesis call after a tool already succeeded, the agent now preserves the verified tool evidence and returns a degraded evidence response instead of rendering the entire turn as a failed provider request.
 - The agent's opening acknowledgement now appears in the chat as the first line of its reply, and its understanding now lives in the thinking block only — neither is buried in the Agent Workspace anymore.
 - The agent's thinking now separates what it knows (facts) from what it must assume (ambiguities), so you can watch it resolve uncertainty instead of seeing a one-line objective.
 - A turn that passes its acceptance check can no longer end with no reply — the agent always produces at least a summary of what it verified.
