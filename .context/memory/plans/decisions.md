@@ -982,3 +982,21 @@ manifest: `.context/memory/features/fail-fast-provider-errors/manifest.md`.
 - **Builds on:** ADR-5, ADR-8, ADR-17, ADR-18, ADR-22, ADR-30, ADR-32, and
   ADR-33. It supersedes the user-facing Observe pipeline and intent surfaces,
   not the backend observability collector or parent/delegation runtime.
+
+---
+## ADR-35: Keep conversational turns off the full execute path (latency + tokens) (2026-08-15)
+
+- **Author:** Claude Code / claude-opus-4-8 (Session 232; proposed — needs a live-model trace to implement)
+- **Status:** proposed (NOT implemented — handoff; the fix must be measured against a real provider, which this local session cannot run)
+- **Context (user-reported):** A trivial greeting ("How's the going") costs ~16s and ~5,000 prompt tokens/turn (session corner: 10,204 total over 2 turns, prompt 10,124 / completion 80) on `laguna-s-2.1-free` (zen). Measured facts (Session 232, local, no provider):
+  - The init/classify call is CHEAP: `build_initialization_prompt` ≈ **880 tokens** (env_context ~470 tok + compact tool summary from ADR-34 B-12). So the classify step is NOT the bloat.
+  - ~5k prompt tokens/turn means the greeting is NOT completing on the cheap **direct** path — it's entering the full **execute** loop, which builds `build_agent_system_prompt(intent, available_tools, …)` with the FULL tool schemas (large).
+  - Two ways a greeting reaches execute: (a) the weak free model returns `mode":"execute"` or emits unparseable JSON → `parse_initialization` fails safe to execute (`initialization.py:256-263, 267`); (b) `mode":"direct"` but an empty/missing `response` → downgraded to execute (`initialization.py:284-286`).
+  - Latency: ~16s is dominated by the free model's ~2.4 tok/s + processing the large execute prompt. The model's speed is not fixable in code; the prompt size (and thus prompt-processing time) is — by keeping conversational turns off the execute path.
+- **Decision (proposed):**
+  1. **Instrument first (needs provider):** log the live init decision per turn — `mode`, `bool(response)`, and the provider's `prompt_tokens` — to confirm whether greetings hit execute via misclassification vs the empty-response downgrade vs something else. Do not guess-fix.
+  2. **Robust direct path for weak models:** when a decision is `direct` with an empty `response` (`initialization.py:284`), do NOT downgrade to the full execute loop. Instead run a SINGLE lightweight chat completion (no agent system prompt, no tool schemas — a conversational reply) to fill the answer. Keeps conversational turns at ~1k tokens instead of ~5k.
+  3. **Prompt-tune init reliability:** strengthen `build_initialization_prompt`'s `direct` guidance so a weak model reliably picks `direct` for greetings/chit-chat (respects the user's "let the model decide, no hardcoded classifier" preference — ADR-34 spirit).
+  4. **Trim init env_context:** the classifier does not need 470 tokens of kernel/hostname detail — pass a compact env (OS + cwd + date, ~30 tok) to the INIT call specifically (do NOT change the shared `_build_environment_context()` used by the execute system prompt).
+- **Consequences:** conversational turns stay ~1k tokens / one cheap call; the free model's raw speed still bounds latency (documented, not fixable here). Must NOT regress: `Hi`→zero-provider-call boundary (Session 206), and ADR-34's model-owned routing (no hardcoded intent module). Every change needs a live `laguna-s-2.1-free`/zen trace before/after (prompt_tokens + wall-clock).
+- **Relates to:** ADR-34 (parent-first init), ADR-32 (fail-fast provider errors), Session 206 (conversational boundary). **Owner note:** overlaps Buffy/Super Z's ADR-34 area — coordinate.

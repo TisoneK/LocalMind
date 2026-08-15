@@ -3243,3 +3243,15 @@ program + ADR-22). -->
 - **Report:** `.context/memory/reviews/2026-08-15-review-35.md`.
 - **Lesson:** never edge-trim individual streamed deltas — it eats inter-token whitespace (also logged in inefficiencies).
 - **Open items:** none.
+
+---
+
+## 2026-08-15 — Session 232
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS 15 (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** diagnosis — greeting latency + token bloat (ADR-35)
+- **Task:** User: latency (~16s) + tokens (~5k prompt/turn) for a trivial greeting on `laguna-s-2.1-free`.
+- **Commits:** 1 context (ADR-35 + backlog B-2026-08-15-2). NO product code — the fix needs a live-model trace this local session cannot run, and it overlaps Buffy/Super Z's ADR-34 area.
+- **Outcome:** diagnosed — measured the init/classify call at only ~880 tokens (env ~470 + compact tools), so the ~5k/turn means greetings are entering the FULL execute loop (big agent system prompt + tool schemas), via the weak model returning execute/unparseable JSON or `direct`-with-empty-`response` downgrading to execute (`initialization.py:256-267, 284-286`). Latency is dominated by the free model's ~2.4 tok/s + the large execute prompt. Fix plan in ADR-35 / B-2026-08-15-2.
+- **Coordination:** did NOT ship into Super Z's freshly-built ADR-34 init/routing code blind on a low token budget without a provider trace; handed off as ADR-35 + backlog instead.
+- **Open items:** B-2026-08-15-2 (needs live zen/laguna trace).
