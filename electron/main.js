@@ -399,6 +399,68 @@ function sendBackendStatus(status) {
 // Tray
 // ---------------------------------------------------------------------------
 
+// Application menu. On macOS, Cmd+C/V/X/A only work in text inputs when an
+// application menu defines the Edit roles — without it, paste is dead in every
+// field (users could not paste an API key into Settings). Role-based items wire
+// the standard shortcuts automatically. The menu lives in the OS menu bar
+// (top of screen on macOS), so it does not affect the window's custom chrome.
+function createAppMenu() {
+  const isMac = process.platform === 'darwin';
+  const template = [
+    ...(isMac
+      ? [{
+          label: app.name || 'LocalMind',
+          submenu: [
+            { role: 'about' },
+            { type: 'separator' },
+            { role: 'hide' },
+            { role: 'hideOthers' },
+            { role: 'unhide' },
+            { type: 'separator' },
+            { role: 'quit' },
+          ],
+        }]
+      : []),
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        ...(isMac
+          ? [{ role: 'pasteAndMatchStyle' }, { role: 'delete' }, { role: 'selectAll' }]
+          : [{ role: 'delete' }, { type: 'separator' }, { role: 'selectAll' }]),
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(isMac ? [{ type: 'separator' }, { role: 'front' }] : [{ role: 'close' }]),
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createTray() {
   const { createTrayIcon } = require('./tray-icon');
   const icon = createTrayIcon();
@@ -652,6 +714,7 @@ function registerIpcHandlers() {
 // ---------------------------------------------------------------------------
 
 app.whenReady().then(() => {
+  createAppMenu();
   createMainWindow();
   createTray();
   registerIpcHandlers();
