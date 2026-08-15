@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ThinkingBlock } from './ThinkingBlock';
 
 describe('ThinkingBlock', () => {
@@ -37,5 +37,21 @@ describe('ThinkingBlock', () => {
   it('accepts a ThinkingStep object as well as a string', () => {
     render(<ThinkingBlock thinking={{ id: 't1', content: 'From an object', collapsed: false }} isStreaming />);
     expect(screen.getByText(/From an object/)).toBeInTheDocument();
+  });
+
+  it('collapses the reasoning by default once the turn is done (ADR-36)', () => {
+    // Collapse-after-done: when not streaming, the block starts collapsed so
+    // only the "Thought process" header shows — not a persistent scrollback.
+    render(<ThinkingBlock thinking="hidden reasoning" isStreaming={false} />);
+    expect(screen.getByText('Thought process')).toBeInTheDocument();
+    expect(screen.queryByText(/hidden reasoning/)).not.toBeInTheDocument();
+  });
+
+  it('expands a collapsed block on click for review (ADR-36)', () => {
+    render(<ThinkingBlock thinking="expandable reasoning" isStreaming={false} />);
+    expect(screen.queryByText(/expandable reasoning/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Thought process'));
+    expect(screen.getByText(/expandable reasoning/)).toBeInTheDocument();
   });
 });
