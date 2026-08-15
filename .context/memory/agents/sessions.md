@@ -3215,3 +3215,17 @@ program + ADR-22). -->
 - **Open items:** None — ADR-34 is fully implemented. The 5s ack SLO is not met with the free Zen model (6.3s), but ADR-34 §2 explicitly allows this ("a complete remote/free provider answer is not guaranteed under 5s"). A faster paid model would benefit directly from the 74% smaller prompt.
 - **Report:** `.context/memory/reviews/2026-08-15-review-33.md`
 - **Notes:** ADR-34 completion summary: 6 sessions (224-229), 37 new tests, 1,918 total tests pass. All contract events fire in order: ack → understanding → plan → tool → evidence → synthesis.
+
+---
+
+## 2026-08-15 — Session 230
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS 15 (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** bugfix on adr-34-realtime-workspace
+- **Task:** User (solo, after Super Z's ADR-34 sessions 224-229): the "Thought process" was showing the final answer verbatim, duplicated across ThinkingBlock + Agent Workspace cards.
+- **Commits:** 2 product/docs (`03ede26` fix(agent), `377ec83` docs) + 1 context closeout (SHA after push).
+- **Outcome:** done — root cause: the streaming initializer surfaced the model's `response` as the "understanding"/thinker line (`render_understanding` response fallback + `loop.py` direct-response trigger), so the answer became the thought process (and violated ADR-34's no-chain-of-thought rule). Fixed: thinker surfaces `objective` (reasoning) / clarifying question only, never `response`. Verified our side preserves whitespace (answer streams verbatim, `loop.py:1482`) — the "no spaces" is the weak free model's raw output (backlog B-2026-08-15-1).
+- **Validation:** 27 init tests pass; full backend 1811 passed / 2 skipped; ruff clean. 2 pre-existing macOS shell/powershell env failures confirmed on clean baseline (unrelated).
+- **Coordination:** started only after Super Z finished (tree clean, synced to `53bde48`); edited Super Z's ADR-34 init code with the ADR's own intent (never expose the answer as chain-of-thought).
+- **Report:** `.context/memory/reviews/2026-08-15-review-34.md`.
+- **Open items:** B-2026-08-15-1 direct-answer formatting with weak models (real-model repro).

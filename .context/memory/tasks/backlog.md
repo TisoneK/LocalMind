@@ -272,3 +272,6 @@ don't remove the line.
 
 ---
 - [x] **[High] B-2026-08-14-12 — Stage-specific prompt budget and model profile (ADR-34 P3)** — completed in Session 229. New `_compact_capability_summary()` groups 30 tools into 8 coarse categories. Init prompt reduced from 7,039 chars (1,759 tokens) to 1,795 chars (448 tokens) — 74% reduction. Added `init_prompt_chars` field to `InitializationDecision`, emitted in `agent_initialization_done` obs event. 8 new tests, 1,733 backend + 185 frontend tests pass. **ADR-34 is fully implemented — all 6 backlog items (B-7 through B-12) are done.**
+
+---
+- [ ] **[Medium] B-2026-08-15-1 — Direct-answer formatting with weak free models (Session 230 follow-up)** (added 2026-08-15 by Claude Code) — User reported the final reply for a greeting had "no spaces/paragraphs, not well formatted". Verified our side is clean: the direct answer streams verbatim as one chunk (`loop.py:1482`, whitespace preserved) — the poor formatting is the free `deepseek-v4-flash-free` model's raw JSON `response` value. Needs a real-model repro (provider credential). Options: coax well-formatted markdown in the init prompt's `response` field guidance (`initialization.py build_initialization_prompt`), and/or a light post-format pass on the direct response. Do not guess-edit without a repro. See review-34.
