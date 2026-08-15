@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Themes. Settings now has an Appearance section where you can pick between three color themes — Graphite, Midnight Iris, and Warm Ink — and choose Light, Dark, or System (follows your OS). Your choice is remembered and applies instantly, with no flash when the app starts.
 
 ### Changed
+- The agent's opening acknowledgement now appears in the chat as the first line of its reply, and its understanding now lives in the thinking block only — neither is buried in the Agent Workspace anymore.
+- The agent's thinking now separates what it knows (facts) from what it must assume (ambiguities), so you can watch it resolve uncertainty instead of seeing a one-line objective.
+- A turn that passes its acceptance check can no longer end with no reply — the agent always produces at least a summary of what it verified.
 - Refreshed the color scheme. The interface no longer uses green for everything — the default is now a calm, neutral graphite with emerald used only as an accent, which is easier on the eyes and lets your content stand out. Under the hood this is a full theming system: three palettes (Graphite, Midnight Iris, Warm Ink), each in light and dark, are ready to ship — a picker to switch between them in Settings is coming next.
 - The terminal now has a blinking cursor at the prompt when it's ready, and shows a live "executing…" cursor while a command is running so you can tell the shell is working even before any output appears. Command output itself is not animated, so fast output stays smooth.
 - The Agents view now animates parent and delegated child agents (and their tool steps) into the tree as they start, and highlights the agent that's currently working, so you can follow delegated work as it happens.
