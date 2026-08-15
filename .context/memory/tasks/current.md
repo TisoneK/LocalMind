@@ -37,14 +37,23 @@ Move reasoning INTO the loop, onto evidence:
   failing model (gemini-2.5-flash): "list the projects in my dev folder" →
   `tool_call shell (ls -F /Users/bao/Code) started→done` with the real listing;
   no empty/fabrication events. 7 new tests; 1827 backend pass (5 pre-existing).
-- **Step 1 — Gut the init to classify-only (NEXT).** Stop generating the plan +
-  facts/ambiguities upfront (initialization.py). Keep tier + ack. Also fixes
-  the pre-existing prompt-budget drift (B-2026-08-15-13: init prompt 2,969
-  chars vs 2,500 budget).
-- **Step 2 — Mid-loop Thinker consult** (ADR-38): after the first evidence
-  step, call the model to assess the gathered evidence → facts/ambiguities →
-  stream to ThinkingBlock, collapse-after-done. **UNBLOCKED now** — Step 0
-  means evidence is actually gathered.
+- **Step 1 — Gut the init to classify-only. ✅ DONE + DELETED (Session 239,
+  commit `e442f3b`).** The init is strictly classify-only: tier + ack +
+  objective only. The legacy fields (facts/ambiguities/tool_names/plan_steps/
+  success_criteria) were DELETED from the decision, parser, `plan_text()`
+  (now `objective_line()`), the streaming block, and the events — a model
+  returning them is ignored, not preserved. Also deleted the orphaned legacy
+  intent system (thinking_dispatcher/execution_graph/workspace-orchestrator/
+  routing_helpers + their models.py contracts — zero callers since Session
+  201) and FIXED the prompt-budget drift (B-2026-08-15-13: now 2,097 chars).
+  Live trace: `agent_initialization_done` = {mode, objective, confidence,
+  init_prompt_chars}; no upfront todos; gemini hit a free-tier 429 on the
+  execute call (environmental).
+- **Step 2 — Mid-loop Thinker consult (NEXT, ADR-38):** after the first
+  evidence step, call the model to assess the gathered evidence →
+  facts/ambiguities → stream to ThinkingBlock, collapse-after-done.
+  **UNBLOCKED now** — Step 0 means evidence is actually gathered, and Step 1
+  removed the init's pretend-assessment.
 - **Step 3 — Emergent step-by-step decisions** (no upfront checklist);
   synthesis fix ensures a real final answer. NOTE: the Session 238 live trace
   still ends with "✓ 1/1 criteria met" gate text instead of the listing — the
@@ -54,7 +63,8 @@ Move reasoning INTO the loop, onto evidence:
 ## Already shipped this arc (KEEP; not the cure but real): spacing fix,
 token-metric fix, paste buttons, no trivial theater (direct mode), act-not-ask
 init prompt, synthesize-on-empty-answer, **Step 0 forced tool-calling
-(Session 238, `e2c73c9`)**. **User's build was stale** — they
+(Session 238, `e2c73c9`)**, **Step 1 classify-only init + legacy intent-system
+deletion (Session 239, `e442f3b`)**. **User's build was stale** — they
 must `git pull && npm run build` so they stop re-hitting fixed bugs.
 
 ## Model: gemini-2.5-flash is the ACTIVE provider (app Settings; key not in
