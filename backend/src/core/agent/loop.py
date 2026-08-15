@@ -4818,9 +4818,18 @@ class AgentLoop:
                     # for genuinely new content.
                     for field, new_value in diff.items():
                         setattr(last_preview, field, new_value)
-                    # Emit ack at most once — the first time the model produces
-                    # an acknowledgement field, regardless of how it grows.
-                    if not ack_sent and last_preview.acknowledgement:
+                    # Session 237: for DIRECT (trivial / needs-thought-no-tools)
+                    # turns, suppress the acknowledgement AND the understanding.
+                    # The reply itself streams immediately, so an ack like
+                    # "Hello there!" before "Hi! How can I help you today?" is
+                    # a redundant second greeting, and a "respond to a greeting"
+                    # thought is pure theater (ADR-37: trivial → just reply, no
+                    # narration). `mode` is the first JSON field, so it is known
+                    # by the time ack/objective appear. Ack + understanding stay
+                    # for execute/clarify turns, where there is real work to
+                    # acknowledge and real reasoning to show.
+                    _direct = last_preview.mode == "direct"
+                    if not ack_sent and last_preview.acknowledgement and not _direct:
                         ack_sent = True
                         await event_queue.put(("ack", last_preview.acknowledgement[:600]))
                     # Emit understanding at most once — when the model's
@@ -4831,7 +4840,7 @@ class AgentLoop:
                     # final answer (rendered in the ThinkingBlock AND the
                     # workspace card) and would expose the answer as
                     # chain-of-thought, which ADR-34 forbids.
-                    if not understanding_sent and (
+                    if not understanding_sent and not _direct and (
                         last_preview.objective
                         or last_preview.clarifying_question
                     ):
