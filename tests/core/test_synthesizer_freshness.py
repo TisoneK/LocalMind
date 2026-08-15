@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from core.agent.synthesizer import (
@@ -14,13 +14,27 @@ from core.models import Intent, RiskLevel, StreamChunk, ToolResult
 
 
 _CURRENT_QUERY = "What's the weather like in Kitengela now?"
-_SEARCH_RESULTS = """1. **Weather Kitengela today - Meteobox.ca**
+
+# Fixture dates are relative to today so the tests stay green on any calendar
+# day: the "current" block is dated today and the "stale" block is 6 days old.
+# (The synthesizer computes freshness against `date.today()` internally, so a
+# hardcoded "current" date silently rots the moment the calendar rolls over.)
+_TODAY = date.today()
+_STALE = _TODAY - timedelta(days=6)
+
+
+def _block_date(d: date, month_fmt: str) -> str:
+    """Format a date without zero-padded days (matches real-world snippets)."""
+    return f"{d.strftime(month_fmt)} {d.day}, {d.year}"
+
+
+_SEARCH_RESULTS = f"""1. **Weather Kitengela today - Meteobox.ca**
    https://today.example/weather
-   Weather forecast Kitengela Aug. 14, 2026. Clear morning, 19°C.
+   Weather forecast Kitengela {_block_date(_TODAY, '%b.')}. Clear morning, 19°C.
 
 2. **WindBorne Systems current conditions**
    https://old.example/weather
-   Current conditions: 19°C, partly cloudy. Updated Saturday, August 8, 2026.
+   Current conditions: 19°C, partly cloudy. Updated Saturday, {_block_date(_STALE, '%B')}.
 """
 
 
@@ -41,12 +55,12 @@ class _RecordingAdapter:
 def test_current_search_filters_older_dated_result_blocks(query: str) -> None:
     extracted = _extract_web_search(
         _SEARCH_RESULTS,
-        today=date(2026, 8, 14),
+        today=_TODAY,
         user_question=query,
     )
 
-    assert "August 8, 2026" not in extracted.raw_content
-    assert "Aug. 14, 2026" in extracted.raw_content
+    assert _block_date(_STALE, '%B') not in extracted.raw_content
+    assert _block_date(_TODAY, '%b.') in extracted.raw_content
     assert extracted.fields["freshness"]["current_blocks"] == 1
     assert extracted.fields["freshness"]["stale_blocks"] == 1
     assert extracted.fields["freshness"]["filtered_blocks"] == 1
@@ -70,21 +84,21 @@ async def test_synthesis_uses_current_result_without_stale_competitor() -> None:
     )
 
     prompt = adapter.messages[0]["content"]
-    assert "August 8, 2026" not in prompt
-    assert "Aug. 14, 2026" in prompt
+    assert _block_date(_STALE, '%B') not in prompt
+    assert _block_date(_TODAY, '%b.') in prompt
     assert "19°C" in result.answer
 
 
 @pytest.mark.asyncio
 async def test_synthesis_refuses_stale_only_current_data() -> None:
-    stale_only = """1. **WindBorne Systems current conditions**
+    stale_only = f"""1. **WindBorne Systems current conditions**
    https://old.example/weather
-   Current conditions: 19°C, partly cloudy. Updated Saturday, August 8, 2026.
+   Current conditions: 19°C, partly cloudy. Updated Saturday, {_block_date(_STALE, '%B')}.
 """
     adapter = _RecordingAdapter()
     extracted = _extract_web_search(
         stale_only,
-        today=date(2026, 8, 14),
+        today=_TODAY,
         user_question=_CURRENT_QUERY,
     )
     sufficiency = _check_sufficiency(extracted, _CURRENT_QUERY)

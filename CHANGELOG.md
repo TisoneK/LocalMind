@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The app now applies the `dark` class to the `<html>` element by default. LocalMind is a dark-only app — this ensures all shadcn/ui components (which use `dark:` Tailwind variants) render correctly in the dark theme. The light theme variables in `globals.css` are retained for future theming support
 - The `human_size` byte-formatting helper is now shared from `core/utils.py` instead of being duplicated in `shell.py` and `filesystem.py`. A bug fix or new unit will now propagate to all callers automatically
 
+### Changed
+- Windows now uses the custom LocalMind title bar instead of the native frame — the Electron window is fully frameless on Windows and the TitleBar's own minimize/maximize/close buttons (wired through IPC) are the window controls. macOS keeps the system traffic lights (`hiddenInset`) and Linux keeps the native frame, so the custom buttons render only where they are needed. The maximize button also shows a restore icon when the window is maximized, and double-clicking the bar toggles maximize/restore like the native Windows title bar.
+
 ### Fixed
 - Fixed the token count being wildly overstated for quick replies. It was counting the full context the agent prepared but didn't actually send for a simple reply (which grew as the conversation got longer); it now reports what was really sent — e.g. a greeting shows ~900 tokens instead of ~5,000.
 - Fixed the Settings dialog losing focus about once a second, which made it impossible to paste or type an API key. Fields now stay focused while you type.

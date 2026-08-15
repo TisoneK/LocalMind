@@ -20,6 +20,10 @@ interface ElectronAPI {
   minimizeWindow: () => Promise<void>;
   maximizeWindow: () => Promise<void>;
   closeWindow: () => Promise<void>;
+  /** Host platform: 'darwin' | 'win32' | 'linux' | ... */
+  platform: string;
+  isMaximized: () => Promise<boolean>;
+  onMaximizeChange: (callback: (maximized: boolean) => void) => () => void;
 }
 
 interface Window {

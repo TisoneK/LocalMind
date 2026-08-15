@@ -448,14 +448,22 @@ function createTray() {
 // ---------------------------------------------------------------------------
 
 function createMainWindow() {
-  // ADR-34 B-11: deliberate LocalMind chrome.
-  // macOS: 'hiddenInset' keeps the native traffic lights but removes the
-  //   title text, letting our TitleBar component render in the inset space.
-  // Windows/Linux: keep the default frame for now — native min/max/close
-  //   buttons remain. The TitleBar component still renders as a header
-  //   strip but without custom window-control buttons (hasElectron=false
-  //   guard in the component).
-  const titleBarStyle = process.platform === 'darwin' ? 'hiddenInset' : 'default';
+  // ADR-34 B-11 + Session 234: deliberate LocalMind chrome.
+  // - macOS: 'hiddenInset' keeps the native traffic lights but removes the
+  //   title text; the TitleBar component renders in the inset space. The
+  //   system provides the window controls, so the custom buttons are hidden.
+  // - Windows: fully frameless (`frame: false`) — the TitleBar component's
+  //   custom min/max/close buttons (wired through the window-* IPC handlers)
+  //   are the ONLY window controls.
+  // - Linux: keep the default frame for now — native controls remain, and
+  //   the custom buttons stay hidden (same rule as macOS).
+  const isMac = process.platform === 'darwin';
+  const isWindows = process.platform === 'win32';
+  const windowChrome = isMac
+    ? { titleBarStyle: 'hiddenInset' }
+    : isWindows
+      ? { frame: false }
+      : {};
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -464,7 +472,7 @@ function createMainWindow() {
     title: 'LocalMind',
     backgroundColor: '#1a1a2e',
     show: false, // shown after backend is ready
-    titleBarStyle,
+    ...windowChrome,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -510,6 +518,16 @@ function createMainWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Keep the renderer's TitleBar maximize/restore icon in sync with the
+  // real window state (frameless Windows has no native indicator).
+  const sendMaximizeState = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window-maximized-changed', mainWindow.isMaximized());
+    }
+  };
+  mainWindow.on('maximize', sendMaximizeState);
+  mainWindow.on('unmaximize', sendMaximizeState);
 }
 
 // ---------------------------------------------------------------------------
@@ -616,6 +634,11 @@ function registerIpcHandlers() {
       if (mainWindow.isMaximized()) mainWindow.unmaximize();
       else mainWindow.maximize();
     }
+  });
+
+  // Current maximize state, for the TitleBar to render the right icon on mount.
+  ipcMain.handle('window-is-maximized', () => {
+    return mainWindow ? mainWindow.isMaximized() : false;
   });
 
   ipcMain.handle('window-close', () => {

@@ -79,6 +79,34 @@ const electronAPI = {
   minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
   maximizeWindow: () => ipcRenderer.invoke('window-maximize'),
   closeWindow:    () => ipcRenderer.invoke('window-close'),
+
+  /**
+   * Host platform: 'darwin' | 'win32' | 'linux' | ...
+   * Lets the TitleBar decide whether to render custom window controls
+   * (frameless Windows) or defer to the system chrome (macOS/Linux/browser).
+   */
+  platform: process.platform,
+
+  /**
+   * Whether the window is currently maximized (for the restore icon).
+   * @returns {Promise<boolean>}
+   */
+  isMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+
+  /**
+   * Subscribe to maximize/restore state changes.
+   * @param {function(boolean): void} callback - Called with the new state
+   * @returns {function} Cleanup function to remove the listener
+   */
+  onMaximizeChange: (callback) => {
+    const handler = (_event, maximized) => {
+      callback(maximized);
+    };
+    ipcRenderer.on('window-maximized-changed', handler);
+    return () => {
+      ipcRenderer.removeListener('window-maximized-changed', handler);
+    };
+  },
 };
 
 // Expose the API to the renderer via window.electronAPI
