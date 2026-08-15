@@ -3906,6 +3906,19 @@ class AgentLoop:
                     )
                     if not _gate_final:
                         continue
+                    # Session 237: the gate passed but the model may have run
+                    # the tool without writing an answer — synthesize the real
+                    # content from evidence so the reply isn't just "✓ n/n".
+                    if not full_text.strip():
+                        _synth = await self._synthesize_final_from_trace(
+                            trace, intent,
+                            reformulated_message or _user_message_text(loop_messages),
+                            active_adapter,
+                        )
+                        if _synth:
+                            full_text = _synth
+                            trace.final_response = full_text
+                            yield StreamChunk(text=_synth, done=False)
                     if _gate_suffix:
                         full_text += _gate_suffix
                         trace.final_response = full_text
@@ -4001,6 +4014,18 @@ class AgentLoop:
                 )
                 if not _gate_final:
                     continue
+                # Session 237: gate passed but no model answer — synthesize the
+                # real content from tool evidence (not just "✓ n/n criteria met").
+                if not full_text.strip():
+                    _synth = await self._synthesize_final_from_trace(
+                        trace, intent,
+                        reformulated_message or _user_message_text(loop_messages),
+                        active_adapter,
+                    )
+                    if _synth:
+                        full_text = _synth
+                        trace.final_response = full_text
+                        yield StreamChunk(text=_synth, done=False)
                 if _gate_suffix:
                     full_text += _gate_suffix
                     trace.final_response = full_text
@@ -4108,6 +4133,50 @@ class AgentLoop:
                 )
         except Exception:  # pragma: no cover — memory must never break the loop
             pass
+
+    async def _synthesize_final_from_trace(
+        self, trace, intent: Intent, user_question: str, adapter
+    ) -> str:
+        """Build a real content answer from tool evidence when the model
+        finished the loop without emitting one.
+
+        Session 237: execute turns like "list my dev folder" ran the tool and
+        the acceptance gate passed, but the model produced NO final text — so
+        the reply was only the criteria suffix ("✓ 1/1 criteria met"), never
+        the actual listing. Synthesize an answer from the trace's tool
+        observations instead. This only fires on the empty-answer path, so it
+        strictly improves a currently-broken case (no regression to turns
+        where the model already answered).
+        """
+        if not self._synthesizer.enabled:
+            return ""
+        try:
+            from core.models import RiskLevel, ToolResult
+
+            results = [
+                ToolResult(
+                    content=str(step.observation),
+                    risk=RiskLevel.LOW,
+                    source=step.tool_name or "tool",
+                )
+                for step in (getattr(trace, "steps", []) or [])
+                if step.tool_name and step.observation
+            ]
+            if not results:
+                return ""
+            synthesis = await self._synthesizer.synthesize(
+                tool_results=results,
+                intent=intent,
+                user_question=user_question or "",
+                adapter=adapter or self._adapter,
+            )
+            return (synthesis.answer or "").strip()
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.warning(
+                "[agent.loop] final-answer synthesis from trace failed (non-fatal): %s",
+                exc,
+            )
+            return ""
 
     async def _acceptance_gate_at_final_answer(
         self,
