@@ -4791,12 +4791,17 @@ class AgentLoop:
                     if not ack_sent and last_preview.acknowledgement:
                         ack_sent = True
                         await event_queue.put(("ack", last_preview.acknowledgement[:600]))
-                    # Emit understanding at most once — when the objective,
-                    # clarifying_question, or (direct mode) response first appears.
+                    # Emit understanding at most once — when the model's
+                    # OBJECTIVE (its reasoning about what the user wants) or a
+                    # clarifying_question first appears. The `response` (the
+                    # answer itself) is deliberately NOT a trigger: surfacing
+                    # it here would make the "thought process" identical to the
+                    # final answer (rendered in the ThinkingBlock AND the
+                    # workspace card) and would expose the answer as
+                    # chain-of-thought, which ADR-34 forbids.
                     if not understanding_sent and (
                         last_preview.objective
                         or last_preview.clarifying_question
-                        or (last_preview.mode == "direct" and last_preview.response)
                     ):
                         understanding_sent = True
                         line = render_understanding(last_preview)

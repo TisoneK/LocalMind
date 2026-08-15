@@ -98,21 +98,19 @@ def extract_preview(buffer: str) -> InitializationPreview:
 def render_understanding(preview: InitializationPreview, decision_mode: str = "") -> str:
     """Render a bounded, human-readable 'thinker' line from a preview.
 
-    ADR-34: the thinker must be visible and fast.  We surface the model's own
-    acknowledgement + objective as a single bounded line; raw JSON, full plan
-    steps, and chain-of-thought never appear in this channel.
+    ADR-34: the thinker must be visible and fast, and it must show the model's
+    REASONING about the request — its `objective` ("what the user actually
+    wants") — never the answer. The `response` is deliberately NOT surfaced
+    here: doing so made the "thought process" identical to the final answer
+    (bug: same blob rendered in the ThinkingBlock and the workspace card) and
+    exposed the answer as chain-of-thought. Raw JSON and full plan steps never
+    appear in this channel either.
     """
     parts: list[str] = []
     if preview.objective:
         parts.append(preview.objective.rstrip("."))
     if preview.clarifying_question and not parts:
         parts.append(f"Clarifying: {preview.clarifying_question}")
-    if not parts and preview.response:
-        # Direct mode often streams the response before the objective; surface
-        # a short prefix of it so the user sees the answer is coming.
-        parts.append(preview.response[:160].rstrip())
-    if not parts and decision_mode:
-        parts.append(f"Mode: {decision_mode}")
     return " ".join(parts)[: _PREVIEW_CAP]
 
 

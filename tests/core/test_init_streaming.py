@@ -365,10 +365,24 @@ def test_render_understanding_uses_clarifying_question_when_no_objective():
     assert "Which file?" in line
 
 
-def test_render_understanding_falls_back_to_response_for_direct_mode():
+def test_render_understanding_never_surfaces_the_response():
+    """Session 224 regression: the thinker must show the model's reasoning
+    (objective), never the answer. Surfacing `response` here made the
+    "thought process" identical to the final answer (bug report: same blob
+    in the ThinkingBlock and the workspace card) and exposed the answer as
+    chain-of-thought, which ADR-34 forbids. A direct reply with only a
+    response yields an empty understanding line."""
     preview = InitializationPreview(mode="direct", response="Hello there, how can I help?")
-    line = render_understanding(preview)
-    assert "Hello there" in line
+    assert render_understanding(preview) == ""
+    # But a genuine objective (the model's reasoning) is still surfaced.
+    preview_with_reasoning = InitializationPreview(
+        mode="direct",
+        objective="User is greeting me and wants a warm, brief reply",
+        response="Hey! Doing great — how can I help?",
+    )
+    line = render_understanding(preview_with_reasoning)
+    assert "greeting" in line
+    assert "how can I help" not in line  # the answer must not leak in
 
 
 def test_preview_diff_detects_new_fields_only():
