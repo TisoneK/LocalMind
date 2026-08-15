@@ -28,6 +28,8 @@ class InitializationDecision:
     response: str = ""
     objective: str = ""
     clarifying_question: str = ""
+    facts: list[str] = field(default_factory=list)
+    ambiguities: list[str] = field(default_factory=list)
     tool_names: list[str] = field(default_factory=list)
     plan_steps: list[str] = field(default_factory=list)
     success_criteria: list[str] = field(default_factory=list)
@@ -172,6 +174,8 @@ JSON schema:
   "response": "complete answer only for direct mode",
   "objective": "what the user actually wants",
   "clarifying_question": "one question only for clarify mode",
+  "facts": ["what you actually know about the request or context (execute only)"],
+  "ambiguities": ["what you would have to assume to proceed (execute only)"],
   "tool_names": ["tool_name"],
   "plan_steps": ["goal-level step with concrete tool/arguments"],
   "success_criteria": ["observable evidence that proves completion"],
@@ -183,6 +187,8 @@ Rules:
 - execute for anything requiring current info, files, code, browser, memory, or evidence.
 - clarify only when proceeding would require guessing a material requirement.
 - acknowledgement <=180 chars, response <=1200 chars, plan_steps <=8, tool_names <=8, success_criteria <=4.
+- facts <=3, ambiguities <=2 (use empty arrays when none — do not invent ambiguity).
+- facts are what you KNOW; ambiguities are what you must ASSUME. Keep them separate.
 
 User request:
 {user_message}
@@ -271,6 +277,8 @@ def parse_initialization(text: str) -> InitializationDecision:
         response=str(payload.get("response", "")).strip()[:1200],
         objective=str(payload.get("objective", "")).strip()[:_MAX_TEXT],
         clarifying_question=str(payload.get("clarifying_question", "")).strip()[:_MAX_TEXT],
+        facts=_bounded_strings(payload.get("facts"), 3, 200),
+        ambiguities=_bounded_strings(payload.get("ambiguities"), 2, 200),
         tool_names=_bounded_strings(payload.get("tool_names"), _MAX_TOOLS, 80),
         plan_steps=_bounded_strings(payload.get("plan_steps"), _MAX_STEPS),
         success_criteria=_bounded_strings(payload.get("success_criteria"), 4),

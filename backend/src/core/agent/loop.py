@@ -89,6 +89,7 @@ from core.agent.delegation import (
 from core.agent.init_stream import (
     InitializationPreview,
     extract_preview,
+    render_assessment_details,
     render_understanding,
 )
 from core.agent.initialization import (
@@ -1444,6 +1445,12 @@ class AgentLoop:
                     # Surface the bounded thinker line in the ThinkingBlock so
                     # the user watches the model's understanding arrive in
                     # real-time, not 7+ seconds later as a single blob.
+                    yield StreamChunk(text="", done=False, thinking=payload[:600])
+                elif event_type == "understanding_details" and isinstance(payload, str):
+                    # ADR-36: facts/ambiguities follow the objective line. A
+                    # thinking separator makes the ThinkingBlock render the
+                    # detail block as a distinct section beneath the goal.
+                    yield StreamChunk(text="", done=False, thinking="start")
                     yield StreamChunk(text="", done=False, thinking=payload[:600])
                 elif event_type == "decision" and isinstance(payload, InitializationDecision):
                     initialization = payload
@@ -4823,6 +4830,15 @@ class AgentLoop:
                     len(decision.plan_steps),
                     decision.init_prompt_chars,
                 )
+                # ADR-36: surface the Thinker's facts/ambiguities as a
+                # follow-up detail block (the objective already streamed as
+                # the early understanding). Emitted only when present, so the
+                # ThinkingBlock gains real resolution reasoning instead of a
+                # one-line objective.
+                if decision.facts or decision.ambiguities:
+                    details = render_assessment_details(decision)
+                    if details:
+                        await event_queue.put(("understanding_details", details))
                 await event_queue.put(("decision", decision))
                 decision_sent = True
             except Exception as exc:

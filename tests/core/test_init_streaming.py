@@ -11,8 +11,6 @@ Validates that the streaming initializer:
 
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass
 from typing import AsyncIterator
 
 import pytest
@@ -20,6 +18,7 @@ import pytest
 from core.agent.init_stream import (
     InitializationPreview,
     extract_preview,
+    render_assessment_details,
     render_understanding,
 )
 from core.agent.initialization import InitializationDecision, parse_initialization
@@ -406,3 +405,77 @@ def test_preview_diff_ignores_empty_new_values():
     old = InitializationPreview(acknowledgement="Hi")
     new = InitializationPreview()  # all empty
     assert old.diff(new) == {}
+
+
+# ── ADR-36: Thinker facts + ambiguities ─────────────────────────────────
+
+
+def test_render_assessment_details_renders_facts_and_ambiguities():
+    """The Thinker separates what it knows from what it must assume."""
+    decision = InitializationDecision(
+        mode="execute",
+        objective="List projects in the dev folder",
+        facts=["the user named C:/Users/tison/dev"],
+        ambiguities=["the dev folder may not exist yet"],
+    )
+    details = render_assessment_details(decision)
+    assert "Facts: the user named C:/Users/tison/dev" in details
+    assert "Ambiguities: the dev folder may not exist yet" in details
+
+
+def test_render_assessment_details_empty_when_none():
+    """No facts/ambiguities -> no detail block (objective-only thinking)."""
+    decision = InitializationDecision(mode="execute", objective="Do the thing")
+    assert render_assessment_details(decision) == ""
+
+
+def test_parse_initialization_extracts_facts_and_ambiguities():
+    """The bounded parser must carry facts + ambiguities into the decision."""
+    text = (
+        '{"mode": "execute", "acknowledgement": "On it.", '
+        '"objective": "List projects", '
+        '"facts": ["target is the dev folder", "platform is windows"], '
+        '"ambiguities": ["folder may not exist"], '
+        '"plan_steps": ["list the directory"], "confidence": 0.8}'
+    )
+    decision = parse_initialization(text)
+    assert decision.facts == ["target is the dev folder", "platform is windows"]
+    assert decision.ambiguities == ["folder may not exist"]
+
+
+@pytest.mark.asyncio
+async def test_streaming_initializer_emits_understanding_details():
+    """When the model returns facts/ambiguities, the initializer emits a
+    follow-up detail event AFTER the objective understanding."""
+    json_chunks = [
+        '{"mode": "execute", ',
+        '"acknowledgement": "On it.", ',
+        '"objective": "List projects in the dev folder", ',
+        '"facts": ["the user named C:/Users/tison/dev"], ',
+        '"ambiguities": ["the dev folder may not exist"], ',
+        '"plan_steps": ["list the directory"], ',
+        '"confidence": 0.8}',
+    ]
+    adapter = _FakeAdapter(json_chunks)
+    loop = _make_loop()
+
+    events: list[tuple[str, object]] = []
+    async for event_type, payload in loop._initialize_parent_streaming(
+        active_adapter=adapter,
+        messages=[{"role": "user", "content": "list the projects in the dev folder"}],
+        available_tools=[{"intent": "shell", "description": "run commands"}],
+        env_context="",
+        intent_history=None,
+    ):
+        events.append((event_type, payload))
+
+    details_events = [p for t, p in events if t == "understanding_details"]
+    assert len(details_events) == 1
+    details = details_events[0]
+    assert "Facts: the user named C:/Users/tison/dev" in details
+    assert "Ambiguities: the dev folder may not exist" in details
+
+    # Order: objective understanding precedes the detail block, which precedes
+    # the final decision.
+    types = [t for t, _ in events]
+    assert types.index("understanding") < types.index("understanding_details") < types.index("decision")

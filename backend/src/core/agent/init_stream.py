@@ -114,8 +114,29 @@ def render_understanding(preview: InitializationPreview, decision_mode: str = ""
     return " ".join(parts)[: _PREVIEW_CAP]
 
 
+def render_assessment_details(decision) -> str:
+    """Render the Thinker's facts + ambiguities as a bounded detail block.
+
+    ADR-36: the Thinker separates what it KNOWS (facts — inform the next
+    step) from what it must ASSUME (ambiguities — determine proceed / pick a
+    default / ask). This is the delta appended after the early objective line
+    so the user watches the agent's resolution reasoning arrive live in the
+    ThinkingBlock. Duck-typed: accepts an InitializationDecision or any object
+    with `facts` / `ambiguities` iterables.
+    """
+    facts = getattr(decision, "facts", None) or []
+    ambiguities = getattr(decision, "ambiguities", None) or []
+    lines: list[str] = []
+    if facts:
+        lines.append("Facts: " + "; ".join(str(f).rstrip(".") for f in facts))
+    if ambiguities:
+        lines.append("Ambiguities: " + "; ".join(str(a).rstrip(".") for a in ambiguities))
+    return "\n".join(lines)[: _PREVIEW_CAP]
+
+
 __all__ = [
     "InitializationPreview",
     "extract_preview",
     "render_understanding",
+    "render_assessment_details",
 ]
