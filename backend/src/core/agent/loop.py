@@ -1082,6 +1082,16 @@ def _filtered_tool_defs(allowed_tools: Optional[frozenset[str]] = None) -> list[
     return [td for td in TOOL_DEFINITIONS if td["function"]["name"] in allowed_names]
 
 
+# Session 238 (Thinker/Agent rebuild Step 0) — forced-tool reprompt bound.
+# When a tool-required turn's FIRST model call returns empty or text-without-
+# tool (gemini-2.5-flash via the OpenAI-compat endpoint, Session 237 trace),
+# the loop reprompts once with a forced-tool nudge instead of failing the
+# turn. The nudge is gated to iteration 0 (the first tool call), so this
+# counter is a hard ceiling documenting the bound; if the gate is ever
+# relaxed, the counter still caps the retries.
+_MAX_TOOL_FORCE_RECOVERIES = 2
+
+
 # Session 192 — same-tool replan bound. After this many CONSECUTIVE
 # failures on the SAME tool, the acceptance gate stops replanning and
 # reports honestly instead of looping. Root of the Session 191 death
@@ -2091,6 +2101,21 @@ class AgentLoop:
             # user sees a result before the adapter itself times out.
             # The wall-clock cap (90s total) is checked between iterations.
             t_llm = time.monotonic()
+            # Session 238 (Thinker/Agent rebuild Step 0): on the FIRST
+            # iteration of a tool-required intent (no tool has run yet),
+            # force the model to emit a tool call. Some providers
+            # (gemini-2.5-flash via the OpenAI-compat endpoint) otherwise
+            # return an empty or text-only response on the first tool call,
+            # which failed the turn with the "empty response" message
+            # (Session 237 trace). tool_choice="required" is applied ONLY
+            # here — later iterations keep the default so the model can
+            # synthesize its final answer without further tool calls.
+            _force_tool_choice = (
+                iteration == 0
+                and intent in AGENT_INTENTS
+                and not trace.steps
+                and bool(filtered_tools)
+            )
             try:
                 result = await asyncio.wait_for(
                     active_adapter.chat_with_tools(
@@ -2098,6 +2123,7 @@ class AgentLoop:
                         tools=filtered_tools,
                         temperature=0.3,
                         intent=intent.value,
+                        tool_choice="required" if _force_tool_choice else None,
                     ),
                     timeout=PER_CALL_TIMEOUT_SECS,
                 )
@@ -3534,6 +3560,47 @@ class AgentLoop:
                         f"tool calls for intent={intent.value} on iter={iteration + 1} "
                         f"(fabrication_risk={fabrication_risk})"
                     )
+                    # Session 238 (Thinker/Agent rebuild Step 0): on the
+                    # FIRST tool iteration, text without a tool call is
+                    # usually model fragility, not a real answer — the
+                    # model skipped the tool API (gemini-2.5-flash via
+                    # OpenAI-compat returned text/empty on the first tool
+                    # call — Session 237 trace). Reprompt with a
+                    # forced-tool nudge (bounded) instead of streaming the
+                    # text as the final answer. The model's text stays in
+                    # history, so if it insists on text again on the next
+                    # pass (iteration != 0 now), the text IS accepted and
+                    # streamed — never an unbounded retry.
+                    if (
+                        filtered_tools
+                        and not has_error
+                        and trace.tool_forced_recoveries < _MAX_TOOL_FORCE_RECOVERIES
+                    ):
+                        trace.tool_forced_recoveries += 1
+                        if _obs:
+                            _obs.emit(
+                                "tool_force_recovery",
+                                recovery_num=trace.tool_forced_recoveries,
+                                reason="text-without-tool on first tool iteration",
+                                intent=intent.value,
+                                iteration=iteration + 1,
+                            )
+                        if not stream_ended_early:
+                            async for _drain_chunk in result:
+                                pass
+                        loop_messages.append({"role": "assistant", "content": initial_buffer})
+                        loop_messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "This request requires a tool call, but you did not call one. "
+                                    "You MUST invoke a tool now via the function-calling API "
+                                    "(e.g. shell, file_task, web_search) before answering. "
+                                    "Do NOT narrate what you would do — call the tool directly."
+                                ),
+                            }
+                        )
+                        continue  # retry this iteration with the forced-tool nudge
                 # (initial_buffer and initial_chunks already populated by the
                 #  MiniMax detection phase above — no need to re-buffer here)
 
@@ -3693,6 +3760,48 @@ class AgentLoop:
                 # never burn another PER_CALL_TIMEOUT_SECS call on the same
                 # empty output.
                 if not (initial_buffer or "").strip():
+                    # Session 238 (Thinker/Agent rebuild Step 0): an EMPTY
+                    # response on the FIRST tool iteration is model
+                    # fragility (gemini-2.5-flash returned empty/no-tool in
+                    # 788ms — Session 237 trace), not evidence that the
+                    # model is overloaded. Reprompt once with a forced-tool
+                    # nudge before the Session 115 honest fast-fail, so the
+                    # turn can still succeed. Later iterations (or a second
+                    # empty response) take the honest fail unchanged — the
+                    # nudge is bounded and never spins.
+                    if (
+                        iteration == 0
+                        and intent in AGENT_INTENTS
+                        and not trace.steps
+                        and filtered_tools
+                        and trace.tool_forced_recoveries < _MAX_TOOL_FORCE_RECOVERIES
+                    ):
+                        trace.tool_forced_recoveries += 1
+                        if _obs:
+                            _obs.emit(
+                                "tool_force_recovery",
+                                recovery_num=trace.tool_forced_recoveries,
+                                reason="empty response on first tool iteration",
+                                intent=intent.value,
+                                iteration=iteration + 1,
+                            )
+                        if not stream_ended_early:
+                            async for _drain_chunk in result:
+                                pass
+                        # Keep message-role alternation for strict providers:
+                        # an empty assistant frame, then the corrective nudge.
+                        loop_messages.append({"role": "assistant", "content": ""})
+                        loop_messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "You returned an empty response. This request requires "
+                                    "tool use — call the appropriate tool NOW via the "
+                                    "function-calling API (do not answer from memory)."
+                                ),
+                            }
+                        )
+                        continue  # retry this iteration with the forced-tool nudge
                     trace.empty_response = True  # ADR-18 P2: remember this failure
                     if _obs:
                         _obs.emit(

@@ -74,7 +74,7 @@ class _ParentAdapterCompat:
     def __getattr__(self, name):
         return getattr(self._base, name)
 
-    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None):
+    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None, tool_choice=None):
         return self._base.chat(messages, temperature=temperature, intent=intent)
 
 

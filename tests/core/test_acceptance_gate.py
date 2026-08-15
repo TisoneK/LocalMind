@@ -19,6 +19,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from core.agent.loop import _SAME_TOOL_REPLAN_CAP, AgentLoop, same_tool_failure_streak
 from core.agent.models import AgentStep, AgentTrace
 from core.models import (
@@ -283,7 +284,7 @@ class _GateLoopAdapter:
     def __init__(self):
         self.chat_with_tools_calls = 0
 
-    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None):
+    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None, tool_choice=None):
         self.chat_with_tools_calls += 1
 
         async def _stream():
@@ -421,7 +422,7 @@ class _ReplanAdapter:
         yield StreamChunk(text=self.plan_text, done=False)
         yield StreamChunk(text="", done=True)
 
-    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None):
+    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None, tool_choice=None):
         raise AssertionError("gate replan must use chat(), not chat_with_tools()")
         yield  # pragma: no cover
 
@@ -569,7 +570,7 @@ async def test_loop_without_gate_fn_unchanged():
     """No is_done_fn → the legacy path (model streams the answer)."""
     loop = AgentLoop(adapter=MagicMock())
 
-    async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
         async def _stream():
             yield StreamChunk(text="All good.", done=False)
             yield StreamChunk(text="", done=True)

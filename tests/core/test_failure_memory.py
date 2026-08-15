@@ -16,6 +16,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from core.agent.models import AgentStep, AgentTrace
 from core.failure_memory import (
     build_failure_summary,
@@ -167,7 +168,7 @@ def test_db_recall_prunes_stale_failures(tmp_path):
 
 
 class _FailLoopAdapter:
-    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None):
+    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None, tool_choice=None):
         async def _stream():
             from core.models import StreamChunk
 
@@ -182,14 +183,15 @@ class _FailLoopAdapter:
 
 
 async def _run_capped_loop(obs):
-    """Drive a loop that ends by hitting the iteration cap (adapter keeps
-    returning empty streams → the loop burns its 1 iteration)."""
+    """Drive a loop that ends on the empty-response honest fail (adapter keeps
+    returning empty streams → the iter-0 nudge burns iteration 1, iteration 2
+    hits the Session 115 fast-fail)."""
     from core.agent.loop import AgentLoop
     from core.models import Intent
 
     loop = AgentLoop(adapter=MagicMock())
 
-    async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
         async def _stream():
             from core.models import StreamChunk
 
@@ -202,7 +204,7 @@ async def _run_capped_loop(obs):
     adapter.chat_with_tools = chat_with_tools
     adapter.chat = _FailLoopAdapter.chat
 
-    with patch("core.agent.loop.MAX_ITERATIONS", 1), patch(
+    with patch("core.agent.loop.MAX_ITERATIONS", 2), patch(
         "core.agent.loop.PLAN_ENABLED", False
     ), patch(
         "core.agent.loop._filter_tool_injection", side_effect=lambda x: x
@@ -248,7 +250,7 @@ async def test_loop_emits_failure_event_on_hit_limit():
     loop = AgentLoop(adapter=MagicMock())
     obs = ObsCollector()
 
-    async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
         # Every call returns a tool call for shell → the loop burns
         # iterations without ever producing a final answer → cap hit.
         from adapters.ollama import ToolCallResult
@@ -293,7 +295,7 @@ async def test_loop_success_emits_no_failure_event():
 
     obs = ObsCollector()
 
-    async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
         async def _stream():
             from core.models import StreamChunk
 
@@ -370,7 +372,7 @@ async def test_engine_persists_failure_and_recalls_it(tmp_path, monkeypatch):
     mock_adapter = MagicMock()
     mock_adapter.effective_context_window = 8192
 
-    async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
         async def _stream():
             from core.models import StreamChunk
 

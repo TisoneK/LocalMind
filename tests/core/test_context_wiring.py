@@ -15,6 +15,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from core.agent.loop import AgentLoop
 from core.models import Intent, StreamChunk
 from core.obs import ObsCollector
@@ -26,7 +27,7 @@ class _SilentAdapter:
     def __init__(self):
         self.calls = 0
 
-    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None):
+    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None, tool_choice=None):
         self.calls += 1
         async def _stream():
             yield StreamChunk(text="", done=True)

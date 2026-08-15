@@ -25,6 +25,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from adapters.ollama import ToolCallResult
 from core.agent.loop import AgentLoop
 from core.agent.models import AgentStep, AgentTrace
@@ -171,7 +172,7 @@ class TestEndToEndHeadingRescue:
         loop = AgentLoop(adapter=MagicMock())
         seen = {"calls": 0}
 
-        async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
             seen["calls"] += 1
             if seen["calls"] == 1:
                 return ToolCallResult(

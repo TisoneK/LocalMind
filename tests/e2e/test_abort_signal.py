@@ -26,11 +26,12 @@ import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
+
 from adapters.ollama import ToolCallResult
 from core.agent.loop import AgentLoop
 from core.engine import Engine
 from core.models import AgentAbortedError, Intent, RiskLevel, StreamChunk, ToolResult
-from fastapi.testclient import TestClient
 
 
 def _successful_dispatch() -> tuple:
@@ -48,7 +49,7 @@ class TestLoopAbort:
         abort_signal = asyncio.Event()
         seen = {"call": 0}
 
-        async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
             seen["call"] += 1
             if seen["call"] == 1:
                 # Abort arrives after iteration 1's top-of-loop check.
@@ -119,7 +120,7 @@ class TestLoopAbort:
         loop = AgentLoop(adapter=MagicMock())
         seen = {"call": 0}
 
-        async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
             seen["call"] += 1
             if seen["call"] == 1:
                 return ToolCallResult(

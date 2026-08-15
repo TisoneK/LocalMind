@@ -726,6 +726,7 @@ class OpenAICompatAdapter(BaseAdapter):
         req_timeout = timeout if timeout is not None else 120.0
 
         usage_option_retry = True
+        tool_choice_retry = True
         request_payload = payload
         for attempt in range(3):  # 0, 1, 2 = 3 total attempts
             request = self._client.build_request(
@@ -738,23 +739,47 @@ class OpenAICompatAdapter(BaseAdapter):
             response = await self._client.send(request, stream=True)
 
             if response.status_code != 429:
-                # Some OpenAI-compatible providers reject the optional
-                # stream_options/include_usage field instead of ignoring it.
-                # Retry that request once without the optional field so
-                # telemetry remains additive and cannot break chat.
-                if (
-                    response.status_code in (400, 422)
-                    and usage_option_retry
-                    and "stream_options" in request_payload
-                ):
+                # Some OpenAI-compatible providers reject optional fields
+                # (stream_options/include_usage, tool_choice) instead of
+                # ignoring them. Retry once without the offending field so
+                # telemetry and forced tool choice remain additive and can
+                # never break chat.
+                if response.status_code in (400, 422):
                     body = (await response.aread()).decode(errors="replace").lower()
-                    if "stream_options" in body or "include_usage" in body or "unknown field" in body:
+                    if (
+                        usage_option_retry
+                        and "stream_options" in request_payload
+                        and (
+                            "stream_options" in body
+                            or "include_usage" in body
+                            or "unknown field" in body
+                        )
+                    ):
                         await response.aclose()
                         request_payload = dict(request_payload)
                         request_payload.pop("stream_options", None)
                         usage_option_retry = False
                         logger.warning(
                             "[adapter] %s rejected stream usage options; retrying without them",
+                            self._provider_name,
+                        )
+                        continue
+                    # Session 238: some providers reject the tool_choice field
+                    # (or a specific value like "required"). Retry once
+                    # without it so the forced-tool first iteration degrades
+                    # to the previous (unforced) behavior instead of failing
+                    # the turn with a 400.
+                    if (
+                        tool_choice_retry
+                        and "tool_choice" in request_payload
+                        and ("tool_choice" in body or "tool choice" in body)
+                    ):
+                        await response.aclose()
+                        request_payload = dict(request_payload)
+                        request_payload.pop("tool_choice", None)
+                        tool_choice_retry = False
+                        logger.warning(
+                            "[adapter] %s rejected tool_choice; retrying without it",
                             self._provider_name,
                         )
                         continue
@@ -984,6 +1009,20 @@ class OpenAICompatAdapter(BaseAdapter):
         # Try sending with the tools parameter for providers that support it
         if tools:
             payload["tools"] = tools
+
+        # Session 238 (Thinker/Agent rebuild Step 0): honor an explicit
+        # tool_choice. The parent loop passes tool_choice="required" on the
+        # FIRST tool iteration so models that would otherwise answer directly
+        # or return empty on the first tool call (gemini-2.5-flash via this
+        # OpenAI-compat endpoint, Session 237 trace) are forced to emit a
+        # tool call. This parameter was previously accepted but silently
+        # ignored — every OpenAI-compatible provider supports the standard
+        # tool_choice values ("auto" / "required" / "none" / a specific
+        # function). Providers that reject the field are handled by the
+        # graceful degrade in _send_streaming_with_retry (retry once without
+        # it), so this stays additive and can never break chat.
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
 
         # ── Streaming implementation ─────────────────────────────────────────
         # Previous version buffered ALL text before returning, which broke

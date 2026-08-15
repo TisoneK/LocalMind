@@ -567,3 +567,123 @@ class TestTextStreamWithoutDone:
             f"all buffered text must be yielded despite the missing [DONE], got {text!r}"
         )
         assert any(c.done for c in chunks), "a done chunk must be yielded"
+
+
+# ── 3. tool_choice passthrough + graceful degrade (Session 238) ──────────
+
+
+class TestToolChoicePassthrough:
+    """Session 238 (Thinker/Agent rebuild Step 0): the OpenAI-compat adapter
+    must HONOR the tool_choice parameter (previously accepted but silently
+    ignored), and degrade gracefully when a provider rejects the field."""
+
+    def test_tool_choice_required_lands_in_payload(self, monkeypatch):
+        monkeypatch.setenv("ZEN_API_KEY", "sk-fake-test-key")
+        adapter = OpenAICompatAdapter(provider="zen", model_override="deepseek-v4-flash-free")
+        captured = {}
+
+        async def fake_send_streaming(url, payload, headers=None, timeout=None):
+            captured.update(payload)
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+
+            async def aiter_lines():
+                yield "data: [DONE]"
+
+            mock_resp.aiter_lines = aiter_lines
+
+            async def aclose():
+                pass
+            mock_resp.aclose = aclose
+            return mock_resp
+
+        with patch.object(adapter, "_send_streaming_with_retry", new=fake_send_streaming):
+            asyncio.run(
+                adapter.chat_with_tools(
+                    messages=[{"role": "user", "content": "list files"}],
+                    tools=[{"type": "function", "function": {"name": "shell", "description": "Run", "parameters": {}}}],
+                    temperature=0.3,
+                    intent="shell",
+                    tool_choice="required",
+                )
+            )
+
+        assert captured.get("tool_choice") == "required", (
+            f"tool_choice='required' must reach the provider payload, got {captured.get('tool_choice')!r}"
+        )
+
+    def test_no_tool_choice_key_when_none(self, monkeypatch):
+        """The default (tool_choice=None) must not add the key at all — the
+        pre-Session-238 payload shape is preserved for every other call."""
+        monkeypatch.setenv("ZEN_API_KEY", "sk-fake-test-key")
+        adapter = OpenAICompatAdapter(provider="zen", model_override="deepseek-v4-flash-free")
+        captured = {}
+
+        async def fake_send_streaming(url, payload, headers=None, timeout=None):
+            captured.update(payload)
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+
+            async def aiter_lines():
+                yield "data: [DONE]"
+
+            mock_resp.aiter_lines = aiter_lines
+
+            async def aclose():
+                pass
+            mock_resp.aclose = aclose
+            return mock_resp
+
+        with patch.object(adapter, "_send_streaming_with_retry", new=fake_send_streaming):
+            asyncio.run(
+                adapter.chat_with_tools(
+                    messages=[{"role": "user", "content": "hi"}],
+                    tools=[],
+                    temperature=0.3,
+                    intent="chat",
+                )
+            )
+
+        assert "tool_choice" not in captured, "tool_choice=None must not add the key"
+
+    def test_provider_rejecting_tool_choice_retries_without_it(self, monkeypatch):
+        """A 400 that names tool_choice degrades to the unforced request
+        instead of failing the turn (mirrors the stream_options degrade)."""
+        monkeypatch.setenv("ZEN_API_KEY", "sk-fake-test-key")
+        adapter = OpenAICompatAdapter(provider="zen", model_override="deepseek-v4-flash-free")
+        requests = []
+
+        class FakeResponse:
+            def __init__(self, status_code: int, body: str = ""):
+                self.status_code = status_code
+                self._body = body.encode()
+                self.headers = {}
+
+            async def aread(self):
+                return self._body
+
+            async def aclose(self):
+                return None
+
+        class FakeClient:
+            def build_request(self, method, url, *, json, headers, timeout):
+                requests.append(json)
+                return {"json": json}
+
+            async def send(self, request, stream=True):
+                if len(requests) == 1:
+                    return FakeResponse(400, '{"error":"unsupported field: tool_choice"}')
+                return FakeResponse(200)
+
+        adapter._client = FakeClient()
+
+        async def run():
+            return await adapter._send_streaming_with_retry(
+                "https://example.test/chat/completions",
+                {"model": "deepseek-v4-flash-free", "tools": [], "tool_choice": "required"},
+            )
+
+        response = asyncio.run(run())
+        assert response.status_code == 200
+        assert "tool_choice" in requests[0]
+        assert "tool_choice" not in requests[1]

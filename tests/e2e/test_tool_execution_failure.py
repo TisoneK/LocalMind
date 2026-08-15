@@ -33,6 +33,7 @@ import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from core.agent.loop import AgentLoop
 from core.models import Intent, StreamChunk
 
@@ -466,7 +467,7 @@ class TestEndToEndSilentFailureScenario:
         # gets an empty stream too.
         call_count = {"chat_with_tools": 0, "chat": 0}
 
-        async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
             call_count["chat_with_tools"] += 1
             if call_count["chat_with_tools"] <= 2:
                 # First two calls: model picks a tool
@@ -724,7 +725,7 @@ class TestSynthesisFailureHandler:
         loop = AgentLoop(adapter=MagicMock())
         call_count = {"n": 0}
 
-        async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
             call_count["n"] += 1
             tool_name = "shell" if call_count["n"] == 1 else "file_write"
             return ToolCallResult(

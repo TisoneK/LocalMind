@@ -27,7 +27,7 @@ class _WorkflowAdapter:
             )
         )
 
-    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None):
+    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None, tool_choice=None):
         async def _stream():
             yield StreamChunk(text="The requested work is complete.", done=False)
             yield StreamChunk(text="", done=True)
@@ -107,7 +107,7 @@ async def test_tool_observation_returns_to_parent_before_final_answer():
             self.tool_call_messages = []
             self.calls = 0
 
-        async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None):
+        async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None, tool_choice=None):
             self.calls += 1
             if self.calls == 1:
                 return ToolCallResult(

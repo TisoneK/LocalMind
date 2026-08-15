@@ -174,6 +174,7 @@ class AgentTrace:
     hit_limit: bool = False
     clarification_issued: bool = False
     tool_talk_recoveries: int = 0  # how many times tool-talk was detected and suppressed
+    tool_forced_recoveries: int = 0  # Session 238: forced-tool reprompts (empty/text-without-tool on iter-0)
     plan_text: str = ""
     """Text of the planning phase output (empty if planning was skipped)."""
     task_type: str = ""

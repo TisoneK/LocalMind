@@ -9,7 +9,9 @@ spinning another PER_CALL_TIMEOUT_SECS model call on the same empty output.
 
 Contract under test:
   1. An empty text-only response yields a non-empty, honest final message.
-  2. chat_with_tools is called exactly ONCE - the loop does NOT retry.
+  2. The FIRST tool iteration gets at most ONE forced-tool nudge (Session
+     238); a second empty reply hits the honest fast-fail - bounded retry,
+     never a spin.
   3. Regression: a normal non-empty text response still streams through.
 """
 
@@ -18,6 +20,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from core.agent.loop import AgentLoop, TerminalProviderError
 from core.models import Intent, StreamChunk
 
@@ -28,7 +31,7 @@ class TestEmptyResponseFastFail:
         loop = AgentLoop(adapter=MagicMock())
         seen = {"calls": 0}
 
-        async def empty_chat_with_tools(messages, tools, temperature=0.3, intent=None):
+        async def empty_chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
             seen["calls"] += 1
 
             async def _stream():
@@ -59,15 +62,19 @@ class TestEmptyResponseFastFail:
 
         full = "".join(c.text for c in chunks)
         assert "empty response" in full, f"expected honest empty-response message, got {full!r}"
-        assert seen["calls"] == 1, (
-            f"loop must not retry the same empty output (chat_with_tools called {seen['calls']}x)"
+        # Session 238: the FIRST tool iteration gets ONE forced-tool nudge
+        # (bounded reprompt) before the honest fail — the empty-response
+        # fast-fail (Session 115) still applies to the second empty reply.
+        assert seen["calls"] == 2, (
+            f"loop must retry an iter-0 empty output at most once, then fail "
+            f"honestly (chat_with_tools called {seen['calls']}x)"
         )
 
     @pytest.mark.asyncio
     async def test_normal_text_response_still_streams(self):
         loop = AgentLoop(adapter=MagicMock())
 
-        async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
             async def _stream():
                 yield StreamChunk(text="All good - nothing to do.", done=False)
                 yield StreamChunk(text="", done=True)
@@ -173,7 +180,10 @@ class TestEmptyResponseFastFail:
                 )
             ]
 
-        assert seen == {"planning": 1, "tool_calls": 1}
+        # Session 238: the first tool-required call gets one forced-tool
+        # nudge (iter-0 text is not accepted as the answer), then the
+        # model's text is streamed on the second pass.
+        assert seen == {"planning": 1, "tool_calls": 2}
         assert "Recovered" in "".join(chunk.text for chunk in chunks)
 
     @pytest.mark.asyncio
@@ -190,7 +200,7 @@ class TestEmptyResponseFastFail:
             '"FreeUsageLimitError","message":"Rate limit exceeded."}}'
         )
 
-        async def chat_with_tools(messages, tools, temperature=0.3, intent=None):
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
             async def _stream():
                 yield StreamChunk(text="", done=True, error=zen_429)
 
