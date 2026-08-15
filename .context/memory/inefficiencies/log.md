@@ -667,3 +667,12 @@ if literally nothing slowed you down.
 - **Cause:** Free-tier provider quota exhaustion + no fallback provider configured.
 - **Fix / recommendation:** For Thinker (and general) development, configure a MORE GENEROUS, FAST free provider — Cerebras (1M tokens/day free) or Groq — instead of relying on zen's small free quota. This unblocks live validation AND fixes the latency complaints. Then Thinker work can actually be observed and validated live (backend from source + curl `/api/chat`, capturing `understanding`/`understanding_details`/`mode`).
 - **Prevent next time:** Before starting a live-validation-dependent session, confirm the provider isn't exhausted (`curl /api/chat` once). If it is, unblock the provider FIRST.
+
+---
+## 2026-08-15 — Claude Code / claude-opus-4-8 (Session 237, cont.)
+
+- **Problem:** The free models available cannot support agent-loop development. The capable one (`deepseek-v4-flash-free`) is quota-exhausted (429); the working one (`nemotron-3.5-lightning-free`) is too WEAK to terminate a tool loop — live-traced "list my dev folder": it ran 8+ iterations repeatedly calling `shell ls` / `find_path` on the same folder, gate-replan timing out each round, never producing an answer (90s, garbled "BasedTheBased" output). The earlier CLEAN 10s/2-iteration run was on the capable deepseek model.
+- **Cost:** Could implement the synthesis fix but not live-validate it (its empty-answer branch is only reached when the model actually TERMINATES, which nemotron doesn't).
+- **Cause:** Free-tier models are either quota-capped (capable) or too weak for tool loops (available). This is THE wall for developing/validating the Thinker + agent loop.
+- **Fix / recommendation:** Agent-loop + Thinker development needs a model that can reliably run tool loops. Options: (1) wait for `deepseek-v4-flash-free` quota to reset (it terminated cleanly), or (2) use a capable model (zen paid: claude-sonnet-5 / gemini-3.7-flash). Chat-only tiers (1/2) work on any model; tier-3 (tools) needs real capability.
+- **Prevent next time:** Before validating agent-loop changes, confirm the ACTIVE model can complete a simple tool task end-to-end (one clean tier-3 turn), not just answer chat.
