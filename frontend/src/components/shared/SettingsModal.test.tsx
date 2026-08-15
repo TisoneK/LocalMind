@@ -90,4 +90,25 @@ describe('SettingsModal', () => {
     // Ollama default → the Ollama URL section (input is placeholder-labeled).
     expect(screen.getByPlaceholderText('http://localhost:11434')).toBeInTheDocument();
   });
+
+  it('keeps input focus when the parent re-renders with a new onClose (Session 233)', async () => {
+    mockClient.getSettings.mockResolvedValue(settingsPayload());
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+
+    const { rerender } = render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    await screen.findByRole('heading', { name: 'Settings' });
+
+    const input = screen.getByPlaceholderText('http://localhost:11434') as HTMLInputElement;
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    // RightPanel passes an inline onClose and re-renders ~every second (live
+    // clock/stats). Before the fix, a new onClose identity re-ran the focus
+    // effect and yanked focus back to the modal's first element — you could
+    // not paste into the API key box. It must now stay put.
+    rerender(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    rerender(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+
+    expect(document.activeElement).toBe(input);
+  });
 });

@@ -273,6 +273,18 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   // element when the modal closes.
   const modalRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  // Keep the latest onClose in a ref so the focus/keydown effect below can
+  // run ONCE (empty deps) and never tear down on a parent re-render.
+  // RightPanel passes an inline `onClose={() => setShowSettings(false)}`, so
+  // its identity changes every parent render; a live clock/stats tick
+  // re-renders the tree ~every second. With `[onClose]` deps the effect
+  // re-ran each second, calling `.focus()` on the modal's first element and
+  // yanking focus out of the input you were typing in — you could not paste
+  // into the API key box (Session 233).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement as HTMLElement | null;
@@ -288,7 +300,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== 'Tab' || !modalRef.current) return;
@@ -314,7 +326,10 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       // Restore focus to the element that opened the modal
       previouslyFocused.current?.focus();
     };
-  }, [onClose]);
+    // Empty deps: set up focus + the Tab/Escape trap ONCE on mount and tear
+    // down only on unmount. Escape uses onCloseRef so it stays current
+    // without re-subscribing (which would steal input focus every render).
+  }, []);
 
   if (loading) {
     return (
