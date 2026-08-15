@@ -113,6 +113,7 @@ from core.agent.text_tools import (
     _parse_minimax_tool_call,
     _parse_plan_steps,
     _strip_minimax_tool_calls,
+    _strip_minimax_tool_calls_stream,
     _truncate_observation,
 )
 from core.agent.tool_dispatch import dispatch_with_retry
@@ -4771,8 +4772,12 @@ class AgentLoop:
                         await event_queue.put(("decision", decision))
                         decision_sent = True
                         return
-                    text = _filter_system_leaks(chunk.text)
-                    text = _strip_minimax_tool_calls(text)
+                    # Whitespace-safe per-chunk filtering: the stream variant
+                    # removes tool-call markup WITHOUT trimming edges, so the
+                    # spaces between streamed JSON deltas survive the join
+                    # (Session 231: the trimming variant collapsed the init
+                    # objective + response into spaceless text).
+                    text = _strip_minimax_tool_calls_stream(_filter_system_leaks(chunk.text))
                     if not text:
                         continue
                     chunks.append(text)
@@ -4944,7 +4949,10 @@ class AgentLoop:
                         # planning text too — a model that emits a stray tool
                         # call block here would otherwise leak it into the plan
                         # context and the thinking stream.
-                        text = _strip_minimax_tool_calls(text)
+                        # Session 231: use the whitespace-SAFE stream variant —
+                        # the trimming one removed the spaces between streamed
+                        # deltas, so the plan/thinking text rendered spaceless.
+                        text = _strip_minimax_tool_calls_stream(text)
                         if text:
                             await _plan_queue.put(text)
                 finally:

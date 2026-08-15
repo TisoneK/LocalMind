@@ -247,8 +247,17 @@ def _parse_minimax_tool_call(text: str) -> list[tuple[str, dict, str]]:
     return calls
 
 
-def _strip_minimax_tool_calls(text: str) -> str:
-    """Remove all MiniMax tool call XML from text, leaving clean content."""
+def _strip_minimax_tool_calls_stream(text: str) -> str:
+    """Streaming-safe MiniMax/DSML tool-call stripper — PRESERVES whitespace.
+
+    Removes the same tool-call markup as ``_strip_minimax_tool_calls`` but does
+    NOT ``.strip()`` the result. The stripping variant must never be applied to
+    an individual streamed delta: a model that streams a JSON value token by
+    token emits deltas like ``"Respond"``, ``" to"``, ``" a"`` — stripping each
+    one removes the leading spaces, so the concatenation collapses to
+    ``"Respondtoa"`` (Session 231 bug: spaceless thought process + answer). Use
+    this per-chunk; use ``_strip_minimax_tool_calls`` only on a complete text.
+    """
     text = _normalize_dsml(text)
     cleaned = _MINIMAX_TOOL_CALL_RE.sub("", text)
     cleaned = _STANDALONE_INVOKE_RE.sub("", cleaned)
@@ -262,7 +271,16 @@ def _strip_minimax_tool_calls(text: str) -> str:
     cleaned = re.sub(r"<\s*/?\s*tool_calls\s*>", "", cleaned, flags=re.IGNORECASE)
     # Collapse runs of blank lines
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    return cleaned.strip()
+    return cleaned
+
+
+def _strip_minimax_tool_calls(text: str) -> str:
+    """Remove all MiniMax tool call XML from a COMPLETE text, trimming edges.
+
+    Whitespace-trimming — safe only on a full text, never on a streamed delta
+    (see ``_strip_minimax_tool_calls_stream``).
+    """
+    return _strip_minimax_tool_calls_stream(text).strip()
 
 
 def _has_minimax_tool_call(text: str) -> bool:
