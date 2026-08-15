@@ -3229,3 +3229,17 @@ program + ADR-22). -->
 - **Coordination:** started only after Super Z finished (tree clean, synced to `53bde48`); edited Super Z's ADR-34 init code with the ADR's own intent (never expose the answer as chain-of-thought).
 - **Report:** `.context/memory/reviews/2026-08-15-review-34.md`.
 - **Open items:** B-2026-08-15-1 direct-answer formatting with weak models (real-model repro).
+
+---
+
+## 2026-08-15 — Session 231
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS 15 (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** bugfix on adr-34-realtime-workspace
+- **Task:** User: thought process + quick replies had NO spaces ("Respondtoacasualgreeting"). Fix spacing/formatting.
+- **Commits:** 2 product/docs (`9d7622d` fix(agent), + docs changelog) + 1 context closeout (SHA after push).
+- **Outcome:** done — root cause (corrects Session 230's wrong "it's the model" call): `_strip_minimax_tool_calls` ends with `.strip()` and ran on EVERY streamed delta in the init producer AND the plan stream, trimming the leading space off each fragment → spaceless joined buffer. Fixed with a whitespace-safe `_strip_minimax_tool_calls_stream` variant used per-chunk; trimming variant unchanged for complete texts.
+- **Validation:** `test_streaming_whitespace.py` (4) + dsml regression + init streaming = 40 pass; ruff clean; full backend suite (2 pre-existing macOS shell env failures, unrelated).
+- **Report:** `.context/memory/reviews/2026-08-15-review-35.md`.
+- **Lesson:** never edge-trim individual streamed deltas — it eats inter-token whitespace (also logged in inefficiencies).
+- **Open items:** none.

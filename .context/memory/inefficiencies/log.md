@@ -640,3 +640,12 @@ if literally nothing slowed you down.
   ownership together. A typed decision is insufficient unless its public lifecycle
   events, evidence boundary, active workspace, and final synthesis channel are
   all explicit and tested end-to-end.
+
+---
+## 2026-08-15 — Claude Code / claude-opus-4-8 (Session 231)
+
+- **Problem:** Spent Session 230 wrongly concluding the spaceless output was the weak model's raw JSON, when it was our own bug: an edge-trimming normalizer (`_strip_minimax_tool_calls`, ends with `.strip()`) applied per streamed delta ate the spaces between fragments.
+- **Cost:** One session's misdiagnosis (blamed the model, backlogged as "needs real-model repro") before the user pushed back with the exact spaceless output.
+- **Cause:** Reasoned "the answer streams verbatim (loop.py:1482), so it's the model" — verbatim, but of an ALREADY per-delta-trimmed buffer. Didn't trace the chunk accumulation upstream of the emit.
+- **Workaround / fix:** Whitespace-safe `_strip_minimax_tool_calls_stream` (no trailing strip) for per-chunk use.
+- **Prevent next time:** Never apply an edge-trimming text normalizer to individual streamed deltas — trim only complete texts. When output is spaceless/garbled, trace the FULL accumulation path (adapter delta → per-chunk filters → join), not just the final emit.
