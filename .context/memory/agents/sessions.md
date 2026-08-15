@@ -3283,3 +3283,18 @@ program + ADR-22). -->
 - **Report:** `.context/memory/reviews/2026-08-15-review-36.md`.
 - **Lesson:** hardcoded calendar dates in test fixtures are time bombs (see inefficiencies).
 - **Open items:** ESLint 66-warning drift; B-2026-08-15-3 (defer build_context for direct turns).
+
+---
+
+## 2026-08-15 — Session 235
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — ADR-36 implementation session
+- **Task:** Implement ADR-36 — Agent as orchestrator + Thinker as silent analyst, with transparency-as-the-mechanism (live-streamed thinking that collapses after done). User handoff from a design discussion; executed one item at a time, each committed + pushed: B-6 routing, B-5 Thinker depth, B-7 final-synthesis guarantee, B-8 collapse verify.
+- **Commits:** 1 context + 4 product + 1 closeout — `3b6a768` (ADR-36 capture), `2ed84e5` (fix(ui) ack→chat), `c49d692` (feat(agent) facts/ambiguities), `f2676b7` (fix(agent) non-empty gate answer), `1d193f3` (test(ui) collapse).
+- **Outcome:** done. Key finding first: the "event-type tagging" prerequisite in the handoff was already ~80% shipped by ADR-34 (typed SSE events, auto-collapsing ThinkingBlock, Actions panel, phase strip). Net-new work: (1) the initialization `ack` now lands on the assistant message as its opening line (not the Agent Workspace), and `understanding` no longer mirrors into the workspace (it already streams through the ThinkingBlock); (2) the init contract + parser + renderer now emit `facts`/`ambiguities` (know vs assume) as a ThinkingBlock detail block, fixing "thinking is shallow"; (3) a gate-passed turn with an empty reason now falls back to trace evidence — no turn ends with zero output; (4) collapse-after-done verified + 2 deterministic vitest assertions.
+- **Validation:** backend 1,820 pass / 2 skip (4 pre-existing `test_shell.py` env failures, confirmed via `git stash` — NOT mine); frontend 195 pass (190 + 2 ack + 1 gate + 2 thinking-block); tsc clean; ruff clean on all touched `backend/src` files.
+- **Report:** none — implementation session (tests are the verification; ADR-36 is the record).
+- **Open items:** B-5 Thinker-depth needs a live zen/laguna trace to validate the new prompt fields (this local session cannot run the provider, per ADR-35). Pre-existing: 4 `test_shell.py` failures on macOS (`permission` vs `nl_command_rejected`); B-2026-08-15-3; B-2026-08-15-4 (ESLint 66 vs 65).
+- **Lesson:** on a design handoff, check what already exists before rebuilding — the transcript's "prerequisite" (event-type tagging) was mostly live; the real gap was Thinker depth + routing polish.
+
