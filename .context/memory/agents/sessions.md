@@ -3267,4 +3267,19 @@ program + ADR-22). -->
 - **Outcome:** done. (1) SettingsModal focus/keydown effect depended on `[onClose]`; RightPanel passes an inline onClose and a live tick re-renders ~every second → effect re-ran and stole input focus. Fixed: run once, latest onClose via ref; +regression test. (2) **First live trace this project** (user added the zen key via Settings; I ran the backend from source + curled `/api/chat`). Found: greeting is already mode=direct, ~2s, one ~930-token call. The ~5k token number was a metric bug — `agent_runtime` approximated the full unsent `build_context` when the provider omitted usage. Fixed to estimate from `init_prompt_chars` for no-tool turns. **Live-verified 5,138→932.**
 - **Coordination:** unloaded `com.localmind.backend` launchd job earlier (user request to stop the app); handled the user's zen key only via the app's own Settings UI (never in chat, never wrote it myself) per the credential-safety rule.
 - **Validation:** frontend 186 pass; backend 1815 pass (4 pre-existing macOS shell/powershell env failures, unrelated — confirmed on baseline). Live trace before/after captured.
-- **Open items:** B-2026-08-15-2 resolved; minor perf follow-up (defer build_context for direct turns).
+- **Open items:** B-2026-08-15-2 resolved; minor perf follow-up (defer build_context for direct turns) → filed as B-2026-08-15-3 in Session 234.
+
+---
+
+## 2026-08-15 — Session 234
+
+- **Agent:** Buffy | **Model:** deepseek-v4-flash | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** adr-34-realtime-workspace — B-11 title-bar follow-up (resumed the interrupted Claude session)
+- **Task:** User: make the default Electron title bar frameless on Windows so the custom TitleBar is used; on Mac use the system's.
+- **Commits:** 1 product (`1865c74` feat(ui) frameless Windows title bar + freshness date-rot fix) + 1 context closeout (after push).
+- **Outcome:** done. Windows is now fully frameless (`frame: false`) — the custom TitleBar min/max/close buttons (existing IPC handlers) are the only window controls; macOS keeps `hiddenInset` traffic lights; Linux keeps the default frame. Custom buttons now render ONLY on `platform === 'win32'` (B-11 had gated on `window.electronAPI`, so macOS showed custom buttons next to traffic lights and Windows below the native frame). Maximize button tracks real state via new `window-is-maximized` IPC + `maximize/unmaximize` events (Square↔restore icon), and double-click on the drag region toggles maximize.
+- **Also fixed:** pre-existing date-rot in `test_synthesizer_freshness.py` — fixture hardcoded Aug 14, 2026 as "current"; once the calendar rolled to Aug 15 every block was stale, synthesis correctly refused, and the test IndexError'd. Fixtures now relative to `date.today()`.
+- **Validation:** frontend 190 pass; backend 1,819 pass / 2 skip; tsc clean; ESLint 0 errors on touched files; `node --check` clean on electron files. Full-repo ESLint is 66 warnings vs 65 cap — pre-existing drift (verified on stashed baseline), logged.
+- **Report:** `.context/memory/reviews/2026-08-15-review-36.md`.
+- **Lesson:** hardcoded calendar dates in test fixtures are time bombs (see inefficiencies).
+- **Open items:** ESLint 66-warning drift; B-2026-08-15-3 (defer build_context for direct turns).

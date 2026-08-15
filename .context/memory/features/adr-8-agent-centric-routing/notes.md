@@ -1175,3 +1175,24 @@ Validation: backend 1784 passed / 2 skipped; frontend 178 passed;
 TypeScript/build/Ruff passed; ESLint 0 errors / 64 warnings. Product commit
 `a7d5b30`; review `.context/memory/reviews/2026-08-14-review-27.md`.
 No live-provider smoke was available.
+
+Session 228 (Super Z) shipped the ADR-34 realtime-workspace backlog:
+B-7 streaming initializer (live GLM-5.2 smoke: ack 1.8s, understanding 3.1s,
+3.4s turn on zen laguna), B-8 evidence/synthesis boundary, B-9 Agents
+auto-activation, B-10 Observe/intent retirement, B-11 title bar + duplicate
+cards + Autonomous-work removal, B-12 compact init prompt (74% smaller).
+`TitleBar.tsx` + `hiddenInset` macOS chrome shipped with B-11.
+
+Session 234 (Buffy) completed the B-11 title-bar platform split: Windows is
+now fully frameless (`frame: false`) and the custom TitleBar min/max/close
+buttons (existing IPC) are the window controls; macOS keeps `hiddenInset`
+traffic lights; Linux keeps the default frame. Custom buttons render only on
+win32 — B-11 had gated on `window.electronAPI`, which duplicated native
+controls on macOS and Windows. Added `window-is-maximized` IPC +
+maximize/unmaximize events for the Square↔restore icon and
+double-click-to-maximize. Also fixed pre-existing date-rot in
+`test_synthesizer_freshness.py` (hardcoded Aug-14 fixture). Frontend 190 /
+backend 1,819 pass. Product commit `1865c74`; review
+`.context/memory/reviews/2026-08-15-review-36.md`.
+Open: B-2026-08-15-3 (defer build_context for direct turns),
+B-2026-08-15-4 (ESLint 66-warning drift vs 65 cap).

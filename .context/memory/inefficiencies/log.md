@@ -649,3 +649,12 @@ if literally nothing slowed you down.
 - **Cause:** Reasoned "the answer streams verbatim (loop.py:1482), so it's the model" — verbatim, but of an ALREADY per-delta-trimmed buffer. Didn't trace the chunk accumulation upstream of the emit.
 - **Workaround / fix:** Whitespace-safe `_strip_minimax_tool_calls_stream` (no trailing strip) for per-chunk use.
 - **Prevent next time:** Never apply an edge-trimming text normalizer to individual streamed deltas — trim only complete texts. When output is spaceless/garbled, trace the FULL accumulation path (adapter delta → per-chunk filters → join), not just the final emit.
+
+---
+## 2026-08-15 — Buffy / deepseek-v4-flash (Session 234)
+
+- **Problem:** A backend regression test (`test_synthesis_uses_current_result_without_stale_competitor`) silently rotted overnight: it hardcoded Aug 14, 2026 as the fixture's "current" block, so once `date.today()` became Aug 15 every block was stale, synthesis correctly refused to answer, and the test IndexError'd on an empty message list. It passed for exactly one calendar day.
+- **Cost:** Full-suite run flagged it; a few minutes of diagnosis to confirm it was date-rot and not a synthesis regression. Real cost: any future agent seeing this failure could have shipped a pointless "fix" to the synthesizer.
+- **Cause:** Freshness logic computes `today = today or date.today()` internally, but the test fixture used a literal date instead of deriving it from `date.today()`.
+- **Workaround / fix:** Fixture dates now relative to today (today + today−6d) via a `_block_date()` helper; assertions reference the same computed strings.
+- **Prevent next time:** Any test whose assertions depend on a calendar date (freshness, "today", aging, TTL) must build fixtures from `date.today()`, never a literal. Also: when a session adds custom window chrome, gate it on the platform that is actually frameless — the previous gate (`window.electronAPI` exists) duplicated native controls on macOS and Windows.
