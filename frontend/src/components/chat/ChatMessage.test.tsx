@@ -77,3 +77,17 @@ describe('ChatMessage hover action row', () => {
     expect(screen.getByRole('button', { name: /copy/i })).toBeDisabled();
   });
 });
+
+describe('ChatMessage acknowledgement (ADR-36)', () => {
+  it('renders the opening acknowledgement as the first line of an assistant reply', () => {
+    render(<ChatMessage message={makeMessage({ acknowledgement: "I'll list all projects." })} />);
+
+    expect(screen.getByText("I'll list all projects.")).toBeInTheDocument();
+  });
+
+  it('does not render an acknowledgement for user messages', () => {
+    render(<ChatMessage message={makeMessage({ role: 'user', content: 'hi', acknowledgement: 'nope' })} />);
+
+    expect(screen.queryByText('nope')).not.toBeInTheDocument();
+  });
+});

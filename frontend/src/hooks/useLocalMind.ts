@@ -913,29 +913,30 @@ export function useChat(
                   }
                   break;
                 }
-                // ADR-34 B-7: model-owned initialization events — surface as
-                // live fields on the parent AgentRun so the Agent Workspace
-                // renders the acknowledgement and understanding in real-time.
+                // ADR-36: the acknowledgement is the Agent's opening line —
+                // it belongs in chat, not the Agent Workspace. Route it to
+                // the assistant message's `acknowledgement` field (rendered
+                // as the opening line above the thinking block).
                 if (obs.type === 'agent_initialization_ack') {
                   const ackData = obs.data || obs;
                   const ackText = String(ackData.acknowledgement || '').slice(0, 180);
                   if (ackText) {
-                    setAgentRuns((prev) => updateAgentRun(prev, rootRunId, {
-                      acknowledgement: ackText,
-                    }));
+                    setMessages((prev) => {
+                      const updated = [...prev];
+                      const last = updated[updated.length - 1];
+                      if (last && last.role === 'assistant') {
+                        updated[updated.length - 1] = { ...last, acknowledgement: ackText };
+                      }
+                      return updated;
+                    });
                   }
                   break;
                 }
-                if (obs.type === 'agent_initialization_understanding') {
-                  const undData = obs.data || obs;
-                  const undText = String(undData.understanding || '').slice(0, 600);
-                  if (undText) {
-                    setAgentRuns((prev) => updateAgentRun(prev, rootRunId, {
-                      understanding: undText,
-                    }));
-                  }
-                  break;
-                }
+                // agent_initialization_understanding is intentionally NOT
+                // mirrored to the workspace run here: it already reaches the
+                // user through the thinking_token channel into the message's
+                // ThinkingBlock (see ADR-36 — the Thinker's assessment lives
+                // on the thinking surface, not the workspace).
                 // ADR-34 B-8: evidence boundary — tool results are handed to
                 // the parent model. Record as an EvidenceEntry on the parent
                 // run so the Agent Workspace can show evidence flowing in.

@@ -56,10 +56,6 @@ export interface AgentRun {
   completedAt?: number;
   error?: string;
   tools: ToolCall[];
-  /** ADR-34 B-7: model-owned acknowledgement streamed during initialization. */
-  acknowledgement?: string;
-  /** ADR-34 B-7: bounded thinker line streamed during initialization. */
-  understanding?: string;
   /** ADR-34 B-8: evidence entries handed to the parent model after each tool. */
   evidence?: EvidenceEntry[];
 }
@@ -106,6 +102,10 @@ export interface ChatMessage {
   thinking?: string;
   thinkMs?: number;
   isAgent?: boolean;
+  /** ADR-36: the Agent's opening acknowledgement, streamed during parent
+   *  initialization. Belongs in chat as the first line of the reply —
+   *  distinct from `content` (the final answer that follows tool work). */
+  acknowledgement?: string;
   codeBlocks?: CodeBlock[];
   fileResults?: FileResult[];
   pendingWrite?: PendingWrite;

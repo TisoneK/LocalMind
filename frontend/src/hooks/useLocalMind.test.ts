@@ -204,6 +204,28 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 
+  it('routes the initialization acknowledgement into chat (ADR-36)', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: {
+          type: 'agent_initialization_ack',
+          data: { acknowledgement: "I'll list all projects." },
+        },
+      }));
+    });
+
+    const last = result.current.messages[result.current.messages.length - 1];
+    expect(last.role).toBe('assistant');
+    expect(last.acknowledgement).toBe("I'll list all projects.");
+    // The acknowledgement is a chat artifact, not answer content.
+    expect(last.content).toBe('');
+
+    act(() => onDone());
+    unmount();
+  });
+
   it('accumulates thinking across phase boundaries instead of wiping (Session 146)', () => {
     const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
 

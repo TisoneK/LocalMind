@@ -659,6 +659,15 @@ export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps)
             <span className="text-[9px] text-brand-green-muted">{message.timestamp}</span>
           </div>
 
+          {/* ADR-36: the Agent's opening acknowledgement — streams as the
+              first line of the reply, distinct from the final answer
+              (`content`) that follows the tool work. */}
+          {!isUser && message.acknowledgement && (
+            <div className="text-[12px] text-brand-green-soft leading-relaxed break-words mb-1.5">
+              <MarkdownContent text={message.acknowledgement} />
+            </div>
+          )}
+
           {/* Thinking block — the model's reasoning, auto-expanded while streaming */}
           {message.thinking && message.isAgent && (
             <ThinkingBlock thinking={message.thinking} thinkMs={message.thinkMs} isStreaming={isStreaming} />
