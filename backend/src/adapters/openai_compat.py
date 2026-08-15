@@ -148,6 +148,12 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 # 60s, so an adapter TTL of 30s caps worst-case outage-detection lag at
 # ~90s (route 60s + adapter 30s) while still cutting the fetch burst
 # from 20+ to ~2/min.
+# Session 240: the longest a transient 429 may block an interactive turn.
+# A short per-minute burst (retry in a few seconds) is worth waiting out —
+# it recovers invisibly. A longer window is surfaced as a clean rate-limit
+# error instead, so the user is never stuck behind an uncancellable hang.
+_MAX_TRANSIENT_429_WAIT = 10.0
+
 _MODELS_CACHE: "TTLCache[list[str]]" = TTLCache(ttl_seconds=30.0, max_entries=32)
 # Per-provider lock so CONCURRENT misses (startup pollers fire within
 # the same second) collapse into a single fetch instead of re-bursting.
@@ -657,44 +663,97 @@ class OpenAICompatAdapter(BaseAdapter):
         return payload
 
     @staticmethod
-    def _is_permanent_429(body_text: str, retry_after: str | None) -> bool:
-        """True when a 429 is a permanent quota/billing exhaustion (daily or
-        free-tier limit, out of credits) rather than a transient per-minute
-        burst.
+    def _parse_retry_delay_seconds(body_text: str, retry_after: str | None) -> float | None:
+        """Best-effort seconds-until-retry from the Retry-After header OR the
+        response body.
 
-        ADR-32: a permanent 429 must NOT be retried. Retrying only burns the
-        backoff window and — across an agent loop's several calls — tens of
+        Providers on the OpenAI-compat path are inconsistent about where the
+        retry window lives. gemini (Google's OpenAI-compat endpoint) does NOT
+        set a ``retry-after`` header — it embeds the window in the JSON body as
+        ``"Please retry in 48.865624513s"`` and/or a RetryInfo
+        ``"retryDelay": "48s"``. Reading only the header therefore misses the
+        single clearest signal that a 429 is a short, recoverable per-minute
+        window rather than a hard wall. Returns ``None`` when no numeric delay
+        can be parsed (e.g. an HTTP-date header).
+        """
+        if retry_after:
+            try:
+                return float(retry_after)
+            except ValueError:
+                pass  # HTTP-date or non-numeric — fall through to the body
+        text = body_text or ""
+        # gemini free-tier body: "Please retry in 48.865624513s"
+        m = re.search(r"retry\s+in\s+([0-9]+(?:\.[0-9]+)?)\s*s", text, re.IGNORECASE)
+        if m:
+            try:
+                return float(m.group(1))
+            except ValueError:
+                pass
+        # RetryInfo style: "retryDelay": "48s"  /  "retry_delay": "48.8s"
+        m = re.search(r'retry[_ ]?delay"?\s*[:=]\s*"?([0-9]+(?:\.[0-9]+)?)\s*s', text, re.IGNORECASE)
+        if m:
+            try:
+                return float(m.group(1))
+            except ValueError:
+                pass
+        return None
+
+    @staticmethod
+    def _is_permanent_429(body_text: str, retry_after: str | None) -> bool:
+        """True when a 429 is a permanent quota/billing exhaustion (daily cap,
+        out of credits) rather than a transient per-minute burst that a short
+        wait recovers.
+
+        ADR-32: a permanent 429 must NOT be retried — retrying only burns the
+        backoff window and, across an agent loop's several calls, tens of
         seconds, before surfacing an error the user could have seen in the
-        first round-trip. Quota markers win over a generic "rate limit"
-        phrase so a "free daily rate limit exceeded" body is treated as
-        permanent.
+        first round-trip.
+
+        Session 240 correction: the previous version treated the bare words
+        ``quota`` / ``free tier`` / ``exceeded your current`` as permanent. But
+        gemini's *per-minute* free-tier 429 contains exactly those words AND an
+        explicit short retry window ("retry in 48.86s") — a recoverable burst
+        that was being hard-failed. So the discriminator is now the retry
+        WINDOW, not generic quota wording:
+          - hard billing/credit exhaustion (never auto-recovers) → permanent
+          - an explicit *daily* cap → permanent
+          - a very long retry window (>= 10 min) → permanent (a quota window)
+          - anything else, including a short retry window → transient (retry)
         """
         text = (body_text or "").lower()
-        permanent_markers = (
+        # Billing / credit exhaustion never recovers within a turn. NOTE: the
+        # bare word "billing" is deliberately NOT a marker — gemini's per-minute
+        # throttle boilerplate says "please check your plan and billing details"
+        # on EVERY 429, including a 2.8s burst, so matching it hard-failed
+        # recoverable throttles (Session 240). Only specific exhaustion phrases
+        # qualify.
+        hard_markers = (
             "insufficient_quota",
             "insufficient credits",
             "out of credits",
-            "quota",
-            "daily limit",
-            "daily quota",
-            "free tier",
-            "free-tier",
-            "usage limit",
-            "usage_limit",
-            "billing",
             "add credits",
             "upgrade your plan",
-            "exceeded your current",
         )
-        if any(marker in text for marker in permanent_markers):
+        if any(marker in text for marker in hard_markers):
             return True
-        # A very long Retry-After (>= 10 minutes) is a quota window, not a burst.
-        if retry_after:
-            try:
-                if float(retry_after) >= 600:
-                    return True
-            except ValueError:
-                pass
+        # A *daily* cap (not per-minute) will not reset inside this turn.
+        daily_markers = (
+            "daily limit",
+            "daily quota",
+            "daily rate",
+            "per day",
+            "quota reached",
+            "usage limit",
+            "usage_limit",
+        )
+        if any(marker in text for marker in daily_markers):
+            return True
+        # A very long retry window (>= 10 minutes) is a quota window, not a burst.
+        delay = OpenAICompatAdapter._parse_retry_delay_seconds(body_text, retry_after)
+        if delay is not None and delay >= 600:
+            return True
+        # Everything else — including a short retry window on a per-minute
+        # free-tier limit — is transient and worth a short, respectful wait.
         return False
 
     async def _send_streaming_with_retry(
@@ -804,22 +863,38 @@ class OpenAICompatAdapter(BaseAdapter):
                 # most importantly, do not issue the old extra request below.
                 return response
 
+            # Transient — but only worth waiting inline for a SHORT window. A
+            # short per-minute burst (retry in a few seconds) recovers
+            # invisibly; a long window (deep free-tier exhaustion) is better
+            # surfaced as a clean rate-limit error now than blocking the turn
+            # for a minute. Latency wins over a hang the user can't cancel.
+            explicit_window = self._parse_retry_delay_seconds(body_text, retry_after)
+            if explicit_window is not None and explicit_window > _MAX_TRANSIENT_429_WAIT:
+                logger.warning(
+                    "[adapter] transient 429 from %s but retry window %.0fs exceeds the "
+                    "%.0fs inline cap — surfacing instead of hanging the turn",
+                    self._provider_name,
+                    explicit_window,
+                    _MAX_TRANSIENT_429_WAIT,
+                )
+                return response
+
             if attempt == 2:
-                # The final transient attempt has already been read. Return
-                # this response directly instead of sending a fourth request
-                # merely to obtain a fresh response object.
+                # Used all transient attempts — return this (already-read)
+                # response instead of sending a fourth request merely to obtain
+                # a fresh response object.
                 logger.warning("[adapter] transient 429 from %s after 3 attempts — giving up", self._provider_name)
                 return response
 
             await response.aclose()
             if attempt < 2:  # don't sleep after the last attempt
-                # Respect Retry-After header if the provider sent one
-                if retry_after:
-                    try:
-                        wait_secs = float(retry_after)
-                    except ValueError:
-                        # Could be an HTTP-date format — fall back to backoff
-                        wait_secs = 2.0 * (2**attempt)
+                # Respect a short explicit window (header OR body — gemini
+                # embeds "retry in 3.2s" in the body, no header). A fixed 2s
+                # backoff could re-fire inside the provider's window; honoring
+                # it lets a short burst recover. Windows longer than the inline
+                # cap already surfaced above, so this is always <= the cap.
+                if explicit_window is not None:
+                    wait_secs = min(explicit_window, _MAX_TRANSIENT_429_WAIT)
                 else:
                     wait_secs = 2.0 * (2**attempt)  # 2s, then 4s
 
