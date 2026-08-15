@@ -603,13 +603,45 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                       {/* Inline key form — expands when this provider is selected */}
                       {isEditing && (
                         <div className="border-t border-brand-border bg-brand-bg-base p-3 space-y-2">
-                          <input
-                            type="password"
-                            value={newKeyValue}
-                            onChange={(e) => setNewKeyValue(e.target.value)}
-                            placeholder="API key"
-                            className="w-full rounded-lg border border-brand-border bg-brand-bg-panel px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
-                          />
+                          <div className="relative">
+                            <input
+                              type="password"
+                              value={newKeyValue}
+                              onChange={(e) => setNewKeyValue(e.target.value)}
+                              placeholder="API key"
+                              className="w-full rounded-lg border border-brand-border bg-brand-bg-panel px-3 py-2 pr-24 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                            />
+                            {/* Paste/Copy directly on the field — no OS menu needed
+                                (Cmd+V is unreliable in Electron without an app menu). */}
+                            <div className="absolute inset-y-0 right-1.5 flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    const text = await navigator.clipboard.readText();
+                                    if (text) setNewKeyValue(text.trim());
+                                  } catch {
+                                    // Clipboard unavailable (permissions/non-secure context) — no-op.
+                                  }
+                                }}
+                                className="px-2 py-1 text-[11px] rounded text-brand-green hover:bg-brand-green/10 transition-colors"
+                                title="Paste API key from clipboard"
+                              >
+                                Paste
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (newKeyValue) navigator.clipboard?.writeText(newKeyValue).catch(() => {});
+                                }}
+                                disabled={!newKeyValue}
+                                className="px-2 py-1 text-[11px] rounded text-brand-green-muted hover:text-brand-green hover:bg-brand-green/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                title="Copy current value"
+                              >
+                                Copy
+                              </button>
+                            </div>
+                          </div>
                           <input
                             type="text"
                             value={newKeyModel}
