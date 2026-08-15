@@ -599,10 +599,31 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         clock.mark("execute", 0, "done" if any(evt.type == "tool_call" for evt in collector.history()) else "skipped")
 
         response_text = "".join(response_chunks).strip()
-        prompt_tokens = int(
-            usage.get("prompt_tokens", 0)
-            or _approx_tokens("".join(str(m.get("content", "")) for m in prompt_messages))
-        )
+        # Prompt-token estimate when the provider omits streaming usage.
+        # A DIRECT turn only sent the compact initialization prompt to the
+        # provider — the full assembled context (build_context) was prepared
+        # but never sent. Approximating that full context over-counted ~5x and
+        # grew with conversation history (Session 233: a greeting reported
+        # ~5,100 tokens when ~900 were actually sent). So when the provider
+        # gives no usage and no tool ran, estimate from the initialization
+        # prompt that was actually sent, not the unsent full context.
+        provider_prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+        if provider_prompt_tokens:
+            prompt_tokens = provider_prompt_tokens
+        else:
+            had_tool_calls = any(evt.type == "tool_call" for evt in collector.history())
+            init_prompt_chars = 0
+            for evt in collector.history():
+                chars = evt.data.get("init_prompt_chars") if isinstance(evt.data, dict) else None
+                if chars:
+                    init_prompt_chars = int(chars)
+                    break
+            if not had_tool_calls and init_prompt_chars:
+                prompt_tokens = max(1, init_prompt_chars // 4)
+            else:
+                prompt_tokens = _approx_tokens(
+                    "".join(str(m.get("content", "")) for m in prompt_messages)
+                )
         completion_tokens = int(
             usage.get("completion_tokens", 0) or _approx_tokens(response_text)
         )
