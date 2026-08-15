@@ -2031,10 +2031,20 @@ class AgentLoop:
                     # hit-limit path (forced answer + hit_limit=True) — wrong.
                     # Same todo bookkeeping as the other clean exits.
                     _complete_current_plan_step()
-                    trace.final_response = str(_done_reason or "")
+                    _done_text = str(_done_reason or "").strip()
+                    if not _done_text:
+                        # ADR-36 B-7: a gate that passes without an explicit
+                        # reason must still produce a non-empty final reply —
+                        # never end a turn with zero output. Fall back to the
+                        # trace evidence, then to a generic acknowledgement.
+                        _done_text = self._summarize_trace_for_user(trace, observation_log) or (
+                            "I completed the task and verified it against the "
+                            "acceptance criteria."
+                        )
+                    trace.final_response = _done_text
                     if _obs:
                         _obs.emit("agent_loop_done", intent=intent.value, iterations=iteration + 1)
-                    yield StreamChunk(text=str(_done_reason or ""), done=False)
+                    yield StreamChunk(text=_done_text, done=False)
                     yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                     return
 

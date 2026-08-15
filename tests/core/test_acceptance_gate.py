@@ -332,6 +332,37 @@ async def test_loop_gate_passes_cleanly_and_preempts_model_call():
 
 
 @pytest.mark.asyncio
+async def test_loop_gate_passes_with_empty_reason_yields_nonempty_answer():
+    """ADR-36 B-7: a gate that passes without an explicit reason must still
+    produce a non-empty final reply — no turn ends with zero output."""
+    loop = AgentLoop(adapter=MagicMock())
+    obs = ObsCollector()
+    adapter = _GateLoopAdapter()
+
+    def always_done_empty(iterations, wall_clock_secs, last_tool_result, trace):
+        trace.gate_passed = True
+        trace.gate_summary = ""
+        return True, ""
+
+    chunks = []
+    async for chunk in loop.run(
+        messages=[{"role": "user", "content": "create hello repo"}],
+        intent=Intent.SHELL,
+        initial_tool_result=None,
+        available_tools=[],
+        adapter=adapter,
+        success_criteria=["pytest passes"],
+        is_done_fn=always_done_empty,
+        obs=obs,
+    ):
+        chunks.append(chunk)
+
+    text = "".join(c.text for c in chunks)
+    assert text.strip(), "gate-passed turn must not end with empty output"
+    assert any(c.done for c in chunks)
+
+
+@pytest.mark.asyncio
 async def test_loop_seeds_trace_criteria_from_param():
     loop = AgentLoop(adapter=MagicMock())
 
