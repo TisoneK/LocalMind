@@ -678,6 +678,15 @@ if literally nothing slowed you down.
 - **Prevent next time:** Before validating agent-loop changes, confirm the ACTIVE model can complete a simple tool task end-to-end (one clean tier-3 turn), not just answer chat.
 
 ---
+## 2026-08-15 — Buffy / z-ai-glm-5.2 (Session 238)
+
+- **Problem:** (1) Port 8000 is occupied by the user's running LocalMind instance — every attempt to start my own backend from source failed with "Port already in use" before I checked `lsof`. (2) The `timeout` CLI doesn't exist on macOS — my curl trace command died instantly with `timeout: command not found` and produced a 33-byte empty file. (3) The active provider (gemini-2.5-flash) is set via the APP's Settings, NOT in `backend/.env` (only `ZEN_API_KEY` is there) — I assumed the failing model was zen until the server startup log revealed `adapter: gemini | model: gemini-2.5-flash`. (4) `LOCALMIND_SHELL_ENABLED=false` in `backend/.env` silently disabled the shell tool in my trace (first trace showed "Shell tool is disabled" in the tool output).
+- **Cost:** ~10 minutes across the four; the trace harness from Session 237 (backend from source + curl) worked once port + shell-enable were right.
+- **Cause:** Local-only environment facts not recorded; `timeout` is GNU coreutils, not macOS; provider keys can live in the app's settings DB rather than `.env`.
+- **Workaround / fix:** Traces on `LOCALMIND_PORT=8765` with `LOCALMIND_SHELL_ENABLED=true`; `curl --max-time` instead of `timeout`; read the server startup log for the ACTIVE adapter/model. Recorded all four in `system/environments.md`.
+- **Prevent next time:** Before any live trace, check `lsof -i :8000`, read the startup log for the active provider, and verify shell-enable — the environments block now says all of it.
+
+---
 ## 2026-08-15 — Claude Code / claude-opus-4-8 (Session 237, gemini trace)
 
 - **Finding (live, gemini-2.5-flash — user added a Gemini key):** Chat tiers work well (hi=1s direct clean; "what can you do"=6s direct, good capabilities answer, no persona leak). But **tier-3 tool tasks fail**: "list my dev folder" → `mode=execute` (correct), but the execute tool-planning call returns an EMPTY response in 788ms (0 tools). The loop's `agent_loop_empty_response` path (loop.py:3695) fires → "The model returned an empty response…". The nearby "fabrication warning: produced text without tool calls" (loop.py:3522) is MISLEADING — its condition (`iteration==0 and agent intent and not trace.steps`) fires even when the buffer is empty.

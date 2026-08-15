@@ -25,29 +25,41 @@ Move reasoning INTO the loop, onto evidence:
 4. **Decide next step. Repeat.** The plan EMERGES; never committed blind.
 
 ## Work sequence (each step live-validated against a working tool model)
-- **Step 0 — Tool-calling actually fires.** gemini-2.5-flash (OpenAI-compat
-  path) returns empty/no-tool on the first execute call (Session 237 trace:
-  788ms empty, "fabrication warning"). deepseek-v4-flash-free ran tools
-  cleanly; nemotron looped. Make the loop reliably get a tool call out of the
-  configured model (inspect the OpenAI-compat tool payload sent to gemini's
-  `generativelanguage.../openai/` endpoint; when a model returns
-  text-without-tool on an execute iter-0, REPROMPT with a forced tool nudge
-  instead of failing empty — loop.py:3522/3695). Without this, nothing else
-  can be validated.
-- **Step 1 — Gut the init to classify-only.** Stop generating the plan +
-  facts/ambiguities upfront (initialization.py). Keep tier + ack.
+- **Step 0 — Tool-calling actually fires. ✅ DONE + LIVE-VERIFIED (Session 238,
+  commit `e2c73c9`).** gemini-2.5-flash (OpenAI-compat path) returned
+  empty/no-tool on the first execute call (Session 237 trace: 788ms empty).
+  Fixed in two layers: (1) the loop passes `tool_choice="required"` on
+  iteration 0 of a tool-required intent — the OpenAI-compat adapter previously
+  accepted but IGNORED the param, now it lands in the payload with a 400-degrade
+  retry; (2) empty/text-without-tool on iter-0 → ONE bounded forced-tool nudge
+  (`AgentTrace.tool_forced_recoveries`, `_MAX_TOOL_FORCE_RECOVERIES=2`, gated to
+  iteration 0) before the Session 115 honest fail. Live trace on the exact
+  failing model (gemini-2.5-flash): "list the projects in my dev folder" →
+  `tool_call shell (ls -F /Users/bao/Code) started→done` with the real listing;
+  no empty/fabrication events. 7 new tests; 1827 backend pass (5 pre-existing).
+- **Step 1 — Gut the init to classify-only (NEXT).** Stop generating the plan +
+  facts/ambiguities upfront (initialization.py). Keep tier + ack. Also fixes
+  the pre-existing prompt-budget drift (B-2026-08-15-13: init prompt 2,969
+  chars vs 2,500 budget).
 - **Step 2 — Mid-loop Thinker consult** (ADR-38): after the first evidence
   step, call the model to assess the gathered evidence → facts/ambiguities →
-  stream to ThinkingBlock, collapse-after-done.
+  stream to ThinkingBlock, collapse-after-done. **UNBLOCKED now** — Step 0
+  means evidence is actually gathered.
 - **Step 3 — Emergent step-by-step decisions** (no upfront checklist);
-  synthesis fix (fbe9d6d) ensures a real final answer.
+  synthesis fix ensures a real final answer. NOTE: the Session 238 live trace
+  still ends with "✓ 1/1 criteria met" gate text instead of the listing — the
+  ADR-37 B-11 synthesis gap is user-visible (B-2026-08-15-11).
 - Then: three-tier routing, rate-limit backoff/recovery for transient RPM.
 
 ## Already shipped this arc (KEEP; not the cure but real): spacing fix,
 token-metric fix, paste buttons, no trivial theater (direct mode), act-not-ask
-init prompt, synthesize-on-empty-answer. **User's build was stale** — they
+init prompt, synthesize-on-empty-answer, **Step 0 forced tool-calling
+(Session 238, `e2c73c9`)**. **User's build was stale** — they
 must `git pull && npm run build` so they stop re-hitting fixed bugs.
 
-## Model: use whichever runs tools now (test deepseek quota; else a zen paid
-model). Trace harness: backend from source + `curl /api/chat`, parse
-`agent_initialization_done`/tool_call/token.
+## Model: gemini-2.5-flash is the ACTIVE provider (app Settings; key not in
+`.env`) and now runs tool loops cleanly (Step 0 live-verified). Trace
+harness: backend from source on `LOCALMIND_PORT=8765` +
+`LOCALMIND_SHELL_ENABLED=true` + `curl -N /api/chat`, parse
+`agent_initialization_done`/tool_call/token. Port 8000 is the user's running
+app — never kill it.
