@@ -1,16 +1,14 @@
 # Current Task
 
-No active task.
+**In progress — Session 235 (Buffy / deepseek-v4-pro, local).**
 
-The next session must read `.context/kickoff.md` before starting work.
+**Task:** Implement ADR-36 — Agent as orchestrator + Thinker as silent analyst
+(transparency-as-the-mechanism). Spec captured as ADR-36; backlog B-2026-08-15-5…8
+filed. Executing the items one at a time, each with its own commit + push:
 
-Last: Session 234 (Buffy / deepseek-v4-flash, local) — resumed the interrupted
-Claude title-bar session: Windows is now fully frameless (`frame: false`) so the
-custom TitleBar buttons are the window controls; macOS keeps the system traffic
-lights (`hiddenInset`); Linux keeps the default frame. Custom buttons render only
-on win32 (B-11 had gated on `window.electronAPI`, duplicating native controls).
-Added `window-is-maximized` IPC + maximize/unmaximize events (Square↔restore
-icon) and double-click-to-maximize. Also fixed pre-existing date-rot in
-`test_synthesizer_freshness.py` (hardcoded Aug-14 fixture). Product `1865c74`;
-frontend 190 / backend 1,819 pass. Open: B-2026-08-15-3 (defer build_context for
-direct turns), B-2026-08-15-4 (ESLint 66-warning drift vs 65 cap).
+- [x] **B-6 routing/tagging polish** — ack → chat (opening line), understanding → thinking block only, drop workspace thinker cards.
+- [ ] **B-5 Thinker depth** — facts/risks/ambiguities assessment (fix "thinking is shallow").
+- [ ] **B-7 final-synthesis guarantee** — no turn ends without a chat reply.
+- [ ] **B-8 collapse-after-done** — verify + document.
+
+**Feature:** none (single-session; may open `features/` if the work spans sessions).
