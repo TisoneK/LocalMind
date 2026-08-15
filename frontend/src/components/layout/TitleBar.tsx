@@ -35,6 +35,7 @@ export function TitleBar({ version }: TitleBarProps) {
   // Custom window controls only make sense on frameless Windows — macOS
   // (hiddenInset) and Linux (default frame) keep native controls.
   const isWindows = api?.platform === 'win32';
+  const isMac = api?.platform === 'darwin';
   const showCustomControls = hasElectron && isWindows;
 
   const [isMaximized, setIsMaximized] = useState(false);
@@ -52,18 +53,20 @@ export function TitleBar({ version }: TitleBarProps) {
 
   return (
     <div
-      className="flex items-center justify-between h-8 px-3 bg-brand-bg-base border-b border-brand-border select-none"
+      data-testid="title-bar"
+      data-platform={api?.platform ?? 'browser'}
+      className={`flex items-center justify-between h-8 px-3 ${isMac ? 'pl-[84px]' : ''} overflow-hidden bg-brand-bg-base border-b border-brand-border select-none`}
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       onDoubleClick={showCustomControls ? handleMaximize : undefined}
       title={showCustomControls ? 'Double-click to maximize/restore' : undefined}
     >
       {/* Left: wordmark + version */}
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-semibold text-brand-green-soft tracking-wide">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-[11px] font-semibold text-brand-green-soft tracking-wide truncate">
           LocalMind
         </span>
         {version && (
-          <span className="text-[9px] text-brand-green-faint font-mono">
+          <span className="text-[9px] text-brand-green-faint font-mono shrink-0">
             {version}
           </span>
         )}

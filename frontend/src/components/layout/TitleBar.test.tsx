@@ -34,12 +34,15 @@ describe('TitleBar (ADR-34 B-11 / Session 234)', () => {
     expect(screen.queryByTitle('Close')).toBeNull();
   });
 
-  it('hides window-control buttons on macOS (system traffic lights)', () => {
+  it('hides window-control buttons on macOS and reserves the traffic-light inset', () => {
     (window as unknown as { electronAPI?: unknown }).electronAPI = win32API({ platform: 'darwin' });
     render(<TitleBar version="v0.5.16" />);
     expect(screen.queryByTitle('Minimize')).toBeNull();
     expect(screen.queryByTitle('Maximize')).toBeNull();
     expect(screen.queryByTitle('Close')).toBeNull();
+    const titleBar = screen.getByTestId('title-bar');
+    expect(titleBar).toHaveAttribute('data-platform', 'darwin');
+    expect(titleBar.className).toContain('pl-[84px]');
   });
 
   it('renders window-control buttons on frameless Windows', () => {

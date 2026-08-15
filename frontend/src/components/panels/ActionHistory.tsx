@@ -141,7 +141,7 @@ function ActionCard({ action }: { action: ActionItem }) {
     >
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-2 py-1.5 hover:bg-brand-border/40 transition-colors text-left"
+        className="flex items-center gap-2 w-full min-w-0 px-2 py-1.5 hover:bg-brand-border/40 transition-colors text-left"
       >
         {verbatim || hasBody ? (
           expanded ? (
@@ -178,7 +178,7 @@ function ActionCard({ action }: { action: ActionItem }) {
             </span>
           )}
         </span>
-        <span className={status.color} title={status.label}>
+        <span className={`${status.color} shrink-0`} title={status.label}>
           {status.icon}
         </span>
         {action.duration !== undefined && (
@@ -189,7 +189,7 @@ function ActionCard({ action }: { action: ActionItem }) {
           </span>
         )}
         {action.timestamp && (
-          <span className="text-[9px] text-brand-green-faint shrink-0">{action.timestamp}</span>
+          <span className="text-[9px] text-brand-green-faint shrink-0 whitespace-nowrap">{action.timestamp}</span>
         )}
       </button>
 

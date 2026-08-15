@@ -255,7 +255,7 @@ export function LeftPanel({
                     ? (tc.duration >= 1000 ? `${(tc.duration / 1000).toFixed(1)}s` : `${tc.duration}ms`)
                     : '';
                   return (
-                    <div key={tc.id} className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-brand-border/50">
+                    <div key={tc.id} className="flex items-center gap-1.5 min-w-0 px-2 py-1 rounded hover:bg-brand-border/50">
                       <span className="text-brand-green-muted">{iconMap[tc.name] || <Terminal className="h-3 w-3" />}</span>
                       <span className="text-[10px] text-brand-green-soft font-mono truncate flex-1 min-w-0" title={displayLabel}>
                         {displayLabel}
@@ -320,9 +320,9 @@ export function LeftPanel({
             const displayLabel = tc.label
               || tc.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
             return (
-              <div key={tc.id} className="flex items-center gap-1.5 px-1 py-0.5">
+              <div key={tc.id} className="flex items-center gap-1.5 min-w-0 px-1 py-0.5">
                 <span className="text-brand-amber">{iconMap[tc.name] || <Terminal className="h-3 w-3" />}</span>
-                <span className="text-[10px] text-brand-green-soft font-mono truncate" title={displayLabel}>
+                <span className="text-[10px] text-brand-green-soft font-mono truncate min-w-0 flex-1" title={displayLabel}>
                   {displayLabel}
                 </span>
               </div>

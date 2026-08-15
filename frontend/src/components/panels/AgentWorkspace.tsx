@@ -87,7 +87,7 @@ function RunNode({
         <button
           type="button"
           onClick={() => hasDetails && setExpanded((value) => !value)}
-          className="flex items-start gap-2 w-full px-2.5 py-2 text-left hover:bg-brand-border/40 transition-colors"
+          className="flex items-start gap-2 w-full min-w-0 px-2.5 py-2 text-left hover:bg-brand-border/40 transition-colors"
           aria-expanded={hasDetails ? expanded : undefined}
         >
           {hasDetails ? (
@@ -100,7 +100,7 @@ function RunNode({
               <span className="text-[11px] font-medium text-brand-green-soft truncate">
                 {run.role === 'parent' ? 'Parent Agent' : run.name}
               </span>
-              <span className={`inline-flex items-center gap-1 text-[9px] ${statusClass(run.status)}`}>
+              <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap text-[9px] ${statusClass(run.status)}`}>
                 {statusIcon(run.status)}
                 {statusLabels[run.status]}
               </span>
@@ -118,7 +118,7 @@ function RunNode({
 
         {expanded && hasDetails && (
           <div className="border-t border-brand-border/70 px-2.5 py-2 space-y-2">
-            <div className="flex items-center gap-3 text-[9px] text-brand-green-muted font-mono">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0 text-[9px] text-brand-green-muted font-mono">
               <span className="inline-flex items-center gap-1"><Wrench className="h-2.5 w-2.5" /> {run.tools.length} tools</span>
               {runningTools > 0 && <span className="text-brand-amber">{runningTools} running</span>}
               {completedTools > 0 && <span className="text-brand-green">{completedTools} done</span>}
@@ -128,11 +128,11 @@ function RunNode({
             {run.evidence && run.evidence.length > 0 && (
               <div className="space-y-0.5">
                 {run.evidence.map((entry, idx) => (
-                  <div key={`${entry.tool}-${entry.iteration}-${idx}`} className="flex items-center gap-1.5 text-[8px] text-brand-green-muted font-mono">
+                  <div key={`${entry.tool}-${entry.iteration}-${idx}`} className="flex items-center gap-1.5 min-w-0 text-[8px] text-brand-green-muted font-mono">
                     <FileInput className={`h-2 w-2 shrink-0 ${entry.failed ? 'text-brand-red' : 'text-brand-green-faint'}`} />
-                    <span className="truncate">evidence ← {entry.tool}</span>
-                    <span className="text-brand-green-faint">({entry.evidenceChars} chars)</span>
-                    {entry.failed && <span className="text-brand-red">failed</span>}
+                    <span className="truncate min-w-0">evidence ← {entry.tool}</span>
+                    <span className="text-brand-green-faint shrink-0">({entry.evidenceChars} chars)</span>
+                    {entry.failed && <span className="text-brand-red shrink-0">failed</span>}
                   </div>
                 ))}
               </div>
@@ -151,10 +151,10 @@ function RunNode({
                     <span className={`shrink-0 ${tool.status === 'failed' ? 'text-brand-red' : isActiveToolStatus(tool.status) ? 'text-brand-amber' : 'text-brand-green'}`}>
                       {isActiveToolStatus(tool.status) ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : tool.status === 'failed' ? <XCircle className="h-2.5 w-2.5" /> : <CheckCircle2 className="h-2.5 w-2.5" />}
                     </span>
-                    <span className="text-[9px] text-brand-green-soft truncate" title={tool.input}>
+                    <span className="text-[9px] text-brand-green-soft truncate min-w-0 flex-1" title={tool.input}>
                       {toolLabel(tool)}
                     </span>
-                    {tool.duration !== undefined && <span className="ml-auto text-[8px] text-brand-green-faint font-mono shrink-0">{formatLatency(tool.duration)}</span>}
+                    {tool.duration !== undefined && <span className="ml-auto text-[8px] text-brand-green-faint font-mono shrink-0 whitespace-nowrap">{formatLatency(tool.duration)}</span>}
                   </motion.div>
                 ))}
                 </AnimatePresence>
