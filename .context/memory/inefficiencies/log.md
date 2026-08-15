@@ -701,3 +701,12 @@ if literally nothing slowed you down.
 - **Cause:** "Backward compat" framing — treating deleted contracts as if they could still arrive, instead of deleting the parse path with the contract; and no sweep step after Session 201's architectural replacement.
 - **Workaround / fix:** (A) Deleted the 4 orphaned modules + their models.py contracts + dead constants/helpers + their tests; (B) deleted the init legacy fields end-to-end (decision → parser → plan_text → streaming block → events → gate feed). (C) Added a Lesson to sessions.md: when a system is replaced, the orphaned modules and their tests get deleted in the same arc.
 - **Prevent next time:** after any architectural replacement (pipeline → runtime), grep for modules whose only importers are other orphaned modules and delete them in that session; never keep a parse path for a contract you deleted — a model emitting old fields is ignored, not preserved.
+
+---
+## 2026-08-15 — Buffy / openai/gpt-5.6-luna (Session 241)
+
+- **Problem:** The full validation run emitted four existing RuntimeWarnings from test mocks and the Electron build emitted nonfatal metadata/code-signing warnings.
+- **Cost:** No implementation delay; all validation gates passed.
+- **Cause:** Existing async mock shapes and the local macOS environment has no valid Developer ID signing identity.
+- **Workaround / fix:** Recorded the warnings, kept the product scope focused, and verified backend tests, changed-file Ruff, frontend build, and diff checks independently.
+- **Prevent next time:** Treat these as known validation noise unless a warning changes test behavior or packaging output; live provider testing still requires the user's configured app credentials and quota window.

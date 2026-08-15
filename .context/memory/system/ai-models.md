@@ -9,7 +9,7 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
-| Buffy | openai/gpt-5.6-luna (lately deepseek/deepseek-v4-flash; Session 238: z-ai/glm-5.2 per system prompt — see Observations) | 2026-07-31 | 2026-08-15 | 21 |
+| Buffy | openai/gpt-5.6-luna (lately deepseek/deepseek-v4-flash; Session 238: z-ai/glm-5.2 per system prompt — see Observations) | 2026-07-31 | 2026-08-15 | 22 |
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 | Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-15 | 10 |
@@ -25,6 +25,7 @@ Update in place when a newer session contradicts an old observation.
 - **Super Z / GLM-4.5:** Anthropic streaming format bug identified by code reading (not runtime — no Anthropic API key available); fix based on Anthropic SSE event spec documentation. Untested against live Anthropic API — next agent with an Anthropic key should verify. (2026-07-11)
 - **Super Z / GLM-4.5:** Identified the PAT redaction issue on first session (2026-07-09) — upload pipeline scrubs secrets from files. Workaround: PAT goes in chat, not the protocol file. (2026-07-09, confirmed 2026-07-11)
 - **Buffy / z-ai/glm-5.2:** Session 238 — implemented + LIVE-verified the forced-tool-call fix (Thinker/Agent rebuild Step 0) against gemini-2.5-flash: the loop's iter-0 `tool_choice="required"` made the previously-empty model emit a real shell tool call with the actual directory listing; the bounded nudge + honest-fail fallback covered by 7 unit tests. Demonstrated live-trace capability: backend from source on `LOCALMIND_PORT=8765` + curl SSE parse (2026-08-15)
+- **Buffy / openai/gpt-5.6-luna:** Session 241 — traced the apparent tool-call limit failure to a real retryable provider 429 on the post-tool synthesis call, then shipped a guarded evidence-preservation fallback with regression coverage. Demonstrated the distinction between tool execution success and final-answer generation failure (2026-08-15)
 - **Super Z / GLM-4.5:** Pushed 10 commits in a single session without intervention — zero-interruption protocol works as designed with GLM-4.5 (2026-07-11)
 - **Super Z / GLM-4.5:** Designed the `.context/` agent-memory system and co-developed the `ai-engineering-protocol` package with the user across multiple sessions (2026-07-09 to 2026-07-11)
 - **GitHub Copilot / DeepSeek V4 Flash Free:** Demonstrated the "skip-Phase-1" anti-pattern — edited `.context/` files before reading the workflow or following protocol steps. User had to redirect multiple times. The 4 flaws logged from this session were all fixed in the protocol package by the next session (binding instruction rule, protocol source URL, no-task-too-small rule, two-surfaces section, session lifecycle markers). This session proved the `.context/` flaws-logging system works: friction was captured, moved to `flaws/`, and upstreamed to the protocol package without the user having to write any of it. (2026-07-11)

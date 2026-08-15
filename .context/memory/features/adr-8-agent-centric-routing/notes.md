@@ -1196,3 +1196,24 @@ backend 1,819 pass. Product commit `1865c74`; review
 `.context/memory/reviews/2026-08-15-review-36.md`.
 Open: B-2026-08-15-3 (defer build_context for direct turns),
 B-2026-08-15-4 (ESLint 66-warning drift vs 65 cap).
+
+---
+## 2026-08-15 — Buffy / openai/gpt-5.6-luna (Session 241)
+
+The reported Cerebras rate-limit card was confirmed as a post-tool synthesis
+failure: the `web_search` call completed and emitted evidence, then the next
+model call received a retryable 429. The loop previously propagated that error
+as a fatal `StreamChunk.error`, so the frontend correctly rendered a whole-turn
+failure even though the tool had succeeded.
+
+Fixed `core/agent/loop.py` to classify the provider error and, when successful
+tool evidence already exists, emit `agent_loop_degraded` plus an evidence-based
+response. Permanent/pre-tool errors keep the existing error path. Added a
+regression covering the exact successful-search → Cerebras-style 429 sequence.
+
+Validation: focused 88 passed; full backend 1752 passed / 2 skipped; frontend
+production build passed; changed-file Ruff and diff checks passed. Product
+commit: `ad9d35c`; review: `.context/memory/reviews/2026-08-15-review-37.md`.
+
+Open: prompt-diet and post-tool synthesis reduction remain the next reliability
+lever; the provider quota error itself is still real when the quota is spent.

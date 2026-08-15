@@ -200,6 +200,18 @@ Four implementation phases (multi-session):
      is likely involved") rather than the router. Or it could be
      removed entirely if the task-type classifier is good enough. TBD.
 
+## Session 241 — post-tool provider-limit recovery (shipped)
+
+The parent loop now distinguishes a retryable provider failure during the
+follow-up synthesis call from a failed tool execution. If a tool already
+succeeded, the loop preserves the verified trace evidence, emits
+`agent_loop_degraded`, and returns an evidence-based response instead of
+surfacing a fatal provider error that erases the completed work. Permanent
+provider failures and pre-tool errors retain the existing error path.
+
+Validation: backend 1752 passed / 2 skipped; frontend production build passed.
+Product commit: `ad9d35c`.
+
 ## Session 195 — Phase 4 track 2: weather signal + bare <tool_call> leak defense (shipped)
 
 - **What:** live transcript bug — "Whats the weather like in Kitengela now?" misrouted

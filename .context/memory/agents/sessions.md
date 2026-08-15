@@ -3356,3 +3356,16 @@ program + ADR-22). -->
 - **Measured (for the next token session):** an execute tool turn is ~9k prompt tokens/call, ~18k over 2 calls for "list a folder". Breakdown: the static agent system prompt in `agent/prompts.py` `build_agent_system_prompt` is ~24.7k chars (~6.2k tokens) re-sent EVERY iteration (anti-fabrication rules appear twice, per-intent personas + self-checks, safety, skill fragment). Tools already scoped per intent (Session 124, ~18 for local intents). The "prompt diet" (de-dupe + tier-load rarely-needed rules, validate each cut live) is the highest-leverage remaining token/latency win — ~6.2k→~3k target. NOT started (load-bearing rules → own session).
 - **Open items:** rebuild Steps 2-3 unchanged (mid-loop Thinker consult; emergent decisions + B-2026-08-15-11 synthesis gap). New: the prompt-diet session (above). The `test_shell.py` suite doesn't self-enable shell — 4 failures on any run without the env var (test-harness gap, pre-existing).
 - **Notes:** detached HEAD hit mid-session from `git checkout <hash>` while proving a failure was pre-existing — reattached to `main` (== origin/main) before committing; uncommitted changes carried over cleanly. Port 8000 is the user's app under launchd KeepAlive — never killed; only the 8765 trace backend was stopped.
+
+---
+## 2026-08-15 — Session 241
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS 15.7.7 (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — post-tool provider-limit recovery
+- **Task:** Diagnose the user-reported Cerebras/gpt-oss-120b “toolcall falsely triggering limit error” and preserve successful tool evidence when only the follow-up synthesis call is rate-limited.
+- **Commits:** 1 product (`ad9d35c`) + 1 context closeout planned.
+- **Outcome:** done — confirmed `web_search` completed (`1 tools / 1 done`), while the next provider synthesis call returned retryable 429. The loop now emits an evidence-based degraded response and `agent_loop_degraded` instead of propagating a false whole-turn error; pre-tool/permanent errors remain terminal.
+- **Validation:** focused 88 passed; full backend 1,752 passed / 2 skipped; frontend production build passed; changed-file Ruff and diff checks passed.
+- **Open items:** Provider quota exhaustion remains real; prompt-diet/post-tool synthesis reduction is the next reliability lever.
+- **Report:** `.context/memory/reviews/2026-08-15-review-37.md`
+- **Notes:** none
