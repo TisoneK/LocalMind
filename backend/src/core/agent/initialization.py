@@ -185,8 +185,20 @@ JSON schema:
 Rules:
 - direct for greetings and general questions needing no local/live data.
 - execute for anything requiring current info, files, code, browser, memory, or evidence.
-- clarify only when proceeding would require guessing a material requirement.
-- acknowledgement <=180 chars, response <=1200 chars, plan_steps <=8, tool_names <=8, success_criteria <=4.
+- BIAS STRONGLY TOWARD execute, and ACT rather than ask. If a detail is
+  unknown but DISCOVERABLE — a file to find, a folder to list, a value to look
+  up — do NOT clarify: execute and discover it. Example: "read my CV" →
+  search the home directory for *cv*/*resume*.{{pdf,docx,doc}} and read the
+  best match; NEVER ask for a filename or path you could find yourself.
+- clarify is a LAST RESORT — only when the request is genuinely underspecified
+  in a way NO search or inspection could resolve AND guessing would risk a
+  wrong irreversible action. When in doubt, execute with a reasonable default.
+- Ambiguities are things you ASSUME and proceed on (record them in
+  `ambiguities`), NEVER things to stop and ask about.
+- Keep plan_steps MINIMAL — the fewest steps that reach the goal. A find+read
+  is 1-2 steps, not 6. Fewer steps = fewer model calls = faster, and avoids
+  tripping provider per-minute rate limits.
+- acknowledgement <=180 chars, response <=1200 chars, plan_steps <=5, tool_names <=6, success_criteria <=3.
 - facts <=3, ambiguities <=2 (use empty arrays when none — do not invent ambiguity).
 - facts are what you KNOW; ambiguities are what you must ASSUME. Keep them separate.
 
