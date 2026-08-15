@@ -3369,3 +3369,15 @@ program + ADR-22). -->
 - **Open items:** Provider quota exhaustion remains real; prompt-diet/post-tool synthesis reduction is the next reliability lever.
 - **Report:** `.context/memory/reviews/2026-08-15-review-37.md`
 - **Notes:** none
+
+---
+## 2026-08-15 — Session 242
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS 15.7.7 (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — context-only provider discrepancy log
+- **Task:** Record the unresolved Mac/Windows rate-limit discrepancy and verify whether runtime settings were deleted.
+- **Commits:** none — context changes are pending user review; no product code changed in this logging action.
+- **Outcome:** recorded evidence instead of a causal guess. After restoring prior uncommitted product files to committed `HEAD`, the live Mac `/api/settings` response still showed `zen / deepseek-v4-flash-free` and configured-key flags for Zen, Cerebras, and Gemini. A real Mac chat request reached Zen's `/v1/chat/completions` and received HTTP 429 after retries. The user's Windows capture shows Cerebras accepted `gpt-oss-120b` for the initial call and completed `web_search`, with only follow-up synthesis rate-limited.
+- **Root-cause status:** unresolved. Settings deletion is ruled out by the live settings response; provider/account-wide failure is not established. The remaining work is a sanitized Mac-vs-Windows request/runtime comparison.
+- **Report:** `.context/memory/reviews/2026-08-15-review-38.md`
+- **Notes:** Do not log credentials or raw authorization headers. Existing uncommitted frontend layout edits from the preceding UI task remain separate from this context record.
