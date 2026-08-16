@@ -785,6 +785,7 @@ export function useChat(
                   reasoning: tc.thought || tc.reasoning,
                   agent: tc.agent || undefined,
                   runId: tc.run_id || tc.runId || undefined,
+                  provider: tc.provider || undefined,
                   timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
                 };
                 // Deduplicate by ID: if a tool_call with the same ID already

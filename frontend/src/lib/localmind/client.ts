@@ -424,6 +424,7 @@ class LocalMindClient {
             todoId: tc.todo_id || tc.todoId,
             reasoning: tc.reasoning,
             agent: tc.agent || undefined,
+            provider: tc.provider || undefined,
             timestamp: tc.timestamp,
           }))
         : undefined,

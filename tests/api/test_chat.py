@@ -545,6 +545,22 @@ class TestSessions:
         assert assistant["agentRuns"][0]["tools"][0]["name"] == "shell"
         assert assistant["agentPhases"][0]["type"] == "gate_passed"
 
+    def test_actions_include_provider_for_badge(self, client):
+        """Session 271: the Actions endpoint returns the winning search engine
+        so the frontend can render the provider badge on the card."""
+        from core.config import settings
+        from storage.db import get_shared_store
+
+        sid = "actions-provider-1"
+        store = get_shared_store(settings.localmind_db_path)
+        store.ensure_session(sid)
+        store.create_action(sid, "web_search", label="Searching the web", action_id="tc-web_search-iter1", provider="bing")
+
+        data = client.get(f"/api/actions?session_id={sid}").json()
+        row = data[0]
+        assert row["type"] == "web_search"
+        assert row["provider"] == "bing"
+
 
 # ── Tool registry ─────────────────────────────────────────────────────────────
 

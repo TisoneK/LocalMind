@@ -229,9 +229,21 @@ function ActionCard({ action }: { action: ActionItem }) {
         )}
         <span className={actionColors[action.type]}>{actionIcons[action.type]}</span>
         <span className="flex-1 min-w-0">
-          {/* Title — the real action label (e.g. "Running: git status") */}
-          <span className="block text-[11px] text-brand-green-soft font-medium truncate">
-            {action.label}
+          {/* Title — the real action label (e.g. "Running: git status"), with
+              a provider badge when the tool reports which engine answered
+              (Session 271: web_search's winning search engine). */}
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span className="block text-[11px] text-brand-green-soft font-medium truncate">
+              {action.label}
+            </span>
+            {action.provider && (
+              <span
+                className="shrink-0 rounded border border-brand-border bg-brand-bg-code px-1 py-px text-[8px] font-mono uppercase tracking-wide text-brand-blue"
+                title={`Answered by ${action.provider}`}
+              >
+                {action.provider}
+              </span>
+            )}
           </span>
           {/* Verbatim command/args — visible without expanding */}
           {verbatim && (

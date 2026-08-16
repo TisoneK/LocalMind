@@ -111,6 +111,7 @@ def _tool_call_dict(d: dict) -> dict:
         "todoId": d.get("todo_id") or None,
         "reasoning": d.get("reasoning") or d.get("thought"),
         "agent": agent,
+        "provider": d.get("provider") or None,
     }
 
 

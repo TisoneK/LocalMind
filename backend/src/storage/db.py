@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS actions (
     iteration   INTEGER,
     todo_id     TEXT,   -- plan todo this action serves (one todo → many actions)
     reasoning   TEXT,   -- Session 122: the model's thought that led to this tool call
+    provider    TEXT,   -- Session 271: which backend engine answered (e.g. web_search winner)
     timestamp   REAL    NOT NULL DEFAULT (unixepoch('now'))
 );
 
@@ -279,6 +280,12 @@ class SessionStore:
                 conn.execute("ALTER TABLE actions ADD COLUMN reasoning TEXT")
         except sqlite3.OperationalError:
             pass
+        try:
+            with self._conn() as conn:
+                # Session 271: which backend engine answered (Actions-card badge).
+                conn.execute("ALTER TABLE actions ADD COLUMN provider TEXT")
+        except sqlite3.OperationalError:
+            pass
         # Session 266: per-turn artifacts on messages (thinking/error/tool
         # calls/metrics). Fresh DBs get them from _SCHEMA; existing DBs need
         # defensive ALTERs (idempotent — a second run raises duplicate-column,
@@ -413,6 +420,7 @@ class SessionStore:
         iteration: Optional[int] = None,
         todo_id: Optional[str] = None,
         reasoning: Optional[str] = None,
+        provider: Optional[str] = None,
     ) -> str:
         """Record a tool action. Returns the action id (stable, reused for updates)."""
         import uuid as _uuid
@@ -424,9 +432,9 @@ class SessionStore:
             # DO NOTHING so the running-create never clobbers a completed row.
             conn.execute(
                 "INSERT INTO actions (id, session_id, tool_name, status, label, input, iteration, "
-                "todo_id, reasoning, timestamp) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
-                (aid, session_id, tool_name, status, label, input, iteration, todo_id, reasoning, time.time()),
+                "todo_id, reasoning, provider, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
+                (aid, session_id, tool_name, status, label, input, iteration, todo_id, reasoning, provider, time.time()),
             )
         return aid
 
@@ -437,11 +445,12 @@ class SessionStore:
         output: Optional[str] = None,
         error: Optional[str] = None,
         duration: Optional[float] = None,
+        provider: Optional[str] = None,
     ) -> None:
-        """Update a tool action's status/output/duration by its stable id."""
+        """Update a tool action's status/output/duration/provider by its stable id."""
         fields: list[str] = []
         values: list[object] = []
-        for key, val in (("status", status), ("output", output), ("error", error), ("duration", duration)):
+        for key, val in (("status", status), ("output", output), ("error", error), ("duration", duration), ("provider", provider)):
             if val is not None:
                 fields.append(f"{key} = ?")
                 values.append(val)
@@ -455,12 +464,12 @@ class SessionStore:
         """Return tool actions for a session, newest first."""
         cols = (
             "id", "session_id", "tool_name", "status", "label", "input",
-            "output", "error", "duration", "iteration", "todo_id", "reasoning", "timestamp",
+            "output", "error", "duration", "iteration", "todo_id", "reasoning", "provider", "timestamp",
         )
         with self._conn() as conn:
             rows = conn.execute(
                 "SELECT id, session_id, tool_name, status, label, input, output, error, "
-                "duration, iteration, todo_id, reasoning, timestamp "
+                "duration, iteration, todo_id, reasoning, provider, timestamp "
                 "FROM actions WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?",
                 (session_id, limit),
             ).fetchall()

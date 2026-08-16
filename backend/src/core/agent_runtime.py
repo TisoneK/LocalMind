@@ -105,6 +105,7 @@ def _collect_tool_calls(collector: ObsCollector) -> list[dict]:
             "todo_id": d.get("todo_id") or None,
             "reasoning": d.get("reasoning") or d.get("thought"),
             "agent": agent,
+            "provider": d.get("provider") or None,
         }
     return list(calls.values())
 

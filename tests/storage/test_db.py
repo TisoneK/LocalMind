@@ -130,6 +130,26 @@ def test_create_action_stores_todo_id(store):
     assert row["iteration"] == 2
 
 
+def test_action_provider_roundtrips(store):
+    """Session 271: the winning search engine is stored on the action row —
+    set on create or via the done-event update — and survives list_actions."""
+    store.ensure_session("s1")
+    # Provider known at create time.
+    store.create_action("s1", "web_search", action_id="a1", provider="bing")
+    assert store.list_actions("s1")[0]["provider"] == "bing"
+    # Provider arrives on the done event — update_action must set it without
+    # clobbering the existing output/status.
+    store.update_action("a1", status="done", output="Search results…", provider="searxng")
+    row = store.list_actions("s1")[0]
+    assert row["provider"] == "searxng"
+    assert row["status"] == "done"
+    assert row["output"] == "Search results…"
+    # Actions without a provider stay null.
+    store.create_action("s1", "shell", action_id="a2")
+    rows = {r["id"]: r for r in store.list_actions("s1")}
+    assert rows["a2"]["provider"] is None
+
+
 # ── Session 266: per-turn artifacts survive a reload ────────────────────────
 # The messages table now persists thinking / error / tool_calls / metrics with
 # each assistant message; get_history must round-trip them so the frontend can

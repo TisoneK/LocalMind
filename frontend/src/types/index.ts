@@ -21,6 +21,9 @@ export interface ToolCall {
   todoId?: string;
   /** The model's reasoning that led to this tool call (Session 122). */
   reasoning?: string;
+  /** Which backend engine answered (e.g. web_search's winning provider —
+   *  Session 271). Rendered as a badge on the Actions card. */
+  provider?: string;
   /** Timestamp when this tool call was first observed (HH:MM format) */
   timestamp?: string;
 }
@@ -254,6 +257,8 @@ export interface ActionItem {
   todoId?: string | null;
   /** The model's reasoning that led to this action (Session 122). */
   reasoning?: string | null;
+  /** Which backend engine answered — badge on the card (Session 271). */
+  provider?: string | null;
 }
 
 export interface TodoItem {

@@ -256,6 +256,19 @@ def _note_described_tool(tool_name: str, tool_result, loaded_tools: set[str]) ->
         logger.info("[agent.loop] describe_tool loaded %r for this run", loaded)
 
 
+def _tool_provider(tool_result) -> Optional[str]:
+    """Surface which backend engine a tool used, for the Actions-card badge.
+
+    Generic metadata hook: any tool that wants a provider badge sets
+    ``metadata["provider"]`` on its ToolResult (e.g. web_search names the
+    winning engine). Falls back to web_search's established
+    ``successful_provider`` key so existing metadata needs no change.
+    """
+    if tool_result is None or not tool_result.metadata:
+        return None
+    return tool_result.metadata.get("provider") or tool_result.metadata.get("successful_provider")
+
+
 # Session 238 (Thinker/Agent rebuild Step 0) — forced-tool reprompt bound.
 # When a tool-required turn's FIRST model call returns empty or text-without-
 # tool (gemini-2.5-flash via the OpenAI-compat endpoint, Session 237 trace),
@@ -1445,7 +1458,7 @@ class AgentLoop:
 
                 # Dispatch all valid calls concurrently
                 async def _dispatch_single(tc_name: str, tc_input: str, tc_args: dict):
-                    """Dispatch a single tool and return (name, observation, failed, latency_ms, result)."""
+                    """Dispatch a single tool and return (name, observation, failed, latency_ms, provider)."""
                     t_start = time.monotonic()
                     tc_result = None
                     try:
@@ -1484,7 +1497,8 @@ class AgentLoop:
                         tc_obs = f"[Tool {tc_name} error: {e}]"
                         tc_failed = True
                     tc_lat = round((time.monotonic() - t_start) * 1000)
-                    return tc_name, tc_obs, tc_failed, tc_lat
+                    tc_provider = _tool_provider(tc_result)
+                    return tc_name, tc_obs, tc_failed, tc_lat, tc_provider
 
                 # Build labels for each tool call
                 # Session 142: capture the batch's 'why' ONCE — the started
@@ -1563,7 +1577,7 @@ class AgentLoop:
                 # Process all results and add to conversation context
                 any_failed = False
                 tool_messages: list[dict] = []
-                for tc_name, tc_obs, tc_failed, tc_lat in dispatch_results:
+                for tc_name, tc_obs, tc_failed, tc_lat, tc_provider in dispatch_results:
                     observation_log += (
                         f"\n[Tool: {tc_name} | Status: {'FAILED' if tc_failed else 'OK'} | Latency: {tc_lat}ms]\n"
                         f"{_truncate_observation(tc_obs)}\n"
@@ -1592,6 +1606,7 @@ class AgentLoop:
                             iteration=iteration + 1,
                             todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                             thought=result.raw_content or "", reasoning=_batch_reasoning,
+                            provider=tc_provider,
                         )
                     if tc_failed:
                         any_failed = True
@@ -2328,6 +2343,7 @@ class AgentLoop:
                                             iteration=iteration + 1,
                                             todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                                             thought=result.raw_content or "", reasoning=_step_reasoning(),
+                                            provider=_tool_provider(tool_result),
                                         )
                         _obs.emit(
                             "fabrication_risk",
@@ -2347,6 +2363,8 @@ class AgentLoop:
                                             iteration=iteration + 1,
                                             todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                                             thought=result.raw_content or "", reasoning=_step_reasoning(),
+                                            provider=_tool_provider(tool_result),
+
                                         )
 
                 trace.steps.append(
@@ -3388,6 +3406,7 @@ class AgentLoop:
                                     iteration=iteration + 1,
                                     todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
                                     thought=result.raw_content or "", reasoning=_step_reasoning(),
+                                    provider=_tool_provider(_late_result),
                                 )
                         continue  # continue the loop so the model can produce a final answer
 

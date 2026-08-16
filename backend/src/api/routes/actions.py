@@ -36,6 +36,7 @@ class ActionItem(BaseModel):
     iteration: Optional[int] = None  # agent loop step number (for chaining)
     todo_id: Optional[str] = None  # plan todo this action serves (Session 120)
     reasoning: Optional[str] = None  # model's thought that led to this action (Session 122)
+    provider: Optional[str] = None  # which backend engine answered (Session 271)
 
 
 def _to_action_item(row: dict) -> ActionItem:
@@ -58,6 +59,7 @@ def _to_action_item(row: dict) -> ActionItem:
         iteration=row.get("iteration"),
         todo_id=row.get("todo_id"),
         reasoning=row.get("reasoning"),
+        provider=row.get("provider"),
     )
 
 

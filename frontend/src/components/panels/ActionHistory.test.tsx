@@ -49,6 +49,21 @@ describe('ActionHistory', () => {
     expect(screen.getByText('Run tests')).toBeInTheDocument();
   });
 
+  it('renders the winning search engine as a badge (Session 271)', () => {
+    render(
+      <ActionHistory
+        actions={[
+          action({ id: 'a1', label: 'Searching the web', type: 'web_search', provider: 'bing', iteration: 1 }),
+          action({ id: 'a2', label: 'Run tests', type: 'shell', iteration: 2 }),
+        ]}
+      />,
+    );
+    expect(screen.getByText('bing')).toBeInTheDocument();
+    expect(screen.getByTitle('Answered by bing')).toBeInTheDocument();
+    // Tools without a provider render no badge.
+    expect(screen.queryByText('duckduckgo')).not.toBeInTheDocument();
+  });
+
   it('groups actions under their plan step', () => {
     render(
       <ActionHistory

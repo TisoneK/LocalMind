@@ -92,6 +92,9 @@ def _tool_call_payload(evt, session_id: str) -> dict:
     args_str = data.get("tool_args", "")
     args_hash = f"-{hashlib.md5(args_str.encode()).hexdigest()[:6]}" if args_str else ""
     action_id = f"tc-{tool}-iter{iteration}{args_hash}"
+    # Session 271: which backend engine answered (e.g. web_search's winning
+    # provider) — carried on the done/failed obs event by the loop.
+    provider = data.get("provider") or None
 
     try:
         if status in ("started", "pending", "in_progress"):
@@ -112,6 +115,7 @@ def _tool_call_payload(evt, session_id: str) -> dict:
                 status="done" if status == "done" else "failed",
                 output=output or None,
                 duration=float(latency_ms) / 1000.0 if latency_ms else None,
+                provider=provider,
             )
     except Exception as exc:
         logger.warning(f"[actions] live record failed: {exc}")
@@ -132,6 +136,7 @@ def _tool_call_payload(evt, session_id: str) -> dict:
             "thought": thought,
             "reasoning": reasoning,
             "agent": agent,
+            "provider": provider,
         },
     }
 
