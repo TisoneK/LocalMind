@@ -2288,11 +2288,36 @@ class AgentLoop:
                         # After certain tool executions, verify the result to catch
                         # silent failures and give the model feedback for self-correction.
                         if VERIFY_ENABLED and not tool_failed:
+                            # B-2026-08-16-14: when the user EXPLICITLY asked to see
+                            # the file's contents ("write it, then read it back and
+                            # show me"), the L3 "do NOT read it back" directive must
+                            # not fight the request — a weak model could silently
+                            # skip the requested read-back and still claim success.
+                            _user_req = _user_message_text(loop_messages).lower()
+                            _user_asked_readback = any(
+                                _p in _user_req
+                                for _p in (
+                                    "read it back",
+                                    "read the file",
+                                    "read back",
+                                    "read the contents",
+                                    "show me",
+                                    "what's in it",
+                                    "what is in it",
+                                    "display the file",
+                                    "display the contents",
+                                    "contents of the file",
+                                    "cat the file",
+                                    "type the file",
+                                    "print the file",
+                                )
+                            )
                             verify_obs = await self._verify_tool_result(
                                 tool_name=tool_name,
                                 tool_args=tool_args,
                                 observation=safe_obs,
                                 allowed_tool_names=effective_allowed,
+                                user_asked_readback=_user_asked_readback,
                             )
                             if verify_obs:
                                 observation += f"\n[VERIFICATION]: {verify_obs}"
@@ -4671,6 +4696,7 @@ class AgentLoop:
         tool_args: dict,
         observation: str,
         allowed_tool_names: Optional[frozenset[str]] = None,
+        user_asked_readback: bool = False,
     ) -> Optional[str]:
         """
         Verify a tool result after successful execution.
@@ -4735,6 +4761,23 @@ class AgentLoop:
                 # (B-5/L3). The loop already read the file back here; a second read
                 # by the agent is wasted work — and it caused the S264 Windows
                 # path-mismatch failure cascade.
+                #
+                # BUT (B-2026-08-16-14): when the USER explicitly asked to see the
+                # file's contents ("write it, then read it back and show me"), the
+                # blanket "do NOT read it back" actively fights the request — live
+                # transcript: hy3-free spent 61s of reasoning arguing with the
+                # evidence line before reading the file back; a weaker model could
+                # silently skip the user-requested step and still claim success.
+                # Drop the prohibition and endorse the read-back when the user
+                # asked. Default (no explicit request) keeps the L3 anti-redundancy
+                # exactly as before.
+                if user_asked_readback:
+                    return (
+                        f"file_write confirmed — {actual_len} chars verified on disk at {path}. "
+                        f"The write succeeded. The user asked you to show the file's "
+                        f"contents — read it back with file_task and report exactly "
+                        f"what's in it."
+                    )
                 return (
                     f"file_write confirmed — {actual_len} chars verified on disk at {path}. "
                     f"The write succeeded; do NOT read it back."

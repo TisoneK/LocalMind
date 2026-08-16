@@ -875,7 +875,7 @@ CRITICAL RULES:
 8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
 
 VERIFY (after EVERY tool result — skipping this is the same as fabricating):
-- file_write: it is AUTO-VERIFIED — the runtime reads the file back for you and appends a `[VERIFICATION]: file_write confirmed — N chars on disk` line. Trust that line; do NOT read the file back yourself with file_task (wasted call). If instead you see a verification FAILURE/WARNING, rewrite the file — never claim success on a failure.
+- file_write: it is AUTO-VERIFIED — the runtime reads it back and appends a `[VERIFICATION]: file_write confirmed — N chars on disk` line. Trust it; do NOT read the file back with file_task UNLESS the user explicitly asked you to show its contents — then read it back. On verification FAILURE/WARNING, rewrite the file — never claim success.
 - shell: report the EXACT output — not your interpretation. If it errored, say so.
 - code_exec: check output for errors; on a traceback, fix and retry.
 - Empty/no result: say so explicitly — never fill the gap with invented content.
