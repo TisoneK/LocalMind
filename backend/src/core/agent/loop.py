@@ -208,6 +208,24 @@ def _user_message_text(messages: list[dict]) -> str:
     return ""
 
 
+def _thinker_context_block(analysis) -> str:
+    """Render a Thinker analysis (ADR-42) into a compact block the loop injects
+    so the model's NEXT action is shaped by the reasoning-on-evidence — facts
+    to build on, ambiguities to resolve on their default (ADR-36: proceed, do
+    not block), and the suggested next step."""
+    parts = ["[Your analysis of the evidence so far — reason from this, do not repeat it to the user]"]
+    if analysis.facts:
+        parts.append("Known: " + "; ".join(analysis.facts))
+    if analysis.ambiguities:
+        parts.append(
+            "Unresolved (proceed on the default unless it risks a wrong irreversible action): "
+            + "; ".join(f"{a.text} → {a.default or 'pick the most reasonable option'}" for a in analysis.ambiguities)
+        )
+    if analysis.next_step:
+        parts.append("Next step: " + analysis.next_step)
+    return "\n".join(parts)
+
+
 def _filtered_tool_defs(allowed_tools: Optional[frozenset[str]] = None) -> list[dict]:
     """Return TOOL_DEFINITIONS filtered to the allowed tool set.
 
@@ -944,6 +962,8 @@ class AgentLoop:
         last_tool_failed = False
         consecutive_failures = 0
         fabrication_risk = 0  # Incremented on tool errors and fabrication-prone patterns
+        # ADR-42: the Thinker consults ONCE, on the first real evidence.
+        _thinker_consulted = False
 
         if initial_tool_result:
             safe_initial = _filter_tool_injection(initial_tool_result.content)
@@ -2395,6 +2415,61 @@ class AgentLoop:
                         "content": safe_observation,
                     }
                 )
+
+                # ── ADR-42: Thinker consult on the first real evidence ──────
+                # A silent, read-only reasoning pass on what was just GATHERED
+                # (not the raw request) — streams genuine reasoning to the
+                # ThinkingBlock and feeds a next-step/facts/ambiguities analysis
+                # forward to shape the next action. Gated: once per turn, only
+                # tool-capable intents, only when the model actually reasons
+                # (thinking enabled), only on a real successful observation. Any
+                # failure/timeout is swallowed — the Thinker never blocks a turn.
+                if (
+                    not _thinker_consulted
+                    and not tool_failed
+                    and observation
+                    and intent in AGENT_INTENTS
+                    and getattr(active_adapter, "thinking_enabled", False)
+                ):
+                    _thinker_consulted = True
+                    try:
+                        from core.agent.thinker import Evidence, Thinker
+
+                        _ev = Evidence(
+                            objective=(initialization.objective if initialization else ""),
+                            user_message=_user_message_text(loop_messages),
+                            observations="\n".join(
+                                f"[{s.tool_name}] {s.observation}" for s in trace.steps if s.observation
+                            ),
+                            last_action=tool_name,
+                            iteration=iteration + 1,
+                        )
+                        if _ev.has_evidence:
+                            if _obs:
+                                _obs.emit("agent_thinker_start", iteration=iteration + 1)
+                            _thinker = Thinker(
+                                timeout_secs=_reasoning_setting(
+                                    "localmind_reasoning_plan_timeout_secs", REASONING_PLAN_TIMEOUT_SECS
+                                )
+                            )
+                            async for _tc in _thinker.consult(_ev, active_adapter):
+                                if _tc.thinking:
+                                    yield StreamChunk(text="", thinking=_tc.thinking, done=False)
+                            _analysis = _thinker.last_analysis
+                            if _analysis and not _analysis.is_empty:
+                                loop_messages.append(
+                                    {"role": "user", "content": _thinker_context_block(_analysis)}
+                                )
+                                if _obs:
+                                    _obs.emit(
+                                        "agent_thinker_done",
+                                        iteration=iteration + 1,
+                                        next_step=_analysis.next_step[:200],
+                                        facts=len(_analysis.facts),
+                                        ambiguities=len(_analysis.ambiguities),
+                                    )
+                    except Exception as _thx:  # never let the Thinker break a turn
+                        logger.warning("[agent.loop] Thinker consult skipped: %s", _thx)
 
                 # ADR-34 B-8: tool output must NOT become the final assistant
                 # answer. The parent model receives the evidence as a tool
