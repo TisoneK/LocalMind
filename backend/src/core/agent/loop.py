@@ -226,6 +226,26 @@ def _thinker_context_block(analysis) -> str:
     return "\n".join(parts)
 
 
+def _thinker_user_summary(analysis) -> str:
+    """Render a Thinker analysis (ADR-42) as USER-facing text for the
+    degraded-evidence fallback (B-2026-08-16-12).
+
+    Distinct from `_thinker_context_block`, which addresses the MODEL's next
+    action; this is the already-computed intermediate synthesis the user can
+    read when the final model call fails after successful tool work. Facts
+    first (the concrete findings), then the next step the Thinker planned.
+    """
+    # No self-header: the degraded fallback intro already announces the block
+    # ("Here's what I'd already worked out from the evidence…"), so repeating
+    # it here would read twice. The bullets + next-step stand on their own.
+    parts = []
+    if analysis.facts:
+        parts.extend(f"  • {f}" for f in analysis.facts)
+    if getattr(analysis, "next_step", "") and str(analysis.next_step).strip():
+        parts.append(f"Next step I was taking: {analysis.next_step}")
+    return "\n".join(parts)
+
+
 def _filtered_tool_defs(allowed_tools: Optional[frozenset[str]] = None) -> list[dict]:
     """Return TOOL_DEFINITIONS filtered to the allowed tool set.
 
@@ -649,6 +669,13 @@ class AgentLoop:
         # the ParentAgent config, so all user turns use initialization.
         plan_context = ""
         iteration_offset = 0  # how many initialization/planning calls consumed
+        # Session 280 (B-2026-08-16-12): `initialization` is only assigned in
+        # the parent-init branch below, but the Thinker consult reads it as
+        # the Evidence objective. Initialize here so the consult never hits a
+        # NameError on non-parent paths (child agents, isolated loop tests) —
+        # before this, the NameError was swallowed by the consult's try/except
+        # and the Thinker silently never ran outside the parent loop.
+        initialization: Optional[InitializationDecision] = None
         _parent_initialization = (
             getattr(agent_config, "name", "") == "parent"
             and not initial_tool_result
@@ -2523,6 +2550,13 @@ class AgentLoop:
                                 loop_messages.append(
                                     {"role": "user", "content": _thinker_context_block(_analysis)}
                                 )
+                                # B-2026-08-16-12: preserve a user-facing
+                                # rendering of the analysis on the trace so the
+                                # degraded-evidence fallback can surface the
+                                # already-computed synthesis instead of
+                                # discarding it when the final model call fails
+                                # (e.g. a provider 429 on the synthesis turn).
+                                trace.thinker_analysis = _thinker_user_summary(_analysis)
                                 if _obs:
                                     _obs.emit(
                                         "agent_thinker_done",
@@ -4773,21 +4807,47 @@ class AgentLoop:
             # model-overload suggestion in _force_final_answer.
             return ""
 
+        # B-2026-08-16-12: the Thinker's analysis (if any) was preserved on
+        # the trace by the loop — surface it instead of discarding the
+        # already-computed synthesis when the final model call fails.
+        thinker_block = ""
+        if trace is not None:
+            thinker_block = (getattr(trace, "thinker_analysis", "") or "").strip()
+
         if synthesis_failure_reason:
-            intro = (
-                f"I ran the requested tools but couldn't synthesize a final "
-                f"answer ({synthesis_failure_reason}). Instead of guessing "
-                f"why, here's the raw evidence — each tool I called, what I "
-                f"sent it, and what it returned:"
-            )
+            if thinker_block:
+                intro = (
+                    f"I ran the requested tools but couldn't synthesize a final "
+                    f"answer ({synthesis_failure_reason}). Here's what I'd "
+                    f"already worked out from the evidence, plus the raw tool "
+                    f"calls:"
+                )
+            else:
+                intro = (
+                    f"I ran the requested tools but couldn't synthesize a final "
+                    f"answer ({synthesis_failure_reason}). Instead of guessing "
+                    f"why, here's the raw evidence — each tool I called, what I "
+                    f"sent it, and what it returned:"
+                )
         else:
-            intro = (
-                "I ran the requested tools but the model couldn't summarize "
-                "what happened (it returned an empty response). Instead of "
-                "guessing why, here's the raw evidence — each tool I called, "
-                "what I sent it, and what it returned:"
-            )
+            if thinker_block:
+                intro = (
+                    "I ran the requested tools but the model couldn't summarize "
+                    "what happened (it returned an empty response). Here's what "
+                    "I'd already worked out from the evidence, plus the raw tool "
+                    "calls:"
+                )
+            else:
+                intro = (
+                    "I ran the requested tools but the model couldn't summarize "
+                    "what happened (it returned an empty response). Instead of "
+                    "guessing why, here's the raw evidence — each tool I called, "
+                    "what I sent it, and what it returned:"
+                )
         lines = [intro, ""]
+        if thinker_block:
+            lines.append(thinker_block)
+            lines.append("")
         # Session 32: if the iteration limit was hit, say so explicitly.
         # The previous fallback guessed "overload" — that was a wrong
         # diagnosis. The real cause was almost always the iteration cap
@@ -4802,7 +4862,8 @@ class AgentLoop:
                 f"what I managed to do before the cap:"
             ))
             # Remove the generic "couldn't summarize" line we just added —
-            # it's misleading when the real cause is the iteration cap.
+            # it's misleading when the real cause is the iteration cap. Keep
+            # the Thinker block (index >= 3) if present — it's real evidence.
             lines = [lines[0], ""] + lines[3:]
         for i, step in enumerate(tool_calls, 1):
             status = "FAILED" if step.tool_failed else "ok"

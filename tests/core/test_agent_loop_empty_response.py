@@ -20,6 +20,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from core.agent.loop import AgentLoop, TerminalProviderError
 from core.models import Intent, StreamChunk
 
@@ -348,3 +349,86 @@ class TestEmptyResponseFastFail:
         assert "Headline A" in full
         assert any(event.type == "agent_loop_degraded" for event in obs.history())
         assert any(event.type == "tool_call" for event in obs.history())
+
+    @pytest.mark.asyncio
+    async def test_degraded_synthesis_surfaces_thinker_analysis(self):
+        """B-2026-08-16-12: when the Thinker computed a correct analysis
+        before the final synthesis call is rate-limited, the degraded reply
+        must carry that analysis — the exact user repro (disk-space task:
+        tool succeeds, Thinker works out the answer, final call 429s).
+        """
+        from adapters.ollama import ToolCallResult
+        from core.agent.thinker import ThinkerAnalysis
+        from core.models import ToolResult
+        from core.obs import ObsCollector
+
+        loop = AgentLoop(adapter=MagicMock())
+        seen = {"calls": 0}
+        rate_limit = (
+            'cerebras returned 429: {"error":{"type":"rate_limit_exceeded",'
+            '"message":"Too many requests"}}'
+        )
+
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+            seen["calls"] += 1
+            if seen["calls"] == 1:
+                return ToolCallResult(
+                    tool_name="shell",
+                    tool_args={"command": "Get-CimInstance Win32_LogicalDisk"},
+                )
+
+            async def _stream():
+                yield StreamChunk(text="", done=True, error=rate_limit)
+
+            return _stream()
+
+        async def dispatch(*args, **kwargs):
+            return (
+                ToolResult(
+                    source="shell",
+                    content="FreeSpace: 14550515712 bytes",
+                ),
+                False,
+                0,
+            )
+
+        fake_analysis = ThinkerAnalysis(
+            facts=["Free space ≈ 13.55 GB", "Not enough for a 50 GB game"],
+            next_step="Tell the user it's not enough",
+        )
+
+        class _FakeThinker:
+            def __init__(self, timeout_secs=30.0):
+                self.last_analysis = fake_analysis
+
+            async def consult(self, evidence, adapter, temperature=0.4):
+                yield StreamChunk(text="", thinking="reasoning...", done=False)
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_with_tools = chat_with_tools
+        mock_adapter.chat = lambda *args, **kwargs: iter(())
+        mock_adapter.thinking_enabled = True
+        obs = ObsCollector()
+        with patch("core.agent.loop.dispatch_with_retry", dispatch), patch(
+            "core.agent.thinker.Thinker", _FakeThinker
+        ):
+            chunks = [
+                chunk
+                async for chunk in loop.run(
+                    messages=[{"role": "user", "content": "check free disk space"}],
+                    intent=Intent.SHELL,
+                    initial_tool_result=None,
+                    available_tools=[],
+                    adapter=mock_adapter,
+                    obs=obs,
+                    skip_planning=True,
+                )
+            ]
+
+        full = "".join(chunk.text for chunk in chunks)
+        assert seen["calls"] == 2
+        # The Thinker's correct synthesis must reach the user, not be dropped.
+        assert "13.55 GB" in full, f"Thinker analysis discarded: {full!r}"
+        assert "not enough for a 50 gb game" in full.lower()
+        assert "rate-limited the final synthesis call" in full
+        assert "shell" in full

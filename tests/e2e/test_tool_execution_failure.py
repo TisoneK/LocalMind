@@ -361,6 +361,58 @@ class TestSummarizeTraceForUser:
         assert "Full error details:" in result
         assert "Permission denied" in result
 
+    def test_surfaces_thinker_analysis_when_present(self):
+        """B-2026-08-16-12: when the Thinker already computed an analysis, the
+        degraded fallback must surface it — not discard the correct synthesis.
+        This is the exact user repro: the Thinker worked out the answer (free
+        space, not enough for 50 GB), then the final synthesis call failed."""
+        from core.agent.loop import AgentStep, AgentTrace
+
+        trace = AgentTrace()
+        trace.thinker_analysis = (
+            "Here's what I'd already worked out from the evidence:\n"
+            "  • Free space ≈ 13.55 GB\n"
+            "  • Not enough for a 50 GB game"
+        )
+        trace.steps = [
+            AgentStep(
+                iteration=1, thought="", tool_name="shell",
+                tool_input="Get-CimInstance Win32_LogicalDisk",
+                observation="FreeSpace: 14550515712 bytes",
+                tool_failed=False, retry_count=0, latency_ms=100,
+            ),
+        ]
+        result = AgentLoop._summarize_trace_for_user(
+            trace,
+            observation_log="",
+            synthesis_failure_reason="the provider rate-limited the final synthesis call",
+        )
+        # The preserved analysis must be in the reply — this is the fix.
+        assert "already worked out" in result, f"Thinker analysis missing: {result!r}"
+        assert "13.55 GB" in result, f"Thinker facts missing: {result!r}"
+        assert "not enough for a 50 gb game" in result.lower(), f"Thinker facts missing: {result!r}"
+        # Raw tool evidence must still be there.
+        assert "shell" in result, f"Raw evidence missing: {result!r}"
+        assert "rate-limited the final synthesis call" in result
+
+    def test_thinker_analysis_block_absent_when_empty(self):
+        """B-2026-08-16-12: when the Thinker produced no analysis (empty
+        string), the fallback must look exactly as before — no dangling
+        'already worked out' header."""
+        from core.agent.loop import AgentStep, AgentTrace
+
+        trace = AgentTrace()  # thinker_analysis defaults to ""
+        trace.steps = [
+            AgentStep(
+                iteration=1, thought="", tool_name="shell",
+                tool_input="ls", observation="file1.py",
+                tool_failed=False, retry_count=0, latency_ms=10,
+            ),
+        ]
+        result = AgentLoop._summarize_trace_for_user(trace, observation_log="")
+        assert "already worked out" not in result, f"Empty analysis leaked: {result!r}"
+        assert "shell" in result
+
     def test_suggests_checking_outputs_not_just_switching_models(self):
         """Session 31 revised: the summary should suggest checking the outputs
         first (to spot malformed data), not just 'switch to a larger model'."""

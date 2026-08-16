@@ -193,6 +193,11 @@ class AgentTrace:
     """Whether the acceptance gate passed at turn end (None = no criteria)."""
     gate_summary: str = ""
     """One-line gate outcome for the user-facing final answer."""
+    thinker_analysis: str = ""
+    """User-facing rendering of the Thinker's analysis (ADR-42), preserved
+    on the trace so the degraded-evidence fallback can surface the
+    already-computed synthesis instead of discarding it when the final model
+    call fails (B-2026-08-16-12). Empty = no Thinker analysis was produced."""
 
     def summary(self) -> str:
         """Human-readable one-liner for logs."""
