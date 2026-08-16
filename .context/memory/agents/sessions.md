@@ -3419,3 +3419,17 @@ program + ADR-22). -->
 - **Live-verify (cerebras, user's working key; isolated LOCALMIND_HOME, keys never printed, port 8000 = user's app never touched):** "hi" = **1,089 prompt tokens / 839ms** (lean init path). Tool task "list projects" = **14,537 raw prompt tokens / 1.6s, `shell` tool fired, no error** (down from ~18k; diet). Tool-calling + answer intact — no regression from the 2-system-message split or cache markers.
 - **IMPORTANT nuance:** `prompt_tokens_approx` is OUR estimate (chars//4) of the FULL prompt — it does NOT reflect the cache discount, which lands on the provider's billing as cache-read tokens (~10%). So the caching win (the biggest lever, for multi-call/multi-turn) is real but invisible to our metric. Also observed: cerebras enforces a TOKENS-per-minute limit (`too_many_tokens_error`) — the bloat directly caused a 429, proving leaner+cached = fewer tokens/min = fewer rate limits.
 - **Next diet target (deferred, needs live tool-use verification):** tool schemas are now the biggest line item (~6.3k tokens all, ~3.8k scoped) — compacting verbose descriptions (browse/git/delegate) is the next lever but risks tool-use regression, so do it with live checks.
+
+---
+
+## 2026-08-16 — Session 246
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — isolated crash fix
+- **Task:** User pasted a React crash trace: `ActionHistory.tsx:188 Uncaught TypeError: Cannot read properties of null (reading 'toFixed')`.
+- **Commits:** 1 product (`1b281ec`, pushed) — `fix(ui): guard null action duration in ActionHistory` + this context commit.
+- **Outcome:** done — the duration render guard checked `action.duration !== undefined` only, but the backend can emit `duration: null` (survives JSON round-tripping, unlike `undefined`), so `null.toFixed(1)` threw and unmounted the whole panel. Guard changed to `!= null` so only real numbers are formatted.
+- **Validation:** frontend `tsc --noEmit` clean. Repo synced (`git pull --ff-only` up to date); core verified OK (0.5.0), status up to date.
+- **Open items:** none new — tool-schema diet (B-2026-08-15-14) remains the next agent-loop token lever.
+- **Report:** `.context/memory/reviews/2026-08-16-review.md`
+- **Notes:** none

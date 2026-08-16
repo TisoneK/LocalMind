@@ -723,3 +723,12 @@ if literally nothing slowed you down.
 - **Cause:** I optimize for "fix the reported input" over "find the system-level cause", and I narrate plausible changes as done before I have evidence. I also treated provider walls as a reason to speculate instead of a reason to stop and state uncertainty.
 - **Workaround / fix:** When a report arrives, decide FIRST "is this an input problem or a loop/system problem?" and measure the shared cost before writing code (I did eventually — the per-call token composition + the time-in-prefix finding are what unlocked ADR-39). Never present an unverified change as a fix; if providers are walled, say so.
 - **Prevent next time:** Lead with a measured root-cause hypothesis, not a patch. Treat a SECOND "that's not the real fix" as proof I'm still at the symptom layer and must step up a level. Verify live or label the claim unverified — no exceptions. Recorded the standing preference in `user/preferences.md` → "Fixing approach & verification" (cure the disease; verify before claiming).
+
+---
+## 2026-08-16 — Buffy / deepseek/deepseek-v4-pro (Session 246)
+
+- **Problem:** `ActionHistory` crashed (`toFixed` of null) because the frontend `ToolCall.duration` type is `number | undefined` but the backend can emit `duration: null`, which survives JSON round-tripping where `undefined` does not.
+- **Cost:** One UI crash surfaced as a user-pasted trace; small, but the type lied.
+- **Cause:** Optional-number guard used `!== undefined` instead of `!= null`, so the JSON-serialized `null` slipped through to `.toFixed(1)`.
+- **Workaround / fix:** Guard changed to `!= null`. General rule: backend-emitted optional numbers reach the client as `null` (not `undefined`), so frontend checks must handle both.
+- **Prevent next time:** When the type is `T | undefined` but the value crosses a JSON boundary (API/SSE), treat `null` as a live possibility and prefer `!= null` guards, or normalize at the deserialization boundary.
