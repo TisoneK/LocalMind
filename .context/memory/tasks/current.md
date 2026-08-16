@@ -44,5 +44,10 @@ commit.
    after the first tool call (real 429, B-12 degraded path handled it
    honestly); the three-model comparison on this task is complete:
    hy3-free > glm-4.5-flash > gpt-oss-120b. Evidence: /tmp/lm-284/.
+5. DONE (Session 285): B-2026-08-16-15 — shell's bare "format" substring
+   block narrowed to real disk-format commands only (Format-List/
+   Format-Table/paths no longer false-positive); 3 new tests; suite 1885 pass.
+   Follow-up consideration logged: the other BLOCKED_COMMANDS substring
+   entries (e.g. "rm -rf /") are equally blunt — audit them.
 
 **Feature:** none
