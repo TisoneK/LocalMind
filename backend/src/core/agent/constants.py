@@ -78,6 +78,24 @@ try:
 except (ValueError, TypeError):
     REASONING_PER_CALL_TIMEOUT_SECS: float = _REASONING_TIMEOUT_DEFAULT
 
+# ADR-41 (Session 256): thinking-aware WALL-CLOCK cap. The 180s
+# MAX_WALL_CLOCK_SECS fits only ~1-2 thinking calls on a slow free tier
+# (each call can spend 30-170s reasoning before acting), so a multi-step
+# turn (init + tool + answer) hits the cap before finishing. When the
+# adapter reports thinking_enabled, the loop uses this larger cap instead.
+# The per-call timeout, iteration cap, and bounded recovery retries remain
+# the real spin protections — this only gives legitimate thinking turns
+# room to finish. Configurable via LOCALMIND_REASONING_MAX_WALL_CLOCK_SECS
+# env var (>= 180).
+_REASONING_WALL_DEFAULT = 360.0
+try:
+    _env_reasoning_wall = float(
+        os.getenv("LOCALMIND_REASONING_MAX_WALL_CLOCK_SECS", str(_REASONING_WALL_DEFAULT))
+    )
+    REASONING_MAX_WALL_CLOCK_SECS: float = max(180.0, _env_reasoning_wall)
+except (ValueError, TypeError):
+    REASONING_MAX_WALL_CLOCK_SECS: float = _REASONING_WALL_DEFAULT
+
 # ── Workspace state feedback (ADR-5) ─────────────────────────────────────────
 # Whether to inject workspace_state.snapshot() into the agent's context
 # at step 1 (assemble prompt) of each turn. This is the "observations

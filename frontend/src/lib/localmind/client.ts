@@ -919,6 +919,7 @@ class LocalMindClient {
     thinking: string;
     reasoning_timeout: number;
     reasoning_plan_timeout: number;
+    reasoning_max_wall_clock: number;
     reasoning_effort: string;
   }> {
     return this.request('/api/settings');
@@ -928,11 +929,13 @@ class LocalMindClient {
     thinking: string;
     reasoningTimeout?: number;
     reasoningPlanTimeout?: number;
+    reasoningMaxWallClock?: number;
     reasoningEffort?: string;
   }): Promise<{
     thinking: string;
     reasoning_timeout: number;
     reasoning_plan_timeout: number;
+    reasoning_max_wall_clock: number;
     reasoning_effort: string;
     message: string;
   }> {
@@ -942,6 +945,7 @@ class LocalMindClient {
         thinking: opts.thinking,
         reasoning_timeout: opts.reasoningTimeout,
         reasoning_plan_timeout: opts.reasoningPlanTimeout,
+        reasoning_max_wall_clock: opts.reasoningMaxWallClock,
         reasoning_effort: opts.reasoningEffort ?? '',
       }),
     });

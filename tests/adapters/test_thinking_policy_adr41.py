@@ -376,29 +376,33 @@ def test_empty_after_reasoning_recovers_with_nudge():
 
 
 def test_second_empty_after_reasoning_still_fails_fast():
-    """The nudge is BOUNDED: a second consecutive reasoning-only response
-    still fails fast with the honest evidence fallback (think-only model
-    protection from ADR-41 stays intact)."""
+    """The nudge is BOUNDED: after _MAX_EMPTY_REASONING_RECOVERIES consecutive
+    reasoning-only responses, the loop still fails fast with the honest
+    evidence fallback (think-only model protection from ADR-41 stays intact)."""
     from core.agent.loop import _MAX_EMPTY_REASONING_RECOVERIES, AgentLoop
 
     adapter = _EmptyAfterToolAdapter()
-    # Make call 2 AND call 3 both reasoning-only by never advancing past 2.
-    adapter.chat_with_tools = _twice_empty(adapter)
+    # Make every post-tool call reasoning-only so the retries exhaust.
+    adapter.chat_with_tools = _always_empty_after_tool(adapter)
     chunks = _collect_with_dispatch(AgentLoop(adapter=adapter), adapter)
 
     text = "".join(chunk.text for chunk in chunks)
     assert "empty response" in text.lower() or "what actually ran" in text.lower(), (
-        f"a second consecutive empty must fail with the evidence fallback — got tail={text[-300:]!r}"
+        f"exhausted retries must fail with the evidence fallback — got tail={text[-300:]!r}"
     )
-    assert _MAX_EMPTY_REASONING_RECOVERIES == 1
+    assert _MAX_EMPTY_REASONING_RECOVERIES == 2
+    # tool call + recovery-budget empty calls + 1 final empty = total calls.
+    assert adapter.calls == 1 + _MAX_EMPTY_REASONING_RECOVERIES + 1
 
 
-def _twice_empty(adapter):
-    """Replace the stub so EVERY post-tool call is reasoning-only."""
+def _always_empty_after_tool(adapter):
+    """Replace the stub so EVERY post-tool call is reasoning-only, counting
+    every call (call 1 = the tool call, then all-think-only)."""
     original = adapter.chat_with_tools
 
     async def _patched(messages, tools, temperature=0.3, intent=None, tool_choice=None):
-        if adapter.calls == 0:
+        adapter.calls += 1
+        if adapter.calls == 1:
             return await original(messages, tools, temperature=temperature, intent=intent, tool_choice=tool_choice)
 
         async def _think_only():
@@ -408,3 +412,20 @@ def _twice_empty(adapter):
         return _think_only()
 
     return _patched
+
+
+def test_reasoning_wall_clock_env_configurable(monkeypatch):
+    """LOCALMIND_REASONING_MAX_WALL_CLOCK_SECS overrides the thinking wall-clock
+    default (>= 180), and the module default exists."""
+    import importlib
+
+    import core.agent.constants as constants_mod
+
+    assert constants_mod.REASONING_MAX_WALL_CLOCK_SECS >= 180.0
+    monkeypatch.setenv("LOCALMIND_REASONING_MAX_WALL_CLOCK_SECS", "600")
+    importlib.reload(constants_mod)
+    try:
+        assert constants_mod.REASONING_MAX_WALL_CLOCK_SECS == 600.0
+    finally:
+        monkeypatch.delenv("LOCALMIND_REASONING_MAX_WALL_CLOCK_SECS", raising=False)
+        importlib.reload(constants_mod)

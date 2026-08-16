@@ -68,6 +68,7 @@ from core.agent.constants import (
     PER_CALL_TIMEOUT_SECS,
     PLAN_ENABLED,
     PLAN_TIMEOUT_SECS,
+    REASONING_MAX_WALL_CLOCK_SECS,
     REASONING_PER_CALL_TIMEOUT_SECS,
     REASONING_PLAN_TIMEOUT_SECS,
     SYNTHESIS_ENABLED,
@@ -255,7 +256,7 @@ _MAX_TOOL_FORCE_RECOVERIES = 2
 # bounded retry with a nudge recovers the turn. Two consecutive empties
 # still fail fast — the think-only protection from the original disable
 # stays intact (this + the Phase-1 500-chunk reasoning cap bound it).
-_MAX_EMPTY_REASONING_RECOVERIES = 1
+_MAX_EMPTY_REASONING_RECOVERIES = 2
 
 
 # Session 192 — same-tool replan bound. After this many CONSECUTIVE
@@ -477,6 +478,17 @@ class AgentLoop:
             and agent_config.max_wall_clock_secs >= 1
         ):
             _effective_max_wall = agent_config.max_wall_clock_secs
+        elif getattr(active_adapter, "thinking_enabled", False):
+            # ADR-41 (Session 256): a thinking model on a slow free tier
+            # spends 30-170s per call THINKING before acting — the 180s wall
+            # clock fits only ~1-2 calls, so a multi-step turn (init + tool +
+            # answer) hits the cap before finishing. Scale the cap for
+            # thinking models; the per-call timeout, iteration cap, and
+            # bounded recovery retries are the real spin protections.
+            _effective_max_wall = _reasoning_setting(
+                "localmind_reasoning_max_wall_clock_secs",
+                REASONING_MAX_WALL_CLOCK_SECS,
+            )
         else:
             _effective_max_wall = MAX_WALL_CLOCK_SECS
 

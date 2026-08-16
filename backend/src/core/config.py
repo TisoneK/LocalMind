@@ -228,6 +228,12 @@ class Settings(BaseSettings):
     # Thinking-aware plan/init/orchestrator stream timeout (seconds).
     # LOCALMIND_REASONING_PLAN_TIMEOUT_SECS / Settings UI.
     localmind_reasoning_plan_timeout_secs: float = 30.0
+    # Thinking-aware total-turn wall-clock cap (seconds) used when the
+    # adapter has thinking enabled — a slow free tier spends 30-170s per
+    # call thinking, so the 180s default only fits ~1-2 calls. The per-call
+    # timeout + iteration cap + bounded retries remain the spin protections.
+    # LOCALMIND_REASONING_MAX_WALL_CLOCK_SECS / Settings UI.
+    localmind_reasoning_max_wall_clock_secs: float = 360.0
     # Optional reasoning-effort for GLM-5.2+ (max/high/medium/low/...); empty
     # = provider default. GLM-4.5-flash does NOT support this parameter.
     # LOCALMIND_REASONING_EFFORT / Settings UI.
@@ -333,6 +339,8 @@ class Settings(BaseSettings):
                 self.localmind_reasoning_timeout_secs = float(data["reasoning_timeout"])
             if "reasoning_plan_timeout" in data:
                 self.localmind_reasoning_plan_timeout_secs = float(data["reasoning_plan_timeout"])
+            if "reasoning_max_wall_clock" in data:
+                self.localmind_reasoning_max_wall_clock_secs = float(data["reasoning_max_wall_clock"])
             if "reasoning_effort" in data:
                 self.localmind_reasoning_effort = str(data["reasoning_effort"])
             # Load API keys from runtime settings

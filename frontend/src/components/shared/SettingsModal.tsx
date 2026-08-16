@@ -102,6 +102,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const [thinking, setThinking] = useState<'enabled' | 'disabled'>('enabled');
   const [reasoningTimeout, setReasoningTimeout] = useState('180');
   const [reasoningPlanTimeout, setReasoningPlanTimeout] = useState('30');
+  const [reasoningMaxWallClock, setReasoningMaxWallClock] = useState('360');
   const [reasoningEffort, setReasoningEffort] = useState('');
 
   // Load current settings on mount
@@ -114,6 +115,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         setThinking(settings.thinking === 'disabled' ? 'disabled' : 'enabled');
         setReasoningTimeout(String(settings.reasoning_timeout ?? 180));
         setReasoningPlanTimeout(String(settings.reasoning_plan_timeout ?? 30));
+        setReasoningMaxWallClock(String(settings.reasoning_max_wall_clock ?? 360));
         setReasoningEffort(settings.reasoning_effort ?? '');
         // Build provider key status AND live default-model map from the
         // providers object returned by /api/settings. This is the single
@@ -152,6 +154,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const handleSaveThinking = useCallback(async () => {
     const timeout = Number(reasoningTimeout);
     const planTimeout = Number(reasoningPlanTimeout);
+    const maxWallClock = Number(reasoningMaxWallClock);
     if (!Number.isFinite(timeout) || timeout < 45) {
       setStatus('error');
       setMessage('Reasoning timeout must be at least 45 seconds.');
@@ -162,6 +165,11 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       setMessage('Plan timeout must be at least 8 seconds.');
       return;
     }
+    if (!Number.isFinite(maxWallClock) || maxWallClock < 180) {
+      setStatus('error');
+      setMessage('Total-turn timeout must be at least 180 seconds.');
+      return;
+    }
     setStatus('saving');
     setMessage('Saving reasoning settings…');
     try {
@@ -169,6 +177,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         thinking,
         reasoningTimeout: timeout,
         reasoningPlanTimeout: planTimeout,
+        reasoningMaxWallClock: maxWallClock,
         reasoningEffort,
       });
       setStatus('success');
@@ -178,7 +187,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       setStatus('error');
       setMessage(err instanceof Error ? err.message : 'Failed to save reasoning settings');
     }
-  }, [thinking, reasoningTimeout, reasoningPlanTimeout, reasoningEffort, onSave]);
+  }, [thinking, reasoningTimeout, reasoningPlanTimeout, reasoningMaxWallClock, reasoningEffort, onSave]);
 
   // When the user picks a provider in the Add Key form, fetch that
   // provider's live model list so the model field can be a dropdown
@@ -594,6 +603,24 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                     className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
                   />
                 </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-brand-green-soft">
+                    Total-turn timeout (s)
+                  </span>
+                  <input
+                    type="number"
+                    min={180}
+                    value={reasoningMaxWallClock}
+                    onChange={(e) => setReasoningMaxWallClock(e.target.value)}
+                    className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                  />
+                </label>
+                <div className="flex items-end pb-0.5">
+                  <p className="text-[11px] leading-tight text-brand-green-muted">
+                    Slow free tiers spend 30-170s per call thinking — a
+                    multi-step turn needs more than the 180s default.
+                  </p>
+                </div>
               </div>
               <div>
                 <label className="block">

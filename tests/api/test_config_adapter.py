@@ -52,6 +52,7 @@ def _fake_settings_for_thinking():
         localmind_thinking="enabled",
         localmind_reasoning_timeout_secs=180.0,
         localmind_reasoning_plan_timeout_secs=30.0,
+        localmind_reasoning_max_wall_clock_secs=360.0,
         localmind_reasoning_effort="",
         ollama_model="",
         ollama_embed_model="",
@@ -74,6 +75,7 @@ async def test_set_thinking_settings_applies_and_persists(monkeypatch):
             thinking="disabled",
             reasoning_timeout=300,
             reasoning_plan_timeout=60,
+            reasoning_max_wall_clock=600,
             reasoning_effort="high",
         )
     )
@@ -81,6 +83,7 @@ async def test_set_thinking_settings_applies_and_persists(monkeypatch):
     assert fake.localmind_thinking == "disabled"
     assert fake.localmind_reasoning_timeout_secs == 300.0
     assert fake.localmind_reasoning_plan_timeout_secs == 60.0
+    assert fake.localmind_reasoning_max_wall_clock_secs == 600.0
     assert fake.localmind_reasoning_effort == "high"
     assert fake._saved["thinking"] == "disabled"
     assert fake._saved["reasoning_timeout"] == 300.0
@@ -123,6 +126,10 @@ async def test_set_thinking_settings_rejects_bad_values(monkeypatch):
     with pytest.raises(HTTPException) as bad_plan:
         await set_thinking_settings(ThinkingSettingsRequest(reasoning_plan_timeout=2))
     assert bad_plan.value.status_code == 400
+
+    with pytest.raises(HTTPException) as bad_wall:
+        await set_thinking_settings(ThinkingSettingsRequest(reasoning_max_wall_clock=60))
+    assert bad_wall.value.status_code == 400
 
 
 @pytest.mark.asyncio

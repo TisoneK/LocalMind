@@ -26,6 +26,7 @@ class SettingsResponse(BaseModel):
     thinking: str = "enabled"
     reasoning_timeout: float = 180.0
     reasoning_plan_timeout: float = 30.0
+    reasoning_max_wall_clock: float = 360.0
     reasoning_effort: str = ""
 
 
@@ -44,6 +45,7 @@ class ThinkingSettingsRequest(BaseModel):
     thinking: Optional[str] = None  # "enabled" | "disabled"
     reasoning_timeout: Optional[float] = None  # per-call seconds when thinking
     reasoning_plan_timeout: Optional[float] = None  # plan/init/orchestrator s
+    reasoning_max_wall_clock: Optional[float] = None  # total-turn cap when thinking
     reasoning_effort: Optional[str] = None  # GLM-5.2+ effort level
 
 
@@ -122,6 +124,7 @@ async def get_settings():
         thinking=settings.localmind_thinking,
         reasoning_timeout=settings.localmind_reasoning_timeout_secs,
         reasoning_plan_timeout=settings.localmind_reasoning_plan_timeout_secs,
+        reasoning_max_wall_clock=settings.localmind_reasoning_max_wall_clock_secs,
         reasoning_effort=settings.localmind_reasoning_effort,
     )
 
@@ -149,6 +152,10 @@ async def set_thinking_settings(req: ThinkingSettingsRequest):
         if req.reasoning_plan_timeout < 8:
             raise HTTPException(status_code=400, detail="reasoning_plan_timeout must be >= 8 seconds")
         settings.localmind_reasoning_plan_timeout_secs = float(req.reasoning_plan_timeout)
+    if req.reasoning_max_wall_clock is not None:
+        if req.reasoning_max_wall_clock < 180:
+            raise HTTPException(status_code=400, detail="reasoning_max_wall_clock must be >= 180 seconds")
+        settings.localmind_reasoning_max_wall_clock_secs = float(req.reasoning_max_wall_clock)
     if req.reasoning_effort is not None:
         settings.localmind_reasoning_effort = req.reasoning_effort.strip().lower()
 
@@ -156,6 +163,7 @@ async def set_thinking_settings(req: ThinkingSettingsRequest):
         thinking=settings.localmind_thinking,
         reasoning_timeout=settings.localmind_reasoning_timeout_secs,
         reasoning_plan_timeout=settings.localmind_reasoning_plan_timeout_secs,
+        reasoning_max_wall_clock=settings.localmind_reasoning_max_wall_clock_secs,
         reasoning_effort=settings.localmind_reasoning_effort,
     )
     # save_runtime_settings PRESERVES empty values (so a partial update can't
@@ -180,6 +188,7 @@ async def set_thinking_settings(req: ThinkingSettingsRequest):
         "thinking": settings.localmind_thinking,
         "reasoning_timeout": settings.localmind_reasoning_timeout_secs,
         "reasoning_plan_timeout": settings.localmind_reasoning_plan_timeout_secs,
+        "reasoning_max_wall_clock": settings.localmind_reasoning_max_wall_clock_secs,
         "reasoning_effort": settings.localmind_reasoning_effort,
         "message": f"Reasoning thinking {'enabled' if settings.localmind_thinking != 'disabled' else 'disabled'}",
     }
