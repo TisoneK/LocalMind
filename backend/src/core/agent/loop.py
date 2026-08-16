@@ -3186,6 +3186,15 @@ class AgentLoop:
                         if not stream_ended_early:
                             async for _drain_chunk in result:
                                 pass
+                        # Session 260: ground truth showed the model streams
+                        # reasoning then 0 content ("thinks but doesn't act").
+                        # Force thinking OFF on the retry so it emits the
+                        # answer/tool-call directly — it has already reasoned
+                        # (streamed live); more thinking just repeats the empty.
+                        try:
+                            active_adapter._one_shot_thinking_off = True
+                        except Exception:
+                            pass
                         # Keep message-role alternation for strict providers:
                         # an empty assistant frame, then the corrective nudge.
                         loop_messages.append({"role": "assistant", "content": ""})
@@ -3193,14 +3202,14 @@ class AgentLoop:
                             {
                                 "role": "user",
                                 "content": (
-                                    "You started reasoning about this task but returned "
-                                    "no answer and no tool call. Continue now — either "
-                                    "call the tool you need next, or give the final "
-                                    "answer directly."
+                                    "You reasoned about this task but returned no answer "
+                                    "and no tool call. Do NOT reason further — act now: "
+                                    "call the next tool you need, or give the final answer "
+                                    "directly in plain text."
                                 ),
                             }
                         )
-                        continue  # retry once with the continue-nudge
+                        continue  # retry with thinking OFF so the model acts
 
                     trace.empty_response = True  # ADR-18 P2: remember this failure
                     if _obs:

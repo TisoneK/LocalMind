@@ -738,13 +738,24 @@ class OpenAICompatAdapter(BaseAdapter):
         max/high/low for 5.3) instead of letting thinking run unbounded.
         """
         thinking = self._zai_thinking_payload(self._model)
+        # Session 260: a ONE-SHOT override forces thinking OFF for the NEXT
+        # call only, then clears itself. The empty-after-reasoning recovery
+        # sets it so a GLM that "thinks but doesn't act" (ground truth: streams
+        # ~73 reasoning tokens then 0 content, `ended=True`, especially
+        # glm-4.5-flash whose reasoning can't be bounded via reasoning_effort
+        # <5.2) is made to emit the answer/tool-call directly — the model has
+        # already reasoned (we streamed it); now it just acts.
+        force_off = getattr(self, "_one_shot_thinking_off", False)
+        if force_off:
+            self._one_shot_thinking_off = False
+            thinking = {"type": "disabled"}
         if thinking:
             payload["thinking"] = thinking
         from core.config import settings as _settings
 
         effort = (getattr(_settings, "localmind_reasoning_effort", "") or "").strip().lower()
         version = self._zai_model_version(self._model)
-        if effort and version and version >= (5, 2):
+        if effort and version and version >= (5, 2) and not force_off:
             payload["reasoning_effort"] = effort
         return payload
 
