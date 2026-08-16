@@ -1,33 +1,30 @@
 # Current Task
 
-**Status:** done — Session 278: between-tool NARRATION streams to the user's chat;
-clarified the agent-in-the-middle architecture; parallel tools already work.
+**Status:** partial-done — Session 279: B-2026-08-16-10 (as-completed streaming for
+parallel tool batches) IMPLEMENTED; as-completed ordering NOT live-verified.
 
-**Delivered (`3bcd105`, review-54):** the model's `content` alongside a tool call
-is user-facing narration (its chain-of-thought comes separately on the reasoning
-channel), but the loop was burying it in the ThinkingBlock and the prompt said
-"never narrate". Now the loop streams it to the user's CHAT (single + multi-tool
-paths) and the prompt asks for ONE short user-facing line. Live catch on
-glm-4.5-flash: it emits 374 thinking tokens then EMPTY content → no narration while
-thinking, which per the user is intended ("when thinking the narration is not
-there") — the ThinkingBlock is the update during reasoning. Not synthesizing fake
-narration. Full suite 1875 pass; prompt trimmed to fit the size budget.
+**Delivered (`cf38bc0`, review-55):** the MultiToolCallResult path dispatched
+concurrently but blocked on `asyncio.gather` and emitted all done-events together.
+Now a per-task `_dispatch_and_emit` emits each tool's done/failed event as it
+finishes; `asyncio.as_completed` + a yield-after-each flushes it to the user; the
+model-context assembly is rebuilt in INPUT order. Also fixed a latent stale-`_inp`
+args bug (every parallel tool's card showed the last call's args). Full suite 1875
+pass, no regression.
 
-**Architecture clarified:** it is NOT tool-to-tool routing — the AgentLoop is the
-orchestrator in the middle (decide → dispatch → observe → Thinker → repeat →
-synthesize). "Intent" is a one-time upfront persona/tool-scope pick. Parallel tool
-calls already dispatch concurrently (`asyncio.gather`, loop.py:1603).
+**KEY FINDING (honest):** the user's models DON'T emit native parallel tool_calls.
+glm-4.5-flash serialized; gemini-2.5-flash looped the `delegate_parallel` TOOL 4×
+(invalid_input). So parallelism happens via delegate_parallel, not native batches —
+B-10's native path rarely activates, and its as-completed ordering could NOT be
+live-verified (the path never triggered). Not claiming "verified".
 
 **Open next / notes:**
-1. **B-2026-08-16-10 (the real concurrency win):** as-completed result streaming —
-   surface each parallel tool's result the moment it finishes instead of blocking
-   on the whole `gather`. (A model still can't generate while awaiting results —
-   its turn pauses at the hand-off; this is loop-side progressive surfacing.)
-2. **Owed real-app visual check** on a content-emitting model (gpt-oss/gemini)
-   where narration is visibly richer (glm-4.5-flash stays silent while thinking).
-3. Carried: B-9 (create→FILE_WRITE — re-scoped to reasoning-driven, not a hardcoded
-   route); owed live Windows re-run of S264 recipe; owed real-app check of the S274
-   todo panel; cerebras synthesis rate-limit (provider cap). Closed: B-4 (S272),
-   B-7 (S276), B-5/L3 (S277).
+1. **B-2026-08-16-11 (from the finding):** (a) apply as-completed streaming to the
+   delegate_parallel path (where parallelism actually happens); (b) audit
+   delegate_parallel's arg schema — gemini couldn't satisfy it (4× invalid_input).
+2. Owed: a focused loop-integration test driving MultiToolCallResult with two
+   different-latency tools (heavy harness — deferred).
+3. Carried: real-app visual checks (todo panel S274; narration on a content model);
+   B-9 (create→FILE_WRITE, reasoning-driven); Windows re-run of S264 recipe.
+   Closed: B-4 (S272), B-7 (S276), B-5/L3 (S277).
 
 **Feature:** none
