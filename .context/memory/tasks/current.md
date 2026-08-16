@@ -1,23 +1,25 @@
 # Current Task
 
-**Status:** Thinker WIRED + live-verified (Session 260); final-answer path is
-the next blocker.
+**Status:** done — Session 261: empty-after-reasoning fixed; the Thinker's
+decisions now reach a real final answer.
 
-**Last completed:** Wired `Thinker.consult` into `AgentLoop.run` (ADR-42,
-`981769a`) — fires once after the first tool evidence on reasoning-capable
-tier-3 turns, streams real reasoning to the ThinkingBlock, injects
-facts/ambiguities/next_step to shape the next action; fail-safe. LIVE-VERIFIED
-on z.ai/glm-4.5-flash: it reasoned on the actual `ls` output and correctly
-called for a recursive search — the init-objective echo is gone. Suite 1,812
-pass.
+**Last completed (`7878db3`):** Fixed the empty-after-reasoning blocker.
+Instrumented ground truth on z.ai/glm-4.5-flash: the model streams ~70
+reasoning tokens then 0 content ("thinks but doesn't act") — not an adapter
+drop; its reasoning can't be bounded (reasoning_effort is GLM ≥5.2 only). Fix:
+a one-shot thinking override — the empty-after-reasoning recovery sets
+`active_adapter._one_shot_thinking_off`; `_add_provider_params` forces
+thinking OFF for the retry (skips reasoning_effort, clears itself) so the
+model ACTS. LIVE-VERIFIED: iter-2 reasoned→empty → forced off → iter-3 real
+content → turn finished with "I found 713 Markdown files in /Users/bao/Code"
+(the Thinker's recursive find_path evidence reached an answer) instead of the
+empty honest-fail. 3 unit tests; suite 1,812 pass. review-44.
 
-**Open next (OWED — the Thinker's reasoning is wasted without these):**
-1. Fix the pre-existing EMPTY-AFTER-REASONING / synthesis gap (`loop.py:3174`
-   recovery; B-2026-08-15-11): in the live test the model went empty after
-   reasoning, so the Thinker's recursive next_step never ran and the final
-   answer was empty. This is now the top blocker to a complete agentic turn.
-2. Run a Thinker-OFF baseline on the same task (z.ai/GLM, thinking ON) to
-   prove the Thinker doesn't worsen the empty-after-reasoning.
-3. Consider consulting the Thinker on later iterations too (currently once).
+**Open next (lower priority):**
+1. Thinking-off answers are terse (separate model style) — could re-issue a
+   fuller synthesis or bound reasoning if glm-4.5 supports it.
+2. Consult the Thinker on later iterations too (currently once).
+3. B-2026-08-15-11 (broader final-answer synthesis audit) — largely relieved
+   by the one-shot fix, but re-check other completion paths.
 
 **Feature:** none

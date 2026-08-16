@@ -3597,3 +3597,14 @@ program + ADR-22). -->
 - **LIVE-VERIFIED (z.ai/glm-4.5-flash, thinking ON, isolated home, port 8000 untouched):** Thinker fired after `ls /Users/bao/Code` and reasoned on the ACTUAL output — spotted only one top-level .md, recognised the user wants ALL → recursive search; `next_step="recursive shell find … and subdirectories"`, 2 facts, 1 ambiguity. The ThinkingBlock now shows real evidence-based thought, NOT the old init-objective echo. Full backend suite 1,812 passed (4 pre-existing env-gated shell fails); ruff clean.
 - **HONEST LIMIT (not overclaiming):** end-to-end the turn still returned an EMPTY final answer — the model went empty after streaming reasoning (the SEPARATE pre-existing empty-after-reasoning issue, `loop.py:3174`, Session 256/257), so the recursive next_step was never executed. The Thinker fixes REASONING; final-answer synthesis (B-2026-08-15-11) + a Thinker-OFF baseline comparison remain OWED. Recorded in ADR-42 + current.md.
 - **Notes:** followed the full .context Exit checklist. The Thinker replaces `render_understanding`'s objective one-liner as "the thought" on tier-3 reasoning turns.
+
+## 2026-08-16 — Session 261
+
+- **Agent:** Claude Code (claude-opus-4-8) | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Task:** "Go ahead" — fix the empty-after-reasoning blocker so the Thinker's decisions reach a real final answer.
+- **Commits:** 1 product (`7878db3`) — `fix(agent): empty-after-reasoning recovery forces thinking OFF` + this context commit. Review: review-44.
+- **Ground truth (instrumented live, z.ai/glm-4.5-flash):** on the synthesis iteration `reasoning_streamed=True, buffer_chars=1, completion_tokens=~70, ended=True` — the model GENUINELY streams reasoning then 0 content ("thinks but doesn't act"); NOT an adapter drop. glm-4.5's reasoning can't be bounded (reasoning_effort is ≥5.2 only).
+- **Fix:** one-shot thinking override — the empty-after-reasoning recovery sets `active_adapter._one_shot_thinking_off`; `_add_provider_params` consumes it for the NEXT call only (forces `thinking:disabled`, skips `reasoning_effort`, clears itself). The model already reasoned (streamed) — the retry makes it act.
+- **LIVE-VERIFIED (same model/task):** iter-2 reasoned→empty (buf=1) → forced off → iter-3 real content (buf=47, 1.5s) → turn FINISHED with a real answer "I found 713 Markdown files in /Users/bao/Code" (the Thinker's recursive find_path evidence reached an answer) instead of the empty honest-fail. 3 unit tests; suite 1,812 pass; ruff clean.
+- **Residual (separate, lower priority):** thinking-off GLM answers are terse — a known model style, not this bug. Thinker-off baseline (Session 260) now lower priority (empty-after-reasoning confirmed pre-existing + now fixed).
+- **Notes:** followed the full .context Exit checklist. This closes the Session 260 blocker: Thinker reasons on evidence (S260) AND the turn now reaches a real answer (S261).
