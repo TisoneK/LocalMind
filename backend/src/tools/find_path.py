@@ -137,8 +137,63 @@ def _search(root: Path, pattern: str, max_depth: int, max_results: int) -> list[
     return matches[:max_results]
 
 
+def _expand_braces(pattern: str) -> list[str]:
+    """Expand shell-style brace groups {a,b} into concrete patterns.
+
+    Returns [pattern] unchanged when there is no comma-containing brace
+    group. Handles multiple groups (Cartesian product) and nested groups:
+    "{a,b}{1,2}.txt" → ["a1.txt", "a2.txt", "b1.txt", "b2.txt"];
+    "{tison,{cv,resume}}*" → ["tison*", "cv*", "resume*"]. fnmatch has no
+    brace support, so a model told "glob" that tries `*.{docx,pdf}` would
+    silently match nothing — this makes it work.
+    """
+    if "{" not in pattern:
+        return [pattern]
+    open_i = pattern.index("{")
+    depth = 0
+    close_i = -1
+    for i in range(open_i, len(pattern)):
+        if pattern[i] == "{":
+            depth += 1
+        elif pattern[i] == "}":
+            depth -= 1
+            if depth == 0:
+                close_i = i
+                break
+    if close_i == -1:
+        return [pattern]  # unbalanced — treat the braces literally
+    head, body, tail = pattern[:open_i], pattern[open_i + 1 : close_i], pattern[close_i + 1 :]
+    alternatives = _split_brace_alternatives(body)
+    if len(alternatives) == 1:
+        return [pattern]  # no alternatives — literal (e.g. "{a}")
+    out: list[str] = []
+    for alt in alternatives:
+        out.extend(_expand_braces(head + alt + tail))
+    return out
+
+
+def _split_brace_alternatives(body: str) -> list[str]:
+    """Split a brace body on top-level commas only — a comma inside a nested
+    {group} must not split its parent. "a,{b,c}" → ["a", "{b,c}"]."""
+    parts: list[str] = []
+    depth = 0
+    current: list[str] = []
+    for ch in body:
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+    parts.append("".join(current))
+    return parts
+
+
 def _matches(name: str, pattern: str, exact: bool = False) -> bool:
-    """Case-insensitive substring, fnmatch, or exact match against a name.
+    """Case-insensitive substring, fnmatch (with {a,b} braces), or exact.
 
     B-2026-08-16-16: multi-word PLAIN input (no glob chars) is an unordered
     AND — the name must contain EVERY whitespace-separated token, in any
@@ -147,19 +202,25 @@ def _matches(name: str, pattern: str, exact: bool = False) -> bool:
     phrase "tison cv" in that exact order; now it matches any name containing
     both "tison" and "cv" (a strict superset — phrase matches still pass, and
     single-token / glob / exact behavior is unchanged).
+
+    B-2026-08-16-17: shell-style brace groups `{a,b}` (fnmatch's missing
+    feature) expand into concrete patterns — `*.{docx,pdf}` matches both
+    extensions, `{tison,cv}*` matches either prefix.
     """
     pattern_l = pattern.lower().strip()
     if not pattern_l:
         return False
+    lowered = name.lower()
     if exact:
-        return name.lower() == pattern_l
+        return lowered == pattern_l
+    if "{" in pattern_l and "}" in pattern_l and "," in pattern_l:
+        return any(fnmatch.fnmatch(lowered, p) for p in _expand_braces(pattern_l))
     if any(ch in pattern_l for ch in "*?["):
-        return fnmatch.fnmatch(name.lower(), pattern_l)
+        return fnmatch.fnmatch(lowered, pattern_l)
     tokens = pattern_l.split()
     if len(tokens) > 1:
-        lowered = name.lower()
         return all(tok in lowered for tok in tokens)
-    return pattern_l in name.lower()
+    return pattern_l in lowered
 
 
 def _walk_catalog(

@@ -82,6 +82,34 @@ def test_matches_single_word_and_glob_unchanged():
     assert _matches("LocalMind", "local*")
 
 
+def test_matches_brace_groups():
+    """B-2026-08-16-17: shell-style {a,b} braces expand — fnmatch alone
+    treats them literally, so `*.{docx,pdf}` previously matched nothing."""
+    assert _matches("report.docx", "*.{docx,pdf}")
+    assert _matches("report.pdf", "*.{docx,pdf}")
+    assert not _matches("report.txt", "*.{docx,pdf}")
+    assert _matches("tison-report.pdf", "{tison,cv}*")
+    assert _matches("cv-report.pdf", "{tison,cv}*")
+    assert not _matches("resume.pdf", "{tison,cv}*")
+
+
+def test_matches_brace_groups_multiple_and_nested():
+    """Multiple brace groups take the Cartesian product; nesting works."""
+    assert _matches("a1.txt", "{a,b}{1,2}.txt")
+    assert _matches("b2.txt", "{a,b}{1,2}.txt")
+    assert not _matches("c3.txt", "{a,b}{1,2}.txt")
+    assert _matches("b.txt", "{a,{b,c}}.txt")
+    assert _matches("c.txt", "{a,{b,c}}.txt")
+    assert not _matches("d.txt", "{a,{b,c}}.txt")
+
+
+def test_matches_unbalanced_brace_is_literal_substring():
+    """No comma/close → braces are literal, substring behavior kept."""
+    assert _matches("file{1}.txt", "file{1")
+    assert _matches("a{b}c.txt", "a{b}c")
+    assert not _matches("abc.txt", "a{b}c")
+
+
 # ── _search (bounded walk) ──────────────────────────────────────────────
 
 
