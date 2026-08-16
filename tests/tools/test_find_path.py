@@ -10,6 +10,7 @@ context" failure mode — the output size is bounded by construction.
 from __future__ import annotations
 
 import pytest
+
 from core.models import Intent
 from tools import dispatch
 from tools.find_path import _matches, _search
@@ -56,6 +57,29 @@ def test_matches_glob():
 
 def test_matches_empty_pattern():
     assert not _matches("anything", "")
+
+
+def test_matches_multi_word_is_unordered_and():
+    """B-2026-08-16-16: multi-word plain patterns are an unordered AND — the
+    name must contain EVERY word, in any order. A single glob/fnmatch pattern
+    cannot express this, so `name="tison cv"` previously only matched the
+    literal phrase "tison cv" in that exact order."""
+    assert _matches("cv-tison-report.pdf", "tison cv")  # reversed order
+    assert _matches("Tison CV Notes.docx", "tison cv")  # phrase, case-insensitive
+    assert _matches("my_cv_final_tison_copy.txt", "tison cv")
+    assert _matches("kenya-history-1963.md", "kenya history")
+    assert not _matches("tison only.txt", "tison cv")  # missing one word
+    assert not _matches("cv only.txt", "tison cv")
+    assert not _matches("nothing here", "tison cv")
+
+
+def test_matches_single_word_and_glob_unchanged():
+    """Single-token substring and glob behavior must not regress."""
+    assert _matches("tison_notes.txt", "tison")
+    assert not _matches("tison_notes.txt", "cvar")
+    assert _matches("a.pdf", "*.pdf")
+    assert not _matches("a.txt", "*.pdf")
+    assert _matches("LocalMind", "local*")
 
 
 # ── _search (bounded walk) ──────────────────────────────────────────────
@@ -114,6 +138,26 @@ async def test_find_path_returns_paths_only(tmp_path, monkeypatch):
     assert "LocalMind" in result.content
     assert "localmind_notes.txt" in result.content
     assert "node_modules" not in result.content  # heavy dir + contents skipped
+
+
+@pytest.mark.asyncio
+async def test_find_path_multi_keyword_and_e2e(tmp_path, monkeypatch):
+    """B-2026-08-16-16 end-to-end: `name="kenya history"` finds
+    "history-of-kenya.md" (words in ANY order) — the old substring/glob
+    behavior could only match the literal phrase in one order."""
+    _allow(monkeypatch, tmp_path)
+    (tmp_path / "history-of-kenya.md").write_text("x")
+    (tmp_path / "kenya-notes.md").write_text("x")
+    (tmp_path / "unrelated.txt").write_text("x")
+    result = await dispatch(
+        __import__("core.models", fromlist=["Intent"]).Intent.FIND_PATH,
+        f'{{"name": "kenya history", "root": "{tmp_path}", "max_depth": 2, "max_results": 10}}',
+    )
+    assert result is not None
+    assert result.success is not False
+    assert "history-of-kenya.md" in result.content
+    assert "kenya-notes.md" not in result.content  # lacks "history"
+    assert "unrelated.txt" not in result.content
 
 
 @pytest.mark.asyncio

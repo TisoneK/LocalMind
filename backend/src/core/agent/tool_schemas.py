@@ -284,11 +284,11 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "find_path",
-            "description": "Find files/folders whose NAME matches a pattern (substring or glob) under a root; returns matching paths only, capped (default 10, max 25, depth 4). Use to LOCATE by name — never ls/dir to hunt.",  # noqa: E501
+            "description": "Find files/folders whose NAME matches (substring, glob, or keywords = AND any order) under a root; returns matching paths only, capped (default 10, max 25, depth 4). Use to LOCATE by name — never ls/dir to hunt.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Substring or glob pattern (case-insensitive)"},
+                    "name": {"type": "string", "description": "Substring, glob, or keywords (ALL must match, any order), case-insensitive"},
                     "root": {"type": "string"},
                     "max_depth": {"type": "integer"},
                     "max_results": {"type": "integer"},

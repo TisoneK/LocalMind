@@ -138,7 +138,16 @@ def _search(root: Path, pattern: str, max_depth: int, max_results: int) -> list[
 
 
 def _matches(name: str, pattern: str, exact: bool = False) -> bool:
-    """Case-insensitive substring, fnmatch, or exact match against a name."""
+    """Case-insensitive substring, fnmatch, or exact match against a name.
+
+    B-2026-08-16-16: multi-word PLAIN input (no glob chars) is an unordered
+    AND — the name must contain EVERY whitespace-separated token, in any
+    order. A single fnmatch pattern can't express "contains X and Y" order-
+    independently, so `name="tison cv"` previously only matched the literal
+    phrase "tison cv" in that exact order; now it matches any name containing
+    both "tison" and "cv" (a strict superset — phrase matches still pass, and
+    single-token / glob / exact behavior is unchanged).
+    """
     pattern_l = pattern.lower().strip()
     if not pattern_l:
         return False
@@ -146,6 +155,10 @@ def _matches(name: str, pattern: str, exact: bool = False) -> bool:
         return name.lower() == pattern_l
     if any(ch in pattern_l for ch in "*?["):
         return fnmatch.fnmatch(name.lower(), pattern_l)
+    tokens = pattern_l.split()
+    if len(tokens) > 1:
+        lowered = name.lower()
+        return all(tok in lowered for tok in tokens)
     return pattern_l in name.lower()
 
 
@@ -281,7 +294,9 @@ async def find_path(message: str) -> ToolResult:
     FIND_PATH dispatch — find files/folders whose NAME matches a pattern.
 
     Args (JSON-encoded from the agent loop, mirroring git/delegate):
-        name:       substring or glob pattern to match (required)
+        name:       substring, glob, or space-separated keywords (unordered
+                    AND — every word must appear, in any order) to match
+                    (required)
         root:       directory to search under (default: user home)
         max_depth:  recursion depth cap (default 4, max 8)
         max_results: OUTPUT page size (default 10, max 25)
