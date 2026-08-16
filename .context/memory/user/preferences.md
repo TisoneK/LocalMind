@@ -35,6 +35,32 @@ correction twice.
 - **`.context/kickoff.md` is READ-ONLY for agents.** It is the front door that already exists in the repo — agents READ it and FOLLOW its 4 steps (identify agent type → sync → read .context/ → load protocol → follow protocol). Agents do NOT create a file called `kickoff.md`. The only time kickoff.md is created/modified is at bootstrap (by `context-sync bootstrap`) or when regenerating a stale file (per the "If this file is stale or missing" section at the bottom of kickoff.md itself). Treat it as an instruction set to execute, not a template to fill in (correction, 2026-08-02 — Session 65 created a bogus `kickoff.md` at `/home/z/my-project/download/codebuff-research/kickoff.md` instead of following the existing one; user caught it: "was kickoff.md read-only or create???")
 - **When a session is "purely research," still follow the full `.context/` protocol** — write the report to `.context/memory/reviews/`, session notes to `.context/memory/sessions/`, backlog items to `.context/memory/tasks/backlog.md`, log the session in `agents/sessions.md`, etc. "Purely research" means no Phase 3 product code changes; it does NOT mean skip the protocol. The user provided a PAT precisely because sessions push (correction, 2026-08-02 — Session 65 initially wrote research to `/home/z/my-project/download/` instead of the repo's `.context/memory/`, missing that the protocol requires reports in the repo)
 
+## Fixing approach & verification
+
+- **Cure the disease, not single prompts.** Find and fix the ROOT architectural
+  cause; do not patch one prompt/input/symptom and call it a fix. The user says
+  this repeatedly and pointedly: "diagnosing a single prompt means we are curing
+  one prompt, not the disease"; and after a fix that routed one question 25s→2s,
+  "that is not the real fix — if you had fixed the real agent loop it would be
+  the real win." He benchmarks against Claude Code (a lot of work in few tokens).
+  Before shipping, ask "does this fix the loop/system or just this input?"
+  (strong repeated signal, Sessions 237 + 244/245)
+- **Verify fixes LIVE before claiming them.** Don't declare something fixed
+  without real evidence (a live trace / reproduction). "It didn't fix anything!"
+  is his response to unverified claims. If the only providers are walled/quota-
+  exhausted and you cannot verify, SAY SO plainly — do not present an unverified
+  change as a confirmed win (correction, 2026-08-15)
+- **Never handle API credentials.** When a key/secret is needed, direct the user
+  to the app's Settings UI (or their password manager) — never save, enter, or
+  read key VALUES yourself. He offered to hand over a Zen key "to save in
+  secrets"; correct move was to refuse and point at Settings (correction, 2026-08-15)
+- **Use ANY capable model.** A free model failing to run tools is treated as OUR
+  bug, not the model's — "use any, they are all capable." Provider/model choice
+  is config, not the root of agent failures (stated, 2026-08-15)
+- **Treat each feature as its own session; move to the next without pausing for
+  confirmations** unless a decision is genuinely the user's to make (stated at
+  kickoff, 2026-08-14)
+
 ## Communication
 
 - Plain-language changelog entries (grandmother test); technical detail in review reports, not the changelog (approved pattern, 2026-07-11)
