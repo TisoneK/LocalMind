@@ -1,5 +1,5 @@
 # Current Task
 
-**Status:** done — Session 257: ran the full app (backend :8000 + vite :3000, Chrome at localhost:3000) and interacted with it through the web proxy. Simple turns complete; agentic turns exposed a repeat of the Session 256 empty-after-reasoning on the free tier. Diagnosed as provider-side think-then-empty (verified via real-adapter + raw API); hardened: recovery budget 1→2 + thinking-aware wall clock 180s→360s (env/Settings/UI). Suite 1,800 pass. See review-47. Servers left running.
+**Status:** done — Session 258: fixed two live Windows bugs. (1) Shell regression: the legacy `shell_exec` dispatch gate rejected every PowerShell cmdlet (`Get-ChildItem -Path $env:USERPROFILE\Desktop`) with `nl_dispatch_removed` — Case 2 now consults `_looks_like_powershell()` so cmdlets route to run_command. (2) Tool chaining: shell/file_write schemas + SHELL/FILE_WRITE workflows + Operator persona + universal FOLLOW-THROUGH rule now say "listing the folder is only step ONE — then call file_write" so the agent chains shell → file_write instead of stopping after the listing. Suite 1,802 pass (4 pre-existing env-gated shell fails). See review-48.
 
 **Feature:** none
