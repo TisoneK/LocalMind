@@ -63,6 +63,21 @@ except (ValueError, TypeError):
 # 45s is generous for a free-tier model but prevents the 120s dead-hang.
 PER_CALL_TIMEOUT_SECS: float = 45.0
 
+# ADR-41 (Session 254): thinking-aware per-call timeout for reasoning models
+# (z.ai/GLM with thinking enabled). A reasoning model streams many thinking
+# tokens BEFORE the answer; on a slow free tier that can legitimately exceed
+# the 45s cap mid-thought — truncating the answer before it lands. When the
+# active adapter reports thinking_enabled, the loop uses this larger budget
+# instead. The wall-clock cap remains the real safety net against a spinning
+# model; this only relaxes the SINGLE-call limit for models that think.
+# Configurable via LOCALMIND_REASONING_TIMEOUT_SECS env var (>= 45).
+_REASONING_TIMEOUT_DEFAULT = 180.0
+try:
+    _env_reasoning = float(os.getenv("LOCALMIND_REASONING_TIMEOUT_SECS", str(_REASONING_TIMEOUT_DEFAULT)))
+    REASONING_PER_CALL_TIMEOUT_SECS: float = max(45.0, _env_reasoning)
+except (ValueError, TypeError):
+    REASONING_PER_CALL_TIMEOUT_SECS: float = _REASONING_TIMEOUT_DEFAULT
+
 # ── Workspace state feedback (ADR-5) ─────────────────────────────────────────
 # Whether to inject workspace_state.snapshot() into the agent's context
 # at step 1 (assemble prompt) of each turn. This is the "observations
@@ -290,3 +305,20 @@ ORCHESTRATOR_CONFIDENCE_HIGH: float = 0.7
 ORCHESTRATOR_CONFIDENCE_MEDIUM: float = 0.4
 
 PLAN_TIMEOUT_SECS: float = 8.0
+
+# ADR-41 (Session 254): thinking-aware plan/init timeout. The planning and
+# initialization paths stream a model-owned JSON decision behind the scenes;
+# with thinking enabled the model reasons BEFORE emitting the JSON, so the
+# 8s PLAN_TIMEOUT_SECS can fire mid-thought (observed live in Session 254:
+# "initialization timed out after 8s" with GLM-4.5-Flash thinking ON). When
+# the active adapter reports thinking_enabled, these waits use this larger
+# budget. The parent loop's wall-clock cap still bounds total turn time.
+# Configurable via LOCALMIND_REASONING_PLAN_TIMEOUT_SECS env var (>= 8).
+_REASONING_PLAN_TIMEOUT_DEFAULT = 30.0
+try:
+    _env_reasoning_plan = float(
+        os.getenv("LOCALMIND_REASONING_PLAN_TIMEOUT_SECS", str(_REASONING_PLAN_TIMEOUT_DEFAULT))
+    )
+    REASONING_PLAN_TIMEOUT_SECS: float = max(8.0, _env_reasoning_plan)
+except (ValueError, TypeError):
+    REASONING_PLAN_TIMEOUT_SECS: float = _REASONING_PLAN_TIMEOUT_DEFAULT

@@ -672,20 +672,73 @@ class OpenAICompatAdapter(BaseAdapter):
             ),
         )
 
+    def _zai_thinking_payload(self, model: str) -> dict | None:
+        """Decide the z.ai ``thinking`` request param for a GLM model.
+
+        ADR-41 (Session 253): GLM is a capable reasoning model, and we were
+        crippling it by unconditionally sending ``thinking: {type: disabled}``
+        — a workaround for the ThinkingDispatcher's 10s timeout, a component
+        DELETED in Session 239. With thinking OFF the same model that does
+        full agentic work in Copilot emits ~28 terse tokens in our harness.
+        Thinking now defaults ON for z.ai, tunable via ``LOCALMIND_THINKING``
+        (``enabled``/``disabled``). One hard constraint from the z.ai docs:
+        GLM-5.3 no longer supports disabling thinking — sending
+        ``{type: disabled}`` there is an API error, so it is never disabled.
+        """
+        if not self._provider_key == "zai":
+            return None
+        model_l = (model or "").lower()
+        if model_l.startswith("glm-5.3"):
+            # z.ai docs (Deep Thinking): GLM-5.3 errors on thinking.type=disabled.
+            return {"type": "enabled"}
+        env = os.getenv("LOCALMIND_THINKING", "enabled").strip().lower()
+        if env == "disabled":
+            return {"type": "disabled"}
+        return {"type": "enabled"}
+
+    @staticmethod
+    def _zai_model_version(model: str) -> tuple[int, int] | None:
+        """Parse ``glm-X.Y`` from a model id (e.g. ``glm-5.2`` → (5, 2))."""
+        import re as _re
+
+        m = _re.match(r"glm[\s-]?(\d+)\.(\d+)", (model or "").lower())
+        if not m:
+            return None
+        return int(m.group(1)), int(m.group(2))
+
+    @property
+    def thinking_enabled(self) -> bool:
+        """True when this adapter's calls run with the model's reasoning ON.
+
+        The agent loop uses this to pick a thinking-aware per-call timeout
+        (ADR-41): reasoning streams many tokens before the answer, so a
+        short fixed cap would truncate mid-thought on a slow free tier.
+        """
+        if self._provider_key != "zai":
+            return False
+        return (self._zai_thinking_payload(self._model) or {}).get("type") != "disabled"
+
     def _add_provider_params(self, payload: dict) -> dict:
         """
         Add provider-specific parameters to the API request payload.
 
-        Z.ai (GLM): GLM models default to thinking/reasoning mode, which
-        streams 1000+ reasoning tokens before the actual answer. This takes
-        20-30 seconds and breaks the ThinkingDispatcher's 10s timeout,
-        causing "Thinking... forever". Disabling thinking mode makes GLM
-        respond instantly (4 tokens for "Say PONG" vs 1200+ with thinking).
-        The reasoning_content field is still read by the streaming parsers
-        as a fallback in case thinking is ever re-enabled.
+        Z.ai (GLM): GLM is a reasoning model. Thinking/reasoning now DEFAULTS
+        ON (ADR-41) so capable models actually use their reasoning — the old
+        unconditional disable was a workaround for the ThinkingDispatcher's
+        10s timeout, a component deleted in Session 239, and it made
+        GLM-4.5-flash emit ~28 terse tokens instead of agentic answers.
+        Tunable via LOCALMIND_THINKING=disabled. When the model supports it
+        (GLM-5.2+), an optional LOCALMIND_REASONING_EFFORT bounds reasoning
+        tokens (max/xhigh/high/medium/low/minimal/none for 5.2;
+        max/high/low for 5.3) instead of letting thinking run unbounded.
         """
-        if self._provider_key == "zai":
-            payload["thinking"] = {"type": "disabled"}
+        thinking = self._zai_thinking_payload(self._model)
+        if thinking:
+            payload["thinking"] = thinking
+        effort = os.getenv("LOCALMIND_REASONING_EFFORT", "").strip().lower()
+        version = self._zai_model_version(self._model)
+        if effort and version and version >= (5, 2):
+            payload["reasoning_effort"] = effort
         return payload
 
     @staticmethod

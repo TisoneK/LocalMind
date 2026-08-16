@@ -42,11 +42,25 @@ from core.agent.constants import (
     ORCHESTRATOR_CONFIDENCE_MEDIUM,
     ORCHESTRATOR_ENABLED,
     ORCHESTRATOR_TIMEOUT_SECS,
+    REASONING_PLAN_TIMEOUT_SECS,
 )
 from core.agent.prompts import build_orchestrator_prompt
 from core.models import Intent
 
 logger = logging.getLogger(__name__)
+
+
+def _orchestrator_timeout_for(active_adapter) -> float:
+    """Return the orchestrator planning timeout, scaled for thinking models.
+
+    ADR-41 (Session 254): with thinking enabled the model reasons before
+    emitting the plan JSON, so the 10s ORCHESTRATOR_TIMEOUT_SECS can fire
+    mid-thought. When the adapter reports thinking_enabled, use the larger
+    REASONING_PLAN_TIMEOUT_SECS budget instead.
+    """
+    if getattr(active_adapter, "thinking_enabled", False):
+        return REASONING_PLAN_TIMEOUT_SECS
+    return ORCHESTRATOR_TIMEOUT_SECS
 
 
 # ── Result dataclass ──────────────────────────────────────────────────────────
@@ -301,7 +315,7 @@ class AgentOrchestrator:
                     if chunk.text:
                         full_response.append(chunk.text)
 
-            await asyncio.wait_for(_collect(), timeout=ORCHESTRATOR_TIMEOUT_SECS)
+            await asyncio.wait_for(_collect(), timeout=_orchestrator_timeout_for(active_adapter))
 
             raw_plan = "".join(full_response).strip()
 
@@ -340,7 +354,7 @@ class AgentOrchestrator:
         except asyncio.TimeoutError:
             logger.warning("[orchestrator] planning timed out — falling through with medium confidence")
             if obs:
-                obs.emit("orchestrator_timeout", timeout=ORCHESTRATOR_TIMEOUT_SECS)
+                obs.emit("orchestrator_timeout", timeout=_orchestrator_timeout_for(active_adapter))
             return OrchestrationResult(
                 steps=[],
                 confidence=0.5,
@@ -451,7 +465,7 @@ class AgentOrchestrator:
                     if chunk.text:
                         full_response.append(chunk.text)
 
-            await asyncio.wait_for(_collect(), timeout=ORCHESTRATOR_TIMEOUT_SECS)
+            await asyncio.wait_for(_collect(), timeout=_orchestrator_timeout_for(active_adapter))
 
             raw_plan = "".join(full_response).strip()
 
@@ -488,7 +502,7 @@ class AgentOrchestrator:
         except asyncio.TimeoutError:
             logger.warning("[orchestrator] replan timed out")
             if obs:
-                obs.emit("orchestrator_replan_timeout", timeout=ORCHESTRATOR_TIMEOUT_SECS)
+                obs.emit("orchestrator_replan_timeout", timeout=_orchestrator_timeout_for(active_adapter))
             return OrchestrationResult(
                 steps=[],
                 confidence=0.3,

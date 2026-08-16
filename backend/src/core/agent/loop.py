@@ -68,6 +68,8 @@ from core.agent.constants import (
     PER_CALL_TIMEOUT_SECS,
     PLAN_ENABLED,
     PLAN_TIMEOUT_SECS,
+    REASONING_PER_CALL_TIMEOUT_SECS,
+    REASONING_PLAN_TIMEOUT_SECS,
     SYNTHESIS_ENABLED,
     SYNTHESIS_TIMEOUT_SECS,
     VERIFY_CODE_EXEC,
@@ -140,6 +142,21 @@ class TerminalProviderError(RuntimeError):
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
+
+def _plan_timeout_for(active_adapter) -> float:
+    """Return the plan/init stream timeout, scaled for thinking models.
+
+    ADR-41 (Session 254): with thinking enabled the model reasons before
+    emitting the plan JSON, so the 8s PLAN_TIMEOUT_SECS can fire mid-thought
+    (observed live: "initialization timed out after 8s" with GLM-4.5-Flash
+    thinking ON). When the adapter reports thinking_enabled, use the larger
+    REASONING_PLAN_TIMEOUT_SECS budget. The parent loop's wall-clock cap
+    still bounds total turn time.
+    """
+    if getattr(active_adapter, "thinking_enabled", False):
+        return REASONING_PLAN_TIMEOUT_SECS
+    return PLAN_TIMEOUT_SECS
 
 
 def _user_message_text(messages: list[dict]) -> str:
@@ -1220,7 +1237,17 @@ class AgentLoop:
             # forever" when the model hangs. Uses PER_CALL_TIMEOUT_SECS
             # (45s) — SHORTER than the adapter's 120s HTTP timeout so the
             # user sees a result before the adapter itself times out.
-            # The wall-clock cap (90s total) is checked between iterations.
+            # The wall-clock cap is checked between iterations.
+            # ADR-41 (Session 254): a reasoning model with thinking enabled
+            # (z.ai/GLM) legitimately streams many thinking tokens before
+            # its answer — a fixed 45s cap would truncate mid-thought on a
+            # slow free tier. When the adapter reports thinking_enabled,
+            # use the larger REASONING_PER_CALL_TIMEOUT_SECS budget instead.
+            _per_call_timeout = (
+                REASONING_PER_CALL_TIMEOUT_SECS
+                if getattr(active_adapter, "thinking_enabled", False)
+                else PER_CALL_TIMEOUT_SECS
+            )
             t_llm = time.monotonic()
             # Session 238 (Thinker/Agent rebuild Step 0): on the FIRST
             # iteration of a tool-required intent (no tool has run yet),
@@ -1246,25 +1273,25 @@ class AgentLoop:
                         intent=intent.value,
                         tool_choice="required" if _force_tool_choice else None,
                     ),
-                    timeout=PER_CALL_TIMEOUT_SECS,
+                    timeout=_per_call_timeout,
                 )
             except asyncio.TimeoutError:
                 logger.warning(
                     "[agent_loop] model call timed out after %.0fs (iter %d) — breaking with error",
-                    PER_CALL_TIMEOUT_SECS,
+                    _per_call_timeout,
                     iteration + 1,
                 )
                 if _obs:
                     _obs.emit(
                         "agent_loop_model_timeout",
                         intent=intent.value,
-                        timeout_secs=PER_CALL_TIMEOUT_SECS,
+                        timeout_secs=_per_call_timeout,
                         iteration=iteration + 1,
                     )
                 yield StreamChunk(
                     text=(
                         f"The model is taking too long to respond "
-                        f"(timed out after {int(PER_CALL_TIMEOUT_SECS)}s). "
+                        f"(timed out after {int(_per_call_timeout)}s). "
                         f"The free-tier model may be overloaded. "
                         f"Please try again or switch to a faster model."
                     ),
@@ -2386,6 +2413,20 @@ class AgentLoop:
                     _minimax_chunks.append(
                         StreamChunk(text=filtered_text, done=chunk.done, usage=dict(_provider_usage))
                     )
+                    # ADR-41 (Session 254): forward the model's reasoning live
+                    # as it streams (GLM thinking → ThinkingBlock). Reasoning is
+                    # user-visible progress and never affects MiniMax/DSML
+                    # tool-call detection (that only looks at TEXT), so it can
+                    # be yielded immediately instead of buffered. Filtered for
+                    # system-leak XML like the text path. (isinstance guard:
+                    # test stubs may carry a truthy non-str .thinking.)
+                    if isinstance(chunk.thinking, str) and chunk.thinking:
+                        yield StreamChunk(
+                            text="",
+                            thinking=_filter_system_leaks(chunk.thinking),
+                            done=False,
+                            usage=dict(_provider_usage),
+                        )
                     if chunk.error:
                         _minimax_error = True
                         if not _minimax_error_msg:
@@ -3273,6 +3314,19 @@ class AgentLoop:
                         # For now, just suppress the XML and let the model see it
                         filtered_text = ""
                         _mid_stream_minimax_buffer = ""
+                    # ADR-41 (Session 254): forward the model's reasoning live
+                    # as it streams (GLM thinking → ThinkingBlock). Reasoning
+                    # is independent of the text path — it never affects
+                    # MiniMax/DSML detection and is filtered for system leaks
+                    # like the text below. (isinstance guard: test stubs may
+                    # carry a truthy non-str .thinking.)
+                    if isinstance(chunk.thinking, str) and chunk.thinking:
+                        yield StreamChunk(
+                            text="",
+                            thinking=_filter_system_leaks(chunk.thinking),
+                            done=False,
+                            usage=dict(_provider_usage),
+                        )
                     # Also strip any partial MiniMax XML from individual chunks.
                     # Use the STREAM variant: the plain _strip_minimax_tool_calls
                     # ends with .strip(), which on a per-chunk basis eats the
@@ -3839,9 +3893,15 @@ class AgentLoop:
                     plan_chunks.append(text)
 
         try:
-            await asyncio.wait_for(_collect_replan(), timeout=PLAN_TIMEOUT_SECS)
+            await asyncio.wait_for(
+                _collect_replan(),
+                timeout=_plan_timeout_for(active_adapter),
+            )
         except asyncio.TimeoutError:
-            logger.warning("[agent.loop] gate replan stream timed out (%ss)", PLAN_TIMEOUT_SECS)
+            logger.warning(
+                "[agent.loop] gate replan stream timed out (%ss)",
+                _plan_timeout_for(active_adapter),
+            )
         except Exception as exc:
             logger.warning("[agent.loop] gate replan call failed: %s", exc)
         plan_text = "".join(plan_chunks).strip()
@@ -4160,12 +4220,12 @@ class AgentLoop:
                 # whether the producer has finished without blocking forever.
                 try:
                     event_type, payload = await asyncio.wait_for(
-                        event_queue.get(), timeout=PLAN_TIMEOUT_SECS
+                        event_queue.get(), timeout=_plan_timeout_for(active_adapter)
                     )
                 except asyncio.TimeoutError:
                     logger.warning(
                         "[agent.loop] initialization timed out after %.0fs",
-                        PLAN_TIMEOUT_SECS,
+                        _plan_timeout_for(active_adapter),
                     )
                     yield ("decision", parse_initialization(""))
                     return
@@ -4232,7 +4292,7 @@ class AgentLoop:
         ]
 
         try:
-            _plan_timeout = PLAN_TIMEOUT_SECS
+            _plan_timeout = _plan_timeout_for(active_adapter)
             from core.error_normalizer import is_terminal_pre_generation_error
 
             # Use a queue for real-time streaming with timeout
@@ -4771,10 +4831,21 @@ class AgentLoop:
                 if filtered_text:
                     _any_text_yielded = True
                     _final_text_parts.append(filtered_text)
+                # ADR-41 (Session 254): forward the model's reasoning in the
+                # final synthesis too — a thinking model (GLM) streams
+                # reasoning before this answer as well. Held with the text
+                # so the ThinkingBlock renders it before the answer.
+                # (isinstance guard: test stubs may carry a truthy non-str
+                # .thinking.)
+                _thinking = (
+                    _filter_system_leaks(chunk.thinking)
+                    if isinstance(chunk.thinking, str) and chunk.thinking
+                    else ""
+                )
                 # Hold the terminal marker until the worker report contract
                 # has been enforced below.
                 _final_chunks.append(
-                    StreamChunk(text=filtered_text, done=False, usage=dict(_provider_usage))
+                    StreamChunk(text=filtered_text, thinking=_thinking, done=False, usage=dict(_provider_usage))
                 )
             logger.info(f"[agent.loop] final synthesis: {round((time.monotonic() - t_final) * 1000)}ms")
         except Exception as exc:
