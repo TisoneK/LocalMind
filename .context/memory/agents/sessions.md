@@ -3433,3 +3433,17 @@ program + ADR-22). -->
 - **Open items:** none new — tool-schema diet (B-2026-08-15-14) remains the next agent-loop token lever.
 - **Report:** `.context/memory/reviews/2026-08-16-review.md`
 - **Notes:** none
+
+---
+
+## 2026-08-16 — Session 247
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — word-welding bug in final synthesis
+- **Task:** User reported the agent "combining words in its reply eg 2 or 3 words into 1" (exported chat: "HereHere arethe trending storiesIfound fortoday").
+- **Commits:** 1 product (`6921ee9`, pushed) — `fix(agent): stop final synthesis welding streamed words together` + this context commit.
+- **Outcome:** done — root cause is `_force_final_answer` (the final-synthesis/rescue path) applying the TRIMMING `_strip_minimax_tool_calls` per streamed delta. Its `.strip()` eats the boundary space between fragments, so the joined answer loses spaces at chunk boundaries. This is the Session 231 bug in a path that fix missed (init producer + plan stream only). The "HereHere" duplication is the heading-only first attempt ("Here") + the rescue synthesis ("Here are the trending stories…"). Switched to `_strip_minimax_tool_calls_stream` + added a multi-chunk regression test.
+- **Validation:** targeted 10 passed; agent-loop/e2e 29 passed; full backend 1761 passed / 2 skipped / 4 pre-existing env-gated `test_shell.py` failures; ruff clean.
+- **Open items:** none new — recommend a grep for any remaining per-chunk trimming `_strip_minimax_tool_calls` call sites on streaming deltas.
+- **Report:** `.context/memory/reviews/2026-08-16-review-2.md`
+- **Notes:** none

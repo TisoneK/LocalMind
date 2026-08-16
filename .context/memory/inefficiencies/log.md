@@ -732,3 +732,12 @@ if literally nothing slowed you down.
 - **Cause:** Optional-number guard used `!== undefined` instead of `!= null`, so the JSON-serialized `null` slipped through to `.toFixed(1)`.
 - **Workaround / fix:** Guard changed to `!= null`. General rule: backend-emitted optional numbers reach the client as `null` (not `undefined`), so frontend checks must handle both.
 - **Prevent next time:** When the type is `T | undefined` but the value crosses a JSON boundary (API/SSE), treat `null` as a live possibility and prefer `!= null` guards, or normalize at the deserialization boundary.
+
+---
+## 2026-08-16 — Buffy / deepseek/deepseek-v4-pro (Session 247)
+
+- **Problem:** The "agent welds words together" bug resurfaced in the final-synthesis path. Session 231 had fixed the same per-chunk `.strip()` bug in the init producer + plan stream, but missed `_force_final_answer`, so web-search/tool answers still collapsed into spaceless text.
+- **Cost:** A second bug report for the same root cause; one more round-trip.
+- **Cause:** The fix was applied call-site-by-call-site rather than sweeping for every per-chunk use of the trimming `_strip_minimax_tool_calls`.
+- **Workaround / fix:** Switched `_force_final_answer` to `_strip_minimax_tool_calls_stream` + regression test.
+- **Prevent next time:** When fixing a "wrong variant of a helper on streamed deltas" bug, grep for ALL per-chunk call sites of the offending helper in the same session — not just the one path that surfaced the symptom.
