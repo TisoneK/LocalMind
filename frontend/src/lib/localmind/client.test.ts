@@ -159,6 +159,88 @@ describe('getObservability', () => {
   });
 });
 
+describe('getSessionHistory (Session 266 artifacts)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('maps persisted thinking/error/toolCalls/performance back onto messages', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        history: [
+          {
+            id: 'm1',
+            role: 'user',
+            content: 'show projects',
+            timestamp: 1783586329.77,
+          },
+          {
+            id: 'm2',
+            role: 'assistant',
+            content: 'Here you go.',
+            timestamp: 1783586330.77,
+            thinking: 'Listing projects to answer the request.',
+            error: { status: 'error', source: 'model_provider', code: 'rate_limit', message: 'Rate limited', retryable: true, raw: 'zen returned 429' },
+            toolCalls: [
+              {
+                id: 'tc-shell-iter1',
+                name: 'shell',
+                label: 'List dev projects',
+                status: 'done',
+                iteration: 1,
+                reasoning: 'List the dev directory',
+                tool_args: 'ls dev',
+                todo_id: 'plan-0',
+                latency_ms: '42',
+              },
+            ],
+            performance: { latencyMs: 2300, promptTokens: 1200, completionTokens: 84, tokensPerSecond: 36.52 },
+          },
+        ],
+      }),
+    }));
+
+    const messages = await localmindClient.getSessionHistory('session-1');
+    const assistant = messages.find((m) => m.role === 'assistant')!;
+
+    // Thinking block + error card survive a reload.
+    expect(assistant.thinking).toBe('Listing projects to answer the request.');
+    expect(assistant.error).toMatchObject({ code: 'rate_limit', retryable: true });
+    // Tool-step pills survive — snake_case wire shape mapped to ToolCall.
+    expect(assistant.toolCalls?.[0]).toMatchObject({
+      name: 'shell',
+      status: 'done',
+      reasoning: 'List the dev directory',
+      todoId: 'plan-0',
+      duration: 42,
+      iteration: 1,
+      input: 'ls dev',
+    });
+    // Performance survives → _seedSessionStats can rebuild the context counter.
+    expect(assistant.performance).toMatchObject({
+      latencyMs: 2300,
+      promptTokens: 1200,
+      completionTokens: 84,
+    });
+  });
+
+  it('leaves messages without artifacts untouched', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        history: [{ id: 'm1', role: 'user', content: 'hi', timestamp: 1783586329.77 }],
+      }),
+    }));
+
+    const messages = await localmindClient.getSessionHistory('session-1');
+    expect(messages[0].thinking).toBeUndefined();
+    expect(messages[0].error).toBeUndefined();
+    expect(messages[0].toolCalls).toBeUndefined();
+    expect(messages[0].performance).toBeUndefined();
+  });
+});
+
 describe('classifyClientIntent (B-2026-08-09-6 / ADR-11)', () => {
   it('hints chat for greetings, farewells, thanks, and acknowledgments', () => {
     expect(classifyClientIntent('hi')).toBe('chat');

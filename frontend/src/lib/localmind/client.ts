@@ -406,8 +406,34 @@ class LocalMindClient {
       timestamp: typeof m.timestamp === 'number'
         ? new Date(m.timestamp * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
         : m.timestamp || '',
-      toolCalls: m.toolCalls,
+      // Session 266: the persisted tool timeline comes back in the backend's
+      // snake_case shape (same as the live SSE tool_call payload) — map it to
+      // the frontend ToolCall type so the pills render identically after reload.
+      // Undefined stays undefined so message rendering can tell "no pills"
+      // from "an empty list" (matches the pre-266 behavior).
+      toolCalls: m.toolCalls
+        ? m.toolCalls.map((tc: any) => ({
+            id: tc.id,
+            name: tc.name,
+            label: tc.label,
+            status: tc.status,
+            input: tc.tool_args || tc.input || '',
+            output: tc.output,
+            duration: tc.duration || (tc.latency_ms ? Number(tc.latency_ms) : undefined),
+            iteration: tc.iteration !== undefined && tc.iteration !== '' ? Number(tc.iteration) : undefined,
+            todoId: tc.todo_id || tc.todoId,
+            reasoning: tc.reasoning,
+            agent: tc.agent || undefined,
+            timestamp: tc.timestamp,
+          }))
+        : undefined,
       fileResults: m.fileResults,
+      // Session 266: restore per-turn artifacts persisted with the assistant
+      // message — thinking block, error card, and per-message performance
+      // (feeds _seedSessionStats → the cumulative context counter).
+      thinking: typeof m.thinking === 'string' ? m.thinking : undefined,
+      error: m.error,
+      performance: m.performance || undefined,
     }));
   }
 
