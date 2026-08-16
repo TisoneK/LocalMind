@@ -1,5 +1,24 @@
 # Current Task
 
-**Status:** done — Session 258: fixed two live Windows bugs. (1) Shell regression: the legacy `shell_exec` dispatch gate rejected every PowerShell cmdlet (`Get-ChildItem -Path $env:USERPROFILE\Desktop`) with `nl_dispatch_removed` — Case 2 now consults `_looks_like_powershell()` so cmdlets route to run_command. (2) Tool chaining: shell/file_write schemas + SHELL/FILE_WRITE workflows + Operator persona + universal FOLLOW-THROUGH rule now say "listing the folder is only step ONE — then call file_write" so the agent chains shell → file_write instead of stopping after the listing. Suite 1,802 pass (4 pre-existing env-gated shell fails). See review-48.
+**Status:** in progress — Session 259 built the Thinker MODULE (ADR-42);
+loop integration + live validation is the next step.
+
+**Last completed:** Built `backend/src/core/agent/thinker/` from the ground
+up — the agent's reasoning backbone. A silent, read-only mid-loop analyst
+that reasons on GATHERED EVIDENCE (never the raw request), replacing the init
+`objective` one-liner echo. Files: contract (Evidence/Ambiguity/
+ThinkerAnalysis), prompt, parse (fail-safe), thinker (`consult()` streams
+real reasoning to the ThinkingBlock, stops at the JSON tail, timeout-bounded,
+never crashes). 10 unit tests pass; ruff clean. Commit `cbd1bd4`. ADR-42.
+
+**Open next (THE integration — its own session, MUST live-verify):** wire
+`Thinker.consult` into `AgentLoop.run` per ADR-42 §Integration plan — after
+the first tool evidence, before the next decision; pipe `chunk.thinking` to
+the `thinking_token` SSE; feed `next_step`/facts/ambiguities forward to shape
+the next action (proceed on defaults, ADR-36); gate on tier-3 (ADR-37) +
+`localmind_thinking` + `localmind_reasoning_plan_timeout_secs` (ADR-41); keep
+fail-fast. **Live-validate on a real model (native reasoning ON) with a
+before/after trace — do NOT claim end-to-end from unit tests.** Replace the
+`render_understanding` objective one-liner as "the thought".
 
 **Feature:** none
