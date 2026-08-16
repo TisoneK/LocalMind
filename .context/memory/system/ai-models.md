@@ -9,7 +9,7 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
-| Buffy | openai/gpt-5.6-luna · deepseek/deepseek-v4-flash · deepseek/deepseek-v4-pro · z-ai/glm-5.2 (varies per session — see Observations) | 2026-07-31 | 2026-08-16 | 27 |
+| Buffy | openai/gpt-5.6-luna · deepseek/deepseek-v4-flash · deepseek/deepseek-v4-pro · z-ai/glm-5.2 (varies per session — see Observations) | 2026-07-31 | 2026-08-16 | 28 |
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 | Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-15 | 10 |
@@ -28,6 +28,7 @@ Update in place when a newer session contradicts an old observation.
 - **Buffy / openai/gpt-5.6-luna:** Session 241 — traced the apparent tool-call limit failure to a real retryable provider 429 on the post-tool synthesis call, then shipped a guarded evidence-preservation fallback with regression coverage. Demonstrated the distinction between tool execution success and final-answer generation failure (2026-08-15)
 - **Buffy / deepseek/deepseek-v4-pro:** Session 246 — fixed the ActionHistory panel crashing on a null `duration` (`toFixed` of null); guard changed to `!= null`. Noted the general lesson: `null` survives JSON round-trips where `undefined` does not, so backend-emitted optional numbers need `!= null` (not `!== undefined`) guards on the frontend. (2026-08-16)
 - **Buffy / deepseek/deepseek-v4-pro:** Session 247 — diagnosed the word-welding bug by tracing the exported "HereHere arethe" text to the final-synthesis path's per-chunk `.strip()`, then fixed it. Demonstrated the value of checking EVERY call site when a class of bug (per-chunk trimming) is fixed in one place — Session 231's fix missed the synthesis path. (2026-08-16)
+- **Buffy / deepseek/deepseek-v4-flash:** Session 265 — three frontend UX fixes in one session (cumulative context counter, hidden empty "Why" blocks, scrollable+copiable+auto-scrolling ThinkingBlock). Demonstrated a fast, test-driven UI sweep: 6 new/updated test files, 224 frontend tests green, tsc + vite build clean, 0 eslint errors. The empty-"Why" fix shows the value of trimming before truthiness-checking user-facing text: `action.reasoning && …` renders a blank block for whitespace-only values (an empty plan-step label), `action.reasoning?.trim() && …` hides it. (2026-08-16)
 - **Buffy / openai/gpt-5.6-luna:** Session 242 — recorded a live Mac/Windows discrepancy without overclaiming its cause: Mac settings remained present and a clean-HEAD chat reached Zen but received HTTP 429; the user's Windows capture showed Cerebras accepting the initial `gpt-oss-120b` call and completing `web_search`. The correct next step is sanitized request/runtime comparison, not another provider diagnosis (2026-08-15)
 - **Super Z / GLM-4.5:** Pushed 10 commits in a single session without intervention — zero-interruption protocol works as designed with GLM-4.5 (2026-07-11)
 - **Super Z / GLM-4.5:** Designed the `.context/` agent-memory system and co-developed the `ai-engineering-protocol` package with the user across multiple sessions (2026-07-09 to 2026-07-11)

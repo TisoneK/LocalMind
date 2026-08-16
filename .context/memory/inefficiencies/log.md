@@ -792,3 +792,12 @@ if literally nothing slowed you down.
 - **Problem:** Same class as the Session 251 entry: launching uvicorn in a backgrounded subshell in ONE tool command works when the curl runs in the SAME command, but launching it in a separate tool call gets the process reaped when the tool shell exits (nohup + disown did NOT help; macOS has no `setsid`). Cost ~4 failed launch attempts this session before I remembered the Session 251 pattern.
 - **Cause:** the tool's shell kills its process group on exit; only a server+curl in one command survives long enough.
 - **Prevent next time:** for any live server trace, run `(cmd &) && sleep N && curl ...` in ONE command (the Session 251/254 pattern). Never launch a background server in a separate tool call.
+
+---
+## 2026-08-16 — Buffy / deepseek-v4-flash (Session 265)
+
+- **Problem:** `git commit -m "$(cat <<'EOF' … EOF)"` heredoc failed with `bash: -c: line 3: unexpected EOF while looking for matching ''` because the commit body contained an apostrophe (`turn's`). Cost one failed command + a rewrite.
+- **Cost:** ~1 minute (one failed run, one re-typed commit).
+- **Cause:** the heredoc is parsed by the tool's bash wrapper; an unescaped apostrophe in the body ends the single-quoted heredoc delimiter early.
+- **Workaround / fix:** keep commit-message bodies apostrophe-free (rewrite "turn's" → "turn"). Works reliably.
+- **Prevent next time:** when using `$(cat <<'EOF' ... EOF)` for multi-line commit messages, scan the body for apostrophes first and reword them away.
