@@ -66,7 +66,7 @@ describe('SettingsModal', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('switching adapter calls setAdapter', async () => {
+  it('switching adapter resets the model to the new provider default', async () => {
     mockClient.getSettings.mockResolvedValue(settingsPayload());
     mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
     mockClient.setAdapter.mockResolvedValue({ ok: true });
@@ -76,7 +76,9 @@ describe('SettingsModal', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Zen AI/i }));
     await waitFor(() => {
-      expect(mockClient.setAdapter).toHaveBeenCalledWith('zen');
+      // The switch carries the new provider's default model so a previous
+      // provider's model can never be stranded under the new adapter.
+      expect(mockClient.setAdapter).toHaveBeenCalledWith('zen', 'deepseek-v4-flash-free');
     });
   });
 

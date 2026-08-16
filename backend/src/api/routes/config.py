@@ -136,8 +136,20 @@ async def set_adapter(req: AdapterConfig):
     # model_field is derived from ADAPTER_MODEL_FIELDS (single source of truth).
     model_field = ADAPTER_MODEL_FIELDS.get(req.adapter)
     if model_field:
-        # Use provided model, or keep the existing model if no model given
-        resolved_model = req.model or getattr(settings, model_field, "")
+        # Resolve the model in priority order: the explicitly requested model,
+        # then THIS provider's own saved model, then THIS provider's DEFAULT.
+        # The default fallback is load-bearing: switching provider without a
+        # model used to leave resolved_model="" when the new provider had no
+        # saved model, and save_runtime_settings PRESERVES an empty kwarg — so
+        # the top-level model kept the PREVIOUS provider's value (e.g. a
+        # Cerebras "gpt-oss-120b" stranded under the Gemini adapter, which then
+        # hit Gemini's free-tier limit). Falling through to the provider
+        # default makes an adapter switch always land on a valid model.
+        resolved_model = (
+            req.model
+            or getattr(settings, model_field, "")
+            or PROVIDER_INFO.get(req.adapter, {}).get("default_model", "")
+        )
         if resolved_model:
             setattr(settings, model_field, resolved_model)
     else:

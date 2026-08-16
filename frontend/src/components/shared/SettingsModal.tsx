@@ -169,10 +169,16 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
 
   const handleAdapterSwitch = useCallback(async (newAdapter: string) => {
     setAdapter(newAdapter);
+    // Switch the shown model to the new provider's default so the UI never
+    // displays (or leaves active) the previous provider's model — e.g.
+    // keeping a Cerebras model under Gemini. The backend resolves the same
+    // default authoritatively; this keeps the visible state in sync.
+    const nextModel = providerDefaults[newAdapter] ?? '';
+    setModel(nextModel);
     setStatus('saving');
     setMessage(`Switching to ${newAdapter}...`);
     try {
-      await localmindClient.setAdapter(newAdapter);
+      await localmindClient.setAdapter(newAdapter, nextModel || undefined);
       setStatus('success');
       setMessage(`Switched to ${newAdapter} adapter`);
       onSave();
@@ -180,7 +186,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       setStatus('error');
       setMessage(err instanceof Error ? err.message : 'Failed to switch adapter');
     }
-  }, [onSave]);
+  }, [onSave, providerDefaults]);
 
   const handleSaveKey = useCallback(async () => {
     if (!newKeyProvider || !newKeyValue.trim()) {
