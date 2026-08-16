@@ -768,3 +768,12 @@ if literally nothing slowed you down.
 - **Cause:** Greedy `.*` with `re.S` crosses newlines to the final `}`; the files are JSON-only SSE (no `event:` lines — the type is inside the JSON), so the whole stream is one line-wise sequence of `data: {...}` objects.
 - **Workaround / fix:** Non-greedy `data: (\{.*?\})\s*\n` per event. The events are `data: {"obs_event": {"type": ..., "data": ...}}` — parse each line's JSON and read `.obs_event.type`.
 - **Prevent next time:** Grep the raw bytes first (the hi trace at `/tmp` is the reference), and always use a non-greedy per-event regex for SSE.
+
+---
+## 2026-08-16 — Buffy / deepseek-v4-flash (Session 252)
+
+- **Problem:** `classify_failure()` (`core/failure_memory.py:52`) returns `tool_failure` whenever ANY tool step has `tool_failed=True` — even when the run then SUCCEEDED (the model rejected a first guess, loaded the right tool, and completed the task). ADR-40 option C makes this more likely: the on-demand round trip means the model may fire a long-tail tool with a guessed arg BEFORE describe_tool, the loop rejects it as degenerate input, and that one rejected step poisons the run's failure memory (`agent_loop_failure: tool_failure` emitted, Remember stage records noise for a successful turn).
+- **Cost:** Incorrect failure-memory records for successfully-adapted runs (observed in the Session 252 zai live trace: describe_tool(skill)→skill(python-testing) succeeded end-to-end, yet the loop emitted `tool_failure: skill()`).
+- **Cause:** `classify_failure` looks at any-step-failed, not last-step/outcome; pre-existing since the Session 175 failure-memory work, surfaced now by the C round trip.
+- **Fix (future session):** only classify `tool_failure` when the failing step is TERMINAL (the run ended on a failed step) or when no successful outcome followed — e.g. skip steps that were followed by a successful step of the same tool, or gate on `not trace.gate_passed` plus last-step-failed. Add a regression test: a run with one rejected first guess + successful retry must NOT emit agent_loop_failure. Filed as review-42's recommended next step.
+- **Prevent next time:** when adding a mechanism that can produce a rejected first attempt (on-demand loading, new validators), check whether rejection paths feed classification/health signals.
