@@ -530,13 +530,19 @@ def _extract_content_and_reasoning(delta: dict) -> tuple[str, str]:
         route content to StreamChunk.text and reasoning to StreamChunk.thinking.
         Never merge them.
 
-    Some models (DeepSeek-v3, Qwen) wrap reasoning in <think>...</think>
-    tags inside content instead of using a separate reasoning_content field.
-    We detect and split that too — the <think> portion goes to reasoning,
-    the rest stays as content.
+    Providers name the separate reasoning field differently: z.ai/GLM and
+    DeepSeek use ``reasoning_content``; cerebras/gpt-oss-120b (verified live,
+    B-7) and OpenRouter-style gateways use ``reasoning``. We read either, so a
+    capable model's thinking always reaches StreamChunk.thinking (the
+    ThinkingBlock) instead of leaking into the chat answer.
+
+    Some models (DeepSeek-v3, Qwen) instead wrap reasoning in <think>...</think>
+    tags inside content. We detect and split that too — the <think> portion goes
+    to reasoning, the rest stays as content.
     """
     content = delta.get("content", "") or ""
-    reasoning = delta.get("reasoning_content", "") or ""
+    # reasoning_content (GLM/DeepSeek) OR reasoning (cerebras/gpt-oss) — same role.
+    reasoning = delta.get("reasoning_content", "") or delta.get("reasoning", "") or ""
 
     # Some models (DeepSeek-v3, Qwen) put reasoning in <think>...</think>
     # tags inside content instead of a separate field. Split it out.
@@ -715,13 +721,28 @@ class OpenAICompatAdapter(BaseAdapter):
     def thinking_enabled(self) -> bool:
         """True when this adapter's calls run with the model's reasoning ON.
 
-        The agent loop uses this to pick a thinking-aware per-call timeout
-        (ADR-41): reasoning streams many tokens before the answer, so a
-        short fixed cap would truncate mid-thought on a slow free tier.
+        The agent loop reads this to (a) gate the mid-loop Thinker consult and
+        (b) pick a thinking-aware per-call timeout (ADR-41): reasoning streams
+        many tokens before the answer, so a short fixed cap would truncate
+        mid-thought.
+
+        B-7: this is NO LONGER z.ai-only. The Thinker made even a lesser model
+        (glm-4.5-flash) efficient and precise, and that benefit should reach
+        ANY capable model — cerebras/gpt-oss-120b (verified to stream reasoning)
+        and the other OpenAI-compat providers. It stays a read-only behavioral
+        signal (it never adds a request param — the z.ai ``thinking`` payload is
+        gated separately in _add_provider_params), so broadening it only enables
+        the Thinker + a more generous timeout, both benign for a fast model.
+        Tunable off via LOCALMIND_THINKING=disabled.
         """
-        if self._provider_key != "zai":
-            return False
-        return (self._zai_thinking_payload(self._model) or {}).get("type") != "disabled"
+        if self._provider_key == "zai":
+            # z.ai owns its own enable/disable logic (GLM-5.3 forces enabled even
+            # when LOCALMIND_THINKING=disabled — z.ai rejects thinking:disabled).
+            return (self._zai_thinking_payload(self._model) or {}).get("type") != "disabled"
+        from core.config import settings as _settings
+
+        mode = (getattr(_settings, "localmind_thinking", "enabled") or "enabled").strip().lower()
+        return mode != "disabled"
 
     def _add_provider_params(self, payload: dict) -> dict:
         """
@@ -737,20 +758,27 @@ class OpenAICompatAdapter(BaseAdapter):
         tokens (max/xhigh/high/medium/low/minimal/none for 5.2;
         max/high/low for 5.3) instead of letting thinking run unbounded.
         """
-        thinking = self._zai_thinking_payload(self._model)
-        # Session 260: a ONE-SHOT override forces thinking OFF for the NEXT
-        # call only, then clears itself. The empty-after-reasoning recovery
-        # sets it so a GLM that "thinks but doesn't act" (ground truth: streams
-        # ~73 reasoning tokens then 0 content, `ended=True`, especially
-        # glm-4.5-flash whose reasoning can't be bounded via reasoning_effort
-        # <5.2) is made to emit the answer/tool-call directly — the model has
-        # already reasoned (we streamed it); now it just acts.
+        # Session 260: a ONE-SHOT override forces thinking OFF for the NEXT call
+        # only, then clears itself. The empty-after-reasoning recovery sets it so
+        # a model that "thinks but doesn't act" (GLM ground truth: streams ~73
+        # reasoning tokens then 0 content, `ended=True`) is made to emit the
+        # answer/tool-call directly — it already reasoned (we streamed it); now
+        # it acts. Read+clear it here for ALL providers so it never lingers on a
+        # provider that doesn't consume the z.ai thinking param below.
         force_off = getattr(self, "_one_shot_thinking_off", False)
         if force_off:
             self._one_shot_thinking_off = False
-            thinking = {"type": "disabled"}
-        if thinking:
-            payload["thinking"] = thinking
+
+        # The z.ai ``thinking`` request param is GLM-specific — only z.ai's API
+        # understands it. B-7 broadened the read-only ``thinking_enabled`` signal
+        # to all capable providers, so gate the actual request param to z.ai here,
+        # or a stray ``thinking`` key could reach cerebras/gemini/etc.
+        if self._provider_key == "zai":
+            thinking = self._zai_thinking_payload(self._model)
+            if force_off:
+                thinking = {"type": "disabled"}
+            if thinking:
+                payload["thinking"] = thinking
         from core.config import settings as _settings
 
         # Session 262: the "thinking level" — reasoning_effort bounds how much

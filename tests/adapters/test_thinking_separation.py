@@ -31,6 +31,26 @@ def test_reasoning_only():
     assert reasoning == "I should say hello back."
 
 
+def test_reasoning_field_cerebras_gpt_oss():
+    """B-7: cerebras/gpt-oss stream reasoning in a `reasoning` field (verified
+    live), not `reasoning_content` — it must still route to reasoning, not chat."""
+    content, reasoning = _extract_content_and_reasoning(
+        {"content": "42", "reasoning": "Let me compute 6 times 7."}
+    )
+    assert content == "42"
+    assert reasoning == "Let me compute 6 times 7."
+
+
+def test_reasoning_content_wins_over_reasoning_when_both_present():
+    """If a provider ever sends both, reasoning_content takes precedence (its the
+    established GLM/DeepSeek field); neither leaks into content."""
+    content, reasoning = _extract_content_and_reasoning(
+        {"content": "ans", "reasoning_content": "primary", "reasoning": "secondary"}
+    )
+    assert content == "ans"
+    assert reasoning == "primary"
+
+
 def test_both_content_and_reasoning():
     """Delta with both fields → both returned, SEPARATE (not merged)."""
     content, reasoning = _extract_content_and_reasoning(

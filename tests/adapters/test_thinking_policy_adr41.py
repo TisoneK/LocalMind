@@ -85,8 +85,20 @@ class TestZaiThinkingPolicy:
             )
 
     def test_no_thinking_param_for_non_zai(self, monkeypatch):
-        """Other providers never get the z.ai-specific thinking param."""
+        """Other providers never get the z.ai-specific thinking request param —
+        but B-7 makes thinking_enabled True for them (enables the Thinker +
+        thinking-aware timeout; the request param stays absent)."""
         monkeypatch.setenv("ZEN_API_KEY", "sk-fake-test-key")
+        adapter = OpenAICompatAdapter(provider="zen", model_override="deepseek-v4-flash-free")
+        payload = adapter._add_provider_params({})
+        assert "thinking" not in payload  # the zai-only request param never leaks
+        assert adapter.thinking_enabled is True  # B-7: Thinker applies to all capable models
+
+    def test_thinking_enabled_tunable_off_for_non_zai(self, monkeypatch):
+        """B-7: LOCALMIND_THINKING=disabled turns the Thinker/timeout off for
+        non-zai providers too (and still no request param)."""
+        monkeypatch.setenv("ZEN_API_KEY", "sk-fake-test-key")
+        monkeypatch.setattr(config_mod.settings, "localmind_thinking", "disabled")
         adapter = OpenAICompatAdapter(provider="zen", model_override="deepseek-v4-flash-free")
         payload = adapter._add_provider_params({})
         assert "thinking" not in payload
