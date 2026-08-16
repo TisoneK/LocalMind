@@ -1075,42 +1075,21 @@ class OpenAICompatAdapter(BaseAdapter):
         timeout = self._timeouts.get(intent, 120)
         url = f"{self._base_url}/chat/completions"
 
-        # Inject tool descriptions into the system prompt as a fallback
-        # for providers that don't support the tools parameter natively.
-        # This gives the model context about available tools even if the
-        # API doesn't support structured tool calling.
-        tool_descriptions = []
-        tool_names = set()
-        for tool in tools:
-            func = tool.get("function", {})
-            name = func.get("name", "")
-            tool_names.add(name)
-            desc = func.get("description", "")
-            params = func.get("parameters", {})
-            required = params.get("required", [])
-            param_desc = ", ".join(
-                f"{p}: {params.get('properties', {}).get(p, {}).get('description', p)}" for p in required
-            )
-            tool_descriptions.append(f"- {name}({param_desc}): {desc}")
+        # Collect tool names (used later for mid-stream tool-call detection).
+        tool_names = {t.get("function", {}).get("name", "") for t in tools}
 
-        tool_context = ""
-        if tool_descriptions:
-            tool_context = (
-                "\n\nYou have access to these tools. To use a tool, call it directly using "
-                "the native tool-calling API. Do NOT output tool calls as text.\n\n"
-                "Available tools:\n" + "\n".join(tool_descriptions) + "\n\n"
-                "IMPORTANT: Call the tool immediately when needed. Do NOT narrate your intent. "
-                "Do NOT output minimax:tool_call or any other text format for tool calls. "
-                "Use the native function-calling API only."
-            )
-
-        # Add tool context to the system message
+        # Session 249: DO NOT inject a text copy of the tool descriptions into
+        # the system prompt. It was added as a fallback for providers that
+        # don't support the native `tools` parameter — but we ALWAYS send that
+        # parameter below, and every configured provider is OpenAI-compatible
+        # and supports it. The injection was therefore a THIRD redundant copy
+        # of the tool catalog (native `tools` param + this text + the tool list
+        # already inside the agent system prompt), adding ~11k chars (~2.7k
+        # tokens) to EVERY call. On a small-budget free tier (z.ai/GLM) that
+        # input bloat starved the output budget, truncating final answers to a
+        # few tokens. Re-add only behind a per-provider "no native tools" flag
+        # if such a provider is ever configured.
         enhanced_messages = list(messages)
-        if enhanced_messages and enhanced_messages[0].get("role") == "system":
-            enhanced_messages[0] = {
-                "role": "system",
-                "content": enhanced_messages[0]["content"] + tool_context,
-            }
 
         # Session 31 (root cause found via real-model testing):
         # DeepSeek-v4-flash-free (via Zen) and possibly other providers
@@ -1203,7 +1182,6 @@ class OpenAICompatAdapter(BaseAdapter):
             # Initial text accumulated during Phase 1 — yielded once Phase 2
             # decides this is a text response (not tool call).
             initial_text_chunks: list[StreamChunk] = []
-            phase1_done = False
 
             # Open the streaming response WITHOUT async-with so we can hand
             # the open stream to the returned generator. The generator is
@@ -1243,7 +1221,6 @@ class OpenAICompatAdapter(BaseAdapter):
                     continue
                 data = line[6:]
                 if data == "[DONE]":
-                    phase1_done = True
                     break
 
                 try:
@@ -1292,7 +1269,6 @@ class OpenAICompatAdapter(BaseAdapter):
                     finish_reason = choice.get("finish_reason", "")
                     if finish_reason == "tool_calls":
                         tool_call_detected = True
-                        phase1_done = True  # Tool call is complete, stop reading
                         break
 
                     # Check finish_reason for safety/content filter blocks
@@ -1310,7 +1286,6 @@ class OpenAICompatAdapter(BaseAdapter):
                             f"or switching to a different provider."
                         )
                         logger.warning(error_msg)
-                        phase1_done = True
                         # Store the error so _stream_from_http can yield it
                         _safety_error = error_msg
                         break
@@ -1371,7 +1346,6 @@ class OpenAICompatAdapter(BaseAdapter):
                     elif _full_text_so_far and chunks_read >= 15:
                         # We've seen actual CONTENT (not just reasoning) and no
                         # tool call sign — this is a text response. Break.
-                        phase1_done = True
                         break
                     elif not _full_text_so_far and chunks_read >= 500:
                         # Reasoning-only for 500 chunks with no content or
@@ -1381,7 +1355,6 @@ class OpenAICompatAdapter(BaseAdapter):
                             "[adapter] Phase 1 read 500 chunks of reasoning with no "
                             "content or tool_calls — breaking to avoid infinite loop"
                         )
-                        phase1_done = True
                         break
                     # else: keep reading — either chunks_read < 15, or we've
                     # only seen reasoning (no content yet) and the model may
@@ -1612,14 +1585,19 @@ class OpenAICompatAdapter(BaseAdapter):
                                 usage=dict(_usage),
                             )
 
-                    # Continue reading from the still-open stream. Session
-                    # 116 (real-model smoke test): httpx streams are ONE-SHOT.
-                    # When Phase 1 consumed the response (it ended without a
-                    # [DONE] line — phase1_done stays False — or broke after
-                    # [DONE]), re-iterating raises RuntimeError("content has
-                    # already been streamed"). Everything was already buffered
-                    # into _initial/_raw_parts, so skip the re-iteration.
-                    if not phase1_done and not _resp.is_stream_consumed:
+                    # Continue reading the REST of the still-open stream. The
+                    # only correct "is there more?" signal is is_stream_consumed
+                    # (httpx streams are ONE-SHOT; re-iterating a consumed one
+                    # raises RuntimeError, so this flag is the exact guard). This
+                    # used to ALSO gate on `not phase1_done` — but Phase 1 sets
+                    # phase1_done=True when it BREAKS MID-STREAM on the text-
+                    # detection heuristic (chunks_read>=15), where the stream is
+                    # NOT consumed. That extra gate dropped the answer's tail for
+                    # models that stream in many small chunks (z.ai/GLM: final
+                    # answer truncated to "...in /Users/bao" — the "/Code" tail
+                    # and everything after was silently lost). is_stream_consumed
+                    # alone correctly skips only a genuinely-consumed stream.
+                    if not _resp.is_stream_consumed:
                         async for line in _resp.aiter_lines():
                             if not line or not line.startswith("data: "):
                                 # Empty lines or non-data lines are SSE
