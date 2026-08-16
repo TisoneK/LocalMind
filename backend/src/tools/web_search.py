@@ -21,11 +21,28 @@ v8 changes vs v7:
   compression; the tool should preserve detail.
 - MAX_RESULTS raised from 5 to 8 — more results means better coverage
   for the LLM to synthesize from.
+
+v9 changes vs v8 (Session 268):
+- FIX: SearXNG was effectively dead. The default instance (searx.be) is
+  behind an Anubis anti-bot challenge that returns HTTP 200 + HTML, so
+  ``r.json()`` raised a JSONDecodeError on EVERY search and the tier
+  never returned a result. Public instances churn constantly (they are
+  rate-limited/blocked within days), so a single hardcoded URL is a
+  ticking failure.
+- SearXNG now walks a FALLBACK CHAIN of instances (configured
+  ``searxng_url`` first — comma-separated supported — then curated
+  public fallbacks, capped at ``MAX_SEARXNG_ATTEMPTS``). Anti-bot
+  challenge pages (non-JSON responses) and rate limits are detected and
+  the search moves to the next instance instead of dying on the first.
+- Non-JSON responses (challenge pages) are detected via Content-Type
+  and reported as such; ``json.JSONDecodeError`` is caught explicitly
+  with a friendly message instead of leaking the raw parser error.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 
 from core.models import Intent, RiskLevel, ToolResult
@@ -35,6 +52,40 @@ logger = logging.getLogger(__name__)
 
 MAX_RESULTS = 8
 SNIPPET_MAX = 800
+
+# SearXNG public instances are churned constantly — a working instance is
+# rate-limited or put behind an anti-bot page within days. The configured
+# ``searxng_url`` (comma-separated list supported) is tried first, then these
+# curated public fallbacks, up to ``MAX_SEARXNG_ATTEMPTS`` total.
+DEFAULT_SEARXNG_FALLBACKS = [
+    "https://search.bus-hit.me",
+    "https://opnxng.com",
+    "https://searx.tiekoetter.com",
+    "https://priv.au",
+    "https://search.hbubli.cc",
+]
+
+MAX_SEARXNG_ATTEMPTS = 3
+
+
+def _searxng_instance_list(configured: str | None) -> list[str]:
+    """Expand the configured SearXNG URL into an ordered, deduped instance list.
+
+    ``searxng_url`` may be a single URL or a comma-separated list (so a user
+    with a known-good private instance can pin it first). Curated public
+    fallbacks are appended after the configured ones.
+    """
+    urls: list[str] = []
+    raw = (configured or "").strip()
+    if raw:
+        for part in raw.split(","):
+            part = part.strip().rstrip("/")
+            if part and part not in urls:
+                urls.append(part)
+    for fallback in DEFAULT_SEARXNG_FALLBACKS:
+        if fallback not in urls:
+            urls.append(fallback)
+    return urls
 
 
 async def _search_ddg(query: str) -> tuple[list[dict], str, str]:
@@ -59,8 +110,9 @@ async def _search_ddg(query: str) -> tuple[list[dict], str, str]:
 
             # DDGS is synchronous and blocks the event loop. Run it in a thread
             # with a hard timeout so a slow/hung search never stalls the server.
+            loop = asyncio.get_running_loop()
             results = await asyncio.wait_for(
-                asyncio.get_event_loop().run_in_executor(None, _run_sync),
+                loop.run_in_executor(None, _run_sync),
                 timeout=12,
             )
             if results:
@@ -88,17 +140,23 @@ async def _search_ddg(query: str) -> tuple[list[dict], str, str]:
     return [], "network", "DuckDuckGo search returned no results after all attempts"
 
 
-async def _search_searxng(
-    query: str, searxng_url: str = "https://searx.be"
+async def _search_searxng_single(
+    query: str, searxng_url: str
 ) -> tuple[list[dict], str, str]:
-    """Search using SearXNG instance with proper error handling."""
+    """Search one SearXNG instance.
+
+    v9: detects anti-bot challenge pages (Anubis etc.) that answer HTTP 200
+    with HTML instead of JSON — they used to raise a JSONDecodeError on every
+    request, silently killing the tier. Returns error_type="challenge" so the
+    caller can skip to the next instance instead of treating it as terminal.
+    """
     try:
         import httpx
     except ImportError:
         return [], "network", "httpx not installed -- cannot search via SearXNG"
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
             # SearXNG API format
             params = {
                 "q": query,
@@ -110,6 +168,18 @@ async def _search_searxng(
             }
             r = await client.get(f"{searxng_url}/search", params=params)
             r.raise_for_status()
+            # Anti-bot challenge pages (Anubis/Cloudflare) return HTTP 200 + an
+            # HTML "verifying your browser" page — never a JSON body. Detect via
+            # Content-Type BEFORE parsing so the caller can move to the next
+            # instance instead of failing the whole tier.
+            content_type = (r.headers.get("content-type") or "").lower()
+            if "application/json" not in content_type:
+                return (
+                    [],
+                    "challenge",
+                    f"SearXNG at {searxng_url} returned a non-JSON response "
+                    "(likely an anti-bot challenge page)",
+                )
             data = r.json()
 
             # Extract results from SearXNG response
@@ -126,32 +196,80 @@ async def _search_searxng(
             return results, "", ""
 
     except asyncio.TimeoutError:
-        logger.warning("[web_search] SearXNG timed out after 15s")
-        return [], "timeout", "SearXNG search timed out after 15 seconds"
-    except httpx.ConnectError as e:
-        logger.warning(f"[web_search] SearXNG connection failed: {e}")
+        logger.warning(f"[web_search] SearXNG {searxng_url} timed out after 12s")
+        return [], "timeout", f"SearXNG at {searxng_url} timed out after 12 seconds"
+    except httpx.ConnectError:
+        logger.warning(f"[web_search] SearXNG connection failed: {searxng_url}")
         return (
             [],
             "network",
             f"SearXNG instance unreachable at {searxng_url} - check internet connection",
         )
     except httpx.HTTPStatusError as e:
-        logger.warning(f"[web_search] SearXNG HTTP error: {e.response.status_code}")
-        if e.response.status_code == 404:
+        status = e.response.status_code
+        logger.warning(f"[web_search] SearXNG HTTP error {status}: {searxng_url}")
+        if status == 404:
             return [], "network", f"SearXNG instance not found at {searxng_url}"
-        elif e.response.status_code >= 500:
-            return [], "network", f"SearXNG server error (HTTP {e.response.status_code})"
+        elif status == 429:
+            return [], "rate_limit", f"SearXNG at {searxng_url} rate-limited (HTTP 429)"
+        elif status >= 500:
+            return [], "network", f"SearXNG server error (HTTP {status}) at {searxng_url}"
         else:
-            return [], "network", f"SearXNG returned HTTP {e.response.status_code}"
+            return [], "network", f"SearXNG at {searxng_url} returned HTTP {status}"
+    except json.JSONDecodeError:
+        # Parsed OK by Content-Type but the body isn't actually JSON (some
+        # challenge pages omit the header). Report as a challenge, not a leak.
+        return (
+            [],
+            "challenge",
+            f"SearXNG at {searxng_url} returned invalid JSON "
+            "(instance misconfigured or behind an anti-bot page)",
+        )
     except Exception as e:
-        logger.warning(f"[web_search] SearXNG failed: {repr(e)}")
+        logger.warning(f"[web_search] SearXNG failed: {searxng_url}: {repr(e)}")
         error_str = str(e)
         if "timeout" in error_str.lower():
-            return [], "timeout", "SearXNG search timed out"
-        elif "json" in error_str.lower():
-            return [], "network", "SearXNG returned invalid JSON - instance may be misconfigured"
-        else:
-            return [], "network", f"SearXNG search error: {error_str}"
+            return [], "timeout", f"SearXNG at {searxng_url} timed out"
+        return [], "network", f"SearXNG search error at {searxng_url}: {error_str}"
+
+
+async def _search_searxng(
+    query: str, searxng_url: str | None = None
+) -> tuple[list[dict], str, str]:
+    """Search SearXNG, walking a fallback chain of instances.
+
+    v9: a single hardcoded public instance is a ticking failure — every one is
+    behind an anti-bot page or rate-limited within days. Try the configured
+    URL(s) first (comma-separated supported), then curated public fallbacks,
+    capped at ``MAX_SEARXNG_ATTEMPTS``. Challenge pages / rate limits move to
+    the next instance; the first instance that returns JSON results wins.
+    """
+    try:
+        import httpx
+    except ImportError:
+        return [], "network", "httpx not installed -- cannot search via SearXNG"
+
+    urls = _searxng_instance_list(searxng_url)
+    attempts = urls[:MAX_SEARXNG_ATTEMPTS]
+    errors: list[str] = []
+    for index, url in enumerate(attempts):
+        try:
+            results, err_type, err_msg = await _search_searxng_single(query, url)
+        except Exception as e:  # defensive — the single-instance call never raises
+            logger.warning(f"[web_search] SearXNG {url} raised: {e}")
+            results, err_type, err_msg = [], "exception", str(e)
+        if results:
+            return results, "", ""
+        errors.append(f"{url} ({err_type}: {err_msg})")
+        if index < len(attempts) - 1:
+            logger.info(
+                "[web_search] SearXNG %s failed (%s) — trying next instance",
+                url, err_type,
+            )
+
+    if not errors:
+        return [], "network", "No SearXNG instances configured"
+    return [], "network", "; ".join(errors)
 
 
 async def _search_brave(query: str, api_key: str) -> tuple[list[dict], str, str]:
@@ -262,7 +380,8 @@ def list_available_tools() -> list[dict]:
             "requires_auth": False,
             "description": (
                 "Stable core fallback, multi-source aggregation. "
-                f"Instance: {getattr(settings, 'searxng_url', 'https://searx.be')}"
+                "Walks a fallback chain (configured instance first, then public "
+                f"fallbacks). Configured: {getattr(settings, 'searxng_url', 'https://searx.be')}"
             ),
         },
         {
@@ -296,7 +415,9 @@ async def web_search(query: str) -> ToolResult:
     # -- Racing Tier 1+2: DDG + SearXNG in parallel ----------------------
     # Fire both searches concurrently. Use whichever returns first with
     # valid results. This drops worst-case latency from 27s to ~15s.
-    searxng_url = getattr(settings, "searxng_url", "https://searx.be")
+    # searxng_url may be a comma-separated list; _search_searxng expands it
+    # into the fallback chain.
+    searxng_url = getattr(settings, "searxng_url", None)
 
     ddg_task = asyncio.create_task(_search_ddg(query))
     searxng_task = asyncio.create_task(_search_searxng(query, searxng_url))
