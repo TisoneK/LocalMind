@@ -1,24 +1,18 @@
 # Current Task
 
-**Status:** done — Session 265: three frontend UX fixes shipped + pushed
-(`3970570` `3b7f968` `040bf0e` `4411e2c`):
-1. **Context counter cumulative** — the top-bar Context meter now shows
-   `sessionStats.promptTokens` (cumulative across the conversation) + the
-   in-flight estimate while streaming, matching the bottom-right stats
-   corner. Previously it showed only the last turn's prompt.
-2. **Empty "Why" blocks hidden** — whitespace-only reasoning (empty
-   plan-step label attached as `reasoning`) rendered blank "Why" sections
-   in the Actions tab and tool-step cards; all render sites now guard on
-   `reasoning?.trim()`.
-3. **ThinkingBlock UX** — max-height + scrollbar (`max-h-64` +
-   `custom-scrollbar`), a bottom copy button, and auto-scroll to bottom as
-   new reasoning streams.
-
-224 frontend tests pass, `tsc -b` + `vite build` clean, eslint 0 errors.
+**Status:** done — Session 266: fixed the "leave a chat and come back, everything's
+gone" bug class (context count, Actions pills, Thinking blocks, Error blocks).
+Root cause was a persistence gap: the `messages` table stored only role/content,
+so thinking/error/tool_calls/metrics were transient frontend state. Each assistant
+message now persists all four; the history endpoint returns them (error normalized
+at the boundary per ADR-20) and the frontend restores them on reload — including
+`_seedSessionStats` rebuilding the cumulative context counter. Error turns now
+persist at all (previously nothing). Commits `06ff072` `6d9f503` `fc34dbf` pushed
+to main. Backend 1827 pass (4 pre-existing shell failures), frontend 226 pass,
+tsc/build clean.
 
 **Open next / notes:** unchanged from before — ADR-37 follow-ups
-B-2026-08-15-10/11/12, review-42's `classify_failure` cleanup, owed live
-Windows re-run of the Session 264 recipe task, unbounded `reasoning_effort`
-default.
+B-2026-08-15-10/11/12, review-42's `classify_failure` cleanup, owed live Windows
+re-run of the Session 264 recipe task, unbounded `reasoning_effort` default.
 
 **Feature:** none
