@@ -65,6 +65,7 @@ def test_list_intent_mappings_covers_all_intents():
         Intent.CREATE_PLAN,
         Intent.SKILL,
         Intent.BEST_OF_N_EDIT,
+        Intent.DESCRIBE_TOOL,  # ADR-40 option C: the describe_tool meta-tool
     )
     routing_intents = {i for i in Intent if i not in meta_tool_intents}
     for intent in routing_intents:
@@ -116,6 +117,11 @@ def test_list_intent_mappings_covers_all_intents():
     assert Intent.BEST_OF_N_EDIT not in mapped_intents, (
         "Intent.BEST_OF_N_EDIT should not be in the routing map — it's a "
         "meta-tool intent (the model calls the best_of_n_edit tool)."
+    )
+    assert Intent.DESCRIBE_TOOL not in mapped_intents, (
+        "Intent.DESCRIBE_TOOL should not be in the routing map — it's a "
+        "meta-tool intent (the model calls the describe_tool tool inside an "
+        "agent loop); the intent classifier never produces it."
     )
 
 

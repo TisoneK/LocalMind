@@ -76,6 +76,7 @@ class Intent(str, Enum):
     CREATE_PLAN = "create_plan"  # B-2026-08-02-8: create multiple subgoals from a plan
     SKILL = "skill"  # B-2026-08-02-12: load a skill (markdown playbook) into context
     BEST_OF_N_EDIT = "best_of_n_edit"  # B-2026-08-02-11: N candidate edits → selector → apply winner
+    DESCRIBE_TOOL = "describe_tool"  # ADR-40 option C: load a long-tail tool's full schema on demand
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

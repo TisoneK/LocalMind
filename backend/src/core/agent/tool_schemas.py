@@ -11,10 +11,11 @@ feeding itself"): `browse` enumerated 10 modes with per-param tutorials,
 This module is the SINGLE SOURCE OF TRUTH for the model-facing tool
 catalog. Two surfaces derive from it:
 
-1. **The native ``tools`` parameter** — these dicts, as-is (scoped by the
-   agent's allowed-tool set via ``_filtered_tool_defs``).
-2. **The in-prompt "Available tools" list** — the ``lean_tool_index()``
-   helper renders `- <name>: <one-liner>` lines from the SAME definitions
+1. **The native ``tools`` parameter** — composed per iteration by
+   ``tool_defs_for_call()``: scoped CORE_TOOL_NAMES + ``describe_tool`` +
+   loaded long-tail schemas (ADR-40 option C on-demand loading).
+2. **The in-prompt "Available tools" list** — ``render_tool_list()``
+   renders `- <name>: <description>` lines from the SAME definitions
    (see ``prompts.build_agent_system_prompt``/``build_planning_prompt``
    ``tool_defs`` parameter), so the prompt list and the native parameter
    can never drift apart again.
@@ -42,17 +43,76 @@ Measured (Session 251): the native `tools` param went from ~24,230 chars
 (~6,057 tok) to ~15,981 chars (~3,995 tok) — a ~34% cut (~2,062 tok/call,
 ~36% of ADR-40's ~5.7k theoretical reclaimable). The remaining weight is
 structural (names, types, enums, required) plus the guardrail/disambiguation
-prose the ADR says to KEEP. The full ~5.7k reclaim needs option C (on-demand
-loading of the long tail — browse/delegate/sql/csv/json/best_of_n/propose_*/
-subgoal), which is a separate session. The in-prompt tool list also shrank:
+prose the ADR says to KEEP. The in-prompt tool list also shrank:
 9,832 chars (~2,458 tok) -> ~5,929 chars (~1,482 tok) via the single-source
-collapse. LIVE-VERIFIED tool selection (Session 251) on the active weak model
-(zai/glm-4.5-flash) AND on cerebras: both routed mode=execute and fired the
-correct tool (shell) with valid args. Do not ship a further cut without a
-fresh live trace — trimming schemas can regress weak models' tool choice.
+collapse.
+
+ADR-40 option C (Session 252): the long tail now loads ON DEMAND via the
+`describe_tool` meta-tool (the `skill`-loader pattern). The 14 CORE_TOOL_NAMES
+(shell/file_task/file_write/edit_file/find_path/web_search/web_fetch/code_exec
++ git/process/memory_op/sysinfo/observe/calculator) are always present lean;
+the 16 LONG_TAIL_TOOL_NAMES are NOT in the native `tools` param until the
+model calls describe_tool(name) — tool_defs_for_call() composes the
+per-iteration param (scoped core + describe_tool + loaded full schemas).
+Measured (Session 252): the full-catalog per-iteration param dropped from
+~16,937 chars (~4,234 tok) to ~7,851 chars (~1,962 tok) — a ~54% cut
+(~2,272 tok/call); cumulative vs pre-ADR-40 that is ~68% (~5,095 tok/call).
+The default SHELL intent scope went ~9,866 -> ~7,178 chars (~27%). The
+remaining ~9.1k chars of long-tail schemas are paid only when a tool is
+actually loaded (e.g. browse: 7,851 -> 9,624 chars for the full catalog).
+LIVE-VERIFIED tool selection (Session 251 option B; Session 252 option C) on
+the active weak model (zai/glm-4.5-flash) AND on cerebras. Do not ship a
+further cut without a fresh live trace — trimming schemas can regress weak
+models' tool choice.
 """
 
 from core.skills import available_skills_summary
+
+# ── Tier split (ADR-40 option C): always-present vs on-demand ──────────────
+# Core tools stay in the native `tools` param on EVERY call, lean. Long-tail
+# tools are NOT loaded by default — the model calls `describe_tool(name)` to
+# pull a specific tool's FULL schema into the `tools` param for the rest of
+# the run (the `skill`-loader pattern, per ADR-40 option C).
+CORE_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "shell",
+        "file_task",
+        "file_write",
+        "edit_file",
+        "find_path",
+        "web_search",
+        "web_fetch",
+        "code_exec",
+        "git",  # coding agent's #1 companion — keep always-present
+        "process",
+        "memory_op",
+        "sysinfo",
+        "observe",
+        "calculator",
+    }
+)
+
+LONG_TAIL_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "browse",
+        "delegate",
+        "delegate_parallel",
+        "delegate_inline",
+        "sql",
+        "csv",
+        "json",
+        "best_of_n_edit",
+        "propose_str_replace",
+        "propose_write_file",
+        "apply_proposed_edit",
+        "add_subgoal",
+        "update_subgoal",
+        "create_plan",
+        "skill",
+        "diagnostics",
+    }
+)
+
 
 # ── Tool Definitions (OpenAI function-calling format) ────────────────────────
 
@@ -643,6 +703,88 @@ TOOL_DEFINITIONS: list[dict] = [
         },
     },
 ]
+
+
+# ── describe_tool meta-tool (ADR-40 option C) ────────────────────────────────
+# The on-demand loader, mirroring the `skill` tool: a tiny always-present
+# index (the description below) plus load-a-specific-tool's-full-schema when
+# selected. Kept OUT of TOOL_DEFINITIONS so the 30-tool catalog stays the
+# backward-compatible module constant; it is appended by tool_defs_for_call().
+
+
+def long_tail_tool_summary() -> str:
+    """Comma-separated on-demand tool names (for the describe_tool hint)."""
+    return ", ".join(sorted(LONG_TAIL_TOOL_NAMES))
+
+
+def get_full_tool_def(name: str) -> dict | None:
+    """Return the full tool definition for `name`, or None if unknown."""
+    for td in TOOL_DEFINITIONS:
+        if td.get("function", {}).get("name") == name:
+            return td
+    return None
+
+
+DESCRIBE_TOOL_DEFINITION: dict = {
+    "type": "function",
+    "function": {
+        "name": "describe_tool",
+        "description": (
+            "Load the FULL usage schema for a tool that is NOT loaded by "
+            "default (an on-demand tool), then call that tool in your NEXT "
+            "step — loading persists for the rest of this run. Call this "
+            "BEFORE using any on-demand tool; do not call the tool until it "
+            "has been described. "
+            f"On-demand tools: {long_tail_tool_summary()}."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "tool_name": {
+                    "type": "string",
+                    "description": "Name of the on-demand tool to load, e.g. 'browse'",
+                },
+            },
+            "required": ["tool_name"],
+        },
+    },
+}
+
+
+def tool_defs_for_call(
+    filtered_defs: list[dict],
+    scoped_allowed: frozenset[str] | set[str],
+    loaded_tools: set[str] | None = None,
+) -> list[dict]:
+    """Compose the per-iteration native ``tools`` parameter (ADR-40 option C).
+
+    ``filtered_defs`` is the scoped catalog (``_filtered_tool_defs``) which
+    still contains ALL scoped tools incl. the long tail. This returns the
+    reduced always-present surface: scoped CORE tools + ``describe_tool`` +
+    the FULL schemas of any long-tail tools loaded this run (via
+    ``describe_tool``), each gated by the scope so scoped agents never gain
+    tools outside their allowed set.
+
+    Args:
+        filtered_defs: scoped tool defs from ``_filtered_tool_defs``.
+        scoped_allowed: the effective allowed-name set (never None — callers
+            pass ``AGENT_ALLOWED_TOOLS`` when no explicit scope).
+        loaded_tools: names loaded this run via ``describe_tool``.
+
+    Returns:
+        The per-iteration ``tools`` param: core defs (catalog order) +
+        ``describe_tool`` + loaded full defs (sorted by name).
+    """
+    defs = [td for td in filtered_defs if td["function"]["name"] in CORE_TOOL_NAMES]
+    defs.append(DESCRIBE_TOOL_DEFINITION)
+    # Only LONG-TAIL names can be loaded — core tools are already in the base
+    # set above, so appending them again would duplicate the schema.
+    for name in sorted(loaded_tools or ()):
+        if name in LONG_TAIL_TOOL_NAMES and name in scoped_allowed:
+            td = get_full_tool_def(name)
+            if td is not None:
+                defs.append(td)
+    return defs
 
 
 def render_tool_list(tool_defs: list[dict] | None = None) -> list[str]:

@@ -165,6 +165,7 @@ from tools import (
     delegate,  # noqa: E402, F401 -- ADR-8 Phase 3: agent-initiated delegation
     delegate_inline,  # noqa: E402, F401 -- B-2026-08-02-9: inline delegation (after delegate: imports its contextvars)
     delegate_parallel,  # noqa: E402, F401 -- B-2026-08-02-6: parallel delegation fan-out
+    describe_tool,  # noqa: E402, F401 -- ADR-40 option C: load a long-tail tool's full schema on demand
     diagnostics,  # noqa: E402, F401 -- DIAGNOSTICS (structured failure analysis)
     edit_file,  # noqa: E402, F401 -- FILE_EDIT (in-place file editing)
     file_reader,  # noqa: E402, F401 -- registers FILE_TASK

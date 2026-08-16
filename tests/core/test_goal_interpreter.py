@@ -264,6 +264,7 @@ _EXCLUDED_INTENTS = {
     Intent.CREATE_PLAN,
     Intent.SKILL,
     Intent.BEST_OF_N_EDIT,
+    Intent.DESCRIBE_TOOL,  # ADR-40 option C: meta-tool (loads a schema; no checkable contract)
     # MEMORY_OP gets a generic "completed without error" — it's in the map.
 }
 

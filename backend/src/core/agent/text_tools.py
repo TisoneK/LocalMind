@@ -501,6 +501,9 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
     elif tool_name == "skill":
         # skill takes a single skill_name argument.
         return tool_args.get("skill_name", "")
+    elif tool_name == "describe_tool":
+        # describe_tool takes a single tool_name argument.
+        return tool_args.get("tool_name", "")
     elif tool_name == "best_of_n_edit":
         # best_of_n_edit dispatcher expects JSON-encoded args
         # (file_path/instruction/n/strategies).

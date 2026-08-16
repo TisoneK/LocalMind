@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 
 import pytest
+
 from core.agent.constants import (
     AGENT_ALLOWED_TOOLS,
     INTENT_TOOL_SCOPES,
@@ -151,7 +152,12 @@ async def test_loop_sends_intent_scoped_tools_to_adapter():
 
     assert captured_tools, "chat_with_tools was never called"
     names = {t["function"]["name"] for t in captured_tools["tools"]}
-    assert names == INTENT_TOOL_SCOPES[Intent.SHELL]
+    # ADR-40 option C: the param is the scoped CORE surface + describe_tool
+    # (long-tail tools in the scope are NOT pre-loaded; the model loads one
+    # with describe_tool when it needs it).
+    from core.agent.tool_schemas import CORE_TOOL_NAMES
+
+    assert names == (INTENT_TOOL_SCOPES[Intent.SHELL] & CORE_TOOL_NAMES) | {"describe_tool"}, names
     assert any(c.done for c in emitted)
 
 
@@ -193,7 +199,9 @@ async def test_loop_respects_explicit_caller_scope_over_intent_scope():
     names = {t["function"]["name"] for t in captured_tools["tools"]}
     # web_search survives even though SHELL intent would normally exclude it
     assert "web_search" in names
-    assert names == explicit_scope
+    # ADR-40 option C: the explicit scope's core tools + describe_tool (the
+    # meta-tool that loads on-demand tools).
+    assert names == explicit_scope | {"describe_tool"}, names
 
 
 class _FinalAnswerStream:

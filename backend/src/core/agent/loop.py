@@ -117,7 +117,7 @@ from core.agent.text_tools import (
     _truncate_observation,
 )
 from core.agent.tool_dispatch import dispatch_with_retry
-from core.agent.tool_schemas import TOOL_DEFINITIONS
+from core.agent.tool_schemas import TOOL_DEFINITIONS, tool_defs_for_call
 from core.context_builder import _build_environment_context
 from core.context_compactor import simplify_tool_results
 from core.models import AgentAbortedError, Intent, StreamChunk, ToolResult
@@ -168,6 +168,23 @@ def _filtered_tool_defs(allowed_tools: Optional[frozenset[str]] = None) -> list[
     """
     allowed_names = allowed_tools if allowed_tools is not None else AGENT_ALLOWED_TOOLS
     return [td for td in TOOL_DEFINITIONS if td["function"]["name"] in allowed_names]
+
+
+def _note_described_tool(tool_name: str, tool_result, loaded_tools: set[str]) -> None:
+    """Record a long-tail tool loaded via describe_tool (ADR-40 option C).
+
+    Called right after ANY dispatch whose tool was describe_tool. The loaded
+    name is carried in ``ToolResult.metadata`` (NOT a contextvar) because
+    dispatch_with_retry runs tools inside asyncio.wait_for — a child task
+    whose contextvar writes would be lost to the loop. The name then appears
+    in the next iteration's native ``tools`` param (via tool_defs_for_call).
+    """
+    if tool_name != "describe_tool" or tool_result is None or not tool_result.success:
+        return
+    loaded = (tool_result.metadata or {}).get("loaded_tool")
+    if loaded:
+        loaded_tools.add(loaded)
+        logger.info("[agent.loop] describe_tool loaded %r for this run", loaded)
 
 
 # Session 238 (Thinker/Agent rebuild Step 0) — forced-tool reprompt bound.
@@ -369,6 +386,11 @@ class AgentLoop:
         from core.subgoal import reset_subgoals
         reset_subgoals()
 
+        # ADR-40 option C: per-run loaded long-tail tools (via describe_tool).
+        # Fresh per run — a previous run's loads never leak into this one
+        # (same fresh-per-turn pattern as proposals/subgoals above).
+        loaded_tools: set[str] = set()
+
         # ADR-8 Phase 2 (Session 34): honor agent_config.max_iterations
         # and agent_config.max_wall_clock_secs when provided. Previously
         # these were dead code — the loop used module-level MAX_ITERATIONS
@@ -439,6 +461,16 @@ class AgentLoop:
             intent_scope = INTENT_TOOL_SCOPES.get(intent, AGENT_ALLOWED_TOOLS)
             scoped_tools = frozenset(scoped_tools or AGENT_ALLOWED_TOOLS).intersection(intent_scope)
         filtered_tools = _filtered_tool_defs(scoped_tools)
+
+        # ADR-40 option C: the native `tools` param is composed PER CALL —
+        # scoped CORE tools + describe_tool + any long-tail tools loaded this
+        # run via describe_tool (on-demand full-tool-context). Loaded tools
+        # stay loaded for the rest of the run; nothing outside the scope is
+        # ever added.
+        def _current_tool_defs() -> list[dict]:
+            _allowed = scoped_tools if scoped_tools is not None else AGENT_ALLOWED_TOOLS
+            return tool_defs_for_call(filtered_tools, _allowed, loaded_tools)
+
         env_context = _build_environment_context()
         # Scope the metadata tool list the same way so the system-prompt
         # "Available tools" section and the planner see the same small
@@ -616,7 +648,7 @@ class AgentLoop:
                 available_tools=scoped_available,
                 env_context=env_context,
                 intent_history=intent_history,
-                tool_defs=filtered_tools,
+                tool_defs=_current_tool_defs(),
             ):
                 if plan_chunk:
                     plan_chunks.append(plan_chunk)
@@ -1209,7 +1241,7 @@ class AgentLoop:
                 result = await asyncio.wait_for(
                     active_adapter.chat_with_tools(
                         messages=iteration_messages,
-                        tools=filtered_tools,
+                        tools=_current_tool_defs(),
                         temperature=0.3,
                         intent=intent.value,
                         tool_choice="required" if _force_tool_choice else None,
@@ -1325,6 +1357,10 @@ class AgentLoop:
                             obs=_obs,  # ADR-18 P3: delegation streams into the UI
                             allowed_tool_names=effective_allowed,
                         )
+                        # ADR-40 option C: a describe_tool call in a batch loads
+                        # the named tool for the rest of this run (metadata
+                        # survives the wait_for task boundary).
+                        _note_described_tool(tc_name, tc_result, loaded_tools)
                         tc_obs = tc_result.content if tc_result else f"[Tool {tc_name} returned no result]"
                         tc_obs = _filter_tool_injection(tc_obs)
                         # Collect result for post-loop synthesis
@@ -1864,6 +1900,7 @@ class AgentLoop:
                         "process": f"Process: {tool_args.get('operation', '')} {tool_args.get('name', '')}" if tool_args.get('operation') else "Process operation",  # noqa: E501
                         "diagnostics": f"Diagnostics: {tool_args.get('operation', '')}" if tool_args.get('operation') else "Analyzing failure",  # noqa: E501
                         "browse": f"Browser: {tool_args.get('action', '')}" if tool_args.get('action') else "Using browser",  # noqa: E501
+                        "describe_tool": f"Loading tool docs: {tool_args.get('tool_name', '')}" if tool_args.get('tool_name') else "Loading tool docs",  # noqa: E501
                     }
                     action_label = action_labels.get(tool_name, f"Running {tool_name}")
                 # Session 121: narrated iteration → step transition; the new
@@ -2026,6 +2063,10 @@ class AgentLoop:
                             adapter=active_adapter,
                             allowed_tool_names=effective_allowed,
                         )
+
+                    # ADR-40 option C: a describe_tool call loads the named
+                    # long-tail tool into this run's native tools param.
+                    _note_described_tool(tool_name, tool_result, loaded_tools)
 
                     latency_ms = round((time.monotonic() - t_tool) * 1000)
 
@@ -2467,6 +2508,7 @@ class AgentLoop:
                         "csv": f"Reading CSV: {_query[:60]}" if _query else "Reading CSV",
                         "json": f"Querying JSON: {_query[:60]}" if _query else "Querying JSON",
                         "sql": f"Querying DB: {_query[:60]}" if _query else "Querying database",
+                        "describe_tool": f"Loading tool docs: {_normalized_args.get('tool_name', '')}" if _normalized_args.get('tool_name') else "Loading tool docs",  # noqa: E501
                         }
                         action_label = _label_map.get(tc_name, f"Running {tc_name}")
 
@@ -2495,6 +2537,7 @@ class AgentLoop:
                                 obs=_obs,  # ADR-18 P3: delegation streams into the UI
                                 allowed_tool_names=effective_allowed,
                             )
+                            _note_described_tool(tc_name, tool_result, loaded_tools)
                             latency_ms = round((time.monotonic() - t_tool) * 1000)
 
                             if tool_result:
@@ -3025,6 +3068,7 @@ class AgentLoop:
                                 "web_search": f"Searching: {_norm_args.get('query', '')[:80]}",
                                 "web_fetch": f"Fetching: {_norm_args.get('url', '')[:80]}",
                                 "shell": f"Running: {_norm_args.get('command', '')[:80]}",
+                                "describe_tool": f"Loading tool docs: {_norm_args.get('tool_name', '')[:80]}",
                             }
                             _tc_label = _tc_label_parts.get(_tc_name, f"Running {_tc_name}")
                             yield StreamChunk(text="", done=False, status=_tc_label)
@@ -3046,6 +3090,7 @@ class AgentLoop:
                                     obs=_obs,  # ADR-18 P3: delegation streams into the UI
                                     allowed_tool_names=effective_allowed,
                                 )
+                                _note_described_tool(_tc_name, _late_result, loaded_tools)
                                 _late_lat = round((time.monotonic() - t_late) * 1000)
                                 _late_obs = (
                                     _filter_tool_injection(_late_result.content)
