@@ -1,53 +1,41 @@
 # Current Task
 
-**Status:** DONE — Session 283: fixed B-2026-08-16-14 ("do NOT read it back"
-directive fought explicit user read-back requests). Product commit + context
-commit.
+**Status:** DONE — Session 286: fixed B-2026-08-16-16 (find_path can't do true
+unordered AND across multiple keywords). Product commit + context commit.
 
-**What shipped (B-2026-08-16-14):**
-- `backend/src/core/agent/loop.py`: `_verify_tool_result` takes
-  `user_asked_readback` (computed at the call site from
-  `_user_message_text(loop_messages)` via read-back-intent phrases). When the
-  user explicitly asked to see the file's contents, the [VERIFICATION] line
-  now ENDORSES the read-back ("read it back with file_task and report exactly
-  what's in it") instead of prohibiting it; default keeps the L3
-  anti-redundancy byte-identical.
-- `backend/src/core/agent/prompts.py`: VERIFY rule gets the "UNLESS the user
-  explicitly asked you to show its contents — then read it back" carve-out,
-  trimmed net-negative (all 11 prompt-budget intents under; no budget churn).
-- 3 new tests (2 unit + 1 loop-level wiring) — fail on pre-fix code, pass now.
+**What shipped (B-2026-08-16-16):**
+- `backend/src/tools/find_path.py`: `_matches` now treats multi-word `name=`
+  input as an unordered AND — every whitespace-separated token must be present
+  (case-insensitive) anywhere in the path/name, in any order. Single tokens
+  keep the old substring behavior; a phrase like "tison cv" now matches
+  `cv-tison.docx` (previously it was one literal substring that never matched).
+- `backend/src/core/agent/tool_schemas.py`: `name` param description updated
+  ("space-separated keywords — all must match, any order"), trimmed to stay
+  under the lean-catalog budget (test_tool_schemas_lean was 43 over after the
+  first wording; final 16,990 chars — under).
+- 5 new tests in `tests/tools/test_find_path.py` (unit: phrase, reversed
+  order, partial word, token-AND across dir+file; e2e dispatch) — verified they
+  fail on pre-fix code, pass now. Fixed 1 pre-existing I001 import-order nit.
 
 **Verification:**
-- Full backend suite 1882 pass, 4 pre-existing env-gated shell fails; ruff clean.
-- **LIVE before/after on the same multi-step task** (create kenya_notes →
-  write facts.txt → read back and show): z.ai/glm-4.5-flash 2× — chain works,
-  final synthesis returns a plain-empty stream (z.ai free-tier flake; loop
-  degrades gracefully via B-12, no crash); hy3-free (zen) 1× — COMPLETE clean
-  run: mkdir → file_write → file_task read-back → full answer with the file's
-  contents verbatim, no conflict. Evidence in /tmp/lm-283/.
-- The external "no working synthesize stage" diagnosis is OBSOLETE — the loop
-  closes end-to-end (B-13 fixed the adapter tail-drop; B-12 handles degraded
-  synthesis; B-14 fixes the directive conflict).
+- Full backend suite 1888 pass (+3), 4 pre-existing env-gated shell fails;
+  ruff clean.
 
 **Open next / notes:**
 1. Carried: B-2026-08-16-11 (as-completed streaming for delegate_parallel;
    audit its brittle arg schema), real-app visual checks (todo panel S274;
    narration on a content model), B-9 (create→FILE_WRITE, reasoning-driven),
    Windows re-run of S264.
-2. Unverified frontend observation from the user's transcript: the terminal
-   panel seemed to retain commands from earlier sessions across model switches
-   — likely a session-view artifact, not state bleeding; worth a quick check.
+2. Carried (S285): the other BLOCKED_COMMANDS substring entries (e.g.
+   "rm -rf /") are equally blunt — audit/regEx-ify them.
 3. z.ai/glm-4.5-flash free tier intermittently returns plain-empty final
-   streams on multi-step tasks (2/2 today) — handled, but worth tracking; if
-   it persists, consider a retry-on-empty for the final synthesis call.
-4. DONE (Session 284): cerebras/gpt-oss-120b multi-step test — quota-blocked
-   after the first tool call (real 429, B-12 degraded path handled it
-   honestly); the three-model comparison on this task is complete:
-   hy3-free > glm-4.5-flash > gpt-oss-120b. Evidence: /tmp/lm-284/.
-5. DONE (Session 285): B-2026-08-16-15 — shell's bare "format" substring
-   block narrowed to real disk-format commands only (Format-List/
-   Format-Table/paths no longer false-positive); 3 new tests; suite 1885 pass.
-   Follow-up consideration logged: the other BLOCKED_COMMANDS substring
-   entries (e.g. "rm -rf /") are equally blunt — audit them.
+   streams on multi-step tasks — handled (B-12), but consider retry-on-empty
+   for the final synthesis call if it persists.
+4. Model testing punch list (S280-286): hy3-free (zen) is the current best on
+   single-step + multi-step tasks; gpt-oss-120b (cerebras) is fastest but
+   quota-blocked mid-task; glm-4.5-flash works but with intermittent empty
+   final streams. DeepSeek is the strongest when its free tier has headroom.
+   All the agent-side bugs those comparisons surfaced (B-12/13/14/15/16) are
+   fixed.
 
 **Feature:** none
