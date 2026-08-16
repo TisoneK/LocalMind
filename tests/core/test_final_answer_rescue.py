@@ -137,6 +137,37 @@ class TestFinalAnswerRescue:
 
 
     @pytest.mark.asyncio
+    async def test_synthesis_stream_preserves_interior_word_spaces(self):
+        """Session 246: the final-synthesis path ran the TRIMMING
+        `_strip_minimax_tool_calls` per streamed delta, which .strip()s each
+        chunk and welds words together ("Herearethetrending"). The stream
+        variant must be used so boundary spaces survive the join."""
+        loop = AgentLoop(adapter=MagicMock())
+
+        async def multi_chunk(messages, temperature=0.4):
+            for delta in ["Here", " are", " the", " trending", " stories", " today"]:
+                yield StreamChunk(text=delta, done=False)
+            yield StreamChunk(text="", done=True)
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat = multi_chunk
+
+        chunks = []
+        async for chunk in loop._force_final_answer(
+            loop_messages=[{"role": "user", "content": "show me trending stories"}],
+            observation_log="[Tool result]: stories",
+            active_adapter=mock_adapter,
+            trace=None,
+            provider_usage={},
+        ):
+            chunks.append(chunk)
+
+        full = "".join(c.text for c in chunks)
+        assert "Here are the trending stories today" in full, (
+            f"interior word spaces were welded together: {full!r}"
+        )
+
+    @pytest.mark.asyncio
     async def test_synthesis_leaked_dsml_markup_is_stripped(self):
         """Session 148: the browser-validated run leaked a raw
         <｜DSML｜tool_calls> block into the final answer because the rescue

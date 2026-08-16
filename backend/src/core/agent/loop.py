@@ -5622,7 +5622,11 @@ class AgentLoop:
                 # path (framing='final') only ran the system-leak filter. The
                 # model sometimes emits a tool call as plain text here even
                 # though plain chat has no tools.
-                filtered_text = _strip_minimax_tool_calls(filtered_text)
+                # Session 246: use the STREAM variant — the trimming variant
+                # ends with .strip(), which on a per-chunk basis eats the
+                # boundary space between every delta and welds the synthesis
+                # into spaceless text ("HereHere arethe", "storiesIfound").
+                filtered_text = _strip_minimax_tool_calls_stream(filtered_text)
                 if filtered_text:
                     _any_text_yielded = True
                     _final_text_parts.append(filtered_text)
