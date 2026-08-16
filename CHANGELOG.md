@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The context counter in the top bar now counts tokens cumulatively across the whole conversation instead of showing just the last response's prompt — so it grows as you chat and matches the running total in the bottom-right stats bar (while a reply is streaming, the in-flight estimate is added on top).
+- The "Why" block in the Actions tab (and the chat tool-step cards) is now hidden when the reasoning is empty or whitespace-only — an empty plan-step label no longer leaves a blank "Why" section (or a stray "why:" line) eating vertical space.
+- The reasoning ("Thinking") block now has a maximum height with its own scrollbar instead of stretching the message indefinitely, a copy button at the bottom to copy the full thought process, and it auto-scrolls to the bottom so newly generated reasoning stays visible while it streams.
 - Shell tool no longer rejects PowerShell cmdlets on Windows (live user bug): the model is told it's on PowerShell and emits commands like `Get-ChildItem -Path $env:USERPROFILE\Desktop`, but the legacy dispatch gate only routed known command tokens + shell operators, so every cmdlet fell through to the "NL dispatch is gone" rejection (`nl_dispatch_removed`) before reaching the shell. The gate now routes PowerShell-flavored commands (per the Session 189 detector) straight to `run_command`.
 - The agent now chains related tools: the shell and file_write tool descriptions, the SHELL/FILE_WRITE planning workflows, the Operator persona, and the universal FOLLOW-THROUGH rule all now say explicitly that listing a folder is only the FIRST step when the user asked to create a file — after confirming the path, call `file_write` with that exact path instead of stopping after the listing.
 
