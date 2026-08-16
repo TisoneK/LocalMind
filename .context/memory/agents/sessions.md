@@ -3786,3 +3786,15 @@ program + ADR-22). -->
 - **Confound caught (live-testing paid off):** first run derailed on a leftover `dinner_recipe.txt` from MY OWN earlier traces on the real Desktop; removed it, re-ran clean. Cleaned up all my Desktop test artifacts. Lesson: clean real-location artifacts between traces.
 - **Verification:** full suite 1875 pass (4 pre-existing env-gated shell fails). No new unit tests (prompt + a verification-message change; live trace is the verification per system/live-testing.md).
 - **Notes:** B-5 marked PARTIAL (L3 done, L2 prompt done, L2 routing → B-9). Honest: did not force a risky classifier change I couldn't verify across task types.
+
+## 2026-08-16 — Session 278
+
+- **Agent:** Claude Code (claude-opus-4-8) | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Task:** User: the agent should be "in the middle … updating the user between tool calls and thinking" + narrate between tools + concurrent multi-tool execution.
+- **Commits:** 1 product (`3bcd105`) — `feat(agent): stream the model's between-tool narration to the user's chat` + this context commit. Review: review-54.
+- **Clarified (user's model is right):** NOT tool-to-tool routing — the AgentLoop is the orchestrator in the middle (decide→dispatch→observe→Thinker→repeat→synthesize). "Intent" is a one-time upfront persona/tool-scope pick, not a route; my earlier "routing" wording (B-9) was wrong.
+- **Concurrency:** parallel tool calls ALREADY work (`asyncio.gather`, loop.py:1603; `parallelizable` metadata). Honest limit: a model can't generate tokens while awaiting tool results (turn pauses at hand-off) — so "keep thinking while tools run" isn't literal; the achievable win is as-completed result streaming → B-2026-08-16-10.
+- **Narration (built):** the model's `content` alongside a tool call IS narration (reasoning comes separately); the loop was burying it in the ThinkingBlock + prompt said "never narrate". Now the loop streams it to the user's CHAT (single + multi paths); prompt asks for ONE short line.
+- **Live-found catch (glm-4.5-flash):** 374 thinking tokens then EMPTY content → no narration text. Per user ("naturally when thinking the narration is not there") this is intended — narration appears when the model produces content; the ThinkingBlock is the update during reasoning. NOT synthesizing fake narration (user rejected Thinker-as-narrator + tool-templated options).
+- **Verification:** live (glm-4.5-flash) final answer streams correctly, not duplicated; find_path used for discovery. Full suite 1875 pass (4 pre-existing env-gated shell fails). Prompt trimmed to fit the size budget (first draft blew code_exec by 15 chars — caught by test_prompt_size_budget).
+- **Notes:** followed system/live-testing.md. Owed: real-app visual check on a content-emitting model (gpt-oss/gemini) where narration is visibly richer; B-10 (as-completed streaming).
