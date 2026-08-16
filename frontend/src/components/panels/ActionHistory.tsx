@@ -181,7 +181,7 @@ function ActionCard({ action }: { action: ActionItem }) {
         <span className={`${status.color} shrink-0`} title={status.label}>
           {status.icon}
         </span>
-        {action.duration !== undefined && (
+        {action.duration != null && (
           <span className="text-[9px] text-brand-green-muted shrink-0">
             {action.duration >= 60
               ? `${(action.duration / 60).toFixed(1)}m`
