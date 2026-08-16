@@ -1,24 +1,23 @@
 # Current Task
 
-**Status:** in progress — Session 259 built the Thinker MODULE (ADR-42);
-loop integration + live validation is the next step.
+**Status:** Thinker WIRED + live-verified (Session 260); final-answer path is
+the next blocker.
 
-**Last completed:** Built `backend/src/core/agent/thinker/` from the ground
-up — the agent's reasoning backbone. A silent, read-only mid-loop analyst
-that reasons on GATHERED EVIDENCE (never the raw request), replacing the init
-`objective` one-liner echo. Files: contract (Evidence/Ambiguity/
-ThinkerAnalysis), prompt, parse (fail-safe), thinker (`consult()` streams
-real reasoning to the ThinkingBlock, stops at the JSON tail, timeout-bounded,
-never crashes). 10 unit tests pass; ruff clean. Commit `cbd1bd4`. ADR-42.
+**Last completed:** Wired `Thinker.consult` into `AgentLoop.run` (ADR-42,
+`981769a`) — fires once after the first tool evidence on reasoning-capable
+tier-3 turns, streams real reasoning to the ThinkingBlock, injects
+facts/ambiguities/next_step to shape the next action; fail-safe. LIVE-VERIFIED
+on z.ai/glm-4.5-flash: it reasoned on the actual `ls` output and correctly
+called for a recursive search — the init-objective echo is gone. Suite 1,812
+pass.
 
-**Open next (THE integration — its own session, MUST live-verify):** wire
-`Thinker.consult` into `AgentLoop.run` per ADR-42 §Integration plan — after
-the first tool evidence, before the next decision; pipe `chunk.thinking` to
-the `thinking_token` SSE; feed `next_step`/facts/ambiguities forward to shape
-the next action (proceed on defaults, ADR-36); gate on tier-3 (ADR-37) +
-`localmind_thinking` + `localmind_reasoning_plan_timeout_secs` (ADR-41); keep
-fail-fast. **Live-validate on a real model (native reasoning ON) with a
-before/after trace — do NOT claim end-to-end from unit tests.** Replace the
-`render_understanding` objective one-liner as "the thought".
+**Open next (OWED — the Thinker's reasoning is wasted without these):**
+1. Fix the pre-existing EMPTY-AFTER-REASONING / synthesis gap (`loop.py:3174`
+   recovery; B-2026-08-15-11): in the live test the model went empty after
+   reasoning, so the Thinker's recursive next_step never ran and the final
+   answer was empty. This is now the top blocker to a complete agentic turn.
+2. Run a Thinker-OFF baseline on the same task (z.ai/GLM, thinking ON) to
+   prove the Thinker doesn't worsen the empty-after-reasoning.
+3. Consider consulting the Thinker on later iterations too (currently once).
 
 **Feature:** none
