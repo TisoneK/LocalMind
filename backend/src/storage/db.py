@@ -12,6 +12,7 @@ Migrations live in storage/migrations/ for forward compatibility.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import sqlite3
@@ -53,7 +54,12 @@ CREATE TABLE IF NOT EXISTS messages (
     role        TEXT    NOT NULL CHECK(role IN ('user','assistant','system','tool')),
     content     TEXT    NOT NULL,
     tool_name   TEXT,
-    timestamp   REAL    NOT NULL DEFAULT (strftime('%J', 'now'))
+    timestamp   REAL    NOT NULL DEFAULT (strftime('%J', 'now')),
+    -- Session 266: per-turn artifacts persisted with the assistant message.
+    thinking    TEXT,
+    error       TEXT,
+    tool_calls  TEXT,
+    metrics     TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session
@@ -270,6 +276,16 @@ class SessionStore:
                 conn.execute("ALTER TABLE actions ADD COLUMN reasoning TEXT")
         except sqlite3.OperationalError:
             pass
+        # Session 266: per-turn artifacts on messages (thinking/error/tool
+        # calls/metrics). Fresh DBs get them from _SCHEMA; existing DBs need
+        # defensive ALTERs (idempotent — a second run raises duplicate-column,
+        # ignored). Same pattern as the actions table columns above.
+        for _col in ("thinking", "error", "tool_calls", "metrics"):
+            try:
+                with self._conn() as conn:
+                    conn.execute(f"ALTER TABLE messages ADD COLUMN {_col} TEXT")
+            except sqlite3.OperationalError:
+                pass
 
     def _apply_migrations(self, conn):
         """Apply any pending migrations from the migrations directory."""
@@ -311,8 +327,8 @@ class SessionStore:
             try:
                 conn.execute(
                     """
-                    INSERT INTO messages(session_id, role, content, tool_name, timestamp, file_name, file_path, file_size, file_type)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO messages(session_id, role, content, tool_name, timestamp, file_name, file_path, file_size, file_type, thinking, error, tool_calls, metrics)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,  # noqa: E501
                     (
                         session_id,
@@ -324,6 +340,10 @@ class SessionStore:
                         message.file_path,
                         message.file_size,
                         message.file_type,
+                        message.thinking,  # plain text — stored raw
+                        message.error,  # raw provider string — stored raw
+                        json.dumps(message.tool_calls) if message.tool_calls else None,
+                        json.dumps(message.metrics) if message.metrics else None,
                     ),
                 )
             except Exception as e:
@@ -472,11 +492,22 @@ class SessionStore:
         with self._conn() as conn:
             conn.execute("DELETE FROM todos WHERE session_id = ?", (session_id,))
 
+    @staticmethod
+    def _decode_json(value):
+        """Parse a JSON column back to its original object; None for empty."""
+        if value is None:
+            return None
+        try:
+            return json.loads(value)
+        except (ValueError, TypeError):
+            return None
+
     def get_history(self, session_id: str, limit: int = 100) -> list[Message]:
         with self._conn() as conn:
             rows = conn.execute(
                 """
-                SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type
+                SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type,
+                       thinking, error, tool_calls, metrics
                 FROM messages
                 WHERE session_id = ?
                 ORDER BY timestamp ASC
@@ -495,6 +526,10 @@ class SessionStore:
                 file_path=row["file_path"] if "file_path" in row.keys() else None,
                 file_size=row["file_size"] if "file_size" in row.keys() else None,
                 file_type=row["file_type"] if "file_type" in row.keys() else None,
+                thinking=row["thinking"] if "thinking" in row.keys() else None,
+                error=row["error"] if "error" in row.keys() else None,
+                tool_calls=self._decode_json(row["tool_calls"]) if "tool_calls" in row.keys() else None,
+                metrics=self._decode_json(row["metrics"]) if "metrics" in row.keys() else None,
             )
             for row in rows
         ]
@@ -510,7 +545,8 @@ class SessionStore:
         with self._conn() as conn:
             rows = conn.execute(
                 """
-                SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type
+                SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type,
+                       thinking, error, tool_calls, metrics
                 FROM messages
                 WHERE session_id = ?
                 ORDER BY timestamp DESC
@@ -529,6 +565,10 @@ class SessionStore:
                 file_path=row["file_path"] if "file_path" in row.keys() else None,
                 file_size=row["file_size"] if "file_size" in row.keys() else None,
                 file_type=row["file_type"] if "file_type" in row.keys() else None,
+                thinking=row["thinking"] if "thinking" in row.keys() else None,
+                error=row["error"] if "error" in row.keys() else None,
+                tool_calls=self._decode_json(row["tool_calls"]) if "tool_calls" in row.keys() else None,
+                metrics=self._decode_json(row["metrics"]) if "metrics" in row.keys() else None,
             )
             for row in rows
         ]

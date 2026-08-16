@@ -160,6 +160,14 @@ class Message(BaseModel):
     file_path: Optional[str] = None
     file_size: Optional[int] = None
     file_type: Optional[str] = None
+    # Session 266: per-turn artifacts persisted with the assistant message so
+    # they survive a reload. Stored as JSON in the messages table; the history
+    # endpoint returns them and the frontend restores thinking blocks, error
+    # cards, tool-step pills, and the cumulative context counter.
+    thinking: Optional[str] = None  # accumulated reasoning trace
+    error: Optional[str] = None  # raw provider error string (normalized at the history boundary per ADR-20)
+    tool_calls: Optional[list] = None  # tool-call timeline (pills)
+    metrics: Optional[dict] = None  # {prompt_tokens, completion_tokens, latency_ms}
 
 
 class FileAttachment(BaseModel):

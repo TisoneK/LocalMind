@@ -15,6 +15,7 @@ parent's delegation tools.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import inspect
 import logging
 import sqlite3
@@ -58,6 +59,53 @@ def get_adapter(*args, **kwargs):
 logger = logging.getLogger(__name__)
 
 STEERING_QUEUE_MAX = 10
+
+# Session 266: the persisted tool-call timeline must respect the same
+# presentation boundary as the SSE bridge (chat.py): delegated child output
+# is intermediate model context, not user-facing content.
+_INTERNAL_DELEGATION_TOOLS = frozenset({"delegate", "delegate_parallel", "delegate_inline"})
+
+
+def _visible_tool_output(tool_name: str, agent_name: str | None, output: str) -> str:
+    """Mirror of chat.py's bridge filter for the persisted tool timeline."""
+    if agent_name or tool_name in _INTERNAL_DELEGATION_TOOLS:
+        return ""
+    return output
+
+
+def _collect_tool_calls(collector: ObsCollector) -> list[dict]:
+    """Build the tool-call timeline (pills) from the collector's obs events.
+
+    Same shape and stable-id scheme as chat.py's ``_tool_call_payload`` so the
+    frontend restores the same step cards it saw live. Dedupes by id (a
+    started event followed by its done event collapses into one row)."""
+    calls: dict[str, dict] = {}
+    for evt in collector.history():
+        if evt.type != "tool_call":
+            continue
+        d = evt.data
+        tool = str(d.get("tool", "unknown"))
+        label = d.get("label", tool)
+        status = d.get("status", "running")
+        iteration = d.get("iteration", "")
+        args_str = d.get("tool_args", "")
+        args_hash = "-" + hashlib.md5(args_str.encode()).hexdigest()[:6] if args_str else ""
+        tc_id = f"tc-{tool}-iter{iteration}{args_hash}"
+        agent = d.get("agent") or None
+        calls[tc_id] = {
+            "id": tc_id,
+            "name": tool,
+            "label": label,
+            "status": status,
+            "iteration": iteration,
+            "latency_ms": d.get("latency_ms", ""),
+            "output": _visible_tool_output(tool, agent, d.get("output", "")),
+            "tool_args": args_str,
+            "todo_id": d.get("todo_id") or None,
+            "reasoning": d.get("reasoning") or d.get("thought"),
+            "agent": agent,
+        }
+    return list(calls.values())
 
 
 class _ParentAdapterCompat:
@@ -257,13 +305,33 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         except Exception:
             logger.exception("[agent-runtime] failed to persist user message")
 
-    def _persist_assistant(self, session_id: str, text: str) -> None:
-        if not text.strip():
+    def _persist_assistant(
+        self,
+        session_id: str,
+        text: str,
+        *,
+        thinking: Optional[str] = None,
+        error: Optional[str] = None,
+        tool_calls: Optional[list] = None,
+        metrics: Optional[dict] = None,
+    ) -> None:
+        # Session 266: an error turn persists an (empty-text) assistant message
+        # carrying the canonical error object — the history endpoint returns it
+        # so the error card survives a reload. Allow empty text ONLY when an
+        # error is attached; a bare empty message is still skipped.
+        if not text.strip() and not error:
             return
         try:
             self._store.append(
                 session_id,
-                Message(role=Role.ASSISTANT, content=text),
+                Message(
+                    role=Role.ASSISTANT,
+                    content=text,
+                    thinking=thinking,
+                    error=error,
+                    tool_calls=tool_calls,
+                    metrics=metrics,
+                ),
             )
         except Exception:
             logger.exception("[agent-runtime] failed to persist assistant message")
@@ -548,6 +616,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         requested_tools = frozenset(allowed_tool_names) if allowed_tool_names is not None else AGENT_ALLOWED_TOOLS
         parent_tools = requested_tools.intersection(AGENT_ALLOWED_TOOLS)
         response_chunks: list[str] = []
+        # Session 266: accumulate the reasoning trace so the persisted message
+        # carries the thinking block the user saw (survives reload). The loop
+        # streams thinking as "start"/"end" markers plus token text — mirror
+        # the frontend's phase-separator behavior (\n\n between phases).
+        thinking_parts: list[str] = []
         usage: dict[str, int] = {}
         try:
             async for chunk in parent.run(
@@ -567,10 +640,28 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             ):
                 if chunk.usage:
                     usage.update(chunk.usage)
+                if chunk.thinking:
+                    if chunk.thinking == "start":
+                        # Phase boundary — separate reasoning phases like the
+                        # frontend does, but only once content exists.
+                        if thinking_parts:
+                            thinking_parts.append("\n\n")
+                    elif chunk.thinking != "end":
+                        thinking_parts.append(chunk.thinking)
                 # Error chunks are terminal transport events. Do not let the
                 # parent runtime's completion bookkeeping turn a provider
                 # failure into the generic "no usable answer" fallback.
                 if chunk.error:
+                    # Session 266: persist the failed turn (error card must
+                    # survive reload). chat.py normalizes the raw string at
+                    # the presentation boundary; we store it verbatim.
+                    self._persist_assistant(
+                        session_id,
+                        "".join(response_chunks),
+                        thinking="".join(thinking_parts) or None,
+                        error=chunk.error,
+                        tool_calls=_collect_tool_calls(collector) or None,
+                    )
                     yield chunk
                     return
                 if chunk.text:
@@ -588,6 +679,15 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             collector.emit("agent_loop_error", error=exc.raw[:120], terminal=True)
             # chat.py owns the one canonical normalization/presentation
             # boundary; keep the raw adapter string internal to this chunk.
+            # Session 266: still persist the failed turn so the error card
+            # survives reload.
+            self._persist_assistant(
+                session_id,
+                "".join(response_chunks),
+                thinking="".join(thinking_parts) or None,
+                error=exc.raw,
+                tool_calls=_collect_tool_calls(collector) or None,
+            )
             yield StreamChunk(text="", done=True, error=exc.raw)
             return
         except AgentAbortedError:
@@ -675,8 +775,21 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             await self._reflect_on_answer(response_text, Intent.ANALYZE, message, session_id, collector)
         except Exception:
             logger.debug("[agent-runtime] reflection skipped", exc_info=True)
-        self._persist_assistant(session_id, response_text)
         total_ms = round((time.monotonic() - started) * 1000)
+        # Session 266: persist the turn's artifacts (thinking, tool-call pills,
+        # per-turn metrics) with the assistant message so a reload restores the
+        # thinking block, step cards, and the cumulative context counter.
+        self._persist_assistant(
+            session_id,
+            response_text,
+            thinking="".join(thinking_parts) or None,
+            tool_calls=_collect_tool_calls(collector) or None,
+            metrics={
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "latency_ms": total_ms,
+            },
+        )
         # prompt_tokens/completion_tokens were normalized above, with a local
         # estimate when a provider omits streaming usage.
         collector.emit(

@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from core.config import settings
+from core.error_normalizer import normalize_error
 from storage.db import get_shared_store
 
 router = APIRouter()
@@ -102,8 +103,34 @@ async def get_history(session_id: str):
             "timestamp": m.timestamp,
         }
 
+        # Session 266: restore the per-turn artifacts the frontend showed live
+        # (thinking block, error card, tool-step pills, per-turn metrics). They
+        # are persisted with the assistant message and must survive a reload.
+        if m.thinking:
+            message["thinking"] = m.thinking
+        if m.error:
+            # ADR-20: normalize ONCE at the presentation boundary — the stored
+            # raw string becomes the canonical object the frontend renders.
+            message["error"] = normalize_error(m.error)
+        if m.tool_calls:
+            message["toolCalls"] = m.tool_calls
+        if m.metrics:
+            metrics = m.metrics
+            latency_ms = metrics.get("latency_ms") or 0
+            completion = metrics.get("completion_tokens") or 0
+            message["performance"] = {
+                "latencyMs": latency_ms or None,
+                "promptTokens": metrics.get("prompt_tokens") or None,
+                "completionTokens": completion or None,
+                "tokensPerSecond": (
+                    round(completion / (latency_ms / 1000.0), 2)
+                    if latency_ms > 0 and completion > 0
+                    else None
+                ),
+            }
+
         # Add tool calls if present
-        if m.tool_name:
+        if m.tool_name and not m.tool_calls:
             message["toolCalls"] = [
                 {
                     "id": f"tool-{m.timestamp}-{idx}",
