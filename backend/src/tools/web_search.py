@@ -1,26 +1,29 @@
 """
-Web Search tool - Racing tier architecture: DDG + SearXNG race, Brave as fallback.
+Web Search tool - Racing tier architecture: DDG + Bing + SearXNG race, Brave as fallback.
 
 Registered as Intent.WEB_SEARCH in the tool registry.
 
 Results are formatted as a compact markdown list so the model can
 reason over them without a huge token footprint.
 
-Architecture (v8 — RACING TIERS):
-- Tier 1+2 RACE: DuckDuckGo and SearXNG fire in PARALLEL — first to
-  return wins. This eliminates the 27s sequential worst-case where DDG
-  times out (12s) and then SearXNG is tried (15s).
-- Tier 3: Brave - Premium optional layer, requires API key. Only tried
-  if both free tiers fail.
+Architecture (v10 — RACING TIERS):
+- Tier 1+2+3 RACE: DuckDuckGo, Bing (scraped), and SearXNG fire in
+  PARALLEL — first to return wins. This eliminates the 27s sequential
+  worst-case where DDG times out (12s) and then SearXNG is tried (15s).
+- Tier 4: Brave - Premium optional layer, requires API key. Only tried
+  if all free tiers fail.
 
-v8 changes vs v7:
-- BREAKING: DDG and SearXNG now race in parallel instead of sequential.
-  Worst-case latency drops from 27s to max(12s, 15s) = 15s.
-- SNIPPET_MAX raised from 300 to 800 — 300 chars was too thin for
-  weather, scores, and other structured data. The synthesizer handles
-  compression; the tool should preserve detail.
-- MAX_RESULTS raised from 5 to 8 — more results means better coverage
-  for the LLM to synthesize from.
+v10 changes vs v9 (Session 268 follow-up):
+- ADD Bing as a reliable no-key free tier. Public SearXNG instances
+  churn constantly (rate-limited / behind anti-bot within days), so the
+  SearXNG fallback chain is a stopgap, not a dependable second tier.
+  Bing's organic results page (``li.b_algo``) is stable and tolerant of
+  moderate scraping — three independent free engines now race, so a
+  single provider being blocked no longer means "all search providers
+  failed".
+- Bing redirect URLs (``/ck/a?...&u=a1<base64url>``) are decoded back
+  to the real destination; challenge/verification pages are detected
+  and reported as such instead of "no results".
 
 v9 changes vs v8 (Session 268):
 - FIX: SearXNG was effectively dead. The default instance (searx.be) is
@@ -42,8 +45,11 @@ v9 changes vs v8 (Session 268):
 from __future__ import annotations
 
 import asyncio
+import base64
+import html
 import json
 import logging
+import re
 
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
@@ -52,6 +58,16 @@ logger = logging.getLogger(__name__)
 
 MAX_RESULTS = 8
 SNIPPET_MAX = 800
+
+# Bing tolerates moderate scraping when it looks like a real browser. The
+# organic-results layout (``li.b_algo``) has been stable for years.
+_BING_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 # SearXNG public instances are churned constantly — a working instance is
 # rate-limited or put behind an anti-bot page within days. The configured
@@ -138,6 +154,103 @@ async def _search_ddg(query: str) -> tuple[list[dict], str, str]:
             logger.warning(f"[web_search] DDG failed: {error_msg}")
             return [], "network", f"DuckDuckGo search failed: {error_msg}"
     return [], "network", "DuckDuckGo search returned no results after all attempts"
+
+
+def _decode_bing_url(href: str) -> str:
+    """Decode a Bing organic-result href back to the real destination URL.
+
+    Bing wraps results in ``/ck/a?...&u=a1<base64url>`` redirect links (the
+    real URL is base64url-encoded in the ``u`` param, prefixed with ``a1``).
+    The href arrives HTML-escaped (``&amp;``), so unescape before parsing.
+    Falls back to the (unescaped) href when there is nothing to decode.
+    """
+    unescaped = html.unescape(href or "")
+    match = re.search(r"[?&]u=a1([^&]+)", unescaped)
+    if match:
+        try:
+            padded = match.group(1) + "=" * (-len(match.group(1)) % 4)
+            # validate=True so non-base64 payloads raise and fall through to
+            # the raw href instead of decoding to garbage.
+            return base64.b64decode(
+                padded, altchars=b"-_", validate=True
+            ).decode("utf-8", errors="ignore")
+        except Exception:
+            pass  # malformed — fall through to the raw href
+    return unescaped
+
+
+async def _search_bing(query: str) -> tuple[list[dict], str, str]:
+    """Search Bing by scraping its organic results page.
+
+    v10: Bing is the reliable no-key second tier — unlike public SearXNG
+    instances it does not churn (rate-limited/behind anti-bot within days).
+    Only ``li.b_algo`` organic blocks are parsed; the redirect URL is decoded
+    back to the real destination. Challenge/captcha pages are detected and
+    reported as such instead of being confused with an empty result set.
+    """
+    try:
+        import httpx
+    except ImportError:
+        return [], "network", "httpx not installed -- cannot search via Bing"
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=12, follow_redirects=True, headers=_BING_HEADERS
+        ) as client:
+            params = {
+                "q": query,
+                "count": MAX_RESULTS,
+                "mkt": "en-US",
+                "setlang": "en",
+            }
+            r = await client.get("https://www.bing.com/search", params=params)
+            r.raise_for_status()
+            content_type = (r.headers.get("content-type") or "").lower()
+            if "html" not in content_type:
+                return [], "challenge", "Bing returned a non-HTML response (likely a block page)"
+            html_text = r.text
+            blocks = re.findall(r'<li class="b_algo".*?</li>', html_text, re.S)
+            if not blocks:
+                if "captcha" in html_text.lower() or "verify" in html_text.lower():
+                    return [], "challenge", "Bing served a verification/captcha page"
+                return [], "empty", "Bing returned no organic results"
+
+            results = []
+            for block in blocks[:MAX_RESULTS]:
+                hm = re.search(
+                    r'<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+                    block,
+                    re.S,
+                )
+                if not hm:
+                    continue
+                href = _decode_bing_url(hm.group(1))
+                title = html.unescape(re.sub(r"<[^>]+>", "", hm.group(2))).strip()
+                if not title:
+                    continue
+                snippet = ""
+                pm = re.search(r"<p[^>]*>(.*?)</p>", block, re.S)
+                if pm:
+                    snippet = html.unescape(
+                        re.sub(r"<[^>]+>", "", pm.group(1))
+                    ).strip()
+                results.append({"title": title, "href": href, "body": snippet})
+
+            if not results:
+                return [], "empty", "Bing returned no parseable organic results"
+            return results, "", ""
+    except asyncio.TimeoutError:
+        logger.warning("[web_search] Bing timed out after 12s")
+        return [], "timeout", "Bing search timed out after 12 seconds"
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        logger.warning(f"[web_search] Bing HTTP error {status}")
+        if status == 429:
+            return [], "rate_limit", "Bing rate-limited (HTTP 429)"
+        return [], "network", f"Bing returned HTTP {status}"
+    except Exception as e:
+        logger.warning(f"[web_search] Bing failed: {repr(e)}")
+        return [], "network", f"Bing search error: {e}"
 
 
 async def _search_searxng_single(
@@ -374,19 +487,26 @@ def list_available_tools() -> list[dict]:
             "description": "Fast first attempt, no auth required. Uses ddgs library.",
         },
         {
-            "name": "SearXNG",
+            "name": "Bing",
             "tier": 2,
             "available": True,
             "requires_auth": False,
+            "description": "Scraped organic results — the reliable no-key second tier (does not churn like public SearXNG instances).",
+        },
+        {
+            "name": "SearXNG",
+            "tier": 3,
+            "available": True,
+            "requires_auth": False,
             "description": (
-                "Stable core fallback, multi-source aggregation. "
+                "Multi-source aggregation fallback. "
                 "Walks a fallback chain (configured instance first, then public "
                 f"fallbacks). Configured: {getattr(settings, 'searxng_url', 'https://searx.be')}"
             ),
         },
         {
             "name": "Brave",
-            "tier": 3,
+            "tier": 4,
             "available": bool(getattr(settings, "brave_search_api_key", "")),
             "requires_auth": True,
             "description": "Premium optional layer. Requires BRAVE_SEARCH_API_KEY env var.",
@@ -399,11 +519,13 @@ async def web_search(query: str) -> ToolResult:
     """
     Search the web using a racing-tier architecture.
 
-    v8: DDG and SearXNG fire in PARALLEL (asyncio race). First provider
-    to return results wins. This eliminates the worst-case 27s sequential
-    delay where DDG times out and then SearXNG is tried.
+    v10: DDG, Bing, and SearXNG fire in PARALLEL (asyncio race). First
+    provider to return results wins. This eliminates the worst-case 27s
+    sequential delay where DDG times out and then SearXNG is tried — and
+    three independent free engines mean one provider being blocked no longer
+    fails the whole search.
 
-    If both free tiers fail, Brave is tried as a premium fallback.
+    If all free tiers fail, Brave is tried as a premium fallback.
     """
     from core.config import settings
 
@@ -412,18 +534,20 @@ async def web_search(query: str) -> ToolResult:
     error_message = ""
     successful_provider = ""
 
-    # -- Racing Tier 1+2: DDG + SearXNG in parallel ----------------------
-    # Fire both searches concurrently. Use whichever returns first with
-    # valid results. This drops worst-case latency from 27s to ~15s.
-    # searxng_url may be a comma-separated list; _search_searxng expands it
-    # into the fallback chain.
+    # -- Racing Tier 1+2+3: DDG + Bing + SearXNG in parallel -------------
+    # Fire all three free searches concurrently. Use whichever returns first
+    # with valid results. Three independent engines mean a single provider
+    # being blocked (DDG anti-bot, Bing rate limit, SearXNG churn) no longer
+    # fails the whole search. searxng_url may be a comma-separated list;
+    # _search_searxng expands it into the fallback chain.
     searxng_url = getattr(settings, "searxng_url", None)
 
     ddg_task = asyncio.create_task(_search_ddg(query))
+    bing_task = asyncio.create_task(_search_bing(query))
     searxng_task = asyncio.create_task(_search_searxng(query, searxng_url))
 
     # Race: wait for the first task to complete with results
-    pending = {ddg_task, searxng_task}
+    pending = {ddg_task, bing_task, searxng_task}
     first_error_type = ""
     first_error_message = ""
 
@@ -439,17 +563,22 @@ async def web_search(query: str) -> ToolResult:
             if task_results:
                 # First provider to return results wins!
                 results = task_results
-                successful_provider = "duckduckgo" if task is ddg_task else "searxng"
+                if task is ddg_task:
+                    successful_provider = "duckduckgo"
+                elif task is bing_task:
+                    successful_provider = "bing"
+                else:
+                    successful_provider = "searxng"
                 logger.info(
                     f"[web_search] Race winner: {successful_provider} with {len(results)} results"
                 )
-                # Cancel the other task
+                # Cancel the other tasks
                 for t in pending:
                     t.cancel()
                 pending = set()
                 break
             else:
-                # This provider failed — track error and wait for the other
+                # This provider failed — track error and wait for the others
                 if not first_error_type:
                     first_error_type = task_err_type
                     first_error_message = task_err_msg
@@ -488,10 +617,9 @@ async def web_search(query: str) -> ToolResult:
                 "successful_provider": "",
                 "attempted_providers": [
                     "duckduckgo",
+                    "bing",
                     "searxng",
-                    "brave"
-                    if getattr(settings, "brave_search_api_key", "")
-                    else "duckduckgo,searxng",
+                    "brave" if getattr(settings, "brave_search_api_key", "") else "",
                 ],
             },
         )
@@ -516,8 +644,9 @@ async def web_search(query: str) -> ToolResult:
             "successful_provider": successful_provider,
             "attempted_providers": [
                 "duckduckgo",
+                "bing",
                 "searxng",
-                "brave" if getattr(settings, "brave_search_api_key", "") else "duckduckgo,searxng",
+                "brave" if getattr(settings, "brave_search_api_key", "") else "",
             ],
         },
     )

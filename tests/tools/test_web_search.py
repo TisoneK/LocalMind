@@ -8,6 +8,8 @@ from tools.web_search import (
     _searxng_instance_list,
     _search_searxng,
     _search_searxng_single,
+    _search_bing,
+    _decode_bing_url,
     DEFAULT_SEARXNG_FALLBACKS,
     MAX_SEARXNG_ATTEMPTS,
 )
@@ -72,6 +74,10 @@ async def test_web_search_all_providers_fail_returns_graceful_error():
         new_callable=AsyncMock,
         return_value=([], "network", "ddg failed (mocked)"),
     ), patch(
+        "tools.web_search._search_bing",
+        new_callable=AsyncMock,
+        return_value=([], "network", "bing failed (mocked)"),
+    ), patch(
         "tools.web_search._search_searxng",
         new_callable=AsyncMock,
         return_value=([], "network", "searxng failed (mocked)"),
@@ -93,6 +99,10 @@ async def test_web_search_exception_returns_graceful_error():
     with patch(
         "tools.web_search._search_ddg",
         side_effect=Exception("network error"),
+    ), patch(
+        "tools.web_search._search_bing",
+        new_callable=AsyncMock,
+        return_value=([], "network", "bing failed (mocked)"),
     ), patch(
         "tools.web_search._search_searxng",
         new_callable=AsyncMock,
@@ -196,6 +206,130 @@ async def test_search_searxng_respects_attempt_cap():
 
     assert len(seen) == min(MAX_SEARXNG_ATTEMPTS, len(urls))
     assert seen == urls[:MAX_SEARXNG_ATTEMPTS]
+
+
+# ── Session 268 follow-up: Bing scraped tier ────────────────────────────────
+
+_BING_RESULT_HTML = """
+<ol id="b_results">
+  <li class="b_algo" data-id iid=SERP.5001>
+    <h2><a target="_blank" href="https://www.bing.com/ck/a?!&amp;&amp;p=abc&amp;u=a1aHR0cHM6Ly93d3cucHl0aG9uLm9yZy8=" h="ID=SERP,5001.1">Welcome to Python.org</a></h2>
+    <div class="b_caption"><p>Experienced programmers can pick up Python very quickly.</p></div>
+  </li>
+  <li class="b_algo" data-id iid=SERP.5002>
+    <h2><a target="_blank" href="https://www.python.org/downloads/">Download Python</a></h2>
+    <div class="b_caption"><p>Download the latest version of Python.</p></div>
+  </li>
+</ol>
+"""
+
+
+def test_decode_bing_url_decodes_redirect():
+    """Bing wraps organic results in /ck/a redirect URLs with the real URL
+    base64url-encoded in the `u` param (prefixed a1) — HTML-escaped on the way
+    in. The decoder must unescape and decode to the real destination."""
+    href = "https://www.bing.com/ck/a?!&amp;&amp;p=abc&amp;u=a1aHR0cHM6Ly93d3cucHl0aG9uLm9yZy8="
+    assert _decode_bing_url(href) == "https://www.python.org/"
+
+
+def test_decode_bing_url_falls_back_to_raw_href():
+    # Direct URLs (no /ck/a wrapper) and malformed payloads pass through.
+    assert _decode_bing_url("https://www.python.org/downloads/") == "https://www.python.org/downloads/"
+    assert _decode_bing_url("https://x.com/a?u=a1!!!not-base64") == "https://x.com/a?u=a1!!!not-base64"
+
+
+class _BingFakeResponse:
+    def __init__(self, body: str, content_type: str = "text/html; charset=utf-8", status: int = 200):
+        self._body = body
+        self.headers = {"content-type": content_type}
+        self.status_code = status
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            import httpx
+            raise httpx.HTTPStatusError(
+                f"HTTP {self.status_code}", request=None, response=self
+            )
+
+    @property
+    def text(self):
+        return self._body
+
+
+class _BingFakeClient:
+    def __init__(self, response):
+        self._response = response
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, *args, **kwargs):
+        return self._response
+
+
+@pytest.mark.asyncio
+async def test_search_bing_parses_organic_results_and_decodes_urls():
+    with patch("httpx.AsyncClient", lambda *a, **k: _BingFakeClient(_BingFakeResponse(_BING_RESULT_HTML))):
+        results, err_type, err_msg = await _search_bing("python")
+
+    assert err_type == ""
+    assert len(results) == 2
+    assert results[0]["title"] == "Welcome to Python.org"
+    # The /ck/a redirect is decoded back to the real destination.
+    assert results[0]["href"] == "https://www.python.org/"
+    assert "Python very quickly" in results[0]["body"]
+    # Direct hrefs pass through untouched.
+    assert results[1]["href"] == "https://www.python.org/downloads/"
+
+
+@pytest.mark.asyncio
+async def test_search_bing_detects_captcha_page():
+    captcha = "<html><body>Please verify you are a human ... captcha</body></html>"
+    with patch("httpx.AsyncClient", lambda *a, **k: _BingFakeClient(_BingFakeResponse(captcha))):
+        results, err_type, err_msg = await _search_bing("python")
+
+    assert results == []
+    assert err_type == "challenge"
+    assert "captcha" in err_msg.lower()
+
+
+@pytest.mark.asyncio
+async def test_search_bing_detects_non_html_block_page():
+    with patch(
+        "httpx.AsyncClient",
+        lambda *a, **k: _BingFakeClient(_BingFakeResponse("denied", content_type="text/plain")),
+    ):
+        results, err_type, err_msg = await _search_bing("python")
+
+    assert results == []
+    assert err_type == "challenge"
+
+
+@pytest.mark.asyncio
+async def test_web_search_race_bing_wins():
+    """Bing is a racing tier — when it returns first with results it wins."""
+    mock_results = [{"title": "Bing Hit", "href": "https://bing.example", "body": "body"}]
+    with patch(
+        "tools.web_search._search_ddg",
+        new_callable=AsyncMock,
+        return_value=([], "network", "ddg empty (mocked)"),
+    ), patch(
+        "tools.web_search._search_bing",
+        new_callable=AsyncMock,
+        return_value=(mock_results, "", ""),
+    ), patch(
+        "tools.web_search._search_searxng",
+        new_callable=AsyncMock,
+        return_value=([], "network", "searxng empty (mocked)"),
+    ):
+        result = await web_search("test")
+
+    assert result.success is True
+    assert result.metadata["successful_provider"] == "bing"
+    assert "Bing Hit" in result.content
 
 
 @pytest.mark.asyncio
