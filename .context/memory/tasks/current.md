@@ -1,33 +1,33 @@
 # Current Task
 
-**Status:** done — Session 274: shipped `todo_write` — the agent can now create,
-update, and mark the live UI Todos panel (the user's report: "the todos are not
-live on the ui by the agent, it cant set them, update nor mark them").
+**Status:** done — Session 276: shipped B-2026-08-16-7 — reasoning handling is now
+provider-generic, so the Thinker (which made glm-4.5-flash efficient/precise)
+reaches ALL capable models, not just z.ai/GLM.
 
-**Delivered (`506f958`, review-51):** the Todos panel was a passive projection of
-the LLM's parsed plan (plan-required intents only, not agent-controllable — a
-3-step task emitted ZERO todo events live). New first-class `todo_write` CORE tool:
-the agent writes the FULL checklist (`todos:[{text,status}]`); the loop's
-`_emit_todo_write_events` turns the result into the `todo_cleared`+`todo_created`
-obs events the SSE bridge + frontend already render (status carried through so
-in_progress shows — no frontend code change needed). A fast, single-purpose helper
-that just parses/normalizes/returns, embodying ADR-43's "tools are helpers, not
-agents" principle. LIVE-VERIFIED on glm-4.5-flash: agent called it, 0 validation
-errors, status progressed pending→in_progress live. 1870 pass; +10 tests.
+**Delivered (`b3f489d`, review-52):** live-probed cerebras/gpt-oss-120b (keys only)
+— reasoning arrives in a `reasoning` field, not `reasoning_content`/`<think>`, so
+`_extract_content_and_reasoning` missed it. And `thinking_enabled` returned False
+for every non-zai provider — and the loop gates the mid-loop Thinker consult +
+thinking-aware timeout on it, so the Thinker NEVER ran for gpt-oss/cerebras. Fix:
+extraction reads `reasoning` too; `thinking_enabled` True for all capable providers
+(z.ai keeps its GLM-5.3 force-enabled logic; tunable via `LOCALMIND_THINKING`); the
+z.ai `thinking` request param + one-shot override gated to zai. LIVE-VERIFIED on
+cerebras/gpt-oss-120b (per system/live-testing.md): Thinker consulted
+(agent_thinker_start/done — never before), reasoning streamed to the thinking
+channel not chat, model ran a tool. 31 adapter + 366 agent/loop tests pass.
 
 **Open next / notes:**
-1. **Owed real-app visual check:** confirm the panel renders the agent's todos in
-   the running app (I verified the SSE event stream + shapes; no frontend code
-   changed since it already threads `status`). Also: a stronger model / clearer
-   completion beat to exercise mark-`completed` live (mechanism is unit-tested).
-2. **Still-open ADR-43 tools work:** B-2026-08-16-5 (L2 right-tool steering:
-   exploratory `ls`/`Get-ChildItem` before create → `file_write`, `shell` for
-   discovery → `find_path`; + L3 the redundant post-write read-back). Note: the
-   find_path-over-ls guardrail already exists in prompts.py:736; the create-task
-   "list then write" nudge at prompts.py:739 is the one to reconsider.
-3. Carried: ADR-37 follow-ups B-2026-08-15-10/11/12; review-42 `classify_failure`
-   cleanup; owed live Windows re-run of the S264 recipe task; unbounded
-   `reasoning_effort` default. B-2026-08-16-4 (bound shell output) closed — already
-   implemented (S272).
+1. **cerebras rate-limits the final synthesis call** — a provider tokens/min cap
+   (in the user's original trace too), so tasks don't fully COMPLETE on its free
+   tier. Orthogonal to reasoning; a headroom/paid provider shows full completion.
+2. **Still-open tools work:** B-2026-08-16-5 (L2 right-tool steering + L3 redundant
+   read-back).
+3. **B-2026-08-16-8 (prompt overhead) — DEPRIORITIZED per user:** "we already saw
+   how the thinker made the agent efficient and precise even on lesser model — so
+   [token cost] shouldn't be a question." The Thinker is the efficiency lever; the
+   ~9k system-prompt overhead is not the priority.
+4. Carried: ADR-37 follow-ups B-2026-08-15-10/11/12; review-42 `classify_failure`
+   cleanup; owed live Windows re-run of the S264 recipe task; owed real-app visual
+   check of the S274 todo panel.
 
 **Feature:** none
