@@ -741,3 +741,12 @@ if literally nothing slowed you down.
 - **Cause:** The fix was applied call-site-by-call-site rather than sweeping for every per-chunk use of the trimming `_strip_minimax_tool_calls`.
 - **Workaround / fix:** Switched `_force_final_answer` to `_strip_minimax_tool_calls_stream` + regression test.
 - **Prevent next time:** When fixing a "wrong variant of a helper on streamed deltas" bug, grep for ALL per-chunk call sites of the offending helper in the same session — not just the one path that surfaced the symptom.
+
+---
+## 2026-08-16 — Buffy / deepseek/deepseek-v4-flash (Session 248)
+
+- **Problem:** Chat transcripts showed every assistant reply TWICE after closing and reopening a chat. The guaranteed-persist safety net's dedup checked `get_history(session_id, limit=2)` — but `get_history` orders ASC, so `limit=2` returned the OLDEST two messages, never the just-saved reply. Every reply from turn 2 onward was written twice.
+- **Cost:** A backend bug that looked like a frontend render issue at first; a chat-history corruption that shipped silently until the user reopened a chat.
+- **Cause:** Assumed `get_history(limit=N)` returns the most recent N messages; the helper is ascending. The dedup compared against the wrong window and always failed for multi-turn chats.
+- **Workaround / fix:** Added `SessionStore.get_recent_history()` (newest-first) and pointed both `_guarantee_persist_assistant` implementations (agent_runtime.py + `_persistence_mixin.py`) at it; dropped the now-wrong `reversed()`.
+- **Prevent next time:** Any "check the latest N" logic must read the helper's ordering — `get_history` is ASC, so `limit=N` is the OLDEST N. Verify ordering semantics before trusting a limit window for recency checks; when in doubt, add a tiny test of the helper's ordering first.

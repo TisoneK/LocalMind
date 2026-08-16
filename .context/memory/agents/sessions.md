@@ -3447,3 +3447,15 @@ program + ADR-22). -->
 - **Open items:** none new — recommend a grep for any remaining per-chunk trimming `_strip_minimax_tool_calls` call sites on streaming deltas.
 - **Report:** `.context/memory/reviews/2026-08-16-review-2.md`
 - **Notes:** none
+
+## 2026-08-16 — Session 248
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-flash | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — four user-reported UI/backend bugs
+- **Task:** (1) New Chat should reset left tab to Chat + right tab to Agents + zero the context counter; (2) actions were pills while active and only became cards after the session ended; (3) after closing and reopening a chat the messages loaded twice; (4) action-card polish (scrollable body, copy icons, stacked step number, pretty color-coded JSON).
+- **Commits:** 2 product (`3564a77`, `405159a`, pushed) + this context commit.
+- **Outcome:** done — (1) `handleNewChat` now calls a new `resetSession()` in `useChat` (clears `lastMetrics`/`liveObservation`/`elapsedMs`/`sessionStats`) and flips `forceChatTab`/`forceAgentsTab`; root cause of the stale counter was the client-side session ID not matching a backend session, so the hook's session-switch cleanup never fired. (2) Removed the `activeToolCalls.length > 0` pill branch in `LeftPanel` — live actions now render as the same expandable cards as history. (3) ROOT CAUSE WAS BACKEND: the guaranteed-persist safety net checked `get_history(limit=2)` which orders ASC → returned the OLDEST two messages, so the just-saved reply never matched and every reply from turn 2 onward was double-written. Added `get_recent_history()` (newest-first) and pointed both `_guarantee_persist_assistant` implementations at it. (4) Action card polish in `ActionHistory.tsx`.
+- **Validation:** frontend `tsc` clean, ESLint 0 errors, 219 passed; backend 1764 passed / 2 skipped / 4 pre-existing env-gated `test_shell.py` failures; ruff clean.
+- **Open items:** duplicate-message fix only repairs NEW replies — old chats keep their dup rows. Deferred (unchanged): tool-schema diet `B-2026-08-15-14`.
+- **Report:** `.context/memory/reviews/2026-08-16-review-3.md`
+- **Notes:** none
