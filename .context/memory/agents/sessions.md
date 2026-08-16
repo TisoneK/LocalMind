@@ -3608,3 +3608,13 @@ program + ADR-22). -->
 - **LIVE-VERIFIED (same model/task):** iter-2 reasoned→empty (buf=1) → forced off → iter-3 real content (buf=47, 1.5s) → turn FINISHED with a real answer "I found 713 Markdown files in /Users/bao/Code" (the Thinker's recursive find_path evidence reached an answer) instead of the empty honest-fail. 3 unit tests; suite 1,812 pass; ruff clean.
 - **Residual (separate, lower priority):** thinking-off GLM answers are terse — a known model style, not this bug. Thinker-off baseline (Session 260) now lower priority (empty-after-reasoning confirmed pre-existing + now fixed).
 - **Notes:** followed the full .context Exit checklist. This closes the Session 260 blocker: Thinker reasons on evidence (S260) AND the turn now reaches a real answer (S261).
+
+## 2026-08-16 — Session 262
+
+- **Agent:** Claude Code (claude-opus-4-8) | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Task:** User feedback on a live glm-4.5-flash Thinker turn: reasoning is great ("gives the agent a lot of context, lays the plan") but "it thinks too hard" — 202s unbounded, repeated a command, turn FAILED "context too long". "There should be thinking levels, not turned off."
+- **Commits:** 1 product (`6a95238`) — `feat(agent): thinking levels for all GLM` + this context commit. Review: review-45.
+- **Root cause + fix:** glm-4.5-flash thinking was binary `{type: enabled}` and `reasoning_effort` (the level) was gated to GLM ≥5.2 → 4.5 reasoned unbounded (202s, context overflow). Applied reasoning_effort to ALL GLM versions + a 400-degrade (`reasoning_effort_retry`) so a non-supporting version stays safe.
+- **LIVE-VERIFIED (z.ai/glm-4.5-flash, reasoning_effort=low):** the field is ACCEPTED (no rejection); the SAME recipe task that failed "context too long" now COMPLETES a full agentic workflow — `ls ~/Desktop` → `file_write` (real 2,253-byte recipe, verification passed) → `file_task` (read-back). No overflow. S261's empty-after-reasoning thinking-off recovery handled two think-but-don't-act steps. Suite 1,814 pass; updated the ADR-41 test (was "≥5.2 only") to "all GLM".
+- **For the user:** set the level in Settings (`reasoning_effort`: low/medium/high) — it now applies to glm-4.5-flash. Default is still unset (unbounded); recommend low/medium on the slow free tier. Open: consider a bounded default.
+- **Notes:** followed the full .context Exit checklist. Removed the test recipe artifact from /Users/bao/Desktop after the trace.
