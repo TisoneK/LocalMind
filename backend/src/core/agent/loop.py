@@ -1596,9 +1596,42 @@ class AgentLoop:
                 # (parallel) actions land under the new todo.
                 _advance_plan_on_narration()
 
-                # Run all dispatches concurrently
-                dispatch_tasks = [_dispatch_single(call.tool_name, inp, call.tool_args) for call, inp in valid_calls]
-                dispatch_results = await asyncio.gather(*dispatch_tasks)
+                # Dispatch all valid calls concurrently, but surface each tool's
+                # completion AS IT FINISHES (B-10) instead of blocking on the whole
+                # batch — a fast tool's card no longer waits for a slow sibling.
+                # Model-context assembly below stays in INPUT order (deterministic).
+                async def _dispatch_and_emit(idx: int, call, inp: str):
+                    res = await _dispatch_single(call.tool_name, inp, call.tool_args)
+                    tc_name, tc_obs, tc_failed, tc_lat, tc_provider = res
+                    if _obs:
+                        _obs.emit(
+                            "tool_call",
+                            tool=tc_name,
+                            label="",
+                            status="failed" if tc_failed else "done",
+                            output=_truncate_observation(tc_obs),
+                            latency_ms=tc_lat,
+                            tool_args=inp,  # this call's input (the batch loop's _inp was stale)
+                            iteration=iteration + 1,
+                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                            thought=result.raw_content or "",
+                            reasoning=_batch_reasoning,
+                            provider=tc_provider,
+                        )
+                    return idx, res
+
+                _batch_tasks = [
+                    asyncio.ensure_future(_dispatch_and_emit(i, call, inp))
+                    for i, (call, inp) in enumerate(valid_calls)
+                ]
+                _results_by_idx: dict[int, tuple] = {}
+                for _fut in asyncio.as_completed(_batch_tasks):
+                    _idx, _res = await _fut
+                    _results_by_idx[_idx] = _res
+                    # Yield so the SSE bridge flushes the just-emitted tool_call
+                    # event to the user now (as-completed streaming).
+                    yield StreamChunk(text="", done=False, status=f"Done — {_res[0]} ({_res[3]}ms)")
+                dispatch_results = [_results_by_idx[i] for i in range(len(valid_calls))]
 
                 # Process all results and add to conversation context
                 any_failed = False
@@ -1620,20 +1653,8 @@ class AgentLoop:
                             latency_ms=tc_lat,
                         )
                     )
-                    if _obs:
-                        _obs.emit(
-                            "tool_call",
-                            tool=tc_name,
-                            label="",
-                            status="failed" if tc_failed else "done",
-                            output=_truncate_observation(tc_obs),
-                            latency_ms=tc_lat,
-                            tool_args=_inp,
-                            iteration=iteration + 1,
-                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
-                            thought=result.raw_content or "", reasoning=_batch_reasoning,
-                            provider=tc_provider,
-                        )
+                    # The tool_call done/failed event is emitted per-tool as it
+                    # completes (see _dispatch_and_emit above), not here.
                     if tc_failed:
                         any_failed = True
 
