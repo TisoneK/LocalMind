@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from pathlib import Path
 
 from core.agent.constants import FILE_OP_TIMEOUT_SECONDS, FILE_READ_MAX_BYTES
@@ -274,6 +275,41 @@ async def parse_file(
     )
 
 
+# Readable file extensions used by the path extractor below.
+_READ_EXTS = r"py|js|ts|txt|md|csv|pdf|docx|xlsx|json|yaml|yml|toml|html|sh|rs|go|log|cfg|ini|env"
+
+# Ordered path patterns for pulling a file reference out of a message.
+# Matches: "quoted path.ext", C:\Windows\path.ext, /unix/path.ext, ~/path, bare.ext
+#
+# NOTE ON ORDER: the bare Unix pattern's char class is [\w.\-/] — forward slash
+# ONLY. A Windows absolute path (C:\Users\tison\Desktop\file.md) would otherwise
+# be truncated at the backslashes down to the bare filename, then looked up under
+# ~/ and cwd and never found — so a file the agent just wrote to the Desktop reads
+# back as not_found (Session 264). The dedicated Windows-drive pattern (backslashes
+# OR forward slashes, spaces allowed) MUST run before the Unix pattern so the full
+# absolute path is offered as the first candidate.
+_PATH_PATTERNS = [
+    re.compile(rf"""["']([^"'\n]+?\.(?:{_READ_EXTS}))["']"""),
+    re.compile(rf"""([A-Za-z]:[\\/][^\n\r"'<>|*?]+?\.(?:{_READ_EXTS}))"""),
+    re.compile(rf"((?:~/|\.{{0,2}}/)?[\w.\-/]+\.(?:{_READ_EXTS}))"),
+]
+
+
+def _extract_path_candidates(message: str) -> list[str]:
+    """Pull candidate file paths out of a message, most-specific first.
+
+    Windows drive-absolute paths are yielded whole (before the bare-filename
+    fallback) so a path the writer just produced can be read back on Windows.
+    """
+    candidates: list[str] = []
+    for pat in _PATH_PATTERNS:
+        for m in pat.finditer(message):
+            grp = m.group(1)
+            if grp not in candidates:
+                candidates.append(grp)
+    return candidates
+
+
 async def file_task(message: str, original_path: str = None) -> ToolResult:
     """
     FILE_TASK dispatch handler — tries to locate and read a file referenced
@@ -284,7 +320,6 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
       2. Path extracted from the message text (quoted or bare)
       3. Prompt user to attach
     """
-    import re as _re
     from pathlib import Path as _Path
 
     # Try original_path first (engine passes this for files already uploaded)
@@ -292,15 +327,7 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
     if original_path:
         candidates.append(original_path)
 
-    # Extract file paths / names from the message
-    # Matches: "quoted/path.ext", 'quoted', bare/path.ext, ~/path, ./path
-    path_patterns = [
-        r"""["']([^"'\s]+\.[a-zA-Z0-9]{1,6})["']""",
-        r"((?:~/|\.{0,2}/)?[\w.\-/]+\.(?:py|js|ts|txt|md|csv|pdf|docx|xlsx|json|yaml|yml|toml|html|sh|rs|go|log|cfg|ini|env))",
-    ]
-    for pat in path_patterns:
-        for m in _re.finditer(pat, message):
-            candidates.append(m.group(1))
+    candidates.extend(_extract_path_candidates(message))
 
     # Expand and validate each candidate
     for raw_path in candidates:

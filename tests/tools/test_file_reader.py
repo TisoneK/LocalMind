@@ -1,6 +1,43 @@
 """Tests for the file reader tool."""
 import pytest
-from tools.file_reader import _chunk_text, parse_file
+from tools.file_reader import _chunk_text, _extract_path_candidates, parse_file
+
+
+# ── Path extraction: read-back must survive Windows backslash paths (S264) ────
+# The disease: file_task's extractor used a forward-slash-only char class, so a
+# Windows absolute path the writer had just produced (C:\Users\tison\Desktop\x.md)
+# was truncated to the bare filename, looked up under ~/ and cwd, and reported
+# not_found — even though the file existed on the Desktop.
+def test_extract_windows_absolute_path_kept_whole():
+    got = _extract_path_candidates(r"C:\Users\tison\Desktop\Nice_Dinner_Recipe.md")
+    # The FULL path must be the first candidate (file_task returns on the first
+    # one that exists), not the truncated bare filename.
+    assert got[0] == r"C:\Users\tison\Desktop\Nice_Dinner_Recipe.md"
+
+
+def test_extract_windows_path_with_spaces():
+    got = _extract_path_candidates(r"C:\Users\tison\My Documents\notes.md")
+    assert got[0] == r"C:\Users\tison\My Documents\notes.md"
+
+
+def test_extract_windows_forward_slash_path():
+    got = _extract_path_candidates("C:/Users/tison/Desktop/file.md")
+    assert got[0] == "C:/Users/tison/Desktop/file.md"
+
+
+def test_extract_unix_absolute_path_still_works():
+    got = _extract_path_candidates("/Users/bao/Desktop/Chicken_Teriyaki_Recipe.md")
+    assert got[0] == "/Users/bao/Desktop/Chicken_Teriyaki_Recipe.md"
+
+
+def test_extract_windows_path_inside_prose():
+    got = _extract_path_candidates(r"read C:\Users\tison\Desktop\file.md please")
+    assert r"C:\Users\tison\Desktop\file.md" in got
+
+
+def test_extract_bare_filename_and_no_path():
+    assert _extract_path_candidates("notes.txt") == ["notes.txt"]
+    assert _extract_path_candidates("just prose, nothing to open here") == []
 
 
 def test_chunk_text_basic():
