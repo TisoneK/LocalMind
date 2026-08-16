@@ -1,5 +1,5 @@
 # Current Task
 
-**Status:** done — Session 256: fixed the user-reported "Agent loop failed — empty_response" on z.ai/glm-4.5-flash with thinking ON (recipe-on-desktop turn: iter-1 ran shell, iter-2 streamed reasoning then returned no content/tool call → whole turn failed). Root cause: with thinking re-enabled, a slow free tier sometimes "thinks but doesn't act"; the loop's empty-response guard treated reasoning-only streams as empty. Fix: one bounded retry with a continue-nudge when reasoning streamed but no text/tool call arrived (`_MAX_EMPTY_REASONING_RECOVERIES = 1`); a second consecutive empty still fails fast. 2 regression tests; suite 1,799 pass. See review-46.
+**Status:** done — Session 257: ran the full app (backend :8000 + vite :3000, Chrome at localhost:3000) and interacted with it through the web proxy. Simple turns complete; agentic turns exposed a repeat of the Session 256 empty-after-reasoning on the free tier. Diagnosed as provider-side think-then-empty (verified via real-adapter + raw API); hardened: recovery budget 1→2 + thinking-aware wall clock 180s→360s (env/Settings/UI). Suite 1,800 pass. See review-47. Servers left running.
 
 **Feature:** none
