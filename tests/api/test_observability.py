@@ -148,4 +148,56 @@ async def test_fallback_never_leaks_cross_session_metrics(monkeypatch):
     assert response.confidence is None
     assert response.tools_used == ""
     assert response.latency_ms == 0
-    assert response.memory_hits == 0
+
+
+@pytest.mark.asyncio
+async def test_observability_falls_back_to_persisted_observation(monkeypatch, tmp_path):
+    """Session 267: after a backend restart the in-memory cache is empty, but
+    the observation persisted at turn end (observations table) must still feed
+    the Observe panel — intent/latency/timings and the snapshot summary."""
+    from core.config import settings
+    from storage.db import SessionStore
+
+    store = SessionStore(str(tmp_path / "obs.db"))
+    store.save_observation(
+        "session-1",
+        data={
+            "intent": "parent",
+            "confidence": 0.95,
+            "tools_used": "shell,git",
+            "memory_hits": 3,
+            "context_tokens": 900,
+            "latency_ms": 1200,
+            "stage_timings": {"generate": {"latency_ms": 800, "status": "done"}},
+            "tool_timings": {"shell": {"calls": 2, "total_ms": 100, "avg_ms": 50, "max_ms": 60, "last_status": "done"}},
+        },
+        snapshot={
+            "timestamp": 1700000000.0,
+            "workspace": {"git_available": True, "git_branch": "main"},
+            "recent_events": [],
+        },
+    )
+
+    class _StoreEngine:
+        def __init__(self):
+            self._last_observation = {}
+            self._last_observation_snapshots = {}
+            self._store = store
+
+    engine = _StoreEngine()
+    monkeypatch.setattr(observability, "_get_engine", lambda: engine)
+
+    response = await observability.get_observability("session-1")
+
+    assert response.session_id == "session-1"
+    assert response.intent == "parent"
+    assert response.context_tokens == 900
+    assert response.latency_ms == 1200
+    assert response.tools_used == "shell,git"
+    assert response.stage_timings == {"generate": {"latency_ms": 800, "status": "done"}}
+    assert response.tool_timings["shell"]["calls"] == 2
+    # The persisted snapshot summary re-wraps into the pydantic model.
+    assert response.observation is not None
+    assert response.observation.workspace.git_available is True
+    assert response.observation.workspace.git_branch == "main"
+    assert response.memory_hits == 3

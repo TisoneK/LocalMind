@@ -194,6 +194,101 @@ def test_messages_without_artifacts_still_roundtrip_plain(store):
     assert history[0].metrics is None
 
 
+def test_message_roundtrips_agent_runs_and_phases(store):
+    """Session 267: the Agent Workspace run tree + phase strip persist with
+    the assistant message and round-trip through get_history and
+    get_recent_history so the Agents tab survives a reload."""
+    runs = [
+        {
+            "id": "parent",
+            "name": "parent",
+            "role": "parent",
+            "task": "build a cli",
+            "status": "completed",
+            "depth": 0,
+            "startedAt": 1700000000000,
+            "completedAt": 1700000009000,
+            "tools": [
+                {"id": "tc-shell-iter1", "name": "shell", "label": "Running: ls", "status": "done", "input": "ls"}
+            ],
+        },
+        {
+            "id": "run-123",
+            "name": "research",
+            "role": "child",
+            "parentId": "parent",
+            "task": "find docs",
+            "status": "completed",
+            "depth": 1,
+            "startedAt": 1700000001000,
+            "completedAt": 1700000007000,
+            "tools": [],
+        },
+    ]
+    phases = [
+        {"id": "phase-plan-1", "type": "plan_created", "label": "Plan built — 2 steps", "timestamp": 1700000000000},
+        {"id": "phase-gate-pass-1", "type": "gate_passed", "label": "Verified — acceptance gate passed", "timestamp": 1700000008000},
+    ]
+    store.append(
+        "s1",
+        Message(role=Role.USER, content="build a cli"),
+    )
+    store.append(
+        "s1",
+        Message(
+            role=Role.ASSISTANT,
+            content="Done.",
+            agent_runs=runs,
+            agent_phases=phases,
+        ),
+    )
+    history = store.get_history("s1")
+    assistant = history[-1]
+    assert assistant.agent_runs == runs
+    assert assistant.agent_phases == phases
+    recent = store.get_recent_history("s1", limit=2)
+    assert recent[0].agent_runs == runs
+    assert recent[0].agent_phases == phases
+
+
+def test_observation_save_get_roundtrips(store):
+    """Session 267: the merged observation + snapshot summary persist to the
+    observations table (one row per session, latest turn wins) and the two
+    writers do not clobber each other."""
+    assert store.get_observation("s1") is None
+
+    store.save_observation(
+        "s1",
+        data={"intent": "parent", "context_tokens": 900, "latency_ms": 1200, "tools_used": "shell,git"},
+    )
+    store.save_observation(
+        "s1",
+        snapshot={"timestamp": 1700000000.0, "workspace": {"git_available": True}, "recent_events": []},
+    )
+
+    obs = store.get_observation("s1")
+    assert obs["data"]["intent"] == "parent"
+    assert obs["data"]["context_tokens"] == 900
+    # The snapshot write must not have clobbered the data column.
+    assert obs["data"]["tools_used"] == "shell,git"
+    assert obs["snapshot"]["workspace"]["git_available"] is True
+
+    # Latest turn wins — data-only write replaces the previous data but keeps
+    # the snapshot (only provided columns are touched).
+    store.save_observation("s1", data={"intent": "parent", "context_tokens": 2000})
+    obs = store.get_observation("s1")
+    assert obs["data"]["context_tokens"] == 2000
+    assert obs["snapshot"] is not None
+
+
+def test_observation_cascades_on_session_delete(store):
+    store.ensure_session("s1")
+    store.save_observation("s1", data={"intent": "parent"})
+    assert store.get_observation("s1") is not None
+    store.delete_session("s1")
+    assert store.get_observation("s1") is None
+
+
 def test_upsert_todo_create_update_clear(store):
     store.ensure_session("s1")
     # create

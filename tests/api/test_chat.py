@@ -501,6 +501,50 @@ class TestSessions:
         assert perf["latencyMs"] == 2300
         assert perf["tokensPerSecond"] == pytest.approx(84 / 2.3, rel=0.05)
 
+    def test_history_returns_agent_workspace(self, client):
+        """Session 267: the Agent Workspace run tree + phase strip persist
+        with the assistant message and come back from the history endpoint so
+        the Agents tab and phase visibility survive a reload."""
+        from core.config import settings
+        from core.models import Message, Role
+        from storage.db import get_shared_store
+
+        sid = "history-agent-workspace-1"
+        store = get_shared_store(settings.localmind_db_path)
+        store.append(sid, Message(role=Role.USER, content="find weather"))
+        store.append(
+            sid,
+            Message(
+                role=Role.ASSISTANT,
+                content="It is 22°C in Nairobi.",
+                agent_runs=[
+                    {
+                        "id": "parent",
+                        "name": "parent",
+                        "role": "parent",
+                        "task": "find weather",
+                        "status": "completed",
+                        "depth": 0,
+                        "startedAt": 1700000000000,
+                        "completedAt": 1700000009000,
+                        "tools": [
+                            {"id": "tc-shell-iter1", "name": "shell", "status": "done", "input": "curl wttr.in"}
+                        ],
+                    }
+                ],
+                agent_phases=[
+                    {"id": "phase-gate-pass-1", "type": "gate_passed", "label": "Verified — acceptance gate passed", "timestamp": 1700000008000}
+                ],
+            ),
+        )
+
+        data = client.get(f"/api/sessions/{sid}/history").json()
+        msgs = data.get("history", data) if isinstance(data, dict) else data
+        assistant = next(m for m in msgs if m["role"] == "assistant")
+        assert assistant["agentRuns"][0]["name"] == "parent"
+        assert assistant["agentRuns"][0]["tools"][0]["name"] == "shell"
+        assert assistant["agentPhases"][0]["type"] == "gate_passed"
+
 
 # ── Tool registry ─────────────────────────────────────────────────────────────
 

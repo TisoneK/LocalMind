@@ -59,7 +59,10 @@ CREATE TABLE IF NOT EXISTS messages (
     thinking    TEXT,
     error       TEXT,
     tool_calls  TEXT,
-    metrics     TEXT
+    metrics     TEXT,
+    -- Session 267: Agent Workspace run tree + phase strip (JSON).
+    agent_runs     TEXT,
+    agent_phases   TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session
@@ -286,6 +289,32 @@ class SessionStore:
                     conn.execute(f"ALTER TABLE messages ADD COLUMN {_col} TEXT")
             except sqlite3.OperationalError:
                 pass
+        # Session 267: Agent Workspace run tree + phase strip on messages.
+        for _col in ("agent_runs", "agent_phases"):
+            try:
+                with self._conn() as conn:
+                    conn.execute(f"ALTER TABLE messages ADD COLUMN {_col} TEXT")
+            except sqlite3.OperationalError:
+                pass
+        # Session 267: per-session observation persistence. The Observe panel
+        # used to read an in-memory engine dict that died on backend restart;
+        # the latest turn's observation is now written here and the endpoint
+        # falls back to it on a cache miss. One row per session (the latest
+        # turn wins) — same lifetime as the session itself (cascade delete).
+        try:
+            with self._conn() as conn:
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS observations (
+                        session_id  TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+                        data        TEXT,
+                        snapshot    TEXT,
+                        updated_at  REAL
+                    )
+                    """
+                )
+        except sqlite3.OperationalError:
+            pass
 
     def _apply_migrations(self, conn):
         """Apply any pending migrations from the migrations directory."""
@@ -327,8 +356,8 @@ class SessionStore:
             try:
                 conn.execute(
                     """
-                    INSERT INTO messages(session_id, role, content, tool_name, timestamp, file_name, file_path, file_size, file_type, thinking, error, tool_calls, metrics)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO messages(session_id, role, content, tool_name, timestamp, file_name, file_path, file_size, file_type, thinking, error, tool_calls, metrics, agent_runs, agent_phases)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,  # noqa: E501
                     (
                         session_id,
@@ -344,6 +373,8 @@ class SessionStore:
                         message.error,  # raw provider string — stored raw
                         json.dumps(message.tool_calls) if message.tool_calls else None,
                         json.dumps(message.metrics) if message.metrics else None,
+                        json.dumps(message.agent_runs) if message.agent_runs else None,
+                        json.dumps(message.agent_phases) if message.agent_phases else None,
                     ),
                 )
             except Exception as e:
@@ -507,7 +538,7 @@ class SessionStore:
             rows = conn.execute(
                 """
                 SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type,
-                       thinking, error, tool_calls, metrics
+                       thinking, error, tool_calls, metrics, agent_runs, agent_phases
                 FROM messages
                 WHERE session_id = ?
                 ORDER BY timestamp ASC
@@ -530,6 +561,8 @@ class SessionStore:
                 error=row["error"] if "error" in row.keys() else None,
                 tool_calls=self._decode_json(row["tool_calls"]) if "tool_calls" in row.keys() else None,
                 metrics=self._decode_json(row["metrics"]) if "metrics" in row.keys() else None,
+                agent_runs=self._decode_json(row["agent_runs"]) if "agent_runs" in row.keys() else None,
+                agent_phases=self._decode_json(row["agent_phases"]) if "agent_phases" in row.keys() else None,
             )
             for row in rows
         ]
@@ -546,7 +579,7 @@ class SessionStore:
             rows = conn.execute(
                 """
                 SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type,
-                       thinking, error, tool_calls, metrics
+                       thinking, error, tool_calls, metrics, agent_runs, agent_phases
                 FROM messages
                 WHERE session_id = ?
                 ORDER BY timestamp DESC
@@ -569,6 +602,8 @@ class SessionStore:
                 error=row["error"] if "error" in row.keys() else None,
                 tool_calls=self._decode_json(row["tool_calls"]) if "tool_calls" in row.keys() else None,
                 metrics=self._decode_json(row["metrics"]) if "metrics" in row.keys() else None,
+                agent_runs=self._decode_json(row["agent_runs"]) if "agent_runs" in row.keys() else None,
+                agent_phases=self._decode_json(row["agent_phases"]) if "agent_phases" in row.keys() else None,
             )
             for row in rows
         ]
@@ -640,7 +675,70 @@ class SessionStore:
         """Delete everything. Used in tests only."""
         with self._conn() as conn:
             conn.execute("DELETE FROM messages")
+            conn.execute("DELETE FROM actions")
+            conn.execute("DELETE FROM observations")
             conn.execute("DELETE FROM sessions")
+
+    # ── Session 267: per-session observation persistence ──────────────────
+    # The Observe panel used to read an in-memory engine dict that died on
+    # backend restart. The latest turn's observation (merged metrics dict +
+    # structured snapshot summary) is now written here so the endpoint can
+    # fall back to the DB on a cache miss.
+
+    def save_observation(
+        self,
+        session_id: str,
+        data: Optional[dict] = None,
+        snapshot: Optional[dict] = None,
+    ) -> None:
+        """Upsert the latest observation for a session (one row per session).
+
+        Only the provided columns are touched — the runtime writes the merged
+        metrics dict at turn end (``_store_observation``) and the structured
+        snapshot separately (``build_observation_snapshot``); each write must
+        not clobber the other.
+        """
+        self.ensure_session(session_id)
+        existing = self.get_observation(session_id)
+        merged_data = data if data is not None else (existing["data"] if existing else None)
+        merged_snapshot = (
+            snapshot if snapshot is not None else (existing["snapshot"] if existing else None)
+        )
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO observations(session_id, data, snapshot, updated_at)
+                VALUES(?, ?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    data       = excluded.data,
+                    snapshot   = excluded.snapshot,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    session_id,
+                    json.dumps(merged_data) if merged_data else None,
+                    json.dumps(merged_snapshot) if merged_snapshot else None,
+                    time.time(),
+                ),
+            )
+
+    def get_observation(self, session_id: str) -> Optional[dict]:
+        """Return the latest persisted observation, or None.
+
+        Shape: {"data": {...}, "snapshot": {...}|None} — mirrors what the
+        observability endpoint reads from the engine's in-memory cache.
+        """
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT data, snapshot FROM observations WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "data": self._decode_json(row["data"]) or {},
+            "snapshot": self._decode_json(row["snapshot"]) if row["snapshot"] else None,
+        }
 
     # ── A4: Tool reliability tracking ─────────────────────────────────────
 

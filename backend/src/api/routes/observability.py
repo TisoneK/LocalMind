@@ -94,6 +94,38 @@ async def get_observability(session_id: str):
     # Try the per-session observation cache first
     obs_data = engine._last_observation.get(session_id)
 
+    # Session 267: the in-memory cache dies on backend restart (capped at 200
+    # sessions and process-scoped). Fall back to the persisted observation
+    # (one row per session, written at turn end) so the Observe panel survives
+    # a backend restart. The snapshot dict is stored as the already-serialized
+    # public summary, so re-wrap it in the pydantic model directly.
+    if obs_data is None:
+        try:
+            persisted = engine._store.get_observation(session_id)
+        except Exception:
+            persisted = None
+        if persisted:
+            obs_data = persisted.get("data")
+            snapshot = persisted.get("snapshot")
+            if obs_data:
+                return ObservabilityData(
+                    session_id=session_id,
+                    intent=obs_data.get("intent"),
+                    confidence=obs_data.get("confidence"),
+                    tools_used=obs_data.get("tools_used", ""),
+                    memory_hits=obs_data.get("memory_hits", 0),
+                    context_tokens=obs_data.get("context_tokens", 0),
+                    latency_ms=obs_data.get("latency_ms", 0),
+                    observation=(
+                        ObservationSummary.model_validate(snapshot)
+                        if snapshot is not None
+                        else None
+                    ),
+                    stage_timings=obs_data.get("stage_timings"),
+                    tool_timings=obs_data.get("tool_timings"),
+                    anomalies=obs_data.get("anomalies"),
+                )
+
     if obs_data:
         snapshot = getattr(engine, "_last_observation_snapshots", {}).get(session_id)
         return ObservabilityData(

@@ -168,6 +168,11 @@ class Message(BaseModel):
     error: Optional[str] = None  # raw provider error string (normalized at the history boundary per ADR-20)
     tool_calls: Optional[list] = None  # tool-call timeline (pills)
     metrics: Optional[dict] = None  # {prompt_tokens, completion_tokens, latency_ms}
+    # Session 267: the Agent Workspace run tree + phase strip rebuilt
+    # server-side from the request's obs events (frontend AgentRun[] /
+    # AgentPhase[] shapes) so the Agents tab survives a reload.
+    agent_runs: Optional[list] = None
+    agent_phases: Optional[list] = None
 
 
 class FileAttachment(BaseModel):

@@ -25,6 +25,7 @@ from typing import AsyncIterator, Optional
 from agents.parent import ParentAgent
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 from core.agent.loop import AgentLoop, TerminalProviderError
+from core.agent_workspace import build_workspace_artifacts
 from core.anomalies import detect_turn_anomalies
 from core.config import settings
 from core.context_builder import build as build_context
@@ -263,6 +264,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             if len(self._last_observation_snapshots) >= 200:
                 self._last_observation_snapshots.pop(next(iter(self._last_observation_snapshots)))
             self._last_observation_snapshots[session_id] = snapshot
+            # Session 267: persist the snapshot summary to the DB so the
+            # Observe panel survives a backend restart (the in-memory cache
+            # is capped and dies with the process).
+            try:
+                self._store.save_observation(
+                    session_id,
+                    snapshot=snapshot.to_public_summary(),
+                )
+            except Exception:
+                logger.debug("[agent-runtime] observation snapshot persistence skipped", exc_info=True)
         return snapshot
 
     def cleanup_session(self, session_id: str) -> None:
@@ -314,6 +325,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         error: Optional[str] = None,
         tool_calls: Optional[list] = None,
         metrics: Optional[dict] = None,
+        agent_runs: Optional[list] = None,
+        agent_phases: Optional[list] = None,
     ) -> None:
         # Session 266: an error turn persists an (empty-text) assistant message
         # carrying the canonical error object — the history endpoint returns it
@@ -331,6 +344,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     error=error,
                     tool_calls=tool_calls,
                     metrics=metrics,
+                    agent_runs=agent_runs,
+                    agent_phases=agent_phases,
                 ),
             )
         except Exception:
@@ -442,6 +457,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             logger.debug("[agent-runtime] anomaly detection skipped", exc_info=True)
 
         self._last_observation[session_id] = merged
+        # Session 267: persist the merged observation to the DB — the
+        # observability endpoint falls back to it on a cache miss (backend
+        # restart survival). Snapshot summary is written separately by
+        # build_observation_snapshot.
+        try:
+            self._store.save_observation(session_id, data=merged)
+        except Exception:
+            logger.debug("[agent-runtime] observation persistence skipped", exc_info=True)
         self._last_turn_prompt_tokens = int(merged.get("context_tokens", 0) or 0)
         self._last_turn_session_id = session_id
 
@@ -655,12 +678,17 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     # Session 266: persist the failed turn (error card must
                     # survive reload). chat.py normalizes the raw string at
                     # the presentation boundary; we store it verbatim.
+                    agent_runs, agent_phases = build_workspace_artifacts(
+                        collector, task=message, root_error=chunk.error
+                    )
                     self._persist_assistant(
                         session_id,
                         "".join(response_chunks),
                         thinking="".join(thinking_parts) or None,
                         error=chunk.error,
                         tool_calls=_collect_tool_calls(collector) or None,
+                        agent_runs=agent_runs,
+                        agent_phases=agent_phases,
                     )
                     yield chunk
                     return
@@ -681,12 +709,17 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             # boundary; keep the raw adapter string internal to this chunk.
             # Session 266: still persist the failed turn so the error card
             # survives reload.
+            agent_runs, agent_phases = build_workspace_artifacts(
+                collector, task=message, root_error=exc.raw
+            )
             self._persist_assistant(
                 session_id,
                 "".join(response_chunks),
                 thinking="".join(thinking_parts) or None,
                 error=exc.raw,
                 tool_calls=_collect_tool_calls(collector) or None,
+                agent_runs=agent_runs,
+                agent_phases=agent_phases,
             )
             yield StreamChunk(text="", done=True, error=exc.raw)
             return
@@ -779,6 +812,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # Session 266: persist the turn's artifacts (thinking, tool-call pills,
         # per-turn metrics) with the assistant message so a reload restores the
         # thinking block, step cards, and the cumulative context counter.
+        # Session 267: also persist the Agent Workspace run tree + phase strip
+        # so the Agents tab and phase visibility survive a reload.
+        agent_runs, agent_phases = build_workspace_artifacts(collector, task=message)
         self._persist_assistant(
             session_id,
             response_text,
@@ -789,6 +825,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 "completion_tokens": completion_tokens,
                 "latency_ms": total_ms,
             },
+            agent_runs=agent_runs,
+            agent_phases=agent_phases,
         )
         # prompt_tokens/completion_tokens were normalized above, with a local
         # estimate when a provider omits streaming usage.

@@ -128,6 +128,12 @@ async def get_history(session_id: str):
                     else None
                 ),
             }
+        # Session 267: restore the Agent Workspace run tree + phase strip
+        # (frontend AgentRun[] / AgentPhase[] shapes — already camelCase).
+        if m.agent_runs:
+            message["agentRuns"] = m.agent_runs
+        if m.agent_phases:
+            message["agentPhases"] = m.agent_phases
 
         # Add tool calls if present
         if m.tool_name and not m.tool_calls:
