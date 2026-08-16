@@ -1,30 +1,21 @@
 # Current Task
 
-**Status:** done — Session 270 (RESEARCH, no product code): created the tools-
-optimization research context, framed as **phase 3** of the sequential program
-(agent loop → thinker backbone → **tools**).
+**Status:** done — Session 271: small follow-up to Session 269 — the web_search
+tool result now opens with `Search results via **<engine>** (N results):`
+(DuckDuckGo / Bing / SearXNG / Brave), so the model (tool evidence) and the
+user (Actions card output) both see which engine answered — previously only
+`metadata.successful_provider` had it. Commit `b5ac1db` pushed. Backend 1858
+pass (4 pre-existing shell failures), 18 web_search tests pass.
 
-**Delivered (`ADR-43` + `review-50` + `B-2026-08-16-4/5/6`):** the untouched cost
-axis after ADR-40. A tool costs twice — INPUT (its schema in the `tools` param,
-~68% solved by ADR-40) and RUNTIME (output-context tokens + latency). This
-research is the RUNTIME axis, chiefly **output-context**. Disease in miniature:
-`find_path` returns a bounded catalog; `shell` (shell.py:760) returns the ENTIRE
-raw stdout uncapped — the helper-vs-raw-pipe asymmetry, and the fuel behind the
-S262 "context too long" failure. Principle (user's): *tools are helpers, not
-agents* — bounded, single-purpose, summary-sized output. Levers: L1 bound output
-(start `shell`) · L2 right-tool steering (discovery→`find_path`, create→
-`file_write`) · L3 drop the redundant read-back (duplicates the loop's own verify;
-hit S264) · L4 uniform bounded observation contract.
+**Concurrency note:** a parallel research session (Claude Code, Session 270 —
+ADR-43 tools optimization, context-only, marked done) committed in this same
+checkout atop my commit; my push carried both commits and local == remote at
+`2101935` with my `b5ac1db` intact. Its record is in sessions.md/SUMMARY.md.
 
-**Open next / notes:**
-1. **Implement the research:** B-2026-08-16-4 (bound `shell` output — biggest,
-   safest win) → B-5 (steering + drop read-back) → B-6 (observation contract).
-   Each phase needs a before/after live trace on z.ai/glm-4.5-flash (output
-   tokens down, task still completes). Never touch port 8000; never print keys.
-2. Carried from S269: ADR-37 follow-ups B-2026-08-15-10/11/12; review-42's
-   `classify_failure` cleanup; **owed live Windows re-run of the Session 264
-   recipe task**; unbounded `reasoning_effort` default (S262).
-3. Working tree has S269's uncommitted `web_search.py` + test edits — not part of
-   this research session; left untouched.
+**Open next / notes:** unchanged from before — ADR-37 follow-ups
+B-2026-08-15-10/11/12, review-42's `classify_failure` cleanup, owed live Windows
+re-run of the Session 264 recipe task, unbounded `reasoning_effort` default.
+New: the research session's B-2026-08-16-4/5/6 (tools optimization — L1: bound
+`shell` output first) is the next implementation candidate.
 
 **Feature:** none

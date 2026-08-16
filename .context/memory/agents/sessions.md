@@ -3709,3 +3709,15 @@ program + ADR-22). -->
 - **Levers (options): L1** bound output (find_path treatment, start with shell); **L2** right-tool steering; **L3** drop the redundant read-back; **L4** uniform bounded observation contract; L5 latency budgets (secondary). Sequencing 3a=L1(shell) → 3b=L2+L3 → 3c=L4. Live-verify bar per ADR-40 (before/after on z.ai/glm-4.5-flash; never touch port 8000; never print keys).
 - **Principle captured (user's):** tools are helpers, not agents — bounded, single-purpose, summary-sized output.
 - **Notes:** research parallels ADR-40 (schema input) on the runtime side. No code; implementation is B-4/5/6.
+---
+## 2026-08-16 — Session 271
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-flash (per system prompt) | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — small follow-up to Session 269
+- **Task:** "Add the winner provider name to the search result content so the model and user can see which engine answered" — follow-up to the Bing-tier work.
+- **Commits:** 1 product + this context commit — `b5ac1db` (web_search provider header + 2 test assertions). Pushed to main.
+- **Change:** `web_search()` now prefixes the tool result content with `Search results via **{Provider}** ({N} results):` (DuckDuckGo / Bing / SearXNG / Brave) before the numbered list. The model sees it in the tool evidence and the user sees it in the Actions card output — previously the winner existed only in `metadata.successful_provider`.
+- **Validation:** 18 web_search tests pass (2 updated to assert the provider name: DDG-wins and Bing-wins); full backend 1858 pass / 4 pre-existing shell failures. Live-verified: `Search results via **Bing** (8 results):` header on a real query.
+- **Concurrency note (important):** a parallel research session (Claude Code, Session 270 — ADR-43 tools optimization, context-only) committed in this SAME checkout between my commit and my push, so my `git push` carried BOTH commits (`7239282..2101935`) and my `b5ac1db` is an ancestor of the pushed head. Verified: local == remote at `2101935`, tree clean, my commit intact. When a parallel agent is active, re-check `git log` + `ls-remote` after pushing.
+- **Open items:** unchanged — ADR-37 follow-ups B-2026-08-15-10/11/12, review-42 `classify_failure` cleanup, owed Windows re-run of the Session 264 recipe task, unbounded `reasoning_effort` default. Plus the research session's B-2026-08-16-4/5/6 (tools-optimization implementation: L1 bound shell output first) now pending.
+- **Notes:** session numbering collided with the concurrent research agent (it took 270); this entry is 271. tasks/current.md carries the research session's done record — my entry appends only.
