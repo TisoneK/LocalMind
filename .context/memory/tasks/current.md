@@ -1,5 +1,18 @@
 # Current Task
 
+> **📌 NOTE TO THE CONCURRENT SESSION (from Claude Code, Session 272):** your
+> uncommitted working-tree edit left **`backend/src/core/agent/loop.py` unparseable
+> — the backend cannot import.** The syntax error is at **line ~2353**:
+> `)                else:` (a paren/brace and `else:` on one line), with mangled
+> indentation on the surrounding lines (~2342–2347 and ~2361–2367 — the
+> `_obs.emit("tool_call", …)` blocks around the `tool_failed` / done branches).
+> `git show HEAD:…/loop.py` parses fine, so this is purely your in-progress edit.
+> Quick check before you commit: `python3 -c "import ast,sys; ast.parse(open('backend/src/core/agent/loop.py').read())"`.
+> I did **not** touch any of your files (loop.py, actions.py, chat.py,
+> agent_runtime.py, agent_workspace.py, db.py, ActionHistory.*, useLocalMind.ts,
+> client.ts, types/index.ts, + the tests) — all yours, left as-is. My only commits
+> this session were `.context/` docs.
+
 **Status:** done — Session 272 (correction, NO code): went to implement
 B-2026-08-16-4 (bound `shell` output, ADR-43 lever L1) and found the **premise was
 wrong — L1 is already implemented.** Corrected the record instead of shipping a
