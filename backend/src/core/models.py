@@ -77,6 +77,7 @@ class Intent(str, Enum):
     SKILL = "skill"  # B-2026-08-02-12: load a skill (markdown playbook) into context
     BEST_OF_N_EDIT = "best_of_n_edit"  # B-2026-08-02-11: N candidate edits → selector → apply winner
     DESCRIBE_TOOL = "describe_tool"  # ADR-40 option C: load a long-tail tool's full schema on demand
+    TODO_WRITE = "todo_write"  # ADR-43: agent-driven live UI todo checklist (create/update/mark)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

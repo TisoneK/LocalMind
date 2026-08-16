@@ -209,6 +209,7 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
         "skill",  # B-2026-08-02-12: load a skill into context (universal tool)
         "best_of_n_edit",  # B-2026-08-02-11: N candidate edits → selector → apply winner
         "describe_tool",  # ADR-40 option C: load a long-tail tool's full schema on demand
+        "todo_write",  # ADR-43: agent-driven live UI todo checklist (universal)
     }
 )
 
@@ -245,6 +246,7 @@ _INTENT_CORE_LOCAL_TOOLS: frozenset[str] = frozenset(
         "find_path",  # Session 125: name-match search (locate before listing)
         "delegate",  # ADR-8 Phase 3: keep delegation available everywhere
         "skill",  # B-2026-08-02-12: universal tool — playbooks are cheap (~130 tok)
+        "todo_write",  # ADR-43: live UI checklist — universal, cheap, multi-step progress
     }
 )
 
@@ -277,12 +279,12 @@ INTENT_TOOL_SCOPES: dict[Intent, frozenset[str]] = {
     Intent.ANALYZE: _INTENT_CORE_LOCAL_TOOLS,
     # Web/browse intents keep their domain tools + delegation + skill.
     Intent.WEB_SEARCH: frozenset(
-        {"web_search", "web_fetch", "delegate", "skill", "file_task"}
+        {"web_search", "web_fetch", "delegate", "skill", "file_task", "todo_write"}
     ),
     Intent.WEB_FETCH: frozenset(
-        {"web_search", "web_fetch", "delegate", "skill", "file_task"}
+        {"web_search", "web_fetch", "delegate", "skill", "file_task", "todo_write"}
     ),
-    Intent.BROWSE: frozenset({"browse", "delegate", "skill", "file_task"}),
+    Intent.BROWSE: frozenset({"browse", "delegate", "skill", "file_task", "todo_write"}),
     # Delegation intents only need the delegation + domain tools.
     Intent.DELEGATE: frozenset({"delegate"}),
     Intent.DELEGATE_PARALLEL: frozenset({"delegate", "delegate_parallel"}),

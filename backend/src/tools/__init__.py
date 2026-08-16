@@ -182,6 +182,7 @@ from tools import (
     skill,  # noqa: E402, F401 -- B-2026-08-02-12: load a skill into context
     sql_tool,  # noqa: E402, F401 -- B-2026-07-31-10: SQL (read-only SQLite queries)
     subgoal,  # noqa: E402, F401 -- B-2026-08-02-8: subgoal scratchpad tools
+    todo_write,  # noqa: E402, F401 -- ADR-43: agent-driven live UI todo checklist
     sysinfo,  # noqa: E402, F401 -- registers SYSINFO (offline: time, date, specs)
     web_fetch,  # noqa: E402, F401 -- registers WEB_FETCH (follow-up URL fetching)
     web_search,  # noqa: E402, F401 -- registers WEB_SEARCH

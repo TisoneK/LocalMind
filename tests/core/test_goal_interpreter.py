@@ -265,6 +265,7 @@ _EXCLUDED_INTENTS = {
     Intent.SKILL,
     Intent.BEST_OF_N_EDIT,
     Intent.DESCRIBE_TOOL,  # ADR-40 option C: meta-tool (loads a schema; no checkable contract)
+    Intent.TODO_WRITE,  # ADR-43: UI-checklist tool (updates the panel; no checkable goal contract)
     # MEMORY_OP gets a generic "completed without error" — it's in the map.
 }
 

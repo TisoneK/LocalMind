@@ -194,6 +194,7 @@ CRITICAL RULES:
 - For code execution: write the complete code in your plan, no placeholders
 - Shell commands must match the current OS (Windows: mkdir, dir, type | Unix: mkdir -p, ls, cat)
 - If a task needs only ONE tool call, say so — no need for multi-step plans
+- For any MULTI-STEP task, call todo_write FIRST with the whole checklist, then call it again as you go — mark the current step in_progress and finished steps completed. This drives the user's live Todos panel; keep it in sync so they see real progress.
 
 REASONING DEPTH (CRITICAL — don't just state your next action, REASON):
 - What do I already know from context that's relevant? (date, user preferences, prior conversation)

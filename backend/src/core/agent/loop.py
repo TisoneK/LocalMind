@@ -256,6 +256,33 @@ def _note_described_tool(tool_name: str, tool_result, loaded_tools: set[str]) ->
         logger.info("[agent.loop] describe_tool loaded %r for this run", loaded)
 
 
+def _emit_todo_write_events(tool_name: str, tool_result, obs) -> None:
+    """Turn a ``todo_write`` result into the todo_* obs events the UI renders.
+
+    Tools can't reach the request's ObsCollector (they run inside
+    ``asyncio.wait_for`` — the same boundary that makes ``_note_described_tool``
+    use metadata, not a contextvar), so ``todo_write`` returns the normalized
+    list in ``metadata["todos"]`` and the loop emits here. A full replace
+    (clear + one create per item) mirrors the plan-todo emission, so the agent's
+    checklist becomes the live Todos panel — create, update status, and mark
+    complete, all under the agent's control (ADR-43).
+    """
+    if tool_name != "todo_write" or obs is None or tool_result is None or not tool_result.success:
+        return
+    todos = (tool_result.metadata or {}).get("todos")
+    if todos is None:
+        return
+    obs.emit("todo_cleared")
+    for t in todos:
+        obs.emit(
+            "todo_created",
+            id=t.get("id", ""),
+            text=t.get("text", ""),
+            completed=bool(t.get("completed", False)),
+            status=t.get("status", "pending"),
+        )
+
+
 def _tool_provider(tool_result) -> Optional[str]:
     """Surface which backend engine a tool used, for the Actions-card badge.
 
@@ -1473,6 +1500,7 @@ class AgentLoop:
                         # the named tool for the rest of this run (metadata
                         # survives the wait_for task boundary).
                         _note_described_tool(tc_name, tc_result, loaded_tools)
+                        _emit_todo_write_events(tc_name, tc_result, _obs)
                         tc_obs = tc_result.content if tc_result else f"[Tool {tc_name} returned no result]"
                         tc_obs = _filter_tool_injection(tc_obs)
                         # Collect result for post-loop synthesis
@@ -2181,6 +2209,7 @@ class AgentLoop:
                     # ADR-40 option C: a describe_tool call loads the named
                     # long-tail tool into this run's native tools param.
                     _note_described_tool(tool_name, tool_result, loaded_tools)
+                    _emit_todo_write_events(tool_name, tool_result, _obs)
 
                     latency_ms = round((time.monotonic() - t_tool) * 1000)
 
@@ -2726,6 +2755,7 @@ class AgentLoop:
                                 allowed_tool_names=effective_allowed,
                             )
                             _note_described_tool(tc_name, tool_result, loaded_tools)
+                            _emit_todo_write_events(tc_name, tool_result, _obs)
                             latency_ms = round((time.monotonic() - t_tool) * 1000)
 
                             if tool_result:
@@ -3333,6 +3363,7 @@ class AgentLoop:
                                     allowed_tool_names=effective_allowed,
                                 )
                                 _note_described_tool(_tc_name, _late_result, loaded_tools)
+                                _emit_todo_write_events(_tc_name, _late_result, _obs)
                                 _late_lat = round((time.monotonic() - t_late) * 1000)
                                 _late_obs = (
                                     _filter_tool_injection(_late_result.content)

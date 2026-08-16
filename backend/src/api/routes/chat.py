@@ -490,6 +490,9 @@ async def _event_stream(
                                 "id": evt.data.get("id", ""),
                                 "text": evt.data.get("text", ""),
                                 "completed": evt.data.get("completed", False),
+                                # Status lets the Todos panel show in_progress (amber
+                                # spinner) for agent-driven todo_write checklists.
+                                "status": evt.data.get("status", "pending"),
                             },
                         }
                     )

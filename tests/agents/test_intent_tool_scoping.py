@@ -86,12 +86,17 @@ def test_editing_intents_keep_best_of_n_family():
 
 
 def test_shell_scoped_payload_is_materially_smaller():
-    """The SHELL payload must be at least 40% smaller than the full set —
-    this is the actual token saving behind the Session 124 fix."""
+    """The SHELL payload must be materially smaller than the full set — this is
+    the actual token saving behind the Session 124 fix.
+
+    Threshold relaxed 0.60 → 0.62 in ADR-43: todo_write is a universal tool added
+    to BOTH the SHELL scope and the full set, and adding equal chars to both sides
+    always raises the ratio (the scope is the smaller base). Scoping still cuts
+    ~38%; a future erosion past 0.62 is a real signal to revisit."""
     full_chars = _payload_chars(AGENT_ALLOWED_TOOLS)
     shell_chars = _payload_chars(INTENT_TOOL_SCOPES[Intent.SHELL])
-    assert shell_chars < full_chars * 0.60, (
-        f"SHELL payload {shell_chars} chars not < 60% of full {full_chars}"
+    assert shell_chars < full_chars * 0.62, (
+        f"SHELL payload {shell_chars} chars not < 62% of full {full_chars}"
     )
 
 

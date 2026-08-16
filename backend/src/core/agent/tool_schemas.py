@@ -89,6 +89,7 @@ CORE_TOOL_NAMES: frozenset[str] = frozenset(
         "sysinfo",
         "observe",
         "calculator",
+        "todo_write",  # ADR-43: agent-driven live UI todo checklist — always available
     }
 )
 
@@ -558,6 +559,33 @@ TOOL_DEFINITIONS: list[dict] = [
                     "strategies": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["file_path", "instruction"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "todo_write",
+            "description": "Write/update the live task checklist in the user's Todos panel. Pass the FULL list every call as todos:[{text,status}] with status 'pending'|'in_progress'|'completed'|'blocked'. Use for any multi-step task: create it up front, then call again to mark the current step in_progress and finished steps completed so the user sees live progress.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "todos": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "text": {"type": "string"},
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["pending", "in_progress", "completed", "blocked"],
+                                },
+                            },
+                            "required": ["text"],
+                        },
+                    },
+                },
+                "required": ["todos"],
             },
         },
     },

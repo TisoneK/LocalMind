@@ -432,6 +432,12 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
     elif tool_name == "edit_file":
         # edit_file: serialise args as JSON for the dispatch layer
         return json.dumps(tool_args, ensure_ascii=False)
+    elif tool_name == "todo_write":
+        # todo_write expects the full {"todos": [...]} object as JSON — same
+        # pattern as find_path/edit_file. Without this branch the fallback
+        # stringifies the todos array with a Python repr (single quotes), which
+        # is not valid JSON and fails the tool's parser (ADR-43).
+        return json.dumps(tool_args, ensure_ascii=False)
     elif tool_name == "file_task":
         return tool_args.get("path", "")
     elif tool_name == "find_path":

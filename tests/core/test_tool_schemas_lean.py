@@ -44,7 +44,7 @@ def test_lean_catalog_size_budget() -> None:
 
 def test_all_tools_keep_callable_structure() -> None:
     """Every def keeps the OpenAI function-calling contract intact."""
-    assert len(TOOL_DEFINITIONS) == 30
+    assert len(TOOL_DEFINITIONS) == 31  # +todo_write (ADR-43)
     for td in TOOL_DEFINITIONS:
         assert td["type"] == "function"
         fn = td["function"]

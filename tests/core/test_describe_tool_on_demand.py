@@ -45,7 +45,7 @@ def test_tier_split_covers_catalog_exactly() -> None:
     catalog = {td["function"]["name"] for td in TOOL_DEFINITIONS}
     assert CORE_TOOL_NAMES | LONG_TAIL_TOOL_NAMES == catalog
     assert CORE_TOOL_NAMES.isdisjoint(LONG_TAIL_TOOL_NAMES)
-    assert len(CORE_TOOL_NAMES) == 14
+    assert len(CORE_TOOL_NAMES) == 15  # +todo_write (ADR-43, always-available)
     assert len(LONG_TAIL_TOOL_NAMES) == 16
     # the ADR's named long tail is all present
     for name in ("browse", "delegate", "sql", "csv", "json", "best_of_n_edit",
