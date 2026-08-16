@@ -144,6 +144,26 @@ class TerminalProviderError(RuntimeError):
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
+def _reasoning_setting(name: str, fallback: float) -> float:
+    """Return a user-tunable reasoning timeout from Settings when set.
+
+    ADR-41 (Session 254): the reasoning budgets are surfaced in the Settings
+    UI (settings.json) and as env vars via the pydantic Settings fields. The
+    constants below remain the module-level defaults (and the test surface);
+    the Settings value wins when present, since load_runtime_settings applies
+    settings.json AFTER pydantic folds the env in.
+    """
+    try:
+        from core.config import settings
+
+        value = getattr(settings, name, None)
+        if value:
+            return float(value)
+    except Exception:
+        pass
+    return fallback
+
+
 def _plan_timeout_for(active_adapter) -> float:
     """Return the plan/init stream timeout, scaled for thinking models.
 
@@ -151,12 +171,25 @@ def _plan_timeout_for(active_adapter) -> float:
     emitting the plan JSON, so the 8s PLAN_TIMEOUT_SECS can fire mid-thought
     (observed live: "initialization timed out after 8s" with GLM-4.5-Flash
     thinking ON). When the adapter reports thinking_enabled, use the larger
-    REASONING_PLAN_TIMEOUT_SECS budget. The parent loop's wall-clock cap
-    still bounds total turn time.
+    REASONING_PLAN_TIMEOUT_SECS budget (tunable via Settings UI / env). The
+    parent loop's wall-clock cap still bounds total turn time.
     """
     if getattr(active_adapter, "thinking_enabled", False):
-        return REASONING_PLAN_TIMEOUT_SECS
+        return _reasoning_setting("localmind_reasoning_plan_timeout_secs", REASONING_PLAN_TIMEOUT_SECS)
     return PLAN_TIMEOUT_SECS
+
+
+def _per_call_timeout_for(active_adapter) -> float:
+    """Return the per-iteration LLM-call timeout, scaled for thinking models.
+
+    ADR-41 (Session 254): a reasoning model with thinking enabled streams
+    many thinking tokens before its answer — a fixed 45s cap would truncate
+    mid-thought on a slow free tier. Use the larger reasoning budget (tunable
+    via Settings UI / env) when the adapter reports thinking_enabled.
+    """
+    if getattr(active_adapter, "thinking_enabled", False):
+        return _reasoning_setting("localmind_reasoning_timeout_secs", REASONING_PER_CALL_TIMEOUT_SECS)
+    return PER_CALL_TIMEOUT_SECS
 
 
 def _user_message_text(messages: list[dict]) -> str:
@@ -1242,12 +1275,8 @@ class AgentLoop:
             # (z.ai/GLM) legitimately streams many thinking tokens before
             # its answer — a fixed 45s cap would truncate mid-thought on a
             # slow free tier. When the adapter reports thinking_enabled,
-            # use the larger REASONING_PER_CALL_TIMEOUT_SECS budget instead.
-            _per_call_timeout = (
-                REASONING_PER_CALL_TIMEOUT_SECS
-                if getattr(active_adapter, "thinking_enabled", False)
-                else PER_CALL_TIMEOUT_SECS
-            )
+            # use the larger reasoning budget instead (Settings UI / env).
+            _per_call_timeout = _per_call_timeout_for(active_adapter)
             t_llm = time.monotonic()
             # Session 238 (Thinker/Agent rebuild Step 0): on the FIRST
             # iteration of a tool-required intent (no tool has run yet),

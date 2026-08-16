@@ -16,7 +16,7 @@ import types
 import pytest
 
 from api.routes import config as config_mod
-from api.routes.config import AdapterConfig, PROVIDER_INFO, set_adapter
+from api.routes.config import PROVIDER_INFO, AdapterConfig, set_adapter
 
 
 def _fake_settings(**model_fields):
@@ -35,6 +35,94 @@ def _fake_settings(**model_fields):
         **model_fields,
     )
     return ns
+
+
+# ── Reasoning thinking policy (ADR-41, POST /api/settings/thinking) ──────
+
+
+def _fake_settings_for_thinking():
+    """SimpleNamespace fake with the fields GET /settings/thinking touch."""
+    saved = {}
+
+    def save_runtime_settings(**kwargs):
+        saved.update(kwargs)
+
+    return types.SimpleNamespace(
+        localmind_adapter="zai",
+        localmind_thinking="enabled",
+        localmind_reasoning_timeout_secs=180.0,
+        localmind_reasoning_plan_timeout_secs=30.0,
+        localmind_reasoning_effort="",
+        ollama_model="",
+        ollama_embed_model="",
+        get_api_key=lambda provider: "fake-key",
+        save_runtime_settings=save_runtime_settings,
+        _saved=saved,
+    )
+
+
+@pytest.mark.asyncio
+async def test_set_thinking_settings_applies_and_persists(monkeypatch):
+    from api.routes.config import ThinkingSettingsRequest, set_thinking_settings
+
+    fake = _fake_settings_for_thinking()
+    monkeypatch.setattr(config_mod, "settings", fake)
+    monkeypatch.setattr(config_mod, "clear_adapter_cache", lambda: None)
+
+    result = await set_thinking_settings(
+        ThinkingSettingsRequest(
+            thinking="disabled",
+            reasoning_timeout=300,
+            reasoning_plan_timeout=60,
+            reasoning_effort="high",
+        )
+    )
+
+    assert fake.localmind_thinking == "disabled"
+    assert fake.localmind_reasoning_timeout_secs == 300.0
+    assert fake.localmind_reasoning_plan_timeout_secs == 60.0
+    assert fake.localmind_reasoning_effort == "high"
+    assert fake._saved["thinking"] == "disabled"
+    assert fake._saved["reasoning_timeout"] == 300.0
+    assert result["thinking"] == "disabled"
+
+
+@pytest.mark.asyncio
+async def test_set_thinking_settings_partial_update_only_applies_given_fields(monkeypatch):
+    from api.routes.config import ThinkingSettingsRequest, set_thinking_settings
+
+    fake = _fake_settings_for_thinking()
+    monkeypatch.setattr(config_mod, "settings", fake)
+    monkeypatch.setattr(config_mod, "clear_adapter_cache", lambda: None)
+
+    await set_thinking_settings(ThinkingSettingsRequest(thinking="enabled"))
+    # Untouched fields keep their values.
+    assert fake.localmind_reasoning_timeout_secs == 180.0
+    assert fake.localmind_reasoning_plan_timeout_secs == 30.0
+    assert fake.localmind_reasoning_effort == ""
+
+
+@pytest.mark.asyncio
+async def test_set_thinking_settings_rejects_bad_values(monkeypatch):
+    from fastapi import HTTPException
+
+    from api.routes.config import ThinkingSettingsRequest, set_thinking_settings
+
+    fake = _fake_settings_for_thinking()
+    monkeypatch.setattr(config_mod, "settings", fake)
+    monkeypatch.setattr(config_mod, "clear_adapter_cache", lambda: None)
+
+    with pytest.raises(HTTPException) as bad_thinking:
+        await set_thinking_settings(ThinkingSettingsRequest(thinking="maybe"))
+    assert bad_thinking.value.status_code == 400
+
+    with pytest.raises(HTTPException) as bad_timeout:
+        await set_thinking_settings(ThinkingSettingsRequest(reasoning_timeout=10))
+    assert bad_timeout.value.status_code == 400
+
+    with pytest.raises(HTTPException) as bad_plan:
+        await set_thinking_settings(ThinkingSettingsRequest(reasoning_plan_timeout=2))
+    assert bad_plan.value.status_code == 400
 
 
 @pytest.mark.asyncio

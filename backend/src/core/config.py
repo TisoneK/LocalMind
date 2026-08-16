@@ -212,6 +212,27 @@ class Settings(BaseSettings):
     # AgentConfig.max_iterations per ADR-8 Phase 2.)
     localmind_agent_enabled: bool = True
 
+    # ADR-41 (Session 254): reasoning-model thinking policy (z.ai/GLM).
+    # "enabled" (default) lets GLM reason before answering — disabling it
+    # made glm-4.5-flash emit ~28-token terse answers. "disabled" opts out
+    # for latency-sensitive use. GLM-5.3+ ignores this (z.ai rejects
+    # thinking.type=disabled there). Settable via LOCALMIND_THINKING env or
+    # the Settings UI (settings.json wins — load_runtime_settings runs
+    # after pydantic folds the env in).
+    localmind_thinking: str = "enabled"
+    # Thinking-aware per-call timeout (seconds) used when the adapter has
+    # thinking enabled — reasoning streams many tokens before the answer, so
+    # the plain 45s PER_CALL_TIMEOUT_SECS would truncate mid-thought on a
+    # slow free tier. LOCALMIND_REASONING_TIMEOUT_SECS / Settings UI.
+    localmind_reasoning_timeout_secs: float = 180.0
+    # Thinking-aware plan/init/orchestrator stream timeout (seconds).
+    # LOCALMIND_REASONING_PLAN_TIMEOUT_SECS / Settings UI.
+    localmind_reasoning_plan_timeout_secs: float = 30.0
+    # Optional reasoning-effort for GLM-5.2+ (max/high/medium/low/...); empty
+    # = provider default. GLM-4.5-flash does NOT support this parameter.
+    # LOCALMIND_REASONING_EFFORT / Settings UI.
+    localmind_reasoning_effort: str = ""
+
     # Permission gates — require user confirmation before write/delete
     localmind_require_write_permission: bool = False
 
@@ -303,6 +324,17 @@ class Settings(BaseSettings):
             if "ollama_url" in data:
                 self.ollama_base_url = data["ollama_url"]
                 logger.info(f"[config] Set ollama_url to {data['ollama_url']}")
+            # ADR-41 (Session 254): reasoning-model thinking policy
+            # (settings.json keys written by POST /api/settings/thinking).
+            if "thinking" in data:
+                self.localmind_thinking = str(data["thinking"])
+                logger.info(f"[config] Set localmind_thinking to {data['thinking']}")
+            if "reasoning_timeout" in data:
+                self.localmind_reasoning_timeout_secs = float(data["reasoning_timeout"])
+            if "reasoning_plan_timeout" in data:
+                self.localmind_reasoning_plan_timeout_secs = float(data["reasoning_plan_timeout"])
+            if "reasoning_effort" in data:
+                self.localmind_reasoning_effort = str(data["reasoning_effort"])
             # Load API keys from runtime settings
             if "api_keys" in data:
                 self._runtime_api_keys = data["api_keys"]

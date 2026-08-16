@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor } from 'lucide-react';
+import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
 import { useTheme, THEMES, type ModePref } from '@/hooks/useTheme';
 
@@ -96,6 +96,13 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       return false;
     }
   });
+  // ADR-41 (Session 254): reasoning-model thinking policy — mirror of the
+  // backend's Settings fields (GET /api/settings), saved via
+  // POST /api/settings/thinking.
+  const [thinking, setThinking] = useState<'enabled' | 'disabled'>('enabled');
+  const [reasoningTimeout, setReasoningTimeout] = useState('180');
+  const [reasoningPlanTimeout, setReasoningPlanTimeout] = useState('30');
+  const [reasoningEffort, setReasoningEffort] = useState('');
 
   // Load current settings on mount
   useEffect(() => {
@@ -104,6 +111,10 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         const settings = await localmindClient.getSettings();
         setAdapter(settings.adapter);
         setModel(settings.model);
+        setThinking(settings.thinking === 'disabled' ? 'disabled' : 'enabled');
+        setReasoningTimeout(String(settings.reasoning_timeout ?? 180));
+        setReasoningPlanTimeout(String(settings.reasoning_plan_timeout ?? 30));
+        setReasoningEffort(settings.reasoning_effort ?? '');
         // Build provider key status AND live default-model map from the
         // providers object returned by /api/settings. This is the single
         // source of truth for default models — no hardcoded values.
@@ -136,6 +147,38 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       }
     })();
   }, []);
+
+  // Save the reasoning-model thinking policy (ADR-41) via the backend.
+  const handleSaveThinking = useCallback(async () => {
+    const timeout = Number(reasoningTimeout);
+    const planTimeout = Number(reasoningPlanTimeout);
+    if (!Number.isFinite(timeout) || timeout < 45) {
+      setStatus('error');
+      setMessage('Reasoning timeout must be at least 45 seconds.');
+      return;
+    }
+    if (!Number.isFinite(planTimeout) || planTimeout < 8) {
+      setStatus('error');
+      setMessage('Plan timeout must be at least 8 seconds.');
+      return;
+    }
+    setStatus('saving');
+    setMessage('Saving reasoning settings…');
+    try {
+      await localmindClient.setThinkingSettings({
+        thinking,
+        reasoningTimeout: timeout,
+        reasoningPlanTimeout: planTimeout,
+        reasoningEffort,
+      });
+      setStatus('success');
+      setMessage('Reasoning settings saved — they apply to the next message.');
+      onSave();
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Failed to save reasoning settings');
+    }
+  }, [thinking, reasoningTimeout, reasoningPlanTimeout, reasoningEffort, onSave]);
 
   // When the user picks a provider in the Add Key form, fetch that
   // provider's live model list so the model field can be a dropdown
@@ -491,6 +534,97 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                 Current model: <span className="font-mono text-brand-green-soft">{model || 'default'}</span>
               </p>
             )}
+          </section>
+
+          {/* ── Reasoning (ADR-41) ── */}
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <Brain className="h-4 w-4 text-brand-green" />
+              Reasoning
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              GLM models on Z.ai think before answering — this produces complete
+              answers instead of terse cuts. Tune that here; it applies to the next message.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-brand-green-soft">Model thinking</p>
+                <div className="inline-flex rounded-lg border border-brand-border p-0.5">
+                  {(['enabled', 'disabled'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setThinking(m)}
+                      aria-pressed={thinking === m}
+                      className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                        thinking === m
+                          ? 'bg-brand-green/15 text-brand-green'
+                          : 'text-brand-green-muted hover:text-brand-green-soft'
+                      }`}
+                    >
+                      {m === 'enabled' ? 'Enabled' : 'Disabled'}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-brand-green-muted">
+                  Disabling makes GLM reply instantly but terse (~28 tokens). GLM-5.3+ always thinks.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-brand-green-soft">
+                    Reasoning timeout (s)
+                  </span>
+                  <input
+                    type="number"
+                    min={45}
+                    value={reasoningTimeout}
+                    onChange={(e) => setReasoningTimeout(e.target.value)}
+                    className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-brand-green-soft">
+                    Plan timeout (s)
+                  </span>
+                  <input
+                    type="number"
+                    min={8}
+                    value={reasoningPlanTimeout}
+                    onChange={(e) => setReasoningPlanTimeout(e.target.value)}
+                    className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                  />
+                </label>
+              </div>
+              <div>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-brand-green-soft">
+                    Reasoning effort (GLM-5.2+)
+                  </span>
+                  <select
+                    value={reasoningEffort}
+                    onChange={(e) => setReasoningEffort(e.target.value)}
+                    className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft focus:border-brand-green outline-none"
+                  >
+                    <option value="">Provider default</option>
+                    {['none', 'minimal', 'low', 'medium', 'high', 'max', 'xhigh'].map((o) => (
+                      <option key={o} value={o}>
+                        {o}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="mt-1 text-[11px] text-brand-green-muted">
+                  Bounds how long GLM thinks (5.2: max/xhigh/high/medium/low/minimal/none; 5.3: max/high/low).
+                </p>
+              </div>
+              <button
+                onClick={handleSaveThinking}
+                disabled={status === 'saving'}
+                className="rounded-lg border border-brand-green/30 bg-brand-green/10 px-4 py-2 text-sm font-medium text-brand-green hover:bg-brand-green/20 transition-colors disabled:opacity-50"
+              >
+                Save Reasoning
+              </button>
+            </div>
           </section>
 
           {/* ── Ollama URL Configuration ── */}

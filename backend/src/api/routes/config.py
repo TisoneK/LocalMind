@@ -21,11 +21,30 @@ class SettingsResponse(BaseModel):
     model: str
     embed_model: Optional[str] = None  # Ollama embedding model (always local)
     providers: dict
+    # ADR-41 (Session 254): reasoning-model thinking policy (z.ai/GLM).
+    # Mirrored to the Settings UI so users can tune thinking without env vars.
+    thinking: str = "enabled"
+    reasoning_timeout: float = 180.0
+    reasoning_plan_timeout: float = 30.0
+    reasoning_effort: str = ""
 
 
 class AdapterConfig(BaseModel):
     adapter: str
     model: Optional[str] = None
+
+
+class ThinkingSettingsRequest(BaseModel):
+    """Body for POST /api/settings/thinking (ADR-41 reasoning policy).
+
+    All fields optional so a partial update is safe: only provided fields
+    are applied and persisted. reasoning_effort="" clears the effort.
+    """
+
+    thinking: Optional[str] = None  # "enabled" | "disabled"
+    reasoning_timeout: Optional[float] = None  # per-call seconds when thinking
+    reasoning_plan_timeout: Optional[float] = None  # plan/init/orchestrator s
+    reasoning_effort: Optional[str] = None  # GLM-5.2+ effort level
 
 
 class ProviderKeyRequest(BaseModel):
@@ -100,7 +119,70 @@ async def get_settings():
         model=current_model,
         embed_model=embed_model,
         providers=providers,
+        thinking=settings.localmind_thinking,
+        reasoning_timeout=settings.localmind_reasoning_timeout_secs,
+        reasoning_plan_timeout=settings.localmind_reasoning_plan_timeout_secs,
+        reasoning_effort=settings.localmind_reasoning_effort,
     )
+
+
+@router.post("/settings/thinking")
+async def set_thinking_settings(req: ThinkingSettingsRequest):
+    """
+    Update the reasoning-model thinking policy (ADR-41) and persist it to
+    settings.json so it survives restarts.
+
+    Applies only the fields the client actually sends. The adapter reads
+    these from the Settings singleton on every call, and load_runtime_settings
+    applies settings.json after pydantic folds the env in — so a UI setting
+    wins over LOCALMIND_THINKING / LOCALMIND_REASONING_* env vars.
+    """
+    if req.thinking is not None:
+        if req.thinking not in ("enabled", "disabled"):
+            raise HTTPException(status_code=400, detail="thinking must be 'enabled' or 'disabled'")
+        settings.localmind_thinking = req.thinking
+    if req.reasoning_timeout is not None:
+        if req.reasoning_timeout < 45:
+            raise HTTPException(status_code=400, detail="reasoning_timeout must be >= 45 seconds")
+        settings.localmind_reasoning_timeout_secs = float(req.reasoning_timeout)
+    if req.reasoning_plan_timeout is not None:
+        if req.reasoning_plan_timeout < 8:
+            raise HTTPException(status_code=400, detail="reasoning_plan_timeout must be >= 8 seconds")
+        settings.localmind_reasoning_plan_timeout_secs = float(req.reasoning_plan_timeout)
+    if req.reasoning_effort is not None:
+        settings.localmind_reasoning_effort = req.reasoning_effort.strip().lower()
+
+    settings.save_runtime_settings(
+        thinking=settings.localmind_thinking,
+        reasoning_timeout=settings.localmind_reasoning_timeout_secs,
+        reasoning_plan_timeout=settings.localmind_reasoning_plan_timeout_secs,
+        reasoning_effort=settings.localmind_reasoning_effort,
+    )
+    # save_runtime_settings PRESERVES empty values (so a partial update can't
+    # clobber a saved model), which means an explicitly-cleared effort would
+    # linger in settings.json and reappear on restart. Remove the key directly
+    # when the user clears it. Guarded on an explicit empty request so partial
+    # updates (effort untouched) never touch the file.
+    if req.reasoning_effort is not None and not settings.localmind_reasoning_effort:
+        try:
+            _path = settings._runtime_settings_path()
+            _data = settings._load_json_file(_path)
+            if "reasoning_effort" in _data:
+                _data.pop("reasoning_effort")
+                settings._secure_write_json(_path, _data)
+        except Exception:
+            pass  # best-effort cleanup; the live value is already correct
+    # The adapter caches provider params; rebuild so the new policy applies
+    # to the next call without a restart.
+    clear_adapter_cache()
+
+    return {
+        "thinking": settings.localmind_thinking,
+        "reasoning_timeout": settings.localmind_reasoning_timeout_secs,
+        "reasoning_plan_timeout": settings.localmind_reasoning_plan_timeout_secs,
+        "reasoning_effort": settings.localmind_reasoning_effort,
+        "message": f"Reasoning thinking {'enabled' if settings.localmind_thinking != 'disabled' else 'disabled'}",
+    }
 
 
 @router.post("/settings/adapter")

@@ -680,10 +680,13 @@ class OpenAICompatAdapter(BaseAdapter):
         — a workaround for the ThinkingDispatcher's 10s timeout, a component
         DELETED in Session 239. With thinking OFF the same model that does
         full agentic work in Copilot emits ~28 terse tokens in our harness.
-        Thinking now defaults ON for z.ai, tunable via ``LOCALMIND_THINKING``
-        (``enabled``/``disabled``). One hard constraint from the z.ai docs:
-        GLM-5.3 no longer supports disabling thinking — sending
-        ``{type: disabled}`` there is an API error, so it is never disabled.
+        Thinking now defaults ON for z.ai, tunable via the Settings UI
+        (settings.json) or ``LOCALMIND_THINKING`` (``enabled``/``disabled``)
+        — the Settings singleton folds the env in at startup, then
+        load_runtime_settings applies settings.json on top, so the UI wins.
+        One hard constraint from the z.ai docs: GLM-5.3 no longer supports
+        disabling thinking — sending ``{type: disabled}`` there is an API
+        error, so it is never disabled.
         """
         if not self._provider_key == "zai":
             return None
@@ -691,8 +694,10 @@ class OpenAICompatAdapter(BaseAdapter):
         if model_l.startswith("glm-5.3"):
             # z.ai docs (Deep Thinking): GLM-5.3 errors on thinking.type=disabled.
             return {"type": "enabled"}
-        env = os.getenv("LOCALMIND_THINKING", "enabled").strip().lower()
-        if env == "disabled":
+        from core.config import settings as _settings
+
+        mode = (getattr(_settings, "localmind_thinking", "enabled") or "enabled").strip().lower()
+        if mode == "disabled":
             return {"type": "disabled"}
         return {"type": "enabled"}
 
@@ -735,7 +740,9 @@ class OpenAICompatAdapter(BaseAdapter):
         thinking = self._zai_thinking_payload(self._model)
         if thinking:
             payload["thinking"] = thinking
-        effort = os.getenv("LOCALMIND_REASONING_EFFORT", "").strip().lower()
+        from core.config import settings as _settings
+
+        effort = (getattr(_settings, "localmind_reasoning_effort", "") or "").strip().lower()
         version = self._zai_model_version(self._model)
         if effort and version and version >= (5, 2):
             payload["reasoning_effort"] = effort

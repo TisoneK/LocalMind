@@ -56,9 +56,17 @@ def _orchestrator_timeout_for(active_adapter) -> float:
     ADR-41 (Session 254): with thinking enabled the model reasons before
     emitting the plan JSON, so the 10s ORCHESTRATOR_TIMEOUT_SECS can fire
     mid-thought. When the adapter reports thinking_enabled, use the larger
-    REASONING_PLAN_TIMEOUT_SECS budget instead.
+    reasoning plan budget (tunable via Settings UI / env) instead.
     """
     if getattr(active_adapter, "thinking_enabled", False):
+        try:
+            from core.config import settings
+
+            value = getattr(settings, "localmind_reasoning_plan_timeout_secs", None)
+            if value:
+                return float(value)
+        except Exception:
+            pass
         return REASONING_PLAN_TIMEOUT_SECS
     return ORCHESTRATOR_TIMEOUT_SECS
 

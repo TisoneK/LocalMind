@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import patch
 
+import core.config as config_mod
 from adapters.openai_compat import OpenAICompatAdapter
 from core.agent.constants import PER_CALL_TIMEOUT_SECS, REASONING_PER_CALL_TIMEOUT_SECS
 from core.models import StreamChunk
@@ -32,10 +33,13 @@ from core.models import StreamChunk
 
 
 class TestZaiThinkingPolicy:
+    """Thinking policy reads the Settings singleton (Settings UI / settings.json
+    wins over env — the adapter no longer reads os.getenv directly)."""
+
     def test_zai_thinking_enabled_by_default(self, monkeypatch):
         """z.ai must NOT send thinking:{type:disabled} anymore — the default is ON."""
         monkeypatch.setenv("ZAI_API_KEY", "sk-fake-test-key")
-        monkeypatch.delenv("LOCALMIND_THINKING", raising=False)
+        monkeypatch.setattr(config_mod.settings, "localmind_thinking", "enabled")
         adapter = OpenAICompatAdapter(provider="zai", model_override="glm-4.5-flash")
         payload = adapter._add_provider_params({})
         assert payload.get("thinking") == {"type": "enabled"}, (
@@ -43,10 +47,10 @@ class TestZaiThinkingPolicy:
         )
         assert adapter.thinking_enabled is True
 
-    def test_zai_thinking_disabled_via_env(self, monkeypatch):
-        """LOCALMIND_THINKING=disabled is the explicit opt-out."""
+    def test_zai_thinking_disabled_via_settings(self, monkeypatch):
+        """Settings thinking=disabled (Settings UI / LOCALMIND_THINKING) is the opt-out."""
         monkeypatch.setenv("ZAI_API_KEY", "sk-fake-test-key")
-        monkeypatch.setenv("LOCALMIND_THINKING", "disabled")
+        monkeypatch.setattr(config_mod.settings, "localmind_thinking", "disabled")
         adapter = OpenAICompatAdapter(provider="zai", model_override="glm-4.5-flash")
         payload = adapter._add_provider_params({})
         assert payload.get("thinking") == {"type": "disabled"}
@@ -55,7 +59,7 @@ class TestZaiThinkingPolicy:
     def test_glm_53_never_disabled(self, monkeypatch):
         """GLM-5.3 rejects thinking.type=disabled (z.ai docs) — force enabled."""
         monkeypatch.setenv("ZAI_API_KEY", "sk-fake-test-key")
-        monkeypatch.setenv("LOCALMIND_THINKING", "disabled")
+        monkeypatch.setattr(config_mod.settings, "localmind_thinking", "disabled")
         adapter = OpenAICompatAdapter(provider="zai", model_override="glm-5.3")
         payload = adapter._add_provider_params({})
         assert payload.get("thinking") == {"type": "enabled"}, (
@@ -64,9 +68,9 @@ class TestZaiThinkingPolicy:
         assert adapter.thinking_enabled is True
 
     def test_reasoning_effort_only_for_glm_52_plus(self, monkeypatch):
-        """LOCALMIND_REASONING_EFFORT is 5.2+ only per z.ai docs."""
+        """Reasoning effort (Settings UI / LOCALMIND_REASONING_EFFORT) is 5.2+ only."""
         monkeypatch.setenv("ZAI_API_KEY", "sk-fake-test-key")
-        monkeypatch.setenv("LOCALMIND_REASONING_EFFORT", "high")
+        monkeypatch.setattr(config_mod.settings, "localmind_reasoning_effort", "high")
 
         # GLM-4.5-flash does NOT support reasoning_effort — must be omitted.
         old = OpenAICompatAdapter(provider="zai", model_override="glm-4.5-flash")
@@ -130,15 +134,17 @@ class _PlainAdapterStub:
     pass
 
 
-def test_plan_timeout_scales_with_thinking():
+def test_plan_timeout_scales_with_thinking(monkeypatch):
     """_plan_timeout_for must return the larger budget when the adapter thinks
-    (ADR-41: the 8s plan/init cap fires mid-thought on GLM)."""
+    (ADR-41: the 8s plan/init cap fires mid-thought on GLM). The Settings
+    value (Settings UI) wins when present."""
     from core.agent.constants import (
         PLAN_TIMEOUT_SECS,
         REASONING_PLAN_TIMEOUT_SECS,
     )
     from core.agent.loop import _plan_timeout_for
 
+    monkeypatch.setattr(config_mod.settings, "localmind_reasoning_plan_timeout_secs", 30.0)
     assert _plan_timeout_for(_ThinkingAdapterStub(thinking=True)) == REASONING_PLAN_TIMEOUT_SECS
     assert _plan_timeout_for(_ThinkingAdapterStub(thinking=False)) == PLAN_TIMEOUT_SECS
     # Missing attribute (pre-ADR-41 stubs) must fall back to the plain cap.
@@ -146,12 +152,32 @@ def test_plan_timeout_scales_with_thinking():
     assert REASONING_PLAN_TIMEOUT_SECS >= PLAN_TIMEOUT_SECS
 
 
-def test_orchestrator_timeout_scales_with_thinking():
+def test_plan_timeout_uses_settings_value(monkeypatch):
+    """A custom Settings UI value must override the module default."""
+    from core.agent.loop import _plan_timeout_for
+
+    monkeypatch.setattr(config_mod.settings, "localmind_reasoning_plan_timeout_secs", 60.0)
+    assert _plan_timeout_for(_ThinkingAdapterStub(thinking=True)) == 60.0
+
+
+def test_per_call_timeout_scales_with_thinking(monkeypatch):
+    """The per-iteration LLM-call timeout must use the reasoning budget when
+    the adapter thinks (ADR-41: don't truncate mid-thought on a slow tier)."""
+    from core.agent.constants import PER_CALL_TIMEOUT_SECS
+    from core.agent.loop import _per_call_timeout_for
+
+    monkeypatch.setattr(config_mod.settings, "localmind_reasoning_timeout_secs", 180.0)
+    assert _per_call_timeout_for(_ThinkingAdapterStub(thinking=True)) == 180.0
+    assert _per_call_timeout_for(_ThinkingAdapterStub(thinking=False)) == PER_CALL_TIMEOUT_SECS
+
+
+def test_orchestrator_timeout_scales_with_thinking(monkeypatch):
     """The orchestrator's planning wait must use the larger budget when the
     adapter thinks — same mid-thought truncation risk as the plan path."""
     from core.agent.constants import ORCHESTRATOR_TIMEOUT_SECS
     from core.agent.orchestrator import _orchestrator_timeout_for
 
+    monkeypatch.setattr(config_mod.settings, "localmind_reasoning_plan_timeout_secs", 30.0)
     assert _orchestrator_timeout_for(_ThinkingAdapterStub(thinking=True)) >= ORCHESTRATOR_TIMEOUT_SECS
     assert _orchestrator_timeout_for(_ThinkingAdapterStub(thinking=False)) == ORCHESTRATOR_TIMEOUT_SECS
     assert _orchestrator_timeout_for(_PlainAdapterStub()) == ORCHESTRATOR_TIMEOUT_SECS

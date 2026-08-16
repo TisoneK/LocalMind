@@ -916,8 +916,35 @@ class LocalMindClient {
     model: string;
     embed_model?: string;
     providers: Record<string, unknown>;
+    thinking: string;
+    reasoning_timeout: number;
+    reasoning_plan_timeout: number;
+    reasoning_effort: string;
   }> {
     return this.request('/api/settings');
+  }
+
+  async setThinkingSettings(opts: {
+    thinking: string;
+    reasoningTimeout?: number;
+    reasoningPlanTimeout?: number;
+    reasoningEffort?: string;
+  }): Promise<{
+    thinking: string;
+    reasoning_timeout: number;
+    reasoning_plan_timeout: number;
+    reasoning_effort: string;
+    message: string;
+  }> {
+    return this.request('/api/settings/thinking', {
+      method: 'POST',
+      body: JSON.stringify({
+        thinking: opts.thinking,
+        reasoning_timeout: opts.reasoningTimeout,
+        reasoning_plan_timeout: opts.reasoningPlanTimeout,
+        reasoning_effort: opts.reasoningEffort ?? '',
+      }),
+    });
   }
 
   async setAdapter(adapter: string, model?: string): Promise<void> {
