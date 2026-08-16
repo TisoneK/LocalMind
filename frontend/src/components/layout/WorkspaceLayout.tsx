@@ -117,7 +117,7 @@ export function WorkspaceLayout() {
   // Hook data — useChat receives the terminal event callback
   const health = useHealth();
   const { sessions, refresh: refreshSessions, deleteSession, deleteSessions } = useSessions();
-  const { messages, isStreaming, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages } =
+  const { messages, isStreaming, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files } = useFileTree();
@@ -266,6 +266,9 @@ export function WorkspaceLayout() {
   // events (ack, understanding, plan, tool evidence, synthesis) arrive
   // in real-time, not be hidden behind the Observe tab.
   const [forceAgentsTab, setForceAgentsTab] = useState(false);
+  // "New Chat" returns the left sidebar to the Chat tab (it may be stuck on
+  // Actions/Files from the previous session's tool activity).
+  const [forceChatTab, setForceChatTab] = useState(false);
   const prevParentRunning = useRef(false);
   useEffect(() => {
     const parentRunning = (agentRuns || []).some(
@@ -286,10 +289,17 @@ export function WorkspaceLayout() {
   // Handle new chat
   const handleNewChat = useCallback(() => {
     const newId = `session-${Date.now()}`;
+    // Start from a clean slate: context counter back to 0, no lingering
+    // metrics/agent runs from the previous session.
+    resetSession();
     setCurrentSessionId(newId);
     setMessages([]);
+    // Return both panels to their canonical tabs for a fresh conversation:
+    // left → Chat, right → Agents.
+    setForceChatTab(true);
+    setForceAgentsTab(true);
     refreshSessions();
-  }, [setMessages, refreshSessions]);
+  }, [resetSession, setMessages, refreshSessions]);
 
   // Handle session selection
   const handleSelectSession = useCallback(
@@ -395,6 +405,8 @@ export function WorkspaceLayout() {
           onToggleTodo={toggleTodo}
           onAddTodo={addTodo}
           onAbort={abort}
+          forceChatTab={forceChatTab}
+          onChatTabShown={() => setForceChatTab(false)}
           width={leftPanelWidth}
         />
         {/* Left resize handle */}

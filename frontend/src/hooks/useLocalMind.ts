@@ -227,6 +227,9 @@ interface ChatState {
    *  of the in-flight agent turn without aborting it. No-op when idle. */
   steer: (message: string) => void;
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  /** Clears transient per-turn state so a new chat starts from a clean slate
+   *  (context-token counter, live metrics, agent-run tree, session stats). */
+  resetSession: () => void;
   onTerminalEvent?: (event: TerminalEventData) => void;
 }
 
@@ -1644,7 +1647,25 @@ export function useChat(
     });
   }, []);
 
-  return { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, onTerminalEvent };
+  // New Chat must start from a clean slate: clear the context-token counter
+  // (lastMetrics/liveObservation feed it), the live metrics, the agent-run
+  // tree, and the cumulative session stats. The session-switch effect can't
+  // be relied on here — a client-generated new session ID is not yet known to
+  // the backend, so its "clear stale data" branch never fires for it.
+  const resetSession = useCallback(() => {
+    setLastMetrics(null);
+    setLiveObservation(null);
+    setElapsedMs(0);
+    setCurrentIntent(undefined);
+    setCurrentConfidence(undefined);
+    setActiveToolCalls([]);
+    setAgentRuns([]);
+    applySessionStats({ ..._EMPTY_SESSION_STATS });
+    lastTurnContributionRef.current = null;
+    sessionStatsSeededForRef.current = null;
+  }, [applySessionStats]);
+
+  return { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession, onTerminalEvent };
 }
 
 // ─── Prompt leak detection (FIX 1) ────────────────────────────────────

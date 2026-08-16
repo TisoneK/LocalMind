@@ -94,4 +94,52 @@ describe('LeftPanel multi-select', () => {
     expect(screen.queryByTestId('selected-count')).toBeNull();
     expect(screen.getByTestId('select-chats')).toBeInTheDocument();
   });
+
+  it('switches back to the Chat tab when forceChatTab is set (New Chat)', () => {
+    const baseProps = {
+      sessions,
+      actions: [],
+      files: [],
+      todos: [],
+      activeToolCalls: [],
+      models: [],
+      selectedModel: 'm',
+      onModelChange: vi.fn(),
+      currentSessionId: null,
+      onSelectSession: vi.fn(),
+      onNewChat: vi.fn(),
+      onDeleteSession: vi.fn(),
+      onDeleteSessions: vi.fn(),
+      onExportSessions: vi.fn(),
+      onToggleTodo: vi.fn(),
+      onAddTodo: vi.fn(),
+    };
+    const { rerender } = render(<LeftPanel {...baseProps} />);
+    // Leave the Chat tab first so the switch is observable.
+    fireEvent.click(screen.getByText('Actions'));
+    expect(screen.getByText('Actions will appear here during execution.')).toBeInTheDocument();
+
+    const onChatTabShown = vi.fn();
+    rerender(<LeftPanel {...baseProps} forceChatTab onChatTabShown={onChatTabShown} />);
+
+    expect(screen.getAllByTestId('session-row')).toHaveLength(3);
+    expect(onChatTabShown).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows live/active actions as expandable cards, not pills', () => {
+    renderPanel({
+      actions: [
+        { id: 'a1', type: 'shell', label: 'Run command', detail: 'ls', status: 'done', timestamp: '09:00', iteration: 1 },
+      ],
+      // A non-empty activeToolCalls used to force the compact pill branch.
+      activeToolCalls: [
+        { id: 'call_1', name: 'shell', status: 'done', input: 'ls', label: '', duration: undefined },
+      ],
+    });
+    fireEvent.click(screen.getByText('Actions'));
+    // The ActionHistory card renders the real action label + chain header;
+    // the old pill path showed the raw tool name ('Shell') instead.
+    expect(screen.getByText('Run command')).toBeInTheDocument();
+    expect(screen.getByText('1 step')).toBeInTheDocument();
+  });
 });

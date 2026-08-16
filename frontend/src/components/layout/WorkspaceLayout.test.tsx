@@ -85,6 +85,7 @@ function setup(overrides: SetupOverrides = {}) {
     abort: vi.fn(),
     steer: vi.fn(),
     setMessages: vi.fn(),
+    resetSession: vi.fn(),
     refreshActions: vi.fn(),
     addTodo: vi.fn(),
     toggleTodo: vi.fn(),
@@ -123,6 +124,7 @@ function setup(overrides: SetupOverrides = {}) {
     abort: fns.abort,
     steer: fns.steer,
     setMessages: fns.setMessages,
+    resetSession: fns.resetSession,
     onTerminalEvent: vi.fn(),
   });
   mockHooks.useActions.mockReturnValue({ actions: [], loading: false, refresh: fns.refreshActions });
@@ -275,13 +277,17 @@ describe('WorkspaceLayout', () => {
     expect(typeof right.onModelsRefresh).toBe('function');
   });
 
-  it('starts a new chat: clears messages and refreshes the session list', () => {
+  it('starts a new chat: clears messages, resets context, and returns panels to canonical tabs', () => {
     const fns = setup();
     act(() => {
       (mockPanelProps.left.onNewChat as () => void)();
     });
     expect(fns.setMessages).toHaveBeenCalledWith([]);
+    expect(fns.resetSession).toHaveBeenCalledTimes(1);
     expect(fns.refreshSessions).toHaveBeenCalledTimes(1);
+    // Left panel → Chat tab, right panel → Agents tab.
+    expect(mockPanelProps.left.forceChatTab).toBe(true);
+    expect(mockPanelProps.right.forceAgentsTab).toBe(true);
   });
 
   it('sends a message through the chat hook with a generated session id', () => {

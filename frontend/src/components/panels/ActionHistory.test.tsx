@@ -6,10 +6,18 @@
  * step currently running so the trace feels alive.
  */
 
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ActionHistory } from './ActionHistory';
 import type { ActionItem } from '../../types';
+
+// jsdom provides no navigator.clipboard — stub it so the copy buttons work.
+const writeText = vi.fn();
+beforeAll(() => {
+  Object.assign(navigator, {
+    clipboard: { writeText: (...args: unknown[]) => { writeText(...args); return Promise.resolve(); } },
+  });
+});
 
 const action = (overrides: Partial<ActionItem> = {}): ActionItem => ({
   id: 'a0',
@@ -60,5 +68,56 @@ describe('ActionHistory', () => {
     );
     // The label still renders; the running branch adds emphasis styling.
     expect(screen.getByText('Running now')).toBeInTheDocument();
+  });
+
+  it('expands an action to reveal copy buttons for input and output', () => {
+    render(
+      <ActionHistory
+        actions={[
+          action({ id: 'a1', label: 'Run command', input: 'ls -la', output: 'total 4', iteration: 1 }),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByText('Run command'));
+    // The input also appears in the collapsed header preview, so it renders twice.
+    expect(screen.getAllByText('ls -la').length).toBeGreaterThan(0);
+    expect(screen.getByText('total 4')).toBeInTheDocument();
+    // One copy button per body section (input + output).
+    expect(screen.getAllByTitle('Copy')).toHaveLength(2);
+  });
+
+  it('copies the section text when a copy button is clicked', () => {
+    writeText.mockClear();
+    render(
+      <ActionHistory
+        actions={[action({ id: 'a1', label: 'Run command', input: 'ls -la', iteration: 1 })]}
+      />,
+    );
+    fireEvent.click(screen.getByText('Run command'));
+    fireEvent.click(screen.getAllByTitle('Copy')[0]);
+    expect(writeText).toHaveBeenCalledWith('ls -la');
+  });
+
+  it('pretty-prints and colour-codes JSON input', () => {
+    render(
+      <ActionHistory
+        actions={[
+          action({
+            id: 'a1',
+            label: 'Write config',
+            type: 'file_write',
+            input: '{"name":"x","count":2}',
+            iteration: 1,
+          }),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByText('Write config'));
+    // JSON keys are rendered as blue spans (the key token includes the colon).
+    const key = screen.getByText('"name":');
+    expect(key.className).toContain('text-brand-blue');
+    // The numeric value is colour-coded purple.
+    const num = screen.getByText('2');
+    expect(num.className).toContain('text-brand-purple');
   });
 });

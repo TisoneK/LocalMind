@@ -383,6 +383,38 @@ describe('useChat SSE obs_event routing', () => {
 
     unmount();
   });
+
+  it('resetSession returns the context counter and stats to a clean slate', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: {
+          type: 'turn_complete',
+          data: { tokens_approx: 9, prompt_tokens_approx: 3500, total_latency_ms: 2300 },
+        },
+      }));
+    });
+    act(() => onDone()());
+
+    // The previous turn left a context count and session totals behind.
+    expect(result.current.lastMetrics?.promptTokens).toBe(3500);
+    expect(result.current.sessionStats.promptTokens).toBe(3500);
+
+    act(() => {
+      result.current.resetSession();
+    });
+
+    expect(result.current.lastMetrics).toBeNull();
+    expect(result.current.liveObservation).toBeNull();
+    expect(result.current.sessionStats).toMatchObject({
+      promptTokens: 0,
+      completionTokens: 0,
+      turnCount: 0,
+    });
+
+    unmount();
+  });
 });
 
 describe('useChat ADR-20 error normalization', () => {

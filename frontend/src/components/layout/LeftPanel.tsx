@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, CheckCircle2, XCircle, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks } from 'lucide-react';
+import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks } from 'lucide-react';
 import { Session, ActionItem, FileNode, TodoItem, ModelOption, ToolCall } from '@/types';
 import type { ExportFormat } from '@/lib/localmind/exportChats';
 import { ActionHistory } from '@/components/panels/ActionHistory';
@@ -33,6 +33,10 @@ interface LeftPanelProps {
   onToggleTodo: (id: string, completed: boolean) => void;
   onAddTodo: (text: string) => void;
   onAbort?: () => void;
+  /** Force the Chat tab to be active (e.g. right after "New Chat"). */
+  forceChatTab?: boolean;
+  /** Called after the Chat tab has been shown. */
+  onChatTabShown?: () => void;
   width?: number;
 }
 
@@ -56,6 +60,8 @@ export function LeftPanel({
   onToggleTodo,
   onAddTodo,
   onAbort,
+  forceChatTab,
+  onChatTabShown,
   width = 280,
 }: LeftPanelProps) {
   const [activeTab, setActiveTab] = useState<LeftTab>('chat');
@@ -112,6 +118,16 @@ export function LeftPanel({
     window.addEventListener('localmind:tool-call-started', showActions);
     return () => window.removeEventListener('localmind:tool-call-started', showActions);
   }, []);
+
+  // "New Chat" returns the sidebar to the Chat tab so the fresh conversation
+  // (and its session list) is immediately visible instead of leaving the user
+  // stranded on Actions/Files from the previous chat.
+  useEffect(() => {
+    if (forceChatTab && activeTab !== 'chat') {
+      setActiveTab('chat');
+      onChatTabShown?.();
+    }
+  }, [forceChatTab, activeTab, onChatTabShown]);
 
   // ADR-20 (Session 167): the error card's "Switch model" action dispatches
   // this event — forward it to the ModelSelector trigger so the dropdown
@@ -403,43 +419,11 @@ export function LeftPanel({
 
         {activeTab === 'actions' && (
           <div className="p-2">
-            {/* Live tool calls — show ALL tool calls regardless of status (running, done, failed) */}
-            {activeToolCalls.length > 0 ? (
-              <div className="space-y-1">
-                {activeToolCalls.map((tc) => {
-                  const iconMap: Record<string, React.ReactNode> = {
-                    file_write: <FileEdit className="h-3 w-3" />,
-                    file_task: <FileEdit className="h-3 w-3" />,
-                    edit_file: <FileEdit className="h-3 w-3" />,
-                    shell: <Terminal className="h-3 w-3" />,
-                    code_exec: <Terminal className="h-3 w-3" />,
-                    web_search: <Globe className="h-3 w-3" />,
-                    memory_op: <Brain className="h-3 w-3" />,
-                    sysinfo: <Zap className="h-3 w-3" />,
-                  };
-                  const statusIcon = isActiveToolStatus(tc.status)
-                    ? <Loader2 className="h-3 w-3 animate-spin text-brand-amber" />
-                    : tc.status === 'done'
-                      ? <CheckCircle2 className="h-3 w-3 text-brand-green" />
-                      : <XCircle className="h-3 w-3 text-brand-red" />;
-                  const displayLabel = tc.label || tc.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
-                  const durationStr = tc.duration !== undefined
-                    ? (tc.duration >= 1000 ? `${(tc.duration / 1000).toFixed(1)}s` : `${tc.duration}ms`)
-                    : '';
-                  return (
-                    <div key={tc.id} className="flex items-center gap-1.5 min-w-0 px-2 py-1 rounded hover:bg-brand-border/50">
-                      <span className="text-brand-green-muted">{iconMap[tc.name] || <Terminal className="h-3 w-3" />}</span>
-                      <span className="text-[10px] text-brand-green-soft font-mono truncate flex-1 min-w-0" title={displayLabel}>
-                        {displayLabel}
-                      </span>
-                      {tc.timestamp && <span className="text-[8px] text-brand-green-muted/60 shrink-0">{tc.timestamp}</span>}
-                      {durationStr && <span className="text-[9px] text-brand-green-muted shrink-0">{durationStr}</span>}
-                      {statusIcon}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : actions.length > 0 ? (
+            {/* Live + persisted actions share one expandable-card list. The
+                ActionHistory already renders a running state (spinner + pulse),
+                so active/just-finished actions are full cards — not the old
+                compact pills — matching the post-session history. */}
+            {actions.length > 0 ? (
               <ActionHistory actions={actions} />
             ) : (
               <div className="px-2.5 py-4 text-center text-[10px] text-brand-green-muted">
