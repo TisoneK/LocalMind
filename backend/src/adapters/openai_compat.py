@@ -154,6 +154,32 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 # error instead, so the user is never stuck behind an uncancellable hang.
 _MAX_TRANSIENT_429_WAIT = 10.0
 
+
+def _flatten_message_content(messages):
+    """Convert block-style message content (``[{"type":"text","text":...,
+    "cache_control":...}]``) back to a plain string. Degrades prompt-cache
+    markers (Session 245 Lever 2) when a provider/proxy rejects the block
+    format. Returns a NEW message list, or ``None`` when nothing was in block
+    form (i.e. there is nothing to retry)."""
+    if not isinstance(messages, list):
+        return None
+    changed = False
+    out = []
+    for m in messages:
+        content = m.get("content") if isinstance(m, dict) else None
+        if isinstance(content, list):
+            text = "".join(
+                part.get("text", "")
+                for part in content
+                if isinstance(part, dict) and part.get("type") == "text"
+            )
+            out.append({**m, "content": text})
+            changed = True
+        else:
+            out.append(m)
+    return out if changed else None
+
+
 _MODELS_CACHE: "TTLCache[list[str]]" = TTLCache(ttl_seconds=30.0, max_entries=32)
 # Per-provider lock so CONCURRENT misses (startup pollers fire within
 # the same second) collapse into a single fetch instead of re-bursting.
@@ -786,6 +812,7 @@ class OpenAICompatAdapter(BaseAdapter):
 
         usage_option_retry = True
         tool_choice_retry = True
+        cache_control_retry = True
         request_payload = payload
         for attempt in range(3):  # 0, 1, 2 = 3 total attempts
             request = self._client.build_request(
@@ -842,6 +869,24 @@ class OpenAICompatAdapter(BaseAdapter):
                             self._provider_name,
                         )
                         continue
+                    # Session 245 Lever 2: a provider/proxy that doesn't
+                    # understand cache_control content-parts may 400. Flatten any
+                    # block-style message content back to a plain string and
+                    # retry once, so prompt-cache markers stay additive.
+                    if cache_control_retry and (
+                        "cache_control" in body or "content" in body
+                    ):
+                        flattened = _flatten_message_content(request_payload.get("messages"))
+                        if flattened is not None:
+                            await response.aclose()
+                            request_payload = dict(request_payload)
+                            request_payload["messages"] = flattened
+                            cache_control_retry = False
+                            logger.warning(
+                                "[adapter] %s rejected cache_control blocks; retrying as plain text",
+                                self._provider_name,
+                            )
+                            continue
                 return response  # success (200) or non-retryable error
 
             # Got 429 — read the body so we can distinguish a transient
@@ -959,6 +1004,38 @@ class OpenAICompatAdapter(BaseAdapter):
             async for chunk in self._chat_openai_style(messages, temperature, timeout):
                 yield chunk
 
+    def _is_anthropic_family(self) -> bool:
+        """True when the active model is a Claude/Anthropic model (possibly via
+        a proxy like zen), which supports explicit ``cache_control`` markers."""
+        m = (self._model or "").lower()
+        return "claude" in m or "anthropic" in m
+
+    def _mark_system_cacheable(self, messages: list[dict]) -> list[dict]:
+        """Session 245 Lever 2: on the OpenAI-compat path, mark the FIRST
+        system message (the byte-stable prefix from Lever 1) with
+        ``cache_control`` so Anthropic-family models cache it. Non-Anthropic
+        models (OpenAI, gemini) cache the stable prefix AUTOMATICALLY and need
+        no marker, so we leave their plain-string messages untouched. Rejection
+        of the field degrades cleanly (see the 400-retry in
+        ``_send_streaming_with_retry``)."""
+        if not self._is_anthropic_family() or not messages:
+            return messages
+        out = list(messages)
+        for i, msg in enumerate(out):
+            if msg.get("role") == "system" and isinstance(msg.get("content"), str):
+                out[i] = {
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": msg["content"],
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                }
+                break  # cache up to (and including) the first/stable system block
+        return out
+
     async def chat_with_tools(
         self,
         messages: list[dict],
@@ -1071,7 +1148,10 @@ class OpenAICompatAdapter(BaseAdapter):
 
         payload = {
             "model": self._model,
-            "messages": enhanced_messages,
+            # Session 245 Lever 2: mark the stable system prefix cacheable for
+            # Anthropic-family models (no-op string passthrough for others,
+            # which cache automatically).
+            "messages": self._mark_system_cacheable(enhanced_messages),
             "temperature": temperature,
             "stream": True,
             # OpenAI-compatible providers that support streaming usage emit a
@@ -1785,9 +1865,12 @@ class OpenAICompatAdapter(BaseAdapter):
         system_messages = [m for m in messages if m.get("role") == "system"]
         non_system_messages = [m for m in messages if m.get("role") != "system"]
 
-        system_content = ""
-        if system_messages:
-            system_content = system_messages[0].get("content", "")
+        # Join ALL system messages (Session 245 Lever 1 added a second,
+        # trailing turn-context system message after the stable prefix; taking
+        # only [0] would drop the environment/workspace/task-state context).
+        system_content = "\n\n".join(
+            m.get("content", "") for m in system_messages if m.get("content")
+        )
 
         # Build Anthropic message format
         anthropic_messages = []
@@ -1808,7 +1891,17 @@ class OpenAICompatAdapter(BaseAdapter):
             "stream": True,
         }
         if system_content:
-            payload["system"] = system_content
+            # Session 245 Lever 2: mark the system prefix cacheable. Anthropic
+            # caches everything up to the last cache_control breakpoint, billing
+            # it once then reading at ~10% on later calls. The prefix is now
+            # byte-stable (Lever 1), so this actually hits.
+            payload["system"] = [
+                {
+                    "type": "text",
+                    "text": system_content,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
 
         try:
             response = await self._send_streaming_with_retry(url, payload, headers=self._headers, timeout=timeout)

@@ -33,17 +33,20 @@ from core.models import Intent
 # (the tool list is measured separately by test_intent_tool_scoping).
 # Measured 2026-08-11 post-Session-144 trim.
 _BUDGETS = {
-    Intent.SHELL: 15_000,  # measured 12,981 (was 16,449 post-126)
-    Intent.SYSINFO: 13_500,  # measured 11,654
-    Intent.CODE_EXEC: 15_500,  # measured 13,043
-    Intent.FILE_WRITE: 15_500,  # measured 13,083
-    Intent.FILE_EDIT: 15_500,  # measured 13,088
-    Intent.FILE_TASK: 16_000,  # measured 13,566
-    Intent.WEB_SEARCH: 16_000,  # measured 13,630
-    Intent.WEB_FETCH: 15_000,  # measured 12,817
-    Intent.MEMORY_OP: 14_000,  # measured 12,150
-    Intent.BROWSE: 14_500,  # measured 12,285
-    Intent.CHAT: 6_000,  # measured 4,730 (unchanged)
+    # Session 245 (Lever 1 + 3): env context moved to a trailing turn-context
+    # message and the formatting example trimmed — ~2,270 chars off each
+    # execute intent. Budgets tightened to lock the reduction in.
+    Intent.SHELL: 11_500,  # measured 10,713 (was 12,981 pre-245)
+    Intent.SYSINFO: 10_000,  # measured 9,386
+    Intent.CODE_EXEC: 11_500,  # measured 10,775
+    Intent.FILE_WRITE: 11_500,  # measured 10,815
+    Intent.FILE_EDIT: 11_500,  # measured 10,820
+    Intent.FILE_TASK: 12_000,  # measured 11,298
+    Intent.WEB_SEARCH: 12_000,  # measured 11,362
+    Intent.WEB_FETCH: 11_500,  # measured 10,549
+    Intent.MEMORY_OP: 10_500,  # measured 9,882
+    Intent.BROWSE: 11_000,  # measured 10,017
+    Intent.CHAT: 6_000,  # measured 4,730 (unchanged — env not in CHAT branch)
 }
 
 # Load-bearing rules that MUST survive future trims — the budget test guards
@@ -81,6 +84,23 @@ def test_load_bearing_rules_survive(intent: Intent) -> None:
             f"{intent.value} prompt lost load-bearing marker {marker!r} — "
             f"re-add it or get explicit sign-off on removing the rule"
         )
+
+
+def test_system_prompt_has_no_dynamic_env_that_busts_cache() -> None:
+    """Session 245 Lever 1: the agent system prompt must stay byte-stable so
+    the system+tools prefix caches. It must NOT embed per-turn/per-minute
+    content (the current time, or the '## Environment' block that carries it) —
+    that lives in a trailing turn-context message instead.
+    """
+    prompt = build_agent_system_prompt(intent=Intent.SHELL, available_tools=[])
+    assert "## Environment" not in prompt, "env block leaked back into the cached prompt"
+    assert "Current time:" not in prompt, "current time (per-minute cache-buster) is back in the cached prompt"
+    # Two builds a moment apart must be identical (no clock/date/uuid inside).
+    import time as _t
+    a = build_agent_system_prompt(intent=Intent.SHELL, available_tools=[])
+    _t.sleep(0.01)
+    b = build_agent_system_prompt(intent=Intent.SHELL, available_tools=[])
+    assert a == b, "system prompt is not byte-stable across builds — a dynamic value leaked in"
 
 
 

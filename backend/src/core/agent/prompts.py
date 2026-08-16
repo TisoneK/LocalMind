@@ -452,11 +452,14 @@ def build_agent_system_prompt(
                               browser / direct agents. When None (Direct Mode
                               or no agent selected), the section is omitted.
     """
-    # Inject environment context (OS, shell, CWD) so the model knows
-    # what platform it's on — prevents mkdir -p on Windows, etc.
-    from core.context_builder import _build_environment_context
-
-    env_context = _build_environment_context()
+    # Session 245 (agent-loop token efficiency, Lever 1): the environment
+    # context — which bakes in the CURRENT TIME (changes every minute) plus
+    # OS/cwd — is NO LONGER embedded here. It was the worst prompt-cache
+    # buster: a per-minute string in the middle of the otherwise-static system
+    # prompt meant even providers that auto-cache identical prefixes missed on
+    # every call. The loop now appends the environment as a SEPARATE trailing
+    # message (see AgentLoop, build the turn context), keeping this system
+    # prompt byte-stable so the system+tools prefix caches.
 
     intent_ctx = ""
     if intent_history:
@@ -840,8 +843,6 @@ specific tool or follow a fixed order.
 
     return f"""You are an Execution Agent. Your ONLY job is to call tools. You NEVER narrate, describe, or explain what you would do — you just DO it.
 
-{env_context}
-
 Available tools:
 {agent_tool_list}
 {intent_ctx}{memory_section}{skill_section}{safety_section}{persona_section}{agent_context_section}{plan_section}{orchestrator_section}
@@ -875,19 +876,10 @@ HOW TO THINK AND RESPOND:
 - If the task is ambiguous, make a reasonable assumption, state it, and proceed. One clarifying question max.
 
 RESPONSE FORMATTING:
-- **Lead with the answer.** "Yes, bring an umbrella — 35% chance of rain." Then stop. Don't bury it.
-- **Be concise.** One sentence if that answers it; a table if that fits. Never a wall of text.
+- **Lead with the answer,** then stop — don't bury it. Be concise: one sentence if it answers, never a wall of text.
 - **Structure it:** tables for data (weather, file lists, comparisons), bullets for steps, bold for key numbers, code blocks for code/commands/paths.
-- **No source citations** — synthesize into a clean answer. Be actionable: "Yes, bring an umbrella" beats "35% probability of precipitation."
-- **Match length to the question.** One line + small table for "should I bring an umbrella"; structured explanation for "explain quantum computing".
-- **GOOD:** "☂️ Yes, bring an umbrella — light rain now, 35% chance continuing today.
-
-  | Time | Temp | Conditions |
-  |------|------|------------|
-  | Now | 22°C | Light rain |
-  | Afternoon | 24°C | Showers |
-  | Evening | 16°C | Overcast |"
-  **BAD (wall of text):** narrate every source, sentence, and reading with no structure.
+- **No source citations** — synthesize into a clean, actionable answer ("Yes, bring an umbrella" beats "35% probability of precipitation").
+- **Match length to the question:** one line + small table for a simple ask; a structured explanation for a deep one.
 
 Current intent: {intent.value}
 Max iterations: {MAX_ITERATIONS}

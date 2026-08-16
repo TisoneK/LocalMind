@@ -1712,21 +1712,22 @@ class AgentLoop:
             agent_context=agent_context,
         )
 
-        # ADR-5: append workspace state to the system prompt. This is the
-        # feedback loop — git status, diff since last turn, last build
-        # result — that turns a bare API call into a real harness.
+        # Session 245 (agent-loop token efficiency, Lever 1): the environment
+        # (OS/cwd and the CURRENT TIME), the ADR-5 workspace state (git status,
+        # diff, last build) and the ADR-18 task-state block are all PER-TURN
+        # DYNAMIC. They are deliberately kept OUT of the cacheable system prompt
+        # and carried in a SEPARATE trailing turn-context message, so the
+        # system+tools prefix stays byte-stable across calls and turns and the
+        # provider can cache it (see the cache_control marker in the adapter).
+        turn_context_parts = [_build_environment_context()]
         if workspace_context:
-            system_prompt = system_prompt + "\n\n" + workspace_context
-
-        # ADR-18 P0: append the TASK STATE block (objective, criteria,
-        # progress, budget) so the model sees the acceptance contract every
-        # iteration instead of reconstructing it from history. Empty for
-        # turns with no contract/plan — zero prompt-cost change there.
+            turn_context_parts.append(workspace_context)
         _task_state_prompt = task_state.to_prompt()
         if _task_state_prompt:
-            system_prompt = system_prompt + "\n\n" + _task_state_prompt
+            turn_context_parts.append(_task_state_prompt)
+        turn_context = "\n\n".join(p for p in turn_context_parts if p)
 
-        # Replace or prepend the system message
+        # Replace or prepend the (stable) system message
         if loop_messages and loop_messages[0]["role"] == "system":
             loop_messages[0] = {
                 "role": "system",
@@ -1734,6 +1735,11 @@ class AgentLoop:
             }
         else:
             loop_messages.insert(0, {"role": "system", "content": system_prompt})
+
+        # Trailing turn-context (dynamic) — placed AFTER the stable prefix so it
+        # never mutates the cached region.
+        if turn_context:
+            loop_messages.insert(1, {"role": "system", "content": turn_context})
 
         # ── Seed observation log with initial tool result ──────────────
         observation_log = ""

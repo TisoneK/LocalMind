@@ -385,8 +385,12 @@ async def test_agent_loop_publishes_inline_scope():
 
     scope = get_inline_mutation_scope()
     assert scope is not None, "loop must publish an inline scope"
+    # Session 245 Lever 1: the loop now emits a byte-stable system prefix plus
+    # a trailing turn-context system message (env/workspace/task-state), then
+    # the conversation. The scope binds to the live loop_messages either way.
     assert scope.messages[0]["role"] == "system"
-    assert scope.messages[1]["role"] == "user"
+    roles = [m["role"] for m in scope.messages]
+    assert "user" in roles, f"user turn must be present: {roles}"
     assert callable(scope.mutate)
 
 
