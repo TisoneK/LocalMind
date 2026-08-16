@@ -624,7 +624,18 @@ async def web_search(query: str) -> ToolResult:
             },
         )
 
-    content = _format_results(results)
+    # Surface WHICH engine answered — the model sees it in the tool result
+    # and the user sees it in the Actions card output.
+    provider_label = {
+        "duckduckgo": "DuckDuckGo",
+        "bing": "Bing",
+        "searxng": "SearXNG",
+        "brave": "Brave",
+    }.get(successful_provider, successful_provider or "unknown")
+    content = (
+        f"Search results via **{provider_label}** ({len(results)} results):\n\n"
+        f"{_format_results(results)}"
+    )
     source_urls = [
         r.get("href", r.get("url", "")) for r in results if r.get("href") or r.get("url")
     ]

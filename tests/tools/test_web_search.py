@@ -59,6 +59,8 @@ async def test_web_search_returns_tool_result_on_success():
     assert "Result" in result.content
     assert result.risk.value == "low"
     assert result.success is True
+    # The winning provider is named in the content (model + user can see it).
+    assert "DuckDuckGo" in result.content
 
 
 @pytest.mark.asyncio
@@ -330,6 +332,8 @@ async def test_web_search_race_bing_wins():
     assert result.success is True
     assert result.metadata["successful_provider"] == "bing"
     assert "Bing Hit" in result.content
+    # The winning provider is named in the content.
+    assert "Search results via **Bing**" in result.content
 
 
 @pytest.mark.asyncio
