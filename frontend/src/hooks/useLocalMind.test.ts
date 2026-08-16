@@ -17,7 +17,7 @@ import { useChat } from './useLocalMind';
 
 const streamMock = vi.hoisted(() => ({
   streamChat: vi.fn(),
-  getSessionHistory: vi.fn(async () => []),
+  getSessionHistory: vi.fn(),
   steer: vi.fn(),
   abort: vi.fn(),
   classifyClientIntent: vi.fn(() => 'chat'),
@@ -472,5 +472,75 @@ describe('useChat ADR-20 error normalization', () => {
     expect(last.content).toContain('old backend');
 
     unmount();
+  });
+});
+
+describe('useChat Agent Workspace restore (Session 267)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('restores the last turn run tree from history on session load', async () => {
+    streamMock.getSessionHistory.mockResolvedValue([
+      { id: 'm1', role: 'user', content: 'build a cli', timestamp: '10:00' },
+      {
+        id: 'm2',
+        role: 'assistant',
+        content: 'Done.',
+        timestamp: '10:01',
+        agentRuns: [
+          {
+            id: 'parent',
+            name: 'parent',
+            role: 'parent',
+            task: 'build a cli',
+            status: 'completed',
+            depth: 0,
+            startedAt: 1700000000000,
+            completedAt: 1700000009000,
+            tools: [{ id: 'tc-shell-iter1', name: 'shell', status: 'done', input: 'ls' }],
+          },
+          {
+            id: 'run-123',
+            name: 'research',
+            role: 'child',
+            parentId: 'parent',
+            task: 'find docs',
+            status: 'completed',
+            depth: 1,
+            startedAt: 1700000001000,
+            completedAt: 1700000007000,
+            tools: [],
+          },
+        ],
+      },
+    ]);
+
+    // The hook loads history on mount and restores the run tree from the
+    // last assistant message that carries one.
+    const utils = renderHook(() => useChat('session-b'));
+    await act(async () => {});
+
+    expect(streamMock.getSessionHistory).toHaveBeenCalledWith('session-b');
+    // The Agents tab tree is restored: parent + child runs.
+    expect(utils.result.current.agentRuns).toHaveLength(2);
+    expect(utils.result.current.agentRuns[0]).toMatchObject({ name: 'parent', role: 'parent' });
+    expect(utils.result.current.agentRuns[1]).toMatchObject({ id: 'run-123', role: 'child', parentId: 'parent' });
+    expect(utils.result.current.agentRuns[0].tools[0].name).toBe('shell');
+
+    utils.unmount();
+  });
+
+  it('clears the run tree when history has no agentRuns', async () => {
+    streamMock.getSessionHistory.mockResolvedValue([
+      { id: 'm1', role: 'user', content: 'hi', timestamp: '10:00' },
+      { id: 'm2', role: 'assistant', content: 'Hello!', timestamp: '10:01' },
+    ]);
+
+    const utils = renderHook(() => useChat('session-b'));
+    await act(async () => {});
+
+    expect(utils.result.current.agentRuns).toEqual([]);
+    utils.unmount();
   });
 });

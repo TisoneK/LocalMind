@@ -527,6 +527,14 @@ export function useChat(
       const history = await localmindClient.getSessionHistory(sessionId);
       if (mounted) {
         setMessages(history);
+        // Session 267: restore the Agent Workspace run tree. The Agents tab
+        // shows the most recent turn's tree (each send replaces it), so pick
+        // the LAST assistant message that carries one — earlier turns' trees
+        // are superseded by the latest turn's work.
+        const lastRunTree = [...history]
+          .reverse()
+          .find((m) => m.role === 'assistant' && Array.isArray(m.agentRuns) && m.agentRuns.length > 0);
+        setAgentRuns(lastRunTree?.agentRuns ?? []);
         // Stats split: seed the corner totals once per session — from the
         // in-run per-session totals when this hook instance already chatted
         // there (never overwrite live-accumulated numbers with a stale

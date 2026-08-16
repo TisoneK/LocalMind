@@ -238,6 +238,61 @@ describe('getSessionHistory (Session 266 artifacts)', () => {
     expect(messages[0].error).toBeUndefined();
     expect(messages[0].toolCalls).toBeUndefined();
     expect(messages[0].performance).toBeUndefined();
+    expect(messages[0].agentRuns).toBeUndefined();
+    expect(messages[0].agentPhases).toBeUndefined();
+  });
+
+  it('passes the persisted Agent Workspace run tree + phase strip through', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        history: [
+          {
+            id: 'm1',
+            role: 'assistant',
+            content: 'Done.',
+            timestamp: 1783586330.77,
+            agentRuns: [
+              {
+                id: 'parent',
+                name: 'parent',
+                role: 'parent',
+                task: 'build a cli',
+                status: 'completed',
+                depth: 0,
+                startedAt: 1700000000000,
+                completedAt: 1700000009000,
+                tools: [{ id: 'tc-shell-iter1', name: 'shell', status: 'done', input: 'ls' }],
+              },
+              {
+                id: 'run-123',
+                name: 'research',
+                role: 'child',
+                parentId: 'parent',
+                task: 'find docs',
+                status: 'completed',
+                depth: 1,
+                startedAt: 1700000001000,
+                completedAt: 1700000007000,
+                tools: [],
+              },
+            ],
+            agentPhases: [
+              { id: 'phase-gate-pass-1', type: 'gate_passed', label: 'Verified — acceptance gate passed', timestamp: 1700000008000 },
+            ],
+          },
+        ],
+      }),
+    }));
+
+    const messages = await localmindClient.getSessionHistory('session-1');
+    const assistant = messages.find((m) => m.role === 'assistant')!;
+    // The Agents tab restores the run tree (parent + child runs) verbatim.
+    expect(assistant.agentRuns).toHaveLength(2);
+    expect(assistant.agentRuns?.[0].name).toBe('parent');
+    expect(assistant.agentRuns?.[1]).toMatchObject({ id: 'run-123', role: 'child', parentId: 'parent' });
+    // The phase strip restores from the message's agentPhases.
+    expect(assistant.agentPhases?.[0]).toMatchObject({ type: 'gate_passed' });
   });
 });
 

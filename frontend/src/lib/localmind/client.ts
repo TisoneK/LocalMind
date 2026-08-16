@@ -434,6 +434,12 @@ class LocalMindClient {
       thinking: typeof m.thinking === 'string' ? m.thinking : undefined,
       error: m.error,
       performance: m.performance || undefined,
+      // Session 267: restore the Agent Workspace run tree + phase strip.
+      // The backend rebuilds them from the turn's obs events and persists
+      // them as already-camelCase AgentRun[] / AgentPhase[] shapes — pass
+      // through verbatim so the Agents tab and phase strip survive reload.
+      agentRuns: m.agentRuns,
+      agentPhases: m.agentPhases,
     }));
   }
 

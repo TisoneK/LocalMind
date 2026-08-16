@@ -137,6 +137,10 @@ export interface ChatMessage {
    *  replanning / switching to a different approach" — the literal
    *  difference between a chat-with-tools and an agent. */
   agentPhases?: AgentPhase[];
+  /** Session 267: the Agent Workspace run tree for this turn (rebuilt
+   *  server-side from obs events and persisted with the message). The Agents
+   *  tab restores the last turn's tree from here on reload. */
+  agentRuns?: AgentRun[];
 }
 
 /** Session 181 — F4 Frontend Phase Visibility.
