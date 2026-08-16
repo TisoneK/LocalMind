@@ -283,6 +283,27 @@
   scrollbar-color: var(--brand-border) var(--brand-bg-base);
 }
 
+/* Model picker: a wider, always-grabbable scrollbar. The 5px custom-scrollbar
+   is nearly impossible to grab with a mouse on macOS, where wheel capture over
+   an absolutely-positioned dropdown is also unreliable — so make the track
+   obvious and easy to drag when the search filter isn't enough. */
+.model-scrollbar::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.model-scrollbar::-webkit-scrollbar-track {
+  background: var(--brand-bg-base);
+}
+.model-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--brand-border-strong, var(--brand-border));
+  border-radius: 6px;
+  border: 3px solid var(--brand-bg-rail);
+}
+.model-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: var(--brand-border-strong, var(--brand-border)) var(--brand-bg-base);
+}
+
 /* Global scrollbar for the page */
 ::-webkit-scrollbar {
   width: 6px;
