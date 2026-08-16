@@ -67,22 +67,22 @@ class TestZaiThinkingPolicy:
         )
         assert adapter.thinking_enabled is True
 
-    def test_reasoning_effort_only_for_glm_52_plus(self, monkeypatch):
-        """Reasoning effort (Settings UI / LOCALMIND_REASONING_EFFORT) is 5.2+ only."""
+    def test_reasoning_effort_applies_to_all_glm(self, monkeypatch):
+        """Session 262: the reasoning_effort 'thinking level' applies to ALL GLM
+        versions, not just >=5.2 — glm-4.5-flash was live-verified to ACCEPT it
+        (and its unbounded thinking was the user's "thinks too hard" complaint).
+        A version that rejects it degrades via the 400-retry, so this stays
+        additive."""
         monkeypatch.setenv("ZAI_API_KEY", "sk-fake-test-key")
         monkeypatch.setattr(config_mod.settings, "localmind_reasoning_effort", "high")
 
-        # GLM-4.5-flash does NOT support reasoning_effort — must be omitted.
-        old = OpenAICompatAdapter(provider="zai", model_override="glm-4.5-flash")
-        payload_old = old._add_provider_params({})
-        assert "reasoning_effort" not in payload_old, (
-            f"glm-4.5-flash does not support reasoning_effort — got {payload_old.get('reasoning_effort')!r}"
-        )
-
-        # GLM-5.2 supports it.
-        new = OpenAICompatAdapter(provider="zai", model_override="glm-5.2")
-        payload_new = new._add_provider_params({})
-        assert payload_new.get("reasoning_effort") == "high"
+        for model in ("glm-4.5-flash", "glm-5.2"):
+            a = OpenAICompatAdapter(provider="zai", model_override=model)
+            payload = a._add_provider_params({})
+            assert payload.get("reasoning_effort") == "high", (
+                f"{model} must carry the reasoning_effort thinking level — got "
+                f"{payload.get('reasoning_effort')!r}"
+            )
 
     def test_no_thinking_param_for_non_zai(self, monkeypatch):
         """Other providers never get the z.ai-specific thinking param."""

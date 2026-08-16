@@ -753,9 +753,16 @@ class OpenAICompatAdapter(BaseAdapter):
             payload["thinking"] = thinking
         from core.config import settings as _settings
 
+        # Session 262: the "thinking level" — reasoning_effort bounds how much
+        # the model reasons (max/high/medium/low/minimal/none), instead of the
+        # binary on/off that let glm-4.5-flash think unbounded for 200s+ (user
+        # feedback: "it thinks too hard — there should be thinking levels, not
+        # turned off"). Apply to ALL GLM versions, not just >=5.2: GLM<5.2 may
+        # ignore or reject the field, but a 400 degrades in
+        # _send_streaming_with_retry (retry without it), so this is additive and
+        # never breaks a call.
         effort = (getattr(_settings, "localmind_reasoning_effort", "") or "").strip().lower()
-        version = self._zai_model_version(self._model)
-        if effort and version and version >= (5, 2) and not force_off:
+        if effort and not force_off:
             payload["reasoning_effort"] = effort
         return payload
 
@@ -884,6 +891,7 @@ class OpenAICompatAdapter(BaseAdapter):
         usage_option_retry = True
         tool_choice_retry = True
         cache_control_retry = True
+        reasoning_effort_retry = True
         request_payload = payload
         for attempt in range(3):  # 0, 1, 2 = 3 total attempts
             request = self._client.build_request(
@@ -958,6 +966,23 @@ class OpenAICompatAdapter(BaseAdapter):
                                 self._provider_name,
                             )
                             continue
+                    # Session 262: a GLM version that doesn't support the
+                    # reasoning_effort "thinking level" (e.g. <5.2) may 400 on
+                    # it — drop it and retry once so the level stays additive.
+                    if (
+                        reasoning_effort_retry
+                        and "reasoning_effort" in request_payload
+                        and ("reasoning_effort" in body or "reasoning" in body)
+                    ):
+                        await response.aclose()
+                        request_payload = dict(request_payload)
+                        request_payload.pop("reasoning_effort", None)
+                        reasoning_effort_retry = False
+                        logger.warning(
+                            "[adapter] %s rejected reasoning_effort; retrying without it",
+                            self._provider_name,
+                        )
+                        continue
                 return response  # success (200) or non-retryable error
 
             # Got 429 — read the body so we can distinguish a transient
