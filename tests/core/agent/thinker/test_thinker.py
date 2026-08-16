@@ -10,7 +10,31 @@ from core.agent.thinker import (
     ThinkerAnalysis,
     parse_thinker_analysis,
 )
+from core.agent.thinker.prompt import build_thinker_messages
 from core.models import StreamChunk
+
+
+# ── Prompt anchors on the real request, not a generic fallback (S263) ─────────
+def test_prompt_shows_user_request_even_when_objective_is_generic():
+    ev = Evidence(
+        objective="Determine and complete the user's request.",  # init fallback
+        user_message="Create a recipe on desktop for a nice dinner",
+        observations="ls output: Facebook.lnk, WhatsApp Web.lnk",
+        last_action="shell",
+    )
+    msg = build_thinker_messages(ev)[1]["content"]
+    assert "Create a recipe on desktop" in msg, "the real request must be shown"
+    # The generic fallback objective must NOT appear (it confused the Thinker).
+    assert "Determine and complete the user's request" not in msg
+    # And it must tell the Thinker not to get stuck on irrelevant evidence.
+    assert "irrelevant" in msg.lower()
+
+
+def test_prompt_shows_meaningful_objective_alongside_request():
+    ev = Evidence(objective="Find and read the user's CV", user_message="read my cv", observations="found a.pdf")
+    msg = build_thinker_messages(ev)[1]["content"]
+    assert "read my cv" in msg
+    assert "Find and read the user's CV" in msg  # meaningful objective still shown
 
 
 # ── Contract ────────────────────────────────────────────────────────────────

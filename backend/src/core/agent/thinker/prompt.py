@@ -27,17 +27,31 @@ Output: first your reasoning in a few plain sentences, then EXACTLY ONE JSON obj
 """
 
 
+# A generic fallback objective (init parse failed) must never stand in for the
+# real request — it made the Thinker reason about irrelevant evidence at
+# confidence 0.0 instead of the actual task (Session 263).
+_GENERIC_OBJECTIVE = "determine and complete the user's request"
+
+
 def build_thinker_messages(evidence: Evidence) -> list[dict]:
     """Assemble the chat messages for a Thinker consult."""
-    user = f"""OBJECTIVE (what the user ultimately wants): {evidence.objective or evidence.user_message}
+    # The USER REQUEST is ground truth. Only show the objective when it adds
+    # something beyond the request and isn't the generic fallback.
+    request = evidence.user_message.strip() or evidence.objective.strip()
+    obj = evidence.objective.strip()
+    obj_line = ""
+    if obj and obj.rstrip(".").lower() != _GENERIC_OBJECTIVE and obj.lower() != request.lower():
+        obj_line = f"\nInterpreted objective: {obj}"
 
-EVIDENCE GATHERED SO FAR (reason about THIS):
+    user = f"""USER REQUEST (what to accomplish): {request}{obj_line}
+
+EVIDENCE GATHERED SO FAR (reason about THIS in service of the request):
 {evidence.observations.strip() or "(nothing gathered yet)"}
 
 Most recent action: {evidence.last_action or "(none)"}
 Loop step: {evidence.iteration}
 
-Think about the evidence above, then give the JSON."""
+Reason about whether the evidence moves the REQUEST forward and what to do next. If the evidence is irrelevant to the request, say so and move on — do not get stuck analyzing it. Then give the JSON."""
     return [
         {"role": "system", "content": _SYSTEM},
         {"role": "user", "content": user},
