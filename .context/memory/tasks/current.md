@@ -40,5 +40,9 @@ commit.
 3. z.ai/glm-4.5-flash free tier intermittently returns plain-empty final
    streams on multi-step tasks (2/2 today) — handled, but worth tracking; if
    it persists, consider a retry-on-empty for the final synthesis call.
+4. DONE (Session 284): cerebras/gpt-oss-120b multi-step test — quota-blocked
+   after the first tool call (real 429, B-12 degraded path handled it
+   honestly); the three-model comparison on this task is complete:
+   hy3-free > glm-4.5-flash > gpt-oss-120b. Evidence: /tmp/lm-284/.
 
 **Feature:** none
