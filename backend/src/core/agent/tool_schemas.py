@@ -1,0 +1,671 @@
+# ruff: noqa: E501 — long tool-description strings (schema data, like prompts.py)
+
+"""Lean tool schemas for the native ``tools`` parameter (ADR-40).
+
+ADR-40 / review-40 (Session 250): the model received ALL 30 kitchen-sink
+schemas on EVERY call — ~24,230 chars (~6,057 tokens) — re-sent every
+iteration, for every provider. The schemas were self-manuals ("the tool
+feeding itself"): `browse` enumerated 10 modes with per-param tutorials,
+`git` spelled out every flag, `delegate` described 7 agents inline.
+
+This module is the SINGLE SOURCE OF TRUTH for the model-facing tool
+catalog. Two surfaces derive from it:
+
+1. **The native ``tools`` parameter** — these dicts, as-is (scoped by the
+   agent's allowed-tool set via ``_filtered_tool_defs``).
+2. **The in-prompt "Available tools" list** — the ``lean_tool_index()``
+   helper renders `- <name>: <one-liner>` lines from the SAME definitions
+   (see ``prompts.build_agent_system_prompt``/``build_planning_prompt``
+   ``tool_defs`` parameter), so the prompt list and the native parameter
+   can never drift apart again.
+
+What the cut KEPT vs REMOVED (per ADR-40 guardrails):
+- KEPT: every structural element — parameter names, JSON types, enums,
+  ``required`` lists, array item schemas, ``additionalProperties``.
+  The provider + ``_extract_tool_input`` depend on these to validate and
+  parse model calls, and the tests pin them (git ops, browse actions,
+  delegate contract, create_plan criteria, ...).
+- KEPT: guardrails + weak-model disambiguation — "reset --hard is
+  BLOCKED", "ALWAYS read the file with file_task before editing",
+  "file_task reads FILES, shell lists directories", "use web_fetch AFTER
+  web_search when snippets lack detail", and per-param descriptions ONLY
+  for params that are not self-evident from their name (browse @e1 refs,
+  network filters, edit_file action pairing, git stash/reset modes,
+  delegate agent mapping, ...).
+- REMOVED: tutorial prose and redundant per-param descriptions for
+  self-evident params (path, query, content, message, operation, ...).
+  The optional `description` label param is dropped from most tools — the
+  loop already builds structured action labels from path/command/query
+  when the model omits it (loop.py `action_label` fallback).
+
+Measured (Session 251): the native `tools` param went from ~24,230 chars
+(~6,057 tok) to ~15,981 chars (~3,995 tok) — a ~34% cut (~2,062 tok/call,
+~36% of ADR-40's ~5.7k theoretical reclaimable). The remaining weight is
+structural (names, types, enums, required) plus the guardrail/disambiguation
+prose the ADR says to KEEP. The full ~5.7k reclaim needs option C (on-demand
+loading of the long tail — browse/delegate/sql/csv/json/best_of_n/propose_*/
+subgoal), which is a separate session. The in-prompt tool list also shrank:
+9,832 chars (~2,458 tok) -> ~5,929 chars (~1,482 tok) via the single-source
+collapse. LIVE-VERIFIED tool selection (Session 251) on the active weak model
+(zai/glm-4.5-flash) AND on cerebras: both routed mode=execute and fired the
+correct tool (shell) with valid args. Do not ship a further cut without a
+fresh live trace — trimming schemas can regress weak models' tool choice.
+"""
+
+from core.skills import available_skills_summary
+
+# ── Tool Definitions (OpenAI function-calling format) ────────────────────────
+
+TOOL_DEFINITIONS: list[dict] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for current information, news, prices, weather. Returns URLs + snippets; if snippets lack detail, use web_fetch to read the page.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_fetch",
+            "description": "Fetch and extract readable text from a web page URL. Use AFTER web_search when the snippets are link-only and you need the actual page content (weather, prices, article facts).",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string"},
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browse",
+            "description": "Drive a real headless browser: open, click, fill forms, type, press, scroll, screenshots, read text/DOM, inspect network + console, run JS. Page output may contain sensitive user or session data.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "open",
+                            "snapshot",
+                            "click",
+                            "fill",
+                            "type",
+                            "press",
+                            "scroll",
+                            "scrollintoview",
+                            "screenshot",
+                            "text",
+                            "dom",
+                            "network",
+                            "console",
+                            "url",
+                            "title",
+                            "eval",
+                            "back",
+                            "forward",
+                            "reload",
+                            "close",
+                            "wait",
+                        ],
+                    },
+                    "url": {"type": "string", "description": "For open: URL to navigate to"},
+                    "ref": {"type": "string", "description": "Element reference such as @e1"},
+                    "selector": {"type": "string", "description": "For dom: CSS selector or element reference; defaults to html"},  # noqa: E501
+                    "value": {"type": "string", "description": "Text, key, script, or wait target depending on action"},
+                    "script": {"type": "string", "description": "For eval: JavaScript to execute"},
+                    "direction": {"type": "string", "enum": ["up", "down", "left", "right"]},
+                    "amount": {"type": "integer"},
+                    "path": {"type": "string"},
+                    "full": {"type": "boolean"},
+                    "filter": {"type": "string", "description": "For network: URL pattern filter"},
+                    "type": {"type": "string", "description": "For network: resource type filter, e.g. xhr,fetch"},
+                    "method": {"type": "string", "description": "For network: HTTP method filter"},
+                    "status": {"type": "string", "description": "For network: status filter, e.g. 2xx"},
+                    "clear": {"type": "boolean", "description": "For network/console: clear captured entries after reading"},  # noqa: E501
+                    "json": {"type": "boolean"},
+                    "interactive": {"type": "boolean", "description": "For snapshot: interactive elements only (default true)"},  # noqa: E501
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "code_exec",
+            "description": "Execute Python code and return the output",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Python code, inside a ```python``` block",
+                    },
+                },
+                "required": ["code"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "file_write",
+            "description": "Write or save content to a file (creates parent directories). Use ONLY to CREATE or OVERWRITE — to modify an existing file use edit_file; to read use file_task.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+                "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": "Edit an existing file in-place: replace, regex_replace, insert, delete, append, prepend. Prefer over file_write for existing files. ALWAYS read the file with file_task before editing.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "replace",
+                            "regex_replace",
+                            "insert",
+                            "delete",
+                            "append",
+                            "prepend",
+                        ],
+                    },
+                    "search": {"type": "string", "description": "For replace/regex_replace/delete actions"},
+                    "replace": {"type": "string", "description": "For replace/regex_replace actions"},
+                    "insert_text": {"type": "string", "description": "For insert/append/prepend actions"},
+                    "line": {"type": "integer"},
+                    "start_line": {"type": "integer"},
+                    "end_line": {"type": "integer"},
+                    "pattern": {"type": "string", "description": "Regex pattern for regex_replace action"},
+                    "all": {"type": "boolean", "description": "Replace all occurrences (default: false, first only)"},
+                },
+                "required": ["path", "action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "file_task",
+            "description": "Read the CONTENTS of a single FILE (text or binary: PDF, DOCX, XLSX, TXT, MD, CSV, JSON, YAML, HTML, XML, code). NOT for directory listings — use shell for those. Do NOT use shell 'cat'/'type' to read files.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_path",
+            "description": "Find files/folders whose NAME matches a pattern (substring or glob) under a root; returns matching paths only, capped (default 10, max 25, depth 4). Use to LOCATE by name — never ls/dir to hunt.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Substring or glob pattern (case-insensitive)"},
+                    "root": {"type": "string"},
+                    "max_depth": {"type": "integer"},
+                    "max_results": {"type": "integer"},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "shell",
+            "description": "Run a system command or list directory contents (ls/dir). Use for folder listings, finding files, git, disk checks, OS commands. To READ file contents use file_task — NOT shell ('cat'/'type' fail on PDFs/DOCX/XLSX). Commands must match the current OS.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "Shell command; use 'dir <path>' (Windows) or 'ls <path>' (Unix) for listings"},  # noqa: E501
+                },
+                "required": ["command"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_op",
+            "description": "Store, recall, or delete persistent facts about the user",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["store", "recall", "forget", "list"],
+                    },
+                    "content": {"type": "string"},
+                },
+                "required": ["operation", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sysinfo",
+            "description": "Get current system info: time, date, hardware specs, installed programs",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "observe",
+            "description": "Observe the desktop right now (offline, instant, bounded): active window, clipboard, running apps, CPU/RAM/disk/battery state, recently modified files. Use for 'what's happening right now?' without shell.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "What to observe: window, clipboard, apps, cpu/ram, recent files"},  # noqa: E501
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculator",
+            "description": "Evaluate a safe arithmetic expression exactly, offline: + - * / // % **, parentheses, pi/e/tau, abs/round/min/max/pow/sqrt/floor/ceil/exp/log/sin/cos/tan, and '15% of 80'. Use for precise numeric answers instead of shell.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {"type": "string"},
+                },
+                "required": ["expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "csv",
+            "description": "Read a CSV file as a compact bounded table (default 20 rows x 20 cols, max 50) — never the raw file. Use for 'what's in this CSV' without flooding context.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "max_rows": {"type": "integer"},
+                    "max_cols": {"type": "integer"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "json",
+            "description": "Parse and summarize JSON — from a file path (allowed folders) or inline JSON text. Optional dot-path query to drill in (e.g. a.b[0].c). Output is bounded: large collections are summarized, never dumped.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string"},
+                    "query": {"type": "string", "description": "Optional dot-path to extract, e.g. 'a.b[0].c'"},
+                    "max_items": {"type": "integer"},
+                },
+                "required": ["source"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sql",
+            "description": "Run a READ-ONLY SQLite SELECT against a local .db/.sqlite file (path in allowed folders). Writes fail safely. Output is bounded (row cap 20, max 50). Use for 'what's in this database'.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "query": {"type": "string"},
+                    "max_rows": {"type": "integer"},
+                },
+                "required": ["path", "query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delegate",
+            "description": "Delegate a sub-task to a specialized agent: research (web), coding (shell+file+code), browser (headless), verifier (tests/reproduce), reviewer (code quality), debugger (root-cause), analyst (clarify), direct (single call, no tools). Costs an extra loop — prefer your own tools when they suffice.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target_agent": {
+                        "type": "string",
+                        "enum": ["research", "coding", "browser", "direct", "verifier", "reviewer", "debugger", "analyst"],  # noqa: E501
+                        "description": "'research' for web, 'coding' for shell+file+code, 'browser' for headless, 'direct' for a single call",
+                    },
+                    "task": {"type": "string"},
+                    "scope": {"type": "array", "items": {"type": "string"}},
+                    "constraints": {"type": "array", "items": {"type": "string"}},
+                    "forbidden_tools": {"type": "array", "items": {"type": "string"}},
+                    "input_evidence": {"type": "string"},
+                    "output_contract": {"type": "object", "additionalProperties": {"type": "string"}},
+                },
+                "required": ["target_agent", "task"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delegate_parallel",
+            "description": "Delegate MULTIPLE independent sub-tasks to agents IN PARALLEL (up to 5 targets, each {agent, task}). Returns a summary of every output. For a single dependent sub-task use 'delegate' instead.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "targets": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "agent": {
+                                    "type": "string",
+                                    "enum": ["research", "coding", "browser", "direct", "verifier", "reviewer", "debugger", "analyst"],  # noqa: E501
+                                },
+                                "task": {"type": "string"},
+                            },
+                            "required": ["agent", "task"],
+                        },
+                    }
+                },
+                "required": ["targets"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delegate_inline",
+            "description": "Delegate an INLINE transformation to an inline-capable agent that REWRITES this conversation's history in place (currently only 'context_pruner', which compacts history when it grows too long). Use sparingly — it changes what you see next.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target_agent": {"type": "string"},
+                    "task": {"type": "string"},
+                },
+                "required": ["target_agent", "task"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_str_replace",
+            "description": "Stage a search/replace edit as a PROPOSAL without touching disk (same args as edit_file). Returns a diff preview stored in a per-run registry; apply the winner with apply_proposed_edit. Nothing is written until you apply.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "replace",
+                            "regex_replace",
+                            "insert",
+                            "delete",
+                            "append",
+                            "prepend",
+                        ],
+                    },
+                    "search": {"type": "string", "description": "For replace/regex_replace/delete actions"},
+                    "replace": {"type": "string", "description": "For replace/regex_replace actions"},
+                    "insert_text": {"type": "string", "description": "For insert/append/prepend actions"},
+                    "line": {"type": "integer"},
+                    "start_line": {"type": "integer"},
+                    "end_line": {"type": "integer"},
+                    "pattern": {"type": "string", "description": "Regex pattern for regex_replace action"},
+                    "all": {"type": "boolean"},
+                },
+                "required": ["path", "search", "replace"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_write_file",
+            "description": "Stage a full-file write as a PROPOSAL without touching disk (path+content). Stored in a per-run registry; call apply_proposed_edit to write it. Use with propose_str_replace for best-of-N editing.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+                "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "apply_proposed_edit",
+            "description": "Write a staged proposal to disk (staged by propose_str_replace or propose_write_file). Same permission gating as file_write.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "best_of_n_edit",
+            "description": "Produce N candidate edits for one file, pick the best via a selector agent, and apply it. Expensive (spawns N+1 sub-agents) — use sparingly for high-stakes edits.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string"},
+                    "instruction": {"type": "string"},
+                    "n": {"type": "integer"},
+                    "strategies": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["file_path", "instruction"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_subgoal",
+            "description": "Record a single subgoal in the run's subgoal scratchpad to track progress across iterations of a multi-step task. Prefer create_plan when you know several steps up front.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "description": {"type": "string"},
+                },
+                "required": ["description"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_subgoal",
+            "description": "Update a subgoal's status ('pending' | 'in_progress' | 'completed' | 'blocked') and/or attach notes. Ids come from add_subgoal / create_plan (e.g. 'sg-1').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "in_progress", "completed", "blocked"],
+                    },
+                    "notes": {"type": "string"},
+                },
+                "required": ["id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_plan",
+            "description": "Create multiple subgoals for a multi-step task; optionally add success_criteria (the acceptance gate verifies them). Returns the scratchpad.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "steps": {"type": "array", "items": {"type": "string"}},
+                    "success_criteria": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "2-4 concrete checkable statements proving success",
+                    },
+                },
+                "required": ["steps"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "skill",
+            "description": (
+                "Load a specialized playbook (a 'skill' — markdown instructions) into your "
+                "context when the task matches its domain (e.g. Python testing, git "
+                "workflows, code review). Skills are read-only prompt fragments. "
+                f"Available skills: {available_skills_summary()}."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "skill_name": {"type": "string"},
+                },
+                "required": ["skill_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "git",
+            "description": "Structured Git operations (prefer over shell for git): status, diff, log, branch, checkout, commit, merge, stash, reset. reset --hard is BLOCKED. Check git status before committing and git log before resetting.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["status", "diff", "log", "branch", "checkout", "commit", "merge", "stash", "reset"],  # noqa: E501
+                    },
+                    "staged": {"type": "boolean", "description": "For 'diff': show staged changes (default: unstaged)"},
+                    "count": {"type": "integer"},
+                    "name": {"type": "string"},
+                    "branch": {"type": "string"},
+                    "message": {"type": "string"},
+                    "add_all": {"type": "boolean", "description": "For 'commit': stage all changes first (git add -A); default: staged only"},  # noqa: E501
+                    "action": {"type": "string", "enum": ["push", "pop", "list"], "description": "For 'stash': push (save), pop (restore+remove), or list; default push"},  # noqa: E501
+                    "mode": {
+                        "type": "string",
+                        "enum": ["--soft", "--mixed", "--hard"],
+                        "description": "For 'reset': --soft/--mixed keep changes; --hard is BLOCKED; default --mixed",
+                    },
+                    "ref": {"type": "string"},
+                },
+                "required": ["operation"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "process",
+            "description": "Manage long-running processes: start (background, returns PID), stop (SIGTERM; force=true for SIGKILL), restart, status, logs (last 200 lines), wait (default 30s). Use for commands running >20s — shell kills commands after 20s.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["start", "stop", "restart", "status", "logs", "wait"],
+                    },
+                    "name": {"type": "string", "description": "Short identifier for the process (e.g. 'dev-server')"},
+                    "command": {"type": "string"},
+                    "force": {"type": "boolean"},
+                    "timeout": {"type": "number"},
+                },
+                "required": ["operation"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "diagnostics",
+            "description": "Structured analysis of errors, tracebacks, logs, and test failures: inspect_error, analyze_traceback, inspect_logs, inspect_test_failure. Returns severity + suggested next actions.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["inspect_error", "analyze_traceback", "inspect_logs", "inspect_test_failure"],  # noqa: E501
+                    },
+                    "text": {"type": "string"},
+                    "path": {"type": "string", "description": "For inspect_logs: file to read; if omitted, 'text' is analyzed"},
+                },
+                "required": ["operation"],
+            },
+        },
+    },
+]
+
+
+def render_tool_list(tool_defs: list[dict] | None = None) -> list[str]:
+    """Render the always-present "Available tools" lines for the system prompt.
+
+    Renders `- <name>: <description>` from the tool definitions themselves so
+    the in-prompt list and the native ``tools`` parameter share ONE source of
+    truth (ADR-40 collapse of the 3 copies). The descriptions are already the
+    lean Tier-1 form (one-liner + guardrails + disambiguation), so the full
+    description is shown — trimming to the first sentence would drop the
+    guardrail sentences ("reset --hard is BLOCKED") that this surface exists
+    to carry for weak models.
+
+    Args:
+        tool_defs: scoped subset of TOOL_DEFINITIONS (e.g. from
+            ``_filtered_tool_defs``). Defaults to the full catalog.
+
+    Returns:
+        List of `- name: description` lines, one per tool, in catalog order.
+    """
+    defs = tool_defs if tool_defs is not None else TOOL_DEFINITIONS
+    return [
+        f"  - {td.get('function', {}).get('name', '?')}: "
+        f"{str(td.get('function', {}).get('description', '')).strip()}"
+        for td in defs
+    ]

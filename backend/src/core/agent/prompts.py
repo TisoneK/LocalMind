@@ -31,6 +31,7 @@ from __future__ import annotations
 from typing import Optional
 
 from core.agent.constants import MAX_ITERATIONS
+from core.agent.tool_schemas import render_tool_list
 from core.models import Intent
 
 
@@ -40,6 +41,7 @@ def build_planning_prompt(
     available_tools: list[dict],
     env_context: str,
     intent_history: Optional[list[str]] = None,
+    tool_defs: Optional[list[dict]] = None,
 ) -> str:
     """
     Return the planning-phase system prompt.
@@ -55,11 +57,17 @@ def build_planning_prompt(
     """
     from core.agent.constants import AGENT_ALLOWED_TOOLS
 
-    agent_tool_list = "\n".join(
-        f"  - {t['intent']}: {t['description']}"
-        for t in available_tools
-        if t["intent"] in AGENT_ALLOWED_TOOLS
-    )
+    # ADR-40: when the scoped tool DEFS are provided, the in-prompt tool list
+    # is rendered from the SAME source as the native `tools` param (one source
+    # of truth). Fall back to the metadata list for backward-compat callers.
+    if tool_defs is not None:
+        agent_tool_list = "\n".join(render_tool_list(tool_defs))
+    else:
+        agent_tool_list = "\n".join(
+            f"  - {t['intent']}: {t['description']}"
+            for t in available_tools
+            if t["intent"] in AGENT_ALLOWED_TOOLS
+        )
 
     intent_ctx = ""
     if intent_history:
@@ -425,6 +433,7 @@ def build_agent_system_prompt(
     memory_facts: Optional[list[str]] = None,
     orchestrator_context: Optional[str] = None,
     agent_context: Optional[str] = None,
+    tool_defs: Optional[list[dict]] = None,
 ) -> str:
     """
     Return the agent execution-phase system prompt string.
@@ -471,13 +480,18 @@ def build_agent_system_prompt(
 
     # Build tool list restricted to only agent-allowed tools, so the LLM
     # cannot hallucinate calls to direct-dispatch tools (sysinfo, file_task, shell).
-    from core.agent.constants import AGENT_ALLOWED_TOOLS
+    # ADR-40: when the scoped tool DEFS are provided, render the in-prompt list
+    # from the SAME source as the native `tools` param (one source of truth).
+    if tool_defs is not None:
+        agent_tool_list = "\n".join(render_tool_list(tool_defs))
+    else:
+        from core.agent.constants import AGENT_ALLOWED_TOOLS
 
-    agent_tool_list = "\n".join(
-        f"  - {t['intent']}: {t['description']}"
-        for t in available_tools
-        if t["intent"] in AGENT_ALLOWED_TOOLS
-    )
+        agent_tool_list = "\n".join(
+            f"  - {t['intent']}: {t['description']}"
+            for t in available_tools
+            if t["intent"] in AGENT_ALLOWED_TOOLS
+        )
 
     # Chat mode: natural conversational response — rich, thoughtful, alive
     if intent == Intent.CHAT:
