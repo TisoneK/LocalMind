@@ -3,6 +3,7 @@ Session 189: PowerShell routing on Windows.'''
 from __future__ import annotations
 
 import pytest
+
 from tools.shell import (
     ShellContract,
     _looks_like_natural_language,
@@ -69,6 +70,31 @@ async def test_legacy_shell_exec_rejects_nl():
     result = await shell_exec('Check git status in the localmind repo')
     assert result.success is False
     assert result.error_type in ('nl_command_rejected', 'nl_dispatch_removed')
+
+
+# ── Session 258: PowerShell cmdlets must route through the legacy gate ───────
+# Live user bug (Windows): the model is told it's on PowerShell and emits
+# `Get-ChildItem -Path $env:USERPROFILE\Desktop`. The legacy shell_exec Case 2
+# gate only routed _RAW_CMD_TOKENS + shell operators — get-childitem is not a
+# token and `$env:` carries no operator, so every cmdlet fell through to Case 3
+# and was rejected with nl_dispatch_removed before reaching the shell.
+
+
+def test_env_var_powershell_cmdlet_is_detected():
+    # The exact live-user shape: PowerShell cmdlet with an env-var path.
+    assert _looks_like_powershell("Get-ChildItem -Path $env:USERPROFILE\\Desktop")
+    assert _looks_like_powershell("Get-ChildItem -Path \"C:\\Users\\tison\\Desktop\"")
+    assert not _looks_like_natural_language("Get-ChildItem -Path $env:USERPROFILE\\Desktop")
+
+
+@pytest.mark.asyncio
+async def test_legacy_shell_exec_routes_powershell_cmdlet_to_run_command():
+    # Must NOT return nl_dispatch_removed — it must route to run_command and
+    # reach the shell (on non-Windows dev the cmdlet itself fails to run, but
+    # the rejection that mattered — nl_dispatch_removed — must never happen).
+    result = await shell_exec("Get-ChildItem -Path $env:USERPROFILE\\Desktop")
+    assert result.error_type != 'nl_dispatch_removed'
+    assert 'NL dispatch' not in result.content
 
 
 def test_where_builtin_first_token_allowed():

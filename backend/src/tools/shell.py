@@ -850,9 +850,15 @@ async def shell_exec(message: str) -> ToolResult:
     # _RAW_CMD_TOKENS is the module-level union of builtins and known
     # command names (see the Session 113 guard above) — operators are
     # checked explicitly so "a | b" routes even with an unknown first token.
+    # Session 189: PowerShell cmdlets (Get-ChildItem, Get-Content, ...) are
+    # real commands — the model is told it's on PowerShell on Windows and
+    # emits cmdlets whose first token is NOT in _RAW_CMD_TOKENS and often
+    # carries no shell operator (e.g. `Get-ChildItem -Path $env:USERPROFILE\Desktop`).
+    # Without this, every cmdlet fell through to Case 3 and was rejected with
+    # nl_dispatch_removed (live user bug, Session 258).
     first_token = message.strip().split()[0].lower() if message.strip() else ""
     has_operator = any(op in message for op in {"&&", "||", ">>", ">", ";", "|"})
-    if has_operator or first_token in _RAW_CMD_TOKENS:
+    if has_operator or first_token in _RAW_CMD_TOKENS or _looks_like_powershell(message):
         return await ShellContract().execute({"action": "run_command", "command": message})
 
     # Case 3 — NL string with no structured payload

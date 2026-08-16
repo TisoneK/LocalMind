@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Shell tool no longer rejects PowerShell cmdlets on Windows (live user bug): the model is told it's on PowerShell and emits commands like `Get-ChildItem -Path $env:USERPROFILE\Desktop`, but the legacy dispatch gate only routed known command tokens + shell operators, so every cmdlet fell through to the "NL dispatch is gone" rejection (`nl_dispatch_removed`) before reaching the shell. The gate now routes PowerShell-flavored commands (per the Session 189 detector) straight to `run_command`.
+- The agent now chains related tools: the shell and file_write tool descriptions, the SHELL/FILE_WRITE planning workflows, the Operator persona, and the universal FOLLOW-THROUGH rule all now say explicitly that listing a folder is only the FIRST step when the user asked to create a file — after confirming the path, call `file_write` with that exact path instead of stopping after the listing.
+
 ### Removed
 - Deleted the legacy request-time intent system: `thinking_dispatcher.py`, `execution_graph.py`, `workspace/orchestrator.py` (+ `workspace/manager.py`), and `engine/routing_helpers.py` had no production callers since the parent-agent runtime replaced the request pipeline (Session 201). Their data contracts (`TaskProfile`, `OrchestrationPlan`, `ExecutionMode`, `SafetyLevel`, `ExecutionConstraints`, `UnderstandingResult`, `ValidationResult`) and dead constants/helpers were deleted with them. The parent AgentLoop is the only routing path — every turn classifies the tier, then the plan EMERGES from tool evidence.
 - Parent initialization is now strictly classify-only (rebuild Step 1): the init decision no longer carries `facts`/`ambiguities`/`tool_names`/`plan_steps`/`success_criteria` (parsed fields, `plan_text()` rendering, the streaming `understanding_details` block, upfront `todo_created` events, and the init-fed acceptance criteria were all deleted). A model that returns legacy fields is ignored, not preserved. The tool catalog is no longer accepted by `build_initialization_prompt`.

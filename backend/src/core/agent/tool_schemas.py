@@ -221,7 +221,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "file_write",
-            "description": "Write or save content to a file (creates parent directories). Use ONLY to CREATE or OVERWRITE — to modify an existing file use edit_file; to read use file_task.",  # noqa: E501
+            "description": "Write or save content to a file (creates parent directories). Use ONLY to CREATE or OVERWRITE — to modify an existing file use edit_file; to read use file_task. When creating a file in a folder you just listed with shell, use the exact folder path from that listing (check-before-acting).",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -300,7 +300,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "shell",
-            "description": "Run a system command or list directory contents (ls/dir). Use for folder listings, finding files, git, disk checks, OS commands. To READ file contents use file_task — NOT shell ('cat'/'type' fail on PDFs/DOCX/XLSX). Commands must match the current OS.",  # noqa: E501
+            "description": "Run a system command or list directory contents (ls/dir). Use for folder listings, finding files, git, disk checks, OS commands. To READ file contents use file_task — NOT shell ('cat'/'type' fail on PDFs/DOCX/XLSX). To CREATE a new file use file_write — do NOT stop after listing a folder if the user asked you to create a file there. Commands must match the current OS (Windows: PowerShell cmdlets like Get-ChildItem work).",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {

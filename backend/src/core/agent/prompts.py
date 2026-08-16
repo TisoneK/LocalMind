@@ -80,6 +80,7 @@ def build_planning_prompt(
     intent_templates = {
         Intent.FILE_WRITE: """
 FILE_WRITE WORKFLOW — follow this template:
+0. If you don't know the exact target folder (e.g. "desktop"), list it with shell first to confirm the path — then write there
 1. Identify the file path from the user's request (or infer a sensible default)
 2. Determine the complete file content — write it ALL, no placeholders
 3. Call file_write ONCE with both 'path' and 'content' filled
@@ -117,9 +118,10 @@ MEMORY_OP WORKFLOW — follow this template:
         Intent.SHELL: """
 SHELL WORKFLOW — follow this template:
 1. Understand what the user wants to do on their computer (list files, run a command, check disk, etc.)
-2. Call the shell tool with the exact command needed — commands MUST match the current OS
+2. Call the shell tool with the exact command needed — commands MUST match the current OS (Windows: PowerShell cmdlets like Get-ChildItem work)
 3. Report the EXACT output from the tool — NEVER fabricate or add items that weren't in the output
-4. If listing a directory, report ONLY the names the tool returned — do NOT add "typical" folders""",
+4. If listing a directory, report ONLY the names the tool returned — do NOT add "typical" folders
+5. If the user asked you to CREATE a file (recipe, document, project): listing the folder is only step ONE — after confirming the path, call file_write with the full path from the listing + complete content. Do NOT stop after listing.""",
         Intent.FILE_TASK: """
 FILE_TASK WORKFLOW — follow this template:
 1. If the user gave a FILE path: call file_task with that exact path — read it immediately
@@ -734,6 +736,7 @@ Do NOT re-plan or re-think — just call the tools as described in the plan.
 '- To LOCATE a file or folder by name, use find_path — never dir/ls an entire directory hoping to spot it (that dumps the whole listing into context)\n'
 '- For DIRECTORY LISTINGS: ALWAYS use shell (list_files or dir/ls), NEVER file_task\n'
 "- For READING FILE CONTENTS: ALWAYS use file_task, NOT shell commands — 'type'/'cat'/'more' only work for text; binary files (PDF, DOCX, XLSX) show garbage bytes in shell; file_task parses all formats\n"
+"- To CREATE a file (recipe, notes, project): shell lists the folder, then file_write writes the file — chain them, don't stop after listing\n"
 '\n'
 '**Failure modes to watch for:**\n'
 "- Fabricating directory contents or file names that weren't in the output\n"
@@ -867,7 +870,7 @@ CRITICAL RULES:
 4. NEVER fabricate or embellish tool results. Base your answer EXACTLY on tool output: no invented file names, folder contents, search results, or system info. If the tool shows 3 items, report 3. If output is empty or errored, say so honestly — never substitute estimates. Every specific detail (names, numbers, paths) must come from the actual tool result.
 5. Don't hedge ("(Not entirely sure)", "I believe"). You are a tool-using agent — you DO NOT guess, you call tools and report results, so you ARE sure. If uncertain, verify with a tool.
 6. LIVE DATA RULE: For ANY query involving live, scheduled, or time-sensitive data (sports, weather, prices, news, stocks), you MUST invoke the appropriate tool — training data is stale for such queries. Always use web_search/web_fetch for current data.
-7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (list dir → find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious.
+7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (list dir → find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. CHAIN RELATED TOOLS: if the user asked you to CREATE a file ("write a recipe on the desktop"), listing the folder with shell is only the FIRST step — then call file_write with that exact path. Listing alone is NOT completing the task.
 8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
 
 VERIFY (after EVERY tool result — skipping this is the same as fabricating):
