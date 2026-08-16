@@ -625,14 +625,14 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               <div>
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-brand-green-soft">
-                    Reasoning effort (GLM-5.2+)
+                    Reasoning effort (thinking level)
                   </span>
                   <select
                     value={reasoningEffort}
                     onChange={(e) => setReasoningEffort(e.target.value)}
                     className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft focus:border-brand-green outline-none"
                   >
-                    <option value="">Provider default</option>
+                    <option value="">Provider default (unbounded)</option>
                     {['none', 'minimal', 'low', 'medium', 'high', 'max', 'xhigh'].map((o) => (
                       <option key={o} value={o}>
                         {o}
@@ -641,7 +641,9 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                   </select>
                 </label>
                 <p className="mt-1 text-[11px] text-brand-green-muted">
-                  Bounds how long GLM thinks (5.2: max/xhigh/high/medium/low/minimal/none; 5.3: max/high/low).
+                  Bounds how much GLM thinks — applies to glm-4.5-flash too. Lower = faster, less
+                  over-thinking; higher = deeper. Try low/medium on slow free tiers. (A version that
+                  doesn&apos;t support a level is ignored safely.)
                 </p>
               </div>
               <button
