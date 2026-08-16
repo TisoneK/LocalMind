@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, Brain, Terminal } from 'lucide-react';
+import { ChevronRight, Brain, Terminal, Copy, Check } from 'lucide-react';
 import { ThinkingStep } from '@/types';
 import { useEnterMotion } from '@/lib/localmind/motion';
 
@@ -57,6 +57,9 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
   // Start expanded during streaming so thinking content is visible.
   // Collapse automatically when streaming finishes.
   const [collapsed, setCollapsed] = useState(!isStreaming);
+  // Session 265: copy state for the footer button (copies the full trace).
+  const [copied, setCopied] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Auto-collapse when streaming transitions from true → false
   useEffect(() => {
@@ -70,6 +73,21 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
 
   const content = typeof thinking === 'string' ? thinking : thinking.content;
   const duration = thinkMs;
+
+  // Session 265: keep newly streamed reasoning visible — whenever the
+  // content grows (or the block is re-expanded), scroll to the bottom so
+  // the latest thought is in view instead of hiding above the fold.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [content, collapsed]);
+
+  const handleCopy = useCallback(() => {
+    if (!content) return;
+    navigator.clipboard?.writeText(content).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [content]);
 
   // v0.13: Parse structured step lines from the thinking stream.
   // A step line looks like: "[Web Search] Search: Nairobi weather"
@@ -118,21 +136,43 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="overflow-hidden border-t border-brand-border bg-brand-bg-dark"
           >
-            <div className="whitespace-pre-wrap break-words px-3 py-2 text-[11px] leading-relaxed text-brand-green-muted">
-              {stepLabel ? (
-                <div className="flex items-start gap-2">
-                  <Terminal className={`mt-0.5 h-3 w-3 shrink-0 ${stepColor}`} />
-                  <span>
+            {/* Session 265: bounded-height reasoning with its own scrollbar —
+                a long thought process scrolls instead of stretching the
+                message; new tokens auto-scroll into view. */}
+            <div
+              ref={scrollRef}
+              data-testid="thinking-scroll"
+              className="max-h-64 overflow-y-auto custom-scrollbar"
+            >
+              <div className="whitespace-pre-wrap break-words px-3 py-2 text-[11px] leading-relaxed text-brand-green-muted">
+                {stepLabel ? (
+                  <div className="flex items-start gap-2">
+                    <Terminal className={`mt-0.5 h-3 w-3 shrink-0 ${stepColor}`} />
+                    <span>
+                      {content}
+                      {isStreaming && <LiveCaret reduceMotion={reduceMotion} />}
+                    </span>
+                  </div>
+                ) : (
+                  <>
                     {content}
                     {isStreaming && <LiveCaret reduceMotion={reduceMotion} />}
-                  </span>
-                </div>
-              ) : (
-                <>
-                  {content}
-                  {isStreaming && <LiveCaret reduceMotion={reduceMotion} />}
-                </>
-              )}
+                  </>
+                )}
+              </div>
+            </div>
+            {/* Footer: copy the full reasoning trace */}
+            <div className="flex items-center justify-end border-t border-brand-border/60 px-2 py-1">
+              <button
+                type="button"
+                onClick={handleCopy}
+                disabled={!content}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] text-brand-green-muted transition-colors hover:text-brand-green hover:bg-brand-green/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                title={copied ? 'Copied' : 'Copy reasoning'}
+              >
+                {copied ? <Check className="h-3 w-3 text-brand-green" /> : <Copy className="h-3 w-3" />}
+                <span>{copied ? 'Copied' : 'Copy'}</span>
+              </button>
             </div>
           </motion.div>
         )}

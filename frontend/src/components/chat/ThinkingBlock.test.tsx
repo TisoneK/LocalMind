@@ -7,9 +7,17 @@
  * the label as a chip.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ThinkingBlock } from './ThinkingBlock';
+
+const writeText = vi.fn();
+beforeEach(() => {
+  writeText.mockClear();
+  Object.assign(navigator, {
+    clipboard: { writeText: (...args: unknown[]) => { writeText(...args); return Promise.resolve(); } },
+  });
+});
 
 describe('ThinkingBlock', () => {
   it('renders the reasoning content while streaming', () => {
@@ -53,5 +61,30 @@ describe('ThinkingBlock', () => {
 
     fireEvent.click(screen.getByText('Thought process'));
     expect(screen.getByText(/expandable reasoning/)).toBeInTheDocument();
+  });
+
+  it('bounds the reasoning height with a scrollable container (Session 265)', () => {
+    render(<ThinkingBlock thinking="long reasoning" isStreaming />);
+    const scroller = screen.getByTestId('thinking-scroll');
+    expect(scroller.className).toContain('max-h-64');
+    expect(scroller.className).toContain('overflow-y-auto');
+    expect(scroller.className).toContain('custom-scrollbar');
+  });
+
+  it('copies the full reasoning via the bottom copy button (Session 265)', () => {
+    render(<ThinkingBlock thinking="copyable reasoning" isStreaming />);
+    fireEvent.click(screen.getByTitle('Copy reasoning'));
+    expect(writeText).toHaveBeenCalledWith('copyable reasoning');
+  });
+
+  it('auto-scrolls new reasoning content into view (Session 265)', () => {
+    // jsdom has no layout, so scrollHeight is 0 by default; fake it to assert
+    // the effect pins scrollTop to the container bottom on content growth.
+    const { rerender } = render(<ThinkingBlock thinking="first chunk" isStreaming />);
+    const scroller = screen.getByTestId('thinking-scroll');
+    Object.defineProperty(scroller, 'scrollHeight', { value: 500, configurable: true });
+
+    rerender(<ThinkingBlock thinking="first chunk second chunk" isStreaming />);
+    expect(scroller.scrollTop).toBe(500);
   });
 });
