@@ -1,0 +1,103 @@
+# Live-testing the agent (mandatory before claiming an agent/tool/adapter change works)
+
+**Audience:** every agent working on LocalMind's backend agent loop, tools, or
+provider adapters. **Read this before you write "done", "works", or "verified".**
+
+## Why unit tests are not enough
+
+The user has said the unit tests "do not tell the truth — they are designed to
+pass certain conditions." That is exactly right, and this session proved it three
+times:
+
+- **todo_write (S274):** every unit test passed, but the REAL agent path was
+  broken — `_extract_tool_input` stringified the tool's array argument as a Python
+  repr (single quotes), so the model's call failed JSON parsing on every
+  invocation. Only a live trace exposed it.
+- **shell output bounding (S272):** an ADR claimed shell dumped raw stdout; reading
+  the actual capture path (and running it) showed it was already bounded. The
+  assumption, not the code, was wrong.
+- **GLM think-and-act (S253):** "the model is weak" was wrong — the harness had
+  disabled its reasoning. Only comparing a real before/after trace found it.
+
+A green suite means the code didn't violate its own assumptions. It does **not**
+mean the real model+provider+loop path works. Those are different claims. Unit
+tests pin structure; live traces prove behavior.
+
+## The isolated live-trace harness
+
+**Hard rules (never violate):**
+- **Never touch port 8000** — that is the user's running app. Always use your own
+  port (8765).
+- **Never print, echo, or read API-key values.** Copy the settings file as-is;
+  don't cat it.
+- **Isolate `LOCALMIND_HOME`** — copy the user's settings into a scratch dir so
+  your trace never writes into their real DB/todos/history.
+- **Clean up** afterwards: kill the 8765 server, and remove any file the trace
+  wrote to a real location (e.g. the Desktop).
+
+**Recipe (copy-paste, adjust the model/task):**
+
+```bash
+cd backend
+SC=<your scratchpad dir>
+TH="$SC/tracehome"; mkdir -p "$TH"
+cp ~/LocalMind/settings.json "$TH/settings.json"   # copy as-is; never cat it
+# Point the copy at the model under test (edit JSON, don't print keys):
+python3 -c "import json;p='$TH/settings.json';d=json.load(open(p));\
+d['adapter']='zai';d['model']='glm-4.5-flash';d['thinking']='enabled';\
+d['reasoning_effort']='low';json.dump(d,open(p,'w'))"
+
+# Boot from source on the ISOLATED port + home (never 8000):
+pkill -f "LOCALMIND_PORT=8765"; lsof -ti:8765 | xargs kill -9 2>/dev/null
+(LOCALMIND_PORT=8765 LOCALMIND_HOME="$TH" LOCALMIND_ADAPTER=zai \
+ LOCALMIND_SHELL_ENABLED=true .venv/bin/python server.py > "$SC/trace.log" 2>&1 &)
+for i in $(seq 1 30); do curl -s -m2 http://localhost:8765/api/health >/dev/null && break; sleep 1; done
+
+# Fire a real request, stream the SSE to a file:
+curl -sN -m280 -X POST http://localhost:8765/api/chat \
+  -F "message=<the task>" -F "session_id=t$(date +%s)" > "$SC/trace.sse"
+```
+
+**Inspect what actually happened (not what you hoped):**
+
+```bash
+# Which tools ran, in what order, with what latency:
+grep -aE "iter=[0-9]+ (LLM|tool_call=)|finished iter" "$SC/trace.log"
+# The SSE events that matter for your change (todo_*, tool_call, turn_complete):
+grep -oE '"type": *"[a-z_]+"' "$SC/trace.sse" | sort | uniq -c
+# Token cost (the real number, from provider_usage on turn_complete):
+grep -o '"provider_usage":[^}]*}' "$SC/trace.sse" | tail -1
+# Errors / validation failures the model hit:
+grep -aiE "error|validation|traceback" "$SC/trace.log" | head
+```
+
+**Then clean up:** `pkill -f "LOCALMIND_PORT=8765"` and delete any real-location
+artifacts the trace created.
+
+## The bar (what "verified" requires)
+
+1. **Real provider, real model.** Trace on `z.ai/glm-4.5-flash` (the active weak
+   model — if it works there it works). For anything touching tool SELECTION or
+   schemas, ALSO trace a second provider with headroom (cerebras) — weak models
+   regress differently. Provider rate-limits are expected; preserve the evidence
+   and note it, don't claim success through them.
+2. **Before AND after.** For a behavior change, capture the failing/old trace and
+   the fixed trace on the SAME task. "It passes now" is only meaningful against
+   "it failed before."
+3. **Verify the thing you changed, in the SSE/log — not a proxy.** If you added a
+   todo tool, the SSE must carry `todo_created`. If you bounded output, the token
+   count must drop. Grep for the actual event/number.
+4. **Report honestly.** State what was live-verified vs unit-tested vs assumed. If
+   the weak model didn't exercise a path (e.g. didn't mark a todo completed), say
+   so — don't imply it did.
+
+## Environment gotchas (logged across sessions)
+
+- Port 8000 is the user's app; `LOCALMIND_SHELL_ENABLED` may be `false` in
+  `backend/.env` (your trace shows "Shell tool is disabled" if so — set it true in
+  the trace env).
+- macOS has no `timeout` CLI; use `curl -m<secs>`.
+- The active provider/model is set in the APP's `~/LocalMind/settings.json`, NOT
+  `backend/.env` — copy that file to know what's really loaded.
+- glm-4.5-flash reasoning can't be bounded by a budget param — `reasoning_effort`
+  (level) is the lever; unbounded thinking overflows context ("context too long").
