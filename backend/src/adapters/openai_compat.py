@@ -1340,11 +1340,29 @@ class OpenAICompatAdapter(BaseAdapter):
             chunks_read = 0
             _safety_error = None  # set if Gemini/other provider blocks via safety filter
 
-            async for line in response.aiter_lines():
+            # B-2026-08-16-13 (Session 282, found via live trace on
+            # z.ai/glm-4.5-flash): Phase 1 and Phase 2b MUST share ONE line
+            # iterator. httpx's `is_stream_consumed` flips True at the START
+            # of iteration (aiter_raw sets it before yielding anything), NOT
+            # when the stream ends — so the old Phase 2b gate (`not
+            # _resp.is_stream_consumed`) was ALWAYS False after Phase 1 had
+            # iterated at all. Every text response that Phase 1 broke out of
+            # mid-stream (the content + chunks_read>=15 heuristic, which fires
+            # on the FIRST content chunk for reasoning-first models like
+            # z.ai/GLM) had its tail silently dropped: the final answer was
+            # truncated to whatever fit in Phase 1's window (~16 content
+            # tokens) and that truncated text was shipped as a successful
+            # reply. Resuming the SAME generator continues the stream where
+            # Phase 1 paused — that is the only correct handoff for httpx's
+            # one-shot streams.
+            _lines = response.aiter_lines()
+            _phase1_exhausted = False
+            async for line in _lines:
                 if not line or not line.startswith("data: "):
                     continue
                 data = line[6:]
                 if data == "[DONE]":
+                    _phase1_exhausted = True
                     break
 
                 try:
@@ -1656,6 +1674,15 @@ class OpenAICompatAdapter(BaseAdapter):
             _raw_parts = list(raw_content_parts)  # snapshot for JSON fallback
             _tool_names = tool_names  # captured for mid-stream detection
             _usage = usage_metadata  # updated by the live stream closure
+            # B-2026-08-16-13: hand Phase 1's line iterator to Phase 2b so it
+            # can RESUME the still-open stream where Phase 1 paused (httpx
+            # streams are one-shot — a fresh aiter_lines() raises
+            # StreamConsumed, and is_stream_consumed is True from the moment
+            # Phase 1 started iterating, so neither is a usable "more data?"
+            # signal). `_phase1_exhausted` is True only when Phase 1 consumed
+            # the stream to [DONE] — only then is there nothing left to read.
+            _lines_tail = _lines
+            _phase1_exhausted = _phase1_exhausted
 
             async def _stream_from_http() -> AsyncIterator[StreamChunk]:
                 """Yield text chunks directly from the live HTTP stream.
@@ -1709,20 +1736,21 @@ class OpenAICompatAdapter(BaseAdapter):
                                 usage=dict(_usage),
                             )
 
-                    # Continue reading the REST of the still-open stream. The
-                    # only correct "is there more?" signal is is_stream_consumed
-                    # (httpx streams are ONE-SHOT; re-iterating a consumed one
-                    # raises RuntimeError, so this flag is the exact guard). This
-                    # used to ALSO gate on `not phase1_done` — but Phase 1 sets
-                    # phase1_done=True when it BREAKS MID-STREAM on the text-
-                    # detection heuristic (chunks_read>=15), where the stream is
-                    # NOT consumed. That extra gate dropped the answer's tail for
-                    # models that stream in many small chunks (z.ai/GLM: final
-                    # answer truncated to "...in /Users/bao" — the "/Code" tail
-                    # and everything after was silently lost). is_stream_consumed
-                    # alone correctly skips only a genuinely-consumed stream.
-                    if not _resp.is_stream_consumed:
-                        async for line in _resp.aiter_lines():
+                    # Continue reading the REST of the still-open stream by
+                    # resuming the SAME line iterator Phase 1 was using. This
+                    # used to be gated on `not _resp.is_stream_consumed` — but
+                    # httpx sets is_stream_consumed=True the moment iteration
+                    # STARTS (aiter_raw), not when the stream ends, so the gate
+                    # was ALWAYS False after Phase 1 iterated and the tail was
+                    # silently dropped for every text response Phase 1 broke
+                    # out of mid-stream (z.ai/GLM: reasoning first, then
+                    # content in many small chunks → final answers truncated
+                    # to ~16 tokens — B-2026-08-16-13). A FRESH
+                    # aiter_lines() would raise StreamConsumed (one-shot), so
+                    # we resume the shared generator instead; `_phase1_exhausted`
+                    # is the only reliable "the stream really ended" signal.
+                    if not _phase1_exhausted:
+                        async for line in _lines_tail:
                             if not line or not line.startswith("data: "):
                                 # Empty lines or non-data lines are SSE
                                 # keepalives — skip them but keep reading.

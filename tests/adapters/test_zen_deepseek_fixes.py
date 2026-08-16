@@ -33,7 +33,9 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
+
 from adapters.openai_compat import (
     PROVIDER_CONFIGS,
     OpenAICompatAdapter,
@@ -366,7 +368,7 @@ class TestPhase1ReasoningOnlyFix:
 
         # Should be a streaming response (not a ToolCallResult) — Phase 1
         # correctly identified this as text after seeing content
-        assert not (result is None), "Result should not be None"
+        assert result is not None, "Result should not be None"
         # result is an async iterator (generator) for text streaming
         # Consume it to verify we get text
         async def consume():
@@ -380,6 +382,117 @@ class TestPhase1ReasoningOnlyFix:
         assert "text chunk" in text, (
             f"Should have streamed the text content. Got: {text!r}"
         )
+
+
+class _OneShotResponse:
+    """Mimics httpx's one-shot stream semantics faithfully.
+
+    Real httpx streams: (1) ``is_stream_consumed`` flips True the moment
+    iteration STARTS (aiter_raw sets it before yielding anything — NOT when
+    the stream ends), and (2) a SECOND ``aiter_lines()`` call raises
+    StreamConsumed. The first ``aiter_lines()`` returns a live generator the
+    caller can PAUSE and RESUME — the shared-iterator handoff that the
+    B-2026-08-16-13 fix relies on.
+    """
+
+    def __init__(self, lines):
+        self.status_code = 200
+        self.headers = {}
+        self._lines = list(lines)
+        self.is_stream_consumed = False
+        self._gen = None
+
+    def aiter_lines(self):
+        if self._gen is not None:
+            raise httpx.StreamConsumed("content has already been streamed")
+        self._gen = self._iter_lines()
+        return self._gen
+
+    async def _iter_lines(self):
+        self.is_stream_consumed = True  # httpx: flips at iteration start
+        for line in self._lines:
+            yield line
+
+    async def aread(self):
+        return b""
+
+    async def aclose(self):
+        return None
+
+
+def test_phase2b_streams_full_tail_after_phase1_break(monkeypatch):
+    """B-2026-08-16-13 (found via live trace on z.ai/glm-4.5-flash): when
+    Phase 1 breaks out of the stream mid-way (the content + chunks_read>=15
+    text-detection heuristic — which fires on the FIRST content chunk for
+    reasoning-first models), Phase 2b must keep streaming the REST of the
+    answer. The old gate `not _resp.is_stream_consumed` was ALWAYS False
+    after Phase 1 iterated (httpx flips that flag at iteration START), so
+    the tail was silently dropped and final answers were truncated to
+    whatever fit in Phase 1's window (~16 content tokens), shipped as a
+    "successful" reply.
+
+    This test uses a faithful one-shot fake: the shared generator must be
+    RESUMED (not re-created) to read the tail — exactly the httpx contract.
+    The stream is consumed in the SAME event loop that produced it (as in
+    the real server), because httpx streams are bound to their loop.
+    """
+    monkeypatch.setenv("ZEN_API_KEY", "sk-fake-test-key")
+    adapter = OpenAICompatAdapter(provider="zen", model_override="deepseek-v4-flash-free")
+
+    # Simulate z.ai/GLM's shape: 80 reasoning chunks, then 30 content chunks
+    # (the model streams reasoning first, so Phase 1 hits the >=15 chunk
+    # threshold while still reasoning and breaks on the very first content
+    # chunk — only ~1 content chunk lands in the Phase 1 buffer).
+    lines = []
+    for i in range(80):
+        lines.append(f'data: {{"choices":[{{"delta":{{"reasoning_content":"think {i} "}}}}]}}')
+    for i in range(30):
+        lines.append(f'data: {{"choices":[{{"delta":{{"content":"word{i} "}}}}]}}')
+    lines.append('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}')
+    lines.append("data: [DONE]")
+    resp = _OneShotResponse(lines)
+
+    async def fake_send_streaming(url, payload, headers=None, timeout=None):
+        return resp
+
+    messages = [{"role": "user", "content": "Tell me a story"}]
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "shell",
+                "description": "Run",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"command": {"type": "string"}},
+                },
+            },
+        },
+    ]
+
+    async def run():
+        with patch.object(adapter, "_send_streaming_with_retry", new=fake_send_streaming):
+            result = await adapter.chat_with_tools(
+                messages=messages, tools=tools, temperature=0.3, intent="chat"
+            )
+        chunks = []
+        async for chunk in result:
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(run())
+    text = "".join(c.text for c in chunks if c.text)
+    thinking = "".join(c.thinking for c in chunks if c.thinking)
+
+    # Phase 1's reasoning buffer must stream through.
+    assert "think 0" in thinking
+    # EVERY content chunk must arrive — the old code dropped everything
+    # after Phase 1's break (only the ~1 buffered chunk survived).
+    assert "word0" in text
+    assert "word29" in text, f"Answer tail dropped — truncated at: {text!r}"
+    assert text.count("word") == 30, f"Expected all 30 chunks, got: {text!r}"
+    # A final done marker must still be emitted.
+    assert any(getattr(c, "done", False) for c in chunks)
 
 
 # ── API-key live resolution (Session 112) ─────────────────────────────────
