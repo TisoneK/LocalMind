@@ -246,6 +246,17 @@ def _note_described_tool(tool_name: str, tool_result, loaded_tools: set[str]) ->
 # relaxed, the counter still caps the retries.
 _MAX_TOOL_FORCE_RECOVERIES = 2
 
+# ADR-41 follow-up (Session 256) — empty-but-reasoned retry bound.
+# With thinking re-enabled (z.ai/GLM), a slow free tier sometimes streams a
+# long reasoning burst and then returns NO content and NO tool call — the
+# model "thought but didn't act" (live user bug: iter-1 ran shell
+# Get-ChildItem, iter-2 streamed reasoning then went empty, and the whole
+# turn failed with empty_response). The reasoning is real progress; one
+# bounded retry with a nudge recovers the turn. Two consecutive empties
+# still fail fast — the think-only protection from the original disable
+# stays intact (this + the Phase-1 500-chunk reasoning cap bound it).
+_MAX_EMPTY_REASONING_RECOVERIES = 1
+
 
 # Session 192 — same-tool replan bound. After this many CONSECUTIVE
 # failures on the SAME tool, the acceptance gate stops replanning and
@@ -2426,6 +2437,7 @@ class AgentLoop:
                 _minimax_chunks: list[StreamChunk] = []
                 _minimax_stream_ended = False
                 _minimax_error = False
+                _streamed_reasoning = False  # Session 256: did this call stream thinking?
                 _minimax_error_msg = ""  # Session 187: keep the adapter's error
                 # message (e.g. "zen returned 429: …") — previously dropped, so
                 # the frontend got error="" and rendered nothing.
@@ -2450,6 +2462,7 @@ class AgentLoop:
                     # system-leak XML like the text path. (isinstance guard:
                     # test stubs may carry a truthy non-str .thinking.)
                     if isinstance(chunk.thinking, str) and chunk.thinking:
+                        _streamed_reasoning = True
                         yield StreamChunk(
                             text="",
                             thinking=_filter_system_leaks(chunk.thinking),
@@ -3057,6 +3070,51 @@ class AgentLoop:
                             }
                         )
                         continue  # retry this iteration with the forced-tool nudge
+
+                    # ADR-41 follow-up (Session 256): the model streamed
+                    # reasoning but returned no text and no tool call — on a
+                    # slow free tier with thinking ON, GLM sometimes "thinks
+                    # but doesn't act" (live user bug: iter-1 ran shell
+                    # Get-ChildItem, iter-2 streamed reasoning then went
+                    # empty, failing the whole turn). The reasoning is real
+                    # progress, so do ONE bounded retry with a nudge before
+                    # the honest fail. Two consecutive empties still fail
+                    # fast — the think-only protection stays intact.
+                    if _streamed_reasoning and trace.empty_reasoning_recoveries < _MAX_EMPTY_REASONING_RECOVERIES:  # noqa: E501
+                        trace.empty_reasoning_recoveries += 1
+                        logger.warning(
+                            "[agent.loop] iter=%d — empty response after reasoning "
+                            "streamed (recovery %d/%d) — nudging to continue",
+                            iteration + 1,
+                            trace.empty_reasoning_recoveries,
+                            _MAX_EMPTY_REASONING_RECOVERIES,
+                        )
+                        if _obs:
+                            _obs.emit(
+                                "empty_reasoning_recovery",
+                                recovery_num=trace.empty_reasoning_recoveries,
+                                intent=intent.value,
+                                iteration=iteration + 1,
+                            )
+                        if not stream_ended_early:
+                            async for _drain_chunk in result:
+                                pass
+                        # Keep message-role alternation for strict providers:
+                        # an empty assistant frame, then the corrective nudge.
+                        loop_messages.append({"role": "assistant", "content": ""})
+                        loop_messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "You started reasoning about this task but returned "
+                                    "no answer and no tool call. Continue now — either "
+                                    "call the tool you need next, or give the final "
+                                    "answer directly."
+                                ),
+                            }
+                        )
+                        continue  # retry once with the continue-nudge
+
                     trace.empty_response = True  # ADR-18 P2: remember this failure
                     if _obs:
                         _obs.emit(

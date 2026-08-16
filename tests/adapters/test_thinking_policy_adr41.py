@@ -296,3 +296,115 @@ def test_force_final_answer_forwards_thinking():
     # The forced-final synthesis re-yields chunks; nothing may crash and the
     # loop must terminate cleanly (done chunk present).
     assert any(chunk.done for chunk in chunks), "loop must emit a done chunk"
+
+
+# ── 7. Empty-after-reasoning recovery (Session 256) ────────────────────────
+# Live user bug (z.ai/glm-4.5-flash, thinking ON): iter-1 called a tool,
+# iter-2 streamed reasoning but returned NO content and NO tool call, and the
+# whole turn failed with empty_response. The loop must do ONE bounded retry
+# with a nudge when the stream contained reasoning, and still fail fast on a
+# second consecutive empty.
+
+
+class _EmptyAfterToolAdapter:
+    """call 1 → shell tool call; call 2 → reasoning-only (no content, no tool
+    call — the Session 256 bug); call 3 → final answer with thinking."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def chat(self, messages, temperature=0.1, intent="chat"):
+        yield StreamChunk(text='{"mode": "execute"}', done=False)
+        yield StreamChunk(text="", done=True)
+
+    async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        self.calls += 1
+        if self.calls == 1:
+            from adapters.ollama import ToolCallResult
+
+            return ToolCallResult(
+                tool_name="shell",
+                tool_args={"command": "echo hi"},
+                raw_content="I'll run a quick check.",
+            )
+        if self.calls == 2:
+
+            async def _think_only():
+                # GLM-style: reasoning streams, then the stream ends with no
+                # content and no tool call.
+                yield StreamChunk(text="", thinking="I should look at the desktop first. ", done=False)
+                yield StreamChunk(text="", thinking="The user wants a recipe. ", done=False)
+                yield StreamChunk(text="", done=True)
+
+            return _think_only()
+
+        async def _final():
+            yield StreamChunk(text="", thinking="Let me finalize. ", done=False)
+            yield StreamChunk(text="Here is the complete recipe: bake salmon with lemon. ", done=False)
+            yield StreamChunk(text="", done=True)
+
+        return _final()
+
+
+def _collect_with_dispatch(loop, adapter, adapter_cls=_EmptyAfterToolAdapter):
+    async def _fake_dispatch(tool_intent, tool_input, **kwargs):
+        from core.models import RiskLevel, ToolResult
+
+        return ToolResult(content="done", risk=RiskLevel.LOW, source="shell", success=True), False, 0
+
+    with patch("core.agent.loop.dispatch_with_retry", side_effect=_fake_dispatch):
+        return _collect(loop, adapter)
+
+
+def test_empty_after_reasoning_recovers_with_nudge():
+    """A reasoning-only response (no text, no tool call) must NOT fail the
+    turn — the loop nudges once and the model's next call completes it."""
+    from core.agent.loop import AgentLoop
+
+    adapter = _EmptyAfterToolAdapter()
+    chunks = _collect_with_dispatch(AgentLoop(adapter=adapter), adapter)
+
+    text = "".join(chunk.text for chunk in chunks)
+    assert "complete recipe" in text, (
+        f"the turn must recover after the reasoning-only call — got tail={text[-200:]!r}"
+    )
+    # tool call + reasoning-only + nudge-retry final = 3 LLM calls.
+    assert adapter.calls == 3, f"expected 3 chat_with_tools calls, got {adapter.calls}"
+    # The reasoning from BOTH the empty call and the final call reaches the UI.
+    thinking = "".join(chunk.thinking for chunk in chunks if chunk.thinking)
+    assert "desktop first" in thinking and "finalize" in thinking
+
+
+def test_second_empty_after_reasoning_still_fails_fast():
+    """The nudge is BOUNDED: a second consecutive reasoning-only response
+    still fails fast with the honest evidence fallback (think-only model
+    protection from ADR-41 stays intact)."""
+    from core.agent.loop import _MAX_EMPTY_REASONING_RECOVERIES, AgentLoop
+
+    adapter = _EmptyAfterToolAdapter()
+    # Make call 2 AND call 3 both reasoning-only by never advancing past 2.
+    adapter.chat_with_tools = _twice_empty(adapter)
+    chunks = _collect_with_dispatch(AgentLoop(adapter=adapter), adapter)
+
+    text = "".join(chunk.text for chunk in chunks)
+    assert "empty response" in text.lower() or "what actually ran" in text.lower(), (
+        f"a second consecutive empty must fail with the evidence fallback — got tail={text[-300:]!r}"
+    )
+    assert _MAX_EMPTY_REASONING_RECOVERIES == 1
+
+
+def _twice_empty(adapter):
+    """Replace the stub so EVERY post-tool call is reasoning-only."""
+    original = adapter.chat_with_tools
+
+    async def _patched(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        if adapter.calls == 0:
+            return await original(messages, tools, temperature=temperature, intent=intent, tool_choice=tool_choice)
+
+        async def _think_only():
+            yield StreamChunk(text="", thinking="Still thinking... ", done=False)
+            yield StreamChunk(text="", done=True)
+
+        return _think_only()
+
+    return _patched
