@@ -750,3 +750,21 @@ if literally nothing slowed you down.
 - **Cause:** Assumed `get_history(limit=N)` returns the most recent N messages; the helper is ascending. The dedup compared against the wrong window and always failed for multi-turn chats.
 - **Workaround / fix:** Added `SessionStore.get_recent_history()` (newest-first) and pointed both `_guarantee_persist_assistant` implementations (agent_runtime.py + `_persistence_mixin.py`) at it; dropped the now-wrong `reversed()`.
 - **Prevent next time:** Any "check the latest N" logic must read the helper's ordering — `get_history` is ASC, so `limit=N` is the OLDEST N. Verify ordering semantics before trusting a limit window for recency checks; when in doubt, add a tiny test of the helper's ordering first.
+
+---
+## 2026-08-16 — Buffy / deepseek-v4-flash (Session 251)
+
+- **Problem:** The SYNC run_terminal_command reaped the backgrounded trace server as soon as the command returned — `nohup .venv/bin/python server.py &` started fine (health check passed 4s later) but the process died before the next command's curl ran (Connection refused).
+- **Cost:** One failed trace attempt + a confusing "server started then vanished" diagnosis.
+- **Cause:** The tool kills the command's process group when the SYNC command completes; nohup alone doesn't detach from that group.
+- **Workaround / fix:** Run the server, the curl trace(s), and the cleanup in ONE command: `server & PID=$!; sleep 6; curl ...; kill $PID`. Also: `A && B & C` backgrounds the ENTIRE `&&` chain, so `$!` is the chain's PID and a later `rm -rf "$TMPHOME"` in the foreground sees an EMPTY `TMPHOME` (shell vars from the backgrounded subshell don't leak back). That left a temp LOCALMIND_HOME (with a copy of the user's settings.json incl. API keys) on disk — caught, deleted, values never printed/committed.
+- **Prevent next time:** For trace servers, always server+curl+kill in one command; when mixing `&` with `&&`, parenthesize the backgrounded part: `( A && B ) &` and clean up temp secret-copies immediately after the kill. Verify no `lm251_home.*` leftovers before ending a session.
+
+---
+## 2026-08-16 — Buffy / deepseek-v4-flash (Session 251)
+
+- **Problem:** SSE trace parsing returned zero events twice — the regex `data: (\{.*\})` with `re.S` (GREEDY `.*`) matches from the first `data: {` to the LAST `}` of the whole file, so `json.loads` failed on the giant multi-object match and every event was skipped.
+- **Cost:** Two wasted parse passes (~2 min).
+- **Cause:** Greedy `.*` with `re.S` crosses newlines to the final `}`; the files are JSON-only SSE (no `event:` lines — the type is inside the JSON), so the whole stream is one line-wise sequence of `data: {...}` objects.
+- **Workaround / fix:** Non-greedy `data: (\{.*?\})\s*\n` per event. The events are `data: {"obs_event": {"type": ..., "data": ...}}` — parse each line's JSON and read `.obs_event.type`.
+- **Prevent next time:** Grep the raw bytes first (the hi trace at `/tmp` is the reference), and always use a non-greedy per-event regex for SSE.

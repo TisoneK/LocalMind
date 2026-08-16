@@ -9,7 +9,7 @@ accordingly).
 
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
-| Buffy | openai/gpt-5.6-luna · deepseek/deepseek-v4-flash · deepseek/deepseek-v4-pro · z-ai/glm-5.2 (varies per session — see Observations) | 2026-07-31 | 2026-08-16 | 26 |
+| Buffy | openai/gpt-5.6-luna · deepseek/deepseek-v4-flash · deepseek/deepseek-v4-pro · z-ai/glm-5.2 (varies per session — see Observations) | 2026-07-31 | 2026-08-16 | 27 |
 | Super Z | GLM-4.5 (Z.ai) | 2026-07-09 | 2026-07-11 | 3 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 | Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-15 | 10 |
@@ -177,3 +177,4 @@ Updated registry row:
   live-app visual verification blocked — the vite harness hit a dev-server
   dual-React resolution quirk and the browser pane wouldn't composite; relied
   on jsdom render tests + build instead. (2026-08-14)
+- **Buffy / deepseek-v4-flash:** Session 251 — shipped + LIVE-VERIFIED the ADR-40 lean tool schemas (option B). Live traces on BOTH the user's active weak model (z.ai/glm-4.5-flash) and cerebras/gpt-oss-120b proved tool SELECTION did not regress after the 34% schema cut: both routed mode=execute and fired the correct tool (shell) with valid args; the weak model adapted on a failed path and synthesized. Demonstrated the full live-trace harness in ONE command (server+curl+kill) and the temp-LOCALMIND_HOME pattern (keys never printed/committed; home deleted). Also confirmed cerebras still rate-limits the post-tool synthesis (tokens/min cap) — the S241 evidence-preservation path handles it. (2026-08-16)
