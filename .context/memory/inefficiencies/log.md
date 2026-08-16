@@ -801,3 +801,9 @@ if literally nothing slowed you down.
 - **Cause:** the heredoc is parsed by the tool's bash wrapper; an unescaped apostrophe in the body ends the single-quoted heredoc delimiter early.
 - **Workaround / fix:** keep commit-message bodies apostrophe-free (rewrite "turn's" → "turn"). Works reliably.
 - **Prevent next time:** when using `$(cat <<'EOF' ... EOF)` for multi-line commit messages, scan the body for apostrophes first and reword them away.
+
+- **Problem:** `git commit -m "$(cat <<'EOF' … EOF)"` failed again (Session 267) — but this time with NO apostrophe in the body: `bash: -c: line 7: unexpected EOF while looking for matching ''`. Cause: when the multi-line command string is passed with literal `\n` sequences (collapsed newlines), the `<<'EOF'` heredoc delimiter never terminates, so bash reads to EOF. The `git add` in the same compound command never ran (parse error before execution), so the retry had to stage + commit separately.
+- **Cost:** ~2 minutes (one failed compound, one re-typed commit).
+- **Cause:** the previous entry blamed apostrophes; this failure had none. Real cause this time: the tool call collapsed my newlines into literal `\n`, so the heredoc's closing `EOF` was never seen on its own line.
+- **Workaround / fix:** stop using heredocs for commit messages entirely — use multiple `-m` flags (`git commit -m "subject" -m "body"`), which need no newlines and are immune to both apostrophes and collapsed-newline corruption. Works reliably.
+- **Prevent next time:** never write `$(cat <<'EOF' ... EOF)` inside run_terminal_command; use `-m` flags or `git commit -F -` with a file.
