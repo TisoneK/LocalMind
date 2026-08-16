@@ -101,9 +101,12 @@ class _PersistenceMixin:
         if not response_text:
             return
         try:
-            # Check if the most recent assistant message already matches
-            recent = self._store.get_history(session_id, limit=2)
-            for msg in reversed(recent):
+            # Check if the most recent assistant message already matches.
+            # get_recent_history() is newest-first — get_history() orders ASC,
+            # so `limit=2` there returned the OLDEST messages and the dedup
+            # silently failed, double-persisting every reply from turn 2 on.
+            recent = self._store.get_recent_history(session_id, limit=2)
+            for msg in recent:
                 if msg.role == Role.ASSISTANT and msg.content.strip() == response_text:
                     return  # Already persisted — skip
 

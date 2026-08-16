@@ -185,10 +185,15 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         if not response_text:
             return
         try:
-            recent = self._store.get_history(session_id, limit=2)
+            # Must check the LATEST assistant message. get_history() orders ASC,
+            # so `limit=2` there returned the OLDEST two messages and the dedup
+            # silently failed for any multi-turn session — double-persisting
+            # every reply from turn 2 on (visible as duplicated transcript
+            # messages after reopening a chat).
+            recent = self._store.get_recent_history(session_id, limit=2)
             if any(
                 msg.role == Role.ASSISTANT and msg.content.strip() == response_text
-                for msg in reversed(recent)
+                for msg in recent
             ):
                 return
             self._persist_assistant(session_id, response_text)

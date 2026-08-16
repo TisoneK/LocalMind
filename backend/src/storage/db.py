@@ -499,6 +499,40 @@ class SessionStore:
             for row in rows
         ]
 
+    def get_recent_history(self, session_id: str, limit: int = 2) -> list[Message]:
+        """Most-recent messages first (newest → oldest).
+
+        Used by the guaranteed-persist dedup, which must inspect the LATEST
+        assistant message. `get_history()` orders ASC, so `limit=n` there
+        returns the OLDEST n messages — the wrong end for a "did we already
+        save this reply?" check.
+        """
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type
+                FROM messages
+                WHERE session_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """,
+                (session_id, limit),
+            ).fetchall()
+
+        return [
+            Message(
+                role=Role(row["role"]),
+                content=row["content"],
+                tool_name=row["tool_name"],
+                timestamp=row["timestamp"],
+                file_name=row["file_name"] if "file_name" in row.keys() else None,
+                file_path=row["file_path"] if "file_path" in row.keys() else None,
+                file_size=row["file_size"] if "file_size" in row.keys() else None,
+                file_type=row["file_type"] if "file_type" in row.keys() else None,
+            )
+            for row in rows
+        ]
+
     def list_sessions(self) -> list[dict]:
         # Rewritten to avoid correlated subqueries in the SELECT clause.
         # The previous version ran two subqueries per session row (one for

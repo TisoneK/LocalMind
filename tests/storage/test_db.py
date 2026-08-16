@@ -41,6 +41,16 @@ def test_history_order(store):
     assert [m.content for m in history] == ["First", "Second", "Third"]
 
 
+def test_get_recent_history_returns_newest_first(store):
+    store.append("s1", Message(role=Role.USER, content="First", timestamp=1.0))
+    store.append("s1", Message(role=Role.ASSISTANT, content="Second", timestamp=2.0))
+    store.append("s1", Message(role=Role.USER, content="Third", timestamp=3.0))
+    store.append("s1", Message(role=Role.ASSISTANT, content="Fourth", timestamp=4.0))
+    recent = store.get_recent_history("s1", limit=2)
+    # Newest-first: the LAST two messages, not the oldest two.
+    assert [m.content for m in recent] == ["Fourth", "Third"]
+
+
 def test_multiple_sessions_isolated(store):
     store.append("s1", Message(role=Role.USER, content="Session 1 message"))
     store.append("s2", Message(role=Role.USER, content="Session 2 message"))
