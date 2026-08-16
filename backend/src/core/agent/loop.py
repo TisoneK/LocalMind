@@ -4676,12 +4676,19 @@ class AgentLoop:
                         f"Consider rewriting the file with complete content."
                     )
 
-                # Silent pass — no verification message needed
                 logger.info(
                     f"[agent.loop] file_write verification passed: "
                     f"path={path} expected={expected_len} actual={actual_len}"
                 )
-                return None
+                # Surface the loop's OWN read-back verification to the model, so it
+                # trusts the write without issuing a redundant file_task read
+                # (B-5/L3). The loop already read the file back here; a second read
+                # by the agent is wasted work — and it caused the S264 Windows
+                # path-mismatch failure cascade.
+                return (
+                    f"file_write confirmed — {actual_len} chars verified on disk at {path}. "
+                    f"The write succeeded; do NOT read it back."
+                )
 
             # ── code_exec verification ───────────────────────────────────
             if tool_name == "code_exec" and VERIFY_CODE_EXEC:

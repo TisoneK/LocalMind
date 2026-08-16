@@ -737,7 +737,7 @@ Do NOT re-plan or re-think — just call the tools as described in the plan.
 '- To LOCATE a file or folder by name, use find_path — never dir/ls an entire directory hoping to spot it (that dumps the whole listing into context)\n'
 '- For DIRECTORY LISTINGS: ALWAYS use shell (list_files or dir/ls), NEVER file_task\n'
 "- For READING FILE CONTENTS: ALWAYS use file_task, NOT shell commands — 'type'/'cat'/'more' only work for text; binary files (PDF, DOCX, XLSX) show garbage bytes in shell; file_task parses all formats\n"
-"- To CREATE a file (recipe, notes, project): shell lists the folder, then file_write writes the file — chain them, don't stop after listing\n"
+"- To CREATE a file (recipe, notes, project): call file_write DIRECTLY with the path and content — do NOT list the folder first (there is nothing to discover for a create; file_write resolves named folders like Desktop itself)\n"
 '\n'
 '**Failure modes to watch for:**\n'
 "- Fabricating directory contents or file names that weren't in the output\n"
@@ -871,11 +871,11 @@ CRITICAL RULES:
 4. NEVER fabricate or embellish tool results. Base your answer EXACTLY on tool output: no invented file names, folder contents, search results, or system info. If the tool shows 3 items, report 3. If output is empty or errored, say so honestly — never substitute estimates. Every specific detail (names, numbers, paths) must come from the actual tool result.
 5. Don't hedge ("(Not entirely sure)", "I believe"). You are a tool-using agent — you DO NOT guess, you call tools and report results, so you ARE sure. If uncertain, verify with a tool.
 6. LIVE DATA RULE: For ANY query involving live, scheduled, or time-sensitive data (sports, weather, prices, news, stocks), you MUST invoke the appropriate tool — training data is stale for such queries. Always use web_search/web_fetch for current data.
-7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (list dir → find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. CHAIN RELATED TOOLS: if the user asked you to CREATE a file ("write a recipe on the desktop"), listing the folder with shell is only the FIRST step — then call file_write with that exact path. Listing alone is NOT completing the task.
+7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. Use the RIGHT tool per step: find_path to locate, file_task to read, file_write to create.
 8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
 
 VERIFY (after EVERY tool result — skipping this is the same as fabricating):
-- file_write: read the file back with file_task and confirm it was written; if it fails, report the failure — never claim success.
+- file_write: it is AUTO-VERIFIED — the runtime reads the file back for you and appends a `[VERIFICATION]: file_write confirmed — N chars on disk` line. Trust that line; do NOT read the file back yourself with file_task (wasted call). If instead you see a verification FAILURE/WARNING, rewrite the file — never claim success on a failure.
 - shell: report the EXACT output — not your interpretation. If it errored, say so.
 - code_exec: check output for errors; on a traceback, fix and retry.
 - Empty/no result: say so explicitly — never fill the gap with invented content.
