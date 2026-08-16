@@ -14,7 +14,6 @@ import {
   useTodos,
   useObjectives,
   useTerminal,
-  useObservability,
   useMetrics,
   useModels,
   useMemory,
@@ -117,7 +116,7 @@ export function WorkspaceLayout() {
   // Hook data — useChat receives the terminal event callback
   const health = useHealth();
   const { sessions, refresh: refreshSessions, deleteSession, deleteSessions } = useSessions();
-  const { messages, isStreaming, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession } =
+  const { messages, isStreaming, activeToolCalls, agentRuns, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files } = useFileTree();
@@ -127,7 +126,6 @@ export function WorkspaceLayout() {
   // cancel functions are intentionally unused — the objective persistence
   // layer stays warm for a future product decision.
   useObjectives(currentSessionId);
-  const { observation } = useObservability(currentSessionId);
   // ADR-34 B-10: useCapabilities() was retired — the Capability Catalog was
   // only rendered in the Observe tab, which is now removed.
   const { metrics: polledMetrics } = useMetrics(isStreaming);
@@ -157,39 +155,15 @@ export function WorkspaceLayout() {
     ? lastMetrics
     : polledMetrics;
 
-  // Bridge the live request metrics into observability without changing their
-  // meaning. The stream owns timing, while promptTokens is the only valid
-  // source for Context Tokens; completion/total tokens must not be displayed
-  // as context. Preserve structured observation values when the backend has
-  // already supplied them, and use the live wall clock while it has not.
-  const liveObservationForPanel = (() => {
-    const live = liveObservation;
-    const promptTokens = lastMetrics?.promptTokens || 0;
-    const liveLatency = elapsedMs > 0
-      ? elapsedMs
-      : (lastMetrics?.latency || 0);
-
-    return {
-      ...observation,
-      ...live,
-      // Prefer a positive value from either observation source before using
-      // the stream fallback. This prevents a partial live observation from
-      // hiding valid backend/historical values.
-      // Prefer the live per-turn value whenever the stream has populated it
-      // (including a truthful 0 from a fast-path turn that built no context) —
-      // a `||` chain here would let a stale polled value mask the current
-      // turn's number. Fall back to the polled observation, then the metric
-      // stream, only when the stream hasn't reported this turn yet.
-      contextTokens: live?.contextTokens !== undefined
-        ? live.contextTokens
-        : isStreaming
-          ? promptTokens || 0
-          : observation.contextTokens || promptTokens || 0,
-      latency: isStreaming && liveLatency > 0
-        ? liveLatency
-        : live?.latency || observation.latency || liveLatency,
-    };
-  })();
+  // Cumulative context consumed across the conversation: the hook already
+  // sums each turn's prompt tokens into sessionStats.promptTokens (the same
+  // running total the bottom-right stats corner shows). While a turn is
+  // streaming, that turn's prompt isn't in the totals yet, so add the live
+  // estimate on top — matching how PerformanceMetrics computes its corner
+  // prompt counter. Previously this meter showed only the LAST turn's prompt
+  // (a single response), which under-reported as the conversation grew.
+  const cumulativeContextTokens =
+    sessionStats.promptTokens + (isStreaming ? (lastMetrics?.promptTokens || 0) : 0);
 
   // Clear liveActions when switching sessions so the Actions panel doesn't
   // show the previous session's tool calls.
@@ -430,11 +404,10 @@ export function WorkspaceLayout() {
           sessionId={currentSessionId || undefined}
           // Context-window occupancy meter: the freed top-bar slot that used
           // to show the redundant confidence badge now shows how full the
-          // model's input window is (this turn's prompt / adapter max).
+          // model's input window is — cumulative prompt tokens consumed
+          // across the conversation / the adapter's max window.
           contextWindowSize={currentModel?.contextWindow}
-          contextTokens={lastMetrics && lastMetrics.promptTokens > 0
-            ? lastMetrics.promptTokens
-            : (liveObservationForPanel.contextTokens || 0)}
+          contextTokens={cumulativeContextTokens}
         />
       </div>
 

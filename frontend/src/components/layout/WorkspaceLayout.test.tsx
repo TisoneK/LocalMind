@@ -53,6 +53,8 @@ interface SetupOverrides {
   observation?: Record<string, unknown>;
   agentRuns?: Array<Record<string, unknown>>;
   isStreaming?: boolean;
+  lastMetrics?: Record<string, unknown> | null;
+  sessionStats?: Record<string, number>;
 }
 
 vi.mock('./LeftPanel', () => ({
@@ -115,9 +117,9 @@ function setup(overrides: SetupOverrides = {}) {
     isStreaming: overrides.isStreaming ?? false,
     activeToolCalls: overrides.activeToolCalls ?? [],
     liveObservation: overrides.liveObservation !== undefined ? overrides.liveObservation : null,
-    lastMetrics: null,
+    lastMetrics: overrides.lastMetrics !== undefined ? overrides.lastMetrics : null,
     elapsedMs: 0,
-    sessionStats: { promptTokens: 0, completionTokens: 0, latencyMs: 0, genTimeMs: 0, turnCount: 0 },
+    sessionStats: overrides.sessionStats ?? { promptTokens: 0, completionTokens: 0, latencyMs: 0, genTimeMs: 0, turnCount: 0 },
     agentRuns: overrides.agentRuns ?? [],
     agentStreaming: overrides.isStreaming ?? false,
     send: fns.send,
@@ -239,17 +241,12 @@ describe('WorkspaceLayout', () => {
     expect(typeof center.onSteer).toBe('function');
   });
 
-  it('passes the model context window + live prompt tokens to the center meter', () => {
+  it('passes the model context window + cumulative session prompt tokens to the center meter', () => {
     setup({
       models: [{ id: 'm1', name: 'Model One', provider: 'zen', contextWindow: 32768 }],
-      liveObservation: {
-        intent: 'chat',
-        confidence: 0.9,
-        toolsUsed: [],
-        memoryHits: 0,
-        contextTokens: 12000,
-        latency: 0,
-      },
+      // Session 265: the meter counts CUMULATIVE prompt tokens across the
+      // conversation (sessionStats.promptTokens), not the last turn's.
+      sessionStats: { promptTokens: 12000, completionTokens: 9, latencyMs: 2300, genTimeMs: 500, turnCount: 2 },
     });
     const center = mockPanelProps.center;
     expect(center.contextWindowSize).toBe(32768);
@@ -376,34 +373,35 @@ describe('WorkspaceLayout', () => {
     expect(center.selectedModel).toMatchObject({ id: 'm2', name: 'm2', provider: '' });
   });
 
-  // Regression: the live per-turn contextTokens (including a truthful 0 from
-  // ADR-34 B-10: the Observe tab is retired. The context-window occupancy
-  // meter now lives in CenterPanel (center.contextTokens), fed by the same
-  // liveObservationForPanel merge. These tests verify the merge logic still
-  // prefers live per-turn values over stale polled ones.
-  it('prefers live per-turn contextTokens over a stale polled observation', () => {
+  // Session 265: the context-window meter is cumulative across the whole
+  // conversation (sessionStats.promptTokens) — a single response's prompt
+  // (liveObservation.contextTokens) or a stale polled observation must not
+  // replace the running total. These regression tests pin that wiring.
+  it('does not let a single-response prompt replace the cumulative total', () => {
     setup({
-      observation: { contextTokens: 3500, latency: 0, stages: [], vectorHits: 0, status: 'idle' },
+      sessionStats: { promptTokens: 7500, completionTokens: 29, latencyMs: 7300, genTimeMs: 1000, turnCount: 2 },
       liveObservation: {
         intent: 'chat',
         confidence: 0.99,
         toolsUsed: [],
         memoryHits: 0,
-        contextTokens: 0,
+        contextTokens: 1200, // last turn's prompt — must NOT win
         latency: 2300,
       },
+      observation: { contextTokens: 3500, latency: 0, stages: [], vectorHits: 0, status: 'idle' },
     });
     const center = mockPanelProps.center;
-    expect(center.contextTokens).toBe(0);
+    expect(center.contextTokens).toBe(7500);
   });
 
-  it('falls back to the polled observation when the stream has not reported a turn yet', () => {
+  it('adds the in-flight turn estimate while streaming (cumulative + live)', () => {
     setup({
-      observation: { contextTokens: 3500, latency: 2900, stages: [], vectorHits: 0, status: 'idle' },
-      liveObservation: null,
+      isStreaming: true,
+      sessionStats: { promptTokens: 3500, completionTokens: 0, latencyMs: 0, genTimeMs: 0, turnCount: 1 },
+      lastMetrics: { promptTokens: 4000, completionTokens: 0, totalTokens: 0, latency: 0 },
     });
     const center = mockPanelProps.center;
-    expect(center.contextTokens).toBe(3500);
+    expect(center.contextTokens).toBe(7500);
   });
 
   it('does NOT pass observation/capabilities/currentIntent to any panel (ADR-34 B-10)', () => {
