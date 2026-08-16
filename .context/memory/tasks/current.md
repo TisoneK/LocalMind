@@ -1,30 +1,28 @@
 # Current Task
 
-**Status:** partial-done — Session 279: B-2026-08-16-10 (as-completed streaming for
-parallel tool batches) IMPLEMENTED; as-completed ordering NOT live-verified.
+**Status:** in-progress — Session 280: verify + log the external "rate-limited final
+synthesis" diagnosis (review-56). Context-only session (no product code).
 
-**Delivered (`cf38bc0`, review-55):** the MultiToolCallResult path dispatched
-concurrently but blocked on `asyncio.gather` and emitted all done-events together.
-Now a per-task `_dispatch_and_emit` emits each tool's done/failed event as it
-finishes; `asyncio.as_completed` + a yield-after-each flushes it to the user; the
-model-context assembly is rebuilt in INPUT order. Also fixed a latent stale-`_inp`
-args bug (every parallel tool's card showed the last call's args). Full suite 1875
-pass, no regression.
+**Verification result (code-verified, review-56):**
+1. The "provider rate-limited the final synthesis call" fallback (loop.py:3022-3031)
+   is NOT unconditional — it requires a stream error that normalize_error() classifies
+   as rate_limit (model_provider + retryable) PLUS a successful tool step. Cerebras's
+   tokens/min cap on post-tool synthesis is documented (S251/252/276), so the provider
+   likely DID 429 the follow-up call in the user's repro.
+2. The sharpest claim VERIFIES: the Thinker's `_analysis` is loop-local (only injected
+   into loop_messages), so `_summarize_trace_for_user()` never sees the already-correct
+   reasoning — correct synthesis is genuinely discarded on the degraded path.
+3. The "multi-line shell command flattened" claim is UNVERIFIED — shell.py passes
+   commands verbatim; no flattening code exists.
 
-**KEY FINDING (honest):** the user's models DON'T emit native parallel tool_calls.
-glm-4.5-flash serialized; gemini-2.5-flash looped the `delegate_parallel` TOOL 4×
-(invalid_input). So parallelism happens via delegate_parallel, not native batches —
-B-10's native path rarely activates, and its as-completed ordering could NOT be
-live-verified (the path never triggered). Not claiming "verified".
+**Delivered:** review-56 report, session 280 log, SUMMARY line, ai-models observation,
+backlog item B-2026-08-16-12 (carry Thinker analysis into the degraded fallback).
 
 **Open next / notes:**
-1. **B-2026-08-16-11 (from the finding):** (a) apply as-completed streaming to the
-   delegate_parallel path (where parallelism actually happens); (b) audit
-   delegate_parallel's arg schema — gemini couldn't satisfy it (4× invalid_input).
-2. Owed: a focused loop-integration test driving MultiToolCallResult with two
-   different-latency tools (heavy harness — deferred).
-3. Carried: real-app visual checks (todo panel S274; narration on a content model);
-   B-9 (create→FILE_WRITE, reasoning-driven); Windows re-run of S264 recipe.
-   Closed: B-4 (S272), B-7 (S276), B-5/L3 (S277).
+1. B-2026-08-16-12: implement the discarded-correct-synthesis fix (live-verify per
+   system/live-testing.md on a provider with headroom — no key on this machine).
+2. Carried from S279: B-2026-08-16-11 (as-completed streaming for delegate_parallel;
+   audit its arg schema), real-app visual checks (todo panel S274; narration on a
+   content model), B-9 (create→FILE_WRITE, reasoning-driven), Windows re-run of S264.
 
 **Feature:** none

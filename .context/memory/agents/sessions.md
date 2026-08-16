@@ -3799,6 +3799,17 @@ program + ADR-22). -->
 - **Verification:** live (glm-4.5-flash) final answer streams correctly, not duplicated; find_path used for discovery. Full suite 1875 pass (4 pre-existing env-gated shell fails). Prompt trimmed to fit the size budget (first draft blew code_exec by 15 chars — caught by test_prompt_size_budget).
 - **Notes:** followed system/live-testing.md. Owed: real-app visual check on a content-emitting model (gpt-oss/gemini) where narration is visibly richer; B-10 (as-completed streaming).
 
+## 2026-08-16 — Session 280
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-flash | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — diagnosis-verification session
+- **Task:** User pasted an external-conversation transcript diagnosing a LocalMind failure mode: gpt-oss-120b (Cerebras) ran a tool fine, the Thinker computed the correct answer (13.55 GB free, not enough for a 50 GB game), but the reply was the canned fallback "the provider rate-limited the final synthesis call" — the external AI claimed "nothing was rate-limited" and that memory was "updated/logged" (it can't write to this repo). Verify the claims against code, then log the corrected diagnosis.
+- **Commits:** context-only (this commit). Review: review-56.
+- **Verified (code):** (1) the "rate-limited" fallback (loop.py:3022-3031) is NOT unconditional — it requires a stream error that `normalize_error()` classifies as `code == rate_limit` (source=model_provider, retryable) PLUS at least one successful tool step. Cerebras's tokens/min cap on the post-tool synthesis call is documented repeatedly (ai-models.md S251/252/276) — in the disk-space repro the provider likely DID 429 the follow-up call; the external "nothing was rate-limited" claim is likely wrong. (2) The SHARPEST claim VERIFIES: the Thinker's `_analysis` is a loop-local that only goes into `loop_messages` (via `_thinker_context_block`) — `_summarize_trace_for_user()` (loop.py:4739) lists tool calls only and never sees the already-correct reasoning, so correct synthesis is genuinely discarded on the degraded path. (3) The "multi-line shell command flattened" claim is UNVERIFIED — shell.py passes the command verbatim to `powershell -Command`; no newline-flattening code exists; the malformed command is model-generated.
+- **Outcome:** done — diagnosis verified + corrected + filed. No product code (fix needs live-verification per the S274 bar; no provider key on this machine).
+- **Open items:** B-2026-08-16-12 (carry the Thinker analysis into the degraded-evidence fallback so a correct intermediate synthesis becomes the reply; live-verify per system/live-testing.md).
+- **Report:** .context/memory/reviews/2026-08-16-review-56.md
+
 ## 2026-08-16 — Session 279
 
 - **Agent:** Claude Code (claude-opus-4-8) | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
