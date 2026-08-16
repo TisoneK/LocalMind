@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Cpu, Trash2, Loader2, CheckCircle2, XCircle, Terminal, Globe, FileEdit, Brain } from 'lucide-react';
+import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, CheckCircle2, XCircle, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks } from 'lucide-react';
 import { Session, ActionItem, FileNode, TodoItem, ModelOption, ToolCall } from '@/types';
+import type { ExportFormat } from '@/lib/localmind/exportChats';
 import { ActionHistory } from '@/components/panels/ActionHistory';
 import { FileExplorer } from '@/components/panels/FileExplorer';
 import { TodoList } from '@/components/panels/TodoList';
@@ -27,6 +28,8 @@ interface LeftPanelProps {
   onSelectSession: (sessionId: string) => void;
   onNewChat: () => void;
   onDeleteSession: (sessionId: string) => void;
+  onDeleteSessions: (sessionIds: string[]) => void | Promise<void>;
+  onExportSessions: (sessionIds: string[], format: ExportFormat) => void | Promise<void>;
   onToggleTodo: (id: string, completed: boolean) => void;
   onAddTodo: (text: string) => void;
   onAbort?: () => void;
@@ -48,6 +51,8 @@ export function LeftPanel({
   onSelectSession,
   onNewChat,
   onDeleteSession,
+  onDeleteSessions,
+  onExportSessions,
   onToggleTodo,
   onAddTodo,
   onAbort,
@@ -55,7 +60,50 @@ export function LeftPanel({
 }: LeftPanelProps) {
   const [activeTab, setActiveTab] = useState<LeftTab>('chat');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // Multi-select chat management (mark → bulk delete / export).
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const isCompact = width < 220;
+
+  const sessionList = Array.isArray(sessions) ? sessions : [];
+  const selectedCount = selectedIds.size;
+  const allSelected = sessionList.length > 0 && selectedCount === sessionList.length;
+
+  const exitSelection = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+    setConfirmBulkDelete(false);
+    setExportMenuOpen(false);
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) =>
+      prev.size === sessionList.length ? new Set() : new Set(sessionList.map((s) => s.id)),
+    );
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedCount === 0) return;
+    onDeleteSessions(Array.from(selectedIds));
+    exitSelection();
+  };
+
+  const handleExport = (format: ExportFormat) => {
+    if (selectedCount === 0) return;
+    onExportSessions(Array.from(selectedIds), format);
+    setExportMenuOpen(false);
+  };
 
   // Tool progress belongs in Actions, not in the chat transcript. The chat
   // hook emits this event as soon as the backend announces a tool call.
@@ -157,39 +205,161 @@ export function LeftPanel({
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {activeTab === 'chat' && (
-          <div className="p-2 space-y-0.5">
+          <div className="p-2">
+            {/* Multi-select toolbar */}
+            {sessionList.length > 0 && (
+              <div className="mb-1 flex items-center gap-1 px-1 min-h-[24px]">
+                {!selectionMode ? (
+                  <button
+                    onClick={() => setSelectionMode(true)}
+                    className="ml-auto flex items-center gap-1 px-1.5 py-1 rounded text-[10px] text-brand-green-muted hover:text-brand-green-soft hover:bg-brand-border/50 transition-colors"
+                    title="Select multiple chats"
+                    data-testid="select-chats"
+                  >
+                    <ListChecks className="h-3 w-3" />
+                    {!isCompact && 'Select'}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={toggleSelectAll}
+                      className="flex items-center gap-1 px-1.5 py-1 rounded text-[10px] text-brand-green-soft hover:bg-brand-border/50 transition-colors"
+                      title={allSelected ? 'Clear selection' : 'Select all'}
+                    >
+                      {allSelected ? (
+                        <CheckSquare className="h-3 w-3 text-brand-green" />
+                      ) : (
+                        <Square className="h-3 w-3" />
+                      )}
+                      {!isCompact && (allSelected ? 'None' : 'All')}
+                    </button>
+                    <span className="text-[10px] text-brand-green-muted" data-testid="selected-count">
+                      {selectedCount} selected
+                    </span>
+                    <button
+                      onClick={exitSelection}
+                      className="ml-auto p-1 rounded text-brand-green-muted hover:text-brand-green-soft hover:bg-brand-border/50 transition-colors"
+                      title="Done"
+                      aria-label="Exit selection"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Bulk actions */}
+            {selectionMode && selectedCount > 0 && !confirmBulkDelete && (
+              <div className="mb-2 flex items-center gap-1.5 px-1">
+                <button
+                  onClick={() => { setConfirmBulkDelete(true); setExportMenuOpen(false); }}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-[10px] bg-brand-red/10 text-brand-red hover:bg-brand-red/20 transition-colors"
+                  data-testid="bulk-delete"
+                >
+                  <Trash2 className="h-3 w-3" /> Delete
+                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setExportMenuOpen((o) => !o)}
+                    className="flex items-center gap-1 px-2 py-1 rounded text-[10px] bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
+                    data-testid="bulk-export"
+                  >
+                    <Download className="h-3 w-3" /> Export
+                  </button>
+                  {exportMenuOpen && (
+                    <div className="absolute left-0 top-full mt-1 z-10 min-w-[120px] rounded-md border border-brand-border bg-brand-bg-panel shadow-lg overflow-hidden">
+                      <button
+                        onClick={() => handleExport('markdown')}
+                        className="block w-full text-left px-3 py-1.5 text-[10px] text-brand-green-soft hover:bg-brand-border/60 transition-colors"
+                        data-testid="export-markdown"
+                      >
+                        Markdown (.md)
+                      </button>
+                      <button
+                        onClick={() => handleExport('json')}
+                        className="block w-full text-left px-3 py-1.5 text-[10px] text-brand-green-soft hover:bg-brand-border/60 transition-colors"
+                        data-testid="export-json"
+                      >
+                        JSON (.json)
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Bulk delete confirmation */}
+            {selectionMode && confirmBulkDelete && (
+              <div className="mb-2 p-2 rounded bg-brand-border border border-brand-red/30">
+                <div className="text-[10px] text-brand-green-soft mb-2">
+                  Delete {selectedCount} chat{selectedCount === 1 ? '' : 's'}? This can&apos;t be undone.
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={handleBulkDelete}
+                    className="px-2 py-1 text-[10px] rounded bg-brand-red/10 text-brand-red hover:bg-brand-red/20"
+                    data-testid="bulk-delete-confirm"
+                  >
+                    Delete {selectedCount}
+                  </button>
+                  <button
+                    onClick={() => setConfirmBulkDelete(false)}
+                    className="px-2 py-1 text-[10px] rounded hover:bg-brand-border text-brand-green-muted hover:text-brand-green-soft"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-0.5">
             {(!sessions || sessions.length === 0) && (
               <div className="px-2.5 py-4 text-center text-[10px] text-brand-green-muted">
                 No sessions yet. Start a new chat!
               </div>
             )}
-            {Array.isArray(sessions) && sessions.map((session) => (
+            {sessionList.map((session) => {
+              const isSelected = selectedIds.has(session.id);
+              return (
               <div
                 key={session.id}
-                onClick={() => onSelectSession(session.id)}
+                data-testid="session-row"
+                onClick={() => (selectionMode ? toggleSelected(session.id) : onSelectSession(session.id))}
                 className={`px-2.5 py-2 rounded cursor-pointer transition-colors group ${
-                  session.id === currentSessionId
+                  selectionMode && isSelected
+                    ? 'bg-brand-green/10 border border-brand-green/30'
+                    : session.id === currentSessionId
                     ? 'bg-brand-border border border-brand-green/20'
                     : 'hover:bg-brand-border/50'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-0.5">
+                  {selectionMode && (
+                    isSelected ? (
+                      <CheckSquare className="h-3.5 w-3.5 text-brand-green shrink-0" />
+                    ) : (
+                      <Square className="h-3.5 w-3.5 text-brand-green-muted shrink-0" />
+                    )
+                  )}
                   <MessageSquare className="h-3 w-3 text-brand-green-muted shrink-0" />
                   <span className="text-[11px] text-brand-green-soft font-medium truncate flex-1 min-w-0" title={session.title}>
                     {session.title}
                   </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmDeleteId(session.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-brand-red/10 text-brand-green-muted hover:text-brand-red transition-all"
-                    title="Delete session"
-                  >
-                    <Trash2 className="h-2.5 w-2.5" />
-                  </button>
+                  {!selectionMode && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDeleteId(session.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-brand-red/10 text-brand-green-muted hover:text-brand-red transition-all"
+                      title="Delete session"
+                    >
+                      <Trash2 className="h-2.5 w-2.5" />
+                    </button>
+                  )}
                 </div>
-                {confirmDeleteId === session.id && (
+                {!selectionMode && confirmDeleteId === session.id && (
                   <div className="mt-2 p-2 rounded bg-brand-border border border-brand-red/30">
                     <div className="text-[10px] text-brand-green-soft mb-2">Delete this chat?</div>
                     <div className="flex justify-end gap-2">
@@ -225,7 +395,9 @@ export function LeftPanel({
                   <span className="text-[9px] text-brand-green-muted">{session.messageCount} msgs</span>
                 </div>
               </div>
-            ))}
+              );
+            })}
+            </div>
           </div>
         )}
 

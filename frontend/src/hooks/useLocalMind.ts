@@ -174,7 +174,25 @@ export function useSessions() {
     []
   );
 
-  return { sessions, loading, refresh, deleteSession };
+  // Bulk delete for the multi-select chat actions. Deletions run
+  // concurrently; a failure on one id does not abort the others. State is
+  // updated once, dropping every id that was actually deleted.
+  const deleteSessions = useCallback(
+    async (sessionIds: string[]): Promise<string[]> => {
+      const results = await Promise.allSettled(
+        sessionIds.map((id) => localmindClient.deleteSession(id)),
+      );
+      const deleted = sessionIds.filter((_, i) => results[i].status === 'fulfilled');
+      if (deleted.length) {
+        const gone = new Set(deleted);
+        setSessions((prev) => prev.filter((s) => !gone.has(s.id)));
+      }
+      return deleted;
+    },
+    []
+  );
+
+  return { sessions, loading, refresh, deleteSession, deleteSessions };
 }
 
 // ─── useChat ───────────────────────────────────────────────────────────

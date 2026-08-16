@@ -22,6 +22,7 @@ import {
 } from '@/hooks/useLocalMind';
 import { localmindClient, getPersistedSettings } from '@/lib/localmind/client';
 import { isActiveToolStatus } from '@/lib/localmind/progress';
+import { exportSessions, type ExportFormat } from '@/lib/localmind/exportChats';
 
 export function WorkspaceLayout() {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -115,7 +116,7 @@ export function WorkspaceLayout() {
 
   // Hook data — useChat receives the terminal event callback
   const health = useHealth();
-  const { sessions, refresh: refreshSessions, deleteSession } = useSessions();
+  const { sessions, refresh: refreshSessions, deleteSession, deleteSessions } = useSessions();
   const { messages, isStreaming, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
@@ -316,6 +317,33 @@ export function WorkspaceLayout() {
     [currentSessionId, deleteSession, setMessages, refreshSessions]
   );
 
+  // Bulk delete for the multi-select chat actions.
+  const handleDeleteSessions = useCallback(
+    async (sessionIds: string[]) => {
+      const deleted = await deleteSessions(sessionIds);
+      // If the active session was among those deleted, clear the transcript.
+      if (currentSessionId && deleted.includes(currentSessionId)) {
+        setCurrentSessionId(null);
+        setMessages([]);
+      }
+      refreshSessions();
+    },
+    [currentSessionId, deleteSessions, setMessages, refreshSessions]
+  );
+
+  // Bulk export selected chats to a downloaded Markdown/JSON file.
+  const handleExportSessions = useCallback(
+    async (sessionIds: string[], format: ExportFormat) => {
+      await exportSessions(
+        sessions,
+        sessionIds,
+        format,
+        (id) => localmindClient.getSessionHistory(id),
+      );
+    },
+    [sessions]
+  );
+
   // Handle model change
   const handleModelChange = useCallback(
     async (modelId: string) => {
@@ -362,6 +390,8 @@ export function WorkspaceLayout() {
           onSelectSession={handleSelectSession}
           onNewChat={handleNewChat}
           onDeleteSession={handleDeleteSession}
+          onDeleteSessions={handleDeleteSessions}
+          onExportSessions={handleExportSessions}
           onToggleTodo={toggleTodo}
           onAddTodo={addTodo}
           onAbort={abort}
