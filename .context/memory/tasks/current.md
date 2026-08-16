@@ -1,23 +1,22 @@
 # Current Task
 
-**Status:** done — Session 268: fixed the web search tool. Root cause (verified
-live): the SearXNG tier was dead — `searx.be` answers HTTP 200 with an Anubis
-anti-bot HTML page, so every request raised a JSONDecodeError (the generic
-except's `"json" in str(exc)` check never matched because str(JSONDecodeError)
-drops the class name, leaking the raw parser error to the user). A live scan of
-9 public instances found them ALL rate-limited/blocked/behind anti-bot; DDG
-works, masking the dead tier until DDG is also blocked. Fix: SearXNG now walks
-a fallback chain (configured `SEARXNG_URL`, comma-separated supported, first;
-curated public fallbacks after; capped at 3 attempts), detects non-JSON
-challenge pages via Content-Type, catches `json.JSONDecodeError` explicitly,
-and DDG uses `asyncio.get_running_loop()` (deprecation). Commit `19a00d8`
-pushed. Backend 1852 pass (4 pre-existing shell failures), 7 new web_search
-tests.
+**Status:** done — Session 269: added scraped Bing as the reliable no-key second
+free tier for web search (follow-up to 268 — the SearXNG fallback chain churns
+because public instances get rate-limited/blocked within days). DDG, Bing, and
+SearXNG now race in parallel (first with results wins, others cancelled); Brave
+remains the keyed premium fallback. Bing's `li.b_algo` organic blocks are
+parsed, its `/ck/a` redirect URLs decoded back to the real destination
+(html.unescape first, then `base64.b64decode(altchars=b'-_', validate=True)` —
+`urlsafe_b64decode` lacks validate), and challenge/captcha pages detected.
+Pinning `mkt=en-US&setlang=en` fixed garbage results in the first live test.
+Commit `f721b9f` pushed. Backend 1858 pass (4 pre-existing shell failures), 6
+new web_search tests.
 
 **Open next / notes:** unchanged from before — ADR-37 follow-ups
 B-2026-08-15-10/11/12, review-42's `classify_failure` cleanup, owed live Windows
 re-run of the Session 264 recipe task, unbounded `reasoning_effort` default.
-New: curated SearXNG fallbacks will churn too (already rate-limited today) —
-a user-pinned private instance is the durable second-tier answer.
+New: Bing scraping is ToS-gray and its HTML structure could change (`b_algo`
+has been stable for years); a keyed API (Serper/Tavily) is the most durable
+option if scraping ever breaks.
 
 **Feature:** none
