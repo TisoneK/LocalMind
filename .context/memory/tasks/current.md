@@ -1,5 +1,5 @@
 # Current Task
 
-**Status:** done — Session 255 (follow-up to review-44): exposed the ADR-41 reasoning settings in the Settings UI + `backend/.env.example`. `LOCALMIND_THINKING` / `LOCALMIND_REASONING_TIMEOUT_SECS` / `LOCALMIND_REASONING_PLAN_TIMEOUT_SECS` / `LOCALMIND_REASONING_EFFORT` documented; new Settings fields (settings.json wins over env) + `POST /api/settings/thinking`; adapter + loop/orchestrator timeouts read the settings; Reasoning section in SettingsModal. Live-verified on an isolated home. See review-45.
+**Status:** done — Session 256: fixed the user-reported "Agent loop failed — empty_response" on z.ai/glm-4.5-flash with thinking ON (recipe-on-desktop turn: iter-1 ran shell, iter-2 streamed reasoning then returned no content/tool call → whole turn failed). Root cause: with thinking re-enabled, a slow free tier sometimes "thinks but doesn't act"; the loop's empty-response guard treated reasoning-only streams as empty. Fix: one bounded retry with a continue-nudge when reasoning streamed but no text/tool call arrived (`_MAX_EMPTY_REASONING_RECOVERIES = 1`); a second consecutive empty still fails fast. 2 regression tests; suite 1,799 pass. See review-46.
 
 **Feature:** none
