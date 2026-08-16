@@ -104,6 +104,57 @@ class TestEmptyResponseFastFail:
         assert "All good - nothing to do." in full, f"expected normal text, got {full!r}"
 
     @pytest.mark.asyncio
+    async def test_streamed_deltas_keep_boundary_spaces(self):
+        """Regression: the per-chunk transform in the execute streaming path
+        must not .strip() each delta, or space-prefixed tokens weld together
+        ("assistantrunning", "thisdevice"). The loop must use the whitespace-
+        safe stream variant on every streamed chunk.
+        """
+        loop = AgentLoop(adapter=MagicMock())
+
+        # The execute streaming path buffers the first ~2000 chars (for tool
+        # detection) and yields them as one block, then streams the REMAINDER
+        # chunk by chunk. The per-chunk transform on that remainder must not
+        # .strip() each delta. So: a >2000-char prefix to fill the buffer, then
+        # the space-prefixed deltas that must survive intact.
+        prefix = "word " * 500  # ~2500 chars, forces the buffer to flush
+        deltas = [" LocalMind", " —", " a", " local", " assistant", " running", " here."]
+
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+            async def _stream():
+                yield StreamChunk(text=prefix, done=False)
+                for d in deltas:
+                    yield StreamChunk(text=d, done=False)
+                yield StreamChunk(text="", done=True)
+
+            return _stream()
+
+        async def empty_chat(messages, temperature=0.4):
+            return
+            yield
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_with_tools = chat_with_tools
+        mock_adapter.chat = empty_chat
+
+        chunks = []
+        # NOTE: do NOT stub _filter_system_leaks here — we want the real
+        # per-chunk transform path (incl. _strip_minimax_tool_calls_stream).
+        with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x):
+            async for chunk in loop.run(
+                messages=[{"role": "user", "content": "what can you do"}],
+                intent=Intent.SHELL,
+                initial_tool_result=None,
+                available_tools=[],
+                adapter=mock_adapter,
+            ):
+                chunks.append(chunk)
+
+        full = "".join(c.text for c in chunks)
+        assert "local assistant running here" in full, f"boundary spaces lost: {full!r}"
+        assert "assistantrunning" not in full, f"delta strip regressed: {full!r}"
+
+    @pytest.mark.asyncio
     async def test_terminal_planning_error_stops_before_tool_call(self):
         """ADR-32: a terminal provider error on the first provider call must
         not be swallowed by planning and retried in the parent loop."""

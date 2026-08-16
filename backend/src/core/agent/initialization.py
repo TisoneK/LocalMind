@@ -113,6 +113,11 @@ JSON schema:
 
 Rules:
 - direct for greetings and general questions needing no local/live data.
+- direct for questions about YOURSELF — your capabilities, identity, or how
+  you work ("what can you do", "who are you", "what tools do you have"). These
+  DESCRIBE your tools; they do not require RUNNING any. Answer from the
+  response field. Do NOT route them to execute just because they mention files
+  or code — nothing needs to be looked up.
 - execute for anything requiring current info, files, code, browser, memory,
   or evidence. BIAS STRONGLY TOWARD execute, and ACT rather than ask. If a
   detail is unknown but DISCOVERABLE — a file to find, a folder to list, a

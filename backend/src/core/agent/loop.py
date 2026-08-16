@@ -4128,8 +4128,14 @@ class AgentLoop:
                         # For now, just suppress the XML and let the model see it
                         filtered_text = ""
                         _mid_stream_minimax_buffer = ""
-                    # Also strip any partial MiniMax XML from individual chunks
-                    _chunk_clean = _strip_minimax_tool_calls(filtered_text)
+                    # Also strip any partial MiniMax XML from individual chunks.
+                    # Use the STREAM variant: the plain _strip_minimax_tool_calls
+                    # ends with .strip(), which on a per-chunk basis eats the
+                    # leading/trailing space at every chunk boundary and welds
+                    # words together ("assistantrunning", "thisdevice"). The
+                    # stream variant removes the XML without touching boundary
+                    # whitespace; the final answer is assembled from full_text.
+                    _chunk_clean = _strip_minimax_tool_calls_stream(filtered_text)
                     if _chunk_clean:
                         # Keep the terminal marker until report enforcement has
                         # completed below; otherwise the client can finalize
