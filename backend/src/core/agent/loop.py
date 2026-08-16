@@ -1424,15 +1424,13 @@ class AgentLoop:
             # This is safe because independent tool calls (e.g., file_task + sysinfo)
             # have no side-effect dependencies between them.
             if isinstance(result, MultiToolCallResult):
-                # Keep provider reasoning internal. User-visible progress is
-                # carried by concise lifecycle statuses and tool events, not
-                # raw chain-of-thought or provider markup.
-                if result.raw_content and _obs:
-                    _obs.emit(
-                        "thinking",
-                        text=_filter_system_leaks(result.raw_content[:500]),
-                        iteration=iteration + 1,
-                    )
+                # The model's content alongside a tool call is user-facing
+                # NARRATION (its chain-of-thought arrives separately on the
+                # thinking channel and is filtered). Stream that one-line progress
+                # update to the user's chat — not into the ThinkingBlock.
+                _narration = _filter_system_leaks((result.raw_content or "").strip())
+                if _narration:
+                    yield StreamChunk(text=_narration[:400] + "\n\n", done=False)
 
                 logger.info(
                     f"[agent.loop] iter={iteration + 1} multi_tool_call: "
@@ -1714,15 +1712,12 @@ class AgentLoop:
                 # Debug: log description from LLM
                 logger.info(f"[agent.loop] tool_args description: {tool_args.get('description', 'NONE')}")
 
-                # Keep provider reasoning internal. The frontend receives
-                # concise lifecycle status and tool events instead of raw
-                # chain-of-thought or provider-specific markup.
-                if result.raw_content and _obs:
-                    _obs.emit(
-                        "thinking",
-                        text=_filter_system_leaks(result.raw_content[:500]),
-                        iteration=iteration + 1,
-                    )
+                # The model's content alongside a tool call is user-facing
+                # NARRATION (chain-of-thought comes separately on the thinking
+                # channel). Stream it to the user's chat as a brief progress line.
+                _narration = _filter_system_leaks((result.raw_content or "").strip())
+                if _narration:
+                    yield StreamChunk(text=_narration[:400] + "\n\n", done=False)
 
                 logger.info(
                     f"[agent.loop] iter={iteration + 1} tool_call={tool_name} args={json.dumps(tool_args)[:120]}"
