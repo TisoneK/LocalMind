@@ -1,22 +1,20 @@
 # Current Task
 
-**Status:** idle — Session 249 completed (z.ai/GLM-4.5-flash triage).
+**Status:** idle — Session 250 completed (research + design only, no code).
 
-**Last completed:** Diagnosed the 3 GLM-4.5-flash issues live. Incomplete
-output {HIGH} is a MODEL limitation (terse; provider reports 28 completion
-tokens; max_tokens + a 2.7k input cut both changed nothing) — reported
-honestly, no code fix claimed. Input bloat {MEDIUM}: the tool catalog was
-sent 3× — removed the redundant text injection (verified 16,763→14,098
-tok/call) + fixed a latent stream-tail drop. Latency {LOW} = model 0.48
-tok/s. `a5c0a0b`; review-39.
+**Last completed:** Documented the tool-context architecture problem + fix.
+The native `tools` param sends all 30 full "kitchen-sink" tool schemas
+EVERY call (~6,334 tok) — the biggest per-call line item and why free
+tiers run out of output budget (S249). A lean name+one-liner index is
+~609 tok → ~5,725 tok/call (~90%) reclaimable by loading a tool's full
+context ON DEMAND (the `skill` tool is the existing template). Wrote
+ADR-40, review-40, backlog B-2026-08-16-1.
 
-**Open next (need a provider with quota to live-verify):**
-1. `B-2026-08-15-14` — scope tools to the intent ("analyze" sent all 30;
-   the `tools` param alone is ~6.3k tok/call) + stop duplicating the tool
-   list inside the agent system prompt.
-2. Issue #1 mitigation: a synthesis-prompt nudge for a complete, structured
-   final answer (count + first N items) and/or richer (less-truncated)
-   evidence for listing tasks. GLM terseness is a model property → coaxing,
-   not a guaranteed fix; live-verify.
+**Open next (implementation — its own session, needs a capable provider to
+live-verify tool SELECTION):** B-2026-08-16-1 per ADR-40 — start with (B)
+lean-but-callable schemas (strip to name + one-liner + non-obvious params +
+guardrails; drop tutorial prose), live-verify tool-calling on cerebras;
+then (C) on-demand loading for the long-tail tools. Keep guardrails; do NOT
+claim a win from unit tests alone.
 
 **Feature:** none

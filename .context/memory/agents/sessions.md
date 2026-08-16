@@ -3470,3 +3470,13 @@ program + ADR-22). -->
 - **Validation:** full backend suite 1,764 passed (4 pre-existing env-gated `test_shell.py`); ruff clean; adapter/streaming/loop/chat tests 117 pass.
 - **Honest limits:** issue #1 is a model-quality limitation (terse output), NOT a code cap — reported as such, no fix claimed. Bigger input cut (tool scoping, B-2026-08-15-14) + a synthesis-prompt nudge for completeness remain, but need a provider with quota (z.ai free rate-limited during testing) to live-verify.
 - **Notes:** the diagnosis took several instrumentation passes across the adapter's multi-phase streaming (Phase 1 detect / _stream_from_http / drain) — finish_reason lands in different places for short vs long answers; the provider `usage` (`completion_tokens`) is the authoritative "did the model actually produce more?" signal.
+
+## 2026-08-16 — Session 250
+
+- **Agent:** Claude Code (claude-opus-4-8) | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Task:** User architectural question, RESEARCH + .context-fill only (no code): "why do tools carry so much context? they are tools not agents — the agent should feed instructions to the tool. It should carry only guardrails + behavior; the agent invokes only a SPECIFIC tool's context, not all 30 for no reason."
+- **Commits:** 0 product (research-only). 1 context commit (this) — ADR-40, review-40, backlog B-2026-08-16-1, logs.
+- **Findings (measured):** the native `tools` param sends all 30 full schemas EVERY call = 25,339 chars ≈ 6,334 tok (biggest per-call line item post-ADR-39). Catalog appeared 3× (native param + [removed S249] injection + `agent_tool_list` in prompt). Schemas are kitchen-sink self-manuals (browse 17 params/10 modes; git 10 params + 782 chars prose). A lean index (name+one-liner) = ~609 tok → **~5,725 tok/call (~90%) reclaimable** by loading a tool's full context ON DEMAND. **The `skill` tool already implements this pattern** (`available_skills_summary()` compact index + `skill(name)` load-on-demand) — the template to replicate.
+- **Deliverable:** ADR-40 (two-tier tool context: lean always-index + on-demand full context; options A dynamic-injection / B lean-schemas / C hybrid, with tradeoffs) + review-40 + backlog B-2026-08-16-1 (High).
+- **Recommendation:** ship B (lean schemas) first, live-verify tool SELECTION on a capable provider (weak models can regress), then C (on-demand long tail). Keep guardrails; drop tutorials.
+- **Notes:** followed the full .context Exit checklist (review + backlog + ADR + sessions + SUMMARY + current.md) — the protocol is now in my personal memory after the Session 249 miss.
