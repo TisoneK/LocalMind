@@ -1,21 +1,32 @@
 # Current Task
 
-**Status:** done — Session 271: small follow-up to Session 269 — the web_search
-tool result now opens with `Search results via **<engine>** (N results):`
-(DuckDuckGo / Bing / SearXNG / Brave), so the model (tool evidence) and the
-user (Actions card output) both see which engine answered — previously only
-`metadata.successful_provider` had it. Commit `b5ac1db` pushed. Backend 1858
-pass (4 pre-existing shell failures), 18 web_search tests pass.
+**Status:** done — Session 272 (correction, NO code): went to implement
+B-2026-08-16-4 (bound `shell` output, ADR-43 lever L1) and found the **premise was
+wrong — L1 is already implemented.** Corrected the record instead of shipping a
+no-op.
 
-**Concurrency note:** a parallel research session (Claude Code, Session 270 —
-ADR-43 tools optimization, context-only, marked done) committed in this same
-checkout atop my commit; my push carried both commits and local == remote at
-`2101935` with my `b5ac1db` intact. Its record is in sessions.md/SUMMARY.md.
+**Verified:** `shell` caps output via `BoundedOutputBuffer` (`TOOL_OUTPUT_MAX`
+4000, head+tail + marker; proven 250k→4000 chars); code_exec/web_fetch/git/
+process_tool bound too; PLUS a second-stage `_truncate_observation`
+(`OBS_LOG_MAX_CHARS` 2000) at every loop ingestion. My ADR-43 §4a cited
+shell.py:760 without tracing that `content` came from the bounded buffer at :226 —
+the "verify before claiming" trap. S262's "context too long" was unbounded
+*thinking* (fixed S262 by reasoning_effort), not shell output. Updated backlog
+B-4 (done), ADR-43, review-50 with the correction.
 
-**Open next / notes:** unchanged from before — ADR-37 follow-ups
-B-2026-08-15-10/11/12, review-42's `classify_failure` cleanup, owed live Windows
-re-run of the Session 264 recipe task, unbounded `reasoning_effort` default.
-New: the research session's B-2026-08-16-4/5/6 (tools optimization — L1: bound
-`shell` output first) is the next implementation candidate.
+**⚠ Working tree is BROKEN (not mine):** `backend/src/core/agent/loop.py` is
+corrupted at ~line 2353 (`) else:`, mangled indentation) — a concurrent session's
+uncommitted in-progress edit (HEAD parses fine). **The backend cannot import**
+until that session finishes; this blocks any live-verify. Left untouched.
+
+**Open next / notes:**
+1. **The real remaining tools work is B-2026-08-16-5** (ADR-43 L2 right-tool
+   steering: exploratory `ls`/`Get-ChildItem` before create, `shell` for
+   discovery → `find_path`; + L3 the redundant post-write read-back). Grounded in
+   real traces, not a misread. Do once loop.py is healthy (needs live-verify on
+   z.ai/glm-4.5-flash). B-6 (L4 observation contract) after.
+2. Carried: ADR-37 follow-ups B-2026-08-15-10/11/12; review-42 `classify_failure`
+   cleanup; owed live Windows re-run of the S264 recipe task; unbounded
+   `reasoning_effort` default.
 
 **Feature:** none
