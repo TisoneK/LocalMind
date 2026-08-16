@@ -785,3 +785,10 @@ if literally nothing slowed you down.
 - **Cost:** A wrong conclusion written into three .context surfaces (review-39, ai-models.md, backlog), which Buffy's Session 252 then partly echoed ("free-tier budget"). The user had to hand me the counter-evidence to redirect. Session 253 spent correcting the record + writing the real handover (ADR-41/review-43/B-2026-08-16-3).
 - **Cause:** I reached for "the model is weak" instead of first auditing our HARNESS for disabled capabilities / obsolete workarounds. `finish_reason`/`completion_tokens=28` told me *what* the model emitted, not *why* — and I didn't ask why our harness would make a capable model emit that.
 - **Prevent next time:** before ever concluding "the model is weak/terse/incapable", grep the adapter + loop for anything that DISABLES or constrains the model (thinking/reasoning flags, max_tokens, stop sequences, per-call timeouts, forced modes) and check each justification is still valid. A capable model producing bad output in our harness is a harness bug until proven otherwise. See `user/preferences.md` "Fixing approach & verification" and the Session 244/245 entry above.
+
+---
+## 2026-08-16 — Buffy / deepseek-v4-flash (Session 254 — backgrounded server reaped)
+
+- **Problem:** Same class as the Session 251 entry: launching uvicorn in a backgrounded subshell in ONE tool command works when the curl runs in the SAME command, but launching it in a separate tool call gets the process reaped when the tool shell exits (nohup + disown did NOT help; macOS has no `setsid`). Cost ~4 failed launch attempts this session before I remembered the Session 251 pattern.
+- **Cause:** the tool's shell kills its process group on exit; only a server+curl in one command survives long enough.
+- **Prevent next time:** for any live server trace, run `(cmd &) && sleep N && curl ...` in ONE command (the Session 251/254 pattern). Never launch a background server in a separate tool call.
