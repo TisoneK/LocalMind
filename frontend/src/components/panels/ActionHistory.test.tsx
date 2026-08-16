@@ -120,4 +120,31 @@ describe('ActionHistory', () => {
     const num = screen.getByText('2');
     expect(num.className).toContain('text-brand-purple');
   });
+
+  it('shows the Why block when reasoning has real content (Session 122)', () => {
+    render(
+      <ActionHistory
+        actions={[action({ id: 'a1', label: 'Run command', reasoning: 'Plan step: list files', iteration: 1 })]}
+      />,
+    );
+    fireEvent.click(screen.getByText('Run command'));
+    expect(screen.getByText('Why')).toBeInTheDocument();
+    expect(screen.getByText('Plan step: list files')).toBeInTheDocument();
+  });
+
+  it('hides the Why block when reasoning is empty or whitespace-only (Session 265)', () => {
+    render(
+      <ActionHistory
+        actions={[
+          action({ id: 'a1', label: 'Empty reason', reasoning: '   ', iteration: 1 }),
+          action({ id: 'a2', label: 'Null reason', reasoning: null, iteration: 2 }),
+        ]}
+      />,
+    );
+    // The collapsed cards must not show a blank "why:" peek.
+    expect(screen.queryByText(/why:/)).not.toBeInTheDocument();
+    // Expanding a whitespace-reasoning card must not reveal an empty Why block.
+    fireEvent.click(screen.getByText('Empty reason'));
+    expect(screen.queryByText('Why')).not.toBeInTheDocument();
+  });
 });

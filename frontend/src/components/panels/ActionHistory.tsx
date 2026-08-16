@@ -243,8 +243,11 @@ function ActionCard({ action }: { action: ActionItem }) {
             </span>
           )}
           {/* Session 122: the reasoning that led to this step — Actions is the
-              trace (what + why), not a second copy of the task list. */}
-          {action.reasoning && (
+              trace (what + why), not a second copy of the task list. Session
+              265: only render it when it actually has content (whitespace-only
+              reasoning from an empty plan step would otherwise show a blank
+              "why:" line that wastes vertical space). */}
+          {action.reasoning?.trim() && (
             <span
               className="block text-[9px] italic text-brand-green-faint truncate"
               title={action.reasoning}
@@ -271,7 +274,7 @@ function ActionCard({ action }: { action: ActionItem }) {
       {expanded && (
         <div className="border-t border-brand-border/50 bg-brand-bg-dark">
           <div className="px-2.5 py-2 space-y-1.5 max-h-72 overflow-y-auto custom-scrollbar">
-            {action.reasoning && (
+            {action.reasoning?.trim() && (
               <div>
                 <div className="text-[9px] text-brand-amber uppercase mb-0.5">Why</div>
                 <p className="text-[10px] italic text-brand-green-soft leading-snug whitespace-pre-wrap break-words">

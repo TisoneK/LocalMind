@@ -146,7 +146,10 @@ function StepDetail({ toolCall }: { toolCall: ToolCall }) {
   const filePath = isFileWrite ? toolCall.input : null;
   return (
     <div className="mt-1 rounded-md border border-brand-border/50 bg-brand-bg-dark px-2.5 py-2">
-      {toolCall.reasoning && (
+      {/* Session 265: only render the Why block when the reasoning has real
+          content — a whitespace-only plan-step label would otherwise show an
+          empty "Why" section that wastes space. */}
+      {toolCall.reasoning?.trim() && (
         <div className="mb-1.5">
           <div className="text-[10px] text-brand-amber mb-0.5">Why</div>
           <p className="text-[10px] italic text-brand-green-soft leading-snug whitespace-pre-wrap break-words max-h-24 overflow-y-auto">
@@ -216,7 +219,9 @@ function TimelineRow({
   const stepMatch = toolCall.todoId?.match(/^plan-(\d+)$/);
   const inputStr = toolCall.input || '';
   const isCodeTool = toolCall.name === 'code_exec';
-  const hasDetail = !!(toolCall.reasoning || toolCall.input || toolCall.output);
+  // Session 265: whitespace-only reasoning (empty plan step) is not detail —
+  // it must not make the row expandable to an empty Why block.
+  const hasDetail = !!(toolCall.reasoning?.trim() || toolCall.input || toolCall.output);
 
   const durationLabel =
     toolCall.duration !== undefined
@@ -280,8 +285,9 @@ function TimelineRow({
             </span>
           )}
         </button>
-        {/* Inline reasoning peek (visible without expanding) */}
-        {toolCall.reasoning && !expanded && (
+        {/* Inline reasoning peek (visible without expanding) — Session 265:
+            hide when the reasoning is whitespace-only (blank "why:" line). */}
+        {toolCall.reasoning?.trim() && !expanded && (
           <div className="px-1.5">
             <span
               className="block truncate text-[9px] italic leading-snug text-brand-green-faint"
