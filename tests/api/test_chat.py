@@ -442,6 +442,65 @@ class TestSessions:
         assert len(msgs) >= 1
         assert any(m["role"] == "user" for m in msgs)
 
+    def test_history_returns_persisted_turn_artifacts(self, client):
+        """Session 266: thinking / error / toolCalls / performance persisted
+        with the assistant message must survive a reload — the history
+        endpoint returns them so the frontend restores the thinking block,
+        error card, step pills, and cumulative context counter."""
+        from core.config import settings
+        from core.models import Message, Role
+        from storage.db import get_shared_store
+
+        sid = "history-artifacts-1"
+        store = get_shared_store(settings.localmind_db_path)
+        store.append(sid, Message(role=Role.USER, content="show projects"))
+        store.append(
+            sid,
+            Message(
+                role=Role.ASSISTANT,
+                content="Here is the project list.",
+                thinking="Listing projects to answer the request.",
+                error="zen returned 429: quota exceeded",
+                tool_calls=[
+                    {
+                        "id": "tc-shell-iter1",
+                        "name": "shell",
+                        "label": "List dev projects",
+                        "status": "done",
+                        "iteration": 1,
+                        "reasoning": "List the dev directory",
+                        "tool_args": "ls dev",
+                    }
+                ],
+                metrics={"prompt_tokens": 1200, "completion_tokens": 84, "latency_ms": 2300},
+            ),
+        )
+
+        data = client.get(f"/api/sessions/{sid}/history").json()
+        msgs = data.get("history", data) if isinstance(data, dict) else data
+        assistant = next(m for m in msgs if m["role"] == "assistant")
+
+        # Thinking block survives.
+        assert assistant["thinking"] == "Listing projects to answer the request."
+        # Error card survives — raw stored string is normalized at the
+        # presentation boundary (ADR-20): canonical object, no raw leak.
+        err = assistant["error"]
+        assert isinstance(err, dict)
+        assert err["code"] == "rate_limit"
+        assert err["retryable"] is True
+        assert "FreeUsageLimitError" not in err["message"]
+        # Tool-step pills survive (persisted timeline beats the legacy
+        # single-tool_name mapping).
+        tcs = assistant["toolCalls"]
+        assert tcs and tcs[0]["name"] == "shell"
+        assert tcs[0]["reasoning"] == "List the dev directory"
+        # Per-turn performance survives → the context counter can be reseeded.
+        perf = assistant["performance"]
+        assert perf["promptTokens"] == 1200
+        assert perf["completionTokens"] == 84
+        assert perf["latencyMs"] == 2300
+        assert perf["tokensPerSecond"] == pytest.approx(84 / 2.3, rel=0.05)
+
 
 # ── Tool registry ─────────────────────────────────────────────────────────────
 

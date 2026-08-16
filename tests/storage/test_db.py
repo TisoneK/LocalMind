@@ -130,6 +130,70 @@ def test_create_action_stores_todo_id(store):
     assert row["iteration"] == 2
 
 
+# ── Session 266: per-turn artifacts survive a reload ────────────────────────
+# The messages table now persists thinking / error / tool_calls / metrics with
+# each assistant message; get_history must round-trip them so the frontend can
+# restore thinking blocks, error cards, step pills, and the context counter.
+
+
+def test_message_roundtrips_thinking_error_tool_calls_metrics(store):
+    store.append(
+        "s1",
+        Message(
+            role=Role.ASSISTANT,
+            content="Done.",
+            thinking="First step\n\nSecond step",
+            error="zen returned 429: quota exceeded",
+            tool_calls=[
+                {"id": "tc-shell-iter1", "name": "shell", "status": "done", "reasoning": "why"},
+                {"id": "tc-file-iter2", "name": "file_read", "status": "done"},
+            ],
+            metrics={"prompt_tokens": 1200, "completion_tokens": 84, "latency_ms": 2300},
+        ),
+    )
+    history = store.get_history("s1")
+    assert len(history) == 1
+    m = history[0]
+    assert m.thinking == "First step\n\nSecond step"
+    assert m.error == "zen returned 429: quota exceeded"
+    assert m.tool_calls == [
+        {"id": "tc-shell-iter1", "name": "shell", "status": "done", "reasoning": "why"},
+        {"id": "tc-file-iter2", "name": "file_read", "status": "done"},
+    ]
+    assert m.metrics == {"prompt_tokens": 1200, "completion_tokens": 84, "latency_ms": 2300}
+
+
+def test_recent_history_roundtrips_artifacts(store):
+    store.append("s1", Message(role=Role.USER, content="hello"))
+    store.append(
+        "s1",
+        Message(
+            role=Role.ASSISTANT,
+            content="reply",
+            thinking="thinking trace",
+            error="provider down",
+            tool_calls=[{"id": "tc-1", "name": "git", "status": "failed"}],
+            metrics={"prompt_tokens": 10, "completion_tokens": 5, "latency_ms": 100},
+        ),
+    )
+    recent = store.get_recent_history("s1", limit=2)
+    m = recent[0]
+    assert m.role == Role.ASSISTANT
+    assert m.thinking == "thinking trace"
+    assert m.error == "provider down"
+    assert m.tool_calls == [{"id": "tc-1", "name": "git", "status": "failed"}]
+    assert m.metrics == {"prompt_tokens": 10, "completion_tokens": 5, "latency_ms": 100}
+
+
+def test_messages_without_artifacts_still_roundtrip_plain(store):
+    store.append("s1", Message(role=Role.USER, content="plain"))
+    history = store.get_history("s1")
+    assert history[0].thinking is None
+    assert history[0].error is None
+    assert history[0].tool_calls is None
+    assert history[0].metrics is None
+
+
 def test_upsert_todo_create_update_clear(store):
     store.ensure_session("s1")
     # create
