@@ -126,7 +126,11 @@ KNOWN_SITES: dict[str, str] = {
 }
 
 BLOCKED_COMMANDS = [
-    "format",
+    # NOTE (B-2026-08-16-15): the bare "format" substring is GONE — it
+    # blocked safe read-only uses (PowerShell Format-List / Format-Table,
+    # filenames/paths containing "format", curl --format, git log --format).
+    # Actual disk-format commands are blocked separately via
+    # _BLOCKED_FORMAT_RE below (format C:, format.exe, Format-Volume).
     "del /f",
     "rm -rf /",
     "rmdir /s /q c:\\",
@@ -139,6 +143,21 @@ BLOCKED_COMMANDS = [
     "net user",
     "net localgroup",
 ]
+
+# Destructive disk-format commands ONLY — replacing the old bare "format"
+# substring, which false-positived on Format-List / Format-Table / any path
+# or variable containing "format" (B-2026-08-16-15, found via a live hy3-free
+# trace: the model's read-only `... | Sort-Object Length | Format-Table` was
+# rejected and it had to route around the block).
+_BLOCKED_FORMAT_RE = re.compile(
+    # No trailing \b after the colon — ':' is a non-word char, so a trailing
+    # boundary never matches at end-of-string ("format c:" would slip through).
+    # Flags may sit between the tool and the drive ("format /q d:"). The
+    # `\s+` (not `\b`) after "format" keeps --format=oneline / format.py
+    # / Format-List safe: they have no whitespace right after "format".
+    r"\bformat\s+(?:/[^\s]+\s+)*[a-zA-Z]:|\bformat\.(exe|com)\b|\bformat-volume\b",
+    re.IGNORECASE,
+)
 
 FILE_TYPE_EXTENSIONS: dict[str, list[str]] = {
     "photo": ["jpg", "jpeg", "png", "heic", "raw"],
@@ -250,12 +269,25 @@ def _capture_process_output(proc: subprocess.Popen, timeout: int) -> tuple[str, 
     return buffer.getvalue().strip(), timed_out
 
 
+def _blocked_reason(cmd: str | list) -> str | None:
+    """Return a user-facing reason if the command is blocked for safety, else
+    None. B-2026-08-16-15: the old bare-"format" substring check also blocked
+    safe read-only commands (Format-List, filenames with "format" in them) —
+    destructive patterns only."""
+    target = cmd if isinstance(cmd, str) else " ".join(cmd)
+    for blocked in BLOCKED_COMMANDS:
+        if blocked.lower() in target.lower():
+            return f"Command blocked for safety: contains '{blocked}'"
+    if _BLOCKED_FORMAT_RE.search(target):
+        return "Command blocked for safety: drive formatting is not allowed"
+    return None
+
+
 def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
     """Execute a shell command. Returns {success, message}. Never raises."""
-    for blocked in BLOCKED_COMMANDS:
-        target = cmd if isinstance(cmd, str) else " ".join(cmd)
-        if blocked.lower() in target.lower():
-            return _err(f"Command blocked for safety: contains '{blocked}'")
+    reason = _blocked_reason(cmd)
+    if reason:
+        return _err(reason)
     # Resolve CWD: explicit parameter > session context var > None (inherit OS default)
     effective_cwd = cwd or _session_cwd_var.get(None)
     # Validate that the CWD directory still exists before passing it

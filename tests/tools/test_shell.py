@@ -6,6 +6,7 @@ import pytest
 
 from tools.shell import (
     ShellContract,
+    _blocked_reason,
     _looks_like_natural_language,
     _looks_like_powershell,
     shell_exec,
@@ -34,6 +35,72 @@ def test_real_commands_are_not_detected():
 def test_empty_command_is_not_nl():
     assert not _looks_like_natural_language('')
     assert not _looks_like_natural_language('   ')
+
+
+# ── B-2026-08-16-15: the bare "format" substring must not block safe commands ─
+# Live finding (hy3-free trace): a read-only PowerShell pipeline ending in
+# Format-Table was rejected because the old BLOCKED_COMMANDS contained the
+# bare substring "format" — which also matched Format-List, filenames/paths
+# with "format" in them, curl --format, git log --format, etc. Only actual
+# destructive disk-format commands (format C:, format.exe, Format-Volume)
+# should be blocked.
+
+
+def test_safe_readonly_commands_are_not_blocked():
+    """Format-List / Format-Table / paths and flags containing 'format' are
+    read-only or harmless — they must NOT trip the block (the exact live
+    case: `... | Sort-Object Length -Descending | Format-Table` was rejected
+    before this fix)."""
+    safe_commands = [
+        'Get-ChildItem -Path "$env:USERPROFILE\\Desktop" -File | Sort-Object Length -Descending | Format-Table',
+        'Get-Process | Format-List Name,CPU',
+        'Get-ChildItem | Format-Table Name,Length -AutoSize',
+        'Get-Content C:\\Users\\me\\format-notes.txt',
+        'dir C:\\reports\\format\\',
+        'python script.py --format json',
+        'curl -X POST -H "Content-Type: application/json" --data @f.json --format json http://x',
+        'git log --format=oneline -5',
+        'echo format',
+        'ls /tmp/formatting-export/',
+    ]
+    for cmd in safe_commands:
+        assert _blocked_reason(cmd) is None, f"safe command blocked: {cmd!r}"
+
+
+def test_real_destructive_format_commands_still_blocked():
+    """Actual disk-format commands must remain blocked — the whole point of
+    the check."""
+    blocked_commands = [
+        'format c:',
+        'format C: /q',
+        'format /q d:',
+        'format c:\\',
+        'format.exe c:',
+        'Format-Volume -DriveLetter C',
+        'echo hi && format e:',
+    ]
+    for cmd in blocked_commands:
+        reason = _blocked_reason(cmd)
+        assert reason is not None and 'blocked for safety' in reason, (
+            f"destructive format command not blocked: {cmd!r}"
+        )
+
+
+def test_other_blocked_commands_unchanged():
+    """The rest of BLOCKED_COMMANDS must keep working (regression guard on the
+    list while the format entry is narrowed)."""
+    for cmd in [
+        'rm -rf /tmp/cache',
+        'del /f C:\\temp\\x.txt',
+        'shutdown -s',
+        'mkfs.ext4 /dev/sdb1',
+        'dd if=/dev/zero of=/dev/sda bs=1M',
+        'reg delete HKCU\\Software\\App',
+    ]:
+        reason = _blocked_reason(cmd)
+        assert reason is not None and 'blocked for safety' in reason, (
+            f"destructive command not blocked: {cmd!r}"
+        )
 
 
 @pytest.mark.asyncio
