@@ -1,29 +1,22 @@
 # Current Task
 
-**Status:** idle — Session 248 completed (New Chat tab/counter reset, live
-actions as cards, action-card polish, backend double-persist fix).
+**Status:** idle — Session 249 completed (z.ai/GLM-4.5-flash triage).
 
-**Last completed:** Four fixes shipped (`3564a77`, `405159a`):
-1. New Chat resets left panel to Chat, right panel to Agents, and zeroes the
-   context counter (new `resetSession()` in `useChat` — the client-side
-   session ID never matched a backend session, so the old session-switch
-   cleanup never fired).
-2. Actions tab no longer shows pills during execution — live actions render
-   as the same expandable cards as history.
-3. Messages loaded twice after reopening a chat — ROOT CAUSE WAS BACKEND:
-   the guaranteed-persist dedup used `get_history(limit=2)` (ASC) so it
-   compared against the OLDEST two messages, never the just-saved reply.
-   Added `get_recent_history()` (newest-first) + pointed both
-   `_guarantee_persist_assistant` impls at it.
-4. Action cards: scrollable body, copy buttons per section, stacked step
-   number (full-width container), pretty color-coded JSON input.
+**Last completed:** Diagnosed the 3 GLM-4.5-flash issues live. Incomplete
+output {HIGH} is a MODEL limitation (terse; provider reports 28 completion
+tokens; max_tokens + a 2.7k input cut both changed nothing) — reported
+honestly, no code fix claimed. Input bloat {MEDIUM}: the tool catalog was
+sent 3× — removed the redundant text injection (verified 16,763→14,098
+tok/call) + fixed a latent stream-tail drop. Latency {LOW} = model 0.48
+tok/s. `a5c0a0b`; review-39.
 
-**Note:** the dup fix repairs NEW replies only — chats already saved with
-duplicate rows keep them.
-
-**Open next (recommended):** tool-schema diet `B-2026-08-15-14` (~3.8k
-scoped tokens) with live tool-use verification. Also still open from
-Session 247: grep for any remaining per-chunk trimming
-`_strip_minimax_tool_calls` uses on streaming deltas.
+**Open next (need a provider with quota to live-verify):**
+1. `B-2026-08-15-14` — scope tools to the intent ("analyze" sent all 30;
+   the `tools` param alone is ~6.3k tok/call) + stop duplicating the tool
+   list inside the agent system prompt.
+2. Issue #1 mitigation: a synthesis-prompt nudge for a complete, structured
+   final answer (count + first N items) and/or richer (less-truncated)
+   evidence for listing tasks. GLM terseness is a model property → coaxing,
+   not a guaranteed fix; live-verify.
 
 **Feature:** none

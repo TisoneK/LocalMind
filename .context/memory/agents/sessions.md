@@ -3459,3 +3459,14 @@ program + ADR-22). -->
 - **Open items:** duplicate-message fix only repairs NEW replies — old chats keep their dup rows. Deferred (unchanged): tool-schema diet `B-2026-08-15-14`.
 - **Report:** `.context/memory/reviews/2026-08-16-review-3.md`
 - **Notes:** none
+
+## 2026-08-16 — Session 249
+
+- **Agent:** Claude Code (claude-opus-4-8) | **Platform:** macOS (local) | **Role:** engineer | **Core:** 0.5.0
+- **Task:** User: free z.ai/GLM-4.5-flash has 3 issues — incomplete output {HIGH}, too much input token {MEDIUM}, latency {LOW}. (Also: the user caught me skipping the Exit checklist last arc — reviews/CHANGELOG/SUMMARY — and I now carry the .context protocol in my personal memory so I run it.)
+- **Commits:** 1 product (`a5c0a0b`, pushed) — `fix(adapter): stop sending the tool catalog 3x; fix stream-tail drop` + this context commit. Review: `reviews/2026-08-16-review-39.md`.
+- **Findings (live-measured on z.ai, isolated LOCALMIND_HOME, port 8000 untouched, keys never printed):** input is ~14–17k tokens PER CALL even for "hi". Payload: system msg 41,812 chars (incl a 10,936-char tool-text injection) + native `tools` param 25,399 chars (all 30 tools) — the tool catalog was sent THREE times. Incomplete output is the MODEL: provider reports exactly 28 completion tokens; `max_tokens=4096` didn't change it; a 2.7k input cut didn't lengthen output (so the "input swallows output" hypothesis was NOT supported by the reduction test); stream fully consumed at 28 tok; output deterministic → GLM-4.5-flash genuinely produces a terse, mid-path-cut summary and stops. Latency = model 0.48 tok/s (not code-fixable).
+- **Fixes:** (1) removed the redundant tool-text injection — verified input 16,763→14,098 tok/call (~2.7k saved), tool-calling intact; (2) fixed a latent stream-tail drop (`_stream_from_http` gated continuation on `not phase1_done`, but Phase 1 sets that True on a MID-STREAM text break where the stream isn't consumed → tail dropped for many-small-chunk streamers; now guarded on `is_stream_consumed`; removed dead `phase1_done`). Fix #2 did NOT change GLM's 28-token answer but prevents truncation once answers grow.
+- **Validation:** full backend suite 1,764 passed (4 pre-existing env-gated `test_shell.py`); ruff clean; adapter/streaming/loop/chat tests 117 pass.
+- **Honest limits:** issue #1 is a model-quality limitation (terse output), NOT a code cap — reported as such, no fix claimed. Bigger input cut (tool scoping, B-2026-08-15-14) + a synthesis-prompt nudge for completeness remain, but need a provider with quota (z.ai free rate-limited during testing) to live-verify.
+- **Notes:** the diagnosis took several instrumentation passes across the adapter's multi-phase streaming (Phase 1 detect / _stream_from_http / drain) — finish_reason lands in different places for short vs long answers; the provider `usage` (`completion_tokens`) is the authoritative "did the model actually produce more?" signal.
