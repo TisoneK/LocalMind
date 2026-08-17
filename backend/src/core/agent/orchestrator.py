@@ -51,14 +51,17 @@ logger = logging.getLogger(__name__)
 
 
 def _orchestrator_timeout_for(active_adapter) -> float:
-    """Return the orchestrator planning timeout, scaled for thinking models.
+    """Return the orchestrator planning timeout, scaled for thinking models
+    and slow local providers.
 
     ADR-41 (Session 254): with thinking enabled the model reasons before
     emitting the plan JSON, so the 10s ORCHESTRATOR_TIMEOUT_SECS can fire
-    mid-thought. When the adapter reports thinking_enabled, use the larger
-    reasoning plan budget (tunable via Settings UI / env) instead.
+    mid-thought. A slow local provider (Ollama) has the same problem at a
+    low token rate. When the adapter reports thinking_enabled OR
+    slow_provider, use the larger reasoning plan budget (tunable via
+    Settings UI / env) instead.
     """
-    if getattr(active_adapter, "thinking_enabled", False):
+    if getattr(active_adapter, "thinking_enabled", False) or getattr(active_adapter, "slow_provider", False):
         try:
             from core.config import settings
 

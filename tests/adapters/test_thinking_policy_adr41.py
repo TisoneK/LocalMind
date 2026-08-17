@@ -195,6 +195,70 @@ def test_orchestrator_timeout_scales_with_thinking(monkeypatch):
     assert _orchestrator_timeout_for(_PlainAdapterStub()) == ORCHESTRATOR_TIMEOUT_SECS
 
 
+# ── 5c. Slow local providers (Ollama) get the generous budgets ───────────────
+# Session 288 (live user report: phi4-mini "Hi" timed out at 45s on a 55.8s /
+# 37-token generation). A local model is slow for a DIFFERENT reason than a
+# thinking model (low token rate, not pre-answer reasoning) — it gets the
+# generous budgets WITHOUT the Thinker, which stays gated on thinking_enabled
+# (an extra sequential consult a slow local model can't afford).
+
+
+class _SlowProviderStub:
+    """Adapter that does NOT think but generates slowly (local Ollama)."""
+
+    slow_provider = True
+
+
+def test_per_call_timeout_scales_with_slow_provider(monkeypatch):
+    """A slow provider's per-call cap must honor the operator-tuned
+    ollama_timeout_chat budget instead of the generic 45s cap (the generic
+    cap previously preempted even the adapter's own 90s HTTP timeout), and
+    must never shrink below the generic cap."""
+    from core.agent.constants import PER_CALL_TIMEOUT_SECS
+    from core.agent.loop import _per_call_timeout_for
+
+    monkeypatch.setattr(config_mod.settings, "ollama_timeout_chat", 180)
+    assert _per_call_timeout_for(_SlowProviderStub()) == 180.0
+    # Floored at the generic cap — a slow provider never gets a shorter
+    # window than a cloud call.
+    monkeypatch.setattr(config_mod.settings, "ollama_timeout_chat", 10)
+    assert _per_call_timeout_for(_SlowProviderStub()) == PER_CALL_TIMEOUT_SECS
+    # Non-slow, non-thinking adapters keep the generic cap.
+    assert _per_call_timeout_for(_PlainAdapterStub()) == PER_CALL_TIMEOUT_SECS
+
+
+def test_plan_timeout_scales_with_slow_provider(monkeypatch):
+    """The 8s plan/init cap fires mid-stream on a slow local model too."""
+    from core.agent.constants import PLAN_TIMEOUT_SECS, REASONING_PLAN_TIMEOUT_SECS
+    from core.agent.loop import _plan_timeout_for
+
+    monkeypatch.setattr(config_mod.settings, "localmind_reasoning_plan_timeout_secs", 30.0)
+    assert _plan_timeout_for(_SlowProviderStub()) == REASONING_PLAN_TIMEOUT_SECS
+    assert _plan_timeout_for(_PlainAdapterStub()) == PLAN_TIMEOUT_SECS
+
+
+def test_orchestrator_timeout_scales_with_slow_provider(monkeypatch):
+    """The orchestrator's planning wait must scale for slow local models too."""
+    from core.agent.constants import ORCHESTRATOR_TIMEOUT_SECS
+    from core.agent.orchestrator import _orchestrator_timeout_for
+
+    monkeypatch.setattr(config_mod.settings, "localmind_reasoning_plan_timeout_secs", 30.0)
+    # The reasoning budget wins for a slow provider (30.0), not the 10s cap.
+    assert _orchestrator_timeout_for(_SlowProviderStub()) == 30.0
+    assert _orchestrator_timeout_for(_PlainAdapterStub()) == ORCHESTRATOR_TIMEOUT_SECS
+
+
+def test_ollama_adapter_reports_slow_provider():
+    """The Ollama adapter must report slow_provider=True (local models are
+    slow — the loop gives them the generous budgets) and NOT claim to think
+    (the Thinker stays off for local models)."""
+    from adapters.ollama import OllamaAdapter
+
+    adapter = OllamaAdapter()
+    assert adapter.slow_provider is True
+    assert not getattr(adapter, "thinking_enabled", False)
+
+
 # ── 6. The loop forwards thinking on final-answer paths ─────────────────────
 
 
@@ -239,6 +303,12 @@ class _ToolThenThinkingAdapter:
         return _stream()
 
 
+class _SlowToolThenAnswerAdapter(_ToolThenThinkingAdapter):
+    """Tool-then-answer stub that is also a slow local provider (Ollama)."""
+
+    slow_provider = True
+
+
 def _collect(loop, adapter) -> list[StreamChunk]:
     async def _run():
         from core.models import Intent
@@ -255,6 +325,30 @@ def _collect(loop, adapter) -> list[StreamChunk]:
         ]
 
     return asyncio.run(_run())
+
+
+def test_slow_provider_gets_reasoning_wall_clock():
+    """A slow local provider must get the generous wall clock — with the
+    generic 180s cap forced to 0, a slow_provider adapter still completes
+    (the loop uses the reasoning wall clock instead of preempting at iter 1)."""
+    from core.agent.loop import AgentLoop
+
+    adapter = _SlowToolThenAnswerAdapter()
+
+    async def _fake_dispatch(tool_intent, tool_input, **kwargs):
+        from core.models import RiskLevel, ToolResult
+
+        return ToolResult(content="done", risk=RiskLevel.LOW, source="shell", success=True), False, 0
+
+    loop = AgentLoop(adapter=adapter)
+    with patch("core.agent.loop.dispatch_with_retry", side_effect=_fake_dispatch):
+        with patch("core.agent.loop.MAX_WALL_CLOCK_SECS", 0.0):
+            chunks = _collect(loop, adapter)
+
+    text = "".join(chunk.text for chunk in chunks)
+    assert "summary of everything" in text, (
+        f"slow_provider must get the generous wall clock — got tail={text[-200:]!r}"
+    )
 
 
 def test_loop_forwards_thinking_on_final_answer():

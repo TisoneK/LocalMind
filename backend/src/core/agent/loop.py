@@ -166,30 +166,51 @@ def _reasoning_setting(name: str, fallback: float) -> float:
 
 
 def _plan_timeout_for(active_adapter) -> float:
-    """Return the plan/init stream timeout, scaled for thinking models.
+    """Return the plan/init stream timeout, scaled for thinking models and
+    slow local providers.
 
     ADR-41 (Session 254): with thinking enabled the model reasons before
     emitting the plan JSON, so the 8s PLAN_TIMEOUT_SECS can fire mid-thought
     (observed live: "initialization timed out after 8s" with GLM-4.5-Flash
-    thinking ON). When the adapter reports thinking_enabled, use the larger
+    thinking ON). A slow local provider (Ollama) has the same problem for a
+    different reason — its token rate is too low to emit the JSON in 8s. When
+    the adapter reports thinking_enabled OR slow_provider, use the larger
     REASONING_PLAN_TIMEOUT_SECS budget (tunable via Settings UI / env). The
     parent loop's wall-clock cap still bounds total turn time.
     """
-    if getattr(active_adapter, "thinking_enabled", False):
+    if getattr(active_adapter, "thinking_enabled", False) or getattr(active_adapter, "slow_provider", False):
         return _reasoning_setting("localmind_reasoning_plan_timeout_secs", REASONING_PLAN_TIMEOUT_SECS)
     return PLAN_TIMEOUT_SECS
 
 
 def _per_call_timeout_for(active_adapter) -> float:
-    """Return the per-iteration LLM-call timeout, scaled for thinking models.
+    """Return the per-iteration LLM-call timeout, scaled for thinking models
+    and slow local providers.
 
     ADR-41 (Session 254): a reasoning model with thinking enabled streams
     many thinking tokens before its answer — a fixed 45s cap would truncate
     mid-thought on a slow free tier. Use the larger reasoning budget (tunable
     via Settings UI / env) when the adapter reports thinking_enabled.
+
+    Session 288 (slow local providers): a local Ollama model has the same
+    truncation problem for a different reason — its token rate is low (often
+    <1-2 tok/s on CPU/small GPUs), so a legitimately short reply can exceed
+    45s. The generic cap even preempted the operator-tuned ollama_timeout_chat
+    HTTP timeout entirely (observed live: phi4-mini "Hi" timed out at 45s on
+    a 55.8s / 37-token generation). Honor that chat budget for slow providers,
+    floored at the generic cap so it never shrinks below a cloud call's window.
     """
     if getattr(active_adapter, "thinking_enabled", False):
         return _reasoning_setting("localmind_reasoning_timeout_secs", REASONING_PER_CALL_TIMEOUT_SECS)
+    if getattr(active_adapter, "slow_provider", False):
+        try:
+            from core.config import settings as _settings
+
+            _chat = float(getattr(_settings, "ollama_timeout_chat", 0) or 0)
+        except Exception:
+            _chat = 0.0
+        if _chat > 0:
+            return max(PER_CALL_TIMEOUT_SECS, _chat)
     return PER_CALL_TIMEOUT_SECS
 
 
@@ -556,13 +577,16 @@ class AgentLoop:
             and agent_config.max_wall_clock_secs >= 1
         ):
             _effective_max_wall = agent_config.max_wall_clock_secs
-        elif getattr(active_adapter, "thinking_enabled", False):
+        elif getattr(active_adapter, "thinking_enabled", False) or getattr(active_adapter, "slow_provider", False):
             # ADR-41 (Session 256): a thinking model on a slow free tier
             # spends 30-170s per call THINKING before acting — the 180s wall
             # clock fits only ~1-2 calls, so a multi-step turn (init + tool +
-            # answer) hits the cap before finishing. Scale the cap for
-            # thinking models; the per-call timeout, iteration cap, and
-            # bounded recovery retries are the real spin protections.
+            # answer) hits the cap before finishing. Session 288: a slow
+            # LOCAL provider (Ollama) has the same wall-clock problem for a
+            # different reason — every call is slow (often 60-90s+), so a
+            # multi-step turn can't fit in 180s either. Scale the cap for
+            # both; the per-call timeout, iteration cap, and bounded recovery
+            # retries are the real spin protections.
             _effective_max_wall = _reasoning_setting(
                 "localmind_reasoning_max_wall_clock_secs",
                 REASONING_MAX_WALL_CLOCK_SECS,

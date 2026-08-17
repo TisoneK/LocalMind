@@ -26,6 +26,20 @@ class BaseAdapter(ABC):
         """Model context window in tokens. Override per adapter/model."""
         return 8192
 
+    @property
+    def slow_provider(self) -> bool:
+        """True when this adapter's generations are slow enough that the
+        generic 45s per-call cap would truncate a legitimately slow reply
+        (local models on CPU / small GPUs often generate <1-2 tok/s).
+
+        The agent loop reads this to apply a more generous per-call / plan /
+        wall-clock budget — WITHOUT enabling the Thinker, which stays gated
+        on ``thinking_enabled`` (a semantic "the model reasons" signal, not
+        a speed one: a slow non-thinking local model must not get an extra
+        sequential consult call it can't afford).
+        """
+        return False
+
     @abstractmethod
     async def chat(
         self,

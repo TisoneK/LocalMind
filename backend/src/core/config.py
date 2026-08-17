@@ -195,7 +195,10 @@ class Settings(BaseSettings):
     ollama_model_code: str = ""
 
     # Intent-specific timeouts (seconds) — override per model/environment in .env
-    ollama_timeout_chat: int = 90
+    # chat is 180 (was 90): local models generate at <1-2 tok/s on CPU/small
+    # GPUs, so a legitimately short reply can exceed 90s — the loop's per-call
+    # cap reads this same knob for slow providers (Session 288).
+    ollama_timeout_chat: int = 180
     ollama_timeout_web_search: int = 180
     ollama_timeout_file_task: int = 180
     ollama_timeout_file_write: int = 180

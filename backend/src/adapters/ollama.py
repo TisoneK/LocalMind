@@ -256,6 +256,17 @@ class OllamaAdapter(BaseAdapter):
         """
         return _smart_num_ctx(self._model, self.context_window)
 
+    @property
+    def slow_provider(self) -> bool:
+        """True: local Ollama models generate at CPU/small-GPU speed (often
+        <1-2 tok/s), so the loop's generic 45s per-call cap truncates
+        legitimately slow replies mid-stream (observed live: phi4-mini "Hi"
+        timed out at 45s on a 55.8s / 37-token generation). The loop honors
+        this with the operator-tuned ollama_timeout_chat budget (default
+        180s) plus the generous plan / wall-clock budgets.
+        """
+        return True
+
     # ------------------------------------------------------------------
     # Core chat (streaming, no tools)
     # ------------------------------------------------------------------
