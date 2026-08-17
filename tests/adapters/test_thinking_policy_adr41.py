@@ -228,12 +228,22 @@ def test_per_call_timeout_scales_with_slow_provider(monkeypatch):
 
 
 def test_plan_timeout_scales_with_slow_provider(monkeypatch):
-    """The 8s plan/init cap fires mid-stream on a slow local model too."""
-    from core.agent.constants import PLAN_TIMEOUT_SECS, REASONING_PLAN_TIMEOUT_SECS
+    """Session 289: for a slow local model the init call GENERATES the whole
+    `direct` decision (greeting response included), so the plan/init timeout
+    must use the generous chat budget — the 30s plan budget timed the init out,
+    fell open to EXECUTE, and cascaded 'Hi' into the full tool loop. Floored at
+    the reasoning plan budget so it never drops below the thinking window."""
+    from core.agent.constants import PLAN_TIMEOUT_SECS
     from core.agent.loop import _plan_timeout_for
 
     monkeypatch.setattr(config_mod.settings, "localmind_reasoning_plan_timeout_secs", 30.0)
-    assert _plan_timeout_for(_SlowProviderStub()) == REASONING_PLAN_TIMEOUT_SECS
+    # chat budget (180) beats the 30s plan budget → init has time to finish.
+    monkeypatch.setattr(config_mod.settings, "ollama_timeout_chat", 180)
+    assert _plan_timeout_for(_SlowProviderStub()) == 180.0
+    # Floored at the plan budget when the chat budget is somehow smaller.
+    monkeypatch.setattr(config_mod.settings, "ollama_timeout_chat", 10)
+    assert _plan_timeout_for(_SlowProviderStub()) == 30.0
+    # Non-slow, non-thinking adapters keep the tight 8s plan cap.
     assert _plan_timeout_for(_PlainAdapterStub()) == PLAN_TIMEOUT_SECS
 
 

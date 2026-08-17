@@ -172,14 +172,33 @@ def _plan_timeout_for(active_adapter) -> float:
     ADR-41 (Session 254): with thinking enabled the model reasons before
     emitting the plan JSON, so the 8s PLAN_TIMEOUT_SECS can fire mid-thought
     (observed live: "initialization timed out after 8s" with GLM-4.5-Flash
-    thinking ON). A slow local provider (Ollama) has the same problem for a
-    different reason — its token rate is too low to emit the JSON in 8s. When
-    the adapter reports thinking_enabled OR slow_provider, use the larger
-    REASONING_PLAN_TIMEOUT_SECS budget (tunable via Settings UI / env). The
-    parent loop's wall-clock cap still bounds total turn time.
+    thinking ON). Use the larger REASONING_PLAN_TIMEOUT_SECS budget for
+    thinking models.
+
+    Session 289 (slow local providers): the parent initialization is
+    classify-only for a fast model, but for a slow local model (Ollama) the
+    init call must GENERATE the whole `direct` decision — including the
+    greeting `response` itself — before the stream ends. At CPU token rates
+    (phi4-mini observed at ~0.17 tok/s) even a 30-token reply exceeds the 30s
+    plan budget, so the init timed out, `parse_initialization("")` fell open to
+    EXECUTE, and a plain "Hi" cascaded into the full tool loop (5K-token
+    prompt) and burned the whole wall-clock. A slow provider therefore needs
+    the same generous chat budget the per-call timeout already grants it — the
+    init is effectively a full generation, not a quick plan. Floored at the
+    reasoning plan budget so it never shrinks below the thinking-model window.
+    The parent loop's wall-clock cap still bounds total turn time.
     """
-    if getattr(active_adapter, "thinking_enabled", False) or getattr(active_adapter, "slow_provider", False):
+    if getattr(active_adapter, "thinking_enabled", False):
         return _reasoning_setting("localmind_reasoning_plan_timeout_secs", REASONING_PLAN_TIMEOUT_SECS)
+    if getattr(active_adapter, "slow_provider", False):
+        plan_budget = _reasoning_setting("localmind_reasoning_plan_timeout_secs", REASONING_PLAN_TIMEOUT_SECS)
+        try:
+            from core.config import settings as _settings
+
+            chat_budget = float(getattr(_settings, "ollama_timeout_chat", 0) or 0)
+        except Exception:
+            chat_budget = 0.0
+        return max(plan_budget, chat_budget)
     return PLAN_TIMEOUT_SECS
 
 
