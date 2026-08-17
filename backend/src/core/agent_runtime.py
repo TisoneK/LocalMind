@@ -602,6 +602,15 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         adapter = self._adapter_for_parent()
         if not inspect.iscoroutinefunction(getattr(adapter, "chat_with_tools", None)):
             adapter = _ParentAdapterCompat(adapter)
+        # Warm the model's real declared context window (Ollama /api/show) so
+        # the budget below and the frontend meter reflect actual capacity, not
+        # the 8192 fallback. Best-effort — the property degrades gracefully.
+        _prime = getattr(adapter, "prime_context_window", None)
+        if callable(_prime):
+            try:
+                await _prime()
+            except Exception:
+                logger.debug("[agent-runtime] context-window prime failed", exc_info=True)
         context_window = getattr(adapter, "effective_context_window", 8192)
         if not isinstance(context_window, (int, float)) or context_window <= 0:
             context_window = 8192

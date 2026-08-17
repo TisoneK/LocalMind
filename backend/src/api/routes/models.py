@@ -224,6 +224,11 @@ async def list_models(provider: str | None = None):
         available = await adapter.list_models()
         if adapter_name == "ollama":
             available = set(available)
+            # Detect the model's real declared window (/api/show) so the
+            # sidebar occupancy meter divides by actual capacity, not 8192.
+            _prime = getattr(adapter, "prime_context_window", None)
+            if callable(_prime):
+                await _prime()
         context_window = adapter.effective_context_window
     except Exception:
         available = []
@@ -315,6 +320,47 @@ async def list_models(provider: str | None = None):
             opt["context_window"] = context_window
 
     return {"models": model_options, "current": current_model, "provider": adapter_name}
+
+
+# Embedding-model substrings — Ollama embedding models carry one of these in
+# their name (nomic-embed-text, mxbai-embed-large, all-minilm, bge-m3,
+# snowflake-arctic-embed, granite-embedding, …). Chat models never do, so this
+# cleanly separates the two lists for the Settings embedding-model dropdown.
+_EMBED_NAME_HINTS = ("embed", "minilm", "bge", "gte")
+
+
+@router.get("/models/embeddings")
+async def list_embedding_models():
+    """List locally-pulled Ollama models usable as embedding models.
+
+    The main /models list deliberately hides embedding models (they use a
+    different endpoint); this endpoint surfaces them for the Settings
+    embedding-model selector. The currently-configured embed model is always
+    included so the UI can show it even if name-matching missed it.
+    """
+    current = settings.ollama_embed_model
+    names: list[str] = []
+    try:
+        import httpx
+
+        base = settings.ollama_base_url.rstrip("/")
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{base}/api/tags", timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                names = [m.get("name", "") for m in data.get("models", []) if m.get("name")]
+    except Exception as exc:
+        logger.warning("[models] embedding-model list failed: %s", exc)
+
+    embed_models = [n for n in names if any(h in n.lower() for h in _EMBED_NAME_HINTS)]
+    # Always include the configured model so the dropdown can display it.
+    if current and current not in embed_models:
+        embed_models.insert(0, current)
+
+    return {
+        "models": [{"id": n, "name": n, "provider": "ollama"} for n in embed_models],
+        "current": current,
+    }
 
 
 # Debug endpoint to check settings state

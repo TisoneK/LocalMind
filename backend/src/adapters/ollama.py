@@ -68,7 +68,11 @@ _MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 }
 
 # Context window tiers for models not in the lookup table.
-_SMALL_MODEL_TAGS = (":1b", ":3b", "phi3:mini", "phi3.5")
+# "mini"/"small" catch sub-4B instruct models whose name carries no ":Nb" tag
+# (e.g. phi4-mini:latest is 3.8B but tag-free — before this it fell through to
+# the "large" branch and got its full declared window as num_ctx, ballooning
+# memory on the exact weak hardware these models target).
+_SMALL_MODEL_TAGS = (":1b", ":2b", ":3b", "mini", "phi3.5", ":0.5b", ":1.5b", "small")
 _MEDIUM_MODEL_TAGS = (":7b", ":8b", ":9b", ":14b", ":12b")
 
 
@@ -159,14 +163,18 @@ def _is_medium_model(model: str) -> bool:
 def _smart_num_ctx(model: str, context_window: int, intent: str = "chat") -> int:
     """Choose a practical ``num_ctx`` that balances capability vs. resource use.
 
-    Previous logic capped small models to 2048 which left almost zero room for
-    conversation after the response-reserve was subtracted.  The new tiers:
+    An explicit ``settings.ollama_num_ctx`` override (Settings modal /
+    OLLAMA_NUM_CTX) always wins — clamped to the declared window so it can't
+    exceed the model's real capacity. With no override, tiered defaults apply:
 
-    * **Small** (1b/3b/phi3:mini) — 8 192 tokens.  Enough for multi-turn chat
+    * **Small** (1b/2b/3b/mini) — 8 192 tokens.  Enough for multi-turn chat
       without blowing up VRAM on consumer hardware.
     * **Medium** (7b-14b) — 16 384 tokens.
     * **Large** — use the model's full context window.
     """
+    override = getattr(settings, "ollama_num_ctx", 0) or 0
+    if isinstance(override, int) and override > 0:
+        return min(override, context_window)
     if _is_small_model(model):
         return min(context_window, 8192)
     if _is_medium_model(model):
@@ -181,6 +189,35 @@ def _smart_num_ctx(model: str, context_window: int, intent: str = "chat") -> int
 # effective. Failures are NOT cached (only a successful fetch is stored), so a
 # recovering Ollama is detected promptly.
 _MODELS_CACHE: "TTLCache[list[str]]" = TTLCache(ttl_seconds=30.0, max_entries=1)
+
+# Per-model declared context window, detected live from `/api/show`. Keyed by
+# the full model tag (e.g. "phi4-mini:latest"). A model's real window is a
+# fixed property of its weights, so a successful detection is cached for the
+# process lifetime; a miss/failure is NOT cached, so a transient Ollama error
+# retries next call. This is what replaces the hand-maintained
+# _MODEL_CONTEXT_WINDOWS table as the PRIMARY source — the table is now only a
+# fallback for when Ollama can't be reached.
+_DETECTED_CONTEXT_WINDOWS: dict[str, int] = {}
+
+
+def _extract_context_length(show_payload: dict) -> int | None:
+    """Pull the declared context length out of an Ollama `/api/show` response.
+
+    Ollama reports it under ``model_info`` as ``"<arch>.context_length"``
+    (e.g. ``"phi3.context_length"``, ``"llama.context_length"``) — the arch
+    prefix varies per model, so we match on the suffix rather than hardcoding
+    architectures. Returns None when the field is absent or unusable.
+    """
+    if not isinstance(show_payload, dict):
+        return None
+    model_info = show_payload.get("model_info")
+    if not isinstance(model_info, dict):
+        return None
+    for key, value in model_info.items():
+        if isinstance(key, str) and key.endswith(".context_length"):
+            if isinstance(value, (int, float)) and value > 0:
+                return int(value)
+    return None
 
 
 class OllamaAdapter(BaseAdapter):
@@ -231,13 +268,63 @@ class OllamaAdapter(BaseAdapter):
         model_exists = any(m == self._model or m.split(":")[0] == self._model.split(":")[0] for m in available)
         return model_exists, available
 
+    async def _detect_context_length(self) -> int | None:
+        """Fetch and cache the model's real declared context window.
+
+        Queries Ollama `POST /api/show` — the authoritative source for a
+        model's context length (a property of its weights, not something we
+        should hand-maintain in a table). Cached per-model for the process
+        lifetime on success; misses are not cached so a transient failure
+        retries. Best-effort: any error returns None and the caller falls back
+        to the static table.
+        """
+        model = self._model.split("#")[0].strip()
+        cached = _DETECTED_CONTEXT_WINDOWS.get(model)
+        if cached is not None:
+            return cached
+        try:
+            resp = await self._client.post(
+                f"{self._base_url}/api/show",
+                json={"name": model},
+                timeout=httpx.Timeout(5.0, connect=3.0),
+            )
+            if resp.status_code == 200:
+                length = _extract_context_length(resp.json())
+                if length:
+                    _DETECTED_CONTEXT_WINDOWS[model] = length
+                    return length
+        except Exception:
+            logger.debug("[adapter] /api/show context-length detection failed for %s", model, exc_info=True)
+        return None
+
+    async def prime_context_window(self) -> None:
+        """Warm the detected-context-window cache before sync property reads.
+
+        `context_window`/`effective_context_window` are synchronous properties
+        (consumed all over the engine), but detection is an async HTTP call.
+        Callers that can await — the request runtime and the /api/models route
+        — invoke this first so the properties then return the real window
+        instead of the 8192 fallback. Idempotent and best-effort.
+        """
+        await self._detect_context_length()
+
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
 
     @property
     def context_window(self) -> int:
+        """The model's DECLARED maximum context window (meter denominator).
+
+        Resolution order: live detection from `/api/show` (primed via
+        `prime_context_window`) → the static known-model table → 8192. This is
+        the model's real capacity, NOT what we necessarily send as num_ctx —
+        see `effective_context_window` for the budgeted/allocated value.
+        """
         model = self._model.split("#")[0].strip()
+        detected = _DETECTED_CONTEXT_WINDOWS.get(model)
+        if detected:
+            return detected
         base_model = model.split(":")[0]
         return _MODEL_CONTEXT_WINDOWS.get(
             model,
@@ -246,13 +333,19 @@ class OllamaAdapter(BaseAdapter):
 
     @property
     def effective_context_window(self) -> int:
-        """The actual num_ctx sent to Ollama — capped for small/medium models.
+        """The actual num_ctx budgeted and sent to Ollama.
 
-        Use this for context budget calculations instead of context_window,
-        which returns the model's declared maximum.  The declared maximum for
-        gemma3:1b is 131072, but _smart_num_ctx caps it to 8192 — a 16x
-        difference that causes context_builder to budget 131K tokens when only
-        8K will actually be processed by Ollama.
+        Precedence:
+        1. ``settings.ollama_num_ctx`` when > 0 — an explicit operator override
+           (Settings modal / OLLAMA_NUM_CTX). Users on capable hardware raise
+           it; users protecting VRAM lower it. It is clamped to the model's
+           declared window so an over-large override can't exceed capacity.
+        2. Otherwise ``_smart_num_ctx`` applies a resource-sane default cap
+           (small→8192, medium→16384, large→full) over the declared window.
+
+        Use this for context-budget math, never the raw declared maximum: a
+        131K-window model we cap to 8192 must be budgeted at 8192 or the
+        context builder over-fills and Ollama silently truncates.
         """
         return _smart_num_ctx(self._model, self.context_window)
 

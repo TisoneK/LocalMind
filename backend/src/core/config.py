@@ -118,6 +118,14 @@ class Settings(BaseSettings):
     ollama_embed_model: str = "nomic-embed-text"  # pin via OLLAMA_EMBED_MODEL in .env
     ollama_timeout: int = 120
     ollama_keep_alive: str = "-1"  # -1 = keep model loaded forever; e.g. "5m", "1h"
+    # Context window (num_ctx) the loop budgets and Ollama is told to allocate.
+    # 0 = AUTO: the adapter detects the model's real declared window from
+    # `/api/show` (falling back to the known-model table, then 8192) and applies
+    # a resource-sane default cap via _smart_num_ctx. A positive value is an
+    # explicit operator override (set from the Settings modal or OLLAMA_NUM_CTX)
+    # — it wins over auto-detection so users on capable hardware can raise the
+    # budget (or lower it to protect VRAM). See adapters/ollama.py.
+    ollama_num_ctx: int = 0
 
     # Adapter
     localmind_adapter: str = "ollama"
@@ -333,6 +341,17 @@ class Settings(BaseSettings):
             if "ollama_url" in data:
                 self.ollama_base_url = data["ollama_url"]
                 logger.info(f"[config] Set ollama_url to {data['ollama_url']}")
+            # Local embedding model (always Ollama-local — used for memory/RAG).
+            if data.get("embed_model"):
+                self.ollama_embed_model = str(data["embed_model"])
+                logger.info(f"[config] Set ollama_embed_model to {data['embed_model']}")
+            # Context-window (num_ctx) override. 0 = auto-detect; >0 = explicit.
+            if "num_ctx" in data:
+                try:
+                    self.ollama_num_ctx = max(0, int(data["num_ctx"]))
+                    logger.info(f"[config] Set ollama_num_ctx to {self.ollama_num_ctx}")
+                except (TypeError, ValueError):
+                    logger.warning(f"[config] Ignoring invalid num_ctx: {data['num_ctx']!r}")
             # ADR-41 (Session 254): reasoning-model thinking policy
             # (settings.json keys written by POST /api/settings/thinking).
             if "thinking" in data:

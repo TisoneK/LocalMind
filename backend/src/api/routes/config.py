@@ -20,6 +20,9 @@ class SettingsResponse(BaseModel):
     adapter: str
     model: str
     embed_model: Optional[str] = None  # Ollama embedding model (always local)
+    # Context window (num_ctx) the loop budgets / Ollama allocates.
+    # 0 = auto-detect the model's real declared window; >0 = explicit override.
+    num_ctx: int = 0
     providers: dict
     # ADR-41 (Session 254): reasoning-model thinking policy (z.ai/GLM).
     # Mirrored to the Settings UI so users can tune thinking without env vars.
@@ -120,6 +123,7 @@ async def get_settings():
         adapter=adapter,
         model=current_model,
         embed_model=embed_model,
+        num_ctx=int(getattr(settings, "ollama_num_ctx", 0) or 0),
         providers=providers,
         thinking=settings.localmind_thinking,
         reasoning_timeout=settings.localmind_reasoning_timeout_secs,
@@ -191,6 +195,59 @@ async def set_thinking_settings(req: ThinkingSettingsRequest):
         "reasoning_max_wall_clock": settings.localmind_reasoning_max_wall_clock_secs,
         "reasoning_effort": settings.localmind_reasoning_effort,
         "message": f"Reasoning thinking {'enabled' if settings.localmind_thinking != 'disabled' else 'disabled'}",
+    }
+
+
+class LocalSettingsRequest(BaseModel):
+    """Body for POST /api/settings/local — Ollama-local knobs.
+
+    Both fields optional so a partial update is safe. embed_model changes the
+    local embedding model used for memory/RAG; num_ctx overrides the context
+    window budget (0 = auto-detect the model's real declared window).
+    """
+
+    embed_model: Optional[str] = None
+    num_ctx: Optional[int] = None
+
+
+@router.post("/settings/local")
+async def set_local_settings(req: LocalSettingsRequest):
+    """Update Ollama-local settings (embedding model, context window) and
+    persist them to settings.json so they survive restarts.
+
+    num_ctx is validated as >= 0 (0 = auto). The adapter reads both from the
+    Settings singleton, so clearing the adapter cache makes the change apply to
+    the next request without a restart.
+    """
+    updated: dict = {}
+    if req.embed_model is not None:
+        embed = req.embed_model.strip()
+        if not embed:
+            raise HTTPException(status_code=400, detail="embed_model cannot be empty")
+        settings.ollama_embed_model = embed
+        settings.save_runtime_settings(embed_model=embed)
+        updated["embed_model"] = embed
+    if req.num_ctx is not None:
+        if req.num_ctx < 0:
+            raise HTTPException(status_code=400, detail="num_ctx must be >= 0 (0 = auto)")
+        settings.ollama_num_ctx = int(req.num_ctx)
+        # num_ctx=0 is meaningful (auto) but save_runtime_settings preserves
+        # empty/zero via the "key absent" path — write it explicitly so a reset
+        # to auto persists instead of leaving a stale override in the file.
+        _path = settings._runtime_settings_path()
+        _data = settings._load_json_file(_path)
+        _data["num_ctx"] = int(req.num_ctx)
+        settings._secure_write_json(_path, _data)
+        updated["num_ctx"] = int(req.num_ctx)
+
+    # Rebuild adapters so the new local settings apply on the next call.
+    clear_adapter_cache()
+
+    return {
+        "embed_model": settings.ollama_embed_model,
+        "num_ctx": int(getattr(settings, "ollama_num_ctx", 0) or 0),
+        "updated": list(updated.keys()),
+        "message": "Local settings updated" if updated else "No changes",
     }
 
 
