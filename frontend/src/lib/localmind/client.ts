@@ -948,6 +948,7 @@ class LocalMindClient {
     adapter: string;
     model: string;
     embed_model?: string;
+    num_ctx?: number;
     providers: Record<string, unknown>;
     thinking: string;
     reasoning_timeout: number;
@@ -991,6 +992,29 @@ class LocalMindClient {
     });
     // Persist to localStorage so the adapter is restored on next launch
     this.savePersistedSettings({ adapter, model: model || '' });
+  }
+
+  // List locally-pulled Ollama models usable as embedding models (memory/RAG).
+  async getEmbeddingModels(): Promise<{
+    models: { id: string; name: string; provider: string }[];
+    current: string;
+  }> {
+    return this.request('/api/models/embeddings');
+  }
+
+  // Update Ollama-local settings: embedding model and/or context window
+  // (num_ctx; 0 = auto-detect the model's real declared window).
+  async setLocalSettings(opts: {
+    embedModel?: string;
+    numCtx?: number;
+  }): Promise<{ embed_model: string; num_ctx: number; updated: string[]; message: string }> {
+    return this.request('/api/settings/local', {
+      method: 'POST',
+      body: JSON.stringify({
+        embed_model: opts.embedModel,
+        num_ctx: opts.numCtx,
+      }),
+    });
   }
 
   async setProviderKey(

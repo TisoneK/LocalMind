@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain } from 'lucide-react';
+import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
 import { useTheme, THEMES, type ModePref } from '@/hooks/useTheme';
 
@@ -104,6 +104,14 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const [reasoningPlanTimeout, setReasoningPlanTimeout] = useState('30');
   const [reasoningMaxWallClock, setReasoningMaxWallClock] = useState('360');
   const [reasoningEffort, setReasoningEffort] = useState('');
+  // ── Active-model + local (Ollama) settings ──
+  // The active-model list for the CURRENT adapter (so users can switch the
+  // chat model right here, not only in the sidebar). Embedding model + context
+  // window (num_ctx) are Ollama-local knobs — previously only settable via env.
+  const [activeModels, setActiveModels] = useState<ModelOption[]>([]);
+  const [embedModels, setEmbedModels] = useState<ModelOption[]>([]);
+  const [embedModel, setEmbedModel] = useState('');
+  const [numCtx, setNumCtx] = useState('0'); // 0 = auto-detect real window
 
   // Load current settings on mount
   useEffect(() => {
@@ -132,6 +140,26 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         }
         setProviderKeys(keyStatus);
         setProviderDefaults(defaults);
+        // Local knobs: embedding model + context-window override.
+        setEmbedModel(settings.embed_model ?? '');
+        setNumCtx(String(settings.num_ctx ?? 0));
+        // Active-model list for the current adapter + embedding-model list.
+        // Both best-effort — a cloud adapter or a stopped Ollama must not
+        // block the rest of the settings from loading.
+        try {
+          const activeList = await localmindClient.getModels();
+          setActiveModels(activeList.models);
+          if (activeList.current) setModel(activeList.current);
+        } catch {
+          /* keep whatever /api/settings reported */
+        }
+        try {
+          const embedList = await localmindClient.getEmbeddingModels();
+          setEmbedModels(embedList.models);
+          if (embedList.current) setEmbedModel(embedList.current);
+        } catch {
+          /* embedding list is Ollama-only; non-fatal */
+        }
         // Load Ollama URL if using ollama adapter
         if (settings.adapter === 'ollama') {
           try {
@@ -233,12 +261,67 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       await localmindClient.setAdapter(newAdapter, nextModel || undefined);
       setStatus('success');
       setMessage(`Switched to ${newAdapter} adapter`);
+      // Refresh the active-model list for the new adapter so the model
+      // selector below reflects the newly-selected provider's models.
+      try {
+        const activeList = await localmindClient.getModels();
+        setActiveModels(activeList.models);
+        if (activeList.current) setModel(activeList.current);
+      } catch {
+        /* non-fatal */
+      }
       onSave();
     } catch (err) {
       setStatus('error');
       setMessage(err instanceof Error ? err.message : 'Failed to switch adapter');
     }
   }, [onSave, providerDefaults]);
+
+  // Hot-swap the active chat model for the CURRENT adapter.
+  const handleSelectActiveModel = useCallback(async (modelId: string) => {
+    if (!modelId || modelId === model) return;
+    setModel(modelId);
+    setStatus('saving');
+    setMessage(`Switching model to ${modelId}...`);
+    try {
+      await localmindClient.selectModel(modelId);
+      setStatus('success');
+      setMessage(`Active model: ${modelId}`);
+      onSave();
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Failed to switch model');
+    }
+  }, [model, onSave]);
+
+  // Persist Ollama-local knobs: embedding model + context-window override.
+  const handleSaveLocal = useCallback(async () => {
+    const parsed = Number.parseInt(numCtx, 10);
+    if (Number.isNaN(parsed) || parsed < 0) {
+      setStatus('error');
+      setMessage('Context window must be 0 (auto) or a positive number');
+      return;
+    }
+    setStatus('saving');
+    setMessage('Saving local model settings...');
+    try {
+      const res = await localmindClient.setLocalSettings({
+        embedModel: embedModel || undefined,
+        numCtx: parsed,
+      });
+      setNumCtx(String(res.num_ctx));
+      setStatus('success');
+      setMessage(
+        parsed === 0
+          ? 'Local settings saved — context window auto-detected per model'
+          : `Local settings saved — context window ${parsed.toLocaleString()} tokens`,
+      );
+      onSave();
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Failed to save local settings');
+    }
+  }, [embedModel, numCtx, onSave]);
 
   const handleSaveKey = useCallback(async () => {
     if (!newKeyProvider || !newKeyValue.trim()) {
@@ -538,11 +621,122 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                 </button>
               ))}
             </div>
-            {adapter !== 'ollama' && (
-              <p className="mt-2 text-xs text-brand-green-muted">
-                Current model: <span className="font-mono text-brand-green-soft">{model || 'default'}</span>
+          </section>
+
+          {/* ── Active Model ── */}
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <Cpu className="h-4 w-4 text-brand-green" />
+              Model
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              The chat model for the current provider. Switching here takes
+              effect on your next message.
+            </p>
+            {activeModels.length > 0 ? (
+              <select
+                value={model}
+                onChange={(e) => handleSelectActiveModel(e.target.value)}
+                className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft focus:border-brand-green outline-none"
+                data-testid="active-model-select"
+              >
+                {/* Include the current model even if the list didn't return it,
+                    so the dropdown always shows what's actually active. */}
+                {!activeModels.some((m) => m.id === model) && model && (
+                  <option value={model}>{model}</option>
+                )}
+                {activeModels.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                    {m.size ? ` — ${m.size}` : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-xs text-brand-green-muted">
+                {adapter === 'ollama'
+                  ? 'No local models found. Pull one with `ollama pull <model>` and reopen settings.'
+                  : `Current model: `}
+                {adapter !== 'ollama' && (
+                  <span className="font-mono text-brand-green-soft">{model || 'default'}</span>
+                )}
               </p>
             )}
+          </section>
+
+          {/* ── Local model (Ollama) — embeddings + context window ── */}
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <Database className="h-4 w-4 text-brand-green" />
+              Local model (Ollama)
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              The embedding model powers memory and file search (always local).
+              Context window sets how much the model reads per turn.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brand-green-soft">
+                  Embedding model
+                </label>
+                {embedModels.length > 0 ? (
+                  <select
+                    value={embedModel}
+                    onChange={(e) => setEmbedModel(e.target.value)}
+                    className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft focus:border-brand-green outline-none"
+                    data-testid="embed-model-select"
+                  >
+                    {!embedModels.some((m) => m.id === embedModel) && embedModel && (
+                      <option value={embedModel}>{embedModel}</option>
+                    )}
+                    {embedModels.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={embedModel}
+                    onChange={(e) => setEmbedModel(e.target.value)}
+                    placeholder="nomic-embed-text"
+                    className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                    data-testid="embed-model-input"
+                  />
+                )}
+                {embedModels.length === 0 && (
+                  <p className="mt-1 text-[11px] text-brand-green-muted">
+                    No embedding models detected. Pull one, e.g. `ollama pull nomic-embed-text`.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-brand-green-soft">
+                  Context window (num_ctx)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1024}
+                  value={numCtx}
+                  onChange={(e) => setNumCtx(e.target.value)}
+                  className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                  data-testid="num-ctx-input"
+                />
+                <p className="mt-1 text-[11px] text-brand-green-muted">
+                  0 = auto-detect the model’s real window. Raise it on capable
+                  hardware; lower it to protect VRAM. Larger windows are slower.
+                </p>
+              </div>
+              <button
+                onClick={handleSaveLocal}
+                className="rounded-lg border border-brand-green/30 bg-brand-green/10 px-3 py-1.5 text-xs font-medium text-brand-green hover:bg-brand-green/20 transition-colors"
+                data-testid="save-local-settings"
+              >
+                Save local settings
+              </button>
+            </div>
           </section>
 
           {/* ── Reasoning (ADR-41) ── */}

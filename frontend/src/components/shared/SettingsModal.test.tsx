@@ -16,6 +16,9 @@ vi.mock('@/lib/localmind/client', () => ({
     setOllamaUrl: vi.fn(),
     resetOllamaUrl: vi.fn(),
     getModels: vi.fn(),
+    getEmbeddingModels: vi.fn(),
+    setLocalSettings: vi.fn(),
+    selectModel: vi.fn(),
   },
 }));
 
@@ -37,6 +40,12 @@ describe('SettingsModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    // Sensible defaults for the load-time calls the modal makes; individual
+    // tests override as needed.
+    mockClient.getModels.mockResolvedValue({ models: [], current: '', provider: 'ollama' });
+    mockClient.getEmbeddingModels.mockResolvedValue({ models: [], current: '' });
+    mockClient.setLocalSettings.mockResolvedValue({ embed_model: '', num_ctx: 0, updated: [], message: 'ok' });
+    mockClient.selectModel.mockResolvedValue(undefined);
   });
 
   it('renders provider names from the live settings payload', async () => {
@@ -91,6 +100,50 @@ describe('SettingsModal', () => {
 
     // Ollama default → the Ollama URL section (input is placeholder-labeled).
     expect(screen.getByPlaceholderText('http://localhost:11434')).toBeInTheDocument();
+  });
+
+  it('switches the active chat model via the model selector', async () => {
+    mockClient.getSettings.mockResolvedValue(settingsPayload());
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+    mockClient.getModels.mockResolvedValue({
+      models: [
+        { id: 'llama3', name: 'llama3', provider: 'ollama', size: '8GB RAM' },
+        { id: 'phi4-mini:latest', name: 'phi4-mini:latest', provider: 'ollama', size: '4GB RAM' },
+      ],
+      current: 'llama3',
+      provider: 'ollama',
+    });
+
+    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    await screen.findByRole('heading', { name: 'Settings' });
+
+    const select = (await screen.findByTestId('active-model-select')) as HTMLSelectElement;
+    await userEvent.selectOptions(select, 'phi4-mini:latest');
+    await waitFor(() => {
+      expect(mockClient.selectModel).toHaveBeenCalledWith('phi4-mini:latest');
+    });
+  });
+
+  it('saves local embedding model + context window', async () => {
+    mockClient.getSettings.mockResolvedValue(settingsPayload({ embed_model: 'nomic-embed-text', num_ctx: 0 }));
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+    mockClient.getEmbeddingModels.mockResolvedValue({
+      models: [{ id: 'nomic-embed-text', name: 'nomic-embed-text', provider: 'ollama' }],
+      current: 'nomic-embed-text',
+    });
+
+    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    await screen.findByRole('heading', { name: 'Settings' });
+
+    const numCtx = (await screen.findByTestId('num-ctx-input')) as HTMLInputElement;
+    await userEvent.clear(numCtx);
+    await userEvent.type(numCtx, '16384');
+    await userEvent.click(screen.getByTestId('save-local-settings'));
+    await waitFor(() => {
+      expect(mockClient.setLocalSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ embedModel: 'nomic-embed-text', numCtx: 16384 }),
+      );
+    });
   });
 
   it('keeps input focus when the parent re-renders with a new onClose (Session 233)', async () => {
