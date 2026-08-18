@@ -16,6 +16,19 @@
 
 ---
 
+## Naming: the agent is **LocalMind** ("Parent Agent" is the role)
+
+Throughout this spec, **"Parent Agent" is the architectural *role* — the root
+agent — not the agent's name.** The spec says as much in §2 ("The term Parent
+Agent describes its architectural role as the root agent") and §23 (Agent
+Identity). The agent's actual identity, the name it uses with the user, is
+**LocalMind**. This is already how the code reads: the parent contract
+(`backend/src/agents/parent/context_builder.py`) opens with *"You are the
+user-facing LocalMind agent."* So read every "Parent Agent" below as "LocalMind,
+in its root-agent role."
+
+---
+
 ## Reconciliation with the current LocalMind build (2026-08-18, Session 297)
 
 This spec defines a **single-agent-first** program: the Parent Agent is the

@@ -2,6 +2,10 @@
 
 > **Updated:** 2026-08-14 — parent-agent runtime migration
 
+> **Naming:** the agent is **LocalMind**; "parent agent" / "Parent Agent" is its
+> architectural *role* (the root agent), not its name — the code says so directly
+> (`agents/parent/context_builder.py`: "You are the user-facing LocalMind agent").
+>
 > **Current-phase scope (2026-08-18):** the authoritative target architecture is
 > [`docs/parent-agent-spec.md`](parent-agent-spec.md) (ADR-47). That spec scopes
 > the current phase to a **single, strong Parent Agent** and defers specialist
