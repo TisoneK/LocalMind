@@ -201,8 +201,10 @@ export function RightPanel({
         </button>
       </div>
 
-      {/* Tab content */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      {/* Tab content — min-h-0 lets this flex child actually SCROLL its own
+          overflow (Agent Workspace cards, terminal, memory) instead of growing
+          and pushing the panel/page. */}
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
         {activeTab === 'terminal' && (
           <TerminalPanel
             lines={terminalLines}

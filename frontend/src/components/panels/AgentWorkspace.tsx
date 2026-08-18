@@ -64,10 +64,13 @@ function RunNode({
   turnIndex?: number;
 }) {
   const { reduce: reduceMotion, enter } = useEnterMotion();
-  // S296: only the ACTIVE turn (and any running child) is expanded by default;
-  // completed prior turns collapse into their turn header so the workspace
-  // groups history instead of wiping/stacking it.
-  const [expanded, setExpanded] = useState(run.status === 'running');
+  // Only the ACTIVE run is expanded; a run AUTO-COLLAPSES the moment it stops
+  // running (derived from status every render — a plain useState initializer
+  // only ran once, so a completed turn stayed stuck open and multiple turns
+  // ended up expanded at once). A manual click pins an explicit open/closed
+  // state that overrides the auto behavior for that one run.
+  const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
+  const expanded = manualExpanded ?? (run.status === 'running');
   const runningTools = run.tools.filter((tool) => isActiveToolStatus(tool.status)).length;
   const completedTools = run.tools.filter((tool) => tool.status === 'done').length;
   // ADR-34 B-9: expand the node when evidence arrives so the user sees
@@ -111,7 +114,7 @@ function RunNode({
         />
         <button
           type="button"
-          onClick={() => hasDetails && setExpanded((value) => !value)}
+          onClick={() => hasDetails && setManualExpanded(!expanded)}
           className="flex items-start gap-2 w-full min-w-0 pl-3 pr-2.5 py-2 text-left hover:bg-brand-border/40 transition-colors"
           aria-expanded={hasDetails ? expanded : undefined}
         >

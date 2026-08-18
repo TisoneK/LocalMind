@@ -87,4 +87,44 @@ describe('AgentWorkspace', () => {
     expect(screen.getByText('the user wants the file listed')).toBeInTheDocument();
     expect(screen.getByText('3 iterations')).toBeInTheDocument();
   });
+
+  it('collapses completed turns and expands only the active one', () => {
+    const twoTurns: AgentRun[] = [
+      {
+        id: 'turn-1',
+        name: 'parent',
+        role: 'parent',
+        task: 'first question',
+        status: 'completed',
+        depth: 0,
+        startedAt: 1000,
+        completedAt: 2000,
+        tools: [
+          { id: 't1', name: 'web_search', label: 'Search alpha docs', status: 'done', input: 'alpha', duration: 100 },
+        ],
+      },
+      {
+        id: 'turn-2',
+        name: 'parent',
+        role: 'parent',
+        task: 'second question',
+        status: 'running',
+        depth: 0,
+        startedAt: 3000,
+        tools: [
+          { id: 't2', name: 'shell', label: 'List beta files', status: 'running', input: 'ls', duration: undefined },
+        ],
+      },
+    ];
+    render(<AgentWorkspace runs={twoTurns} />);
+
+    // The completed (turn 1) card is auto-collapsed → its tool detail is hidden.
+    expect(screen.queryByText('Search alpha docs')).not.toBeInTheDocument();
+    // The active (turn 2) card is expanded → its tool detail is visible.
+    expect(screen.getByText('List beta files')).toBeInTheDocument();
+
+    // A manual click on the collapsed turn expands it (override).
+    fireEvent.click(screen.getByText('Turn 1'));
+    expect(screen.getByText('Search alpha docs')).toBeInTheDocument();
+  });
 });
