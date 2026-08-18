@@ -4095,3 +4095,17 @@ program + ADR-22). -->
 - **Outcome:** done — floor is now unit + e2e + live-verified.
 - **Open items:** B-2026-08-18-1 (delegation decision; identity settled = LocalMind).
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (cont.) — resolve B-2026-08-18-1 → accept-and-harden (ADR-48)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user: "go" (after I recommended option (c)). Resolved the open architecture decision B-2026-08-18-1. DOCS + DECISION only — NO delegation code removed/disabled (explicitly reversible).
+- **DECISION (ADR-48, option (c) accept-and-harden):** LocalMind consciously accepts it has advanced past the spec's single-agent-first phase. The wired multi-agent runtime (11 specialists + delegation) stays first-class; the Parent Agent spec is retained as the standing QUALITY BAR (§40's 12 criteria + §43), not a build roadmap; §36's "delegation out of scope" is recorded as superseded by lived reality (author's spec body kept verbatim). The ADR-47 "do not extend delegation" hold is LIFTED. Justified by review-65/66: the §40 bar is largely already met by the parent loop itself, so freezing/removing delegation would buy no quality gain at large risk.
+- **SHIPPED (`e8f3cb4` docs + this context commit):** ADR-48; spec status header + ARCHITECTURE scope callout reframed from "open/dormant" to "decided (c), quality bar"; B-2026-08-18-1 checked off (both lines).
+- **Commits:** 2 — `docs:` (`e8f3cb4`); `chore(context):` (this).
+- **VERIFICATION:** docs/decision only, no code → no test run needed (last green: BE 1947/0, e2e 89, FE 251). Pre-commit CI hook green on the docs commit.
+- **Outcome:** done — the Parent-Agent-spec arc is complete: documented → gap-analyzed → audited → the one real gap (completion floor) implemented+tested+live-verified → identity settled (LocalMind) → architecture decision resolved (accept-and-harden). Remaining work is ordinary §40 hardening (the review-65 partials), no pending user decision.
+- **Open items:** §40 hardening backlog (efficiency B-2026-08-17-8..12 first).
+- **Report:** ADR-48 in plans/decisions.md; lineage in review-65/66.
+- **Notes:** none
