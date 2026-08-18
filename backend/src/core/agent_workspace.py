@@ -378,12 +378,25 @@ def build_run_tree(
         elif evt.type in RUN_LIFECYCLE_TYPES:
             phase = _lifecycle_phase(evt.type, d, _next_id)
             if phase:
-                runs[0].setdefault("phases", []).append(phase)
-    phases = runs[0].get("phases")
-    if phases:
-        runs[0]["phases"] = sorted(
-            phases, key=lambda p: _LIFECYCLE_PHASE_RANK.get(p.get("type"), 99)
-        )
+                # Child lifecycle events carry an `agent` tag (forwarded by
+                # ChildObsProxy) — attach to that child run; untagged events
+                # belong to the parent.
+                agent = str(d.get("agent") or "")
+                target = runs[0]
+                if agent:
+                    for run in reversed(runs):
+                        if run.get("role") != "parent" and run.get("name") == agent:
+                            target = run
+                            break
+                target.setdefault("phases", []).append(phase)
+    # Canonical narrative order per run (the loop emits some events out of
+    # story order — stable sort by rank).
+    for run in runs:
+        phases = run.get("phases")
+        if phases:
+            run["phases"] = sorted(
+                phases, key=lambda p: _LIFECYCLE_PHASE_RANK.get(p.get("type"), 99)
+            )
     return runs
 
 

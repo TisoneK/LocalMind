@@ -963,15 +963,22 @@ export function useChat(
                 if (RUN_LIFECYCLE_TYPES.has(obs.type)) {
                   const runPhase = buildAgentPhase(obs.type, obs.data || obs);
                   if (runPhase) {
+                    const phaseAgent = String((obs.data || obs).agent || '');
                     setAgentRuns((prev) => {
-                      const run = prev.find((r) => r.id === rootRunId);
-                      if (!run) return prev;
+                      // Route to the owning run: child lifecycle events carry
+                      // an `agent` tag (ChildObsProxy) → the running child of
+                      // that name; untagged events → the parent. Mirrors
+                      // attachToolToAgentRun's matching.
+                      const target = phaseAgent
+                        ? [...prev].reverse().find((r) => r.role !== 'parent' && r.name === phaseAgent && r.status === 'running')
+                        : prev.find((r) => r.id === rootRunId);
+                      if (!target) return prev;
                       // Canonical narrative order — the loop emits some events
                       // out of story order (loop_start before init), so sort
                       // by the same rank the backend uses on persistence.
-                      const phases = [...(run.phases || []), runPhase]
+                      const phases = [...(target.phases || []), runPhase]
                         .sort((a, b) => (LIFECYCLE_PHASE_RANK[a.type] ?? 99) - (LIFECYCLE_PHASE_RANK[b.type] ?? 99));
-                      return updateAgentRun(prev, rootRunId, { phases });
+                      return updateAgentRun(prev, target.id, { phases });
                     });
                   }
                 }

@@ -35,17 +35,38 @@ def test_child_obs_proxy_forwards_only_visible_events():
     proxy.emit("agent_loop_start", intent="chat")  # must NOT leak to parent
     proxy.emit("tool_status", tool="web_search", status="done")
     proxy.emit("turn_complete", total_latency_ms=123)  # must NOT leak
+    # Child lifecycle narration IS forwarded (Agents-tab child run node)…
+    proxy.emit("agent_initialization_start", intent="analyze")
+    proxy.emit("agent_initialization_understanding", understanding="find the weather")
+    proxy.emit("agent_initialization_done", mode="execute", objective="search")
+    proxy.emit("agent_planning_done", plan_len=3)
+    proxy.emit("agent_thinker_start", iteration=1)
+    # …but the child's loop start/done stay parent-owned.
+    proxy.emit("agent_loop_done", direct=False, iterations=2)
 
     parent_events = [e.type for e in parent.history()]
     assert "tool_call" in parent_events
     assert "tool_status" in parent_events
     assert "agent_loop_start" not in parent_events
+    assert "agent_loop_done" not in parent_events
     assert "turn_complete" not in parent_events
+    for lifecycle in (
+        "agent_initialization_start",
+        "agent_initialization_understanding",
+        "agent_initialization_done",
+        "agent_planning_done",
+        "agent_thinker_start",
+    ):
+        assert lifecycle in parent_events
 
     # Forwarded tool_call carries the child agent tag but not its raw output.
     fwd = next(e for e in parent.history() if e.type == "tool_call")
     assert fwd.data.get("agent") == "research"
     assert "output" not in fwd.data
+    # Forwarded lifecycle events carry the child agent tag too.
+    fwd_life = next(e for e in parent.history() if e.type == "agent_initialization_done")
+    assert fwd_life.data.get("agent") == "research"
+    assert fwd_life.data.get("mode") == "execute"
 
     # The child's own list still retains the raw output for its internal
     # execution/trace (the parent receives the final result separately).

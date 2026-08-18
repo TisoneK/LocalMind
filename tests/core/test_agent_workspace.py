@@ -189,6 +189,29 @@ def test_run_tree_lifecycle_phases_on_parent():
     assert build_agent_phases(c) == []
 
 
+def test_run_tree_child_lifecycle_phases_attach_to_child():
+    """Child lifecycle events (agent-tagged by ChildObsProxy) land on the
+    child run, not the parent; untagged events stay on the parent."""
+    c = _collector(
+        ("delegation_started", {"target_agent": "research", "task": "find weather", "run_id": "run-123", "depth": 1}),
+        ("agent_initialization_start", {"agent": "research"}),
+        ("agent_initialization_understanding", {"agent": "research", "understanding": "the user wants the weather"}),
+        ("agent_initialization_done", {"agent": "research", "mode": "execute"}),
+        # parent's own lifecycle, emitted around the delegation
+        ("agent_loop_done", {"direct": False, "iterations": 4}),
+    )
+    runs = build_run_tree(c, task="weather report")
+    parent, child = runs
+    assert [p["type"] for p in child["phases"]] == [
+        "initializing",
+        "understanding",
+        "initialized",
+    ]
+    assert child["phases"][1]["detail"] == "the user wants the weather"
+    # the parent got only its own untagged event
+    assert [p["type"] for p in parent["phases"]] == ["turn_done"]
+
+
 def test_run_tree_lifecycle_phases_sorted_narratively():
     """The loop emits agent_loop_start BEFORE the init events — the phases
     must still read "getting started → understood → working → done" (sorted

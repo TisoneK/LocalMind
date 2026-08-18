@@ -92,7 +92,9 @@ class ObsCollector:
 # turn_complete, intent_classified, stage_timing — those are the
 # PARENT's UI state (intent display, metrics, timeline). Forwarding the
 # child's CHAT intent would clobber the parent's intent in the Observe
-# panel.
+# panel. The child's loop start/done are skipped for the same reason;
+# its working/completed state is already visible via delegation status
+# + forwarded tool steps.
 class ChildObsProxy(ObsCollector):
     """Delegated child's observability collector.
 
@@ -103,8 +105,25 @@ class ChildObsProxy(ObsCollector):
     """
 
     # Event types the frontend renders as tool progress (the chat.py
-    # bridge converts these to top-level `tool_call` SSE events).
-    _FORWARD_TYPES = frozenset({"tool_call", "tool_status"})
+    # bridge converts these to top-level `tool_call` SSE events) plus the
+    # child's lifecycle narration (initialization/planning/thinker) so the
+    # Agents-tab child run node shows what the sub-agent understood,
+    # planned, and thought. agent_loop_start/done stay excluded (parent UI
+    # state — the child's working/completed state is already visible via
+    # delegation status + tool steps).
+    _FORWARD_TYPES = frozenset(
+        {
+            "tool_call",
+            "tool_status",
+            "agent_initialization_start",
+            "agent_initialization_understanding",
+            "agent_initialization_ack",
+            "agent_initialization_done",
+            "agent_planning_done",
+            "agent_thinker_start",
+            "agent_thinker_done",
+        }
+    )
 
     def __init__(self, parent, agent_name: str):
         super().__init__()

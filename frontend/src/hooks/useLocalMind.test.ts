@@ -609,3 +609,47 @@ describe('useChat Agents-tab lifecycle narration (bootup-telemetry)', () => {
     unmount();
   });
 });
+
+describe('useChat child-agent lifecycle narration (bootup-telemetry follow-up)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    streamMock.getSessionHistory.mockResolvedValue([]);
+  });
+
+  it('routes child lifecycle obs events (agent-tagged) to the child run', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: {
+          type: 'delegation_started',
+          data: { target_agent: 'research', task: 'find the weather', run_id: 'run-123', depth: 1 },
+        },
+      }));
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_initialization_start', data: { intent: 'analyze', agent: 'research' } },
+      }));
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_initialization_understanding', data: { understanding: 'wants the weather', agent: 'research' } },
+      }));
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_initialization_done', data: { mode: 'execute', agent: 'research' } },
+      }));
+      // parent's own lifecycle stays on the parent
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_loop_done', data: { direct: false, iterations: 4 } },
+      }));
+    });
+
+    const child = result.current.agentRuns.find((r) => r.id === 'run-123');
+    expect(child).toBeDefined();
+    expect((child?.phases ?? []).map((p) => p.type)).toEqual(['initializing', 'understanding', 'initialized']);
+    expect(child!.phases![1].detail).toBe('wants the weather');
+
+    const parent = result.current.agentRuns.find((r) => r.role === 'parent');
+    expect((parent?.phases ?? []).map((p) => p.type)).toEqual(['turn_done']);
+
+    onDone();
+    unmount();
+  });
+});
