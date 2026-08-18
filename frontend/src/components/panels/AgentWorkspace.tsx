@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { AgentRun, AgentRunStatus, ToolCall } from '@/types';
 import { formatLatency, isActiveToolStatus } from '@/lib/localmind/progress';
 import { useEnterMotion } from '@/lib/localmind/motion';
+import { PHASE_META } from '@/components/chat/AgentPhases';
 
 interface AgentWorkspaceProps {
   runs: AgentRun[];
@@ -67,7 +68,8 @@ function RunNode({
   // ADR-34 B-9: expand the node when evidence arrives so the user sees
   // evidence flowing in without clicking.
   const hasEvidence = Boolean(run.evidence && run.evidence.length > 0);
-  const hasDetails = children.length > 0 || run.tools.length > 0 || Boolean(run.error) || hasEvidence;
+  const hasPhases = Boolean(run.phases && run.phases.length > 0);
+  const hasDetails = children.length > 0 || run.tools.length > 0 || Boolean(run.error) || hasEvidence || hasPhases;
   const elapsed = run.completedAt !== undefined ? run.completedAt - run.startedAt : undefined;
   const running = run.status === 'running';
 
@@ -123,6 +125,42 @@ function RunNode({
               {runningTools > 0 && <span className="text-brand-amber">{runningTools} running</span>}
               {completedTools > 0 && <span className="text-brand-green">{completedTools} done</span>}
             </div>
+
+            {/* Active-agent lifecycle narration (bootup-telemetry session):
+                the phases this run fired — getting started → understood →
+                working → turn complete — so the workspace feels alive during
+                the longest waits (init, thinking, tool phases). */}
+            {run.phases && run.phases.length > 0 && (
+              <div className="border-t border-brand-border/50 pt-1.5 space-y-0.5">
+                <div className="text-[8px] uppercase tracking-wider text-brand-green-faint font-medium">
+                  Lifecycle
+                </div>
+                {run.phases.map((phase) => {
+                  const meta = PHASE_META[phase.type] || PHASE_META.plan_created;
+                  return (
+                    <div
+                      key={phase.id}
+                      className="flex items-start gap-1.5 min-w-0"
+                      data-testid={`run-phase-${phase.type}`}
+                    >
+                      <span className={`${meta.color} font-mono w-3.5 text-center shrink-0`}>
+                        {meta.icon}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[9px] text-brand-green-soft truncate" title={phase.label}>
+                          {phase.label}
+                        </span>
+                        {phase.detail && (
+                          <span className="block text-[8px] text-brand-green-faint truncate" title={phase.detail}>
+                            {phase.detail}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* ADR-34 B-8: evidence entries handed to the parent model */}
             {run.evidence && run.evidence.length > 0 && (

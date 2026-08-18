@@ -60,4 +60,29 @@ describe('AgentWorkspace', () => {
     expect(screen.getByText('1 active')).toBeInTheDocument();
     expect(screen.getByText('working')).toBeInTheDocument();
   });
+
+  it('renders the active-agent lifecycle phases inside the run node', () => {
+    const withPhases: AgentRun[] = [
+      {
+        ...runs[0],
+        phases: [
+          { id: 'p1', type: 'initializing', label: 'Getting started — understanding your request', timestamp: 1000 },
+          { id: 'p2', type: 'understanding', label: 'Understanding your request', detail: 'the user wants the file listed', timestamp: 1100 },
+          { id: 'p3', type: 'initialized', label: 'Understood — execute mode', timestamp: 1200 },
+          { id: 'p4', type: 'working', label: 'Working — executing the plan', timestamp: 1300 },
+          { id: 'p5', type: 'turn_done', label: 'Turn complete', detail: '3 iterations', timestamp: 1400 },
+        ],
+      },
+    ];
+    render(<AgentWorkspace runs={withPhases} />);
+
+    // Lifecycle strip renders inside the (default-expanded) parent node.
+    expect(screen.getByText('Lifecycle')).toBeInTheDocument();
+    expect(screen.getByTestId('run-phase-initializing')).toBeInTheDocument();
+    expect(screen.getByTestId('run-phase-understanding')).toBeInTheDocument();
+    expect(screen.getByTestId('run-phase-turn_done')).toBeInTheDocument();
+    expect(screen.getByText('Getting started — understanding your request')).toBeInTheDocument();
+    expect(screen.getByText('the user wants the file listed')).toBeInTheDocument();
+    expect(screen.getByText('3 iterations')).toBeInTheDocument();
+  });
 });

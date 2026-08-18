@@ -36,15 +36,22 @@ interface AgentPhasesProps {
 //   orchestrator_replan_* → purple (orchestrator)
 //   agent_loop_failure → red ✗ (failed)
 
-const PHASE_META: Record<
+// Exported so the Agents-tab run node (AgentWorkspace) renders the same
+// phase icons/colors for the active-agent lifecycle narration.
+export const PHASE_META: Record<
   AgentPhase['type'],
   { icon: string; color: string; label: string }
 > = {
-  // Lifecycle phases (bootup-telemetry session) — the strip narrates the
-  // whole turn, including the init call (the longest wait on slow models).
+  // Lifecycle phases (bootup-telemetry session) — narrated on the Agents-tab
+  // run node (RUN_LIFECYCLE_TYPES), including the init call (the longest
+  // wait on slow models).
   initializing: { icon: '⚡', color: 'text-brand-amber', label: 'Getting started' },
+  understanding: { icon: '💡', color: 'text-brand-blue', label: 'Understanding' },
+  acknowledged: { icon: '👋', color: 'text-brand-blue', label: 'Acknowledged' },
   initialized: { icon: '✓', color: 'text-brand-green', label: 'Understood' },
   planned: { icon: '📋', color: 'text-brand-blue', label: 'Plan ready' },
+  thinking: { icon: '🧠', color: 'text-brand-purple', label: 'Thinking' },
+  thinking_done: { icon: '✓', color: 'text-brand-green', label: 'Analysis ready' },
   working: { icon: '🔧', color: 'text-brand-amber', label: 'Working' },
   turn_done: { icon: '🏁', color: 'text-brand-green', label: 'Turn complete' },
   plan_created: { icon: '📋', color: 'text-brand-blue', label: 'Plan built' },

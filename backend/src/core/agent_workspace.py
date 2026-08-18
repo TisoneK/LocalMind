@@ -30,30 +30,42 @@ from core.obs import ObsCollector, ObsEvent
 # agent_runtime._INTERNAL_DELEGATION_TOOLS.
 _INTERNAL_DELEGATION_TOOLS = frozenset({"delegate", "delegate_parallel", "delegate_inline"})
 
-# The obs event types that surface the agent's decision history in the
-# phase strip (Session 181 — F4 Frontend Phase Visibility). The 8 original
-# types covered plan/gate/orchestrator/failure; the 5 lifecycle types
-# (initialization_start/done, planning_done, loop_start/done) were added by
-# the bootup-telemetry session so the strip narrates the WHOLE turn —
-# "getting started → understood → working → turn complete" — instead of
-# staying empty during the longest wait (the init call on a slow model).
-PHASE_EVENT_TYPES = frozenset(
+# The obs event types that narrate the ACTIVE AGENT's lifecycle — attached
+# to the parent run's `phases` in build_run_tree so the Agents tab shows the
+# whole turn inside the running agent node ("getting started → understood →
+# working → turn complete"). These belong on the workspace run node, NOT the
+# chat phase strip: the strip (build_agent_phases) keeps the Session 181
+# plan/gate/orchestrator/failure decision history only.
+RUN_LIFECYCLE_TYPES = frozenset(
     {
         "agent_initialization_start",
+        "agent_initialization_understanding",
+        "agent_initialization_ack",
         "agent_initialization_done",
         "agent_planning_done",
+        "agent_thinker_start",
+        "agent_thinker_done",
         "agent_loop_start",
         "agent_loop_done",
-        "plan_nodes_created",
-        "plan_node_advanced",
-        "agent_loop_gate_passed",
-        "agent_loop_gate_failed_replan",
-        "orchestrator_replan_start",
-        "orchestrator_replan_done",
-        "orchestrator_replan_failed",
-        "agent_loop_failure",
     }
 )
+
+
+# Canonical narrative order for the run's lifecycle phases. The loop emits
+# some events out of story order (agent_loop_start fires BEFORE the init
+# events), so phases are stable-sorted by this rank when attached — the
+# Agents tab always reads "getting started → understood → working → done".
+_LIFECYCLE_PHASE_RANK = {
+    "initializing": 0,
+    "understanding": 1,
+    "acknowledged": 2,
+    "initialized": 3,
+    "planned": 4,
+    "thinking": 5,
+    "thinking_done": 6,
+    "working": 7,
+    "turn_done": 8,
+}
 
 
 def _now_ms() -> int:
@@ -125,6 +137,116 @@ def _tool_call_dict(d: dict) -> dict:
     }
 
 
+def _lifecycle_phase(evt_type: str, d: dict, next_id) -> Optional[dict]:
+    """Build an AgentPhase entry for a RUN-lifecycle obs event.
+
+    Attached to the parent run's ``phases`` (Agents tab, inside the active
+    agent node) — mirrors the frontend's buildAgentPhase cases for the same
+    event types. ``next_id(prefix)`` is a per-build counter (deterministic ids
+    like build_agent_phases). Returns None for events with nothing useful.
+    """
+    ts = _now_ms()
+    iteration = d.get("iteration") if d.get("iteration") not in (None, "") else None
+    if evt_type == "agent_initialization_start":
+        return {
+            "id": next_id("init-start"),
+            "type": "initializing",
+            "label": "Getting started — understanding your request",
+            "timestamp": ts,
+        }
+    if evt_type == "agent_initialization_understanding":
+        text = str(d.get("understanding", "")).strip() or None
+        if not text:
+            return None
+        return {
+            "id": next_id("understanding"),
+            "type": "understanding",
+            "label": "Understanding your request",
+            "detail": text[:160],
+            "timestamp": ts,
+        }
+    if evt_type == "agent_initialization_ack":
+        text = str(d.get("acknowledgement", "")).strip() or None
+        if not text:
+            return None
+        return {
+            "id": next_id("ack"),
+            "type": "acknowledged",
+            "label": "Acknowledged",
+            "detail": text[:160],
+            "timestamp": ts,
+        }
+    if evt_type == "agent_initialization_done":
+        mode = str(d.get("mode", ""))
+        return {
+            "id": next_id("init-done"),
+            "type": "initialized",
+            "label": (
+                f"Understood — {mode} mode" if mode else "Understood the request"
+            ),
+            "detail": str(d.get("objective", ""))[:160] or None,
+            "timestamp": ts,
+        }
+    if evt_type == "agent_planning_done":
+        return {
+            "id": next_id("planned"),
+            "type": "planned",
+            "label": "Plan ready — proceeding step by step",
+            "timestamp": ts,
+            "iteration": iteration,
+        }
+    if evt_type == "agent_thinker_start":
+        return {
+            "id": next_id("thinking"),
+            "type": "thinking",
+            "label": "Thinking through the evidence",
+            "timestamp": ts,
+            "iteration": iteration,
+        }
+    if evt_type == "agent_thinker_done":
+        return {
+            "id": next_id("think-done"),
+            "type": "thinking_done",
+            "label": "Analysis ready",
+            "timestamp": ts,
+            "iteration": iteration,
+        }
+    if evt_type == "agent_loop_start":
+        return {
+            "id": next_id("working"),
+            "type": "working",
+            "label": "Working — executing the plan",
+            "timestamp": ts,
+            "iteration": iteration,
+        }
+    if evt_type == "agent_loop_done":
+        direct = bool(d.get("direct"))
+        clarification = bool(d.get("clarification"))
+        hit_limit = bool(d.get("hit_limit"))
+        detail_parts = []
+        if direct:
+            detail_parts.append("answered directly")
+        if clarification:
+            detail_parts.append("asked for clarification")
+        if hit_limit:
+            detail_parts.append("iteration limit reached")
+        try:
+            iterations = int(d.get("iterations", 0) or 0)
+        except (TypeError, ValueError):
+            iterations = 0
+        if iterations:
+            detail_parts.append(f"{iterations} iterations")
+        return {
+            "id": next_id("turn-done"),
+            "type": "turn_done",
+            "label": "Turn complete",
+            "detail": "; ".join(detail_parts) if detail_parts else None,
+            "timestamp": ts,
+            "iteration": iteration,
+        }
+    return None
+
+
 def build_run_tree(
     collector: ObsCollector,
     *,
@@ -139,8 +261,10 @@ def build_run_tree(
     Mirrors the frontend: the parent root is created with the user's task,
     child runs are created on ``delegation_started`` (keyed by run_id),
     child statuses settle on ``delegation_completed``, tool_call events attach
-    to the owning run (a child by its ``agent`` tag, else the parent), and
-    ``evidence_to_parent`` entries land on the parent run.
+    to the owning run (a child by its ``agent`` tag, else the parent),
+    ``evidence_to_parent`` entries land on the parent run, and RUN-lifecycle
+    obs events (initialization/planning/thinker/loop) append phase entries to
+    the parent run's ``phases`` so the active agent node narrates the turn.
     """
     runs: list[dict] = [
         {
@@ -154,12 +278,20 @@ def build_run_tree(
             "completedAt": completed_at if completed_at is not None else _now_ms(),
             "error": root_error,
             "tools": [],
+            "phases": [],
         }
     ]
     by_id: dict[str, dict] = {root_id: runs[0]}
     # agent name -> most recent run id for that agent (child tool_call events
     # carry `agent` but not run_id; the frontend matches by name + running).
     child_by_agent: dict[str, str] = {}
+    # Deterministic phase ids within one build (same pattern as
+    # build_agent_phases) so the persisted run tree survives reload.
+    _phase_counter = {"n": 0}
+
+    def _next_id(prefix: str) -> str:
+        _phase_counter["n"] += 1
+        return f"phase-{prefix}-{_phase_counter['n']}"
 
     def _attach_tool(tc: dict) -> None:
         run_id = tc.get("runId")
@@ -243,6 +375,15 @@ def build_run_tree(
                     "timestamp": _now_ms(),
                 }
             )
+        elif evt.type in RUN_LIFECYCLE_TYPES:
+            phase = _lifecycle_phase(evt.type, d, _next_id)
+            if phase:
+                runs[0].setdefault("phases", []).append(phase)
+    phases = runs[0].get("phases")
+    if phases:
+        runs[0]["phases"] = sorted(
+            phases, key=lambda p: _LIFECYCLE_PHASE_RANK.get(p.get("type"), 99)
+        )
     return runs
 
 
@@ -266,6 +407,7 @@ def build_workspace_artifacts(
         root_error
         or root.get("tools")
         or root.get("evidence")
+        or root.get("phases")
         or len(runs) > 1
     )
     agent_runs = runs if has_content else None
@@ -297,81 +439,11 @@ def build_agent_phases(collector: ObsCollector) -> list[dict]:
             if d.get("iteration") not in (None, "")
             else None
         )
-        # Lifecycle phases (bootup-telemetry session) — narrate the whole
-        # turn so the strip is never empty during the longest wait (the
-        # parent init call on a slow model). Mirrors the frontend's
-        # buildAgentPhase entries for the same event types.
-        if evt.type == "agent_initialization_start":
-            phases.append(
-                {
-                    "id": _next_id("init-start"),
-                    "type": "initializing",
-                    "label": "Getting started — understanding your request",
-                    "timestamp": ts,
-                }
-            )
-        elif evt.type == "agent_initialization_done":
-            mode = str(d.get("mode", ""))
-            phases.append(
-                {
-                    "id": _next_id("init-done"),
-                    "type": "initialized",
-                    "label": (
-                        f"Understood — {mode} mode"
-                        if mode
-                        else "Understood the request"
-                    ),
-                    "detail": str(d.get("objective", ""))[:160] or None,
-                    "timestamp": ts,
-                }
-            )
-        elif evt.type == "agent_planning_done":
-            phases.append(
-                {
-                    "id": _next_id("planned"),
-                    "type": "planned",
-                    "label": "Plan ready — proceeding step by step",
-                    "timestamp": ts,
-                    "iteration": iteration,
-                }
-            )
-        elif evt.type == "agent_loop_start":
-            phases.append(
-                {
-                    "id": _next_id("working"),
-                    "type": "working",
-                    "label": "Working — executing the plan",
-                    "timestamp": ts,
-                }
-            )
-        elif evt.type == "agent_loop_done":
-            direct = bool(d.get("direct"))
-            clarification = bool(d.get("clarification"))
-            hit_limit = bool(d.get("hit_limit"))
-            detail_parts = []
-            if direct:
-                detail_parts.append("answered directly")
-            if clarification:
-                detail_parts.append("asked for clarification")
-            if hit_limit:
-                detail_parts.append("iteration limit reached")
-            try:
-                iterations = int(d.get("iterations", 0) or 0)
-            except (TypeError, ValueError):
-                iterations = 0
-            if iterations:
-                detail_parts.append(f"{iterations} iterations")
-            phases.append(
-                {
-                    "id": _next_id("turn-done"),
-                    "type": "turn_done",
-                    "label": "Turn complete",
-                    "detail": "; ".join(detail_parts) if detail_parts else None,
-                    "timestamp": ts,
-                    "iteration": iteration,
-                }
-            )
-        elif evt.type == "plan_nodes_created":
+        # Lifecycle narration (initialization/planning/thinker/loop) lives on
+        # the RUN tree (build_run_tree phases), not the chat strip — the strip
+        # keeps the Session 181 plan/gate/orchestrator/failure decision
+        # history only.
+        if evt.type == "plan_nodes_created":
             try:
                 count = int(d.get("node_count", 0) or 0)
             except (TypeError, ValueError):

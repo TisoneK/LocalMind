@@ -257,4 +257,42 @@ describe('buildAgentPhase', () => {
     const phase2 = buildAgentPhase('agent_loop_gate_passed', data);
     expect(phase1!.id).not.toBe(phase2!.id);
   });
+
+  it('handles agent_initialization_understanding with text', () => {
+    const phase = buildAgentPhase('agent_initialization_understanding', {
+      understanding: 'the user wants the file listed',
+    });
+    expect(phase!.type).toBe('understanding');
+    expect(phase!.label).toBe('Understanding your request');
+    expect(phase!.detail).toBe('the user wants the file listed');
+  });
+
+  it('returns null for empty understanding payload', () => {
+    expect(buildAgentPhase('agent_initialization_understanding', {})).toBeNull();
+  });
+
+  it('handles agent_initialization_ack with text', () => {
+    const phase = buildAgentPhase('agent_initialization_ack', {
+      acknowledgement: "On it!",
+    });
+    expect(phase!.type).toBe('acknowledged');
+    expect(phase!.label).toBe('Acknowledged');
+    expect(phase!.detail).toBe('On it!');
+  });
+
+  it('returns null for empty ack payload', () => {
+    expect(buildAgentPhase('agent_initialization_ack', { acknowledgement: '' })).toBeNull();
+  });
+
+  it('handles agent_thinker_start / agent_thinker_done with iteration', () => {
+    const start = buildAgentPhase('agent_thinker_start', { iteration: 2 });
+    expect(start!.type).toBe('thinking');
+    expect(start!.label).toBe('Thinking through the evidence');
+    expect(start!.iteration).toBe(2);
+
+    const done = buildAgentPhase('agent_thinker_done', { iteration: 2 });
+    expect(done!.type).toBe('thinking_done');
+    expect(done!.label).toBe('Analysis ready');
+    expect(done!.iteration).toBe(2);
+  });
 });

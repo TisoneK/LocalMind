@@ -943,10 +943,48 @@ export function useChat(
                   }
                   break;
                 }
+                // Active-agent lifecycle narration (bootup-telemetry session):
+                // attach the initialization / planning / thinker / loop phases
+                // to the PARENT run so the Agents tab's active agent node
+                // shows the whole turn. The chat phase strip keeps ONLY the
+                // Session 181 decision history (plan/gate/orchestrator) — see
+                // PHASE_EVENT_TYPES below.
+                const RUN_LIFECYCLE_TYPES = new Set([
+                  'agent_initialization_start',
+                  'agent_initialization_understanding',
+                  'agent_initialization_ack',
+                  'agent_initialization_done',
+                  'agent_planning_done',
+                  'agent_thinker_start',
+                  'agent_thinker_done',
+                  'agent_loop_start',
+                  'agent_loop_done',
+                ]);
+                if (RUN_LIFECYCLE_TYPES.has(obs.type)) {
+                  const runPhase = buildAgentPhase(obs.type, obs.data || obs);
+                  if (runPhase) {
+                    setAgentRuns((prev) => {
+                      const run = prev.find((r) => r.id === rootRunId);
+                      if (!run) return prev;
+                      // Canonical narrative order — the loop emits some events
+                      // out of story order (loop_start before init), so sort
+                      // by the same rank the backend uses on persistence.
+                      const phases = [...(run.phases || []), runPhase]
+                        .sort((a, b) => (LIFECYCLE_PHASE_RANK[a.type] ?? 99) - (LIFECYCLE_PHASE_RANK[b.type] ?? 99));
+                      return updateAgentRun(prev, rootRunId, { phases });
+                    });
+                  }
+                }
                 // ADR-36: the acknowledgement is the Agent's opening line —
-                // it belongs in chat, not the Agent Workspace. Route it to
-                // the assistant message's `acknowledgement` field (rendered
-                // as the opening line above the thinking block).
+                // route it to the assistant message's `acknowledgement` field
+                // (rendered as the opening line above the thinking block).
+                // It is ALSO a run-lifecycle phase (handled above) so the
+                // workspace node narrates it.
+                // agent_initialization_understanding is intentionally NOT
+                // mirrored to the chat message here: it already reaches the
+                // user through the thinking_token channel into the message's
+                // ThinkingBlock (ADR-36). The run node above narrates it for
+                // the Agents tab.
                 if (obs.type === 'agent_initialization_ack') {
                   const ackData = obs.data || obs;
                   const ackText = String(ackData.acknowledgement || '').slice(0, 180);
@@ -1217,22 +1255,15 @@ export function useChat(
                 }
 
                 // Session 181 — F4 Frontend Phase Visibility. Handle the
-                // backend obs events that surface the agent's decision
+                // backend obs events that surface the agent's DECISION
                 // history. Each appends a phase entry to the LAST assistant
                 // message's `agentPhases` array — the strip renders in
                 // ChatMessage between the thinking block and tool cards.
-                // The 5 lifecycle types (initialization_start/done,
-                // planning_done, loop_start/done) were added by the
-                // bootup-telemetry session so the strip narrates the WHOLE
-                // turn — "getting started → understood → working → turn
-                // complete" — instead of staying empty during the longest
-                // wait (the parent init call on a slow model).
+                // The lifecycle narration (initialization/planning/thinker/
+                // loop) moved to the Agents-tab run node (RUN_LIFECYCLE_TYPES
+                // above) — the chat strip keeps the plan/gate/orchestrator
+                // set only.
                 const PHASE_EVENT_TYPES = new Set([
-                  'agent_initialization_start',
-                  'agent_initialization_done',
-                  'agent_planning_done',
-                  'agent_loop_start',
-                  'agent_loop_done',
                   'plan_nodes_created',
                   'plan_node_advanced',
                   'agent_loop_gate_passed',
@@ -1709,14 +1740,32 @@ function _toolToIntent(toolName: string, fallback: string = 'chat'): string {
   return map[toolName] || fallback;
 }
 
+// Canonical narrative order for the active-agent lifecycle phases (mirrors
+// the backend's _LIFECYCLE_PHASE_RANK in agent_workspace.py). The loop emits
+// some events out of story order (agent_loop_start fires before init), so
+// the run node always reads "getting started → understood → working → done".
+const LIFECYCLE_PHASE_RANK: Record<string, number> = {
+  initializing: 0,
+  understanding: 1,
+  acknowledged: 2,
+  initialized: 3,
+  planned: 4,
+  thinking: 5,
+  thinking_done: 6,
+  working: 7,
+  turn_done: 8,
+};
+
 // ─── Session 181 — F4 Frontend Phase Visibility ──────────────────────
 //
-// buildAgentPhase converts a backend obs event into an AgentPhase entry
-// for the phase strip in ChatMessage. Each event type carries different
-// payload fields; this helper extracts the most informative label +
-// detail for each. Returns null when the event payload is missing
-// required fields (defensive — the strip only renders entries that
-// have something useful to say).
+// buildAgentPhase converts a backend obs event into an AgentPhase entry.
+// Two consumers: the chat phase strip (plan/gate/orchestrator decision
+// history, via PHASE_EVENT_TYPES) and the Agents-tab run node (lifecycle
+// narration, via RUN_LIFECYCLE_TYPES — the active-agent phases). Each
+// event type carries different payload fields; this helper extracts the
+// most informative label + detail for each. Returns null when the event
+// payload is missing required fields (defensive — surfaces only render
+// entries that have something useful to say).
 //
 // Exported for direct unit testing (Session 181).
 export function buildAgentPhase(
@@ -1736,6 +1785,28 @@ export function buildAgentPhase(
         timestamp: ts,
       };
     }
+    case 'agent_initialization_understanding': {
+      const text = String(data?.understanding ?? '').trim();
+      if (!text) return null;
+      return {
+        id: `phase-understanding-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'understanding',
+        label: 'Understanding your request',
+        detail: text.slice(0, 160),
+        timestamp: ts,
+      };
+    }
+    case 'agent_initialization_ack': {
+      const text = String(data?.acknowledgement ?? '').trim();
+      if (!text) return null;
+      return {
+        id: `phase-ack-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'acknowledged',
+        label: 'Acknowledged',
+        detail: text.slice(0, 160),
+        timestamp: ts,
+      };
+    }
     case 'agent_initialization_done': {
       const mode = String(data?.mode ?? '');
       const objective = String(data?.objective ?? '').slice(0, 160);
@@ -1745,6 +1816,24 @@ export function buildAgentPhase(
         label: mode ? `Understood — ${mode} mode` : 'Understood the request',
         detail: objective || undefined,
         timestamp: ts,
+      };
+    }
+    case 'agent_thinker_start': {
+      return {
+        id: `phase-thinking-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'thinking',
+        label: 'Thinking through the evidence',
+        timestamp: ts,
+        iteration: data?.iteration !== undefined ? Number(data.iteration) : undefined,
+      };
+    }
+    case 'agent_thinker_done': {
+      return {
+        id: `phase-think-done-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'thinking_done',
+        label: 'Analysis ready',
+        timestamp: ts,
+        iteration: data?.iteration !== undefined ? Number(data.iteration) : undefined,
       };
     }
     case 'agent_planning_done': {

@@ -61,6 +61,11 @@ export interface AgentRun {
   tools: ToolCall[];
   /** ADR-34 B-8: evidence entries handed to the parent model after each tool. */
   evidence?: EvidenceEntry[];
+  /** Active-agent lifecycle narration (bootup-telemetry session): the
+   *  initialization / planning / thinker / loop phases fired by this run,
+   *  rendered inside the run node on the Agents tab. Populated live from
+   *  obs events and persisted server-side with the run tree. */
+  phases?: AgentPhase[];
 }
 
 export interface PendingWrite {
@@ -157,8 +162,12 @@ export interface AgentPhase {
   /** Canonical phase type — drives the icon + label. */
   type:
     | 'initializing'       // agent_initialization_start — parent init began
+    | 'understanding'      // agent_initialization_understanding — thinker line (workspace)
+    | 'acknowledged'       // agent_initialization_ack — opening acknowledgement (workspace)
     | 'initialized'        // agent_initialization_done — mode decided (execute/direct/clarify)
     | 'planned'            // agent_planning_done — plan produced
+    | 'thinking'           // agent_thinker_start — thinking through evidence (workspace)
+    | 'thinking_done'      // agent_thinker_done — analysis ready (workspace)
     | 'working'            // agent_loop_start — execute loop began
     | 'turn_done'          // agent_loop_done — loop finished (direct/clarify/iterations/hit_limit)
     | 'plan_created'        // plan_nodes_created — structured DAG built

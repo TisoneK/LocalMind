@@ -544,3 +544,68 @@ describe('useChat Agent Workspace restore (Session 267)', () => {
     utils.unmount();
   });
 });
+
+describe('useChat Agents-tab lifecycle narration (bootup-telemetry)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    streamMock.getSessionHistory.mockResolvedValue([]);
+  });
+
+  it('attaches lifecycle obs events as phases on the parent run', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_initialization_start', data: { intent: 'analyze' } },
+      }));
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_initialization_understanding', data: { understanding: 'wants the file listed' } },
+      }));
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_initialization_ack', data: { acknowledgement: 'On it!' } },
+      }));
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_initialization_done', data: { mode: 'execute', objective: 'list files' } },
+      }));
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_loop_done', data: { direct: false, iterations: 3 } },
+      }));
+    });
+
+    const parent = result.current.agentRuns.find((r) => r.role === 'parent');
+    expect(parent).toBeDefined();
+    const types = (parent?.phases ?? []).map((p) => p.type);
+    expect(types).toEqual(['initializing', 'understanding', 'acknowledged', 'initialized', 'turn_done']);
+    expect(parent!.phases![1].detail).toBe('wants the file listed');
+    expect(parent!.phases![2].detail).toBe('On it!');
+    expect(parent!.phases![4].detail).toBe('3 iterations');
+
+    // lifecycle phases do NOT land in the chat phase strip (decision history only)
+    onDone();
+    unmount();
+  });
+
+  it('does not put lifecycle phases on the chat message agentPhases strip', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_initialization_start', data: { intent: 'analyze' } },
+      }));
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_loop_done', data: { direct: true } },
+      }));
+      onChunk()(JSON.stringify({
+        obs_event: { type: 'agent_loop_gate_passed', data: { intent: 'analyze' } },
+      }));
+    });
+
+    const last = result.current.messages[result.current.messages.length - 1];
+    const stripTypes = (last?.agentPhases ?? []).map((p) => p.type);
+    // decision history only — lifecycle events stay off the chat strip
+    expect(stripTypes).toEqual(['gate_passed']);
+
+    onDone();
+    unmount();
+  });
+});
