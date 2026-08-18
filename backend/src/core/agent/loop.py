@@ -665,7 +665,6 @@ class AgentLoop:
             _allowed = scoped_tools if scoped_tools is not None else AGENT_ALLOWED_TOOLS
             return tool_defs_for_call(filtered_tools, _allowed, loaded_tools)
 
-        env_context = _build_environment_context()
         # Scope the metadata tool list the same way so the system-prompt
         # "Available tools" section and the planner see the same small
         # surface as the adapter tool defs. Metadata uses intent values;
@@ -676,29 +675,18 @@ class AgentLoop:
 
         scoped_available = [t for t in available_tools if _scope_name(t) in scoped_tools]
 
-        # ── ADR-5: Workspace state feedback ──────────────────────────────
-        # Mark the turn start (records current HEAD for diff tracking),
-        # then take a snapshot of git status/diff/build result. The
-        # snapshot is injected into the system prompt below — this is the
-        # "observations flow back into context every turn" loop from the
-        # CODING HARNESS diagram, the literal difference between a harness
-        # and a bare API.
-        workspace_context = ""
-        if WORKSPACE_STATE_ENABLED:
-            try:
-                mark_turn_start()
-                ws_snap = workspace_snapshot()
-                workspace_context = format_snapshot(ws_snap)
-                if workspace_context:
-                    logger.debug(
-                        "[agent_loop] workspace_state injected (%d chars)",
-                        len(workspace_context),
-                    )
-            except Exception as ws_exc:
-                # Workspace state must never break the agent loop —
-                # log and continue with empty context.
-                logger.warning("[agent_loop] workspace_state failed: %s", ws_exc)
-                workspace_context = ""
+        # Boot-path efficiency (bootup-telemetry session): the FULL
+        # environment block (platform calls + available_tools + a VectorStore
+        # construction) and the ADR-5 workspace snapshot (4-5 git
+        # subprocesses, ~100ms macOS / more on Windows) are ONLY consumed by
+        # the EXECUTE prompt (turn_context_parts below). They are NOT needed
+        # by the parent initialization call — that uses the COMPACT env block
+        # (init_env_context). Building them here, before the init model call,
+        # made every DIRECT turn ("Hi") pay for work it never uses. Both are
+        # now deferred to the execute path: env_context is built lazily where
+        # the non-parent plan-stream needs it, and the workspace snapshot is
+        # taken right before the execute prompt assembly. Direct/clarify
+        # turns skip them entirely.
 
         # ── Phase 0: Parent initialization / planning ───────────────────
         # The user-facing parent does not inherit a prompt-shaped route. Its
@@ -850,6 +838,12 @@ class AgentLoop:
                 raise AgentAbortedError("aborted by user before planning")
             if _obs:
                 _obs.emit("agent_planning_start", intent=intent.value)
+
+            # The plan-stream path (non-parent callers) is the ONLY consumer
+            # of the full environment block — the parent initialization call
+            # uses the compact block instead. Build it here, lazily, so the
+            # parent boot path never pays for it (bootup-telemetry session).
+            env_context = _build_environment_context()
 
             # Collect the plan internally while it streams from the provider.
             plan_chunks: list[str] = []
@@ -1056,6 +1050,36 @@ class AgentLoop:
         # and carried in a SEPARATE trailing turn-context message, so the
         # system+tools prefix stays byte-stable across calls and turns and the
         # provider can cache it (see the cache_control marker in the adapter).
+        #
+        # ── ADR-5: Workspace state feedback (DEFERRED to the execute path) ──
+        # Mark the turn start (records current HEAD for diff tracking), then
+        # take a snapshot of git status/diff/build result. The snapshot is
+        # injected into the execute prompt below — this is the "observations
+        # flow back into context every turn" loop from the CODING HARNESS
+        # diagram, the literal difference between a harness and a bare API.
+        #
+        # Boot-path efficiency (bootup-telemetry session): this block runs 4-5
+        # git subprocesses (~100ms on macOS, more on Windows). It is ONLY
+        # consumed by the execute prompt — the parent initialization call
+        # never sees it. Deferred here (after init/plan decided mode=execute)
+        # so DIRECT and CLARIFY turns skip the subprocesses entirely.
+        workspace_context = ""
+        if WORKSPACE_STATE_ENABLED:
+            try:
+                mark_turn_start()
+                ws_snap = workspace_snapshot()
+                workspace_context = format_snapshot(ws_snap)
+                if workspace_context:
+                    logger.debug(
+                        "[agent_loop] workspace_state injected (%d chars)",
+                        len(workspace_context),
+                    )
+            except Exception as ws_exc:
+                # Workspace state must never break the agent loop —
+                # log and continue with empty context.
+                logger.warning("[agent_loop] workspace_state failed: %s", ws_exc)
+                workspace_context = ""
+
         turn_context_parts = [_build_environment_context()]
         if workspace_context:
             turn_context_parts.append(workspace_context)

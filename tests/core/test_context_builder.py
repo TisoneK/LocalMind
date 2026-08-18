@@ -149,3 +149,46 @@ def test_compact_env_context_is_smaller_and_drops_tool_prose():
 
     # And it is materially smaller.
     assert len(compact) < len(full) / 2
+
+
+# ── Boot-path efficiency (bootup-telemetry session) ──────────────────────────
+
+
+def test_full_env_context_skips_vectorstore_in_async_context():
+    """In an async runtime the memory count is unusable, so the full env
+    build must NOT construct VectorStore (which would open sqlite and fire
+    a synchronous HTTP probe to Ollama on the event loop)."""
+    from unittest.mock import patch
+
+    import asyncio
+
+    async def _run():
+        with patch(
+            "storage.vector.VectorStore",
+            side_effect=AssertionError("VectorStore must not be constructed in async context"),
+        ):
+            from core.context_builder import _build_environment_context
+
+            text = _build_environment_context()
+        return text
+
+    text = asyncio.run(_run())
+    assert "## Environment" in text
+    assert "Available Tools" in text
+
+
+def test_full_env_context_still_counts_in_sync_context():
+    """The sync (non-event-loop) path still constructs VectorStore and
+    reports the memory count — the run_until_complete branch is intact."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    from core.context_builder import _build_environment_context
+
+    fake_store = MagicMock()
+    fake_store._ready = True
+    fake_store.count = AsyncMock(return_value=123)
+
+    with patch("storage.vector.VectorStore", return_value=fake_store):
+        text = _build_environment_context()
+
+    assert "123 facts in memory" in text

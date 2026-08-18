@@ -171,20 +171,29 @@ def _build_environment_context(session_cwd: str | None = None, compact: bool = F
   file operations are relative to there."""
 
     # ── Memory facts count (if available) ──
+    # Boot-path efficiency (bootup-telemetry session): the count is only
+    # usable from a SYNC context (run_until_complete). In an async runtime
+    # the loop can't await it — and constructing VectorStore is not free:
+    # it opens sqlite AND — when a dim row exists — fires a SYNCHRONOUS HTTP
+    # probe to Ollama (_probe_embed_dim, 10s timeout) on the event loop.
+    # Check the loop state BEFORE constructing so the async boot path skips
+    # the whole block instead of paying for a store it discards.
     memory_count = 0
     try:
-        from storage.vector import VectorStore
+        import asyncio
 
-        vs = VectorStore()
-        if vs._ready:
-            import asyncio
+        try:
+            asyncio.get_running_loop()
+            # Async context — the count is unusable here; skip construction
+            # (which would block the event loop on sqlite + an Ollama probe).
+            pass
+        except RuntimeError:
+            # Sync context — the count is usable; construct and count.
+            from storage.vector import VectorStore
 
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Can't await in sync context — skip
-                pass
-            else:
-                memory_count = loop.run_until_complete(vs.count())
+            vs = VectorStore()
+            if vs._ready:
+                memory_count = asyncio.run(vs.count())
     except Exception:
         pass
 
