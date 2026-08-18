@@ -3981,3 +3981,19 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-7 (read-blocked false grounding), L2 discovery/shell-before-create steering, L3 clean trace on a read-allowed path, L4.
 - **Report:** .context/memory/reviews/2026-08-17-review-61.md
 - **Notes:** none
+
+---
+## 2026-08-18 — Session bootup-telemetry (collab: bootup speed + telemetry/observation)
+
+- **Agent:** Buffy (Freebuff/Codebuff) | **Model:** z-ai/glm-5.2 | **Platform:** macOS (local) | **Core:** 0.8.0
+- **Task:** user: "1) spawn a sub agent to tackle agent bootup speed and efficiency. 2) Agent telemetry and observation so that agent workspace feels alive when agent is working and user get updated throughout the way."
+- **Setup:** Session 295 (token optimization) was IN PROGRESS on main — ran this session in an isolated collab worktree (`collab/bootup-telemetry/buffy`), coordination branch `collab/bootup-telemetry/coordination` published; never touched Session 295's state.
+- **DELIVERED (2 commits, pushed to `collab/bootup-telemetry/buffy`):**
+  - `99e7760` perf: full env block (VectorStore + sync Ollama embed-dim probe — measured 162ms / 10s timeout when Ollama down) and ADR-5 workspace snapshot (4-5 git subprocesses) were built BEFORE the init LLM call but consumed only by the execute prompt. Both deferred to the execute path; direct/clarify turns skip them entirely. VectorStore memory-count skipped in async contexts (count was never usable there; old code also took the skip branch in the live app).
+  - `ed103f9` obs: five lifecycle phases (initialization_understanding, initialization_ack, planning_done, thinker_start, thinker_done) persisted + surfaced (agent_workspace PHASE_EVENT_TYPES/build_agent_phases) and rendered (frontend AgentPhase union, buildAgentPhase, PHASE_META); heartbeat status in chat.py is now phase-aware via a testable helper (was misleading generic "waiting for a tool result" during init).
+- **LIVE-VERIFIED (z.ai/glm-4.5-flash, isolated 8765, scratch LOCALMIND_HOME):** direct greeting ✅ (compact 3017-char init); full tool-execute run ✅ (init mode=execute → sysinfo → correct date/time answer; all 11 lifecycle phases streamed; heartbeats showed init/tool-phase texts). Provider hit 30s init timeouts on later traces — reproduced IDENTICALLY on pre-change code (git stash), so provider-side, not a regression. Execute-path trace used LOCALMIND_REASONING_PLAN_TIMEOUT_SECS=120 (env-only, no code change). Cerebras blocked by 402 payment-required on the key.
+- **VERIFICATION:** backend 1932 passed / 2 skipped; frontend 242 passed; tsc --noEmit clean.
+- **Outcome:** done — both user targets delivered, live-verified, pushed.
+- **Open items:** none for this scope. Integration onto main remains (Session 295 owns main; merge in dependency order per collab protocol).
+- **Report:** release event `.context/memory/collaboration/events/20260818T080300Z-buffy-release.md`
+- **Notes:** sandbox kills background processes between commands — live traces must start server + fire request in ONE command. Also: `asyncio.get_event_loop()` is order-dependent-flaky under pytest-asyncio (stale loop) — use `get_running_loop()`.
