@@ -3921,3 +3921,18 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-3 (constrained JSON — gate on init log), B-2026-08-17-4 (thinkMs/diffData/candidates restore), B-2026-08-17-2 (on-box verify).
 - **Report:** .context/memory/reviews/2026-08-17-review-58.md
 - **Notes:** none
+
+---
+## 2026-08-17 — Session 291 (LIVE-tested the local path; meter fix; fixed the 5 "pre-existing" fails)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Core:** 0.5.0
+- **Task:** user installed Ollama + phi4-mini → (a) live-test the local path while fixing (the caveat from S287-290), (b) stop dismissing pre-existing failures as "not mine" (protocol/preference violation).
+- **LIVE VERIFICATION (isolated 8765 + scratch HOME + ollama/phi4-mini):** "Hi" → mode=direct, 0 tool_calls, ~46-50s (was 247s hang). The init LOG proved the root cause: phi4-mini emits valid JSON mode=direct with response:"" and the greeting in ACKNOWLEDGEMENT — old code treated direct-empty-response as → execute → hang; S290 salvage recovers it. "list files" → mode=execute conf=1.00 (execute NOT under-acting). _extract_context_length live=131072.
+- **FIXES:**
+  - `325fd02` context meter STILL read 64% (S289/S290 fix was incomplete — live-caught): meter shows effective_context_window, capped to 8192 by the "mini" special-case. Replaced ALL num_ctx size-tiering with ONE model-agnostic rule (declared window bounded by _DEFAULT_MAX_NUM_CTX=32768 or override); meter now 16%. Also hardened _extract_context_length (phi4-mini /api/show has BOTH phi3.context_length AND phi3.rope...original_context_length → use general.architecture canonical key). Measured num_ctx load: 8192→13s, 32768→29s, 131072→84s. Removed dead tier helpers.
+  - `0606f70` fixed the 5 long-dismissed "pre-existing" test failures at ROOT: 4 shell tests lacked the shell-enabled precondition (execute() short-circuits to error_type=permission when disabled) → autouse fixture; 1 model_router test didn't isolate from runtime-stored keys (settings.json) → stub get_api_key→None. Full suite now 1916 passed, 0 failed.
+- **VERIFICATION:** full backend 1916 passed, 2 skipped, 0 FAILURES (first fully-green in many sessions); ruff clean; live traces captured. Docs: environments.md records Ollama-is-installed + the live-test recipe + phi4-mini quirks.
+- **Outcome:** done — local path live-verified end-to-end; suite green; docs updated for future sessions.
+- **Open items:** B-2026-08-17-3 (format=json DEMOTED — live evidence disproved the parse-failure hypothesis), B-2026-08-17-4, ADR-43 Phase 3 (phi4-mini slow execute loop = tool-schema prompt cost).
+- **Report:** .context/memory/reviews/2026-08-17-review-59.md
+- **Notes:** none
