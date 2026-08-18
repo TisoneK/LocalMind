@@ -4015,3 +4015,11 @@ program + ADR-22). -->
 - **LIVE-VERIFIED (z.ai/glm-4.5-flash, isolated 8765):** persisted history shows agentRuns root phases = [initializing, initialized, turn_done] ("answered directly"), chat strip agentPhases = None for a direct turn.
 - **VERIFICATION:** backend 1935 passed / 2 skipped; frontend 250 passed; tsc clean.
 - **Outcome:** done — merged to main (`ed103f9..a318b40`), pushed. Session 295's uncommitted files untouched.
+
+---
+## 2026-08-18 — bootup-telemetry FOLLOW-UP 2 (child-agent lifecycle phases)
+
+- **Request:** "Show the child-agent lifecycle phases too, not just the parent."
+- **Fix (`fcd0080`, on main):** ChildObsProxy now forwards the child's lifecycle narration (initialization start/understanding/ack/done, planning_done, thinker start/done) to the parent collector, agent-tagged; agent_loop_start/done stay excluded (ADR-18 P3 parent-UI rationale — child working/completed already visible via delegation status + tools). build_run_tree routes agent-tagged phases to the matching child run (untagged → parent) and sorts per-run; frontend RUN_LIFECYCLE_TYPES routes by the event's agent tag to the running child (mirrors attachToolToAgentRun).
+- **VERIFICATION:** backend 1936 passed / 2 skipped (ChildObsProxy forwarding + child-run attachment pinned); frontend 251 passed; tsc clean. No live trace this round (pure forwarding/reconstruction change, fully unit-pinned; provider was flaky earlier).
+- **Outcome:** done — committed directly to main (a318b40..fcd0080), pushed. Session 295's uncommitted files untouched.
