@@ -4004,3 +4004,14 @@ program + ADR-22). -->
 - **Merge:** user asked to merge `collab/bootup-telemetry/buffy` into main. Fast-forward `92e2e62..ed103f9` (both commits: perf + obs), pushed to `origin/main`.
 - **Session 295 impact:** still IN PROGRESS on main with uncommitted `current.md` + `baseline_test.txt` — no file overlap, both untouched by the merge. 295 will need to rebase/merge main before their commit.
 - **Verified before merge:** origin/main was unchanged at `92e2e62` (0 divergence); branch content identical to the fully-tested state (backend 1932 passed, frontend 242 passed, live traces green).
+
+---
+## 2026-08-18 — bootup-telemetry FOLLOW-UP (user feedback: telemetry placement)
+
+- **Feedback:** "You added the agent telemetry and observability to center chat instead of right panel agents tab (inside active agent)."
+- **Fix (`a318b40`, merged to main):** relocated the lifecycle narration (initialization start/understanding/ack/done, planning_done, thinker start/done, loop start/done) from the center-chat phase strip to the Agents-tab ACTIVE AGENT node:
+  - Backend `build_run_tree` attaches `phases` to the parent run (persisted with the run tree, survives reload); sorted by canonical narrative rank (loop emits loop_start before init). `build_agent_phases` (chat strip) back to Session 181 plan/gate/orchestrator/failure only.
+  - Frontend `useLocalMind` routes RUN_LIFECYCLE_TYPES to `agentRuns[0].phases` (same sort); chat-strip PHASE_EVENT_TYPES no longer includes lifecycle; `buildAgentPhase` gained understanding/ack/thinker cases; AgentWorkspace RunNode renders a compact "Lifecycle" strip (shared PHASE_META) and phases-only runs expand.
+- **LIVE-VERIFIED (z.ai/glm-4.5-flash, isolated 8765):** persisted history shows agentRuns root phases = [initializing, initialized, turn_done] ("answered directly"), chat strip agentPhases = None for a direct turn.
+- **VERIFICATION:** backend 1935 passed / 2 skipped; frontend 250 passed; tsc clean.
+- **Outcome:** done — merged to main (`ed103f9..a318b40`), pushed. Session 295's uncommitted files untouched.
