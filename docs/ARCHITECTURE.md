@@ -2,6 +2,15 @@
 
 > **Updated:** 2026-08-14 — parent-agent runtime migration
 
+> **Current-phase scope (2026-08-18):** the authoritative target architecture is
+> [`docs/parent-agent-spec.md`](parent-agent-spec.md) (ADR-47). That spec scopes
+> the current phase to a **single, strong Parent Agent** and defers specialist
+> agents / delegation to a later phase. The `delegate / delegate_parallel → child
+> agents` branch shown below is **already implemented but ahead of that
+> roadmap** — treat it as dormant, not a current-phase endorsement. Whether to
+> keep it dormant, remove it, or declare the phase advanced is an open decision
+> (backlog B-2026-08-18-1).
+
 ## Core model
 
 LocalMind is a local-first agent system. The API and CLI are transport surfaces;
