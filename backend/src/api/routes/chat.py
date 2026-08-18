@@ -164,6 +164,30 @@ async def _drain_live_tool_events(obs: ObsCollector, session_id: str):
             )
 
 
+def _drain_live_lifecycle_events(obs: ObsCollector):
+    """S296: stream the NON-tool obs events LIVE during pending waits.
+
+    Previously only tool events (`_drain_live_tool_events`) drained here; every
+    other obs event — the init/plan/thinker/loop lifecycle, the Session-181
+    phase decisions, stage timings, intent, anomalies — stayed buffered in the
+    collector until the next real TEXT chunk. On an execute turn the first text
+    IS the final answer, so the Agents-tab phase strip and the Observe panel
+    only updated AFTER the turn finished. Draining the remainder here makes them
+    real-time. `_drain_live_tool_events` runs first and removes the tool events,
+    so `drain()` returns exactly the lifecycle remainder — the same events, and
+    the same obs_event SSE shape, the main text-chunk handler would emit."""
+    for evt in obs.drain():
+        yield _sse(evt.to_sse_dict())
+        if evt.type == "intent_classified":
+            yield _sse(
+                {
+                    "type": "intent",
+                    "intent": evt.data.get("primary"),
+                    "confidence": float(evt.data.get("confidence", 0.5)),
+                }
+            )
+
+
 def _finalize_plan_todos(session_id: str) -> list[dict]:
     """Session 121: mark any plan todos the loop didn't explicitly advance as
     complete. The plan covers the whole turn, so when the turn ends the
@@ -327,6 +351,12 @@ async def _event_stream(
                 live_tool_events = False
                 async for live_event in _drain_live_tool_events(obs, session_id):
                     live_tool_events = True
+                    yield live_event
+                    _last_sent_time = time.monotonic()
+                # S296: also stream the lifecycle/phase/Observe events live, so
+                # the Agents tab + Observe panel update DURING the turn instead
+                # of all at once after the final answer.
+                for live_event in _drain_live_lifecycle_events(obs):
                     yield live_event
                     _last_sent_time = time.monotonic()
                 yield _sse({
