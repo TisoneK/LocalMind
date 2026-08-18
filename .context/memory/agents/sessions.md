@@ -3981,3 +3981,19 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-7 (read-blocked false grounding), L2 discovery/shell-before-create steering, L3 clean trace on a read-allowed path, L4.
 - **Report:** .context/memory/reviews/2026-08-17-review-61.md
 - **Notes:** none
+
+---
+## 2026-08-17 — Session 295 (MULTIAGENT: token/speed optimization)
+
+- **Agent:** Claude Code (orchestrator) | **Model:** claude-opus-4-8 + 3 isolated-context general-purpose subagents | **Platform:** macOS (Darwin 24.6) | **Core:** 0.8.0
+- **Task:** user: "Optimize tools and context token and efficiency of the agent and speed using multi agent (each agent has its OWN context, not shared)." Ran 3 parallel isolated-context investigation subagents (INPUT tokens / OUTPUT-runtime tokens / LATENCY); orchestrator captured the live baseline + serialized implementation + verification.
+- **BASELINE (glm-4.5-flash create task):** 7 LLM calls (~26s, 10,176 cumulative tokens) — model wandered (shell ls + echo> + cat + 3 reasoning-only) instead of one file_write. Per-call fixed cost ~6,365 tok; tool info sent 3× (native param + in-prompt list + redundant env prose).
+- **SHIPPED (safe, verified):**
+  - `6e6de38`~1 (Agent C latency) — Ollama warmup sends the real num_ctx → no 13-29s first-turn KV reload. Live-verified (phi4-mini).
+  - `6e6de38` (Agent A tokens) — dropped the redundant env "## Available Tools" prose on the execute path (`include_tool_list=False`, keeps OS hints) — ~279 tok/call saved. Unit-tested.
+- **ROADMAP (ranked, backlogged B-2026-08-17-8..12, review-62):** A2/A4 in-prompt list + scaffold trim; B1 file_read injection cap (512KB→32KB, HIGH) + B2 uniform choke-point cap; C2 init/memory overlap; C3 fold classify+first-action (3→2 calls, risky, ADR-46-guarded); L2-secondary parent-path create→file_write steering (biggest per-task latency win, collapses ~4 calls). All need clean before/after live traces.
+- **VERIFICATION:** full backend 1937 passed / 0 failed; "Hi" on phi4-mini still direct/0-tools; env token saving measured (279/call).
+- **Outcome:** done — multi-agent investigation complete, 2 safe wins shipped, full ranked roadmap backlogged with file:line anchors + risk.
+- **Open items:** B-2026-08-17-8..12.
+- **Report:** .context/memory/reviews/2026-08-17-review-62.md
+- **Notes:** 3 subagent transcripts were consumed; durable findings are in review-62 + backlog. Multiagent lesson: isolated-context agents in parallel work well for read-only investigation across distinct axes; ALWAYS re-verify their claims (Agent A said "the <17000 test measures TOOL_DEFINITIONS not the render" — correct this time; last session a subagent was wrong about a budget test).

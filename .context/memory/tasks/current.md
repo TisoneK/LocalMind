@@ -1,43 +1,37 @@
 # Current Task
 
-**Status:** Session 294 (MULTIAGENT) DONE. Core updated 0.5.0→0.8.0. ADR-43 L2
-+ B-2026-08-17-6 shipped & live-verified; B-2026-08-17-5 done. Full suite
-1925/0. All pushed.
+**Status:** Session 295 (MULTIAGENT token/speed optimization) DONE. 2 safe wins
+shipped + live-verified; full ranked roadmap backlogged. Suite 1937/0. Pushed.
 
-## Shipped
-- `efe01cd` core → 0.8.0 (peer collaboration + gates tooling).
-- `a907092` B-2026-08-17-5 — embedding models excluded from chat-model list.
-- `8da6740`~1 B-2026-08-17-6 — resolve_write_path honors native-absolute paths;
-  loop grounding/verify trust tool_result.metadata["path"] (also fixes
-  timestamp-renamed-doc false failures).
-- `8da6740` ADR-43 L2 — file_task description steers create→file_write (trio
-  asymmetry fixed; lean budget respected).
+## Method
+3 isolated-context general-purpose subagents investigated in PARALLEL (INPUT
+tokens / OUTPUT-runtime tokens / LATENCY); orchestrator captured the live
+baseline + serialized implementation + verification. Worked well.
 
-## Multiagent note
-2 read-only general-purpose subagents investigated in PARALLEL (path/verify bug;
-L2 steering); orchestrator synthesized + implemented + serialized ALL
-live-testing (one server on 8765). Worked well. Lesson: a subagent claimed "no
-budget test exists" — WRONG (the lean-catalog test caught the file_task add) —
-always re-verify subagent claims.
+## Baseline (glm-4.5-flash create task)
+7 LLM calls / ~26s / 10,176 cumulative tokens — the model did shell ls+echo>+cat
+instead of one file_write (L2 steering gap) and each call carried ~6,365 fixed
+tokens (tool info sent 3×).
 
-## ADR-43 progress
-- L1 done (S272). L3 STARTED (file_write affirmative confirmation, S293) —
-  clean before/after on a READ-ALLOWED path still owed. L2 DONE (file_task
-  steer) — secondary discovery→find_path + "don't exploratory-shell before
-  create" still open (parent base.md lacks it; trace showed 4 shell calls).
-  L4 not started.
+## Shipped (safe, verified)
+- `6e6de38`~1 Ollama warmup at real num_ctx → no 13-29s first-turn reload.
+- `6e6de38` dropped redundant env "## Available Tools" prose on execute path
+  (~279 tok/call).
 
-## Next session
-1. B-2026-08-17-7 — write-allowed-but-read-blocked path → FALSE grounding
-   failure (distinguish read-blocked from file-missing).
-2. L2 secondary: add discovery→find_path + create-directly steering to base.md
-   (the parent path that a plain "create a file" task actually uses).
-3. L3 clean before/after on a Desktop/read-allowed path; consider the loop-side
-   read-back trusting the write result (partly done via B-6 metadata.path).
-4. L4 uniform bounded observation contract.
-5. Carried: B-2026-08-17-4 (thinkMs/diffData/candidates restore).
+## Next (ranked roadmap — review-62, B-2026-08-17-8..12)
+Each needs a CLEAN before/after live trace (glm-4.5-flash + phi4-mini spot-check),
+ADR-40 guardrail:
+1. **B-2026-08-17-12 (STEERING, biggest per-task latency win):** parent-path
+   (intent=ANALYZE) create→file_write + don't-exploratory-shell/cat steering —
+   collapses the baseline's ~4 wasted shell calls to one file_write.
+2. **B-2026-08-17-9 (B1, HIGH output tokens):** cap file_read injection
+   512KB→~32KB (up to ~120K tokens/large read) + B2 uniform choke-point cap.
+3. **B-2026-08-17-11 (C3, biggest per-turn latency):** fold classify+first-action
+   3→2 calls — ADR-46-guarded (whitelisted read-only first action only).
+4. B-2026-08-17-8 (A2/A4 in-prompt list + scaffold trim); B-2026-08-17-10 (C2
+   init/memory overlap).
 
-**Bar:** each ADR-43 phase needs a CLEAN before/after live trace on a
-read-allowed path. Live-test glm-4.5-flash + spot-check phi4-mini.
+**Load-bearing, DO NOT touch:** init call (ADR-46 gate), iter-1 synthesis,
+Thinker gate (already off for Ollama), slow-provider budgets (ADR-45).
 
 **Feature:** none
