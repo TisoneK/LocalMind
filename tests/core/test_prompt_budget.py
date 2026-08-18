@@ -42,16 +42,17 @@ def _sample_tools() -> list[dict]:
 
 
 def test_init_prompt_is_under_budget():
-    """The classify-only init prompt must stay well under the 2500-char
-    budget — it no longer carries the tool catalog or plan fields."""
+    """The init prompt must stay lean: no tool catalog. ADR-49 added a small
+    ordered `plan` output (the live Todos checklist), a ~260-char increase, so
+    the budget is 3000 (still far below the old monolithic plan-stream prompt)."""
     prompt = build_initialization_prompt(
         user_message="whats the time?",
         env_context="",
         history=[],
     )
-    assert len(prompt) < 2500, (
+    assert len(prompt) < 3000, (
         f"budget violation: init prompt is {len(prompt)} chars, "
-        f"expected under 2500 (classify-only format)."
+        f"expected under 3000 (lean classify + short plan)."
     )
 
 

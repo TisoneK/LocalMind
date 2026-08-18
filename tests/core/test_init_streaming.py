@@ -412,9 +412,9 @@ def test_preview_diff_ignores_empty_new_values():
 
 
 def test_parse_initialization_ignores_legacy_fields():
-    """Step 1 (ADR-38): facts/ambiguities/plan_steps/tool_names were DELETED
-    from the classify-only contract — a model that returns them anyway must
-    not resurrect them."""
+    """facts/ambiguities/tool_names remain DELETED from the contract; the legacy
+    `plan_steps` KEY is also ignored. ADR-49: only the new `plan` key is parsed
+    (tested separately) — this input carries none, so plan_steps stays empty."""
     text = (
         '{"mode": "execute", "acknowledgement": "On it.", '
         '"objective": "List projects", '
@@ -428,5 +428,7 @@ def test_parse_initialization_ignores_legacy_fields():
     assert not hasattr(decision, "facts")
     assert not hasattr(decision, "ambiguities")
     assert not hasattr(decision, "tool_names")
-    assert not hasattr(decision, "plan_steps")
+    # plan_steps is a real field now (ADR-49) but the legacy `plan_steps` KEY is
+    # NOT its source — only `plan` is — so it stays empty here.
+    assert decision.plan_steps == []
     assert decision.objective_line() == "UNDERSTANDING: List projects"

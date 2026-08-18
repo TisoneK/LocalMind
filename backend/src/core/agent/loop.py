@@ -908,10 +908,22 @@ class AgentLoop:
 
             plan_context = initialization.objective_line()
             trace.plan_text = plan_context
-            # Step 1 (ADR-38): the init commits NO plan — the plan emerges
-            # from the loop on gathered evidence. The todo cursor machinery
-            # below stays a no-op (empty step list) until a plan exists.
-            _plan_steps = []
+            # ADR-49 (revises ADR-38 for the todo checklist): the init returns an
+            # ordered step list for a multi-step task. Emit it UP FRONT as the
+            # live Todos panel so the user sees the plan the agent will follow;
+            # `_advance_plan_on_narration` (below) checks each step off as the
+            # agent works, and the agent may reorder/skip as evidence changes.
+            _plan_steps = list(initialization.plan_steps or [])
+            if _plan_steps and _obs:
+                _obs.emit("todo_cleared")
+                for i, step in enumerate(_plan_steps):
+                    _obs.emit(
+                        "todo_created",
+                        id=f"plan-{i}",
+                        text=step,
+                        completed=False,
+                        status="pending",
+                    )
             if _obs:
                 _obs.emit(
                     "agent_planning_done",

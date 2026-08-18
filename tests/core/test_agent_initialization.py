@@ -18,23 +18,27 @@ from core.models import Intent, StreamChunk, ToolResult
 from core.obs import ObsCollector
 
 
-def test_parse_execute_decision_is_classify_only():
-    """Step 1 (ADR-38): legacy plan/tool/criteria fields are ignored — only
-    the classify fields parse. A model that returns them anyway must not
-    resurrect a committed plan."""
+def test_parse_execute_decision_parses_plan_ignores_other_legacy_fields():
+    """ADR-49 (revises ADR-38 for the todo checklist): the init now parses an
+    ordered `plan` for execute mode → the live Todos panel. The OTHER legacy
+    fields (tool_names/success_criteria, and the old `plan_steps` KEY) are still
+    ignored — only `plan` is the sanctioned planning output."""
     decision = parse_initialization(
         '{"mode":"execute","acknowledgement":"I understand.",'
         '"objective":"Find the current weather",'
         '"tool_names":["web_search","web_fetch"],'
-        '"plan_steps":["Search Kitengela weather today", "Fetch a reliable result"],'
+        '"plan":["Search Kitengela weather today","Fetch a reliable result"],'
+        '"plan_steps":["legacy key must be ignored"],'
         '"success_criteria":["current source found"],"confidence":0.92}'
     )
 
     assert isinstance(decision, InitializationDecision)
     assert decision.mode == "execute"
     assert decision.objective == "Find the current weather"
+    # `plan` IS parsed now (ADR-49) — the legacy `plan_steps` KEY is not.
+    assert decision.plan_steps == ["Search Kitengela weather today", "Fetch a reliable result"]
+    assert "legacy key must be ignored" not in decision.plan_steps
     assert not hasattr(decision, "tool_names")
-    assert not hasattr(decision, "plan_steps")
     assert not hasattr(decision, "success_criteria")
     assert decision.objective_line() == "UNDERSTANDING: Find the current weather"
 

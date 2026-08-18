@@ -37,6 +37,11 @@ class InitializationDecision:
     clarifying_question: str = ""
     confidence: float = 0.0
     raw: str = ""
+    # ADR-49 (revises ADR-38 for the todo checklist): an ordered list of the
+    # concrete steps the agent will take, for a multi-step `execute` task. Emitted
+    # up front as the live Todos panel and checked off as the agent works. Empty
+    # for direct/clarify and single-step tasks.
+    plan_steps: list[str] = field(default_factory=list)
     # ADR-34 B-12: record the init prompt size so init vs execution budgets
     # are measured independently. Set by the streaming initializer.
     init_prompt_chars: int = 0
@@ -101,8 +106,10 @@ Modes (choose the tier):
 - clarify: a material detail is missing that NO search or inspection could
   resolve; put one question in clarifying_question.
 - execute: anything needing current info, files, code, browser, memory, or
-  multi-step work. Do NOT plan the steps here — the agent will look at the
-  actual state first and decide step by step from what it finds.
+  multi-step work. For a multi-step task, list the concrete ordered steps you
+  will take in `plan` (2-6 short imperative steps, each a real action toward the
+  goal — e.g. "Search the web for X", "Read the top result", "Summarize the
+  answer"). Use a single-item `plan` (or omit it) for a genuinely one-step task.
 
 {env_context}{history_block}
 
@@ -112,6 +119,7 @@ JSON schema:
   "acknowledgement": "short user-facing acknowledgement (<=180 chars)",
   "response": "complete answer only for direct mode",
   "objective": "what the user actually wants — one concise line (<=200 chars)",
+  "plan": ["ordered step 1", "ordered step 2", "..."],
   "clarifying_question": "one question only for clarify mode",
   "confidence": 0.0
 }}
@@ -133,9 +141,10 @@ Rules:
 - clarify is a LAST RESORT — only when the request is genuinely underspecified
   in a way NO search or inspection could resolve AND guessing would risk a
   wrong irreversible action. When in doubt, execute with a reasonable default.
-- The plan is NOT decided here. You only classify the tier, acknowledge, and
-  state the objective. The agent gathers real evidence first, then decides
-  each next step from what it actually finds.
+- For an execute task, `plan` is the ordered checklist the agent will follow to
+  reach the objective — the user sees it as a live task list. Keep steps
+  concrete and few; the agent may reorder, add, or skip steps as real evidence
+  changes. Leave `plan` empty for direct/clarify.
 - acknowledgement <=180 chars, response <=1200 chars, objective <=200 chars.
 
 User request:
@@ -259,6 +268,16 @@ def parse_initialization(text: str) -> InitializationDecision:
         decision.confidence = max(0.0, min(1.0, float(payload.get("confidence", 0.0))))
     except (TypeError, ValueError):
         decision.confidence = 0.0
+
+    # ADR-49: ordered upfront plan → the live Todos panel. Bounded + sanitized;
+    # a model that omits it (or emits junk) just yields an empty plan (no todos).
+    _raw_plan = payload.get("plan")
+    if isinstance(_raw_plan, list):
+        decision.plan_steps = [
+            str(s).strip()[:120]
+            for s in _raw_plan
+            if isinstance(s, str) and s.strip()
+        ][:6]
 
     if mode == "execute":
         # The only path to the tool loop — an explicit, parseable choice.
