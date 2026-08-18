@@ -117,8 +117,18 @@ def test_bad_override_falls_back_to_none(monkeypatch):
 
 
 def test_missing_api_key_falls_back_to_none(monkeypatch):
-    """Cloud override without an API key → None (fall back), never raises."""
+    """Cloud override without an API key → None (fall back), never raises.
+
+    Session 291: also stub get_api_key → None. Deleting the ZEN_API_KEY env var
+    alone is NOT enough — the adapter resolves keys from runtime storage
+    (settings.json) FIRST, so on a machine with a real saved Zen key the adapter
+    built successfully and the test failed. Stubbing get_api_key isolates the
+    test from the developer's actual saved keys (the real, source-agnostic
+    "no key available" condition)."""
     monkeypatch.delenv("ZEN_API_KEY", raising=False)
+    # Patch on the class — pydantic's Settings instance rejects setattr of a
+    # non-field, but the class method is fair game.
+    monkeypatch.setattr(type(settings), "get_api_key", lambda self, provider: None)
     monkeypatch.setenv(f"{AGENT_MODEL_ENV_PREFIX}CODING", "zen:deepseek-v4-pro")
     assert get_adapter_for_agent("coding") is None
 

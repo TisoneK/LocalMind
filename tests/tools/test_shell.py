@@ -13,6 +13,18 @@ from tools.shell import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _enable_shell(monkeypatch):
+    """These tests exercise the shell contract's real validation/execution.
+    The shell tool is DISABLED by default (localmind_shell_enabled=False), so
+    without this precondition every `execute()`/`shell_exec()` call short-
+    circuits to error_type="permission" before reaching the logic under test —
+    which is exactly why the 4 run_command/powershell tests failed for so long
+    (miscatalogued as "env-gated"; Session 291 fixed them at the root). Pure
+    `_looks_like_*` tests don't call execute(), so enabling it is harmless."""
+    monkeypatch.setattr("core.config.settings.localmind_shell_enabled", True, raising=False)
+
+
 def test_nl_sentences_are_detected():
     assert _looks_like_natural_language('Check git status in the localmind repo')
     assert _looks_like_natural_language('Show diff of uncommitted changes if any exist')
