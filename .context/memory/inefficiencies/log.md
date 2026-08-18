@@ -839,3 +839,11 @@ if literally nothing slowed you down.
 - **Cause:** usage-limit interruption is environmental; re-verification is intentional protocol discipline, not waste.
 - **Workaround / fix:** current.md + the task tracker made the mid-session resume trivial — no state was reconstructed from chat history. Confirms the value of setting current.md BEFORE work, not after.
 - **Prevent next time:** nothing to change — this is the system working. Keep writing current.md with the DoD up front so any interruption is recoverable.
+
+---
+## 2026-08-18 — Claude Code / claude-opus-4-8 (Session 298)
+- **Problem:** review-65 (my own, same day) scored §40.8/§40.12 STRONG citing the `GoalInterpreter` deterministic success-criteria backfill — but the parent audit found `GoalInterpreter` is DEAD CODE (no production import/call site). I had trusted the ADR-18 narrative + the module's own docstring ("runs inside the parent runtime before AgentLoop.run") instead of grepping for the call site. Also: I mis-read "continue, use multi-agents" as a loop-wide effort and spawned 3 subagents the user then had to re-scope.
+- **Cost:** one review needed a correction; ~3 subagent spawns stopped early (read-only, no commits, minimal waste).
+- **Cause:** (1) a docstring that asserts wiring is not proof of wiring — ADR/docstring narratives describe intent, not the live graph; (2) I extrapolated "continue" past the actual parent+spec scope.
+- **Workaround / fix:** grepped `GoalInterpreter(` / imports across backend/src to prove the dead-code claim; appended a correction to review-65; filed B-2026-08-18-2. Stopped the off-scope subagents immediately on the re-scope.
+- **Prevent next time:** for any "X is wired / X handles this" claim, grep the CALL SITE (instantiation + import) before scoring it STRONG — especially when the only evidence is a docstring or an ADR. And on an ambiguous "continue," confirm scope before spawning multi-agent effort.

@@ -4042,3 +4042,17 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-1 decision; the 4 partials (existing backlog).
 - **Report:** .context/memory/reviews/2026-08-18-review-65.md
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (parent-vs-spec conformance audit)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** continued from S297. User said "continue, use multi-agents" → I launched a loop-wide efficiency multiagent effort (B-2026-08-17-8..12; 3 parallel read-only subagents). User then re-scoped: "right now it's just about parent and its spec." STOPPED all 3 subagents (off-scope, read-only, nothing committed), refocused. User chose "Audit parent vs spec contract."
+- **AUDIT (review-66, READ-ONLY):** ParentAgent (`agents/parent/`) + intent=ANALYZE path vs spec §23/§38/§41/§43. `_PARENT_CONTRACT` (context_builder.py) faithfully encodes §41 and IS injected live (base_agent.py:319). Bounded at 20 iter/600s (loop honors agent_config, loop.py:574-598 — corrects review-65's "8"). Identity is §38 FUTURE/delegation-forward (the parent face of B-2026-08-18-1).
+- **HEADLINE GAP (§6/§29/§30/§40.12):** the parent's deterministic completion-verification FLOOR is unwired — (1) `parent.run` passes NO success_criteria (agent_runtime.py:678-691); (2) `GoalInterpreter` (the designed backfill) is DEAD CODE — no production import/call; (3) F4 `post_execution_verify` is skipped because intent=ANALYZE ∉ high-stakes set (post_execution_verifier.py:137-144). So absent model-volunteered create_plan criteria, `criteria_gate` passes vacuously and "done" = model assertion. CAVEAT: per-write grounding still fires (write correctness ok); the gap is objective-COMPLETION rigor.
+- **CORRECTED review-65** — it over-credited GoalInterpreter (§40.8/§40.12 → PARTIAL). Lesson: verify the CALL SITE, not the ADR/docstring narrative.
+- **Commits:** 2 — `docs(review):` review-66 + review-65 correction; `chore(context):` backlog B-2026-08-18-2 + session log.
+- **VERIFICATION:** every anchor confirmed by reading source. No code changed → no baseline run (last green S296 BE 1937/0, FE 251).
+- **Outcome:** done — parent audit delivered; B-2026-08-18-2 filed (actionable parent-scoped fix). Awaiting user on B-2026-08-18-1/-2.
+- **Report:** .context/memory/reviews/2026-08-18-review-66.md
+- **Notes:** none
