@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Creating a file at a full/absolute path (e.g. `/var/data/report.txt`) now saves it exactly there, instead of accidentally nesting it under your home folder. And the agent's built-in "did the write succeed?" check now looks at where the file was actually written — so a successful save (including documents it auto-timestamps) no longer shows a false "could not verify the file" warning.
+- The agent is less likely to reach for the wrong tool when you ask it to create a file: the read tool now clearly states it's read-only and that creating/writing goes through the write tool. (Verified live on a small model.)
+- Embedding models (e.g. `mxbai-embed-large`) no longer clutter the chat-model list — they only appear in the embedding-model picker.
 - Your chosen local (Ollama) chat model and embedding model are now remembered and restored the next time you open the app — previously the local model choice was lost on restart.
 - Fixed a cloud model name (e.g. `deepseek-v4-free`) wrongly showing as the Ollama model. Switching from a cloud provider to Ollama could leave the old cloud model attached to Ollama; local and cloud model choices are now kept separate.
 - The Settings dialog opens right away instead of sitting on "Loading settings…" while it fetches the local model lists (which can take a few seconds on Ollama); the lists now fill in a moment later. The loading state also matches your selected theme now.
