@@ -738,10 +738,14 @@ class AgentLoop:
             # so the frontend's ThinkingBlock renders the bounded thinker line.
             initialization: Optional[InitializationDecision] = None
             streaming_ack_emitted = False
+            # Session 289: the classify/init call gets a COMPACT env (no tool
+            # prose, no hardware lines) — ~half the tokens of the full block,
+            # which matters most on the slow local models this app targets.
+            init_env_context = _build_environment_context(compact=True)
             async for event_type, payload in self._initialize_parent_streaming(
                 active_adapter=active_adapter,
                 messages=messages,
-                env_context=env_context,
+                env_context=init_env_context,
                 intent_history=intent_history,
             ):
                 if event_type == "ack" and isinstance(payload, str):

@@ -83,8 +83,17 @@ def _intent_fragment_name(intent: Intent) -> str:
     return _SKILL_MAP.get(intent, intent.value.lower())
 
 
-def _build_environment_context(session_cwd: str | None = None) -> str:
-    """Build environment context for the agent — system info, date/time, hardware, tools."""
+def _build_environment_context(session_cwd: str | None = None, compact: bool = False) -> str:
+    """Build environment context for the agent — system info, date/time, hardware, tools.
+
+    ``compact=True`` returns a trimmed block for the parent INITIALIZATION /
+    classify call (Session 289): a classifier choosing direct/clarify/execute
+    needs the date, OS and working directory — NOT the CPU/Python lines and,
+    above all, NOT the "## Available Tools" prose (which is redundant with the
+    real tool schemas sent in execute mode and roughly HALVES the init prompt
+    on the small local models this app targets). The full block is unchanged
+    for the execution path.
+    """
     import datetime
     import os
     import platform
@@ -144,6 +153,22 @@ def _build_environment_context(session_cwd: str | None = None) -> str:
 
     tool_list = available_tools()
     tool_summary = ", ".join(t["intent"] for t in tool_list)
+
+    # Compact block for the classify/init call — essentials only, and NO
+    # VectorStore count (skips a per-turn DB call the classifier doesn't need).
+    if compact:
+        return f"""## Environment
+- {os_info}
+- Current date: {date_str}
+- Current time: {time_str}{tz_str}
+- Working directory: {cwd}
+- Home: {home}
+- Shell: {shell_name}
+
+## What You Know
+- Today is {date_str}. Use this to ground time-sensitive requests.
+- You are running on {system} {release}. The user's home is {home}; default
+  file operations are relative to there."""
 
     # ── Memory facts count (if available) ──
     memory_count = 0

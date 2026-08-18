@@ -1,5 +1,5 @@
 """Tests for the context builder."""
-from core.context_builder import _count_tokens, build
+from core.context_builder import _build_environment_context, _count_tokens, build
 from core.models import (
     EngineContext,
     FileAttachment,
@@ -127,3 +127,25 @@ def test_knowledge_doc_loader_is_memoized(monkeypatch, tmp_path):
 def test_count_tokens_basic():
     assert _count_tokens("hello world") > 0
     assert _count_tokens("") == 0
+
+
+def test_compact_env_context_is_smaller_and_drops_tool_prose():
+    """Session 289: the classify/init call uses a compact env — it must keep
+    the essentials (date, OS, working dir) but drop the redundant tool prose
+    and hardware lines so the init prompt stays lean on slow local models."""
+    full = _build_environment_context()
+    compact = _build_environment_context(compact=True)
+
+    # Compact keeps the grounding essentials.
+    assert "## Environment" in compact
+    assert "Current date:" in compact
+    assert "Working directory:" in compact
+
+    # Compact drops the redundant tool catalog and hardware detail.
+    assert "## Available Tools" not in compact
+    assert "## Available Tools" in full
+    assert "Python:" not in compact
+    assert "CPU:" not in compact
+
+    # And it is materially smaller.
+    assert len(compact) < len(full) / 2
