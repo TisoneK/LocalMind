@@ -410,6 +410,11 @@ async def select_model(req: SelectModelRequest):
         # Mutate settings in-place — all subsequent Engine instances read from settings
         settings.ollama_model = model
         clear_adapter_cache("ollama")
+        # Session 292: persist under the DEDICATED ollama_model key so the choice
+        # survives a restart (previously the ollama branch never saved — only
+        # cloud did — so the selected local model was lost on next launch) and
+        # never collides with the cloud `model` key.
+        settings.save_runtime_settings(ollama_model=model)
     else:
         # Cloud providers: update the appropriate setting
         setting_key = _model_setting_attr(adapter_name)

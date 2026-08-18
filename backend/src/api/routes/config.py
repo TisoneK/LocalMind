@@ -23,6 +23,8 @@ class SettingsResponse(BaseModel):
     # Context window (num_ctx) the loop budgets / Ollama allocates.
     # 0 = auto-detect the model's real declared window; >0 = explicit override.
     num_ctx: int = 0
+    # Whether the shell tool is enabled (Session 292: was env-only, now UI-toggle).
+    shell_enabled: bool = False
     providers: dict
     # ADR-41 (Session 254): reasoning-model thinking policy (z.ai/GLM).
     # Mirrored to the Settings UI so users can tune thinking without env vars.
@@ -124,6 +126,7 @@ async def get_settings():
         model=current_model,
         embed_model=embed_model,
         num_ctx=int(getattr(settings, "ollama_num_ctx", 0) or 0),
+        shell_enabled=bool(getattr(settings, "localmind_shell_enabled", False)),
         providers=providers,
         thinking=settings.localmind_thinking,
         reasoning_timeout=settings.localmind_reasoning_timeout_secs,
@@ -208,6 +211,7 @@ class LocalSettingsRequest(BaseModel):
 
     embed_model: Optional[str] = None
     num_ctx: Optional[int] = None
+    shell_enabled: Optional[bool] = None
 
 
 @router.post("/settings/local")
@@ -239,6 +243,15 @@ async def set_local_settings(req: LocalSettingsRequest):
         _data["num_ctx"] = int(req.num_ctx)
         settings._secure_write_json(_path, _data)
         updated["num_ctx"] = int(req.num_ctx)
+    if req.shell_enabled is not None:
+        settings.localmind_shell_enabled = bool(req.shell_enabled)
+        # Boolean False is meaningful (disable) — write explicitly rather than
+        # via save_runtime_settings' non-empty-only path.
+        _path = settings._runtime_settings_path()
+        _data = settings._load_json_file(_path)
+        _data["shell_enabled"] = bool(req.shell_enabled)
+        settings._secure_write_json(_path, _data)
+        updated["shell_enabled"] = bool(req.shell_enabled)
 
     # Rebuild adapters so the new local settings apply on the next call.
     clear_adapter_cache()
@@ -306,10 +319,13 @@ async def set_adapter(req: AdapterConfig):
     # Persist runtime settings to JSON file for restart survival.
     # save_runtime_settings preserves existing values when a kwarg is empty,
     # so passing model="" won't wipe a previously-saved model.
-    settings.save_runtime_settings(
-        adapter=req.adapter,
-        model=resolved_model,
-    )
+    # Session 292: Ollama persists under its DEDICATED ollama_model key (the
+    # generic `model` key is cloud-only on load), so an Ollama model survives a
+    # restart and a stale cloud model never loads as the Ollama model.
+    if req.adapter == "ollama":
+        settings.save_runtime_settings(adapter=req.adapter, ollama_model=resolved_model)
+    else:
+        settings.save_runtime_settings(adapter=req.adapter, model=resolved_model)
 
     return {
         "adapter": settings.localmind_adapter,

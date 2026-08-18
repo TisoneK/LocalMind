@@ -169,3 +169,47 @@ async def test_saved_provider_model_is_kept(monkeypatch):
 
     result = await set_adapter(AdapterConfig(adapter="cerebras"))
     assert result["model"] == "gpt-oss-120b"
+
+
+# ── Session 292: dedicated ollama_model key + shell_enabled persistence ──────
+# Bug D/E: the Ollama model was routed through the ambiguous generic `model`
+# key. A stale cloud model left in `model` after switching provider→ollama
+# loaded as ollama_model (D), and select_model never persisted the Ollama
+# model (E). Fix: a dedicated ollama_model key, cloud-only generic `model`.
+
+import json as _json
+from core.config import Settings
+
+
+def _settings_at(tmp_path, data: dict) -> Settings:
+    p = tmp_path / "settings.json"
+    p.write_text(_json.dumps(data), encoding="utf-8")
+    s = Settings()
+    s._runtime_settings_path = lambda: p  # type: ignore[method-assign]
+    s.ollama_model = ""  # known baseline
+    s.load_runtime_settings()
+    return s
+
+
+def test_stale_cloud_model_does_not_load_as_ollama_model(tmp_path):
+    # The exact D scenario: adapter=ollama but a leftover cloud model in `model`.
+    s = _settings_at(tmp_path, {"adapter": "ollama", "model": "deepseek-v4-flash-free"})
+    assert s.ollama_model == ""  # NOT deepseek — the cloud model is ignored for ollama
+    assert s.localmind_adapter == "ollama"
+
+
+def test_dedicated_ollama_model_key_persists(tmp_path):
+    # The E scenario: a saved ollama_model survives a restart (load).
+    s = _settings_at(tmp_path, {"adapter": "ollama", "ollama_model": "phi4-mini:latest"})
+    assert s.ollama_model == "phi4-mini:latest"
+
+
+def test_cloud_model_still_loads_for_cloud_adapter(tmp_path):
+    # Regression guard: the generic `model` key still works for cloud adapters.
+    s = _settings_at(tmp_path, {"adapter": "zen", "model": "deepseek-v4-flash-free"})
+    assert s.zen_model == "deepseek-v4-flash-free"
+
+
+def test_shell_enabled_persists_both_ways(tmp_path):
+    assert _settings_at(tmp_path, {"shell_enabled": True}).localmind_shell_enabled is True
+    assert _settings_at(tmp_path, {"shell_enabled": False}).localmind_shell_enabled is False

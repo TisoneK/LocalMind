@@ -332,12 +332,22 @@ class Settings(BaseSettings):
             if "adapter" in data:
                 self.localmind_adapter = data["adapter"]
                 logger.info(f"[config] Set adapter to {data['adapter']}")
+            # The generic `model` key is CLOUD-only. Ollama has its own dedicated
+            # `ollama_model` key below — routing Ollama through this ambiguous
+            # key let a stale cloud model (e.g. deepseek-v4-flash-free left in
+            # `model` after switching provider→ollama) load as the Ollama model.
             if "model" in data:
                 adapter = data.get("adapter", "ollama")
-                model_key = f"{adapter}_model" if adapter != "ollama" else "ollama_model"
-                if hasattr(self, model_key):
-                    setattr(self, model_key, data["model"])
-                    logger.info(f"[config] Set {model_key} to {data['model']}")
+                if adapter != "ollama":
+                    model_key = f"{adapter}_model"
+                    if hasattr(self, model_key):
+                        setattr(self, model_key, data["model"])
+                        logger.info(f"[config] Set {model_key} to {data['model']}")
+            # Ollama chat model — dedicated key so it survives restarts and never
+            # cross-contaminates with a cloud provider's model (Session 292).
+            if data.get("ollama_model"):
+                self.ollama_model = str(data["ollama_model"])
+                logger.info(f"[config] Set ollama_model to {data['ollama_model']}")
             if "ollama_url" in data:
                 self.ollama_base_url = data["ollama_url"]
                 logger.info(f"[config] Set ollama_url to {data['ollama_url']}")
@@ -352,6 +362,10 @@ class Settings(BaseSettings):
                     logger.info(f"[config] Set ollama_num_ctx to {self.ollama_num_ctx}")
                 except (TypeError, ValueError):
                     logger.warning(f"[config] Ignoring invalid num_ctx: {data['num_ctx']!r}")
+            # Shell-tool enable flag (Session 292: UI toggle, persisted).
+            if "shell_enabled" in data:
+                self.localmind_shell_enabled = bool(data["shell_enabled"])
+                logger.info(f"[config] Set localmind_shell_enabled to {self.localmind_shell_enabled}")
             # ADR-41 (Session 254): reasoning-model thinking policy
             # (settings.json keys written by POST /api/settings/thinking).
             if "thinking" in data:
