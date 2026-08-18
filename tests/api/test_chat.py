@@ -587,9 +587,21 @@ class TestToolRegistry:
     @pytest.mark.asyncio
     async def test_web_search_tool(self):
         from tools.web_search import web_search
-        # _search_ddg now returns (results, query, source) tuple
-        with patch("tools.web_search._search_ddg", new_callable=AsyncMock) as m:
-            m.return_value = ([{"title": "Result", "href": "https://ex.com", "body": "snippet"}], "test", "duckduckgo")
+        # Mock ALL three racing providers so the test is deterministic and never
+        # hits the real network — DDG is the only one with results, so it wins
+        # regardless of the relevance gate (its mock need not match the query).
+        with patch(
+            "tools.web_search._search_ddg", new_callable=AsyncMock
+        ) as m, patch(
+            "tools.web_search._search_bing",
+            new_callable=AsyncMock,
+            return_value=([], "network", "bing empty (mocked)"),
+        ), patch(
+            "tools.web_search._search_searxng",
+            new_callable=AsyncMock,
+            return_value=([], "network", "searxng empty (mocked)"),
+        ):
+            m.return_value = ([{"title": "Result", "href": "https://ex.com", "body": "snippet"}], "", "")
             result = await web_search("test")
         assert result.source == "web_search"
         assert "Result" in result.content

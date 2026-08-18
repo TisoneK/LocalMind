@@ -59,6 +59,74 @@ logger = logging.getLogger(__name__)
 MAX_RESULTS = 8
 SNIPPET_MAX = 800
 
+# ── Relevance gate for the provider race ─────────────────────────────────────
+# The race (below) fires DDG/Bing/SearXNG in parallel. Taking the FIRST provider
+# with any results selects for SPEED, not RELEVANCE — a fast provider that
+# returns off-topic hits (observed: Bing latches onto the word "current" in
+# "current weather Kitengela" and returns Current.com / an "electric current"
+# Wikipedia page / a dictionary entry) beats a slower provider (DDG) that has
+# the correct results. The gate lets a provider win immediately only when its
+# results cover enough of the query's DISTINCTIVE terms; otherwise it is held as
+# a fallback while better providers finish. Fully query-driven — no per-topic
+# rules, no provider favoritism.
+_SEARCH_STOPWORDS = frozenset(
+    {
+        # function words
+        "the", "a", "an", "of", "to", "in", "on", "at", "for", "and", "or",
+        "is", "are", "am", "be", "was", "were", "do", "does", "did", "with",
+        "about", "from", "by", "as", "it", "its", "this", "that", "these",
+        "those", "i", "you", "me", "my", "your", "we", "our",
+        # question / command framing
+        "what", "whats", "what's", "how", "when", "where", "who", "why",
+        "which", "please", "tell", "give", "show", "find", "search", "get",
+        "like", "want", "need",
+        # temporal / real-time framing (rarely in relevant titles; inflate the
+        # bar without discriminating)
+        "now", "rn", "today", "tonight", "current", "currently", "latest",
+        "right", "recent", "recently", "live",
+    }
+)
+
+
+def _query_content_tokens(query: str) -> list[str]:
+    """Distinctive query tokens: lowercased, ≥3 chars, stopwords/dupes removed."""
+    tokens: list[str] = []
+    for tok in re.findall(r"[a-z0-9]+", query.lower()):
+        if len(tok) >= 3 and tok not in _SEARCH_STOPWORDS and tok not in tokens:
+            tokens.append(tok)
+    return tokens
+
+
+def _relevance_coverage(query: str, results: list[dict]) -> int:
+    """How many distinct query content-tokens appear in the result titles/bodies."""
+    tokens = _query_content_tokens(query)
+    if not tokens:
+        return 0
+    hay = " ".join(
+        f"{r.get('title', '')} {r.get('body', '')}" for r in results
+    ).lower()
+    return sum(1 for t in tokens if t in hay)
+
+
+def _is_relevant_enough(query: str, results: list[dict]) -> bool:
+    """True if a result set is a STRONG match — it may win the race immediately.
+    The bar is near-full coverage of the query's distinctive terms: ALL of them
+    for short queries (<4 terms), or all-but-one for longer ones. Near-full is
+    required because generic domain words alone are not enough — e.g. "weather
+    Kitengela Kenya temperature forecast" must match the LOCATION (kitengela/
+    kenya), not just weather/forecast/temperature (which a Los-Angeles weather
+    page also matches). Anything below the bar is held; the best-covering held
+    set is used only if no provider clears it. With no distinctive terms to
+    judge on, any non-empty set passes."""
+    if not results:
+        return False
+    tokens = _query_content_tokens(query)
+    if not tokens:
+        return True
+    n = len(tokens)
+    need = n if n < 4 else n - 1
+    return _relevance_coverage(query, results) >= need
+
 # Bing tolerates moderate scraping when it looks like a real browser. The
 # organic-results layout (``li.b_algo``) has been stable for years.
 _BING_HEADERS = {
@@ -546,13 +614,20 @@ async def web_search(query: str) -> ToolResult:
     bing_task = asyncio.create_task(_search_bing(query))
     searxng_task = asyncio.create_task(_search_searxng(query, searxng_url))
 
-    # Race: wait for the first task to complete with results
-    pending = {ddg_task, bing_task, searxng_task}
+    # Race with a RELEVANCE GATE (not pure first-to-return): a provider wins
+    # immediately only if its results cover the query's distinctive terms. An
+    # off-topic set (fast but wrong) is held as a fallback while better
+    # providers finish; if none clears the bar, the highest-coverage set is
+    # used so we never return fewer results than the old behavior.
+    provider_of = {ddg_task: "duckduckgo", bing_task: "bing", searxng_task: "searxng"}
+    pending = set(provider_of)
     first_error_type = ""
     first_error_message = ""
+    fallback: tuple[list[dict], str, int] | None = None  # (results, provider, coverage)
 
     while pending:
         done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+        winner = False
         for task in done:
             try:
                 task_results, task_err_type, task_err_msg = task.result()
@@ -560,28 +635,45 @@ async def web_search(query: str) -> ToolResult:
                 logger.warning(f"[web_search] Search task raised exception: {e}")
                 task_results, task_err_type, task_err_msg = [], "exception", str(e)
 
+            provider = provider_of[task]
             if task_results:
-                # First provider to return results wins!
-                results = task_results
-                if task is ddg_task:
-                    successful_provider = "duckduckgo"
-                elif task is bing_task:
-                    successful_provider = "bing"
-                else:
-                    successful_provider = "searxng"
+                if _is_relevant_enough(query, task_results):
+                    results = task_results
+                    successful_provider = provider
+                    logger.info(
+                        f"[web_search] Race winner (relevant): {provider} "
+                        f"with {len(results)} results"
+                    )
+                    winner = True
+                    break
+                # Fast but off-topic — keep the best-covering set as a fallback
+                # and wait for a provider that actually matches the query.
+                cov = _relevance_coverage(query, task_results)
                 logger.info(
-                    f"[web_search] Race winner: {successful_provider} with {len(results)} results"
+                    f"[web_search] {provider} returned {len(task_results)} "
+                    f"low-relevance results (coverage={cov}) — holding for a better provider"
                 )
-                # Cancel the other tasks
-                for t in pending:
-                    t.cancel()
-                pending = set()
-                break
+                if fallback is None or cov > fallback[2]:
+                    fallback = (task_results, provider, cov)
             else:
                 # This provider failed — track error and wait for the others
                 if not first_error_type:
                     first_error_type = task_err_type
                     first_error_message = task_err_msg
+        if winner:
+            for t in pending:
+                t.cancel()
+            pending = set()
+            break
+
+    # No provider cleared the relevance bar → use the best-effort set we saw
+    # (still better than returning "no results" and forcing the model to guess).
+    if not results and fallback is not None:
+        results, successful_provider, _cov = fallback
+        logger.info(
+            f"[web_search] No provider cleared the relevance bar; using "
+            f"best-effort {successful_provider} (coverage={_cov})"
+        )
 
     # If we got results from the race, skip Brave
     if not results:

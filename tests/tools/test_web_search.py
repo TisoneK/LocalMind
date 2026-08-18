@@ -1,17 +1,23 @@
 """Tests for the web search tool."""
 from __future__ import annotations
-import pytest
+
 from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from tools.web_search import (
-    web_search,
-    _format_results,
-    _searxng_instance_list,
-    _search_searxng,
-    _search_searxng_single,
-    _search_bing,
-    _decode_bing_url,
     DEFAULT_SEARXNG_FALLBACKS,
     MAX_SEARXNG_ATTEMPTS,
+    _decode_bing_url,
+    _format_results,
+    _is_relevant_enough,
+    _query_content_tokens,
+    _relevance_coverage,
+    _search_bing,
+    _search_searxng,
+    _search_searxng_single,
+    _searxng_instance_list,
+    web_search,
 )
 
 
@@ -44,10 +50,17 @@ async def test_web_search_returns_tool_result_on_success():
     mock_results = [
         {"title": "Result", "href": "https://test.com", "body": "Body text"},
     ]
+    # Mock ALL three providers (Bing too) so the race is deterministic and never
+    # hits the real network — DDG is the only provider with results, so it wins
+    # regardless of the relevance gate.
     with patch(
         "tools.web_search._search_ddg",
         new_callable=AsyncMock,
         return_value=(mock_results, "", ""),
+    ), patch(
+        "tools.web_search._search_bing",
+        new_callable=AsyncMock,
+        return_value=([], "network", "bing empty (mocked)"),
     ), patch(
         "tools.web_search._search_searxng",
         new_callable=AsyncMock,
@@ -373,3 +386,108 @@ async def test_search_searxng_single_detects_challenge_page():
     assert err_type == "challenge"
     assert "anti-bot" in err_msg
     assert "JSONDecodeError" not in err_msg
+
+
+# ── Relevance gate for the provider race (Kitengela weather regression) ───────
+# Root cause fixed here: the race was FIRST_COMPLETED (fastest wins), so a fast
+# provider returning off-topic results (Bing latching onto the word "current"
+# in "current weather Kitengela" → Current.com / dictionary hits, or returning
+# Los-Angeles weather) beat DDG's correct Kitengela results. The gate lets a
+# provider win immediately only when it covers the query's distinctive terms.
+
+_BING_CURRENT_JUNK = [
+    {"title": "Current | Future of Banking", "body": "banking app"},
+    {"title": "Electric current - Wikipedia", "body": "flow of charge"},
+    {"title": "current 是什么意思", "body": "dictionary"},
+]
+_BING_LA_WEATHER = [
+    {"title": "10-Day Weather Forecast for Los Angeles", "body": "temperature and forecast"},
+    {"title": "Los Angeles, CA - National Weather Service", "body": "weather"},
+]
+_DDG_KITENGELA = [
+    {"title": "Weather today - Kitengela, Kenya", "body": "current temperature forecast"},
+    {"title": "7-day weather forecast Kitengela", "body": "Kenya temperature"},
+]
+
+
+def test_query_content_tokens_drops_framing_and_temporal_words():
+    toks = _query_content_tokens("current weather Kitengela Kenya right now")
+    assert toks == ["weather", "kitengela", "kenya"]  # current/right/now dropped
+
+
+def test_relevance_coverage_counts_distinct_terms():
+    q = "current weather Kitengela Kenya right now"
+    assert _relevance_coverage(q, _BING_CURRENT_JUNK) == 0
+    assert _relevance_coverage(q, _DDG_KITENGELA) == 3
+
+
+def test_bing_current_junk_is_not_relevant():
+    q = "current weather Kitengela Kenya right now"
+    assert _is_relevant_enough(q, _BING_CURRENT_JUNK) is False
+
+
+def test_ddg_kitengela_is_relevant():
+    q = "current weather Kitengela Kenya right now"
+    assert _is_relevant_enough(q, _DDG_KITENGELA) is True
+
+
+def test_wrong_location_weather_is_not_relevant():
+    """Generic weather words alone (LA page) must NOT pass — the location
+    (kitengela/kenya) is required."""
+    q = "weather Kitengela Kenya current temperature forecast"
+    assert _is_relevant_enough(q, _BING_LA_WEATHER) is False
+    assert _is_relevant_enough(q, _DDG_KITENGELA) is True
+
+
+def test_no_distinctive_terms_accepts_any_results():
+    """A query of only framing/stopwords has nothing to judge on → take anything."""
+    assert _is_relevant_enough("what is it right now", _BING_LA_WEATHER) is True
+
+
+@pytest.mark.asyncio
+async def test_race_relevance_beats_a_faster_offtopic_provider():
+    """The regression: Bing returns junk FAST, DDG returns the correct results.
+    The gate must return DDG (relevance), not Bing (speed)."""
+    with patch(
+        "tools.web_search._search_bing",
+        new_callable=AsyncMock,
+        return_value=(_BING_CURRENT_JUNK, "", ""),
+    ), patch(
+        "tools.web_search._search_ddg",
+        new_callable=AsyncMock,
+        return_value=(_DDG_KITENGELA, "", ""),
+    ), patch(
+        "tools.web_search._search_searxng",
+        new_callable=AsyncMock,
+        return_value=([], "network", "searxng empty (mocked)"),
+    ):
+        result = await web_search("current weather Kitengela Kenya right now")
+
+    assert result.success is True
+    assert "DuckDuckGo" in result.content
+    assert "Kitengela" in result.content
+    assert "Future of Banking" not in result.content
+
+
+@pytest.mark.asyncio
+async def test_race_falls_back_to_best_effort_when_all_offtopic():
+    """If NO provider clears the bar, the best-covering set is still returned
+    (never worse than the old 'first non-empty' behavior)."""
+    with patch(
+        "tools.web_search._search_bing",
+        new_callable=AsyncMock,
+        return_value=(_BING_CURRENT_JUNK, "", ""),
+    ), patch(
+        "tools.web_search._search_ddg",
+        new_callable=AsyncMock,
+        return_value=([], "network", "ddg empty (mocked)"),
+    ), patch(
+        "tools.web_search._search_searxng",
+        new_callable=AsyncMock,
+        return_value=([], "network", "searxng empty (mocked)"),
+    ):
+        result = await web_search("current weather Kitengela Kenya right now")
+
+    # Off-topic, but still returned (graceful) rather than "no results".
+    assert result.success is True
+    assert "Future of Banking" in result.content
