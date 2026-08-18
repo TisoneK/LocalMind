@@ -184,6 +184,28 @@ def _finalize_plan_todos(session_id: str) -> list[dict]:
     return flipped
 
 
+def _heartbeat_status_text(obs: ObsCollector, live_tool_events: bool) -> str:
+    """Phase-aware heartbeat status (bootup-telemetry session).
+
+    The status must be truthful about WHAT the agent is doing. The old
+    fallback said "waiting for a tool result" even during the parent
+    INITIALIZATION call (which can take 30-180s on a slow model) when NO
+    tool has been invoked yet — misleading the user into thinking a tool
+    was running. Inspect the obs collector: init started but not finished
+    → "getting started"; tools have run → "working with tools"; otherwise
+    → neutral still-working.
+    """
+    _history_types = {evt.type for evt in obs.history()}
+    _init_started = "agent_initialization_start" in _history_types
+    _init_done = "agent_initialization_done" in _history_types
+    _any_tool = any(evt.type == "tool_call" for evt in obs.history())
+    if _init_started and not _init_done:
+        return "Agent is getting started — understanding your request…"
+    if live_tool_events or _any_tool:
+        return "Agent is working with tools — the latest result is shown above."
+    return "Agent is still working — this can take a moment on slower models."
+
+
 def _sse_comment(comment: str = "keepalive") -> str:
     """SSE comment line — ignored by EventSource but keeps the connection alive.
 
@@ -309,11 +331,7 @@ async def _event_stream(
                     _last_sent_time = time.monotonic()
                 yield _sse({
                     "type": "status_update",
-                    "status": (
-                        "Agent is working with tools — the latest result is shown above."
-                        if live_tool_events
-                        else "Agent is still working — waiting for a tool result…"
-                    ),
+                    "status": _heartbeat_status_text(obs, live_tool_events),
                 })
                 yield _sse_comment("agent-working")
                 _last_sent_time = time.monotonic()

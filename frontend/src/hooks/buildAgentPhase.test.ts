@@ -185,6 +185,56 @@ describe('buildAgentPhase', () => {
     expect(phase).toBeNull();
   });
 
+  // ── lifecycle phases (bootup-telemetry session) ────────────────────────
+
+  it('handles agent_initialization_start', () => {
+    const phase = buildAgentPhase('agent_initialization_start', { intent: 'analyze' });
+    expect(phase).not.toBeNull();
+    expect(phase!.type).toBe('initializing');
+    expect(phase!.label).toContain('Getting started');
+  });
+
+  it('handles agent_initialization_done with mode', () => {
+    const phase = buildAgentPhase('agent_initialization_done', {
+      mode: 'execute',
+      objective: 'list the files',
+    });
+    expect(phase!.type).toBe('initialized');
+    expect(phase!.label).toBe('Understood — execute mode');
+    expect(phase!.detail).toBe('list the files');
+  });
+
+  it('handles agent_initialization_done without mode', () => {
+    const phase = buildAgentPhase('agent_initialization_done', {});
+    expect(phase!.type).toBe('initialized');
+    expect(phase!.label).toBe('Understood the request');
+  });
+
+  it('handles agent_planning_done', () => {
+    const phase = buildAgentPhase('agent_planning_done', { plan_len: 42, iteration: 1 });
+    expect(phase!.type).toBe('planned');
+    expect(phase!.label).toContain('Plan ready');
+    expect(phase!.iteration).toBe(1);
+  });
+
+  it('handles agent_loop_start', () => {
+    const phase = buildAgentPhase('agent_loop_start', { intent: 'analyze' });
+    expect(phase!.type).toBe('working');
+    expect(phase!.label).toContain('Working');
+  });
+
+  it('handles agent_loop_done with direct + iterations', () => {
+    const phase = buildAgentPhase('agent_loop_done', { direct: true, iterations: 0 });
+    expect(phase!.type).toBe('turn_done');
+    expect(phase!.label).toBe('Turn complete');
+    expect(phase!.detail).toBe('answered directly');
+  });
+
+  it('handles agent_loop_done with hit_limit', () => {
+    const phase = buildAgentPhase('agent_loop_done', { hit_limit: true, iterations: 8 });
+    expect(phase!.detail).toBe('iteration limit reached; 8 iterations');
+  });
+
   // ── defensive: missing payload ───────────────────────────────────────
 
   it('handles null data defensively', () => {

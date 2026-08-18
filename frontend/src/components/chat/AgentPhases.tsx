@@ -40,6 +40,13 @@ const PHASE_META: Record<
   AgentPhase['type'],
   { icon: string; color: string; label: string }
 > = {
+  // Lifecycle phases (bootup-telemetry session) — the strip narrates the
+  // whole turn, including the init call (the longest wait on slow models).
+  initializing: { icon: '⚡', color: 'text-brand-amber', label: 'Getting started' },
+  initialized: { icon: '✓', color: 'text-brand-green', label: 'Understood' },
+  planned: { icon: '📋', color: 'text-brand-blue', label: 'Plan ready' },
+  working: { icon: '🔧', color: 'text-brand-amber', label: 'Working' },
+  turn_done: { icon: '🏁', color: 'text-brand-green', label: 'Turn complete' },
   plan_created: { icon: '📋', color: 'text-brand-blue', label: 'Plan built' },
   node_advanced: { icon: '→', color: 'text-brand-green', label: 'Step advanced' },
   gate_passed: { icon: '✓', color: 'text-brand-green', label: 'Verified' },

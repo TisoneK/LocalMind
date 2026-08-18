@@ -30,10 +30,20 @@ from core.obs import ObsCollector, ObsEvent
 # agent_runtime._INTERNAL_DELEGATION_TOOLS.
 _INTERNAL_DELEGATION_TOOLS = frozenset({"delegate", "delegate_parallel", "delegate_inline"})
 
-# The 8 obs event types that surface the agent's decision history in the
-# phase strip (Session 181 — F4 Frontend Phase Visibility).
+# The obs event types that surface the agent's decision history in the
+# phase strip (Session 181 — F4 Frontend Phase Visibility). The 8 original
+# types covered plan/gate/orchestrator/failure; the 5 lifecycle types
+# (initialization_start/done, planning_done, loop_start/done) were added by
+# the bootup-telemetry session so the strip narrates the WHOLE turn —
+# "getting started → understood → working → turn complete" — instead of
+# staying empty during the longest wait (the init call on a slow model).
 PHASE_EVENT_TYPES = frozenset(
     {
+        "agent_initialization_start",
+        "agent_initialization_done",
+        "agent_planning_done",
+        "agent_loop_start",
+        "agent_loop_done",
         "plan_nodes_created",
         "plan_node_advanced",
         "agent_loop_gate_passed",
@@ -287,7 +297,81 @@ def build_agent_phases(collector: ObsCollector) -> list[dict]:
             if d.get("iteration") not in (None, "")
             else None
         )
-        if evt.type == "plan_nodes_created":
+        # Lifecycle phases (bootup-telemetry session) — narrate the whole
+        # turn so the strip is never empty during the longest wait (the
+        # parent init call on a slow model). Mirrors the frontend's
+        # buildAgentPhase entries for the same event types.
+        if evt.type == "agent_initialization_start":
+            phases.append(
+                {
+                    "id": _next_id("init-start"),
+                    "type": "initializing",
+                    "label": "Getting started — understanding your request",
+                    "timestamp": ts,
+                }
+            )
+        elif evt.type == "agent_initialization_done":
+            mode = str(d.get("mode", ""))
+            phases.append(
+                {
+                    "id": _next_id("init-done"),
+                    "type": "initialized",
+                    "label": (
+                        f"Understood — {mode} mode"
+                        if mode
+                        else "Understood the request"
+                    ),
+                    "detail": str(d.get("objective", ""))[:160] or None,
+                    "timestamp": ts,
+                }
+            )
+        elif evt.type == "agent_planning_done":
+            phases.append(
+                {
+                    "id": _next_id("planned"),
+                    "type": "planned",
+                    "label": "Plan ready — proceeding step by step",
+                    "timestamp": ts,
+                    "iteration": iteration,
+                }
+            )
+        elif evt.type == "agent_loop_start":
+            phases.append(
+                {
+                    "id": _next_id("working"),
+                    "type": "working",
+                    "label": "Working — executing the plan",
+                    "timestamp": ts,
+                }
+            )
+        elif evt.type == "agent_loop_done":
+            direct = bool(d.get("direct"))
+            clarification = bool(d.get("clarification"))
+            hit_limit = bool(d.get("hit_limit"))
+            detail_parts = []
+            if direct:
+                detail_parts.append("answered directly")
+            if clarification:
+                detail_parts.append("asked for clarification")
+            if hit_limit:
+                detail_parts.append("iteration limit reached")
+            try:
+                iterations = int(d.get("iterations", 0) or 0)
+            except (TypeError, ValueError):
+                iterations = 0
+            if iterations:
+                detail_parts.append(f"{iterations} iterations")
+            phases.append(
+                {
+                    "id": _next_id("turn-done"),
+                    "type": "turn_done",
+                    "label": "Turn complete",
+                    "detail": "; ".join(detail_parts) if detail_parts else None,
+                    "timestamp": ts,
+                    "iteration": iteration,
+                }
+            )
+        elif evt.type == "plan_nodes_created":
             try:
                 count = int(d.get("node_count", 0) or 0)
             except (TypeError, ValueError):

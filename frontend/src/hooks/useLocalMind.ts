@@ -1217,11 +1217,22 @@ export function useChat(
                 }
 
                 // Session 181 — F4 Frontend Phase Visibility. Handle the
-                // 8 backend obs events that surface the agent's decision
+                // backend obs events that surface the agent's decision
                 // history. Each appends a phase entry to the LAST assistant
                 // message's `agentPhases` array — the strip renders in
                 // ChatMessage between the thinking block and tool cards.
+                // The 5 lifecycle types (initialization_start/done,
+                // planning_done, loop_start/done) were added by the
+                // bootup-telemetry session so the strip narrates the WHOLE
+                // turn — "getting started → understood → working → turn
+                // complete" — instead of staying empty during the longest
+                // wait (the parent init call on a slow model).
                 const PHASE_EVENT_TYPES = new Set([
+                  'agent_initialization_start',
+                  'agent_initialization_done',
+                  'agent_planning_done',
+                  'agent_loop_start',
+                  'agent_loop_done',
                   'plan_nodes_created',
                   'plan_node_advanced',
                   'agent_loop_gate_passed',
@@ -1714,6 +1725,61 @@ export function buildAgentPhase(
 ): AgentPhase | null {
   const ts = Date.now();
   switch (eventType) {
+    // Lifecycle phases (bootup-telemetry session) — narrate the whole turn
+    // so the strip is never empty during the longest wait (the parent init
+    // call on a slow model). Mirrors the backend build_agent_phases entries.
+    case 'agent_initialization_start': {
+      return {
+        id: `phase-init-start-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'initializing',
+        label: 'Getting started — understanding your request',
+        timestamp: ts,
+      };
+    }
+    case 'agent_initialization_done': {
+      const mode = String(data?.mode ?? '');
+      const objective = String(data?.objective ?? '').slice(0, 160);
+      return {
+        id: `phase-init-done-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'initialized',
+        label: mode ? `Understood — ${mode} mode` : 'Understood the request',
+        detail: objective || undefined,
+        timestamp: ts,
+      };
+    }
+    case 'agent_planning_done': {
+      return {
+        id: `phase-planned-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'planned',
+        label: 'Plan ready — proceeding step by step',
+        timestamp: ts,
+        iteration: data?.iteration !== undefined ? Number(data.iteration) : undefined,
+      };
+    }
+    case 'agent_loop_start': {
+      return {
+        id: `phase-working-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'working',
+        label: 'Working — executing the plan',
+        timestamp: ts,
+      };
+    }
+    case 'agent_loop_done': {
+      const detailParts: string[] = [];
+      if (data?.direct) detailParts.push('answered directly');
+      if (data?.clarification) detailParts.push('asked for clarification');
+      if (data?.hit_limit) detailParts.push('iteration limit reached');
+      const iterations = Number(data?.iterations ?? 0);
+      if (iterations > 0) detailParts.push(`${iterations} iterations`);
+      return {
+        id: `phase-turn-done-${ts}-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'turn_done',
+        label: 'Turn complete',
+        detail: detailParts.length ? detailParts.join('; ') : undefined,
+        timestamp: ts,
+        iteration: data?.iteration !== undefined ? Number(data.iteration) : undefined,
+      };
+    }
     case 'plan_nodes_created': {
       const count = Number(data?.node_count ?? 0);
       if (!count) return null;

@@ -634,3 +634,42 @@ class TestToolRegistry:
         result = await file_task("read my doc")
         assert result.source == "file_reader"
         assert "attach" in result.content.lower() or "file" in result.content.lower()
+
+    def test_heartbeat_status_is_phase_aware_during_initialization(self):
+        """During the parent init call (no tools yet), the heartbeat status
+        must say 'getting started' — NOT 'waiting for a tool result' (the
+        bootup-telemetry fix: the old text was misleading when the agent was
+        initializing, the longest wait on slow models)."""
+        from api.routes.chat import _heartbeat_status_text
+        from core.obs import ObsCollector
+
+        obs = ObsCollector()
+        obs.emit("agent_initialization_start", intent="analyze")
+        status = _heartbeat_status_text(obs, live_tool_events=False)
+        assert "getting started" in status, status
+        assert "waiting for a tool result" not in status, status
+
+        # Once init completes, the neutral still-working text returns.
+        obs.emit("agent_initialization_done", mode="execute", objective="x")
+        status = _heartbeat_status_text(obs, live_tool_events=False)
+        assert "still working" in status, status
+
+    def test_heartbeat_status_working_with_tools_after_tool_call(self):
+        """Once a tool has run, the heartbeat says 'working with tools'."""
+        from api.routes.chat import _heartbeat_status_text
+        from core.obs import ObsCollector
+
+        obs = ObsCollector()
+        obs.emit("tool_call", tool="shell", status="started", tool_args="ls")
+        status = _heartbeat_status_text(obs, live_tool_events=False)
+        assert "working with tools" in status, status
+
+    def test_heartbeat_status_still_working_when_no_init_and_no_tools(self):
+        """Without init or tool events, the heartbeat stays neutral."""
+        from api.routes.chat import _heartbeat_status_text
+        from core.obs import ObsCollector
+
+        obs = ObsCollector()
+        status = _heartbeat_status_text(obs, live_tool_events=False)
+        assert "still working" in status, status
+        assert "getting started" not in status, status

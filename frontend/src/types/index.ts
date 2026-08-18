@@ -156,6 +156,11 @@ export interface AgentPhase {
   id: string;
   /** Canonical phase type — drives the icon + label. */
   type:
+    | 'initializing'       // agent_initialization_start — parent init began
+    | 'initialized'        // agent_initialization_done — mode decided (execute/direct/clarify)
+    | 'planned'            // agent_planning_done — plan produced
+    | 'working'            // agent_loop_start — execute loop began
+    | 'turn_done'          // agent_loop_done — loop finished (direct/clarify/iterations/hit_limit)
     | 'plan_created'        // plan_nodes_created — structured DAG built
     | 'node_advanced'       // plan_node_advanced — a node transitioned state
     | 'gate_passed'         // agent_loop_gate_passed — criteria verified ✓

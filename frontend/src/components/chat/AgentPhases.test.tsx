@@ -92,4 +92,28 @@ describe('AgentPhases', () => {
     render(<AgentPhases phases={[basePhase()]} />);
     expect(screen.getByTestId('agent-phases-strip')).toBeInTheDocument();
   });
+
+  // ── lifecycle phases (bootup-telemetry session) ────────────────────────
+
+  it('renders lifecycle phases with their meta labels', () => {
+    render(
+      <AgentPhases
+        phases={[
+          basePhase({ id: 'p-init', type: 'initializing', label: 'Getting started — understanding your request' }),
+          basePhase({ id: 'p-initd', type: 'initialized', label: 'Understood — execute mode' }),
+          basePhase({ id: 'p-work', type: 'working', label: 'Working — executing the plan' }),
+          basePhase({ id: 'p-done', type: 'turn_done', label: 'Turn complete' }),
+        ]}
+      />,
+    );
+    expect(screen.getByText('Getting started — understanding your request')).toBeInTheDocument();
+    expect(screen.getByText('Understood — execute mode')).toBeInTheDocument();
+    expect(screen.getByText('Working — executing the plan')).toBeInTheDocument();
+    // meta label prefixes render too (Turn complete matches both the meta
+    // label and the phase label, so use getAllByText)
+    expect(screen.getByText('Getting started')).toBeInTheDocument();
+    expect(screen.getByText('Understood')).toBeInTheDocument();
+    expect(screen.getByText('Working')).toBeInTheDocument();
+    expect(screen.getAllByText('Turn complete').length).toBeGreaterThanOrEqual(1);
+  });
 });

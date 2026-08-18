@@ -119,6 +119,10 @@ def test_run_tree_tool_status_update_collapses_rows():
 
 def test_phases_built_for_all_phase_event_types():
     c = _collector(
+        ("agent_initialization_start", {}),
+        ("agent_initialization_done", {"mode": "execute", "objective": "list the files"}),
+        ("agent_planning_done", {"plan_len": 42, "iteration": 1}),
+        ("agent_loop_start", {}),
         ("plan_nodes_created", {"node_count": 3, "node_ids": ["a", "b", "c"]}),
         ("plan_node_advanced", {"node_id": "a", "new_status": "completed", "subgoal": "install deps", "iteration": 1}),
         ("agent_loop_gate_passed", {"intent": "analyze", "iterations": 2}),
@@ -126,12 +130,17 @@ def test_phases_built_for_all_phase_event_types():
         ("orchestrator_replan_start", {"intent": "analyze", "iteration": 2}),
         ("orchestrator_replan_done", {"confidence": 0.85, "intent": "analyze"}),
         ("orchestrator_replan_failed", {"error": "boom", "intent": "analyze"}),
+        ("agent_loop_done", {"direct": False, "iterations": 3}),
         ("agent_loop_failure", {"reason": "criteria unmet", "failure_type": "criteria_unmet"}),
     )
     phases = build_agent_phases(c)
-    assert len(phases) == 8
+    assert len(phases) == 13
     types = [p["type"] for p in phases]
     assert types == [
+        "initializing",
+        "initialized",
+        "planned",
+        "working",
         "plan_created",
         "node_advanced",
         "gate_passed",
@@ -139,13 +148,39 @@ def test_phases_built_for_all_phase_event_types():
         "orchestrator_replan_start",
         "orchestrator_replan_done",
         "orchestrator_replan_failed",
+        "turn_done",
         "agent_loop_failure",
     ]
     # plan_created label pluralizes
-    assert phases[0]["label"] == "Plan built — 3 steps"
+    assert phases[4]["label"] == "Plan built — 3 steps"
+    # lifecycle labels carry the mode / iterations detail
+    assert phases[1]["label"] == "Understood — execute mode"
+    assert phases[1]["detail"] == "list the files"
+    assert phases[11]["detail"] == "3 iterations"
     # deterministic ids — a second build produces identical ids (no re-random)
     phases2 = build_agent_phases(c)
     assert [p["id"] for p in phases] == [p["id"] for p in phases2]
+
+
+def test_phases_lifecycle_direct_turn_detail():
+    """agent_loop_done on a direct turn carries the 'answered directly' note."""
+    c = _collector(
+        ("agent_loop_done", {"direct": True, "iterations": 0}),
+    )
+    phases = build_agent_phases(c)
+    assert len(phases) == 1
+    assert phases[0]["type"] == "turn_done"
+    assert phases[0]["detail"] == "answered directly"
+
+
+def test_phases_lifecycle_hit_limit_detail():
+    """agent_loop_done with hit_limit surfaces the cap in the strip."""
+    c = _collector(
+        ("agent_loop_done", {"hit_limit": True, "iterations": 8}),
+    )
+    phases = build_agent_phases(c)
+    assert phases[0]["type"] == "turn_done"
+    assert phases[0]["detail"] == "iteration limit reached; 8 iterations"
 
 
 def test_phases_skip_events_missing_required_fields():
@@ -171,6 +206,11 @@ def test_phase_event_types_cover_frontend_strip():
     # The frontend's phase strip handles exactly these event types
     # (useLocalMind.ts PHASE_EVENT_TYPES) — keep them in sync.
     assert PHASE_EVENT_TYPES == {
+        "agent_initialization_start",
+        "agent_initialization_done",
+        "agent_planning_done",
+        "agent_loop_start",
+        "agent_loop_done",
         "plan_nodes_created",
         "plan_node_advanced",
         "agent_loop_gate_passed",
