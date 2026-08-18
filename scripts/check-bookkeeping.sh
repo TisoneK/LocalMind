@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+#
+# Bookkeeping gate (Session 296): fail the exit if the append-only logs are
+# STALE relative to the session log. The protocol requires appending
+# inefficiencies/log.md AND flaws/log.md every session (an explicit
+# "## <date> — none this session" counts), but those two are the least
+# self-surfacing part of the exit — a missing entry looks identical to a quiet
+# session, so a drifting agent skips them silently (S291-295). This makes the
+# omission fail the exit gate the way a broken build would.
+#
+# Rule: the newest dated "## YYYY-MM-DD" header in each append-only log must be
+# >= the newest one in agents/sessions.md. If you logged a session, you must
+# have logged its friction (or an explicit none) too.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+M=.context/memory
+
+newest_header_date() {
+  grep -oE '^(## |---.*)?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$1" 2>/dev/null \
+    | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | sort | tail -1
+}
+
+s=$(newest_header_date "$M/agents/sessions.md")
+i=$(newest_header_date "$M/inefficiencies/log.md")
+f=$(newest_header_date "$M/flaws/log.md")
+
+if [ -z "$s" ]; then
+  echo "bookkeeping: no dated session entries yet — skipping"
+  exit 0
+fi
+
+fail=0
+if [ -z "$i" ] || [ "$i" \< "$s" ]; then
+  echo "STALE: inefficiencies/log.md newest=${i:-none} < sessions.md newest=$s"
+  echo "  → append this session's entry (an explicit '## $s — none this session' counts)"
+  fail=1
+fi
+if [ -z "$f" ] || [ "$f" \< "$s" ]; then
+  echo "STALE: flaws/log.md newest=${f:-none} < sessions.md newest=$s"
+  echo "  → append this session's entry (an explicit '## $s — none this session' counts)"
+  fail=1
+fi
+
+if [ "$fail" = 0 ]; then
+  echo "bookkeeping OK: inefficiencies + flaws logs current with sessions.md ($s)"
+fi
+exit "$fail"
