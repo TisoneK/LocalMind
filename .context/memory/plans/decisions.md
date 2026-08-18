@@ -1288,3 +1288,13 @@ manifest: `.context/memory/features/fail-fast-provider-errors/manifest.md`.
   B-2026-08-18-1 from "add delegation later?" to "the multi-agent layer exists and
   is live — freeze/hide it, remove it, or accept we're ahead and steer remaining
   work toward §40 hardening."
+- **IDENTITY CLARIFICATION (Session 298, user directive "it's LocalMind"):** the
+  agent's user-facing IDENTITY (spec §23) is **LocalMind**; "Parent Agent" is only
+  the spec's architectural ROLE label (spec §2: "describes its architectural role
+  as the root agent, not an indication that child agents already exist"). The code
+  already encodes this — `agents/parent/context_builder.py`: "You are the
+  user-facing LocalMind agent." Recorded as an identity note in
+  `docs/parent-agent-spec.md` (reconciliation header) + `docs/ARCHITECTURE.md`
+  scope callout (`42df924`). Bearing on B-2026-08-18-1: whichever delegation path
+  is chosen, the single user-facing identity stays LocalMind — the specialists are
+  internal workers, never user-facing.

@@ -4071,3 +4071,15 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-1 (delegation/identity decision, recommended (c)); the deferred loop-wide efficiency roadmap (B-2026-08-17-8..12) that was descoped this session.
 - **Report:** .context/memory/reviews/2026-08-18-review-66.md (IMPLEMENTED addendum)
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (cont.) — identity clarification: the agent is LocalMind
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user: "it's LocalMind" → reframe the docs so the agent's identity reads as LocalMind and "Parent Agent" as only the architectural role (spec §2/§23). Docs-only; author's spec body untouched.
+- **SHIPPED (`42df924`):** identity note in `docs/parent-agent-spec.md` (reconciliation header) + `docs/ARCHITECTURE.md` scope callout — "the agent is LocalMind; Parent Agent = root-agent role; code already says 'the user-facing LocalMind agent'." Added an identity clarification to ADR-47.
+- **Commits:** 2 — `docs:` identity note (`42df924`); `chore(context):` ADR-47 note + this log.
+- **Outcome:** done — naming reconciled across docs. No code change.
+- **Open items:** B-2026-08-18-1 (delegation/identity decision; identity itself now settled = LocalMind, single user-facing agent).
+- **Report:** (folded into review-66 lineage; no separate report)
+- **Notes:** none
