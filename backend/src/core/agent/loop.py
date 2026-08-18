@@ -49,6 +49,7 @@ import logging
 import re
 import time
 import uuid
+from types import SimpleNamespace
 from typing import AsyncIterator, Optional
 
 from adapters.ollama import MultiToolCallResult, ToolCallResult
@@ -412,6 +413,63 @@ def same_tool_failure_streak(trace) -> tuple[int, str]:
         else:
             break
     return streak, last_tool
+
+
+def parent_completion_floor_note(trace) -> Optional[str]:
+    """The parent's deterministic completion-verification FLOOR (B-2026-08-18-2,
+    review-66): the missing VERIFY→DONE segment of the spec's wheel.
+
+    On the user-facing parent path the turn carries no explicit success-criteria
+    contract (the parent runs a generic ANALYZE intent, `GoalInterpreter` is not
+    wired, and the F4 post-execution verifier is skipped for non-high-stakes
+    intents), so `_acceptance_gate_at_final_answer` used to accept the model's
+    "done" on its word alone — even when the parent's last real action FAILED
+    (spec §29/§30: "action succeeded" ≠ "objective succeeded").
+
+    This closes that hole. When the parent's LAST executed tool is high-stakes
+    (file_write/file_edit/shell/code_exec — file_write also has its own read-back
+    grounding), the action is judged failed if EITHER (a) the dispatcher set
+    `tool_failed` (tool-level failure: permission, internal error), OR (b) the
+    reused F4 checker `verify_last_tool_succeeded` finds error markers in its
+    observation (command-level failure: a nonzero-exit shell command or a
+    code_exec exception, which `shell.py` returns as content with success=True —
+    so `tool_failed` alone would MISS it). Returns a note on failure so the gate
+    rejects "done" and recovers; None otherwise → read/analysis/search turns and
+    genuinely successful actions are unchanged.
+
+    Tradeoff (identical to the already-shipped F4 verifier this reuses): the
+    observation check keys on error markers, so a high-stakes action whose
+    legitimate output contains "error"/"failed" could be false-rejected; the
+    `_SUCCESS_RE` override in `verify_last_tool_succeeded` covers the common
+    passing-build case, and the same-tool-streak + iteration caps bound any
+    spurious replan to an honest stop.
+    """
+    from core.agent.post_execution_verifier import (
+        is_high_stakes_intent,
+        verify_last_tool_succeeded,
+    )
+
+    # Judge only the LAST tool the parent actually ran; a preceding failure the
+    # model already recovered from must not block a later legitimate "done".
+    last_step = None
+    for step in reversed(getattr(trace, "steps", []) or []):
+        if getattr(step, "tool_name", "") or "":
+            last_step = step
+            break
+    if last_step is None:
+        return None
+    name = last_step.tool_name or ""
+    if not is_high_stakes_intent(name):
+        return None
+    if bool(getattr(last_step, "tool_failed", False)):
+        return f"the last action ({name}) reported a failure"
+    # Judge THIS tool step's observation — not `verify_last_tool_succeeded(trace)`,
+    # which re-reads steps[-1] and would miss the failure when a tool-less
+    # final-answer/reasoning step trails the real action.
+    passed, note = verify_last_tool_succeeded(SimpleNamespace(steps=[last_step]))
+    if not passed:
+        return f"the last action ({name}) did not succeed — {note}"
+    return None
 
 
 class AgentLoop:
@@ -3640,6 +3698,7 @@ class AgentLoop:
                         reformulated_message=reformulated_message,
                         memory_facts=memory_facts,
                         intent_history=intent_history,
+                        is_parent=(getattr(agent_config, "name", "") == "parent"),
                     )
                     if not _gate_final:
                         continue
@@ -3767,6 +3826,7 @@ class AgentLoop:
                     reformulated_message=reformulated_message,
                     memory_facts=memory_facts,
                     intent_history=intent_history,
+                    is_parent=(getattr(agent_config, "name", "") == "parent"),
                 )
                 if not _gate_final:
                     continue
@@ -3951,6 +4011,7 @@ class AgentLoop:
         reformulated_message: str = "",
         memory_facts: Optional[list[str]] = None,
         intent_history: Optional[list[str]] = None,
+        is_parent: bool = False,
     ) -> tuple[str, bool]:
         """Gate the model's "done" claim against the success criteria.
 
@@ -3971,7 +4032,46 @@ class AgentLoop:
         """
         criteria = getattr(trace, "success_criteria", None) or []
         if not criteria:
-            return "", True
+            # B-2026-08-18-2 / review-66 — the parent's missing VERIFY→DONE
+            # floor. With no explicit criteria contract, don't accept the
+            # parent's "done" when its last real action FAILED (spec §29/§30).
+            # Deterministic, keyed on the dispatcher's tool_failed verdict, and
+            # scoped to the parent — read/analysis/successful turns are
+            # unchanged (return the legacy model-assertion path below).
+            _floor_note = parent_completion_floor_note(trace) if is_parent else None
+            if _floor_note is None:
+                return "", True
+            _streak, _streak_tool = same_tool_failure_streak(trace)
+            if iteration + 1 >= effective_max_iter or _streak >= _SAME_TOOL_REPLAN_CAP:
+                # Out of iterations / same-tool spiral — stop honestly rather
+                # than loop the same failure (spec §18 loop protection).
+                trace.gate_summary = f"✗ completion floor: {_floor_note}"
+                return f"\n\n{trace.gate_summary}", True
+            revised = await self._replan_for_gate(
+                trace=trace,
+                unmet=[("(parent completion floor)", _floor_note)],
+                loop_messages=loop_messages,
+                observation_log=observation_log,
+                active_adapter=active_adapter,
+            )
+            if obs:
+                obs.emit(
+                    "agent_loop_gate_failed_replan",
+                    intent=intent.value,
+                    iteration=iteration + 1,
+                    unmet=[_floor_note],
+                )
+            loop_messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "\n[COMPLETION FLOOR] You reported done, but your last "
+                        f"action failed:\n- {_floor_note}\n\nRevised plan:\n{revised}\n"
+                        "\nDo NOT report done until that action succeeds. Continue working."
+                    ),
+                }
+            )
+            return "", False
         # Run-scoped evidence guard (same as is_coding_done): never gate on
         # pre-existing workspace state before this run executed a tool.
         if not any(step.tool_name for step in getattr(trace, "steps", [])):
