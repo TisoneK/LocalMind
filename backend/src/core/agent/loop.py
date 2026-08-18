@@ -388,6 +388,17 @@ _MAX_EMPTY_REASONING_RECOVERIES = 2
 # streak, so legitimate strategy pivots are never blocked.
 _SAME_TOOL_REPLAN_CAP = 2
 
+# B-2026-08-18-3 — repetition nudge bound. A model can spin on a tool that keeps
+# SUCCEEDING but isn't advancing (the "current weather Kitengela" transcript: 3
+# web_searches all returned results, none useful, then an empty synthesis). The
+# failure streak above never catches this because the tool didn't fail. After
+# this many CONSECUTIVE calls to the same tool (pass OR fail), the loop nudges
+# ONCE to reflect and change approach or answer with what it has — soft, not a
+# forced stop, so a task that legitimately needs repeated same-tool calls (e.g.
+# reading several files) is not blocked; the iteration/wall-clock caps remain the
+# hard bound.
+_SAME_TOOL_REPETITION_NUDGE_CAP = 3
+
 
 def same_tool_failure_streak(trace) -> tuple[int, str]:
     """Count CONSECUTIVE same-tool failures at the end of a trace.
@@ -408,6 +419,31 @@ def same_tool_failure_streak(trace) -> tuple[int, str]:
         if not tool:
             continue
         if failed and (not last_tool or tool == last_tool):
+            streak += 1
+            last_tool = tool
+        else:
+            break
+    return streak, last_tool
+
+
+def same_tool_repetition_streak(trace) -> tuple[int, str]:
+    """Trailing run of consecutive calls to the SAME tool, regardless of
+    pass/fail (B-2026-08-18-3).
+
+    Returns (streak, tool_name). Unlike `same_tool_failure_streak`, a SUCCESS
+    does not break the streak — this catches a model spinning on a tool that
+    keeps succeeding but isn't advancing (e.g. repeated web_searches that return
+    results but never the answer). A DIFFERENT tool breaks it (a real strategy
+    change); tool-less reasoning steps don't.
+    """
+    steps = getattr(trace, "steps", []) or []
+    streak = 0
+    last_tool = ""
+    for step in reversed(steps):
+        tool = getattr(step, "tool_name", "") or ""
+        if not tool:
+            continue
+        if not last_tool or tool == last_tool:
             streak += 1
             last_tool = tool
         else:
@@ -1308,6 +1344,7 @@ class AgentLoop:
         # ADR-8 Phase 2: use _effective_max_iter / _effective_max_wall
         # (agent_config overrides when provided; module-level defaults
         # otherwise) instead of the raw MAX_ITERATIONS / MAX_WALL_CLOCK_SECS.
+        _repetition_nudged = False  # B-2026-08-18-3: fire the progress nudge once per turn
         for iteration in range(_effective_max_iter):
             trace.iterations_used = iteration + 1
 
@@ -1356,6 +1393,39 @@ class AgentLoop:
             task_state.completed = [s.description for s in _subgoals if s.status == "completed"]
             task_state.pending = [s.description for s in _subgoals if s.status in ("pending", "in_progress")]
             task_state.failed = [(s.description, s.notes or "") for s in _subgoals if s.status == "blocked"]
+
+            # B-2026-08-18-3 — progress nudge. If the model has called the SAME
+            # tool N+ times in a row (succeeding but not advancing — the "current
+            # weather Kitengela" spin: 3 web_searches, all ok, none useful, then
+            # empty synthesis), nudge ONCE to change approach or answer with what
+            # it has. Soft: legitimately-repeated tools aren't blocked, and the
+            # iteration/wall-clock caps remain the hard bound.
+            if not _repetition_nudged:
+                _rep_streak, _rep_tool = same_tool_repetition_streak(trace)
+                if _rep_streak >= _SAME_TOOL_REPETITION_NUDGE_CAP:
+                    _repetition_nudged = True
+                    loop_messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                f"[PROGRESS CHECK] You have called `{_rep_tool}` "
+                                f"{_rep_streak} times in a row and are not converging. "
+                                "STOP repeating it: either take a genuinely DIFFERENT "
+                                "approach (a different tool, or a materially different "
+                                "input), or give the best answer you can from the evidence "
+                                f"you already have. Do not call `{_rep_tool}` again with a "
+                                "similar input."
+                            ),
+                        }
+                    )
+                    if _obs:
+                        _obs.emit(
+                            "agent_loop_repetition_nudge",
+                            tool=_rep_tool,
+                            streak=_rep_streak,
+                            iteration=iteration + 1,
+                        )
+
             # Session 180 — F3 Structured Planner DAG. Advance the plan
             # nodes based on the latest tool execution. Heuristic: the
             # node whose subgoal tokens appear in the latest tool's
