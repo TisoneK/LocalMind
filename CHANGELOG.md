@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Faster first message with a local (Ollama) model: the app now warms the model up at the correct size at startup, so your first request no longer triggers a slow model reload (previously a 10–30s stall on the first message after launch).
+- The agent uses fewer tokens on each step of a task: a duplicate copy of the tool list that was being re-sent on every step has been removed (~280 tokens saved per step), leaving more room for the actual work — especially helpful on small local models and free-tier limits.
+
 ### Fixed
 - Creating a file at a full/absolute path (e.g. `/var/data/report.txt`) now saves it exactly there, instead of accidentally nesting it under your home folder. And the agent's built-in "did the write succeed?" check now looks at where the file was actually written — so a successful save (including documents it auto-timestamps) no longer shows a false "could not verify the file" warning.
 - The agent is less likely to reach for the wrong tool when you ask it to create a file: the read tool now clearly states it's read-only and that creating/writing goes through the write tool. (Verified live on a small model.)
