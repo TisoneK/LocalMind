@@ -863,3 +863,11 @@ if literally nothing slowed you down.
 - **Cause:** the race fires all three providers; a test that patches one but not the others makes a live network call and couples the assertion to whatever the real engine returns that day (flaky + slow + order-dependent).
 - **Workaround / fix:** mock ALL THREE racing providers in any web_search test (the non-tested ones → empty). Done for both tests; now deterministic + offline.
 - **Prevent next time:** when a function fans out to N backends, a unit test must stub ALL N — stubbing a subset leaves a hidden real call. Grep for `web_search._search_` patches that don't cover ddg+bing+searxng. (Also: `ci-check.sh` only lints `backend/src`, not `tests/` — test-only lint won't fail CI, but tests still run in CI, so a real-network test is a latent flake.)
+
+---
+## 2026-08-18 — Claude Code / claude-opus-4-8 (Session 298 upfront-plan)
+- **Problem:** my first attempt at "make the agent plan todos" was to STRENGTHEN the parent contract prompt (todo_write FIRST for multi-step tasks). It parsed/linted/tested fine — but the LIVE trace on glm-4.5-flash showed the model IGNORED it entirely (0 todo_write calls, went straight to searching). I reverted it and moved the plan into the harness (init emits an ordered `plan`).
+- **Cost:** one prompt edit + one live trace (~2 min) before pivoting to the real fix.
+- **Cause:** weak models don't reliably follow multi-tool protocol instructions from a prompt; a behavior you NEED guaranteed can't depend on model goodwill.
+- **Workaround / fix:** produce the artifact in the harness (parse a `plan` field from the init the model already returns) rather than relying on the model to call a tool in a specific order.
+- **Prevent next time:** for any "the agent should ALWAYS do X" requirement on weak models, prefer a harness-guaranteed mechanism over prompt-steering; if you must try steering, LIVE-TEST it on the weak model before building on it. (Same lesson family as the completion-floor gotchas: verify against runtime reality, not assumptions.)

@@ -4124,3 +4124,20 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-3 (agent-level "successful-but-irrelevant results → change strategy"; the OUTPUT twin of the completion floor).
 - **Report:** .context/memory/reviews/2026-08-18-review-67.md
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (cont.) — anti-spin nudge + workspace UX + upfront todo plan
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user: "fix it [B-2026-08-18-3] and also fix agent obs cards to collapse (only active expanded) + scroll inside their container"; then a follow-up UI report (Todos panel empty; "Plan ready" narrates with no evidence).
+- **SHIPPED:**
+  - `2201cb9` **B-2026-08-18-3** anti-spin: `same_tool_repetition_streak` + a soft one-time `[PROGRESS CHECK]` nudge after N consecutive same-tool calls (pass or fail). Real-loop e2e test + helper units. The output twin of the completion floor.
+  - `9518666` **workspace UX:** obs/turn cards AUTO-COLLAPSE when a turn stops running (only active expanded; the old useState initializer ran once → completed turns stayed stuck open); tab content gets `min-h-0` so cards scroll IN the panel, not the page. FE tsc + tests green (+1 collapse test).
+  - `83e6a2b` **ADR-49 upfront todo plan** (revises ADR-38 for the checklist): the parent's existing init call now returns an ordered `plan`; the loop emits it as todos up front and the existing cursor checks them off. Prompt-steering the model to call todo_write first FIRST-LINE FAILED live (glm ignored it) → had to make the plan harness-produced.
+- **LIVE-VERIFIED (glm-4.5-flash, isolated 8765):** the exact "weather in Kitengela" transcript now (a) picks DDG over Bing junk (search fix), (b) plans [Search / Read top result / Summarize] → emits 3 todos → marks plan-0/1/2 completed, (c) returns a full weather report (17°C, overcast, wind SE 3km/h, humidity 82%). No empty_response, no spin.
+- **Commits:** 5 this stretch — 2201cb9 (nudge), 9518666 (UI), 83e6a2b (upfront plan), + 2 changelog. Updated 3 ADR-38-era init tests to the ADR-49 contract.
+- **VERIFICATION:** full backend 1967 passed / 0 failed; FE tsc + AgentWorkspace tests green; ruff clean; live traces captured; harness cleaned up (port 8000 untouched).
+- **Outcome:** done — all requested fixes shipped + live-verified end-to-end.
+- **Open items:** the §40 efficiency roadmap (B-2026-08-17-8..12) remains.
+- **Report:** review-67 (search) + ADR-49 (plan); this log.
+- **Notes:** none
