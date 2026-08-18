@@ -206,6 +206,9 @@ describe('getSessionHistory (Session 266 artifacts)', () => {
 
     // Thinking block + error card survive a reload.
     expect(assistant.thinking).toBe('Listing projects to answer the request.');
+    // Session 290: the ThinkingBlock render is gated on `isAgent`; a restored
+    // assistant turn must carry it or the persisted thinking never renders.
+    expect(assistant.isAgent).toBe(true);
     expect(assistant.error).toMatchObject({ code: 'rate_limit', retryable: true });
     // Tool-step pills survive — snake_case wire shape mapped to ToolCall.
     expect(assistant.toolCalls?.[0]).toMatchObject({
@@ -240,6 +243,8 @@ describe('getSessionHistory (Session 266 artifacts)', () => {
     expect(messages[0].performance).toBeUndefined();
     expect(messages[0].agentRuns).toBeUndefined();
     expect(messages[0].agentPhases).toBeUndefined();
+    // A user message is not an agent turn.
+    expect(messages[0].isAgent).toBeUndefined();
   });
 
   it('passes the persisted Agent Workspace run tree + phase strip through', async () => {

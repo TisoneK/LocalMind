@@ -433,6 +433,11 @@ class LocalMindClient {
       // message — thinking block, error card, and per-message performance
       // (feeds _seedSessionStats → the cumulative context counter).
       thinking: typeof m.thinking === 'string' ? m.thinking : undefined,
+      // Session 290: the ThinkingBlock render is gated on `isAgent` (the live
+      // stream always sets it true for assistant turns). Restored messages had
+      // no isAgent, so the persisted thinking block never rendered on reload —
+      // mark every restored assistant turn as an agent turn to match live.
+      isAgent: m.role === 'assistant' ? true : undefined,
       error: m.error,
       performance: m.performance || undefined,
       // Session 267: restore the Agent Workspace run tree + phase strip.
