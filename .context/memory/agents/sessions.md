@@ -4056,3 +4056,18 @@ program + ADR-22). -->
 - **Outcome:** done — parent audit delivered; B-2026-08-18-2 filed (actionable parent-scoped fix). Awaiting user on B-2026-08-18-1/-2.
 - **Report:** .context/memory/reviews/2026-08-18-review-66.md
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (cont.) — implemented the parent completion-verification floor
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user: "audit parent against the spec and ADD missing parts of the wheel (still review-66)." Implemented the one real gap from review-66 — the parent's missing VERIFY→DONE segment (B-2026-08-18-2).
+- **SHIPPED (`fd48db5`):** `parent_completion_floor_note` + an `is_parent` branch in `_acceptance_gate_at_final_answer` (loop.py). When the parent claims done with NO criteria contract AND its last high-stakes tool (file_write/file_edit/shell/code_exec) failed — via `tool_failed` OR error markers in the observation (reused F4 `verify_last_tool_succeeded`) — the gate rejects "done", injects a recovery block, continues (bounded by iteration + same-tool-streak caps). Read/analysis/successful turns unchanged. +10 unit tests.
+- **LIVE-VERIFIED (glm-4.5-flash, isolated 8765, per system/live-testing.md):** failing `cat /nonexistent` → floor fires (1 `gate_failed_replan` in the SSE), model forced to continue and RESOLVE (ran `touch`), then completed; `echo` success → 0 fires, completes iter=2. Clean before/after on the same task (the interim tool_failed-only build finished iter=2 with 0 fires; the observation-aware build catches it).
+- **TWO LIVE-CAUGHT DESIGN CORRECTIONS (units alone would have shipped a no-op):** (1) `shell.py:792` returns a nonzero-exit command with `success=True` → keying only on `tool_failed` MISSES command-level failures; had to reuse the F4 observation check. (2) `verify_last_tool_succeeded` reads `steps[-1]`, which is a trailing tool-less final-answer step in the live loop → had to judge the last TOOL step (SimpleNamespace probe). Both invisible to unit tests; only the live trace exposed them.
+- **Commits:** 3 — `fix(agent):` floor + tests (`fd48db5`); `docs:` CHANGELOG; `chore(context):` this. (Pre-commit hook runs full CI ~90s per commit.)
+- **VERIFICATION:** full backend 1947 passed / 2 skipped / 0 failed; ruff clean; live traces captured; harness cleaned up (8765 killed, no stray artifacts, port 8000 untouched).
+- **Outcome:** done — B-2026-08-18-2 shipped & live-verified. The parent's wheel now has a real VERIFY→DONE floor.
+- **Open items:** B-2026-08-18-1 (delegation/identity decision, recommended (c)); the deferred loop-wide efficiency roadmap (B-2026-08-17-8..12) that was descoped this session.
+- **Report:** .context/memory/reviews/2026-08-18-review-66.md (IMPLEMENTED addendum)
+- **Notes:** none

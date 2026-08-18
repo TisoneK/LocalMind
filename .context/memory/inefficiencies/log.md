@@ -847,3 +847,11 @@ if literally nothing slowed you down.
 - **Cause:** (1) a docstring that asserts wiring is not proof of wiring — ADR/docstring narratives describe intent, not the live graph; (2) I extrapolated "continue" past the actual parent+spec scope.
 - **Workaround / fix:** grepped `GoalInterpreter(` / imports across backend/src to prove the dead-code claim; appended a correction to review-65; filed B-2026-08-18-2. Stopped the off-scope subagents immediately on the re-scope.
 - **Prevent next time:** for any "X is wired / X handles this" claim, grep the CALL SITE (instantiation + import) before scoring it STRONG — especially when the only evidence is a docstring or an ADR. And on an ambiguous "continue," confirm scope before spawning multi-agent effort.
+
+---
+## 2026-08-18 — Claude Code / claude-opus-4-8 (Session 298 cont.)
+- **Problem:** my first two implementations of the parent completion floor were live-NO-OPs that PASSED all unit tests. (1) Keyed on `AgentStep.tool_failed`, but `shell.py:792` returns a nonzero-exit command with `success=True` → `tool_failed=False` → a failed `cat` was never caught. (2) After switching to the F4 `verify_last_tool_succeeded`, it reads `trace.steps[-1]`, which in the live loop is a trailing tool-less final-answer step (empty observation) → passed vacuously → floor still didn't fire live.
+- **Cost:** two extra server restarts + trace rounds (~10 min) before the floor fired live.
+- **Cause:** I designed against the DATA MODEL as I assumed it (tool_failed = command failed; steps[-1] = last action) instead of against the RUNTIME reality. Unit tests I wrote encoded the same wrong assumptions, so they passed.
+- **Workaround / fix:** ran the REAL shell tool in a probe to see `success=True` + `"Command failed:"` content; switched the check to observation error-markers; judged the last TOOL step via a SimpleNamespace probe, not `steps[-1]`. Then the live trace fired (1 `gate_failed_replan`).
+- **Prevent next time:** this is the exact case system/live-testing.md warns about ("unit tests are designed to pass certain conditions"). For a loop/tool change, run ONE live trace EARLY (before polishing units) to learn the real shapes — `tool_failed` vs `success`, what `steps[-1]` actually is — then write units against reality. A green suite proved only that my code matched my wrong assumptions.
