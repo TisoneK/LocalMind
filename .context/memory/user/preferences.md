@@ -54,9 +54,21 @@ correction twice.
   to the app's Settings UI (or their password manager) — never save, enter, or
   read key VALUES yourself. He offered to hand over a Zen key "to save in
   secrets"; correct move was to refuse and point at Settings (correction, 2026-08-15)
-- **Use ANY capable model.** A free model failing to run tools is treated as OUR
-  bug, not the model's — "use any, they are all capable." Provider/model choice
-  is config, not the root of agent failures (stated, 2026-08-15)
+- **Fix the agent model-agnostically and env-agnostically — never "for local"
+  or "for weak models."** The root fix must make ANY model (small or large) in
+  ANY environment run the agent effectively. Framing a fix as local-/small-model-
+  specific (a `slow_provider` flag, a local-only timeout budget, a "compact env
+  for local models") is a SYMPTOM fix and "leaves trails of fixing symptoms." A
+  weak model exposing a failure is a lens onto a ROOT weakness in the
+  agent/loop/contract that also degrades big models — fix THAT. Before shipping,
+  ask "does this make the agent robust for every model+env, or did I special-case
+  one model?" (correction, 2026-08-17 — S289/S290 framed the "Hi enters the tool
+  loop" work around phi4-mini/Ollama with `slow_provider` band-aids; the real bug
+  is a fragile classify/execute contract that fails open to `execute` on ANY
+  model that doesn't emit clean JSON). Sharpens [[cure-the-disease]].
+- **Use ANY capable model.** A free/small model failing to run tools is OUR bug,
+  not the model's — "use any, they are all capable." Provider/model choice is
+  config, not the root of agent failures (stated, 2026-08-15)
 - **Treat each feature as its own session; move to the next without pausing for
   confirmations** unless a decision is genuinely the user's to make (stated at
   kickoff, 2026-08-14)
