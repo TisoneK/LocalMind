@@ -55,14 +55,19 @@ function RunNode({
   children,
   childMap,
   depth,
+  turnIndex,
 }: {
   run: AgentRun;
   children: AgentRun[];
   childMap: Map<string, AgentRun[]>;
   depth: number;
+  turnIndex?: number;
 }) {
   const { reduce: reduceMotion, enter } = useEnterMotion();
-  const [expanded, setExpanded] = useState(run.status === 'running' || depth === 0);
+  // S296: only the ACTIVE turn (and any running child) is expanded by default;
+  // completed prior turns collapse into their turn header so the workspace
+  // groups history instead of wiping/stacking it.
+  const [expanded, setExpanded] = useState(run.status === 'running');
   const runningTools = run.tools.filter((tool) => isActiveToolStatus(tool.status)).length;
   const completedTools = run.tools.filter((tool) => tool.status === 'done').length;
   // ADR-34 B-9: expand the node when evidence arrives so the user sees
@@ -80,27 +85,59 @@ function RunNode({
       className={depth > 0 ? 'ml-3 border-l border-brand-border pl-2' : ''}
     >
       <div
-        className={`rounded-md border bg-brand-bg-code/70 overflow-hidden ${
+        className={`relative rounded-lg border overflow-hidden transition-colors ${
           running
-            ? 'border-brand-amber/40 shadow-[0_0_0_1px_rgba(240,180,60,0.08)]'
-            : 'border-brand-border'
+            ? 'border-brand-amber/50 bg-gradient-to-br from-brand-amber/[0.07] to-brand-bg-code/70'
+            : run.status === 'failed' || run.status === 'timed_out'
+              ? 'border-brand-red/30 bg-brand-bg-code/70'
+              : 'border-brand-border bg-brand-bg-code/70'
         }`}
       >
+        {/* Status accent bar — a gradient rail down the left edge; it breathes
+            while the run is active (motion-safe). */}
+        <motion.span
+          aria-hidden
+          className={`absolute left-0 top-0 bottom-0 w-[3px] ${
+            running
+              ? 'bg-gradient-to-b from-brand-amber to-brand-amber/30'
+              : run.status === 'completed'
+                ? 'bg-gradient-to-b from-brand-green to-brand-green/20'
+                : run.status === 'failed' || run.status === 'timed_out'
+                  ? 'bg-brand-red/60'
+                  : 'bg-brand-border'
+          }`}
+          animate={running && !reduceMotion ? { opacity: [0.55, 1, 0.55] } : { opacity: 1 }}
+          transition={running && !reduceMotion ? { duration: 1.6, repeat: Infinity, ease: 'easeInOut' } : undefined}
+        />
         <button
           type="button"
           onClick={() => hasDetails && setExpanded((value) => !value)}
-          className="flex items-start gap-2 w-full min-w-0 px-2.5 py-2 text-left hover:bg-brand-border/40 transition-colors"
+          className="flex items-start gap-2 w-full min-w-0 pl-3 pr-2.5 py-2 text-left hover:bg-brand-border/40 transition-colors"
           aria-expanded={hasDetails ? expanded : undefined}
         >
           {hasDetails ? (
             expanded ? <ChevronDown className="h-3 w-3 mt-0.5 text-brand-green-muted shrink-0" />
               : <ChevronRight className="h-3 w-3 mt-0.5 text-brand-green-muted shrink-0" />
           ) : <span className="w-3 shrink-0" />}
-          <Bot className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${run.role === 'parent' ? 'text-brand-green' : 'text-brand-amber'}`} />
+          {/* Turn badge on root nodes; agent glyph on children. */}
+          {depth === 0 && turnIndex !== undefined ? (
+            <span
+              className={`grid h-4 w-4 mt-0.5 shrink-0 place-items-center rounded-full text-[8px] font-bold tabular-nums ${
+                running
+                  ? 'bg-brand-amber/20 text-brand-amber ring-1 ring-brand-amber/40'
+                  : 'bg-brand-green/15 text-brand-green ring-1 ring-brand-green/25'
+              }`}
+              title={`Turn ${turnIndex}`}
+            >
+              {turnIndex}
+            </span>
+          ) : (
+            <Bot className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${run.role === 'parent' ? 'text-brand-green' : 'text-brand-amber'}`} />
+          )}
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
               <span className="text-[11px] font-medium text-brand-green-soft truncate">
-                {run.role === 'parent' ? 'Parent Agent' : run.name}
+                {run.role === 'parent' ? (turnIndex !== undefined ? `Turn ${turnIndex}` : 'Parent Agent') : run.name}
               </span>
               <span className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap text-[9px] ${statusClass(run.status)}`}>
                 {statusIcon(run.status)}
@@ -131,34 +168,57 @@ function RunNode({
                 working → turn complete — so the workspace feels alive during
                 the longest waits (init, thinking, tool phases). */}
             {run.phases && run.phases.length > 0 && (
-              <div className="border-t border-brand-border/50 pt-1.5 space-y-0.5">
-                <div className="text-[8px] uppercase tracking-wider text-brand-green-faint font-medium">
+              <div className="border-t border-brand-border/50 pt-1.5">
+                <div className="text-[8px] uppercase tracking-wider text-brand-green-faint font-medium mb-1">
                   Lifecycle
                 </div>
-                {run.phases.map((phase) => {
-                  const meta = PHASE_META[phase.type] || PHASE_META.plan_created;
-                  return (
-                    <div
-                      key={phase.id}
-                      className="flex items-start gap-1.5 min-w-0"
-                      data-testid={`run-phase-${phase.type}`}
-                    >
-                      <span className={`${meta.color} font-mono w-3.5 text-center shrink-0`}>
-                        {meta.icon}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[9px] text-brand-green-soft truncate" title={phase.label}>
-                          {phase.label}
-                        </span>
-                        {phase.detail && (
-                          <span className="block text-[8px] text-brand-green-faint truncate" title={phase.detail}>
-                            {phase.detail}
+                {/* Connected timeline: a rail down the left with a dot per
+                    phase; phases pop in as they arrive (motion-safe), so a
+                    child or parent loop narrates itself live and fancily. */}
+                <div className="relative pl-3.5">
+                  <span aria-hidden className="absolute left-[5px] top-1 bottom-1 w-px bg-gradient-to-b from-brand-green/40 via-brand-border to-transparent" />
+                  <AnimatePresence initial={false}>
+                    {run.phases.map((phase, pIdx) => {
+                      const meta = PHASE_META[phase.type] || PHASE_META.plan_created;
+                      const isLast = pIdx === run.phases!.length - 1;
+                      return (
+                        <motion.div
+                          key={phase.id}
+                          layout={!reduceMotion}
+                          {...enter({ x: -6, duration: 0.2 })}
+                          className="relative flex items-start gap-2 min-w-0 pb-1"
+                          data-testid={`run-phase-${phase.type}`}
+                        >
+                          {/* timeline dot — the newest one glows while running */}
+                          <span
+                            className={`absolute -left-3.5 top-[3px] grid h-[11px] w-[11px] place-items-center rounded-full bg-brand-bg-code ring-1 ${
+                              running && isLast ? 'ring-brand-amber/60' : 'ring-brand-border'
+                            }`}
+                          >
+                            <motion.span
+                              className={`h-[5px] w-[5px] rounded-full ${meta.color.replace('text-', 'bg-')}`}
+                              animate={running && isLast && !reduceMotion ? { scale: [1, 1.5, 1], opacity: [0.7, 1, 0.7] } : { scale: 1, opacity: 1 }}
+                              transition={running && isLast && !reduceMotion ? { duration: 1.2, repeat: Infinity, ease: 'easeInOut' } : undefined}
+                            />
                           </span>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1">
+                              <span className={`${meta.color} font-mono text-[9px] shrink-0`}>{meta.icon}</span>
+                              <span className="block text-[9px] text-brand-green-soft truncate" title={phase.label}>
+                                {phase.label}
+                              </span>
+                            </span>
+                            {phase.detail && (
+                              <span className="block text-[8px] text-brand-green-faint truncate pl-3.5" title={phase.detail}>
+                                {phase.detail}
+                              </span>
+                            )}
+                          </span>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
               </div>
             )}
 
@@ -253,8 +313,8 @@ export function AgentWorkspace({ runs, isStreaming = false }: AgentWorkspaceProp
 
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded border border-brand-border bg-brand-bg-code px-2 py-1.5">
-          <div className="text-[9px] text-brand-green-muted">Runs</div>
-          <div className="text-[13px] text-brand-green-soft font-mono">{runs.length}</div>
+          <div className="text-[9px] text-brand-green-muted">Turns</div>
+          <div className="text-[13px] text-brand-green-soft font-mono">{roots.length}</div>
         </div>
         <div className="rounded border border-brand-border bg-brand-bg-code px-2 py-1.5">
           <div className="text-[9px] text-brand-green-muted">Tool steps</div>
@@ -264,8 +324,8 @@ export function AgentWorkspace({ runs, isStreaming = false }: AgentWorkspaceProp
 
       <div className="space-y-2">
         <AnimatePresence initial={false}>
-          {roots.map((root) => (
-            <RunNode key={root.id} run={root} children={childMap.get(root.id) ?? []} childMap={childMap} depth={0} />
+          {roots.map((root, i) => (
+            <RunNode key={root.id} run={root} children={childMap.get(root.id) ?? []} childMap={childMap} depth={0} turnIndex={i + 1} />
           ))}
         </AnimatePresence>
       </div>

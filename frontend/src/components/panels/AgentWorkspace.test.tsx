@@ -42,11 +42,13 @@ describe('AgentWorkspace', () => {
     render(<AgentWorkspace runs={runs} />);
 
     expect(screen.getByTestId('agent-workspace')).toBeInTheDocument();
-    expect(screen.getByText('Parent Agent')).toBeInTheDocument();
+    // S296: root parent runs are now labelled by turn ("Turn 1") and grouped.
+    expect(screen.getByText('Turn 1')).toBeInTheDocument();
     expect(screen.getByText('research')).toBeInTheDocument();
     fireEvent.click(screen.getByText('research'));
     expect(screen.getByText('Search upstream docs')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
+    // S296: the workspace now groups by turn — one parent turn here.
+    expect(screen.getByText('Turns')).toBeInTheDocument();
   });
 
   it('renders the empty state before the first turn starts', () => {

@@ -38,7 +38,12 @@ import type {
   SessionStats,
   AgentPhase,
   AgentRun,
+  AgentRunStatus,
 } from '@/types';
+
+// S296: cap the accumulated per-turn run groups in the Agent Workspace so a
+// long session doesn't grow the DOM unbounded (older turns pruned, newest kept).
+const MAX_WORKSPACE_TURNS = 10;
 
 // ─── Session stats (stats split — bottom-right corner) ────────────────────
 // Per-chat cumulative performance totals. Keyed per hook instance so they
@@ -618,7 +623,33 @@ export function useChat(
         startedAt: Date.now(),
         tools: [],
       }];
-      setAgentRuns([...runTree]);
+      // S296 (issue 2): ACCUMULATE per-turn run groups instead of wiping the
+      // workspace every turn. Finalize any run still marked running from a
+      // prior/interrupted turn, then append this turn's tree. Keep only the
+      // most recent MAX_WORKSPACE_TURNS parent turns (+ their descendants) so a
+      // long session doesn't grow the DOM unbounded — older turns are pruned.
+      setAgentRuns((prev) => {
+        const finalized = prev.map((r) =>
+          r.status === 'running'
+            ? { ...r, status: 'completed' as AgentRunStatus, completedAt: r.completedAt ?? Date.now() }
+            : r,
+        );
+        const combined = [...finalized, ...runTree];
+        const rootIds = combined.filter((r) => !r.parentId).map((r) => r.id);
+        const keptRoots = new Set(rootIds.slice(-MAX_WORKSPACE_TURNS));
+        // Keep a run if its ancestor chain terminates at a kept root.
+        const byId = new Map(combined.map((r) => [r.id, r] as const));
+        const isKept = (run: AgentRun): boolean => {
+          let cur: AgentRun | undefined = run;
+          const seen = new Set<string>();
+          while (cur && cur.parentId && !seen.has(cur.id)) {
+            seen.add(cur.id);
+            cur = byId.get(cur.parentId);
+          }
+          return Boolean(cur && keptRoots.has(cur.id));
+        };
+        return combined.filter(isKept);
+      });
 
       let currentContent = '';
       let thinkingContent = '';
