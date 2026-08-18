@@ -2372,6 +2372,7 @@ class AgentLoop:
                                 observation=safe_obs,
                                 allowed_tool_names=effective_allowed,
                                 user_asked_readback=_user_asked_readback,
+                                result_path=(tool_result.metadata or {}).get("path"),
                             )
                             if verify_obs:
                                 observation += f"\n[VERIFICATION]: {verify_obs}"
@@ -2383,7 +2384,14 @@ class AgentLoop:
                         # verification observable to the frontend and creates an
                         # explicit audit trail for the grounding check.
                         if tool_name == "file_write" and not tool_failed:
-                            _grounding_path = tool_args.get("path", "")
+                            # S293: verify WHERE THE WRITE ACTUALLY LANDED
+                            # (tool_result.metadata["path"]), not the model's
+                            # requested arg. They diverge whenever file_write
+                            # re-anchors a path or timestamp-renames a document —
+                            # verifying the raw arg then read-back-failed a
+                            # perfectly good write and injected a false
+                            # [GROUNDING CHECK FAILED] (B-2026-08-17-6).
+                            _grounding_path = (tool_result.metadata or {}).get("path") or tool_args.get("path", "")
                             if _grounding_path and _obs:
                                 try:
                                     # NOTE: dispatch_with_retry is imported at module level (line 177).
@@ -4771,6 +4779,7 @@ class AgentLoop:
         observation: str,
         allowed_tool_names: Optional[frozenset[str]] = None,
         user_asked_readback: bool = False,
+        result_path: Optional[str] = None,
     ) -> Optional[str]:
         """
         Verify a tool result after successful execution.
@@ -4787,7 +4796,11 @@ class AgentLoop:
         try:
             # ── file_write verification ──────────────────────────────────
             if tool_name == "file_write" and VERIFY_FILE_WRITE:
-                path = tool_args.get("path", "")
+                # S293: read back WHERE THE WRITE LANDED (result_path from the
+                # tool's metadata) not the model's raw arg — they diverge on a
+                # re-anchored path or a timestamp-renamed document, which used
+                # to fail verification for a perfectly good write (B-2026-08-17-6).
+                path = result_path or tool_args.get("path", "")
                 expected_len = len(tool_args.get("content", ""))
                 if not path:
                     return None

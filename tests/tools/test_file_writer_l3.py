@@ -36,3 +36,23 @@ async def test_write_result_pluralizes_lines(tmp_path: Path):
     assert "(1 line)" in one.content
     many = await _do_write(tmp_path / "b.txt", "l1\nl2\nl3")
     assert "(3 lines)" in many.content
+
+
+# ── S293 / B-2026-08-17-6: native absolute paths honored verbatim ────────────
+
+from tools.file_writer import resolve_write_path
+
+
+def test_absolute_path_is_honored_verbatim():
+    # A genuine absolute path must NOT be re-anchored to HOME (the bug prepended
+    # /Users/<me> to /private/tmp/... so the write landed in the wrong place and
+    # the loop's read-back verification then failed against the original path).
+    assert resolve_write_path("/private/tmp/x/foo.txt") == Path("/private/tmp/x/foo.txt")
+    assert resolve_write_path("/var/data/bar.py") == Path("/var/data/bar.py")
+
+
+def test_relative_and_named_folder_paths_unchanged():
+    # Regression guard: non-absolute paths keep their home-anchored behavior.
+    home = Path.home()
+    assert resolve_write_path("Code/hello.py") == home / "Code" / "hello.py"
+    assert resolve_write_path("Documents/note.txt") == home / "Documents" / "note.txt"

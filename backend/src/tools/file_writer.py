@@ -393,6 +393,22 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
         filename = fallback_filename
         dir_parts = parts
 
+    # ── 0. Native absolute path for THIS OS — honor it verbatim ──────────────
+    # Everything below re-anchors to HOME (step 5 joins dir_parts onto
+    # Path.home()), which silently prepended /Users/<me> to a genuine absolute
+    # path like /private/tmp/... — so the file landed in the wrong place AND the
+    # loop's read-back verification (file_reader, which DOES honor absolute
+    # paths) then failed against the original path (S293, B-2026-08-17-6). A
+    # native-absolute path is the caller's explicit choice; use it as-is.
+    # `Path.is_absolute()` is OS-aware: on POSIX only "/..." is absolute (a
+    # Windows "C:\..." is NOT, so it still falls through to the cross-OS
+    # named-folder re-anchoring below); on Windows only "X:\..." is absolute.
+    if Path(raw).is_absolute():
+        p = Path(raw)
+        resolved = p if has_filename else p / filename
+        logger.info("[file_writer] native absolute path honored verbatim: %s", resolved)
+        return resolved
+
     # ── 1. Named-folder shorthand: bare name like "Documents" ─────────────────
     if len(dir_parts) == 1 and dir_parts[0].lower() in _NAMED_FOLDER_COMPONENTS:
         canonical = _NAMED_FOLDERS.get(dir_parts[0].lower(), dir_parts[0])
