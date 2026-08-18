@@ -823,3 +823,11 @@ if literally nothing slowed you down.
 - **Cause:** (1) a wrong pathspec silently poisoned the whole `git add` (git's all-or-nothing on a fatal pathspec); (2) I relied on `2>/dev/null` which HID the "pathspec did not match" fatal error; (3) my local test runs kept passing because the working tree had the product code — so the broken COMMITTED state was invisible until `git status`.
 - **Workaround / fix:** committed the missing product code (eee708a). Verified the round-trip test passes on the now-complete state.
 - **Prevent next time:** NEVER pipe `git add` stderr to /dev/null — a "pathspec did not match" is exactly the signal you need. After committing a multi-file change, run `git show --stat HEAD` to confirm ALL intended files landed, especially when product + test files are staged together. Don't reference paths you haven't verified exist.
+
+---
+## 2026-08-17 — Claude Code / claude-opus-4-8 (Session 296)
+- **Problem:** (1) I stopped appending to this log (and flaws/log.md) after S290 — S291-295 shipped without an entry each, despite the protocol requiring one every session. The user caught it. (2) Live-verifying the obs streaming fix needs a SLOW multi-tool trace (>2min on glm-4.5-flash) to see the pending-path interleaving that a fast turn can't demonstrate — expensive to iterate.
+- **Cost:** the missing logs meant ~5 sessions of friction/learnings weren't captured for future agents; and the slow-trace cost slows every ADR-40/43 live-verify.
+- **Cause:** (1) no mechanical gate — the exit checklist is prose, and I drifted once the commit was green. (2) glm-4.5-flash with reasoning is genuinely slow; there's no fast weak model that exercises the tool loop cheaply.
+- **Workaround / fix:** (1) resumed the logs this session + logged the gate gap in flaws/log.md. (2) use a FAST task first to confirm event ORDER, reserve the slow multi-tool trace for the definitive interleaving check; run it in the background (run_in_background) so it doesn't block.
+- **Prevent next time:** run `context-gates exit` (0.8.0) before finishing if it checks the append-only logs; otherwise keep a literal end-of-session checklist that includes inefficiencies + flaws, not just review + sessions.

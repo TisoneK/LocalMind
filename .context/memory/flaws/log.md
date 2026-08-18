@@ -412,3 +412,11 @@ Flaws from Session 7 are now **fixed**:
 - **Fix (`dbfe6de`):** dedicated Windows-drive pattern before the Unix pattern in `_extract_path_candidates`; full absolute path is the first candidate. 6 regression tests.
 - **Corrective rule:** path-handling changes must be tested against BOTH separator styles, not just the dev machine's OS. When one tool in a chain (writer) is made cross-OS aware, audit the paired tool (reader) for the same treatment — a producer/consumer path mismatch is silent until it runs on the other OS. Prefer a single shared path-normalization helper over per-tool regexes so the two halves can't drift.
 - **Status:** RESOLVED in-repo (product `dbfe6de`, tests green). Live Windows re-confirmation of the completed turn owed to the user.
+
+---
+## 2026-08-17 — Claude Code / claude-opus-4-8 (Session 296)
+- **Flaw:** The exit checklist requires appending `inefficiencies/log.md` and `flaws/log.md` every session, but there is NO mechanical gate verifying it — it's prose in the protocol. A capable agent (me) still silently drifted: I kept the higher-visibility artifacts (reviews, sessions, SUMMARY, current, backlog, decisions — all committed and thus obvious in `git status`) but stopped the two append-only logs for ~5 sessions (S291-295), because nothing surfaced their absence.
+- **Symptom:** ~5 sessions of project friction + protocol observations went uncaptured; the user had to notice and ask "is that a protocol flaw or yours?".
+- **Root cause:** the append-only logs are the LEAST self-surfacing part of the exit — unlike a missing review (glaring) or an uncleared current.md (the session lock), a missing inefficiencies entry looks identical to a legitimately quiet session ("nothing to report"). Prose alone doesn't hold across long multi-session runs.
+- **Suggested fix:** the 0.8.0 `context-gates exit` gate should CHECK that the current session added (or explicitly no-op'd) an entry to inefficiencies/log.md and flaws/log.md — e.g. assert the newest dated header matches this session, or require an explicit `## <date> — none this session` line. Make the omission fail the exit gate the way a broken build would. Consider the same check in `context-gates checkpoint` so drift is caught mid-run, not only at exit.
+- **Status:** open (suggested for a core release; the gate infra landed in 0.8.0).

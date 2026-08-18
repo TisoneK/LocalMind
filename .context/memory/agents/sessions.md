@@ -3997,3 +3997,19 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-8..12.
 - **Report:** .context/memory/reviews/2026-08-17-review-62.md
 - **Notes:** 3 subagent transcripts were consumed; durable findings are in review-62 + backlog. Multiagent lesson: isolated-context agents in parallel work well for read-only investigation across distinct axes; ALWAYS re-verify their claims (Agent A said "the <17000 test measures TOOL_DEFINITIONS not the render" — correct this time; last session a subagent was wrong about a budget test).
+
+---
+## 2026-08-17 — Session 296 (real-time obs streaming + per-turn grouping + fancy UI)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6) | **Core:** 0.8.0
+- **Task:** user reported two obs bugs + wanted child-loop phases and a catchy (non-generic) UI. Also flagged that I'd stopped some `.context/` bookkeeping.
+- **FIXES (`c97b282`~1 + `c97b282`):**
+  - Issue 1 (obs updated only after the final answer): the pending path drained ONLY tool events; all other obs (init/plan/thinker/loop lifecycle, phase decisions, stage timings) buffered until the next TEXT chunk = the final answer. Added `_drain_live_lifecycle_events` in the pending path. LIVE-VERIFIED (glm-4.5-flash multi-tool trace): obs events now interleave between pending status_updates throughout the turn, before the final token.
+  - Issue 2 (workspace wiped every turn): `send()` replaced agentRuns; now ACCUMULATES per-turn groups (finalize prior running, append, cap last 10 turns). Each turn = a numbered "Turn N" node; active expanded, prior collapsed.
+  - Child phases + polish: child loop phases stream live now; made it catchy (breathing gradient status rail, numbered turn badge, connected lifecycle timeline with a pulsing newest dot) — motion-safe.
+- **VERIFICATION:** frontend 251 tests pass (+ AgentWorkspace test updated to Turn-N grouping), tsc clean, 0 eslint errors; backend chat tests 42 pass; issue-1 confirmed via a live interleaving trace.
+- **BOOKKEEPING (owned lapse):** kept reviews/sessions/SUMMARY/backlog/decisions/current every session but stopped inefficiencies + flaws logs (S291-295) and MEMORY.md, never used the task tracker. RESUMED all this session; used TaskCreate/TaskUpdate for the 5 subtasks. Logged a genuine protocol flaw: no mechanical gate confirms the append-only logs were touched (suggested for 0.8.0 context-gates exit).
+- **Outcome:** done — both obs bugs fixed + live-verified, UI polished, bookkeeping restored.
+- **Open items:** optimization roadmap B-2026-08-17-8..12 (review-62).
+- **Report:** .context/memory/reviews/2026-08-17-review-63.md
+- **Notes:** none
