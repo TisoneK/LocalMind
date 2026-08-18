@@ -169,12 +169,15 @@ def test_message_roundtrips_thinking_error_tool_calls_metrics(store):
                 {"id": "tc-file-iter2", "name": "file_read", "status": "done"},
             ],
             metrics={"prompt_tokens": 1200, "completion_tokens": 84, "latency_ms": 2300},
+            acknowledgement="I'll list your projects and summarise them.",
         ),
     )
     history = store.get_history("s1")
     assert len(history) == 1
     m = history[0]
     assert m.thinking == "First step\n\nSecond step"
+    # Session 290: the ADR-36 opening acknowledgement round-trips too.
+    assert m.acknowledgement == "I'll list your projects and summarise them."
     assert m.error == "zen returned 429: quota exceeded"
     assert m.tool_calls == [
         {"id": "tc-shell-iter1", "name": "shell", "status": "done", "reasoning": "why"},

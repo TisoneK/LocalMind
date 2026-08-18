@@ -181,6 +181,7 @@ describe('getSessionHistory (Session 266 artifacts)', () => {
             content: 'Here you go.',
             timestamp: 1783586330.77,
             thinking: 'Listing projects to answer the request.',
+            acknowledgement: "I'll list your projects.",
             error: { status: 'error', source: 'model_provider', code: 'rate_limit', message: 'Rate limited', retryable: true, raw: 'zen returned 429' },
             toolCalls: [
               {
@@ -209,6 +210,8 @@ describe('getSessionHistory (Session 266 artifacts)', () => {
     // Session 290: the ThinkingBlock render is gated on `isAgent`; a restored
     // assistant turn must carry it or the persisted thinking never renders.
     expect(assistant.isAgent).toBe(true);
+    // Session 290: the ADR-36 opening acknowledgement survives reload too.
+    expect(assistant.acknowledgement).toBe("I'll list your projects.");
     expect(assistant.error).toMatchObject({ code: 'rate_limit', retryable: true });
     // Tool-step pills survive — snake_case wire shape mapped to ToolCall.
     expect(assistant.toolCalls?.[0]).toMatchObject({
