@@ -270,7 +270,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "file_task",
-            "description": "Read the CONTENTS of a single FILE (text or binary: PDF, DOCX, XLSX, TXT, MD, CSV, JSON, YAML, HTML, XML, code). NOT for directory listings — use shell for those. Do NOT use shell 'cat'/'type' to read files.",  # noqa: E501
+            "description": "READ an existing FILE's contents (PDF, DOCX, XLSX, code, text/binary). READ-ONLY (to create/write a file use file_write). NOT for directory listings — use shell. Do NOT use shell 'cat'/'type' to read files.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
