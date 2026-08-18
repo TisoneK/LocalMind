@@ -10,9 +10,14 @@
 
 # Parent Agent — Complete Functional Architecture & Development Specification
 
-> **Status in LocalMind:** north-star architecture for the current development
-> phase. See the Reconciliation note directly below before reading the spec —
-> the shipped codebase has already run *ahead* of this spec in one important way.
+> **Status in LocalMind (decided 2026-08-18, ADR-48):** this spec is LocalMind's
+> standing **quality bar**, *not* a build roadmap. LocalMind has consciously
+> advanced past the spec's single-agent-first phase — the multi-agent runtime is
+> already live and stays first-class (ADR-48, option (c) accept-and-harden). Read
+> §40 (the 12 quality criteria) and §43 (success conditions) as the bar the agent
+> is held to; read §36's "specialists/delegation out of scope this phase" as
+> **superseded by lived reality** (kept verbatim below for provenance). See the
+> Reconciliation note next.
 
 ---
 

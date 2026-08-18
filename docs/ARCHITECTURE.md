@@ -6,14 +6,14 @@
 > architectural *role* (the root agent), not its name — the code says so directly
 > (`agents/parent/context_builder.py`: "You are the user-facing LocalMind agent").
 >
-> **Current-phase scope (2026-08-18):** the authoritative target architecture is
-> [`docs/parent-agent-spec.md`](parent-agent-spec.md) (ADR-47). That spec scopes
-> the current phase to a **single, strong Parent Agent** and defers specialist
-> agents / delegation to a later phase. The `delegate / delegate_parallel → child
-> agents` branch shown below is **already implemented but ahead of that
-> roadmap** — treat it as dormant, not a current-phase endorsement. Whether to
-> keep it dormant, remove it, or declare the phase advanced is an open decision
-> (backlog B-2026-08-18-1).
+> **Architecture status (decided 2026-08-18, ADR-48):** LocalMind has accepted it
+> is **past** the single-agent-first phase — the multi-agent runtime below
+> (`delegate / delegate_parallel → child agents`, 11 specialists) is **first-class
+> and endorsed**, not dormant. The Parent Agent spec
+> [`docs/parent-agent-spec.md`](parent-agent-spec.md) is retained as the standing
+> **quality bar** (§40 / §43), not a build roadmap. Remaining agent work is
+> measured against §40 (open hardening: efficiency, tool-selection, recovery,
+> grounding — see the backlog), not against "is it still single-agent."
 
 ## Core model
 
