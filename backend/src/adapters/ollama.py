@@ -67,13 +67,16 @@ _MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "qwen3:9b": 131072,
 }
 
-# Context window tiers for models not in the lookup table.
-# "mini"/"small" catch sub-4B instruct models whose name carries no ":Nb" tag
-# (e.g. phi4-mini:latest is 3.8B but tag-free — before this it fell through to
-# the "large" branch and got its full declared window as num_ctx, ballooning
-# memory on the exact weak hardware these models target).
-_SMALL_MODEL_TAGS = (":1b", ":2b", ":3b", "mini", "phi3.5", ":0.5b", ":1.5b", "small")
-_MEDIUM_MODEL_TAGS = (":7b", ":8b", ":9b", ":14b", ":12b")
+# Default ceiling for num_ctx when the operator hasn't set an explicit override.
+# A model's DECLARED window can be huge (phi4-mini declares 131072) but sending
+# that as num_ctx makes Ollama pre-allocate the full KV cache — live-measured on
+# phi4-mini (S291): num_ctx 8192→13s load, 32768→29s, 131072→84s. So we give the
+# model a real working window (not the old 8192 special-case that made a 5K chat
+# read ~64% full) but bound it so a small model with a giant declared window
+# doesn't pay an 84s load. Model- and env-agnostic: ONE rule for every model,
+# and the user raises it (up to the declared window) or lowers it via
+# OLLAMA_NUM_CTX / the Settings context-window field.
+_DEFAULT_MAX_NUM_CTX = 32768
 
 
 def _normalize_ollama_usage(payload: dict) -> dict[str, int]:
@@ -150,37 +153,24 @@ class MultiToolCallResult:
         return len(self.calls) > 1
 
 
-def _is_small_model(model: str) -> bool:
-    """Return True for 1B/3B/mini models that should use reduced context."""
-    return any(tag in model for tag in _SMALL_MODEL_TAGS)
-
-
-def _is_medium_model(model: str) -> bool:
-    """Return True for 7B-14B models."""
-    return any(tag in model for tag in _MEDIUM_MODEL_TAGS)
-
-
 def _smart_num_ctx(model: str, context_window: int, intent: str = "chat") -> int:
-    """Choose a practical ``num_ctx`` that balances capability vs. resource use.
+    """Choose the ``num_ctx`` sent to Ollama — ONE model-agnostic rule.
 
     An explicit ``settings.ollama_num_ctx`` override (Settings modal /
-    OLLAMA_NUM_CTX) always wins — clamped to the declared window so it can't
-    exceed the model's real capacity. With no override, tiered defaults apply:
+    OLLAMA_NUM_CTX) always wins, clamped to the model's declared window so it
+    can never exceed real capacity. With no override, use the model's declared
+    window bounded by ``_DEFAULT_MAX_NUM_CTX`` — real working context without
+    paying the full-window KV-cache load cost on models that declare a huge one.
 
-    * **Small** (1b/2b/3b/mini) — 8 192 tokens.  Enough for multi-turn chat
-      without blowing up VRAM on consumer hardware.
-    * **Medium** (7b-14b) — 16 384 tokens.
-    * **Large** — use the model's full context window.
+    ``model`` is retained for signature stability but no longer size-tiered:
+    the old small/medium/large special-casing was a weak-hardware assumption
+    that made phi4-mini's context read ~64% full at 5K tokens. The bound is the
+    same for every model; the operator tunes it per machine.
     """
     override = getattr(settings, "ollama_num_ctx", 0) or 0
     if isinstance(override, int) and override > 0:
         return min(override, context_window)
-    if _is_small_model(model):
-        return min(context_window, 8192)
-    if _is_medium_model(model):
-        return min(context_window, 16384)
-    # Large models: use the full window
-    return context_window
+    return min(context_window, _DEFAULT_MAX_NUM_CTX)
 
 
 # Cache for available models — avoids hitting /api/tags on every request.
@@ -205,18 +195,41 @@ def _extract_context_length(show_payload: dict) -> int | None:
 
     Ollama reports it under ``model_info`` as ``"<arch>.context_length"``
     (e.g. ``"phi3.context_length"``, ``"llama.context_length"``) — the arch
-    prefix varies per model, so we match on the suffix rather than hardcoding
-    architectures. Returns None when the field is absent or unusable.
+    prefix varies per model. Live-verified on phi4-mini (S291): model_info
+    carries BOTH ``phi3.context_length`` (131072, the real window) AND
+    ``phi3.rope.scaling.original_context_length`` — the latter ALSO ends in
+    ``.context_length``, so a naive suffix match can return the wrong (rope)
+    value depending on dict order. We therefore resolve the canonical key from
+    ``general.architecture`` first, then fall back to a suffix match that
+    excludes rope/original variants. Returns None when absent or unusable.
     """
     if not isinstance(show_payload, dict):
         return None
     model_info = show_payload.get("model_info")
     if not isinstance(model_info, dict):
         return None
+
+    def _valid(v: object) -> int | None:
+        return int(v) if isinstance(v, (int, float)) and v > 0 else None
+
+    # Canonical: "<arch>.context_length" via general.architecture (e.g. phi3).
+    arch = model_info.get("general.architecture")
+    if isinstance(arch, str) and arch:
+        canonical = _valid(model_info.get(f"{arch}.context_length"))
+        if canonical is not None:
+            return canonical
+
+    # Fallback: any *.context_length that is NOT a rope/original-scaling variant.
     for key, value in model_info.items():
-        if isinstance(key, str) and key.endswith(".context_length"):
-            if isinstance(value, (int, float)) and value > 0:
-                return int(value)
+        if (
+            isinstance(key, str)
+            and key.endswith(".context_length")
+            and "original" not in key
+            and "rope" not in key
+        ):
+            valid = _valid(value)
+            if valid is not None:
+                return valid
     return None
 
 

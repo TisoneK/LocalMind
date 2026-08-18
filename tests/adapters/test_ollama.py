@@ -151,7 +151,7 @@ def test_context_window_unknown_model_defaults(adapter):
 from adapters.ollama import (  # noqa: E402
     _extract_context_length,
     _DETECTED_CONTEXT_WINDOWS,
-    _is_small_model,
+    _DEFAULT_MAX_NUM_CTX,
     _smart_num_ctx,
 )
 
@@ -176,10 +176,40 @@ def test_extract_context_length_missing_returns_none():
     assert _extract_context_length({"model_info": None}) is None
 
 
-def test_phi4_mini_treated_as_small():
-    # The size-tier heuristic must catch tag-free "mini" models so num_ctx
-    # defaults to a resource-sane 8192 rather than ballooning to the full 128K.
-    assert _is_small_model("phi4-mini:latest") is True
+def test_extract_context_length_prefers_canonical_over_rope_variant():
+    # Live-verified shape (phi4-mini, S291): model_info carries BOTH the real
+    # window AND a rope original_context_length that also ends in
+    # ".context_length". Must return the real 131072 regardless of dict order.
+    payload = {
+        "model_info": {
+            "general.architecture": "phi3",
+            # rope variant FIRST to prove order-independence.
+            "phi3.rope.scaling.original_context_length": 4096,
+            "phi3.context_length": 131072,
+        }
+    }
+    assert _extract_context_length(payload) == 131072
+
+
+def test_extract_context_length_fallback_excludes_rope_when_no_arch():
+    # No general.architecture → suffix fallback must still skip the rope variant.
+    payload = {
+        "model_info": {
+            "phi3.rope.scaling.original_context_length": 4096,
+            "phi3.context_length": 131072,
+        }
+    }
+    assert _extract_context_length(payload) == 131072
+
+
+def test_num_ctx_defaults_to_bounded_declared_window():
+    # Session 291: ONE model-agnostic rule — num_ctx is the declared window
+    # bounded by the default ceiling, no per-size special-casing. A small model
+    # with a huge declared window (phi4-mini, 131072) is bounded, not floored
+    # at the old 8192 that made a 5K chat read ~64% full.
+    assert _smart_num_ctx("phi4-mini:latest", 131072) == _DEFAULT_MAX_NUM_CTX
+    # A model whose declared window is below the ceiling uses it as-is.
+    assert _smart_num_ctx("tiny:1b", 4096) == 4096
 
 
 @pytest.mark.asyncio
@@ -196,8 +226,9 @@ async def test_detect_context_length_populates_window(adapter, monkeypatch):
     await adapter.prime_context_window()
     # After detection the declared window is the model's real capacity.
     assert adapter.context_window == 131072
-    # phi4-mini is "small" → num_ctx still capped at 8192 (memory safety).
-    assert adapter.effective_context_window == 8192
+    # num_ctx is the declared window bounded by the default ceiling (no longer
+    # the tiny 8192 special-case) — so the meter reads a sane fraction.
+    assert adapter.effective_context_window == _DEFAULT_MAX_NUM_CTX
 
 
 @pytest.mark.asyncio
@@ -230,9 +261,9 @@ def test_num_ctx_override_wins_and_clamps(adapter, monkeypatch):
     from core.config import settings
 
     adapter._model = "llama3.1:8b"  # 128000 declared
-    monkeypatch.setattr(settings, "ollama_num_ctx", 32768, raising=False)
-    # Override beats the size-tier default.
-    assert adapter.effective_context_window == 32768
+    monkeypatch.setattr(settings, "ollama_num_ctx", 65536, raising=False)
+    # An explicit override beats the default ceiling.
+    assert adapter.effective_context_window == 65536
     # An override larger than the declared window is clamped to capacity.
     monkeypatch.setattr(settings, "ollama_num_ctx", 999999, raising=False)
     assert adapter.effective_context_window == 128000
@@ -243,5 +274,5 @@ def test_num_ctx_override_zero_is_auto(adapter, monkeypatch):
 
     adapter._model = "llama3.1:70b"
     monkeypatch.setattr(settings, "ollama_num_ctx", 0, raising=False)
-    # 0 = auto → large model (no small/medium tag) uses its full window.
-    assert _smart_num_ctx("llama3.1:70b", 128000) == 128000
+    # 0 = auto → declared window bounded by the default ceiling.
+    assert _smart_num_ctx("llama3.1:70b", 128000) == _DEFAULT_MAX_NUM_CTX
