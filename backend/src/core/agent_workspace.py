@@ -23,7 +23,7 @@ import hashlib
 import time
 from typing import Optional
 
-from core.obs import ObsCollector, ObsEvent
+from core.obs import ObsCollector
 
 # Tool names whose output must never surface to the user (delegated child
 # output is intermediate model context, not user-facing content). Mirrors

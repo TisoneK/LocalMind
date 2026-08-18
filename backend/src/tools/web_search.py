@@ -358,7 +358,7 @@ async def _search_searxng(
     the next instance; the first instance that returns JSON results wins.
     """
     try:
-        import httpx
+        import httpx  # noqa: F401  — availability probe: fail fast before the loop
     except ImportError:
         return [], "network", "httpx not installed -- cannot search via SearXNG"
 
@@ -491,7 +491,7 @@ def list_available_tools() -> list[dict]:
             "tier": 2,
             "available": True,
             "requires_auth": False,
-            "description": "Scraped organic results — the reliable no-key second tier (does not churn like public SearXNG instances).",
+            "description": "Scraped organic results — the reliable no-key second tier (does not churn like public SearXNG instances).",  # noqa: E501
         },
         {
             "name": "SearXNG",

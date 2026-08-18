@@ -200,16 +200,16 @@ def _salvage_response(raw: str) -> str:
     the tool loop. Order: an explicit response/acknowledgement value (even from
     malformed JSON) → the raw prose when the output was never JSON → "".
     """
-    for field in ("response", "acknowledgement"):
+    for key in ("response", "acknowledgement"):
         # A complete (quoted) value first.
-        match = re.search(rf'"{field}"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+        match = re.search(rf'"{key}"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
         if match:
             try:
                 return json.loads(f'"{match.group(1)}"').strip()[:1200]
             except (ValueError, json.JSONDecodeError):
                 return match.group(1).strip()[:1200]
         # A value truncated mid-stream (no closing quote) — take it to the end.
-        loose = re.search(rf'"{field}"\s*:\s*"(.+)$', raw, re.DOTALL)
+        loose = re.search(rf'"{key}"\s*:\s*"(.+)$', raw, re.DOTALL)
         if loose:
             return loose.group(1).strip().rstrip('"').strip()[:1200]
     # No JSON structure at all — the model simply replied in prose. Use it.
