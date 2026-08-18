@@ -1273,3 +1273,18 @@ manifest: `.context/memory/features/fail-fast-provider-errors/manifest.md`.
   features or advertise child-agent orchestration as current until the user
   resolves B-2026-08-18-1. This ADR is direction, not a code change; it does not
   supersede any prior ADR — it frames them.
+- **ADDENDUM (Session 297, peer-verified via colab agent Buffy/Freebuff + re-checked by me):**
+  the "delegation shipped ahead of roadmap" framing above UNDERSTATES it. The
+  whole multi-agent layer the spec defers (§36) is not just present — it is the
+  LIVE runtime: `ParentAgent` is the request entry point
+  (`core/agent_runtime.py:667`), **11 specialist agents are registered**
+  (`backend/src/agents/{research,reviewer,analyst,direct,browser,parent,editor_selector,debugger,verifier,coding,context_pruner}` + `registry.py`),
+  the full machinery is wired (`delegate`, `delegate_parallel`, `delegate_inline`,
+  `best_of_n_edit`), and `agents/selection.py:26` is explicitly demoted to "not
+  used for request-time routing … UI metadata" (ADR-8 phases 3–4 done). So the
+  spec is best read not as a build roadmap but as a **quality bar** — esp. §40's
+  12 criteria (goal accuracy, tool selection, verification, honest completion) —
+  for a system that has already run past this phase's stated scope. This sharpens
+  B-2026-08-18-1 from "add delegation later?" to "the multi-agent layer exists and
+  is live — freeze/hide it, remove it, or accept we're ahead and steer remaining
+  work toward §40 hardening."

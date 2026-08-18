@@ -4013,3 +4013,18 @@ program + ADR-22). -->
 - **Open items:** optimization roadmap B-2026-08-17-8..12 (review-62).
 - **Report:** .context/memory/reviews/2026-08-17-review-63.md
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 297 (memorize/document the Parent Agent spec)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user handed a full "Parent Agent — Complete Functional Architecture & Development Specification" (Desktop md) and asked to "start colab agent session for memorizing/documenting this information." Interpreted "colab" as a normal single-agent doc session (documenting ONE spec has no parallelizable investigation axes — multiagent worktrees would be theater; flagged the interpretation to the user).
+- **KEY FINDING (spec vs build divergence):** spec §1/§9/§36 = single-agent-first, delegation/specialists OUT OF SCOPE this phase — but the codebase ALREADY ships delegation (`core/agent/delegation.py`, `tools/delegate.py`, `tools/delegate_parallel.py`, `tools/delegate_inline.py`, `tools/best_of_n_edit.py`; 262 refs) and `docs/ARCHITECTURE.md` advertised `delegate/delegate_parallel → child agents`. Conversely the spec's LOOP is already built + is exactly what ADR-33/34/36/37/38/42/43/45/46 have been hardening. Documented BOTH; did NOT touch delegation code (architectural change → flagged for the user).
+- **DELIVERABLES:** (1) `docs/parent-agent-spec.md` — spec captured verbatim (cp, not retyped) + provenance/Reconciliation header; (2) ADR-47 (single-agent-first; delegation deferred not extended; frames prior loop ADRs); (3) `docs/ARCHITECTURE.md` scope callout on the delegate branch → spec + ADR-47; (4) B-2026-08-18-1 (flagged architectural, NEEDS USER DECISION — keep delegation dormant / remove / declare phase advanced).
+- **Commits:** 3 — `docs:` spec + ARCHITECTURE reconcile (project surface); `chore(context):` ADR-47 + backlog; `chore(context):` session log (this).
+- **VERIFICATION:** no product code changed → baseline not re-run (last green S296: BE 1937/0, FE 251). Append-only logs verified only-grew before each commit. Project and `.context/` staged/committed separately.
+- **Outcome:** done — spec memorized/documented durably; the one real divergence surfaced honestly and put in front of the user rather than silently resolved.
+- **Open items:** B-2026-08-18-1 (delegation reconciliation — decision owed); carried B-2026-08-17-8..12, -4, -7, -2.
+- **Report:** .context/memory/reviews/2026-08-18-review-64.md
+- **Colab:** peer agent **Buffy/Freebuff** joined read-only and independently verified the reconciliation, sharpening it — the divergence is the ENTIRE multi-agent layer, not just delegation (ParentAgent is the live entry `agent_runtime.py:667`, 11 specialists registered, delegation wired, `selection.py` demoted to UI metadata). Peer persisted it as a review-64 addendum + a SHARPENED note under B-2026-08-18-1 (peer commit `383fba4`). I re-verified the claims (greps held) and folded the sharpening into ADR-47's durable record (decisions.md) so it doesn't live only in the review report. Peer coordinated via a shared durable file rather than a `context-collab` event — logged as a flaw.
+- **Notes:** none

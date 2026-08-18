@@ -831,3 +831,11 @@ if literally nothing slowed you down.
 - **Cause:** (1) no mechanical gate — the exit checklist is prose, and I drifted once the commit was green. (2) glm-4.5-flash with reasoning is genuinely slow; there's no fast weak model that exercises the tool loop cheaply.
 - **Workaround / fix:** (1) resumed the logs this session + logged the gate gap in flaws/log.md. (2) use a FAST task first to confirm event ORDER, reserve the slow multi-tool trace for the definitive interleaving check; run it in the background (run_in_background) so it doesn't block.
 - **Prevent next time:** run `context-gates exit` (0.8.0) before finishing if it checks the append-only logs; otherwise keep a literal end-of-session checklist that includes inefficiencies + flaws, not just review + sessions.
+
+---
+## 2026-08-18 — Claude Code / claude-opus-4-8 (Session 297)
+- **Problem:** minor only. (1) hit the usage limit mid-session (between appending SUMMARY.md and the friction logs) — resumed cleanly from the task tracker + current.md state, which is exactly what the bookkeeping is for. (2) Verifying the peer agent's (Buffy/Freebuff) sharpening claims before folding them into durable memory cost a couple of greps — but was correct per "verify before trusting" and the S295 multiagent lesson (always re-verify peer claims); the claims held.
+- **Cost:** ~negligible; a few tool calls to re-verify peer findings.
+- **Cause:** usage-limit interruption is environmental; re-verification is intentional protocol discipline, not waste.
+- **Workaround / fix:** current.md + the task tracker made the mid-session resume trivial — no state was reconstructed from chat history. Confirms the value of setting current.md BEFORE work, not after.
+- **Prevent next time:** nothing to change — this is the system working. Keep writing current.md with the DoD up front so any interruption is recoverable.
