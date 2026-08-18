@@ -1,0 +1,239 @@
+#!/bin/sh
+# context-collab — peer-to-peer coordination for concurrent agents.
+#
+# Project mode only. Coordination state is immutable, one-file-per-event
+# under .context/memory/collaboration/events/, so concurrent agents do not
+# append to a shared log. Product work still belongs on isolated branches or
+# worktrees; this tool does not merge or force-push product code.
+#
+# Commands:
+#   emit TYPE --session ID --agent ID --issue ID [metadata] [--body-file FILE]
+#   status [--session ID] [--issue ID]
+#   check  [--session ID] [--issue ID]   integration-readiness gate
+#
+# Metadata:
+#   --paths CSV       repo-relative paths or logical scopes
+#   --refs CSV        event IDs or commit SHAs this event cites
+#   --option ID       proposal option ID
+#   --selected ID     option selected by an agreement
+#   --owner ID        implementation owner
+#   --participants CSV agents who accepted an agreement
+#   --body TEXT       one-line event detail (use --body-file for reasoning)
+#
+# Event types: claim proposal assessment agreement correction handoff release
+# check validates the event trail for integration readiness.
+
+set -u
+
+say() { printf '%s\n' "$*"; }
+err() { printf 'context-collab: %s\n' "$*" >&2; }
+die() { err "$*"; exit 1; }
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 1
+CORE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd) || exit 1
+CONTEXT_DIR=$(dirname -- "$CORE_DIR")
+PROJECT_DIR=$(dirname -- "$CONTEXT_DIR")
+MEMORY_DIR=$CONTEXT_DIR/memory
+COLLAB_DIR=$MEMORY_DIR/collaboration
+EVENT_DIR=$COLLAB_DIR/events
+
+validate_value() {
+  _label=$1; _value=$2
+  [ -n "$_value" ] || die "$_label cannot be empty"
+  _clean=$(printf '%s' "$_value" | tr -d '\n\r')
+  [ "$_clean" = "$_value" ] || die "$_label cannot contain a newline"
+}
+
+validate_id() {
+  _label=$1; _value=$2
+  validate_value "$_label" "$_value"
+  case "$_value" in
+    *[!A-Za-z0-9._:-]*) die "$_label may contain only letters, numbers, '.', '_', ':' or '-'" ;;
+  esac
+}
+
+field() {
+  sed -n "s/^$1: //p" "$2" | head -n 1
+}
+
+usage() {
+  sed -n '8,29p' "$0" | sed 's/^# \{0,1\}//'
+  exit 2
+}
+
+emit() {
+  TYPE=${1:-}; [ -n "$TYPE" ] || usage
+  shift
+  case "$TYPE" in
+    claim|proposal|assessment|agreement|correction|handoff|release) ;;
+    *) die "unknown event type '$TYPE'" ;;
+  esac
+
+  SESSION=""; AGENT=""; ISSUE=""; PATHS="none"; REFS="none"
+  OPTION="none"; SELECTED="none"; OWNER="none"; PARTICIPANTS="none"
+  BODY=""; BODY_FILE=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --session)       [ $# -ge 2 ] || die "--session needs a value"; SESSION=$2; shift 2 ;;
+      --agent)         [ $# -ge 2 ] || die "--agent needs a value"; AGENT=$2; shift 2 ;;
+      --issue)         [ $# -ge 2 ] || die "--issue needs a value"; ISSUE=$2; shift 2 ;;
+      --paths)         [ $# -ge 2 ] || die "--paths needs a value"; PATHS=$2; shift 2 ;;
+      --refs)          [ $# -ge 2 ] || die "--refs needs a value"; REFS=$2; shift 2 ;;
+      --option)        [ $# -ge 2 ] || die "--option needs a value"; OPTION=$2; shift 2 ;;
+      --selected)      [ $# -ge 2 ] || die "--selected needs a value"; SELECTED=$2; shift 2 ;;
+      --owner)         [ $# -ge 2 ] || die "--owner needs a value"; OWNER=$2; shift 2 ;;
+      --participants)  [ $# -ge 2 ] || die "--participants needs a value"; PARTICIPANTS=$2; shift 2 ;;
+      --body)          [ $# -ge 2 ] || die "--body needs a value"; BODY=$2; shift 2 ;;
+      --body-file)     [ $# -ge 2 ] || die "--body-file needs a value"; BODY_FILE=$2; shift 2 ;;
+      -h|--help) usage ;;
+      *) die "unknown argument '$1' (try: context-collab help)" ;;
+    esac
+  done
+
+  validate_id session "$SESSION"
+  validate_id agent "$AGENT"
+  validate_id issue "$ISSUE"
+  validate_value paths "$PATHS"
+  validate_value refs "$REFS"
+  validate_id option "$OPTION"
+  validate_id selected "$SELECTED"
+  validate_id owner "$OWNER"
+  validate_value participants "$PARTICIPANTS"
+  case "$TYPE" in
+    claim)       [ "$PATHS" != none ] || die "claim requires --paths" ;;
+    proposal)    [ "$OPTION" != none ] || die "proposal requires --option" ;;
+    assessment|correction|handoff|release)
+      [ "$REFS" != none ] || die "$TYPE requires --refs" ;;
+    agreement)
+      [ "$REFS" != none ] || die "agreement requires --refs"
+      [ "$SELECTED" != none ] || die "agreement requires --selected"
+      [ "$OWNER" != none ] || die "agreement requires --owner"
+      [ "$PARTICIPANTS" != none ] || die "agreement requires --participants" ;;
+  esac
+  if [ -n "$BODY_FILE" ]; then
+    [ -f "$BODY_FILE" ] || die "body file not found: $BODY_FILE"
+  fi
+  if [ -n "$BODY_FILE" ] && [ -n "$BODY" ]; then
+    die "use either --body or --body-file, not both"
+  fi
+  if [ -z "$BODY_FILE" ] && [ -z "$BODY" ]; then
+    case "$TYPE" in
+      claim) BODY="Intent and evidence: describe the intended change and why this scope is safe." ;;
+      *) die "$TYPE requires --body-file or --body with evidence and reasoning" ;;
+    esac
+  fi
+
+  mkdir -p "$EVENT_DIR" || die "cannot create $EVENT_DIR"
+  # Timestamp + agent + process/random suffix makes collisions exceedingly
+  # unlikely; the temp file + mv makes publication atomic on one filesystem.
+  STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+  if command -v od >/dev/null 2>&1 && [ -r /dev/urandom ]; then
+    RAND=$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')
+  else
+    RAND=$$
+  fi
+  ID="$STAMP-$AGENT-$RAND"
+  TARGET=$EVENT_DIR/$ID.md
+  TMP="$EVENT_DIR/.${ID}.$$.tmp"
+  [ ! -e "$TARGET" ] || die "event ID collision: $ID"
+  {
+    printf '%s\n' '---'
+    printf 'id: %s\n' "$ID"
+    printf 'type: %s\n' "$TYPE"
+    printf 'session: %s\n' "$SESSION"
+    printf 'agent: %s\n' "$AGENT"
+    printf 'created: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'issue: %s\n' "$ISSUE"
+    printf 'paths: %s\n' "$PATHS"
+    printf 'refs: %s\n' "$REFS"
+    printf 'option: %s\n' "$OPTION"
+    printf 'selected: %s\n' "$SELECTED"
+    printf 'owner: %s\n' "$OWNER"
+    printf 'participants: %s\n' "$PARTICIPANTS"
+    printf '%s\n\n' '---'
+    if [ -n "$BODY_FILE" ]; then cat "$BODY_FILE"; else printf '%s\n' "$BODY"; fi
+    printf '\n'
+  } > "$TMP" || { rm -f "$TMP"; die "could not write event"; }
+  mv "$TMP" "$TARGET" || { rm -f "$TMP"; die "could not publish event"; }
+  say "created collaboration event: .context/memory/collaboration/events/$ID.md"
+  say "publish it in a separate chore(context): commit before changing the claimed product scope"
+}
+
+released() {
+  _claim=$1
+  for _f in "$EVENT_DIR"/*.md; do
+    [ -f "$_f" ] || continue
+    _type=$(field type "$_f")
+    [ "$_type" = release ] || [ "$_type" = handoff ] || continue
+    _refs=$(field refs "$_f")
+    case ",$_refs," in *",$_claim,"*) return 0 ;; esac
+  done
+  return 1
+}
+
+paths_overlap() {
+  awk -v left="$1" -v right="$2" 'BEGIN {
+    nl=split(left, l, ","); nr=split(right, r, ",");
+    for (i=1; i<=nl; i++) for (j=1; j<=nr; j++)
+      if (l[i] != "none" && l[i] == r[j]) exit 0;
+    exit 1
+  }'
+}
+
+status() {
+  SESSION=""; ISSUE=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --session) [ $# -ge 2 ] || die "--session needs a value"; SESSION=$2; shift 2 ;;
+      --issue)   [ $# -ge 2 ] || die "--issue needs a value"; ISSUE=$2; shift 2 ;;
+      -h|--help) usage ;;
+      *) die "unknown argument '$1'" ;;
+    esac
+  done
+  [ -d "$EVENT_DIR" ] || { say "no collaboration events yet"; return 0; }
+  count=0
+  say "Collaboration events${SESSION:+ for session $SESSION}${ISSUE:+ / issue $ISSUE}:"
+  for f in "$EVENT_DIR"/*.md; do
+    [ -f "$f" ] || continue
+    s=$(field session "$f"); i=$(field issue "$f")
+    [ -z "$SESSION" ] || [ "$s" = "$SESSION" ] || continue
+    [ -z "$ISSUE" ] || [ "$i" = "$ISSUE" ] || continue
+    count=$((count + 1))
+    say "- $(field type "$f") $(field id "$f") — agent=$(field agent "$f") paths=$(field paths "$f") refs=$(field refs "$f")"
+  done
+  [ "$count" -gt 0 ] || { say "(none)"; return 0; }
+
+  say ""
+  say "Active claims and possible overlaps:"
+  for a in "$EVENT_DIR"/*.md; do
+    [ -f "$a" ] || continue
+    [ "$(field type "$a")" = claim ] || continue
+    sa=$(field session "$a"); ia=$(field issue "$a");
+    [ -z "$SESSION" ] || [ "$sa" = "$SESSION" ] || continue
+    [ -z "$ISSUE" ] || [ "$ia" = "$ISSUE" ] || continue
+    released "$(field id "$a")" && continue
+    say "- $(field id "$a") — agent=$(field agent "$a") paths=$(field paths "$a")"
+    for b in "$EVENT_DIR"/*.md; do
+      [ -f "$b" ] || continue
+      [ "$a" \< "$b" ] || continue
+      [ "$(field type "$b")" = claim ] || continue
+      [ "$(field session "$b")" = "$sa" ] || continue
+      [ "$(field issue "$b")" = "$ia" ] || continue
+      released "$(field id "$b")" && continue
+      if paths_overlap "$(field paths "$a")" "$(field paths "$b")"; then
+        say "  POSSIBLE OVERLAP with $(field id "$b") — peers must assess and agree before either conflicting edit"
+      fi
+    done
+  done
+  say ""
+  say "Unresolved proposals/corrections require peer assessment and an agreement event before implementation."
+}
+
+CMD=${1:-}; [ $# -gt 0 ] && shift
+case "$CMD" in
+  emit)   emit "$@" ;;
+  status) status "$@" ;;
+  check)  sh "$SCRIPT_DIR/context-collab-check" check "$@" ;;
+  ''|-h|--help|help) usage ;;
+  *) die "unknown command '$CMD' (try: context-collab help)" ;;
+esac

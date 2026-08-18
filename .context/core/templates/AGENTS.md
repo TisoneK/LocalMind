@@ -27,22 +27,30 @@ If you read nothing else, obey these rules:
 4. **Read memory before working:** at minimum
    `.context/memory/workflows/active.md`,
    `.context/memory/agents/sessions.md` (last entries),
+   `.context/memory/collaboration/README.md` and relevant event files
+   when collaboration is enabled, `.context/memory/workflows/gates.conf`,
    `.context/memory/tasks/current.md`, and
    `.context/memory/inefficiencies/log.md` (known traps). If the
    active session has detailed notes at
    `.context/memory/sessions/`, skim them for current state.
-5. **One task at a time.** If `.context/memory/tasks/current.md` shows
-   another live session in progress, do not start.
+5. **Choose the mode explicitly.** Without a shared collaboration
+   `session` + `issue`, `tasks/current.md` is the single-agent lock. In
+   collaboration mode, use an isolated git worktree/branch and the
+   immutable event trail; do not block peers on `tasks/current.md`. Before
+   each next action run `context-gates checkpoint`; before commits,
+   integration, and exit run the matching gate.
 6. **Append-only files are append-only:** `agents/sessions.md`,
    `tasks/backlog.md`, `plans/decisions.md`, `flaws/log.md`,
    `inefficiencies/log.md`. Add at the bottom; never edit or delete
-   past entries.
+   past entries. Collaboration event files are stronger: immutable,
+   one event per file; emit a correction instead of editing one.
 7. **No secrets in tracked files, ever.** Values go only in
    `.context/memory/secrets/` (self-gitignored). Never echo a secret or
    token in chat, logs, or commit messages.
 8. **Two surfaces, two prefixes:** editing product code = normal commit
    prefixes; editing `.context/` = `chore(context):` (reports:
-   `docs(review):`). Never mix both surfaces in one commit.
+   `docs(review):`). Never mix both surfaces in one commit. Collaboration
+   events are separate immutable context commits.
 9. **The session is not done until everything is committed AND pushed**,
    the session is logged in `.context/memory/agents/sessions.md`, and
    `.context/memory/tasks/current.md` is cleared. If the user has to

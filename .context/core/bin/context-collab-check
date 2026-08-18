@@ -1,0 +1,287 @@
+#!/bin/sh
+# context-collab-check — validate collaboration events before integration.
+#
+# This is called by context-collab check. It treats the event trail as an
+# integration gate: malformed metadata, unresolved claims, overlapping active
+# claims, incomplete agreements, unresolved corrections/handoffs, and releases
+# without product commits fail the check.
+
+set -u
+
+say() { printf '%s\n' "$*"; }
+err() { printf 'context-collab: %s\n' "$*" >&2; }
+die() { err "$*"; exit 2; }
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 2
+CORE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd) || exit 2
+CONTEXT_DIR=$(dirname -- "$CORE_DIR")
+EVENT_DIR=$CONTEXT_DIR/memory/collaboration/events
+
+usage() {
+  cat <<'EOF'
+context-collab check [--session ID] [--issue ID]
+
+Integration-readiness checks:
+  - required and valid event metadata
+  - duplicate event IDs and resolvable event references
+  - complete agreements with proposals, assessments, participants, and owner
+  - active overlapping claims
+  - unresolved claims, proposals, assessments, handoffs, and corrections
+  - releases that reference a product commit
+
+Exit codes: 0 passed · 1 validation failure · 2 usage/error
+EOF
+  exit 2
+}
+
+field() {
+  sed -n "s/^$1: //p" "$2" | head -n 1
+}
+
+valid_id() {
+  _value=$1
+  [ -n "$_value" ] || return 1
+  case "$_value" in *[!A-Za-z0-9._:-]*) return 1 ;; esac
+  return 0
+}
+
+valid_sha() {
+  [ -n "$1" ] || return 1
+  case "$1" in *[!0-9A-Fa-f]*) return 1 ;; esac
+  _sha_len=$(printf '%s' "$1" | awk '{ print length }')
+  [ "$_sha_len" -ge 7 ] && [ "$_sha_len" -le 40 ]
+}
+
+event_in_scope() (
+  _scope_file=$1
+  _scope_session=$(field session "$_scope_file"); _scope_issue=$(field issue "$_scope_file")
+  [ -z "$CHECK_SESSION" ] || [ "$_scope_session" = "$CHECK_SESSION" ] || return 1
+  [ -z "$CHECK_ISSUE" ] || [ "$_scope_issue" = "$CHECK_ISSUE" ] || return 1
+  return 0
+)
+
+event_by_id() (
+  _wanted=$1
+  for _event_file in "$EVENT_DIR"/*.md; do
+    [ -f "$_event_file" ] || continue
+    [ "$(field id "$_event_file")" = "$_wanted" ] && { printf '%s\n' "$_event_file"; return 0; }
+  done
+  return 1
+)
+
+refs_for() {
+  printf '%s' "$(field refs "$1")" | tr ',' ' '
+}
+
+has_ref_type() {
+  _source=$1; _want=$2
+  for _ref in $(refs_for "$_source"); do
+    [ "$_ref" = none ] && continue
+    _rf=$(event_by_id "$_ref") || continue
+    [ "$(field type "$_rf")" = "$_want" ] && return 0
+  done
+  return 1
+}
+
+referenced_by_type() {
+  _wanted=$1; _want_type=$2
+  _wanted_file=$(event_by_id "$_wanted") || return 1
+  _wanted_session=$(field session "$_wanted_file"); _wanted_issue=$(field issue "$_wanted_file")
+  for _f in "$EVENT_DIR"/*.md; do
+    [ -f "$_f" ] || continue
+    [ "$(field type "$_f")" = "$_want_type" ] || continue
+    [ "$(field session "$_f")" = "$_wanted_session" ] || continue
+    [ "$(field issue "$_f")" = "$_wanted_issue" ] || continue
+    for _ref in $(refs_for "$_f"); do
+      [ "$_ref" = "$_wanted" ] && return 0
+    done
+  done
+  return 1
+}
+
+has_non_event_ref() {
+  _source=$1
+  for _ref in $(refs_for "$_source"); do
+    [ "$_ref" = none ] && continue
+    valid_sha "$_ref" && return 0
+  done
+  return 1
+}
+
+claim_closed() {
+  _claim=$1
+  referenced_by_type "$_claim" release && return 0
+  referenced_by_type "$_claim" handoff && return 0
+  return 1
+}
+
+csv_contains() {
+  case ",$1," in *",$2,"*) return 0 ;; esac
+  return 1
+}
+
+csv_distinct_count() {
+  printf '%s\n' "$1" | awk -F, 'BEGIN { n=0 } {
+    for (i=1; i<=NF; i++) if ($i != "none" && !seen[$i]++) n++
+  } END { print n }'
+}
+
+paths_overlap() {
+  awk -v left="$1" -v right="$2" 'BEGIN {
+    nl=split(left, l, ","); nr=split(right, r, ",");
+    for (i=1; i<=nl; i++) for (j=1; j<=nr; j++)
+      if (l[i] != "none" && l[i] == r[j]) exit 0;
+    exit 1
+  }'
+}
+
+check_fail() {
+  CHECK_FAILURES=$((CHECK_FAILURES + 1))
+  err "check: $*"
+}
+
+check_event() {
+  _f=$1
+  event_in_scope "$_f" || return 0
+  _id=$(field id "$_f"); _type=$(field type "$_f")
+  for _key in id type session agent created issue paths refs option selected owner participants; do
+    [ -n "$(field "$_key" "$_f")" ] || check_fail "$_f is missing $_key"
+  done
+  valid_id "$_id" || check_fail "$_f has invalid id '$_id'"
+  case "$_type" in
+    claim|proposal|assessment|agreement|correction|handoff|release) ;;
+    *) check_fail "$_f has unknown type '$_type'"; return 0 ;;
+  esac
+  for _ref in $(refs_for "$_f"); do
+    [ "$_ref" = none ] && continue
+    if _rf=$(event_by_id "$_ref"); then
+      [ "$(field session "$_rf")" = "$(field session "$_f")" ] || check_fail "$_id references event $_ref from another session"
+      [ "$(field issue "$_rf")" = "$(field issue "$_f")" ] || check_fail "$_id references event $_ref from another issue"
+    else
+      valid_sha "$_ref" || check_fail "$_id has unknown reference '$_ref' (expected an event ID or commit SHA)"
+    fi
+  done
+  case "$_type" in
+    claim)
+      [ "$(field paths "$_f")" != none ] || check_fail "claim $_id has no paths"
+      ;;
+    proposal)
+      [ "$(field option "$_f")" != none ] || check_fail "proposal $_id has no option"
+      ;;
+    assessment)
+      has_ref_type "$_f" proposal || check_fail "assessment $_id does not reference a proposal"
+      ;;
+    agreement)
+      has_ref_type "$_f" proposal || check_fail "agreement $_id does not reference a proposal"
+      has_ref_type "$_f" assessment || check_fail "agreement $_id does not reference an assessment"
+      [ "$(field selected "$_f")" != none ] || check_fail "agreement $_id has no selected option"
+      [ "$(field owner "$_f")" != none ] || check_fail "agreement $_id has no owner"
+      [ "$(field participants "$_f")" != none ] || check_fail "agreement $_id has no participants"
+      csv_contains "$(field participants "$_f")" "$(field owner "$_f")" || check_fail "agreement $_id owner is not a participant"
+      [ "$(csv_distinct_count "$(field participants "$_f")")" -ge 2 ] || check_fail "agreement $_id needs at least two distinct participants"
+      _selected=$(field selected "$_f"); _selected_found=no
+      for _ref in $(refs_for "$_f"); do
+        _rf=$(event_by_id "$_ref") || continue
+        [ "$(field type "$_rf")" = proposal ] || continue
+        [ "$(field option "$_rf")" = "$_selected" ] && _selected_found=yes
+      done
+      [ "$_selected_found" = yes ] || check_fail "agreement $_id selects an option not present in its referenced proposals"
+      ;;
+    correction)
+      [ "$(field refs "$_f")" != none ] || check_fail "correction $_id has no reference"
+      referenced_by_type "$_id" agreement || check_fail "correction $_id has no peer agreement"
+      ;;
+    handoff)
+      has_ref_type "$_f" agreement || check_fail "handoff $_id does not reference an agreement"
+      [ "$(field owner "$_f")" != none ] || check_fail "handoff $_id has no receiving owner"
+      ;;
+    release)
+      has_ref_type "$_f" claim || has_ref_type "$_f" handoff || check_fail "release $_id does not reference a claim or handoff"
+      has_non_event_ref "$_f" || check_fail "release $_id does not reference a product commit"
+      ;;
+  esac
+}
+
+check_duplicates() {
+  for _f in "$EVENT_DIR"/*.md; do
+    [ -f "$_f" ] || continue
+    event_in_scope "$_f" || continue
+    for _other in "$EVENT_DIR"/*.md; do
+      [ -f "$_other" ] || continue
+      [ "$_other" \< "$_f" ] || continue
+      event_in_scope "$_other" || continue
+      [ "$(field id "$_f")" = "$(field id "$_other")" ] && check_fail "duplicate event id $(field id "$_f")"
+    done
+  done
+}
+
+check_overlaps() {
+  for _a in "$EVENT_DIR"/*.md; do
+    [ -f "$_a" ] || continue
+    event_in_scope "$_a" || continue
+    [ "$(field type "$_a")" = claim ] || continue
+    claim_closed "$(field id "$_a")" && continue
+    for _b in "$EVENT_DIR"/*.md; do
+      [ -f "$_b" ] || continue
+      [ "$_a" \< "$_b" ] || continue
+      event_in_scope "$_b" || continue
+      [ "$(field type "$_b")" = claim ] || continue
+      claim_closed "$(field id "$_b")" && continue
+      [ "$(field session "$_a")" = "$(field session "$_b")" ] || continue
+      [ "$(field issue "$_a")" = "$(field issue "$_b")" ] || continue
+      if paths_overlap "$(field paths "$_a")" "$(field paths "$_b")"; then
+        check_fail "active claims overlap: $(field id "$_a") and $(field id "$_b")"
+      fi
+    done
+  done
+}
+
+check_resolutions() {
+  for _f in "$EVENT_DIR"/*.md; do
+    [ -f "$_f" ] || continue
+    event_in_scope "$_f" || continue
+    _id=$(field id "$_f"); _type=$(field type "$_f")
+    case "$_type" in
+      claim) claim_closed "$_id" || check_fail "claim $_id is not released or handed off" ;;
+      proposal|assessment) referenced_by_type "$_id" agreement || check_fail "$_type $_id is not resolved by an agreement" ;;
+      handoff) referenced_by_type "$_id" release || check_fail "handoff $_id is not released" ;;
+    esac
+  done
+}
+
+check() {
+  CHECK_SESSION=""; CHECK_ISSUE=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --session) [ $# -ge 2 ] || die "--session needs a value"; valid_id "$2" || die "invalid session id: $2"; CHECK_SESSION=$2; shift 2 ;;
+      --issue)   [ $# -ge 2 ] || die "--issue needs a value"; valid_id "$2" || die "invalid issue id: $2"; CHECK_ISSUE=$2; shift 2 ;;
+      -h|--help) usage ;;
+      *) die "unknown argument '$1'" ;;
+    esac
+  done
+  [ -d "$EVENT_DIR" ] || { say "collaboration check: no events (nothing to check)"; return 0; }
+  CHECK_FAILURES=0; CHECK_COUNT=0
+  for _f in "$EVENT_DIR"/*.md; do
+    [ -f "$_f" ] || continue
+    event_in_scope "$_f" || continue
+    CHECK_COUNT=$((CHECK_COUNT + 1))
+    check_event "$_f"
+  done
+  [ "$CHECK_COUNT" -gt 0 ] || { say "collaboration check: no matching events"; return 0; }
+  check_duplicates
+  check_overlaps
+  check_resolutions
+  if [ "$CHECK_FAILURES" -gt 0 ]; then
+    err "collaboration check failed: $CHECK_FAILURES problem(s) across $CHECK_COUNT event(s)"
+    return 1
+  fi
+  say "collaboration check passed: $CHECK_COUNT event(s), all claims resolved and agreements/releases complete"
+  return 0
+}
+
+CMD=${1:-}; [ $# -gt 0 ] && shift
+case "$CMD" in
+  check) check "$@" ;;
+  ''|-h|--help|help) usage ;;
+  *) die "unknown command '$CMD'" ;;
+esac

@@ -136,6 +136,92 @@ or am I editing the agent's memory of the project?"
 
 ---
 
+## Peer Collaboration Mode — Concurrent Agents, Shared Issues
+
+Collaboration is opt-in. Declare a shared `session` ID and `issue` ID
+when two or more agents will work on the same issue, either concurrently
+or at different times. Without those IDs, the existing one-agent-per-repo
+workflow and `tasks/current.md` lock remain in force.
+
+### Isolation and publication
+
+- Every collaborating agent works in a separate product worktree/clone
+  and branch named `collab/<session-id>/<agent-id>`. Never edit the same
+  checkout as another agent and never push product commits directly to
+  the shared integration branch while collaboration is active.
+- Publish coordination events to the shared event-only ref
+  `collab/<session-id>/coordination` (use a separate worktree when
+  possible). It is a bulletin board, not a coordinator: each event is a
+  new immutable file, and a non-fast-forward push is rebased while
+  preserving every event file. Publish event commits separately as
+  `chore(context):`; never append live coordination state to a shared log.
+  Use `sh .context/core/bin/context-collab` to emit and inspect events.
+- Fetch before reading peer state and again before applying a conflicting
+  change. A claim exposes intent and scope; it is not a lock.
+- Before integrating product branches, run
+  `sh .context/core/bin/context-collab check --session <id> --issue <id>`.
+  A failing check blocks integration until peers resolve the reported
+  event-trail problem.
+
+### Peer decision lifecycle
+
+1. Emit a `claim` before editing, naming the issue, paths/logical scope,
+   hypothesis, evidence, and intended change.
+2. Non-overlapping claims may proceed in parallel. Treat shared
+   interfaces, migrations, generated files, and lockfiles as overlapping
+   even when their paths differ.
+3. For an overlap, each option is a `proposal`; every involved agent
+   reads the alternatives and emits an `assessment` comparing correctness,
+   regression risk, compatibility, simplicity, and verification evidence.
+4. Do not apply a conflicting option until an `agreement` event records
+   the best-supported option, the reasoning, all accepting participants,
+   and exactly one implementation owner. There is no timestamp, priority,
+   or agent-ID tie-breaker. If evidence remains tied, pause and ask the
+   user rather than silently selecting a winner.
+5. If an agent finds a mistake, emit a `correction` referencing the
+   relevant event or commit. State the observed symptom, evidence, likely
+   root cause, candidate repairs, and suggested owner. Peers assess it;
+   an agreement chooses the right cause/repair and who fixes it. The owner
+   emits a `release` after re-reading the result and running checks.
+6. Agents joining later reuse the same session/issue IDs, fetch the event
+   trail, and emit a new claim or `handoff` before continuing. They do not
+   overwrite another agent's notes or assume an old claim is still active.
+
+In collaboration mode, `tasks/current.md` is informational and is not a
+lock. Do not overwrite or clear a peer's current task. Normal durable
+files are updated by their named owner or after rebasing; event files are
+the live coordination channel.
+
+## Explicit Gate Protocol — Commands, Not Prose
+
+The project-owned registry is `.context/memory/workflows/gates.conf`.
+Run the POSIX helper (or its PowerShell equivalent) at every lifecycle
+boundary. A failing gate blocks the next transition; record the exact
+command and observed result before retrying.
+
+- **Per-agent-turn checkpoint:** before the next action after reading,
+  editing, or receiving peer state, run:
+  `sh .context/core/bin/context-gates checkpoint [--session <id> --issue <id>]`.
+  This refreshes working-tree and collaboration state so an agent never
+  acts on stale context.
+- **Before every commit:** run
+  `sh .context/core/bin/context-gates run pre-commit`.
+  It runs universal staged-diff checks plus explicit project commands;
+  hybrid mode discovers conventional commands only when none are listed.
+- **Before branch integration:** run
+  `sh .context/core/bin/context-gates run integration --session <id> --issue <id>`.
+  This includes `context-collab check` and configured build/integration
+  commands. Omit the collaboration scope only for a non-collaborative
+  single-agent integration.
+- **Before session exit:** run
+  `sh .context/core/bin/context-gates run exit`.
+  It verifies core integrity, final diffs, and configured exit commands.
+
+Commands are explicit when present in `gates.conf`; auto-discovery is a
+fallback, not permission to invent a command. If a project requires a
+specific command, configure it explicitly and use `mode=explicit` to make
+missing commands fail rather than pass with a notice.
+
 ## Session Lifecycle — Entry, Transitions, Exit
 
 > **The protocol must direct the agent at every point.** If you don't
@@ -161,7 +247,7 @@ or am I editing the agent's memory of the project?"
 - [ ] `.context/memory/tasks/`, `.context/memory/system/`, `.context/memory/plans/` updated, committed, AND pushed
 - [ ] `.context/memory/agents/sessions.md` + `.context/memory/sessions/SUMMARY.md` + `.context/memory/inefficiencies/log.md` + `.context/memory/flaws/log.md` appended, committed, AND pushed
 - [ ] `.context/memory/sessions/` notes promoted + committed, AND pushed (if this session produced a notes file)
-- [ ] `tasks/current.md` cleared (set to idle)
+- [ ] `tasks/current.md` cleared (set to idle) in single-agent mode; collaboration mode releases/handoffs each claim without clearing a peer's task
 - [ ] PAT unset (Step 19)
 - [ ] Chat summary delivered to user
 
@@ -220,19 +306,21 @@ git config user.email "<GIT_EMAIL>"
   1. `.context/README.md` — the zone map (core = read-only protocol; memory = this project's data)
   2. `.context/memory/agents/sessions.md` — who worked here before, with which model, and what they did (read the last 3–5 entries)
   3. `.context/memory/sessions/SUMMARY.md` — compressed session continuity (skim the last ~10 entries; if the file doesn't exist yet, skip — it's created by the first session that runs on 0.5.0+)
-  4. `.context/memory/tasks/current.md` — is a task marked in-progress? If a prior session died mid-task, this is where you find out.
-  5. `.context/memory/tasks/backlog.md` — open items waiting for a session like this one
-  6. `.context/memory/flaws/log.md` — known workflow/protocol traps — where the `.context` system itself misled a prior agent. **Don't re-hit a logged flaw.**
-  7. `.context/memory/inefficiencies/log.md` — known project traps (tool failures, flaky tests, env quirks). **Don't re-hit a logged trap.**
-  8. `.context/memory/plans/decisions.md` — architectural decisions already made. **Don't relitigate them; don't "fix" code into violating them.**
-  9. `.context/memory/overrides/rules.md` — project-local protocol adjustments. **Overrides beat this edition** (except secret-handling and append-only rules).
-  10. `.context/memory/system/environments.md` + `.context/memory/system/ai-models.md` — environments and agents seen before
-  11. `.context/memory/user/identity.md` + `.context/memory/user/preferences.md` — who the user is and how they like things done
-  12. `.context/memory/workflows/active.md` — the workflow currently in force
-  13. `.context/memory/secrets/` — local-only secret values available on this machine (never tracked; empty on a fresh clone). Note what's available — never print values.
+  4. `.context/memory/collaboration/README.md` — collaboration rules; if a shared session/issue is active, read its event files and status before claiming work.
+  5. `.context/memory/workflows/gates.conf` — explicit commands and gate mode; initialize it if missing.
+  6. `.context/memory/tasks/current.md` — in single-agent mode, is a task marked in-progress? If a prior session died mid-task, this is where you find out. In collaboration mode it is not a lock.
+  7. `.context/memory/tasks/backlog.md` — open items waiting for a session like this one
+  8. `.context/memory/flaws/log.md` — known workflow/protocol traps — where the `.context` system itself misled a prior agent. **Don't re-hit a logged flaw.**
+  9. `.context/memory/inefficiencies/log.md` — known project traps (tool failures, flaky tests, env quirks). **Don't re-hit a logged trap.**
+  10. `.context/memory/plans/decisions.md` — architectural decisions already made. **Don't relitigate them; don't "fix" code into violating them.**
+  11. `.context/memory/overrides/rules.md` — project-local protocol adjustments. **Overrides beat this edition** (except secret-handling and append-only rules).
+  12. `.context/memory/system/environments.md` + `.context/memory/system/ai-models.md` — environments and agents seen before
+  13. `.context/memory/user/identity.md` + `.context/memory/user/preferences.md` — who the user is and how they like things done
+  14. `.context/memory/workflows/active.md` — the workflow currently in force
+  15. `.context/memory/secrets/` — local-only secret values available on this machine (never tracked; empty on a fresh clone). Note what's available — never print values.
 - If `.context/` does NOT exist, bootstrap it now (see Bootstrap in the `.context/` section) and commit it: `chore(context): bootstrap .context/ (core <version>)`.
 - **Migration:** if `docs/report/` contains prior reviews, move them: `git mv docs/report/*.md .context/memory/reviews/` in the same bootstrap commit. Leave a `docs/report/README.md` pointer saying reviews now live in `.context/memory/reviews/`.
-- Set `.context/memory/tasks/current.md` to this session's task before starting work (overwrite — it holds one task at a time).
+- In single-agent mode, set `.context/memory/tasks/current.md` to this session's task before starting work (overwrite — it holds one task at a time). In collaboration mode, do not use it as a lock: create an isolated branch/worktree, emit a `claim` event with the shared session/issue IDs, and inspect peer events first.
 
 **Step 4 — Install dependencies**
 - **Discover the package manager first** by checking which lockfile exists:
@@ -344,7 +432,8 @@ git log --oneline -20
   # IMMEDIATELY strip the token again so it's not in .git/config between pushes
   git remote set-url origin https://github.com/<OWNER>/<REPO>.git
   ```
-- If push is rejected (non-fast-forward), pull, resolve conflicts, and push again. `.context/` append-only files merge trivially — keep both sides' entries.
+- **Collaboration mode:** push the isolated `collab/<session-id>/<agent-id>` branch, not the shared integration branch. Rebase/pull before publishing each event or product commit. If product branches conflict at integration, the involved agents compare the alternatives and record an agreement before resolving; never force-overwrite a peer.
+- If push is rejected (non-fast-forward), pull, resolve conflicts, and push again. `.context/` event files merge by keeping both files; do not edit an existing event to resolve a conflict.
 - **If a fix breaks tests:** either fix the test or revert the change. Do NOT push broken tests. If you can't resolve it in 2 attempts, revert and document the issue in the report and `.context/memory/inefficiencies/log.md`.
 
 ### Phase 4: Report
@@ -369,7 +458,7 @@ git log --oneline -20
 > the `chore(context):` prefix, and push.
 
 **Step 15 — Update `.context/memory/tasks/`**
-- Clear `.context/memory/tasks/current.md` — mark the session's task done (or blocked, with the blocker).
+- In single-agent mode, clear `.context/memory/tasks/current.md` — mark the session's task done (or blocked, with the blocker). In collaboration mode, leave peers' task state untouched and emit a `release` or `handoff` event for each claimed scope.
 - Append every open item you couldn't finish to `.context/memory/tasks/backlog.md` (append-only — never delete or reorder existing entries). Include enough context that a fresh agent can act on the item without this session's chat history.
 - If this session completed an existing backlog item, check it off (`- [x]`) and note the session/commit — don't remove the line.
 
@@ -380,7 +469,7 @@ git log --oneline -20
 - `.context/memory/plans/decisions.md`: append an ADR-style entry for every architectural decision made or confirmed this session (context → decision → consequences). Skip if none.
 
 **Step 17 — Log the session**
-- Append a session entry to `.context/memory/agents/sessions.md` (append-only). This is the permanent record: date, agent, model, platform, task, commits (count + SHA range), outcome, open items. Include the `Notes:` line — set to the `memory/sessions/<date>-<N>/notes.md` path if you created notes, or "none". **Do not confuse this with SUMMARY.md: this file gets the full ~7-line entry; SUMMARY.md gets ONE line.**
+- Append a session entry to `.context/memory/agents/sessions.md` (append-only). This is the permanent record: date, agent, model, platform, task, commits (count + SHA range), outcome, open items. Include the `Notes:` line — set to the `memory/sessions/<date>-<N>/notes.md` path if you created notes, or "none". In collaboration mode also record the shared session/issue IDs, event IDs, branch, and agreement/release references. **Do not confuse this with SUMMARY.md: this file gets the full ~7-line entry; SUMMARY.md gets ONE line.**
 - Append a one-line summary to `.context/memory/sessions/SUMMARY.md`. This is the prunable compressed continuity (unlike `agents/sessions.md` which is append-only forever). Format: date, agent, model, one-line outcome, and a key decision/discovery if any. **One line only — do not write the full session entry here.**
 - **Context Promotion:** if you created a `memory/sessions/<date>-<N>/notes.md` for this session, evaluate its contents before closing: *"Does anything in these notes need to survive beyond this session?"*
   - **Durable facts → promote.** Distill and write them into their proper persistent domain: an architectural insight → `plans/decisions.md` (ADR); a new constraint or workaround → `inefficiencies/log.md`; a new backlog item → `tasks/backlog.md`; a user preference discovered → `user/preferences.md`; a protocol friction → `flaws/log.md`. Promotion is selective — the goal is not to copy the notes; it is to move durable knowledge to where future agents will find it without reading session history. **The invariant: permanent context must never depend exclusively on an individual session.** A durable fact lives in its domain file, not only in a session directory — so deleting the session cannot delete the knowledge.
@@ -447,6 +536,9 @@ rm -f .context/memory/secrets/github-pat   # if you stored it there in Step 1
     │   └── active.md        # workflow currently in force (protocol by agent type, scope, push policy)
     ├── agents/
     │   └── sessions.md      # append-only log — one entry per agent session
+    ├── collaboration/
+    │   ├── README.md        # peer workflow + immutable event contract
+    │   └── events/           # one immutable file per claim/proposal/agreement/etc.
     ├── reviews/
     │   └── YYYY-MM-DD-review.md  # session review reports
     ├── tasks/
@@ -709,7 +801,7 @@ Treat this as a production project. Think like an owner, not a contractor.
 - **Read `.context/` before anything else** (Step 3) — it's the shared brain across agents, machines, and models.
 - **Always pull before starting work** and after every commit.
 - **Check `.context/memory/reviews/`** for prior agent reviews — don't redo work that's already done.
-- **Check `.context/memory/tasks/current.md`** — if another agent marked a task in-progress recently, don't collide with it; note the conflict in your session entry.
+- **Check `.context/memory/tasks/current.md`** — in single-agent mode, if another agent marked a task in-progress recently, don't collide with it; in collaboration mode, use the shared session/issue event trail and claims instead, and note any overlap in your session entry.
 - **Don't assume your local state matches remote.** Check with `git fetch` and `git log HEAD..origin/main`.
 - **If your working tree has unexpected changes**, the remote moved ahead. Hard-sync: `git fetch origin && git reset --hard origin/main` (after stashing in-progress work).
 
@@ -902,7 +994,7 @@ Append-only. Never overwrite. Start each section with `---`.
 
 ### End-of-session gates (before Step 19 unsets the PAT)
 
-- [ ] `.context/memory/tasks/current.md` cleared, open items appended to `backlog.md` (Step 15)
+- [ ] `.context/memory/tasks/current.md` cleared, open items appended to `backlog.md` (Step 15) in single-agent mode; collaboration mode releases/handoffs each claim without clearing a peer's task
 - [ ] `.context/memory/system/` + `.context/memory/user/` + `.context/memory/plans/` updated (Step 16)
 - [ ] Session entry in `.context/memory/agents/sessions.md` + inefficiencies logged (Step 17)
 - [ ] All `chore(context):` commits pushed
@@ -963,7 +1055,7 @@ Append-only. Never overwrite. Start each section with `---`.
 - **Build failing?** Run the typecheck command first. Check if a recent commit broke something. Check `.context/memory/inefficiencies/log.md` — a prior agent may have hit and solved this exact failure.
 - **Dependencies acting up?** Delete `node_modules`/`venv` and the lockfile, reinstall fresh with the correct package manager.
 - **Python `externally-managed-environment`?** Create a venv first: `python -m venv .venv && source .venv/bin/activate`.
-- **Push rejected (non-fast-forward)?** Another agent pushed. `git pull --rebase origin main`, resolve any conflicts, push again. Append-only `.context/` files merge by keeping both sides' entries.
+- **Push rejected (non-fast-forward)?** Another agent pushed. In single-agent mode, `git pull --rebase origin main`, resolve and retry. In collaboration mode, fetch/rebase your isolated branch; preserve both immutable event files. Product conflicts require peer comparison and an agreement, never a silent overwrite.
 - **Push rejected (auth)?** The remote URL was stripped of the token. Re-add it: `git remote set-url origin "https://x-access-token:${GIT_TOKEN}@github.com/..."`, push, then strip again.
 - **ORM errors?** Regenerate the client after schema changes (e.g., `prisma generate`).
 - **Tool calls timing out?** After 2 consecutive timeouts, tell the user to restart the session.

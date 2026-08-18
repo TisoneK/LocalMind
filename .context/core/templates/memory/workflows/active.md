@@ -24,6 +24,7 @@ user changes the rules; note the change in your session entry.
 - **Commit style:** <e.g., Conventional Commits with scope; chore(context): for this directory>
 - **Commit granularity:** <e.g., one logical change per commit>
 - **Deliverable:** <e.g., report in .context/memory/reviews/ + chat summary>
+- **Gates:** `.context/memory/workflows/gates.conf` — checkpoint before each next action; `pre-commit`, `integration`, and `exit` gates are mandatory
 -->
 
 - **Protocol:** —
@@ -38,3 +39,4 @@ user changes the rules; note the change in your session entry.
 - **Commit style:** —
 - **Commit granularity:** —
 - **Deliverable:** —
+- **Gates:** —

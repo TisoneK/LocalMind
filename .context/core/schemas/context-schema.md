@@ -61,7 +61,13 @@ core/
 ├── MANIFEST.sha256      # checksums of every core file — integrity check
 ├── bin/
 │   ├── context-sync     # POSIX-sh: status / verify / update / rollback / bootstrap
-│   └── context-sync.ps1 # PowerShell port (Windows): status / verify / update / rollback / lock
+│   ├── context-sync.ps1   # PowerShell port (Windows): status / verify / update / rollback / lock
+│   ├── context-collab       # POSIX-sh: atomic collaboration events + status + check
+│   ├── context-collab.ps1   # PowerShell port (Windows): emit + status + check
+│   ├── context-collab-check # POSIX integration-readiness validator
+│   ├── context-collab-check.ps1 # PowerShell integration-readiness validator
+│   ├── context-gates        # POSIX lifecycle gates + checkpoint
+│   └── context-gates.ps1    # PowerShell lifecycle gates + checkpoint
 ├── rules/
 │   ├── ai-engineering-protocol-local.md   # LOCAL agents' edition
 │   └── ai-engineering-protocol.md         # CLOUD/SANDBOX agents' edition
@@ -105,8 +111,10 @@ File inventory, write modes, and scopes. **Write modes:**
 | Path (under `.context/memory/`) | Mode | Scope | Holds |
 |---|---|---|---|
 | `agents/sessions.md` | append-only | project | One entry per session: agent, model, platform, task, commits, outcome |
-| `tasks/current.md` | overwrite | project | The one task in progress — doubles as the concurrency lock |
+| `tasks/current.md` | overwrite | project | The one task in progress — a lock only in single-agent mode |
 | `tasks/backlog.md` | append-only | project | Open items for future sessions |
+| `collaboration/README.md` | generated | project | Peer collaboration rules and event contract |
+| `collaboration/events/<event-id>.md` | immutable new file | project | Claims, proposals, assessments, agreements, corrections, handoffs, releases |
 | `plans/decisions.md` | append-only | project | ADR-style decisions — respected, not relitigated |
 | `flaws/log.md` | append-only | project→package | Friction with the protocol/`.context/` system itself; flows upstream |
 | `flaws/README.md` | generated | project | The flaws-vs-inefficiencies split rule (pointer to this schema) |
@@ -117,6 +125,7 @@ File inventory, write modes, and scopes. **Write modes:**
 | `sessions/SUMMARY.md` | update-in-place (entries are removable) | project | Compressed session history — one line per session, prunable. The permanent record is `agents/sessions.md` |
 | `sessions/YYYY-MM-DD-N/notes.md` | append-only while active; deletable after promotion | project | Per-session detailed notes — research, exploration, dead ends. Disposable; durable facts must be promoted first |
 | `workflows/active.md` | overwrite | project (see scoping!) | Standing session parameters + core version in force |
+| `workflows/gates.conf` | update-in-place | project | Explicit lifecycle commands and hybrid discovery mode |
 | `system/environments.md` | update-in-place | **machine** | One block per machine/sandbox, keyed by an "Identify by" line |
 | `system/ai-models.md` | update-in-place | **agent** | Registry + evidence-based observations per agent/model |
 | `user/identity.md` | update-in-place | user | Who the user is |
@@ -136,11 +145,41 @@ wins.
 
 `.context/README.md` → `kickoff.md` → `memory/workflows/active.md` →
 `memory/agents/sessions.md` (last 3–5) → `memory/sessions/SUMMARY.md`
-(skim last 10 entries for compressed continuity) → `memory/tasks/current.md` →
-`memory/tasks/backlog.md` → `memory/inefficiencies/log.md` →
+(skim last 10 entries for compressed continuity) → `memory/collaboration/README.md`
+(and active event files when collaboration is enabled) →
+`memory/tasks/current.md` → `memory/tasks/backlog.md` →
+`memory/inefficiencies/log.md` →
 `memory/flaws/log.md` → `memory/plans/decisions.md` →
-`memory/overrides/rules.md` → `memory/system/` → `memory/user/` →
-note what's in `memory/secrets/` (never print values).
+`memory/overrides/rules.md` → `memory/workflows/gates.conf` →
+`memory/system/` → `memory/user/` → note what's in `memory/secrets/`
+(never print values).
+
+
+---
+
+## Peer collaboration
+
+Collaboration is opt-in for a shared `session` + `issue` identity. Each
+agent uses an isolated product git worktree/branch; product edits never
+happen in the same checkout. Live coordination is published on the shared
+`collab/<session-id>/coordination` ref as immutable, one-file-per-event
+records under `memory/collaboration/events/`, not in a shared append-only
+file. This makes simultaneous claims, proposals,
+assessments, agreements, corrections, handoffs, and releases mergeable.
+
+A claim makes scope visible but is not a lock. Overlapping claims require
+peer assessment and an explicit agreement selecting the best-supported
+option and one implementation owner. A correction names the evidence,
+likely cause, candidate repairs, and suggested owner; peers agree on the
+repair and owner before it is applied. There is no timestamp or agent-ID
+tie-breaker. If evidence remains tied, pause the conflicting work and ask
+the user. Use `.context/core/bin/context-collab` to emit events and inspect
+status; run `context-collab check` before integration. Event commits remain
+separate from product commits.
+
+`tasks/current.md` remains the single-agent lock when collaboration is not
+enabled. In collaboration mode it is not a lock and must not be used to
+block a peer; use the collaboration event trail instead.
 
 ---
 

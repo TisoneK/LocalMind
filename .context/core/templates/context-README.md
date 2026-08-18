@@ -17,16 +17,21 @@ is committed to git and travels with the repo. It has **two zones**:
 │   ├── roles/            # mission overlays
 │   ├── schemas/          # context-schema.md — the single source of truth on formats
 │   ├── templates/        # what memory files are generated from
-│   └── bin/              # context-sync (sh) + context-sync.ps1 (Windows): status / verify / update / rollback
+│   └── bin/              # context-sync + context-collab (+ .ps1): sync, peer coordination, and integration checks
 └── memory/       # this project's living memory — project-owned, writable
     ├── agents/sessions.md       # append-only session log
-    ├── tasks/current.md         # the task in progress (also the session lock)
+    ├── collaboration/           # opt-in peer coordination
+    │   ├── README.md            # worktree + event contract
+    │   └── events/               # immutable one-file-per-event records
+    ├── tasks/current.md         # task in progress (single-agent lock only)
     ├── tasks/backlog.md         # append-only open items
     ├── plans/decisions.md       # append-only ADRs
     ├── flaws/log.md             # protocol friction — flows upstream to the package
     ├── inefficiencies/log.md    # project friction
     ├── reviews/                 # session reports
-    ├── workflows/active.md      # standing session parameters
+    ├── workflows/
+    │   ├── active.md             # standing session parameters
+    │   └── gates.conf             # explicit lifecycle commands + hybrid discovery mode
     ├── system/                  # machines + agent/model registry
     ├── user/                    # identity + preferences
     ├── overrides/rules.md       # project-local protocol adjustments
@@ -51,4 +56,6 @@ is committed to git and travels with the repo. It has **two zones**:
 3. **Sessions start at `kickoff.md`** (one level up from memory —
    `.context/kickoff.md`). It routes you by agent type to your edition
    in `core/rules/`. Memory never chooses your edition — your agent
-   type does.
+   type does. For concurrent work, use isolated branches/worktrees and
+   `memory/collaboration/events/`; overlapping changes require a peer
+   agreement before implementation.

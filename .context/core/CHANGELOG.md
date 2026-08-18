@@ -10,6 +10,83 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 0.8.0 — 2026-08-17
+
+**Explicit lifecycle command gates.** Agents now have mechanical,
+project-owned gates instead of relying only on prose instructions.
+
+- **`context-gates` + `context-gates.ps1`:** add `checkpoint`,
+  `pre-commit`, `integration`, and `exit` gate commands with consistent
+  exit behavior and observable command output.
+- **Per-agent-turn checkpoint:** refreshes working-tree and collaboration
+  state before the next action, reducing stale-context work.
+- **Project command registry:** new `memory/workflows/gates.conf` supports
+  explicit commands per lifecycle gate. `mode=hybrid` uses safe conventional
+  package.json/Python discovery only when no explicit command is configured;
+  `mode=explicit` fails when a required gate has no command.
+- **Mandatory transitions:** protocol editions, kickoff, AGENTS digest,
+  and schema now require gates before commits, branch integration, and
+  session exit. Integration includes `context-collab check` when a
+  collaboration session/issue is supplied.
+
+**Migration from 0.7.x:** existing projects remain compatible. New
+bootstraps receive `gates.conf`; existing projects can initialize it with
+`sh .context/core/bin/context-gates init` or the PowerShell equivalent.
+
+## 0.7.0 — 2026-08-17
+
+**Collaboration integration-readiness checks.** The collaboration helper
+now provides a mechanical gate before product branches are integrated.
+
+- **`context-collab check`:** validates required event metadata, event ID
+  uniqueness, resolvable same-session/same-issue references, complete agreements,
+  selected options, peer participants, owners, active claim overlaps,
+  unresolved proposals/assessments/corrections/handoffs, and product
+  commit references on releases.
+- **PowerShell parity:** `context-collab.ps1 check` delegates to the
+  PowerShell validator with the same checks and exit-code contract.
+- **Operational split:** `status` remains the live-work view; `check` is
+  the integration-readiness gate and fails when the event trail is not
+  complete.
+
+**Migration from 0.6.x:** none. Existing event trails remain readable;
+projects gain the check helpers on their next core update.
+
+## 0.6.0 — 2026-08-17
+
+**Peer collaboration for concurrent and shared-issue sessions.** The
+single-agent workflow remains the default, while agents can now opt into a
+shared session/issue and coordinate without a mutable global lock.
+
+- **Isolated workspaces:** collaborating agents use separate clones or git
+  worktrees and `collab/<session-id>/<agent-id>` product branches; product
+  commits never happen in the same checkout or directly on the shared
+  integration branch during collaboration. Events publish to the shared
+  event-only `collab/<session-id>/coordination` ref.
+- **Immutable event trail:** projects gain `memory/collaboration/`, where
+  each claim, proposal, assessment, agreement, correction, handoff, and
+  release is a separate event file. Independent files avoid concurrent EOF
+  append conflicts and preserve the complete reasoning trail.
+- **Evidence-based peer agreement:** overlapping scopes require assessments
+  and an agreement selecting the best-supported option and exactly one
+  implementation owner. There is no timestamp, priority, or agent-ID
+  winner; genuinely tied evidence pauses for the user.
+- **Corrections:** an agent can record the observed mistake, evidence, likely
+  cause, candidate repairs, and suggested fixer; peers agree on the repair
+  and owner before the correction is applied.
+- **`core/bin/context-collab` + `context-collab.ps1`:** POSIX and
+  PowerShell helpers for atomic event creation and overlap/status inspection.
+- **Schema and protocol:** both editions, kickoff, AGENTS digest, README,
+  and schema now distinguish single-agent `tasks/current.md` locking from
+  collaboration event coordination.
+
+**Migration from 0.5.x:** none required for existing single-agent
+projects. New bootstraps receive `memory/collaboration/README.md`; an
+existing project that opts in copies that template into
+`.context/memory/collaboration/` during its first collaboration session.
+Core updates never touch memory. Event files are created only when a
+project opts into collaboration.
+
 ## 0.5.0 — 2026-07-31
 
 **The session-scoped memory release.** Session history is now self-contained

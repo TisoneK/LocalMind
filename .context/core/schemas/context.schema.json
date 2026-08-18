@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$comment": "Machine-readable mirror of context-schema.md (the authoritative document). Update both in the same commit. Consumers: context-sync, future check tooling, agents that prefer structured data.",
   "title": ".context/ directory schema",
-  "coreVersion": "0.5.0",
+  "coreVersion": "0.8.0",
   "zones": {
     "core": {
       "path": ".context/core/",
@@ -39,8 +39,10 @@
   },
   "memoryFiles": {
     "agents/sessions.md":      { "mode": "append-only",      "scope": "project" },
-    "tasks/current.md":        { "mode": "overwrite",        "scope": "project", "note": "doubles as the one-agent-per-repo lock" },
+    "tasks/current.md":        { "mode": "overwrite",        "scope": "project", "note": "single-agent lock only; collaboration mode uses event claims" },
     "tasks/backlog.md":        { "mode": "append-only",      "scope": "project" },
+    "collaboration/README.md": { "mode": "generated",         "scope": "project" },
+    "collaboration/events/<event-id>.md": { "mode": "immutable-new-file", "scope": "project", "note": "one file per peer event; never edit an event" },
     "plans/decisions.md":      { "mode": "append-only",      "scope": "project" },
     "flaws/log.md":            { "mode": "append-only",      "scope": "project", "flowsTo": "package" },
     "flaws/README.md":         { "mode": "generated",        "scope": "project" },
@@ -51,6 +53,7 @@
     "sessions/YYYY-MM-DD-N/notes.md": { "mode": "append-only-while-active", "scope": "project", "note": "per-session detailed notes; disposable — durable facts must be promoted first" },
     "reviews/YYYY-MM-DD-*.md": { "mode": "new-file-per-session", "scope": "project", "commitPrefix": "docs(review):" },
     "workflows/active.md":     { "mode": "overwrite",        "scope": "project", "note": "protocol field is recorded 'by agent type', naming BOTH editions — never a single edition" },
+    "workflows/gates.conf":     { "mode": "update-in-place",  "scope": "project", "note": "explicit lifecycle commands; hybrid mode may discover conventional commands" },
     "system/environments.md":  { "mode": "update-in-place",  "scope": "machine", "keyedBy": "Identify by" },
     "system/ai-models.md":     { "mode": "update-in-place",  "scope": "agent-model" },
     "user/identity.md":        { "mode": "update-in-place",  "scope": "user" },
@@ -68,7 +71,10 @@
     "credentialFlows": "agent-type facts; PAT steps exist only in the cloud edition",
     "appendOnly": "corrections are appended, never edited in; byte-identical duplicates may be removed with a note",
     "secrets": "values only under memory/secrets/, never in tracked files, never echoed",
-    "coreReadOnly": "no agent writes under .context/core/ in a project repo, ever"
+    "coreReadOnly": "no agent writes under .context/core/ in a project repo, ever",
+    "collaboration": "isolated worktree/branch per agent; overlapping claims require peer assessment and an agreement naming the best-supported option and one owner; no timestamp or agent-ID tie-breaker",
+    "collaborationCheck": "context-collab check is the integration-readiness gate for malformed events, unresolved overlaps, incomplete agreements, unresolved corrections/handoffs, and releases without product commits",
+    "lifecycleGates": "context-gates checkpoint runs before each next agent action; pre-commit, integration, and exit gates block their lifecycle transition on failure; explicit gates.conf commands take precedence over hybrid discovery"
   },
   "commitPrefixes": {
     "memory": "chore(context):",
