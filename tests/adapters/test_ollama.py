@@ -276,3 +276,23 @@ def test_num_ctx_override_zero_is_auto(adapter, monkeypatch):
     monkeypatch.setattr(settings, "ollama_num_ctx", 0, raising=False)
     # 0 = auto → declared window bounded by the default ceiling.
     assert _smart_num_ctx("llama3.1:70b", 128000) == _DEFAULT_MAX_NUM_CTX
+
+
+@pytest.mark.asyncio
+async def test_list_models_excludes_embedding_models(adapter, monkeypatch):
+    # Session 293 (B-2026-08-17-5): embedding models must NOT appear in the
+    # chat-model selector. The old `-embed` suffix check missed nomic-embed-text,
+    # mxbai-embed-large, all-minilm, bge-m3, etc.
+    tags = {"models": [
+        {"name": "phi4-mini:latest"},
+        {"name": "llama3.1:8b"},
+        {"name": "mxbai-embed-large:latest"},
+        {"name": "nomic-embed-text"},
+        {"name": "all-minilm"},
+        {"name": "bge-m3"},
+    ]}
+    resp = MagicMock()
+    resp.json = MagicMock(return_value=tags)
+    monkeypatch.setattr(adapter._client, "get", AsyncMock(return_value=resp))
+    chat = await adapter.list_models()
+    assert chat == ["phi4-mini:latest", "llama3.1:8b"]

@@ -78,6 +78,13 @@ _MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 # OLLAMA_NUM_CTX / the Settings context-window field.
 _DEFAULT_MAX_NUM_CTX = 32768
 
+# Substrings that mark an Ollama EMBEDDING model (nomic-embed-text,
+# mxbai-embed-large, all-minilm, bge-m3, snowflake-arctic-embed, granite-embedding,
+# gte-*). Chat models never carry these — used to keep embedding models out of
+# the chat-model selector (they use /api/embeddings). Mirrors the same tuple in
+# api/routes/models.py (kept local to avoid an adapters→routes import cycle).
+_EMBED_NAME_HINTS = ("embed", "minilm", "bge", "gte")
+
 
 def _normalize_ollama_usage(payload: dict) -> dict[str, int]:
     """Normalize Ollama/OpenAI-compatible usage fields.
@@ -839,13 +846,22 @@ class OllamaAdapter(BaseAdapter):
             return False
 
     async def list_models(self) -> list[str]:
-        """Return names of locally available Ollama chat/generation models."""
+        """Return names of locally available Ollama CHAT/generation models.
+
+        Embedding models are excluded — they use the separate /api/embeddings
+        endpoint and must not appear in the chat-model selector (Session 293:
+        `mxbai-embed-large:latest` was leaking in). The `-embed` suffix check
+        missed them; embedding models carry one of _EMBED_NAME_HINTS anywhere in
+        the name (nomic-embed-text, mxbai-embed-large, all-minilm, bge-m3, …).
+        """
         try:
             response = await self._client.get(f"{self._base_url}/api/tags", timeout=5)
             data = response.json()
-            # Filter out embedding models (they have separate /api/embeddings endpoint)
             all_models = [m["name"] for m in data.get("models", [])]
-            return [m for m in all_models if not m.endswith("-embed")]
+            return [
+                m for m in all_models
+                if not any(hint in m.lower() for hint in _EMBED_NAME_HINTS)
+            ]
         except Exception:
             return []
 
