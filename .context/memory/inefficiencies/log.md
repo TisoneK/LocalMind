@@ -807,3 +807,11 @@ if literally nothing slowed you down.
 - **Cause:** the previous entry blamed apostrophes; this failure had none. Real cause this time: the tool call collapsed my newlines into literal `\n`, so the heredoc's closing `EOF` was never seen on its own line.
 - **Workaround / fix:** stop using heredocs for commit messages entirely — use multiple `-m` flags (`git commit -m "subject" -m "body"`), which need no newlines and are immune to both apostrophes and collapsed-newline corruption. Works reliably.
 - **Prevent next time:** never write `$(cat <<'EOF' ... EOF)` inside run_terminal_command; use `-m` flags or `git commit -F -` with a file.
+
+---
+## 2026-08-17 — Claude Code / claude-opus-4-8 (Session 289)
+- **Problem:** the three reported bugs are all Ollama-path, but there's no Ollama on the macOS dev box, so none could be live-verified — only unit-tested with mocked `/api/show` + `/api/chat`. This is the 3rd consecutive session (287/288/289) shipping an Ollama fix "NOT live-verified on the user's box."
+- **Cost:** ~low direct cost, but real risk: the root-cause diagnosis for bug 2 (init-timeout-then-execute, 30+180=213s) is inferred from the token/latency numbers in the user's screenshot, not confirmed by a trace. If the true cause is misclassification (not timeout), the timeout fix won't fully resolve it.
+- **Cause:** the live-testing harness (`system/live-testing.md`, port 8765 + z.ai/glm-4.5-flash) exercises the cloud path; the slow-local-model path it can't reproduce without a slow local model. z.ai can simulate a thinking model but not a 0.17 tok/s generation rate.
+- **Workaround / fix:** shipped with thorough unit tests + explicit "user verifies" backlog item (B-2026-08-17-2) and an honest verification section in review-57. The user has been asked to confirm on their box after each of these.
+- **Prevent next time:** consider a tiny CPU-only Ollama model (e.g. qwen2.5:0.5b) in the dev/CI harness to exercise the real slow-local path — even at a few tok/s it would catch the init-timeout / classify-JSON behavior that mocks can't. Or an env-gated live test that runs only when OLLAMA_BASE_URL is reachable.

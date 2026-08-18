@@ -1150,3 +1150,53 @@ manifest: `.context/memory/features/fail-fast-provider-errors/manifest.md`.
 - **ADDITION (Session 274, Claude Code) — todo_write, the agent's live-todo control surface:** delivered `todo_write` (`506f958`, review-51), a first-class CORE tool embodying this ADR's principle (a fast single-purpose helper — parse/normalize/return — like web_search). The UI Todos panel was a PASSIVE projection of the LLM's parsed plan (plan-required intents only, not agent-controllable; a 3-step task emitted zero todo events live). The agent now writes the FULL checklist and the loop's `_emit_todo_write_events` emits the todo_cleared+todo_created obs events the SSE bridge + frontend already render (status carried through so in_progress shows). Loop owns emission (tools can't reach ObsCollector across asyncio.wait_for — same as describe_tool). LIVE-VERIFIED on glm-4.5-flash (create + in_progress update; 0 validation errors). Bug the live trace caught: `_extract_tool_input` stringified the todos array as a Python-repr (invalid JSON) — unit tests passed while the real agent path was broken. Still open: B-2026-08-16-5 (L2 steering + L3 redundant read-back).
 
 - **ADR-41 UPDATE (Session 276, B-7) — reasoning is now provider-generic, not zai-only:** ADR-41 re-enabled GLM reasoning but the plumbing stayed z.ai-specific. Two gaps closed (`b3f489d`, review-52): (1) `_extract_content_and_reasoning` only read `reasoning_content`/`<think>` — a live probe showed cerebras/gpt-oss-120b streams reasoning in a `reasoning` field, now read too, so any capable model's thinking routes to the ThinkingBlock not chat; (2) `thinking_enabled` was False for all non-zai, and the loop gates the Thinker consult + thinking-aware timeout on it — so the Thinker (ADR-42) never ran outside z.ai. Now True for all capable providers (z.ai keeps its GLM-5.3 force-enabled logic; tunable via LOCALMIND_THINKING). The z.ai `thinking` REQUEST param stays gated to zai. LIVE-VERIFIED on cerebras/gpt-oss-120b (Thinker consulted, reasoning to thinking channel, model acted). This is the "use any capable model; a model failing is OUR bug" principle applied to the reasoning path.
+
+---
+## ADR-44: Detect Ollama context window from /api/show; user-configurable num_ctx (2026-08-17)
+- **Status:** accepted
+- **Context:** LocalMind hardcoded per-model context windows in a static
+  `_MODEL_CONTEXT_WINDOWS` table (adapters/ollama.py). Any model absent from it
+  (e.g. phi4-mini:latest, a common pull) fell to the 8192 default — so the
+  context meter read `5248/8192 = 64%` on a near-empty chat and the agent
+  budgeted a 128K model at 8K. The table is unmaintainable (every new model =
+  a code edit) and wrong-by-default.
+- **Decision:** the model's declared context window is a property of its
+  weights, so ASK the runtime for it: `POST /api/show` → the `<arch>.context_length`
+  field, cached per-model, primed from the request runtime and `/api/models`
+  before the sync `context_window` property is read. The static table is now
+  only a fallback when Ollama is unreachable. Separately, `num_ctx` (what we
+  actually budget / send) is user-configurable via `ollama_num_ctx`
+  (`OLLAMA_NUM_CTX` / Settings modal): 0 = auto (resource-sane tier cap over the
+  real window), >0 = explicit override clamped to capacity. The size-tier
+  heuristic recognises tag-free "mini" models so their default num_ctx stays
+  8192 rather than ballooning to the full window on weak hardware.
+- **Consequences:** the declared window (meter) and the budgeted num_ctx are now
+  two distinct values — `context_window` = real capacity, `effective_context_window`
+  = budgeted/allocated. Future agents: don't re-hardcode windows in the table;
+  it's a fallback, not the source. `prime_context_window()` is async and
+  best-effort — the sync properties degrade to table→8192 if it hasn't run. A
+  num_ctx override must always be clamped to the declared window.
+
+---
+## ADR-45: Slow local models need the full generation budget for the parent init call (2026-08-17)
+- **Status:** accepted (extends ADR-41 / S288 slow_provider)
+- **Context:** the parent init is "classify-only" for a fast model, but its
+  `direct` decision includes the user-facing `response` (e.g. the greeting
+  itself), which the model must GENERATE before the init stream ends. On a slow
+  local model (phi4-mini ~0.17 tok/s) even a short reply exceeds the 30s plan
+  budget, so the init timed out, `parse_initialization("")` fell open to
+  EXECUTE, and every "Hi" cascaded into the full tool loop and burned the 180s
+  wall-clock. S288 fixed the per-call chat timeout for slow providers but left
+  the init/plan timeout at the short plan budget.
+- **Decision:** `_plan_timeout_for` grants slow providers (not thinking) the
+  generous `ollama_timeout_chat` budget, floored at the reasoning plan budget —
+  the init is effectively a full generation for a slow model, not a quick plan.
+  Stays inside model-owned agentic control: the fix is a timeout, NOT a revival
+  of prompt-shaped intent routing (the user explicitly rejected that).
+- **Consequences:** a greeting on a slow local model completes in ONE init call
+  (`direct`, no tools). The remaining risk is genuine MISCLASSIFICATION (a weak
+  model emitting `execute` for "Hi") rather than a timeout — that is a
+  model-capability problem, addressed by progressive tool-schema disclosure
+  (B-2026-08-17-1) and/or a stronger local model, not by more timeout. Future
+  agents: for slow local providers, the init call is a first-class generation —
+  budget it like a chat call, not like a plan.
