@@ -59,21 +59,61 @@ def test_parse_clarify_decision_requires_one_question():
     assert decision.clarifying_question == "Which project should I use?"
 
 
-def test_invalid_or_empty_output_fails_open_to_parent_execution():
-    decision = parse_initialization("not JSON from a provider")
+def test_unparseable_output_resolves_to_direct_not_execute():
+    # Session 290: execute is OPT-IN. An unparseable classify output must NOT
+    # drag any model into the tool loop — a model that ignored the JSON
+    # contract and just replied in prose has its prose shown as the answer.
+    decision = parse_initialization("Hello! How can I help you today?")
 
-    assert decision.mode == "execute"
-    # Step 1 (ADR-38): fail-open does NOT invent a plan — the loop picks
-    # the first action from evidence.
-    assert decision.objective_line() == "UNDERSTANDING: Determine and complete the user's request."
-    assert decision.raw == "not JSON from a provider"
+    assert decision.mode == "direct"
+    assert decision.response == "Hello! How can I help you today?"
+    assert decision.raw == "Hello! How can I help you today?"
 
 
-def test_missing_direct_response_cannot_end_the_turn():
+def test_unparseable_empty_output_gets_a_bounded_fallback_answer():
+    # Truly empty/garbled output still resolves to a bounded direct answer,
+    # never execute — the safe floor for any model on an unclear turn.
+    decision = parse_initialization("")
+    assert decision.mode == "direct"
+    assert decision.response  # non-empty fallback, so the turn can complete
+
+    garbled = parse_initialization('{"mode":"dir')  # malformed, no fields
+    assert garbled.mode == "direct"
+    assert garbled.response
+
+
+def test_partial_json_response_is_salvaged_into_a_direct_answer():
+    # A truncated JSON stream that still carries the response field: recover
+    # the answer instead of discarding it into execute.
+    decision = parse_initialization('{"mode":"direct","response":"Hi there, I\'m LocalMind.')
+    assert decision.mode == "direct"
+    assert decision.response == "Hi there, I'm LocalMind."
+
+
+def test_missing_direct_response_stays_direct_with_fallback():
+    # A `direct` with an empty response must still resolve to a bounded direct
+    # answer (was: escalated to execute) — execute is opt-in.
     decision = parse_initialization('{"mode":"direct","response":""}')
+    assert decision.mode == "direct"
+    assert decision.response  # non-empty fallback
 
+
+def test_unknown_mode_resolves_to_direct():
+    decision = parse_initialization('{"mode":"banana","response":"Sure thing."}')
+    assert decision.mode == "direct"
+    assert decision.response == "Sure thing."
+
+
+def test_clarify_without_question_resolves_to_direct():
+    decision = parse_initialization('{"mode":"clarify","response":"","clarifying_question":""}')
+    assert decision.mode == "direct"
+
+
+def test_explicit_execute_is_still_honored():
+    # The ONLY path to the tool loop: an explicit, parseable execute decision.
+    decision = parse_initialization('{"mode":"execute","objective":"Find the largest file."}')
     assert decision.mode == "execute"
-    # No invented plan either — the plan emerges from the loop.
+    assert decision.objective == "Find the largest file."
 
 
 @pytest.mark.asyncio

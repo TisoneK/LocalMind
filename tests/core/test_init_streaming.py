@@ -143,8 +143,10 @@ async def test_streaming_initializer_terminal_error_propagates():
 
 
 @pytest.mark.asyncio
-async def test_streaming_initializer_fails_open_on_unparsable_output():
-    """Unparsable model output falls back to execute mode (fail-open)."""
+async def test_streaming_initializer_resolves_prose_to_direct():
+    """Session 290: unparsable model output resolves to a bounded DIRECT
+    answer (execute is opt-in) — a model that replied in prose has that prose
+    shown as the answer instead of being dragged into the tool loop."""
     adapter = _FakeAdapter(chunks=["This is not JSON at all, just prose."])
     loop = _make_loop()
 
@@ -160,9 +162,8 @@ async def test_streaming_initializer_fails_open_on_unparsable_output():
             decision = payload
 
     assert decision is not None
-    assert decision.mode == "execute"  # fail-open
-    # Step 1 (ADR-38): fail-open must NOT invent a plan — the plan emerges
-    # from the loop on gathered evidence.
+    assert decision.mode == "direct"
+    assert decision.response == "This is not JSON at all, just prose."
 
 
 @pytest.mark.asyncio
@@ -189,7 +190,9 @@ async def test_streaming_initializer_non_terminal_error_does_not_hang():
             decision = payload
 
     assert decision is not None, "consumer hung — no decision event was put on the queue"
-    assert decision.mode == "execute"  # fail-open
+    # Session 290: a truncated/errored init is not a parseable execute choice,
+    # so it resolves to a bounded direct answer, never the tool loop.
+    assert decision.mode == "direct"
 
 
 @pytest.mark.asyncio
@@ -211,7 +214,9 @@ async def test_streaming_initializer_empty_stream_does_not_hang():
             decision = payload
 
     assert decision is not None, "consumer hung on empty stream"
-    assert decision.mode == "execute"
+    # Session 290: empty stream → bounded direct answer, never the tool loop.
+    assert decision.mode == "direct"
+    assert decision.response  # a non-empty fallback so the turn completes
 
 
 @pytest.mark.asyncio

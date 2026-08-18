@@ -363,14 +363,16 @@ async def test_engine_persists_failure_and_recalls_it(tmp_path, monkeypatch):
 
         return _stream()
 
-    async def chat(messages, temperature=0.4, intent=None):
-        async def _stream():
-            from core.models import StreamChunk
+    async def chat(messages, temperature=0.4, intent=None, **kwargs):
+        # Session 290: the parent init resolves to EXECUTE only on an explicit,
+        # parseable decision — return one so the loop actually runs and can hit
+        # the cap (the failure this test asserts). An empty/garbled init now
+        # (correctly) resolves to a bounded DIRECT answer, which would skip the
+        # loop entirely.
+        from core.models import StreamChunk
 
-            yield StreamChunk(text="", done=False)
-            yield StreamChunk(text="", done=True)
-
-        return _stream()
+        yield StreamChunk(text='{"mode":"execute","objective":"build the frontend app"}', done=False)
+        yield StreamChunk(text="", done=True)
 
     mock_adapter.chat_with_tools = chat_with_tools
     mock_adapter.chat = chat

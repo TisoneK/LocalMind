@@ -801,7 +801,14 @@ class AgentLoop:
                         done=False,
                         status=initialization.acknowledgement,
                     )
-                yield StreamChunk(text=initialization.response, done=False)
+                # Session 290: carry the init call's provider usage — on a
+                # direct turn the init IS the turn, so this is the real token
+                # count (else the runtime falls back to an inflated estimate).
+                yield StreamChunk(
+                    text=initialization.response,
+                    done=False,
+                    usage=initialization.usage,
+                )
                 yield StreamChunk(text="", done=True)
                 return
 
@@ -4460,6 +4467,10 @@ class AgentLoop:
         # from yielding and propagates exceptions cleanly.
         event_queue: asyncio.Queue = asyncio.Queue()
         last_preview = InitializationPreview()
+        # Session 290: accumulate the init call's provider usage. On a DIRECT
+        # turn the init call is the whole turn, so this is the real token usage
+        # (previously dropped, forcing an inflated estimate).
+        usage_acc: dict = {}
 
         async def _stream_producer() -> None:
             ack_sent = False
@@ -4471,6 +4482,8 @@ class AgentLoop:
                     temperature=0.1,
                     intent="chat",
                 ):
+                    if getattr(chunk, "usage", None):
+                        usage_acc.update(chunk.usage)
                     if chunk.error:
                         if is_terminal_pre_generation_error(chunk.error):
                             await event_queue.put(("error", TerminalProviderError(chunk.error)))
@@ -4536,13 +4549,22 @@ class AgentLoop:
                         if line:
                             await event_queue.put(("understanding", line))
                 # Stream ended — parse the full JSON and emit the final decision.
-                decision = parse_initialization("".join(chunks))
+                _raw_joined = "".join(chunks)
+                decision = parse_initialization(_raw_joined)
                 # ADR-34 B-12: record the init prompt size for budget measurement.
                 decision.init_prompt_chars = len(prompt)
+                decision.usage = dict(usage_acc)
+                # Observability (Session 290): log the mode AND a snippet of the
+                # model's raw output so an operator can confirm WHY a turn went
+                # direct vs execute — e.g. "execute" on a plain 'Hi' means the
+                # model explicitly chose it, while a direct-from-unparseable
+                # shows the raw prose we recovered. Answers "what is happening?".
                 logger.info(
-                    "[agent.loop] parent initialization mode=%s prompt_chars=%d",
+                    "[agent.loop] parent initialization mode=%s conf=%.2f prompt_chars=%d raw=%r",
                     decision.mode,
+                    decision.confidence,
                     decision.init_prompt_chars,
+                    _raw_joined[:200],
                 )
                 await event_queue.put(("decision", decision))
                 decision_sent = True
@@ -4582,13 +4604,18 @@ class AgentLoop:
                         "[agent.loop] initialization timed out after %.0fs",
                         _plan_timeout_for(active_adapter),
                     )
-                    yield ("decision", parse_initialization(""))
+                    # Salvage whatever the model streamed before the cap — a
+                    # slow model that produced partial prose still answers
+                    # (bounded direct), instead of being discarded into the
+                    # tool loop. parse_initialization keeps execute opt-in.
+                    yield ("decision", parse_initialization("".join(chunks)))
                     return
                 if event_type == "error":
                     if isinstance(payload, TerminalProviderError):
                         raise payload
-                    # Non-terminal error → fall back to execute mode.
-                    yield ("decision", parse_initialization(""))
+                    # Non-terminal error → bounded direct answer from whatever
+                    # arrived, never an unrequested tool loop.
+                    yield ("decision", parse_initialization("".join(chunks)))
                     return
                 if event_type == "decision":
                     yield (event_type, payload)

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 INITIALIZATION_MODES = frozenset({"direct", "clarify", "execute"})
@@ -40,6 +40,11 @@ class InitializationDecision:
     # ADR-34 B-12: record the init prompt size so init vs execution budgets
     # are measured independently. Set by the streaming initializer.
     init_prompt_chars: int = 0
+    # Session 290: provider-reported usage from the init call. On a DIRECT turn
+    # the init call IS the whole turn, so this is the turn's real token usage —
+    # propagated to the loop so direct turns report actual tokens, not an
+    # estimate. Set by the streaming initializer; default empty.
+    usage: dict = field(default_factory=dict)
 
     @property
     def is_direct(self) -> bool:
@@ -177,35 +182,73 @@ def _first_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
+# The bounded answer used when a turn resolves to DIRECT but the model gave us
+# nothing usable to say (empty/garbled classify output). It never runs a tool
+# and never hangs — the safe floor for any model on an unclear turn.
+_FALLBACK_DIRECT_RESPONSE = (
+    "I'm here and ready to help. Could you tell me a little more about what "
+    "you'd like me to do?"
+)
+
+
+def _salvage_response(raw: str) -> str:
+    """Recover a user-facing answer from an unparseable classify output.
+
+    A model that "fails" the JSON contract has almost always just answered the
+    user in prose (or emitted partial JSON that still carries the answer). That
+    text IS the answer — recover it rather than discarding it and escalating to
+    the tool loop. Order: an explicit response/acknowledgement value (even from
+    malformed JSON) → the raw prose when the output was never JSON → "".
+    """
+    for field in ("response", "acknowledgement"):
+        # A complete (quoted) value first.
+        match = re.search(rf'"{field}"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+        if match:
+            try:
+                return json.loads(f'"{match.group(1)}"').strip()[:1200]
+            except (ValueError, json.JSONDecodeError):
+                return match.group(1).strip()[:1200]
+        # A value truncated mid-stream (no closing quote) — take it to the end.
+        loose = re.search(rf'"{field}"\s*:\s*"(.+)$', raw, re.DOTALL)
+        if loose:
+            return loose.group(1).strip().rstrip('"').strip()[:1200]
+    # No JSON structure at all — the model simply replied in prose. Use it.
+    if not raw.lstrip().startswith("{"):
+        return raw.strip()[:1200]
+    return ""
+
+
 def parse_initialization(text: str) -> InitializationDecision:
-    """Parse a model decision and fail safely into execute mode.
+    """Parse the classify decision. EXECUTE IS OPT-IN, never the fallback.
 
-    An unparsable initialization response must never cause a prompt-shaped
-    routing fallback.  Execute mode preserves the parent loop's ability to
-    inspect the request and choose a tool; the raw response is retained only
-    as bounded internal context.
+    The tool loop is the most expensive, least-bounded, and only
+    state-changing path, so entering it must be an EXPLICIT, parseable choice —
+    ``mode == "execute"``. Every uncertain outcome (unparseable output, an
+    unknown mode, a direct with no answer, a clarify with no question) resolves
+    to a bounded DIRECT answer instead, built from the model's own output via
+    ``_salvage_response``. This is model- and provider-agnostic: it stops ANY
+    model — 3B local or frontier cloud — from being dragged into a tool loop
+    (or an unbounded hang) on a turn it never asked to execute. A model that
+    ignores the JSON contract and just greets the user now has that greeting
+    shown as the answer, which is what it always should have been.
 
-    Rebuild Step 1 (ADR-38): the init is classify-only, so a decision with
-    NO plan is legitimate — the plan emerges from the loop. Legacy fields
-    (facts/ambiguities/tool_names/plan_steps/success_criteria) were DELETED:
-    a model that returns them is ignored, not preserved.
+    Rebuild Step 1 (ADR-38): the init is classify-only — no plan is committed;
+    the plan emerges from the loop when execute is chosen. Legacy fields
+    (facts/ambiguities/tool_names/plan_steps/success_criteria) are ignored.
     """
     raw = (text or "").strip()
     payload = _first_json_object(raw)
     if payload is None:
-        # Fail open into execute WITHOUT inventing a plan — the loop will
-        # look at the request and pick the first action from evidence.
+        # Unparseable → bounded direct answer from whatever the model produced.
         return InitializationDecision(
-            mode="execute",
-            objective="Determine and complete the user's request.",
+            mode="direct",
+            response=_salvage_response(raw) or _FALLBACK_DIRECT_RESPONSE,
             raw=raw[:1800],
         )
 
-    mode = str(payload.get("mode", "execute")).strip().lower()
-    if mode not in INITIALIZATION_MODES:
-        mode = "execute"
+    mode = str(payload.get("mode", "")).strip().lower()
     decision = InitializationDecision(
-        mode=mode,
+        mode="direct",  # default until an explicit execute/clarify earns it
         acknowledgement=str(payload.get("acknowledgement", "")).strip()[:_MAX_TEXT],
         response=str(payload.get("response", "")).strip()[:1200],
         objective=str(payload.get("objective", "")).strip()[:_MAX_TEXT],
@@ -217,9 +260,18 @@ def parse_initialization(text: str) -> InitializationDecision:
     except (TypeError, ValueError):
         decision.confidence = 0.0
 
-    if decision.mode == "direct" and not decision.response:
-        # A direct decision without an answer cannot complete the user turn.
+    if mode == "execute":
+        # The only path to the tool loop — an explicit, parseable choice.
         decision.mode = "execute"
-    if decision.mode == "clarify" and not decision.clarifying_question:
-        decision.mode = "execute"
+    elif mode == "clarify" and decision.clarifying_question:
+        # Clarify is honored only when it carries a question to ask.
+        decision.mode = "clarify"
+    else:
+        # direct (explicit), an unknown mode, a direct with no answer, or a
+        # clarify with no question — all resolve to a bounded direct answer.
+        decision.mode = "direct"
+        if not decision.response:
+            decision.response = (
+                _salvage_response(raw) or decision.acknowledgement or _FALLBACK_DIRECT_RESPONSE
+            )
     return decision
