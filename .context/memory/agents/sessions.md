@@ -3936,3 +3936,18 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-3 (format=json DEMOTED — live evidence disproved the parse-failure hypothesis), B-2026-08-17-4, ADR-43 Phase 3 (phi4-mini slow execute loop = tool-schema prompt cost).
 - **Report:** .context/memory/reviews/2026-08-17-review-59.md
 - **Notes:** none
+
+---
+## 2026-08-17 — Session 292 (Settings bugs A–E, live-tested on Ollama)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Core:** 0.5.0
+- **Task:** batch of Settings bugs: A "Loading settings…" lag + not themed; B no UI shell-enable toggle; C context-window field should reflect selected model; D deepseek-v4-free defaulting for Ollama; E Ollama model+embeddings must persist and boot from saved values.
+- **FIXES (2 commits):**
+  - `ad21e23` (backend) D/E shared root cause: Ollama model routed through the ambiguous generic `model` key → stale cloud model loaded as ollama_model (D) + select_model never persisted (E). Fix: DEDICATED `ollama_model` key (select_model + set_adapter persist it; load reads it; generic `model` is cloud-only). B: shell_enabled in GET /api/settings + POST /api/settings/local (persisted, boolean-safe) + load restores it.
+  - `774129d` (frontend) A: reveal modal after essential settings load (model/embed lists populate in background; they prime slow /api/show); themed loading panel. B: shell on/off switch. C: num_ctx field placeholder shows the selected model's window, updates on switch; blank=auto.
+- **LIVE-VERIFIED (real app + Ollama, isolated 8765 + scratch HOME, across a REBOOT):** D — stale deepseek ignored, model=''→phi4-mini; E — select phi4-mini → persists → reboot → phi4-mini; B — toggle shell → persists → reboot → True. Confirmed on an actual restart, not just unit tests.
+- **VERIFICATION:** backend 1920 passed / 0 failed (+4 config tests); frontend 234 passed (+2 SettingsModal tests); tsc + eslint clean.
+- **Outcome:** done — all 5 bugs fixed, backend live-verified end-to-end.
+- **Open items:** B-2026-08-17-5 (embedding models leak into chat list); then STARTING ADR-43 Phase 3.
+- **Report:** .context/memory/reviews/2026-08-17-review-60.md
+- **Notes:** none
