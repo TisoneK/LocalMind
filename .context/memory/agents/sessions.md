@@ -4109,3 +4109,18 @@ program + ADR-22). -->
 - **Open items:** §40 hardening backlog (efficiency B-2026-08-17-8..12 first).
 - **Report:** ADR-48 in plans/decisions.md; lineage in review-65/66.
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (cont.) — web_search relevance-gated race (Kitengela weather bug)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user pasted a live transcript where "weather in Kitengela" failed (3 searches ok → empty_response). Diagnosed + fixed.
+- **ROOT CAUSE (live-proven, not the model/empty_response):** the DDG/Bing/SearXNG race was `asyncio.wait(FIRST_COMPLETED)` — fastest wins regardless of relevance. Ran the real providers: Bing returned junk (Current.com / "electric current" wiki / a dictionary — latched onto the word "current"), DDG returned the correct Kitengela weather. Bing (fast) beat DDG (correct); the model had no data, retried 3× (each "successful" so the same-tool-fail streak never tripped), returned empty synthesis.
+- **FIX (`1304a24`):** relevance gate on the race (`web_search.py`) — a provider wins immediately only if its results cover the query's DISTINCTIVE terms (framing/temporal words like "current/right/now" dropped; near-full coverage so generic weather words alone don't pass a wrong-location page); off-topic-but-fast sets held as fallback; best-coverage returned if none clears the bar. General, model/env-agnostic.
+- **LIVE-VERIFIED (real network):** all 3 transcript queries now return DuckDuckGo Kitengela/Kenya weather (was Bing junk / Los-Angeles). 9 new tests; de-flaked 2 existing tests that hit the real network. Full backend 1961 passed / 0 failed.
+- **Commits:** 2 — `fix(search):` (`1304a24`); `docs:` CHANGELOG. (+ this context commit.)
+- **VERIFICATION:** live before/after captured; 1961 BE tests; web_search.py ruff clean.
+- **Outcome:** done — search bug fixed at the root + live-verified.
+- **Open items:** B-2026-08-18-3 (agent-level "successful-but-irrelevant results → change strategy"; the OUTPUT twin of the completion floor).
+- **Report:** .context/memory/reviews/2026-08-18-review-67.md
+- **Notes:** none
