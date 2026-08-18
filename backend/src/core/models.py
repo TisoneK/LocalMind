@@ -166,6 +166,10 @@ class Message(BaseModel):
     # endpoint returns them and the frontend restores thinking blocks, error
     # cards, tool-step pills, and the cumulative context counter.
     thinking: Optional[str] = None  # accumulated reasoning trace
+    # Session 290: the ADR-36 opening acknowledgement ("I'll do X") the parent
+    # streamed before the answer — shown live but previously lost on reload,
+    # the same gap the thinking block had.
+    acknowledgement: Optional[str] = None
     error: Optional[str] = None  # raw provider error string (normalized at the history boundary per ADR-20)
     tool_calls: Optional[list] = None  # tool-call timeline (pills)
     metrics: Optional[dict] = None  # {prompt_tokens, completion_tokens, latency_ms}

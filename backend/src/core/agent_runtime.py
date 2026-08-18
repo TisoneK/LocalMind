@@ -323,6 +323,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         text: str,
         *,
         thinking: Optional[str] = None,
+        acknowledgement: Optional[str] = None,
         error: Optional[str] = None,
         tool_calls: Optional[list] = None,
         metrics: Optional[dict] = None,
@@ -342,6 +343,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     role=Role.ASSISTANT,
                     content=text,
                     thinking=thinking,
+                    acknowledgement=acknowledgement,
                     error=error,
                     tool_calls=tool_calls,
                     metrics=metrics,
@@ -351,6 +353,23 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             )
         except Exception:
             logger.exception("[agent-runtime] failed to persist assistant message")
+
+    @staticmethod
+    def _collect_acknowledgement(collector) -> Optional[str]:
+        """Extract the parent's opening acknowledgement from the obs trace.
+
+        The loop emits it as an ``agent_initialization_ack`` obs event
+        (loop.py). Persisting it lets the ADR-36 opening line survive a reload,
+        the same way thinking/tool pills do (Session 290)."""
+        try:
+            for evt in collector.history():
+                if evt.type == "agent_initialization_ack":
+                    ack = evt.data.get("acknowledgement") if isinstance(evt.data, dict) else None
+                    if ack:
+                        return str(ack)[:180]
+        except Exception:
+            return None
+        return None
 
     async def _memory_facts(self, message: str, session_id: str) -> list[str]:
         try:
@@ -695,6 +714,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         session_id,
                         "".join(response_chunks),
                         thinking="".join(thinking_parts) or None,
+                        acknowledgement=self._collect_acknowledgement(collector),
                         error=chunk.error,
                         tool_calls=_collect_tool_calls(collector) or None,
                         agent_runs=agent_runs,
@@ -726,6 +746,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 session_id,
                 "".join(response_chunks),
                 thinking="".join(thinking_parts) or None,
+                acknowledgement=self._collect_acknowledgement(collector),
                 error=exc.raw,
                 tool_calls=_collect_tool_calls(collector) or None,
                 agent_runs=agent_runs,
@@ -829,6 +850,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             session_id,
             response_text,
             thinking="".join(thinking_parts) or None,
+            acknowledgement=self._collect_acknowledgement(collector),
             tool_calls=_collect_tool_calls(collector) or None,
             metrics={
                 "prompt_tokens": prompt_tokens,

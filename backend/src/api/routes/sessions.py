@@ -108,6 +108,9 @@ async def get_history(session_id: str):
         # are persisted with the assistant message and must survive a reload.
         if m.thinking:
             message["thinking"] = m.thinking
+        # Session 290: the ADR-36 opening acknowledgement line.
+        if getattr(m, "acknowledgement", None):
+            message["acknowledgement"] = m.acknowledgement
         if m.error:
             # ADR-20: normalize ONCE at the presentation boundary — the stored
             # raw string becomes the canonical object the frontend renders.

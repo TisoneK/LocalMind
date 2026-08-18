@@ -60,6 +60,8 @@ CREATE TABLE IF NOT EXISTS messages (
     error       TEXT,
     tool_calls  TEXT,
     metrics     TEXT,
+    -- Session 290: the ADR-36 opening acknowledgement line.
+    acknowledgement TEXT,
     -- Session 267: Agent Workspace run tree + phase strip (JSON).
     agent_runs     TEXT,
     agent_phases   TEXT
@@ -296,6 +298,12 @@ class SessionStore:
                     conn.execute(f"ALTER TABLE messages ADD COLUMN {_col} TEXT")
             except sqlite3.OperationalError:
                 pass
+        # Session 290: the ADR-36 opening acknowledgement line (survives reload).
+        try:
+            with self._conn() as conn:
+                conn.execute("ALTER TABLE messages ADD COLUMN acknowledgement TEXT")
+        except sqlite3.OperationalError:
+            pass
         # Session 267: Agent Workspace run tree + phase strip on messages.
         for _col in ("agent_runs", "agent_phases"):
             try:
@@ -363,8 +371,8 @@ class SessionStore:
             try:
                 conn.execute(
                     """
-                    INSERT INTO messages(session_id, role, content, tool_name, timestamp, file_name, file_path, file_size, file_type, thinking, error, tool_calls, metrics, agent_runs, agent_phases)
-                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO messages(session_id, role, content, tool_name, timestamp, file_name, file_path, file_size, file_type, thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,  # noqa: E501
                     (
                         session_id,
@@ -382,6 +390,7 @@ class SessionStore:
                         json.dumps(message.metrics) if message.metrics else None,
                         json.dumps(message.agent_runs) if message.agent_runs else None,
                         json.dumps(message.agent_phases) if message.agent_phases else None,
+                        message.acknowledgement,  # plain text — stored raw
                     ),
                 )
             except Exception as e:
@@ -434,7 +443,10 @@ class SessionStore:
                 "INSERT INTO actions (id, session_id, tool_name, status, label, input, iteration, "
                 "todo_id, reasoning, provider, timestamp) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
-                (aid, session_id, tool_name, status, label, input, iteration, todo_id, reasoning, provider, time.time()),
+                (
+                    aid, session_id, tool_name, status, label, input,
+                    iteration, todo_id, reasoning, provider, time.time(),
+                ),
             )
         return aid
 
@@ -450,7 +462,13 @@ class SessionStore:
         """Update a tool action's status/output/duration/provider by its stable id."""
         fields: list[str] = []
         values: list[object] = []
-        for key, val in (("status", status), ("output", output), ("error", error), ("duration", duration), ("provider", provider)):
+        for key, val in (
+            ("status", status),
+            ("output", output),
+            ("error", error),
+            ("duration", duration),
+            ("provider", provider),
+        ):
             if val is not None:
                 fields.append(f"{key} = ?")
                 values.append(val)
@@ -547,7 +565,7 @@ class SessionStore:
             rows = conn.execute(
                 """
                 SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type,
-                       thinking, error, tool_calls, metrics, agent_runs, agent_phases
+                       thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement
                 FROM messages
                 WHERE session_id = ?
                 ORDER BY timestamp ASC
@@ -572,6 +590,7 @@ class SessionStore:
                 metrics=self._decode_json(row["metrics"]) if "metrics" in row.keys() else None,
                 agent_runs=self._decode_json(row["agent_runs"]) if "agent_runs" in row.keys() else None,
                 agent_phases=self._decode_json(row["agent_phases"]) if "agent_phases" in row.keys() else None,
+                acknowledgement=row["acknowledgement"] if "acknowledgement" in row.keys() else None,
             )
             for row in rows
         ]
@@ -588,7 +607,7 @@ class SessionStore:
             rows = conn.execute(
                 """
                 SELECT role, content, tool_name, timestamp, file_name, file_path, file_size, file_type,
-                       thinking, error, tool_calls, metrics, agent_runs, agent_phases
+                       thinking, error, tool_calls, metrics, agent_runs, agent_phases, acknowledgement
                 FROM messages
                 WHERE session_id = ?
                 ORDER BY timestamp DESC
@@ -613,6 +632,7 @@ class SessionStore:
                 metrics=self._decode_json(row["metrics"]) if "metrics" in row.keys() else None,
                 agent_runs=self._decode_json(row["agent_runs"]) if "agent_runs" in row.keys() else None,
                 agent_phases=self._decode_json(row["agent_phases"]) if "agent_phases" in row.keys() else None,
+                acknowledgement=row["acknowledgement"] if "acknowledgement" in row.keys() else None,
             )
             for row in rows
         ]
