@@ -776,11 +776,21 @@ class OllamaAdapter(BaseAdapter):
         2. /api/chat with a minimal message — generates 1 token then stops.
            Works on all models that support the chat endpoint.
         """
+        # S295 (latency): warm the KV cache at the SAME num_ctx real requests
+        # use, or the first request forces a full reload. Warmup previously
+        # omitted num_ctx → Ollama loaded at its small default (~2048/4096) while
+        # the first real chat sends up to 32768, costing a 13–29s cold reload the
+        # warmup was meant to prevent. Prime the real window first so
+        # effective_context_window matches what chat()/chat_with_tools() send.
+        await self._detect_context_length()
+        _warm_num_ctx = self.effective_context_window
+
         # Attempt 1: /api/generate with no prompt (zero-cost warmup)
         url_gen = f"{self._base_url}/api/generate"
         payload_gen = {
             "model": self._model,
             "keep_alive": self._keep_alive,
+            "options": {"num_ctx": _warm_num_ctx},
         }
         try:
             response = await self._client.post(url_gen, json=payload_gen, timeout=60)
@@ -812,6 +822,7 @@ class OllamaAdapter(BaseAdapter):
             "max_tokens": 1,
             "stream": False,
             "keep_alive": self._keep_alive,
+            "options": {"num_ctx": _warm_num_ctx},
         }
         try:
             response = await self._client.post(url_chat, json=payload_chat, timeout=60)
