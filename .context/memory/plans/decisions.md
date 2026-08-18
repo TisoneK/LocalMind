@@ -1233,3 +1233,43 @@ manifest: `.context/memory/features/fail-fast-provider-errors/manifest.md`.
 - **IMPLEMENTATION START (Session 293, Claude Code) — L3 (drop the redundant post-write read-back):** `file_write`'s success result was a terse `"{name} - {parent}/"` path echo — it read like an UNconfirmed path and invited the model to spend a follow-up `file_task` read-back to verify (the redundant call ADR-43 flags; it also hit the S264 path bug → empty_response). Changed it to an AFFIRMATIVE, self-contained confirmation: `"Wrote N bytes (M lines) to <full path> — saved and verified. Do not read it back to check; the write is confirmed."` (metadata unchanged — structured consumers use `metadata.path`, not the prose). Result-shape unit-tested (`tests/tools/test_file_writer_l3.py`). LIVE STATUS — HONEST/INCONCLUSIVE: BEFORE trace (glm-4.5-flash create task) showed the model reaching for `file_task` (a READ tool) on a CREATE task (the L2 wrong-tool pattern); the AFTER trace showed the model using `file_write` with NO `file_task` read-back (the intended L3 effect) — BUT that trace was CONFOUNDED and did not cleanly complete: (a) a path-resolution quirk — `resolve_write_path` prepended the home dir to an absolute `/private/tmp/...` test path → `/Users/bao/private/tmp/...`, so the file landed in the LOCALMIND_HOME scratch and the loop's OWN read-back verification (checking the original path) emitted `[GROUNDING CHECK FAILED]`; (b) the provider rate-limited the final synthesis. So L3's code change is SAFE + shape-verified, but a CLEAN behavioral before/after is still owed (use a normal home-relative path, e.g. Desktop, and a non-rate-limited window; spot-check phi4-mini). NOTE for next session: the loop does its OWN post-write read-back verification (the `[VERIFICATION]/[GROUNDING CHECK]` block) — L3's deeper win may be making THAT loop-side check trust the write result instead of re-reading, not just steering the model. Also logged: the `/private/tmp` path-prepend quirk (B-2026-08-17-6). Next: finish L3 verification, then L2 steering + L4 uniform observation contract.
 
 - **L2 DONE + B-2026-08-17-6 (Session 294, multiagent):** L2 right-tool steering — the CREATE→file_write gap was the trio asymmetry (shell→"use file_write", file_write→"use file_task", file_task→said NOTHING), so a model name-matching "file task" for "create a file" got zero correction; the parent path (pinned to ANALYZE, uses base.md not prompts.py) never sees the correct SHELL-persona steering. Fix: one clause in the file_task schema ("READ-ONLY (to create/write a file use file_write)"), kept under the lean core-catalog budget while preserving the pinned guardrails. Live-verified (glm-4.5-flash): model used file_write, no file_task. ALSO fixed the write-path bug the L3 trace surfaced (B-2026-08-17-6): resolve_write_path honors native-absolute paths; the loop's grounding + _verify_tool_result read back tool_result.metadata["path"] (where the write landed) not the raw arg — this is the "loop trusts the write result" idea from the L3 note, applied to the loop-side verification (also fixes false failures on timestamp-renamed documents). REMAINING: L2 secondary (discovery→find_path + "don't exploratory-shell before create" — the parent's base.md lacks it; the trace still showed 4 shell calls); a clean L3 before/after on a READ-ALLOWED path (this trace's residual grounding warning was a /private/tmp read-allowlist artifact → B-2026-08-17-7); L4 uniform observation contract.
+
+---
+## ADR-47: Single-agent-first — the Parent Agent is the whole autonomous layer this phase; delegation is deferred, not extended (2026-08-18)
+- **Author:** Claude Code / claude-opus-4-8 (Session 297)
+- **Status:** accepted (direction-setting; reconciles the shipped delegation
+  surface against a user-provided north-star spec — see
+  `docs/parent-agent-spec.md`)
+- **Context:** the user handed a full "Parent Agent — Complete Functional
+  Architecture & Development Specification" and asked to memorize/document it.
+  The spec (§1, §9, §36) is explicit: the current phase builds ONE strong
+  single-agent runtime — the Parent Agent that runs the closed loop (understand →
+  diagnose → plan → act → observe → assess → recover → verify → complete) — and
+  **specialist agents, delegation, and multi-agent orchestration are out of
+  scope until that single-agent foundation is proven reliable.** But the codebase
+  has already run ahead of this: `backend/src/core/agent/delegation.py`,
+  `tools/delegate.py`, `tools/delegate_parallel.py` (262 refs) ship today, and
+  `docs/ARCHITECTURE.md` advertises `delegate / delegate_parallel → isolated
+  specialized child agents`. So the spec and the build genuinely disagree about
+  whether delegation belongs to "now."
+- **Decision:** adopt the spec as the phase's north star and record the
+  divergence honestly rather than silently resolving it. (1) The spec lives
+  in-repo verbatim at `docs/parent-agent-spec.md` with a Reconciliation header.
+  (2) The already-accepted ADRs ADR-33/34/36/37/38/42/43/45/46 are recognized as
+  incremental realizations of this spec — the loop, the Thinker-as-silent-analyst,
+  tools-as-bounded-helpers, and execute-is-opt-in are exactly the spec's
+  principles. (3) The existing delegation surface is treated as **dormant /
+  ahead-of-roadmap, NOT to be extended** this phase; the choice between keeping it
+  dormant-and-unadvertised, removing it to match the spec, or consciously
+  declaring the phase over is left to the user (backlogged B-2026-08-18-1). NO
+  delegation code was changed by this documentation session.
+- **Consequences:** future sessions have one authoritative statement of the
+  target architecture and will not read `docs/ARCHITECTURE.md`'s delegate note as
+  a current-phase endorsement (a scope callout now points here + at the spec).
+  The quality bar for "done this phase" is the spec's single-agent lifecycle
+  (§43: reliable state, appropriate context, controlled tool access, meaningful
+  observation, dynamic replanning, bounded retries, explicit verification, safe
+  escalation) — not new specialist capabilities. Do NOT build new delegation
+  features or advertise child-agent orchestration as current until the user
+  resolves B-2026-08-18-1. This ADR is direction, not a code change; it does not
+  supersede any prior ADR — it frames them.
