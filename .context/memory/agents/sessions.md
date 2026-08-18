@@ -3951,3 +3951,16 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-5 (embedding models leak into chat list); then STARTING ADR-43 Phase 3.
 - **Report:** .context/memory/reviews/2026-08-17-review-60.md
 - **Notes:** none
+
+---
+## 2026-08-17 — Session 293 (ADR-43 start: L3 file_write confirmation)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Core:** 0.5.0
+- **Task:** user: "start ADR-43." Advanced ADR-43 Phase 3 (tools runtime efficiency). L1 (output bounding) already done (S272); real open work is L2 (steering) + L3 (drop redundant post-write read-back).
+- **DONE (`4f32520`):** L3 first step — file_write's terse `"{name} - {parent}/"` echo (which invited a redundant file_task read-back) is now an affirmative self-contained confirmation ("Wrote N bytes (M lines) to <path> — saved and verified. Do not read it back."). Metadata unchanged. Result-shape unit-tested (test_file_writer_l3.py).
+- **LIVE (glm-4.5-flash, isolated 8765):** BEFORE trace showed the model using `file_task` (READ) on a CREATE task (also the L2 wrong-tool gap). AFTER trace: model used `file_write`, NO file_task read-back (intended L3 effect) — BUT confounded: a `/private/tmp` path-prepend quirk failed the loop's OWN read-back verification (`[GROUNDING CHECK FAILED]`) and the provider rate-limited final synthesis. So L3 code is SAFE + shape-verified; a CLEAN behavioral before/after is still OWED (honest, not claimed as verified). Surfaced B-2026-08-17-6 (path-resolution + write-vs-verify-path divergence). Key insight for next: the LOOP does its own post-write read-back verification — L3's deeper win is making THAT trust the write result.
+- **VERIFICATION:** file/write tests 102 passed / 2 skipped; ruff clean.
+- **Outcome:** ADR-43 STARTED — L3 code shipped + unit-verified; behavioral live-verify + L2 steering + L4 pending.
+- **Open items:** B-2026-08-17-6 (path quirk), finish L3 clean trace, L2 steering, L4 observation contract.
+- **Report:** (folded into review-60 / this log; no separate report for the start)
+- **Notes:** none

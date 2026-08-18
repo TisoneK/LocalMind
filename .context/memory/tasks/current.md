@@ -1,38 +1,39 @@
 # Current Task
 
-**Status:** DONE — Session 291. LIVE-tested the local (Ollama/phi4-mini) path
-end-to-end, fixed the context meter for real, and fixed the 5 long-dismissed
-"pre-existing" test failures at root. Full backend suite GREEN (1916 pass, 0
-fail). All pushed.
+**Status:** ADR-43 STARTED (Session 293). L3 first step shipped + unit-verified;
+clean behavioral live-verify still owed. Settings bugs (Session 292) all done +
+live-verified. All pushed.
 
-**Shipped:**
-- `325fd02` context meter: replaced all num_ctx size-tiering with ONE
-  model-agnostic rule (declared window bounded by _DEFAULT_MAX_NUM_CTX=32768 or
-  the user override); meter now 16% at 5K (was 64%). Hardened
-  _extract_context_length (canonical arch key, excludes rope/original variants).
-  Live-verified on real phi4-mini.
-- `0606f70` fixed the 5 "pre-existing" fails at root (shell tests lacked the
-  shell-enabled precondition; model_router didn't isolate from saved keys).
-- Docs: environments.md records Ollama-installed + live-test recipe + phi4-mini
-  quirks; changelog corrected; review-59.
+## ADR-43 progress (Phase 3 — tools runtime efficiency)
+- L1 (bound tool OUTPUT): DONE (S272 — shell/code_exec/web_fetch bounded +
+  _truncate_observation).
+- **L3 (drop redundant post-write read-back): STARTED (`4f32520`).** file_write
+  now returns an affirmative "Wrote N bytes to <path> — saved and verified. Do
+  not read it back." confirmation (was a terse "{name} - {parent}/" echo that
+  invited a file_task read-back). Result-shape unit-tested.
+  - LIVE STATUS HONEST/INCONCLUSIVE: AFTER trace showed the model using
+    file_write with NO file_task read-back (intended) but was CONFOUNDED (a
+    /private/tmp path-prepend quirk failed the loop's own verification + a
+    provider rate-limit). CLEAN before/after still OWED.
+  - KEY INSIGHT: the LOOP does its OWN post-write read-back verification (the
+    `[GROUNDING CHECK]` block) — L3's deeper win is making THAT trust the write
+    result, not just steering the model.
+- L2 (right-tool steering): NOT STARTED. The BEFORE trace showed glm-4.5-flash
+  using file_task (READ) on a CREATE task — the steering gap. Do next.
+- L4 (uniform bounded observation contract): NOT STARTED.
 
-**Live-proven root cause (S290 fix confirmed):** phi4-mini emits valid JSON
-mode=direct with response:"" (greeting in acknowledgement) → old code escalated
-direct-empty-response to execute → 247s hang. Execute is opt-in (ADR-46) + the
-salvage recovers the acknowledgement → "Hi" answers direct, 0 tools, ~50s.
+## Next session
+1. Finish L3: clean before/after (normal home-relative path, e.g. Desktop; a
+   non-rate-limited window; spot-check phi4-mini). Consider making the loop-side
+   read-back verification trust the write result.
+2. B-2026-08-17-6: file_write path-prepend on absolute /private/tmp + write-vs-
+   verify-path divergence.
+3. L2 steering (create→file_write, discovery→find_path), then L4.
+4. Carried: B-2026-08-17-4 (thinkMs/diffData/candidates restore); B-2026-08-17-5
+   (embedding models leak into chat list).
 
-**Open next:**
-1. B-2026-08-17-3 — format=json for classify: DEMOTED. Live evidence disproved
-   the JSON-parse-failure hypothesis (phi4-mini's JSON was valid). Keep only as
-   robustness for other models.
-2. B-2026-08-17-4 — restore thinkMs/diffData/candidates on reload.
-3. ADR-43 Phase 3 (progressive tool-schema disclosure) — now the TOP local-path
-   perf lever: phi4-mini's execute loop is slow largely from the tool-schema
-   prompt cost (a real tool task >2 min).
-
-**Principles (do not regress):** tool loop is OPT-IN (ADR-46); fix
-model/env-agnostically, never "for local" (preferences.md); LIVE-test the local
-path (Ollama is installed — environments.md); never dismiss failures as
-"pre-existing, not mine".
+**Bar:** each ADR-43 phase needs a CLEAN before/after live trace (fewer wasted
+calls / lower output-context AND task still completes). A confounded trace is
+NOT verification. Live-test on glm-4.5-flash + spot-check phi4-mini.
 
 **Feature:** none
