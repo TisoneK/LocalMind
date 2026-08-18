@@ -3964,3 +3964,20 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-6 (path quirk), finish L3 clean trace, L2 steering, L4 observation contract.
 - **Report:** (folded into review-60 / this log; no separate report for the start)
 - **Notes:** none
+
+---
+## 2026-08-17 — Session 294 (MULTIAGENT: ADR-43 L2/L3 + path/verify fix)
+
+- **Agent:** Claude Code (orchestrator) | **Model:** claude-opus-4-8 + 2 general-purpose subagents | **Platform:** macOS (Darwin 24.6, local) | **Core:** 0.8.0 (updated from 0.5.0 this session)
+- **Task:** user: "sync context and pick up next session in multiagent session." First multiagent session — 2 read-only investigation subagents in PARALLEL (path/verify bug; L2 steering) while orchestrator did non-overlapping work + serialized all live-testing.
+- **CORE UPDATE (`efe01cd`):** context-sync 0.5.0→0.8.0 (adds peer collaboration for concurrent sessions + context-collab/context-gates tooling).
+- **FIXES:**
+  - `a907092` B-2026-08-17-5 — embedding models excluded from the chat-model list (embed/minilm/bge/gte, not just `-embed`).
+  - `8da6740`~1 B-2026-08-17-6 (subagent 1 root-caused) — `resolve_write_path` honors native-absolute paths (OS-aware is_absolute; was prepending home to /private/tmp → wrong location); loop grounding + `_verify_tool_result` trust `tool_result.metadata["path"]` not the raw arg (also fixes timestamp-renamed-document false failures).
+  - `8da6740` ADR-43 L2 (subagent 2 root-caused: the trio asymmetry — file_task said nothing about create) — file_task description now steers create→file_write. Caught a lean-catalog budget test the subagent missed (file_task is core/always-present); rewrote concisely to fit <17000 while keeping the pinned guardrail phrases.
+- **LIVE-VERIFIED (glm-4.5-flash, isolated 8765):** create task → file at the CORRECT absolute path, model used file_write (no file_task). Residual grounding warning = test-path artifact (/private/tmp outside the read-allowlist → read-back blocked, not missing) → B-2026-08-17-7.
+- **VERIFICATION:** full backend 1925 passed / 0 failed; ruff clean.
+- **Outcome:** done — ADR-43 L2 + B-2026-08-17-6 shipped & live-verified; multiagent structure worked (parallel read-only investigation + serial live-test).
+- **Open items:** B-2026-08-17-7 (read-blocked false grounding), L2 discovery/shell-before-create steering, L3 clean trace on a read-allowed path, L4.
+- **Report:** .context/memory/reviews/2026-08-17-review-61.md
+- **Notes:** none

@@ -1,39 +1,43 @@
 # Current Task
 
-**Status:** ADR-43 STARTED (Session 293). L3 first step shipped + unit-verified;
-clean behavioral live-verify still owed. Settings bugs (Session 292) all done +
-live-verified. All pushed.
+**Status:** Session 294 (MULTIAGENT) DONE. Core updated 0.5.0→0.8.0. ADR-43 L2
++ B-2026-08-17-6 shipped & live-verified; B-2026-08-17-5 done. Full suite
+1925/0. All pushed.
 
-## ADR-43 progress (Phase 3 — tools runtime efficiency)
-- L1 (bound tool OUTPUT): DONE (S272 — shell/code_exec/web_fetch bounded +
-  _truncate_observation).
-- **L3 (drop redundant post-write read-back): STARTED (`4f32520`).** file_write
-  now returns an affirmative "Wrote N bytes to <path> — saved and verified. Do
-  not read it back." confirmation (was a terse "{name} - {parent}/" echo that
-  invited a file_task read-back). Result-shape unit-tested.
-  - LIVE STATUS HONEST/INCONCLUSIVE: AFTER trace showed the model using
-    file_write with NO file_task read-back (intended) but was CONFOUNDED (a
-    /private/tmp path-prepend quirk failed the loop's own verification + a
-    provider rate-limit). CLEAN before/after still OWED.
-  - KEY INSIGHT: the LOOP does its OWN post-write read-back verification (the
-    `[GROUNDING CHECK]` block) — L3's deeper win is making THAT trust the write
-    result, not just steering the model.
-- L2 (right-tool steering): NOT STARTED. The BEFORE trace showed glm-4.5-flash
-  using file_task (READ) on a CREATE task — the steering gap. Do next.
-- L4 (uniform bounded observation contract): NOT STARTED.
+## Shipped
+- `efe01cd` core → 0.8.0 (peer collaboration + gates tooling).
+- `a907092` B-2026-08-17-5 — embedding models excluded from chat-model list.
+- `8da6740`~1 B-2026-08-17-6 — resolve_write_path honors native-absolute paths;
+  loop grounding/verify trust tool_result.metadata["path"] (also fixes
+  timestamp-renamed-doc false failures).
+- `8da6740` ADR-43 L2 — file_task description steers create→file_write (trio
+  asymmetry fixed; lean budget respected).
+
+## Multiagent note
+2 read-only general-purpose subagents investigated in PARALLEL (path/verify bug;
+L2 steering); orchestrator synthesized + implemented + serialized ALL
+live-testing (one server on 8765). Worked well. Lesson: a subagent claimed "no
+budget test exists" — WRONG (the lean-catalog test caught the file_task add) —
+always re-verify subagent claims.
+
+## ADR-43 progress
+- L1 done (S272). L3 STARTED (file_write affirmative confirmation, S293) —
+  clean before/after on a READ-ALLOWED path still owed. L2 DONE (file_task
+  steer) — secondary discovery→find_path + "don't exploratory-shell before
+  create" still open (parent base.md lacks it; trace showed 4 shell calls).
+  L4 not started.
 
 ## Next session
-1. Finish L3: clean before/after (normal home-relative path, e.g. Desktop; a
-   non-rate-limited window; spot-check phi4-mini). Consider making the loop-side
-   read-back verification trust the write result.
-2. B-2026-08-17-6: file_write path-prepend on absolute /private/tmp + write-vs-
-   verify-path divergence.
-3. L2 steering (create→file_write, discovery→find_path), then L4.
-4. Carried: B-2026-08-17-4 (thinkMs/diffData/candidates restore); B-2026-08-17-5
-   (embedding models leak into chat list).
+1. B-2026-08-17-7 — write-allowed-but-read-blocked path → FALSE grounding
+   failure (distinguish read-blocked from file-missing).
+2. L2 secondary: add discovery→find_path + create-directly steering to base.md
+   (the parent path that a plain "create a file" task actually uses).
+3. L3 clean before/after on a Desktop/read-allowed path; consider the loop-side
+   read-back trusting the write result (partly done via B-6 metadata.path).
+4. L4 uniform bounded observation contract.
+5. Carried: B-2026-08-17-4 (thinkMs/diffData/candidates restore).
 
-**Bar:** each ADR-43 phase needs a CLEAN before/after live trace (fewer wasted
-calls / lower output-context AND task still completes). A confounded trace is
-NOT verification. Live-test on glm-4.5-flash + spot-check phi4-mini.
+**Bar:** each ADR-43 phase needs a CLEAN before/after live trace on a
+read-allowed path. Live-test glm-4.5-flash + spot-check phi4-mini.
 
 **Feature:** none
