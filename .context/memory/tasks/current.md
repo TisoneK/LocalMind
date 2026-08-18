@@ -1,26 +1,30 @@
 # Current Task
 
-**Status:** DONE — Session 289: three local-first bugs (Windows/Ollama,
-phi4-mini) + a token-consumption concern. 5 product commits + changelog +
-review-57. All pushed. NOT live-verified on Ollama — see B-2026-08-17-2.
+**Status:** DONE — Session 290. Thinking-block + acknowledgement persistence
+fixed and verifiable; the "Hi hangs in the tool loop" ROOT fix (execute opt-in,
+ADR-46) shipped. All pushed. Ollama path NOT live-verified here.
 
 **Shipped:**
-- `bef1eb2` Bug 3 — context meter 64%: detect real window via Ollama /api/show;
-  user-configurable num_ctx (0=auto); "mini" size-tier; backend settings plumbing
-  (ADR-44).
-- `6887440` Bug 2 — "Hi" runs tool loop + times out: slow providers get the chat
-  budget for the parent init call so the classify finishes and returns `direct`
-  (ADR-45). Stays in agentic control — no intent routing.
-- `8e2bca4` Bug 1 — Settings modal: active-model + embedding-model + context-window
-  controls (+ /api/settings/local, /api/models/embeddings).
-- `20fff03` Token — compact env for the classify call; "Hi" ~731 vs ~5,211 tokens.
+- `d161c36` thinking block restores on reopen (history mapping now sets isAgent).
+- `5c8d082` ADR-36 acknowledgement persists across reload (new column).
+- `368fc4d` (context) recorded model/env-agnostic root-fix preference.
+- `035809c` ROOT: execute is opt-in (ADR-46) — the tool loop runs only on an
+  explicit parseable `mode:execute`; everything uncertain → bounded DIRECT from
+  the model's own output. Direct turns report real usage. Init decision logged.
+- `8b167b7` changelog.
 
 **Open next:**
-1. B-2026-08-17-2 — user verifies on Windows/Ollama (meter %, "Hi" no-tools, Settings).
-2. B-2026-08-17-1 — progressive tool-schema disclosure (ADR-43 Phase 3): the
-   dominant remaining execute-mode token cost; needs live-verification on a weak
-   model (ADR-40 guardrail).
-3. Carried (S288): delegate_parallel as-completed streaming, BLOCKED_COMMANDS
-   substring audit, Windows re-run of S264, z.ai empty-final retry.
+1. B-2026-08-17-2 — user verifies on Windows/Ollama: "Hi" answers in one step;
+   READ THE NEW INIT LOG LINE (`[agent.loop] parent initialization mode=... raw=...`)
+   to confirm whether the on-box cause was a parse-failure (now → direct) or a
+   genuine mode=execute misclassification.
+2. B-2026-08-17-3 — constrained JSON for the classify call (model-agnostic),
+   GATED on the init log confirming parse-failure is the real cause.
+3. B-2026-08-17-4 — restore thinkMs/diffData/candidates on reload.
+4. Carried: progressive tool-schema disclosure (ADR-43 Phase 3); B-2026-08-17-1.
+
+**Principle (do not regress):** the tool loop is OPT-IN (ADR-46), never
+fail-open. Fix the agent model/env-agnostically — never "for local/weak models"
+(that's symptom-fixing; see user/preferences.md).
 
 **Feature:** none

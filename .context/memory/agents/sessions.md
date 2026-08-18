@@ -3904,3 +3904,20 @@ program + ADR-22). -->
 - **Open items:** backlog B-2026-08-17-1 (progressive tool-schema disclosure, ADR-43 Phase 3), on-box verification of bugs 2&3.
 - **Report:** .context/memory/reviews/2026-08-17-review-57.md
 - **Notes:** none
+
+---
+## 2026-08-17 — Session 290 (thinking/ack persistence + execute-opt-in ROOT fix)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.5.0
+- **Task:** "fix thinking block not persisting on reopen; sweep for other missing pieces." Then the user reported "Hi" STILL hangs (screenshot: execute, 0 tokens, 247s) and corrected the framing: fix the ROOT model/env-agnostically, never "for local/weak models" (symptom-fixing). Then: "your turn to think."
+- **FIXES (6 commits):**
+  - `d161c36` thinking block not restored on reopen — render gated on `message.thinking && message.isAgent`; the history mapping never set `isAgent` (live path always does). Mark restored assistant turns isAgent:true.
+  - `5c8d082` persist the ADR-36 opening acknowledgement (sibling live-only gap) — new `acknowledgement` column (idempotent migration), captured from the agent_initialization_ack obs event, returned by history, restored client-side.
+  - `368fc4d` (context) recorded the model/env-agnostic root-fix preference in preferences.md (+ my own memory).
+  - `035809c` **ROOT fix — execute is opt-in (ADR-46).** parse_initialization failed open to `execute` on any unparseable classify output → the tool loop was the default-when-confused for EVERY model. Now the loop requires an explicit parseable `mode:"execute"`; everything uncertain → bounded DIRECT answer from the model's own output (`_salvage_response`). Loop timeout/error fallbacks salvage the partial stream. Direct turns propagate the init call's real usage (was dropped → inflated estimate). Init decision logged (mode+conf+raw) for observability.
+  - `8b167b7` changelog (rewrote the S289 local-framed "Hi" entry to the model-agnostic root description).
+- **VERIFICATION:** backend +~15 new/updated tests (execute-opt-in across all fail-open paths, salvage, usage propagation, thinking+ack round-trip). Full suite: 1910 pass, 4 pre-existing env-gated shell fails + 1 pre-existing env-keyed model_router fail (all fail on clean main). Frontend 232 pass, tsc clean. **NOT live-verified on Ollama** (none on this box) — fix is model-agnostic logic; new init log lets the user confirm on-box which branch fires.
+- **Outcome:** done — thinking+ack persistence shipped & verifiable; "Hi" root fix shipped, pending on-box confirmation of which failure branch (parse-fail vs genuine misclassify) the log shows.
+- **Open items:** B-2026-08-17-3 (constrained JSON — gate on init log), B-2026-08-17-4 (thinkMs/diffData/candidates restore), B-2026-08-17-2 (on-box verify).
+- **Report:** .context/memory/reviews/2026-08-17-review-58.md
+- **Notes:** none

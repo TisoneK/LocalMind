@@ -1200,3 +1200,32 @@ manifest: `.context/memory/features/fail-fast-provider-errors/manifest.md`.
   (B-2026-08-17-1) and/or a stronger local model, not by more timeout. Future
   agents: for slow local providers, the init call is a first-class generation —
   budget it like a chat call, not like a plan.
+
+---
+## ADR-46: The tool loop is opt-in — execute requires an explicit decision (2026-08-17)
+- **Status:** accepted (supersedes the fail-open-to-execute behavior; makes
+  ADR-45's slow-provider init timeout secondary)
+- **Context:** the parent's classify step (`parse_initialization`) failed open to
+  `execute` on any output it couldn't parse. The tool loop — the most expensive,
+  unbounded, and only state-changing path — was therefore the DEFAULT whenever the
+  classification was unclear, for EVERY model. Capable models masked it (clean
+  JSON); weak/loaded/truncated cases fell into the loop. "Hi" hanging on phi4-mini
+  (execute, 0 tokens, 247s) was the visible instance of a universal fragility.
+  S289 mis-treated it as a local-model timeout symptom; the user corrected the
+  framing (fix the root, model/env-agnostic — see preferences.md).
+- **Decision:** EXECUTE IS OPT-IN. The tool loop runs only on an explicit,
+  parseable `mode:"execute"`. Every uncertain outcome — unparseable output, an
+  unknown mode, a `direct` with no answer, a `clarify` with no question, an init
+  timeout/error — resolves to a bounded DIRECT answer, built from the model's own
+  output (`_salvage_response`; a model that ignores the JSON contract has usually
+  just answered in prose, and that prose is the answer). Direct turns also
+  propagate the init call's real provider usage, and the init decision is logged
+  (mode + confidence + raw snippet) for observability.
+- **Consequences:** no model — 3B local or frontier cloud — is ever dragged into
+  a tool loop it didn't ask for. Tradeoff: a REAL task whose execute-JSON is
+  unparseable now under-acts (answers in prose) instead of hanging — recoverable
+  by rephrasing, and far safer than a hang or a wrong tool action. To cut those
+  false-directs on weak models, constrain the classify output to valid JSON
+  (B-2026-08-17-3) — model-agnostic, gated on the new init log confirming
+  parse-failure is the real cause. NEVER restore fail-open-to-execute: the loop
+  is opt-in.
