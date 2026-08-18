@@ -192,3 +192,18 @@ def test_full_env_context_still_counts_in_sync_context():
         text = _build_environment_context()
 
     assert "123 facts in memory" in text
+
+
+def test_include_tool_list_false_drops_tools_prose_keeps_os_hints():
+    """S295: the execute path drops the redundant '## Available Tools' prose
+    (kept in the native tools param + in-prompt list) but MUST keep the OS/shell
+    hints (unlike compact) — they help code-gen on the shell path."""
+    full = _build_environment_context()
+    lean = _build_environment_context(include_tool_list=False)
+
+    assert "## Available Tools" in full
+    assert "## Available Tools" not in lean
+    # OS hints + grounding survive (this is NOT the compact block).
+    assert "## Environment" in lean and "## What You Know" in lean
+    assert "Working directory:" in lean
+    assert len(lean) < len(full)

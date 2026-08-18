@@ -843,7 +843,10 @@ class AgentLoop:
             # of the full environment block — the parent initialization call
             # uses the compact block instead. Build it here, lazily, so the
             # parent boot path never pays for it (bootup-telemetry session).
-            env_context = _build_environment_context()
+            # S295: drop the redundant "## Available Tools" prose (the native
+            # tools param + in-prompt list already carry it) — saves ~279
+            # tokens on every loop iteration; keeps the OS/shell hints.
+            env_context = _build_environment_context(include_tool_list=False)
 
             # Collect the plan internally while it streams from the provider.
             plan_chunks: list[str] = []
@@ -1080,7 +1083,10 @@ class AgentLoop:
                 logger.warning("[agent_loop] workspace_state failed: %s", ws_exc)
                 workspace_context = ""
 
-        turn_context_parts = [_build_environment_context()]
+        # S295: the trailing turn-context is re-sent on EVERY loop iteration —
+        # drop the redundant tool-list prose (kept in the native param + the
+        # in-prompt list) to save ~279 tokens/iteration.
+        turn_context_parts = [_build_environment_context(include_tool_list=False)]
         if workspace_context:
             turn_context_parts.append(workspace_context)
         _task_state_prompt = task_state.to_prompt()

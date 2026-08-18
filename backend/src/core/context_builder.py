@@ -83,7 +83,11 @@ def _intent_fragment_name(intent: Intent) -> str:
     return _SKILL_MAP.get(intent, intent.value.lower())
 
 
-def _build_environment_context(session_cwd: str | None = None, compact: bool = False) -> str:
+def _build_environment_context(
+    session_cwd: str | None = None,
+    compact: bool = False,
+    include_tool_list: bool = True,
+) -> str:
     """Build environment context for the agent — system info, date/time, hardware, tools.
 
     ``compact=True`` returns a trimmed block for the parent INITIALIZATION /
@@ -91,8 +95,15 @@ def _build_environment_context(session_cwd: str | None = None, compact: bool = F
     needs the date, OS and working directory — NOT the CPU/Python lines and,
     above all, NOT the "## Available Tools" prose (which is redundant with the
     real tool schemas sent in execute mode and roughly HALVES the init prompt
-    on the small local models this app targets). The full block is unchanged
-    for the execution path.
+    on the small local models this app targets).
+
+    ``include_tool_list=False`` drops ONLY the "## Available Tools" prose while
+    keeping the OS guidance / common-command hints (S295 latency/token work):
+    on the EXECUTE path that block is a stale THIRD copy of the tool catalog
+    (the native `tools` param + the in-prompt "Available tools:" list already
+    carry it), costing ~279 tokens on every loop iteration. The OS/shell hints
+    it sits next to ARE useful for code-gen, so — unlike ``compact`` — this
+    keeps them.
     """
     import datetime
     import os
@@ -197,19 +208,9 @@ def _build_environment_context(session_cwd: str | None = None, compact: bool = F
     except Exception:
         pass
 
-    context = f"""## Environment
-- {os_info}
-- Hostname: {hostname}
-- User: {username}
-- Current date: {date_str}
-- Current time: {time_str}{tz_str}
-- Working directory: {cwd}
-- Home: {home}
-- Shell: {shell_name}
-- CPU: {processor} ({cpu_count} cores)
-- Python: {py_version}
-- {os_guidance}
-- {common_cmds}
+    # The "## Available Tools" prose duplicates the native tools param + the
+    # in-prompt tool list; drop it when the caller says so (execute path).
+    tools_section = "" if not include_tool_list else f"""
 
 ## Available Tools
 You have access to these tools: {tool_summary}
@@ -223,7 +224,21 @@ You have access to these tools: {tool_summary}
 - edit_file: Edit existing files with search/replace/insert operations
 - sysinfo: Get current time/date/day and system specs (CPU, RAM, disk) — instant and offline.
   Use it exclusively for time/date questions.
-- memory_op: Store and retrieve persistent facts across conversations
+- memory_op: Store and retrieve persistent facts across conversations"""
+
+    context = f"""## Environment
+- {os_info}
+- Hostname: {hostname}
+- User: {username}
+- Current date: {date_str}
+- Current time: {time_str}{tz_str}
+- Working directory: {cwd}
+- Home: {home}
+- Shell: {shell_name}
+- CPU: {processor} ({cpu_count} cores)
+- Python: {py_version}
+- {os_guidance}
+- {common_cmds}{tools_section}
 
 ## What You Know
 - Today is {date_str}. Use this to ground all time-sensitive queries.
