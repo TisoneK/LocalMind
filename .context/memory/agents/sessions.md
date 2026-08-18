@@ -3997,3 +3997,10 @@ program + ADR-22). -->
 - **Open items:** none for this scope. Integration onto main remains (Session 295 owns main; merge in dependency order per collab protocol).
 - **Report:** release event `.context/memory/collaboration/events/20260818T080300Z-buffy-release.md`
 - **Notes:** sandbox kills background processes between commands — live traces must start server + fire request in ONE command. Also: `asyncio.get_event_loop()` is order-dependent-flaky under pytest-asyncio (stale loop) — use `get_running_loop()`.
+
+---
+## 2026-08-18 — bootup-telemetry INTEGRATION (user-requested)
+
+- **Merge:** user asked to merge `collab/bootup-telemetry/buffy` into main. Fast-forward `92e2e62..ed103f9` (both commits: perf + obs), pushed to `origin/main`.
+- **Session 295 impact:** still IN PROGRESS on main with uncommitted `current.md` + `baseline_test.txt` — no file overlap, both untouched by the merge. 295 will need to rebase/merge main before their commit.
+- **Verified before merge:** origin/main was unchanged at `92e2e62` (0 divergence); branch content identical to the fully-tested state (backend 1932 passed, frontend 242 passed, live traces green).
