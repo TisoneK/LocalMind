@@ -4028,3 +4028,17 @@ program + ADR-22). -->
 - **Report:** .context/memory/reviews/2026-08-18-review-64.md
 - **Colab:** peer agent **Buffy/Freebuff** joined read-only and independently verified the reconciliation, sharpening it — the divergence is the ENTIRE multi-agent layer, not just delegation (ParentAgent is the live entry `agent_runtime.py:667`, 11 specialists registered, delegation wired, `selection.py` demoted to UI metadata). Peer persisted it as a review-64 addendum + a SHARPENED note under B-2026-08-18-1 (peer commit `383fba4`). I re-verified the claims (greps held) and folded the sharpening into ADR-47's durable record (decisions.md) so it doesn't live only in the review report. Peer coordinated via a shared durable file rather than a `context-collab` event — logged as a flaw.
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 297 (cont.) — spec §40/§43 gap analysis
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** continuation of S297 — user picked "gap analysis first" for B-2026-08-18-1. Scored the LIVE runtime against `docs/parent-agent-spec.md` §40 (12 criteria) + §43. READ-ONLY, no product code.
+- **RESULT (review-65):** 8 STRONG / 4 PARTIAL / 0 hard gaps. The single-agent quality bar is largely MET by the PARENT LOOP itself (deterministic acceptance gate `verify.py`, first-class `TaskState`, bounded retries + same-tool streak, write-permission confirmation gate, execute-opt-in ADR-46, auto file_write verification) — independent of the delegation layer. The 4 PARTIALs are all already backlogged: efficiency (B-2026-08-17-8..12, the main gap), tool-selection L2-secondary, classify_failure recovery (review-42), read-blocked grounding (B-2026-08-17-7).
+- **RECOMMENDATION:** B-2026-08-18-1 → **(c) accept-and-harden** — keep the runtime (removing it buys no §40 gain, costs a big risky diff), treat the spec as the quality bar, close the 4 partials in order, and update the spec text (§36/§43) to record LocalMind consciously advanced past the single-agent phase.
+- **Commits:** 1 — `docs(review):` review-65 (+ this log).
+- **VERIFICATION:** verified each criterion against the actual modules (read goal_interpreter/task_state/verify/constants + grepped loop/tool_dispatch/prompts), not the ADRs alone. No baseline re-run (no code changed; last green S296 BE 1937/0, FE 251).
+- **Outcome:** done — analysis delivered; awaiting the user's final a/b/c call.
+- **Open items:** B-2026-08-18-1 decision; the 4 partials (existing backlog).
+- **Report:** .context/memory/reviews/2026-08-18-review-65.md
+- **Notes:** none
