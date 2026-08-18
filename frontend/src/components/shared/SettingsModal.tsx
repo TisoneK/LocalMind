@@ -54,6 +54,7 @@ interface ModelOption {
   name: string;
   provider: string;
   size?: string;
+  contextWindow?: number;  // effective window from /api/models (drives Bug C)
 }
 
 interface SettingsModalProps {
@@ -111,7 +112,14 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const [activeModels, setActiveModels] = useState<ModelOption[]>([]);
   const [embedModels, setEmbedModels] = useState<ModelOption[]>([]);
   const [embedModel, setEmbedModel] = useState('');
-  const [numCtx, setNumCtx] = useState('0'); // 0 = auto-detect real window
+  // num_ctx override as a string; '' means AUTO (use the model's own window,
+  // shown as the field placeholder so it reflects the selected model — Bug C).
+  const [numCtx, setNumCtx] = useState('');
+  // The selected model's effective context window (from /api/models) — drives
+  // the num_ctx placeholder so the field reflects the current model's value.
+  const [modelWindow, setModelWindow] = useState<number | null>(null);
+  // Shell-tool enable toggle (Bug B — was env-only, now a UI switch).
+  const [shellEnabled, setShellEnabled] = useState(false);
 
   // Load current settings on mount
   useEffect(() => {
@@ -140,16 +148,27 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         }
         setProviderKeys(keyStatus);
         setProviderDefaults(defaults);
-        // Local knobs: embedding model + context-window override.
+        // Local knobs: embedding model + context-window override + shell toggle.
         setEmbedModel(settings.embed_model ?? '');
-        setNumCtx(String(settings.num_ctx ?? 0));
+        // '' = auto (0); a real override shows as its number.
+        setNumCtx(settings.num_ctx && settings.num_ctx > 0 ? String(settings.num_ctx) : '');
+        setShellEnabled(settings.shell_enabled ?? false);
+        // Bug A: the essential settings are loaded — reveal the modal NOW and
+        // let the model/embedding lists (which prime Ollama /api/show and can
+        // take a few seconds) populate in the background instead of blocking
+        // the whole dialog behind a "Loading settings…" spinner.
+        setLoading(false);
         // Active-model list for the current adapter + embedding-model list.
         // Both best-effort — a cloud adapter or a stopped Ollama must not
         // block the rest of the settings from loading.
         try {
           const activeList = await localmindClient.getModels();
           setActiveModels(activeList.models);
-          if (activeList.current) setModel(activeList.current);
+          const current = activeList.current || settings.model;
+          if (current) setModel(current);
+          // Bug C: reflect the selected model's window in the num_ctx field.
+          const cur = activeList.models.find((m) => m.id === current);
+          if (cur?.contextWindow) setModelWindow(cur.contextWindow);
         } catch {
           /* keep whatever /api/settings reported */
         }
@@ -281,6 +300,9 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const handleSelectActiveModel = useCallback(async (modelId: string) => {
     if (!modelId || modelId === model) return;
     setModel(modelId);
+    // Bug C: reflect the newly-selected model's window in the num_ctx field.
+    const picked = activeModels.find((m) => m.id === modelId);
+    if (picked?.contextWindow) setModelWindow(picked.contextWindow);
     setStatus('saving');
     setMessage(`Switching model to ${modelId}...`);
     try {
@@ -292,14 +314,16 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       setStatus('error');
       setMessage(err instanceof Error ? err.message : 'Failed to switch model');
     }
-  }, [model, onSave]);
+  }, [model, activeModels, onSave]);
 
-  // Persist Ollama-local knobs: embedding model + context-window override.
+  // Persist Ollama-local knobs: embedding model + context window + shell toggle.
   const handleSaveLocal = useCallback(async () => {
-    const parsed = Number.parseInt(numCtx, 10);
+    // '' = auto (0). A concrete value is a positive override.
+    const trimmed = numCtx.trim();
+    const parsed = trimmed === '' ? 0 : Number.parseInt(trimmed, 10);
     if (Number.isNaN(parsed) || parsed < 0) {
       setStatus('error');
-      setMessage('Context window must be 0 (auto) or a positive number');
+      setMessage('Context window must be blank (auto) or a positive number');
       return;
     }
     setStatus('saving');
@@ -308,12 +332,13 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       const res = await localmindClient.setLocalSettings({
         embedModel: embedModel || undefined,
         numCtx: parsed,
+        shellEnabled,
       });
-      setNumCtx(String(res.num_ctx));
+      setNumCtx(res.num_ctx && res.num_ctx > 0 ? String(res.num_ctx) : '');
       setStatus('success');
       setMessage(
         parsed === 0
-          ? 'Local settings saved — context window auto-detected per model'
+          ? 'Local settings saved — context window auto-fit to the model'
           : `Local settings saved — context window ${parsed.toLocaleString()} tokens`,
       );
       onSave();
@@ -321,7 +346,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       setStatus('error');
       setMessage(err instanceof Error ? err.message : 'Failed to save local settings');
     }
-  }, [embedModel, numCtx, onSave]);
+  }, [embedModel, numCtx, shellEnabled, onSave]);
 
   const handleSaveKey = useCallback(async () => {
     if (!newKeyProvider || !newKeyValue.trim()) {
@@ -473,11 +498,15 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   }, []);
 
   if (loading) {
+    // Bug A: match the modal's own themed panel (border/bg/text tokens adapt to
+    // the active theme) instead of bare muted text floating on the backdrop.
+    // The lag is separately fixed by revealing the modal right after the
+    // essential settings load, so this state now only flashes briefly.
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="flex items-center gap-3 text-brand-green-muted">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Loading settings...</span>
+        <div className="flex items-center gap-3 rounded-xl border border-brand-border bg-brand-bg-panel px-6 py-4 text-brand-green-soft shadow-2xl">
+          <Loader2 className="h-5 w-5 animate-spin text-brand-green" />
+          <span>Loading settings…</span>
         </div>
       </div>
     );
@@ -713,21 +742,49 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-brand-green-soft">
-                  Context window (num_ctx)
+                  Context window (tokens)
                 </label>
                 <input
                   type="number"
                   min={0}
                   step={1024}
                   value={numCtx}
+                  placeholder={modelWindow ? `${modelWindow} (auto)` : 'auto'}
                   onChange={(e) => setNumCtx(e.target.value)}
-                  className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft font-mono focus:border-brand-green outline-none"
+                  className="w-full rounded-lg border border-brand-border bg-brand-bg-base px-3 py-2 text-sm text-brand-green-soft font-mono placeholder:text-brand-green-muted focus:border-brand-green outline-none"
                   data-testid="num-ctx-input"
                 />
                 <p className="mt-1 text-[11px] text-brand-green-muted">
-                  0 = auto-detect the model’s real window. Raise it on capable
-                  hardware; lower it to protect VRAM. Larger windows are slower.
+                  {modelWindow
+                    ? `Leave blank to auto-fit the selected model (${modelWindow.toLocaleString()} tokens). `
+                    : 'Leave blank to auto-fit the selected model. '}
+                  Enter a number to pin a custom window — larger is slower to load and uses more memory.
                 </p>
+              </div>
+              {/* Bug B: shell-tool enable toggle (was LOCALMIND_SHELL_ENABLED env-only) */}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-brand-green-soft">Shell tool</p>
+                  <p className="mt-0.5 text-[11px] text-brand-green-muted">
+                    Lets the agent run system commands (list files, check disk, run scripts). Off by default for safety.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={shellEnabled}
+                  onClick={() => setShellEnabled((v) => !v)}
+                  data-testid="shell-enabled-toggle"
+                  className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors ${
+                    shellEnabled ? 'bg-brand-green/70' : 'bg-brand-border'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-brand-bg-panel transition-transform ${
+                      shellEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
               </div>
               <button
                 onClick={handleSaveLocal}

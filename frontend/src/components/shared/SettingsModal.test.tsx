@@ -146,6 +146,43 @@ describe('SettingsModal', () => {
     });
   });
 
+  it('toggles the shell tool and persists it (Session 292)', async () => {
+    mockClient.getSettings.mockResolvedValue(settingsPayload({ shell_enabled: false }));
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+
+    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    await screen.findByRole('heading', { name: 'Settings' });
+
+    const toggle = await screen.findByTestId('shell-enabled-toggle');
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(screen.getByTestId('save-local-settings'));
+    await waitFor(() => {
+      expect(mockClient.setLocalSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ shellEnabled: true }),
+      );
+    });
+  });
+
+  it('num_ctx field reflects the selected model window as its placeholder (Session 292)', async () => {
+    mockClient.getSettings.mockResolvedValue(settingsPayload({ num_ctx: 0 }));
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+    mockClient.getModels.mockResolvedValue({
+      models: [{ id: 'phi4-mini:latest', name: 'phi4-mini:latest', provider: 'ollama', contextWindow: 32768 }],
+      current: 'phi4-mini:latest',
+      provider: 'ollama',
+    });
+
+    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    await screen.findByRole('heading', { name: 'Settings' });
+
+    const numCtx = (await screen.findByTestId('num-ctx-input')) as HTMLInputElement;
+    // Auto (num_ctx=0) → empty value, placeholder shows the model's window.
+    await waitFor(() => expect(numCtx.placeholder).toContain('32768'));
+    expect(numCtx.value).toBe('');
+  });
+
   it('keeps input focus when the parent re-renders with a new onClose (Session 233)', async () => {
     mockClient.getSettings.mockResolvedValue(settingsPayload());
     mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });

@@ -957,6 +957,7 @@ class LocalMindClient {
     model: string;
     embed_model?: string;
     num_ctx?: number;
+    shell_enabled?: boolean;
     providers: Record<string, unknown>;
     thinking: string;
     reasoning_timeout: number;
@@ -1015,12 +1016,14 @@ class LocalMindClient {
   async setLocalSettings(opts: {
     embedModel?: string;
     numCtx?: number;
-  }): Promise<{ embed_model: string; num_ctx: number; updated: string[]; message: string }> {
+    shellEnabled?: boolean;
+  }): Promise<{ embed_model: string; num_ctx: number; shell_enabled?: boolean; updated: string[]; message: string }> {
     return this.request('/api/settings/local', {
       method: 'POST',
       body: JSON.stringify({
         embed_model: opts.embedModel,
         num_ctx: opts.numCtx,
+        shell_enabled: opts.shellEnabled,
       }),
     });
   }
