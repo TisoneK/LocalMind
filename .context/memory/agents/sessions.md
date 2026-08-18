@@ -4083,3 +4083,15 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-1 (delegation/identity decision; identity itself now settled = LocalMind, single user-facing agent).
 - **Report:** (folded into review-66 lineage; no separate report)
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (cont.) — e2e coverage for the completion floor
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user: "fix it e2e and push then test" → give the parent completion floor (fd48db5) automated end-to-end coverage (it had unit tests on the helper + a manual live trace, but no e2e test through the real gate), push, run it.
+- **SHIPPED (`5018f82`):** `tests/e2e/test_parent_completion_floor_e2e.py` — 6 tests driving the REAL `_acceptance_gate_at_final_answer` (stub replan adapter) through the floor branch: failed high-stakes last action → rejects done + injects [COMPLETION FLOOR] recovery + replans (is_final False); success → accepts; non-parent → legacy path unaffected; at cap → honest stop, no replan; low-stakes failure → not gated; tool_failed=True → caught. This covers the branch + recovery wiring the unit helper tests don't reach.
+- **VERIFICATION:** e2e suite 89 passed (+6); ruff clean; re-ran the 6 on the pushed state → all pass. Pre-commit CI hook (full ruff+pytest+tsc+eslint) green.
+- **Commits:** 1 — `test(e2e):` (`5018f82`).
+- **Outcome:** done — floor is now unit + e2e + live-verified.
+- **Open items:** B-2026-08-18-1 (delegation decision; identity settled = LocalMind).
+- **Notes:** none
