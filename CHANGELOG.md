@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- The Agents workspace now updates in **real time** during a turn — the agent's phases (getting started, understanding, planning, running tools, verifying) appear as they happen instead of all at once after the reply. It also keeps a **history of your turns**: each turn is its own numbered, collapsible group (the active turn is expanded, past turns tuck away) instead of the panel wiping itself every message. Child agents narrate their phases live too, and the whole thing got a visual refresh — a breathing status rail, turn badges, and a connected lifecycle timeline (with motion turned off automatically if you prefer reduced motion).
+
 - Faster first message with a local (Ollama) model: the app now warms the model up at the correct size at startup, so your first request no longer triggers a slow model reload (previously a 10–30s stall on the first message after launch).
 - The agent uses fewer tokens on each step of a task: a duplicate copy of the tool list that was being re-sent on every step has been removed (~280 tokens saved per step), leaving more room for the actual work — especially helpful on small local models and free-tier limits.
 
