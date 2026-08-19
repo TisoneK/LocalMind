@@ -590,18 +590,15 @@ async def _do_write(
             shutil.copy2(filepath, dest_path)
             logger.info("[file_writer] copied to final dest → %s", dest_path)
 
-        # ADR-43 L3: an AFFIRMATIVE, self-contained confirmation — the write is
-        # already done and verified here, so the model has no reason to spend a
-        # follow-up read-back call (file_task) to check it. The terse
-        # "name - parent/" echo used to read like an unconfirmed path and
-        # invited exactly that redundant verify (which also hit the S264 path
-        # bug and cascaded to empty_response). The full path + byte/line counts
-        # ARE the confirmation.
+        # The result reports the FACTS of the write (path + byte/line counts).
+        # It deliberately does NOT tell the agent whether to verify/read the file
+        # back — that phantom instruction ("saved and verified; do not read it
+        # back; the write is confirmed") is not the tool's business; the agent
+        # decides based on the actual task (B-2026-08-18-7).
         return ToolResult(
             content=(
                 f"Wrote {size} bytes ({lines} line{'' if lines == 1 else 's'}) "
-                f"to {dest_path} — saved and verified. Do not read it back to "
-                f"check; the write is confirmed."
+                f"to {dest_path}."
             ),
             risk=RiskLevel.LOW,
             source="file_writer",

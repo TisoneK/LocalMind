@@ -84,7 +84,7 @@ def test_only_the_last_tool_is_judged():
     trace = AgentTrace(
         steps=[
             _step("shell", observation="No such file or directory"),
-            _step("file_write", observation="Wrote 12 bytes to /tmp/ok.txt — saved and verified."),
+            _step("file_write", observation="Wrote 12 bytes to /tmp/ok.txt."),
         ]
     )
     assert parent_completion_floor_note(trace) is None
@@ -93,7 +93,7 @@ def test_only_the_last_tool_is_judged():
 def test_trailing_failed_high_stakes_rejects_after_earlier_success():
     trace = AgentTrace(
         steps=[
-            _step("file_write", observation="Wrote 5 bytes — saved and verified."),
+            _step("file_write", observation="Wrote 5 bytes to /tmp/ok.txt."),
             _step("code_exec", failed=True),
         ]
     )

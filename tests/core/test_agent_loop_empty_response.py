@@ -435,21 +435,18 @@ class TestEmptyResponseFastFail:
 
 
 class TestFileWriteVerificationReadbackDirective:
-    """B-2026-08-16-14: the L3 "do NOT read it back" directive (Session 277)
-    must not fight an EXPLICIT user request to see the file's contents.
-
-    Live transcript (hy3-free multi-step chain): the evidence the model
-    reasoned over said "The write succeeded; do NOT read it back" while the
-    user had asked to read the file back and show its contents — the model
-    spent 61s of reasoning arguing with the directive before correctly
-    reading the file anyway. A weaker model could silently skip the
-    user-requested step and still claim "no step failed".
+    """B-2026-08-18-7: the file_write verification line is FACTUAL evidence
+    ("file_write confirmed — N chars verified on disk at <path>") and must NOT
+    tell the agent whether to read the file back. The old "do NOT read it back" /
+    "read it back with file_task" directive was a phantom self-verification
+    instruction (it fought explicit user requests and second-guessed the agent);
+    the agent decides for itself from the actual task.
     """
 
     @pytest.mark.asyncio
-    async def test_verification_drops_prohibition_when_user_asked_readback(self):
-        """User explicitly asked to see the file's contents -> the verification
-        line must endorse the read-back instead of prohibiting it."""
+    async def test_verification_line_is_factual_with_no_readback_instruction(self):
+        """The verification line states the on-disk fact and gives NO read-back
+        instruction of any kind — regardless of what the user asked."""
         from core.models import ToolResult
 
         loop = AgentLoop(adapter=MagicMock())
@@ -466,43 +463,20 @@ class TestFileWriteVerificationReadbackDirective:
                 tool_name="file_write",
                 tool_args={"path": "C:/Users/tison/Desktop/kenya_notes/facts.txt", "content": "Fact A\nFact B\nFact C"},
                 observation="",
-                user_asked_readback=True,
             )
 
         assert msg is not None
+        # Factual evidence of the on-disk result …
+        assert "confirmed" in msg and "on disk" in msg
+        # … and NO instruction about reading the file back, either way.
         assert "do NOT read it back" not in msg, f"prohibition leaked: {msg!r}"
-        assert "read it back with file_task" in msg
+        assert "read it back" not in msg.lower(), f"read-back directive leaked: {msg!r}"
 
     @pytest.mark.asyncio
-    async def test_verification_keeps_prohibition_by_default(self):
-        """No explicit read-back request -> the L3 anti-redundancy directive is
-        preserved exactly (default, matching pre-B-14 behavior)."""
-        from core.models import ToolResult
-
-        loop = AgentLoop(adapter=MagicMock())
-
-        async def fake_dispatch(intent, path, max_retries=0, allowed_tool_names=None):
-            return (
-                ToolResult(source="file_task", content="Fact A\nFact B\nFact C", success=True),
-                False,
-                0,
-            )
-
-        with patch("core.agent.loop.dispatch_with_retry", new=fake_dispatch):
-            msg = await loop._verify_tool_result(
-                tool_name="file_write",
-                tool_args={"path": "C:/Users/tison/Desktop/kenya_notes/facts.txt", "content": "Fact A\nFact B\nFact C"},
-                observation="",
-            )
-
-        assert msg is not None
-        assert "do NOT read it back" in msg
-
-    @pytest.mark.asyncio
-    async def test_loop_wires_readback_flag_when_user_asked(self):
-        """Loop-level wiring: when the user asks to write THEN read back, the
-        verification evidence the model sees on the synthesis call must not
-        tell it to skip the requested read-back."""
+    async def test_loop_surfaces_factual_verification_without_readback_directive(self):
+        """Loop-level wiring: even when the user asks to write THEN read back, the
+        verification evidence the model sees is the factual on-disk line with NO
+        read-back instruction — the agent honors the user's request on its own."""
         from adapters.ollama import ToolCallResult
         from core.models import ToolResult
         from core.obs import ObsCollector
@@ -577,9 +551,10 @@ class TestFileWriteVerificationReadbackDirective:
         full = "".join(chunk.text for chunk in chunks)
         assert seen["calls"] == 2, f"expected tool call + synthesis, got {seen['calls']}"
         assert "Here are the facts" in full
-        # The verification evidence the model sees must endorse the read-back.
+        # The factual VERIFICATION line reaches the model, with NO read-back
+        # instruction of any kind (B-2026-08-18-7).
         assert seen["synthesis_messages"] is not None
         joined = " ".join(str(m.get("content", "")) for m in seen["synthesis_messages"])
         assert "VERIFICATION" in joined, f"verification line missing: {joined!r}"
         assert "do NOT read it back" not in joined, f"prohibition leaked: {joined!r}"
-        assert "read it back with file_task" in joined
+        assert "read it back" not in joined.lower(), f"read-back directive leaked: {joined!r}"

@@ -1,9 +1,10 @@
-"""ADR-43 L3 — file_write returns an affirmative, self-contained confirmation.
+"""file_write returns a FACTUAL result (byte/line count + path) and NOTHING that
+tells the agent whether to verify its own work.
 
-The terse "name - parent/" echo read like an unconfirmed path and invited a
-redundant post-write read-back (file_task) to verify — a wasted call that also
-hit the S264 path bug and cascaded to empty_response. The write is already done
-and verified in the tool; its result must SAY so, so the model doesn't re-check.
+B-2026-08-18-7: the old "saved and verified. Do not read it back to check; the
+write is confirmed." wording was a phantom self-verification instruction the
+tool has no business issuing. The result must state only the facts of the write;
+the agent decides for itself whether to read the file back.
 """
 from __future__ import annotations
 
@@ -15,16 +16,18 @@ from tools.file_writer import _do_write
 
 
 @pytest.mark.asyncio
-async def test_write_result_is_an_affirmative_confirmation(tmp_path: Path):
+async def test_write_result_is_factual_without_a_verify_instruction(tmp_path: Path):
     dest = tmp_path / "note.txt"
     result = await _do_write(dest, "hello from adr43")
 
     assert result.success is not False
-    # Affirmative, self-contained: byte count, full path, and an explicit
-    # "don't read it back" so the model spends no verify call.
+    # Factual: byte count + full path.
     assert "16 bytes" in result.content
     assert str(dest) in result.content
-    assert "read it back" in result.content.lower()
+    # NO phantom self-verification instruction of any kind.
+    low = result.content.lower()
+    for phantom in ("read it back", "write is confirmed", "saved and verified", "do not read"):
+        assert phantom not in low, f"phantom instruction leaked: {result.content!r}"
     # Structured metadata is unchanged (consumers rely on it, not the prose).
     assert result.metadata["bytes"] == 16
     assert result.metadata["path"] == str(dest)
