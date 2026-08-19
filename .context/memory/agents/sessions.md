@@ -4195,3 +4195,16 @@ program + ADR-22). -->
 - **Outcome:** done — <br> rendering fixed; steer strengthened but honestly logged as insufficient; guaranteed path scoped.
 - **Open items:** B-2026-08-18-4 (structured weather — the real fix), B-2026-08-18-6 (grounding), §40 efficiency.
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (cont.) — remove phantom "do not read it back" instruction everywhere (B-2026-08-18-7)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user — a tool's output text tells the agent "do not read it back / the write is confirmed / saved and verified" after a file write; the earlier single-location fix didn't cover all. Find + remove EVERYWHERE; confirm a file-write response has no self-verify instruction.
+- **ROOT:** the ADR-43 L3 phantom instruction was generated in THREE places (not one): (1) `tools/file_writer.py` result text; (2) `loop.py _verify_tool_result` feedback line (both the default "do NOT read it back" and the B-2026-08-16-14 user-asked "read it back with file_task" branches); (3) `prompts.py` system-prompt "Trust it; do NOT read the file back…". All now factual-only. Removed the dead `user_asked_readback` plumbing. Left `skills/coding.md`'s "read it back as if reviewing a PR" (the OPPOSITE, legitimate review directive).
+- **SHIPPED (`575d175`):** file_write result = "Wrote N bytes (M lines) to <path>."; verification line = "file_write confirmed — N chars verified on disk at <path>." CONFIRMED via a direct run: the file-write response contains NO phantom instruction. Updated 4 tests that pinned the old directive.
+- **VERIFICATION:** grep sweep (no phantom text in generated output/prompts, only explanatory comments); direct file_write + _verify_tool_result run shows factual-only; full backend 1968 passed / 0 failed; ruff clean.
+- **Outcome:** done — phantom instruction removed everywhere; verification confirms a clean file-write response.
+- **LESSON:** the earlier "fixed in one place" was wrong — the same instruction was duplicated across tool output + loop feedback + system prompt. For any "remove this phrasing" task, grep ALL generators (tool output, loop-injected evidence, system prompts) — don't trust a single-site fix.
+- **Open items:** B-2026-08-18-4 (weather card), -6 (grounding), §40 efficiency.
+- **Notes:** none
