@@ -91,3 +91,19 @@ describe('ChatMessage acknowledgement (ADR-36)', () => {
     expect(screen.queryByText('nope')).not.toBeInTheDocument();
   });
 });
+
+describe('ChatMessage markdown table <br> handling', () => {
+  it('renders <br> inside a table cell as a line break, not literal text', () => {
+    const content = [
+      '| Metric | Value |',
+      '|---|---|',
+      '| Temperature | 16-18°C<br>High: 23°C |',
+    ].join('\n');
+    render(<ChatMessage message={makeMessage({ content })} onRetry={() => {}} />);
+    // The literal "<br>" must NOT appear as text …
+    expect(screen.queryByText(/<br\s*\/?>/i)).not.toBeInTheDocument();
+    // … and both values render (split across a real line break).
+    expect(screen.getByText(/16-18°C/)).toBeInTheDocument();
+    expect(screen.getByText(/High: 23°C/)).toBeInTheDocument();
+  });
+});

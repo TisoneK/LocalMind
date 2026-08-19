@@ -294,6 +294,20 @@ function MarkdownLink({ href, children, ...props }: React.ComponentPropsWithoutR
 }
 
 /** Styled table */
+// Models routinely put `<br>` in table cells for multi-line values (GFM tables
+// can't hold a real newline). react-markdown (no rehype-raw) leaves it as the
+// literal text "<br>", which looks broken. Convert those literals to real line
+// breaks — scoped to table cells, and only <br> (no other raw HTML), so it's safe.
+function withLineBreaks(children: React.ReactNode): React.ReactNode {
+  return React.Children.map(children, (child, i) => {
+    if (typeof child === 'string' && /<br\s*\/?>/i.test(child)) {
+      const parts = child.split(/<br\s*\/?>/i);
+      return parts.flatMap((part, j) => (j === 0 ? [part] : [<br key={`br-${i}-${j}`} />, part]));
+    }
+    return child;
+  });
+}
+
 // Tables render as a polished CARD — rounded, bordered, accent header row, zebra
 // striping, hover highlight, tabular figures — so structured answers (weather,
 // comparisons, schedules) read as a clean table instead of raw text.
@@ -332,13 +346,13 @@ function MarkdownTableCell({ isHeader, children, ...props }: React.ComponentProp
   if (isHeader) {
     return (
       <th className="whitespace-nowrap px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-brand-green" {...props}>
-        {children}
+        {withLineBreaks(children)}
       </th>
     );
   }
   return (
     <td className="px-3 py-2 align-middle text-brand-green-soft" {...props}>
-      {children}
+      {withLineBreaks(children)}
     </td>
   );
 }
