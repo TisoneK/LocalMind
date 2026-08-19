@@ -42,6 +42,12 @@ class InitializationDecision:
     # up front as the live Todos panel and checked off as the agent works. Empty
     # for direct/clarify and single-step tasks.
     plan_steps: list[str] = field(default_factory=list)
+    # B-2026-08-18-5: set when the classify JSON was unparseable AND there was no
+    # salvageable prose — the `response` is then the generic canned fallback,
+    # which IGNORES the conversation. The loop uses this to answer the user's
+    # message directly from history instead (so a follow-up like "why did you say
+    # X?" isn't met with a context-free "tell me more").
+    needs_history_answer: bool = False
     # ADR-34 B-12: record the init prompt size so init vs execution budgets
     # are measured independently. Set by the streaming initializer.
     init_prompt_chars: int = 0
@@ -249,10 +255,15 @@ def parse_initialization(text: str) -> InitializationDecision:
     payload = _first_json_object(raw)
     if payload is None:
         # Unparseable → bounded direct answer from whatever the model produced.
+        salvaged = _salvage_response(raw)
         return InitializationDecision(
             mode="direct",
-            response=_salvage_response(raw) or _FALLBACK_DIRECT_RESPONSE,
+            response=salvaged or _FALLBACK_DIRECT_RESPONSE,
             raw=raw[:1800],
+            # Nothing salvageable → the canned fallback ignores context. Flag it
+            # so the loop answers the user's message from the conversation history
+            # instead of the generic "tell me more" (B-2026-08-18-5).
+            needs_history_answer=not salvaged,
         )
 
     mode = str(payload.get("mode", "")).strip().lower()

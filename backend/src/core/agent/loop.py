@@ -877,6 +877,45 @@ class AgentLoop:
             if initialization.is_direct:
                 if _obs:
                     _obs.emit("agent_loop_done", intent=intent.value, direct=True)
+                if getattr(initialization, "needs_history_answer", False):
+                    # B-2026-08-18-5: the classify JSON flaked with nothing to
+                    # salvage. Do NOT emit the canned context-free fallback —
+                    # answer the user's latest message directly from the
+                    # conversation history (fixes a follow-up like "why did you
+                    # say X?" being met with a generic "tell me more").
+                    _hist_msgs = [
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are LocalMind, a helpful assistant. Answer the user's "
+                                "LATEST message using the conversation above. If they are "
+                                "questioning or correcting a previous answer, address it "
+                                "directly and honestly using what was actually said earlier "
+                                "— never reply with a generic 'tell me more'. Be concise."
+                            ),
+                        },
+                        *messages,
+                    ]
+                    _direct_parts: list[str] = []
+
+                    async def _collect_direct():
+                        async for _c in active_adapter.chat(_hist_msgs, temperature=0.4, intent="chat"):
+                            if getattr(_c, "error", None):
+                                break
+                            _t = _filter_system_leaks(_c.text or "")
+                            if _t:
+                                _direct_parts.append(_t)
+
+                    try:
+                        await asyncio.wait_for(
+                            _collect_direct(), timeout=_per_call_timeout_for(active_adapter)
+                        )
+                    except Exception as _exc:  # pragma: no cover — defensive fallback
+                        logger.warning("[agent.loop] direct-from-history fallback failed: %s", _exc)
+                    _answer = "".join(_direct_parts).strip() or initialization.response
+                    yield StreamChunk(text=_answer, done=False, usage=initialization.usage)
+                    yield StreamChunk(text="", done=True)
+                    return
                 if initialization.acknowledgement:
                     yield StreamChunk(
                         text="",
