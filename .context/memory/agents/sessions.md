@@ -4248,3 +4248,17 @@ program + ADR-22). -->
 - **LESSON:** the general recovery layer (ADR-50) only works if tools REPORT failures. shell's success=True-on-failure was hiding them (same root as the completion-floor observation-check workaround). Fixing the SOURCE (tool reports failure) is better than working around it downstream.
 - **Open items:** B-2026-08-18-4 (weather card), -6 (grounding).
 - **Notes:** none
+
+---
+## 2026-08-19 — Session 298 (cont.) — synthesize-from-reasoning rescue (B-2026-08-18-11) — user's hypothesis CONFIRMED
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** live disk-scan test (B-2026-08-18-10) still ended in empty_response. User: "fix them [the two remaining root issues] and maybe glm is putting directive/output to the REASONING block?"
+- **HYPOTHESIS CONFIRMED:** on GLM/thinking the model streams its real analysis into the REASONING channel and returns empty CONTENT ("thinks but doesn't act"). The loop streamed that reasoning to the UI but DISCARDED the text (kept only a bool `_streamed_reasoning`), so the substance was thrown away and the turn dead-ended.
+- **SHIPPED (`0bb0126`, B-2026-08-18-11):** (1) capture `_reasoning_buffer`; on empty-after-reasoning (retries exhausted) hand the model its OWN reasoning + the tool evidence back and ask for the final answer with thinking OFF (plain synthesis, not the tool loop) — falls back to the trace dump only if that too yields nothing. (2) shell timeout is now a real configurable Settings field (`localmind_shell_timeout`, default 45; the env var existed in .env but had no field so it was ignored and hardcoded 20 won).
+- **LIVE-VERIFIED (glm-4.5-flash, isolated 8765, SHELL_TIMEOUT=45):** the SAME disk task that died with empty_response TWICE now logs "empty-response rescued by synthesis from reasoning+evidence (1201 chars)" and returns a REAL answer: ".venv 290MB largest; .pytest_cache/.ruff_cache safe to delete". Clean before/after.
+- **VERIFICATION:** full backend 1986 passed / 0 failed (updated the ADR-41 bound test — after the bounded retries the loop now synthesizes, not only dumps). Live before/after captured.
+- **Commits:** 1 (0bb0126) + this.
+- **Outcome:** done — the empty_response dead-end is fixed at the root (the answer was in the reasoning channel; now captured + synthesized). Completes the recovery arc (ADR-50 + B-2026-08-18-8/-10/-11).
+- **Open items:** B-2026-08-18-4 (weather card), -6 (grounding).
+- **Notes:** none

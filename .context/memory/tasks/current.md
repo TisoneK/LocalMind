@@ -1,19 +1,19 @@
 # Current Task
 
-**Status:** IDLE — Session 298 done (2026-08-19). code_exec run-a-file recovery +
-phantom-instruction removal shipped + pushed. No task in progress.
+**Status:** IDLE — Session 298 done (2026-08-19). Recovery arc complete + live-
+verified. No task in progress.
 
-## Latest shipped
-- `575d175` (B-2026-08-18-7) — removed the phantom "do not read it back / write is
-  confirmed / saved and verified" instruction from tool output + loop verification
-  + system prompt; a file-write response is now purely factual (confirmed).
-- `ee07182` (B-2026-08-18-8) — code_exec now RUNS a "python file.py" command via
-  shell instead of a dead-end invalid_input (structural recovery, not a hint).
+## Recovery arc shipped (root-cause, not symptom patches)
+- ADR-50 (`764b0a8`) — general model-agnostic tool-error recovery (classify every
+  error_type → concrete [RECOVERY] directive).
+- `b69329e` (B-2026-08-18-10) — shell surfaces timeout/nonzero-exit as a real
+  error so the recovery layer engages.
+- `0bb0126` (B-2026-08-18-11) — capture the reasoning channel + synthesize a real
+  answer from reasoning+evidence instead of empty_response (user's hypothesis
+  confirmed live); shell timeout now a configurable Settings field (default 45).
 
 ## Next (open, no user decision pending)
-- **B-2026-08-18-4** — guaranteed ChatGPT-style weather card (structured wttr.in).
-- **B-2026-08-18-6** — synthesis grounding (don't assert facts not in evidence).
-- Known: z.ai init-timeout flakiness on live tests (slow provider, ADR-45).
+- B-2026-08-18-4 (guaranteed weather card), -6 (synthesis grounding).
 - §40 efficiency roadmap: B-2026-08-17-8..12.
 
 **Feature:** none
