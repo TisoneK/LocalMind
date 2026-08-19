@@ -789,6 +789,25 @@ class ShellContract(ToolContract):
 
         try:
             content, risk = await asyncio.get_event_loop().run_in_executor(None, _sync)
+            # B-2026-08-18-10: propagate a command FAILURE as a real tool error.
+            # Shell used to return success=True even for a timeout / nonzero exit
+            # (the failure was buried as "Command failed: ..." in the output), so
+            # the loop's recovery layer never engaged: the agent could spin on
+            # failing commands (e.g. a recursive scan that keeps timing out) and
+            # then give up (empty_response) with no recovery signal. Marking it
+            # failed makes the [RECOVERY] directive fire, lets the same-tool-
+            # failure streak stop the spin, and lets the completion floor block a
+            # false "done". `_run_command` and the open_* helpers all emit the
+            # "Command failed:\n" prefix on failure (see _run_command / _run).
+            if content.startswith("Command failed:"):
+                error_type = "timeout" if "timed out" in content.lower() else "command_failed"
+                return ToolResult(
+                    content=content,
+                    risk=risk,
+                    source="shell",
+                    success=False,
+                    error_type=error_type,
+                )
             return ToolResult(content=content, risk=risk, source="shell")
         except _FieldError as exc:
             return ToolResult(
