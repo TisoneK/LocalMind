@@ -294,19 +294,27 @@ function MarkdownLink({ href, children, ...props }: React.ComponentPropsWithoutR
 }
 
 /** Styled table */
+// Tables render as a polished CARD — rounded, bordered, accent header row, zebra
+// striping, hover highlight, tabular figures — so structured answers (weather,
+// comparisons, schedules) read as a clean table instead of raw text.
 function MarkdownTable({ children, ...props }: React.ComponentPropsWithoutRef<'table'>) {
   return (
-    <div className="overflow-x-auto my-2">
-      <table className="border-collapse w-full text-[12px] font-mono" {...props}>
-        {children}
-      </table>
+    <div className="my-3 overflow-hidden rounded-xl border border-brand-border bg-brand-bg-code/50 shadow-sm">
+      <div className="overflow-x-auto">
+        <table
+          className="w-full border-collapse text-[12px] tabular-nums [&_tbody_tr:nth-child(even)]:bg-brand-bg-base/40 [&_tbody_tr:hover]:bg-brand-green/[0.06] [&_tbody_tr:last-child]:border-b-0"
+          {...props}
+        >
+          {children}
+        </table>
+      </div>
     </div>
   );
 }
 
 function MarkdownTableHead({ children, ...props }: React.ComponentPropsWithoutRef<'thead'>) {
   return (
-    <thead className="border-b-2 border-brand-green-table-border" {...props}>
+    <thead className="border-b border-brand-green-table-border bg-gradient-to-b from-brand-green/[0.10] to-brand-green/[0.03]" {...props}>
       {children}
     </thead>
   );
@@ -314,7 +322,7 @@ function MarkdownTableHead({ children, ...props }: React.ComponentPropsWithoutRe
 
 function MarkdownTableRow({ children, ...props }: React.ComponentPropsWithoutRef<'tr'>) {
   return (
-    <tr className="border-b border-brand-border" {...props}>
+    <tr className="border-b border-brand-border/60 transition-colors" {...props}>
       {children}
     </tr>
   );
@@ -323,13 +331,13 @@ function MarkdownTableRow({ children, ...props }: React.ComponentPropsWithoutRef
 function MarkdownTableCell({ isHeader, children, ...props }: React.ComponentPropsWithoutRef<'th' | 'td'> & { isHeader?: boolean }) {
   if (isHeader) {
     return (
-      <th className="px-2.5 py-1.5 text-left font-semibold text-brand-green text-[11px] tracking-wider uppercase bg-brand-bg-table" {...props}>
+      <th className="whitespace-nowrap px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-brand-green" {...props}>
         {children}
       </th>
     );
   }
   return (
-    <td className="px-2.5 py-1 text-brand-green-soft" {...props}>
+    <td className="px-3 py-2 align-middle text-brand-green-soft" {...props}>
       {children}
     </td>
   );

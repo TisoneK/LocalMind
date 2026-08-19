@@ -677,7 +677,13 @@ _COMBINED_SYNTHESIS_PROMPT = (
     "and note what's missing\n"
     "4. NEVER add information from your training data — only use the content above\n"
     "5. Be CONCISE — give the key facts the user asked for, not the entire page\n"
-    "6. Format the answer in a clean, readable way (use bullet points for lists)\n"
+    "6. Format for readability. When the answer is tabular — several items that "
+    "share the same fields (e.g. an hourly/daily weather forecast with "
+    "time/conditions/temperature, prices, schedules, specs, or a comparison) — "
+    "present it as a GitHub-flavored Markdown table (a header row, then one row "
+    "per item; you may put a weather emoji like sunny/cloudy/rain in a conditions "
+    "cell). Add a one-line intro before the table and a short takeaway after. Use "
+    "bullet points only for simple non-tabular lists.\n"
     "7. Cite the source URL if available"
 )
 
