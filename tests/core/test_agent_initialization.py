@@ -245,6 +245,67 @@ async def test_parent_initialization_precedes_tool_execution():
     assert "The command completed." in "".join(chunk.text for chunk in chunks)
 
 
+@pytest.mark.asyncio
+async def test_understanding_narrates_workspace_not_chat_thinking():
+    """The classify "understanding" is INTERNAL: it narrates the Agent
+    Workspace lifecycle (agent_initialization_understanding obs) and must NOT
+    leak into the chat ThinkingBlock as a `thinking` StreamChunk."""
+
+    class Adapter:
+        async def chat(self, messages, temperature=0.1, intent="chat"):
+            if temperature == 0.1:
+                yield StreamChunk(
+                    text=(
+                        '{"mode":"execute","acknowledgement":"On it.",'
+                        '"objective":"Read the config file","title":"Read Config"}'
+                    )
+                )
+                return
+            yield StreamChunk(text="Done reading the config.")
+            yield StreamChunk(text="", done=True)
+
+        async def chat_with_tools(self, *args, **kwargs):
+            async def _answer():
+                yield StreamChunk(text="Done.")
+                yield StreamChunk(text="", done=True)
+
+            return _answer()
+
+    adapter = Adapter()
+    config = ParentAgent(adapter=None).config()
+    obs = ObsCollector()
+    with patch(
+        "core.agent.loop.dispatch_with_retry",
+        return_value=(ToolResult(content="ok", source="shell"), False, 0),
+    ):
+        chunks = [
+            chunk
+            async for chunk in AgentLoop(adapter=adapter).run(
+                messages=[{"role": "user", "content": "read the config"}],
+                intent=Intent.ANALYZE,
+                initial_tool_result=None,
+                available_tools=[{"intent": "shell", "description": "Run a command"}],
+                adapter=adapter,
+                agent_config=config,
+                allowed_tool_names=frozenset({"shell"}),
+                obs=obs,
+            )
+        ]
+
+    # The workspace narration IS present (internal lifecycle phase).
+    understanding_events = [
+        e for e in obs.history() if e.type == "agent_initialization_understanding"
+    ]
+    assert understanding_events, "understanding should narrate the workspace"
+    understanding_text = str(understanding_events[0].data.get("understanding", ""))
+    assert understanding_text  # non-empty
+
+    # It must NOT be streamed into the chat ThinkingBlock.
+    thinking_blobs = [c.thinking for c in chunks if getattr(c, "thinking", None)]
+    assert understanding_text not in thinking_blobs
+    assert not any(understanding_text in (t or "") for t in thinking_blobs)
+
+
 def test_initialization_prompt_is_classify_only():
     """Step 1 (ADR-38): the init prompt classifies the tier only — tool
     names, plans, and upfront assessment fields are gone (they emerge

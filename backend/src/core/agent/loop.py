@@ -883,11 +883,13 @@ class AgentLoop:
             if _obs:
                 _obs.emit("agent_initialization_start", intent=intent.value)
             # ADR-34 B-7: consume the streaming initializer so the user sees
-            # the model's acknowledgement and understanding within the 5s SLO.
+            # the model's acknowledgement within the 5s SLO.
             # Each ("ack", str) event becomes a StreamChunk(status=...) — a
             # model-owned transport acknowledgement, never raw chain-of-thought.
-            # Each ("understanding", str) event becomes a StreamChunk(thinking=...)
-            # so the frontend's ThinkingBlock renders the bounded thinker line.
+            # The ("understanding", str) event is INTERNAL: it feeds the Agent
+            # Workspace lifecycle phase (agent_initialization_understanding obs)
+            # only — it is NOT streamed into the chat ThinkingBlock (a shallow
+            # one-line classify note doesn't belong in the user's chat thread).
             initialization: Optional[InitializationDecision] = None
             streaming_ack_emitted = False
             # Session 289: the classify/init call gets a COMPACT env (no tool
@@ -910,16 +912,16 @@ class AgentLoop:
                         )
                     yield StreamChunk(text="", done=False, status=payload[:180])
                 elif event_type == "understanding" and isinstance(payload, str):
+                    # INTERNAL only — narrate it in the Agent Workspace via the
+                    # obs event; do NOT yield a thinking StreamChunk (that would
+                    # surface this shallow one-line classify note in the user's
+                    # chat ThinkingBlock, where it doesn't belong).
                     if _obs:
                         _obs.emit(
                             "agent_initialization_understanding",
                             understanding=payload[:600],
                             elapsed_ms=round((time.monotonic() - initialization_started) * 1000),
                         )
-                    # Surface the bounded thinker line in the ThinkingBlock so
-                    # the user watches the model's understanding arrive in
-                    # real-time, not 7+ seconds later as a single blob.
-                    yield StreamChunk(text="", done=False, thinking=payload[:600])
                 elif event_type == "decision" and isinstance(payload, InitializationDecision):
                     initialization = payload
             if initialization is None:
