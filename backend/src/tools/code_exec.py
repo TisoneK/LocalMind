@@ -66,6 +66,12 @@ async def _collect_output(proc) -> tuple[str, str]:
 
 _CODE_FENCE = re.compile(r"```(?:python|py)?\s*([\s\S]+?)```", re.IGNORECASE)
 
+# A command that RUNS a file (e.g. "python fib_check.py 55", "python3 x.py") —
+# not inline Python source. Inline code never starts with the literal word
+# "python", so this reliably catches the code_exec-vs-shell mix-up
+# (B-2026-08-18-8). code_exec runs inline source; the shell tool runs files.
+_RUN_FILE_COMMAND_RE = re.compile(r"^\s*(?:python3?|py|pypy3?)\b", re.IGNORECASE)
+
 
 def _extract_code(message: str) -> str:
     """
@@ -135,15 +141,50 @@ def _extract_code(message: str) -> str:
 async def code_exec(message: str) -> ToolResult:
     from core.config import settings
 
+    stripped = message.strip()
+    # B-2026-08-18-8: the model often reaches for code_exec to RUN a script file
+    # it just wrote (e.g. "python C:\...\fib_check.py 55", "python3 /a/b.py").
+    # code_exec runs INLINE Python source, not a file. The model's INTENT is
+    # unambiguous, so the harness RECOVERS structurally: run the command via the
+    # shell tool (exactly how you run a file) and return its output — instead of
+    # a dead-end error the weak model then stalls on (empty_response). Don't rely
+    # on the model reading a "use shell" hint; just do it. Checked BEFORE
+    # _extract_code because that heuristic can mis-read "python3 /path/x.py" as an
+    # expression and try to exec it. Inline Python source never starts with the
+    # literal word "python", so this branch is safe. shell's own permission gate
+    # (localmind_shell_enabled) still applies — a permission error propagates.
+    if _RUN_FILE_COMMAND_RE.match(stripped):
+        from tools.shell import shell_exec
+
+        logger.info("[code_exec] file-run command auto-routed to shell: %s", stripped)
+        shell_result = await shell_exec(stripped)
+        return ToolResult(
+            content=(
+                "(code_exec received a file-run command and ran it via the shell "
+                "tool — code_exec is for inline source, shell runs files.)\n"
+                f"{shell_result.content or ''}"
+            ),
+            risk=shell_result.risk,
+            source="code_exec",
+            success=shell_result.success,
+            error_type=shell_result.error_type,
+            error_message=shell_result.error_message,
+            metadata=shell_result.metadata,
+        )
+
     code = _extract_code(message)
     if not code:
         return ToolResult(
-            content="No executable Python code found in the message. Please provide code in a ```python``` block.",
+            content=(
+                "No executable Python code found. code_exec runs INLINE Python source "
+                "(paste the code directly, or in a ```python``` block). To RUN an "
+                "existing .py file, use the `shell` tool instead."
+            ),
             risk=RiskLevel.LOW,
             source="code_exec",
             success=False,
             error_type="invalid_input",
-            error_message="No fenced ```python``` block found in input.",
+            error_message="No inline Python code found in input.",
         )
 
     timeout = getattr(settings, "localmind_code_exec_timeout", 30)

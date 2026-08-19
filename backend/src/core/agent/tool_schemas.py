@@ -205,7 +205,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "code_exec",
-            "description": "Execute Python code and return the output",
+            "description": "Run inline Python. To run a .py file, use shell.",
             "parameters": {
                 "type": "object",
                 "properties": {
