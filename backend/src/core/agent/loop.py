@@ -938,6 +938,10 @@ class AgentLoop:
                     "agent_initialization_done",
                     mode=initialization.mode,
                     objective=initialization.objective,
+                    # Action-oriented turn heading for the Agent Workspace
+                    # (rides the existing event — no extra call). Empty when the
+                    # model omitted it → the UI keeps "Turn N".
+                    title=initialization.title,
                     confidence=initialization.confidence,
                     # ADR-34 B-12: record the init prompt budget so init vs
                     # execution sizes are measured independently.

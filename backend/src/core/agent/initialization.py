@@ -34,6 +34,12 @@ class InitializationDecision:
     acknowledgement: str = ""
     response: str = ""
     objective: str = ""
+    # A 2-4 word action-oriented label for THIS turn ("Fetch Weather", "Greet
+    # User", "Generate Spreadsheet"), used as the Agent Workspace turn heading
+    # instead of a bare "Turn N". Produced by the classify call that already
+    # runs every turn — no extra model call, a handful of extra output tokens.
+    # Empty when the model omits it → the UI falls back to "Turn N".
+    title: str = ""
     clarifying_question: str = ""
     confidence: float = 0.0
     raw: str = ""
@@ -125,6 +131,7 @@ JSON schema:
   "acknowledgement": "short user-facing acknowledgement (<=180 chars)",
   "response": "complete answer only for direct mode",
   "objective": "what the user actually wants — one concise line (<=200 chars)",
+  "title": "a 2-4 word action label for this turn (Title Case)",
   "plan": ["ordered step 1", "ordered step 2", "..."],
   "clarifying_question": "one question only for clarify mode",
   "confidence": 0.0
@@ -152,6 +159,8 @@ Rules:
   concrete and few; the agent may reorder, add, or skip steps as real evidence
   changes. Leave `plan` empty for direct/clarify.
 - acknowledgement <=180 chars, response <=1200 chars, objective <=200 chars.
+- title names what this turn DOES as a 2-4 word Title-Case verb phrase, always
+  provided — e.g. "Greet User", "Fetch Weather", "Generate Spreadsheet".
 
 User request:
 {user_message}
@@ -204,6 +213,25 @@ _FALLBACK_DIRECT_RESPONSE = (
     "I'm here and ready to help. Could you tell me a little more about what "
     "you'd like me to do?"
 )
+
+
+def _clean_title(value: Any) -> str:
+    """Sanitize the model's turn title into a short, bare action phrase.
+
+    Trims quotes/punctuation, collapses whitespace, and bounds it to a few
+    words so the Agent Workspace heading stays on one line. Non-string or empty
+    input yields "" → the UI falls back to "Turn N".
+    """
+    if not isinstance(value, str):
+        return ""
+    text = re.sub(r"\s+", " ", value).strip().strip("\"'").strip()
+    text = re.sub(r"[\s.:;,!?]+$", "", text)
+    if not text:
+        return ""
+    words = text.split(" ")
+    if len(words) > 5:
+        text = " ".join(words[:5])
+    return text[:40]
 
 
 def _salvage_response(raw: str) -> str:
@@ -272,6 +300,7 @@ def parse_initialization(text: str) -> InitializationDecision:
         acknowledgement=str(payload.get("acknowledgement", "")).strip()[:_MAX_TEXT],
         response=str(payload.get("response", "")).strip()[:1200],
         objective=str(payload.get("objective", "")).strip()[:_MAX_TEXT],
+        title=_clean_title(payload.get("title")),
         clarifying_question=str(payload.get("clarifying_question", "")).strip()[:_MAX_TEXT],
         raw=raw[:1800],
     )

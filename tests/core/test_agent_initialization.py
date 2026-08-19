@@ -43,6 +43,27 @@ def test_parse_execute_decision_parses_plan_ignores_other_legacy_fields():
     assert decision.objective_line() == "UNDERSTANDING: Find the current weather"
 
 
+def test_parse_extracts_and_sanitizes_the_turn_title():
+    """The classify call names the turn (a 2-4 word action phrase) → the Agent
+    Workspace heading. It rides the existing init call (no extra model call).
+    The parser trims quotes/trailing punctuation and bounds the length."""
+    decision = parse_initialization(
+        '{"mode":"execute","objective":"Find the current weather",'
+        '"title":"  \\"Fetch Weather!\\"  ","confidence":0.9}'
+    )
+    assert decision.title == "Fetch Weather"
+
+    # A model that omits the title yields "" → the UI falls back to "Turn N".
+    assert parse_initialization('{"mode":"direct","response":"Hi."}').title == ""
+
+    # An over-long title is bounded to a few words / 40 chars.
+    long = parse_initialization(
+        '{"mode":"execute","title":"Do a great many different things all at once now"}'
+    ).title
+    assert len(long) <= 40
+    assert long.split(" ")[0] == "Do"
+
+
 def test_parse_direct_decision_returns_complete_answer():
     decision = parse_initialization(
         '```json\n{"mode":"direct","acknowledgement":"Hi!",'

@@ -42,10 +42,10 @@ describe('AgentWorkspace', () => {
     render(<AgentWorkspace runs={runs} />);
 
     expect(screen.getByTestId('agent-workspace')).toBeInTheDocument();
-    // Root parent turns are now headed by an action phrase derived from the
-    // user's intent (falling back to "Turn N" only when there's no message);
-    // the ordinal lives in the badge.
-    expect(screen.getByText('Investigate the Failing Request')).toBeInTheDocument();
+    // Root parent turns are headed by the action phrase the classify call
+    // names (run.title); with no title here, they fall back to "Turn N". The
+    // ordinal lives in the badge.
+    expect(screen.getByText('Turn 1')).toBeInTheDocument();
     expect(screen.getByText('research')).toBeInTheDocument();
     fireEvent.click(screen.getByText('research'));
     expect(screen.getByText('Search upstream docs')).toBeInTheDocument();
@@ -53,25 +53,21 @@ describe('AgentWorkspace', () => {
     expect(screen.getByText('Turns')).toBeInTheDocument();
   });
 
-  it('heads a turn with an action phrase from the user intent', () => {
+  it('heads a turn with the action phrase named by the classify call', () => {
     const weather: AgentRun[] = [
-      { id: 'w', name: 'parent', role: 'parent', task: "What's the weather in Kitengela?", status: 'completed', depth: 0, startedAt: 1000, completedAt: 2000, tools: [] },
+      { id: 'w', name: 'parent', role: 'parent', task: "What's the weather in Kitengela?", title: 'Fetch Weather', status: 'completed', depth: 0, startedAt: 1000, completedAt: 2000, tools: [] },
     ];
     render(<AgentWorkspace runs={weather} />);
     expect(screen.getByText('Fetch Weather')).toBeInTheDocument();
-    // A polite "can you make a spreadsheet" maps to the same verb-object style.
-    const sheet: AgentRun[] = [
-      { id: 's', name: 'parent', role: 'parent', task: 'Can you make a spreadsheet of my expenses?', status: 'completed', depth: 0, startedAt: 1000, completedAt: 2000, tools: [] },
-    ];
-    render(<AgentWorkspace runs={sheet} />);
-    expect(screen.getByText('Generate Spreadsheet')).toBeInTheDocument();
+    // The full user message is preserved as the subtitle.
+    expect(screen.getByText("What's the weather in Kitengela?")).toBeInTheDocument();
   });
 
-  it('falls back to "Turn N" when the turn has no message', () => {
-    const noTask: AgentRun[] = [
-      { id: 'n', name: 'parent', role: 'parent', status: 'completed', depth: 0, startedAt: 1000, completedAt: 2000, tools: [] },
+  it('falls back to "Turn N" until the title arrives (or when omitted)', () => {
+    const noTitle: AgentRun[] = [
+      { id: 'n', name: 'parent', role: 'parent', task: 'Investigate the failing request', status: 'completed', depth: 0, startedAt: 1000, completedAt: 2000, tools: [] },
     ];
-    render(<AgentWorkspace runs={noTask} />);
+    render(<AgentWorkspace runs={noTitle} />);
     expect(screen.getByText('Turn 1')).toBeInTheDocument();
   });
 
@@ -169,9 +165,9 @@ describe('AgentWorkspace', () => {
     // The active (turn 2) card is expanded → its tool detail is visible.
     expect(screen.getByText('List beta files')).toBeInTheDocument();
 
-    // A manual click on the collapsed turn (headed by its derived label)
+    // A manual click on the collapsed turn (headed by "Turn 1" — no title set)
     // expands it (override).
-    fireEvent.click(screen.getByText('First Question'));
+    fireEvent.click(screen.getByText('Turn 1'));
     expect(screen.getByText('Search alpha docs')).toBeInTheDocument();
   });
 });

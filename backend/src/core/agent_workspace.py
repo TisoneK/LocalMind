@@ -376,6 +376,13 @@ def build_run_tree(
                 }
             )
         elif evt.type in RUN_LIFECYCLE_TYPES:
+            # The classify call names the turn ("Fetch Weather"); carry it onto
+            # the parent node so the reloaded run tree heads the turn the same
+            # way the live UI does (no extra model call — rides this event).
+            if evt.type == "agent_initialization_done":
+                _title = str(d.get("title", "")).strip()
+                if _title:
+                    runs[0]["title"] = _title[:40]
             phase = _lifecycle_phase(evt.type, d, _next_id)
             if phase:
                 # Child lifecycle events carry an `agent` tag (forwarded by

@@ -50,52 +50,6 @@ function toolLabel(tool: ToolCall): string {
   return tool.label || tool.name.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 }
 
-// High-signal intents → a polished verb phrase. Ordered: first match wins.
-const TURN_INTENTS: Array<[RegExp, string]> = [
-  [/^\s*(hi+|hey+|hello|yo|sup|howdy|greetings|good\s+(morning|afternoon|evening|day))\b/i, 'Greet User'],
-  [/^\s*(thanks|thank\s*you|thx|ty|cheers|appreciate\s+it)\b/i, 'Acknowledge Thanks'],
-  [/\b(weather|forecast|temperature|how\s+(hot|cold|warm)|is\s+it\s+raining)\b/i, 'Fetch Weather'],
-  [/\b(spreadsheet|\bcsv\b|excel|\.xlsx)\b/i, 'Generate Spreadsheet'],
-  [/\breports?\b/i, 'Generate Report'],
-  [/\btranslat(e|ion)\b/i, 'Translate Text'],
-  [/\b(summar(y|ize|ise|ies)|tl;?dr)\b/i, 'Summarize'],
-  [/\b(search|google|look\s*up|browse|find\s+online)\b/i, 'Search Web'],
-  [/\b(debug|fix|bugs?|broken|not\s+working|traceback|stack\s*trace|crash(es|ing)?)\b/i, 'Fix Issue'],
-  [/\b(unit\s*test|run\s+(the\s+)?tests?|pytest|jest|vitest)\b/i, 'Run Tests'],
-  [/\b(refactor|clean\s*up|rename)\b/i, 'Refactor Code'],
-  [/\b(install|set\s*up|configure|scaffold)\b/i, 'Set Up'],
-];
-
-const TURN_POLITE_PREFIX =
-  /^\s*(?:hey\s+|hi\s+|ok(?:ay)?[,\s]+|so[,\s]+|now[,\s]+|please\s+|kindly\s+|just\s+|can\s+you\s+|could\s+you\s+|would\s+you\s+|will\s+you\s+|go\s+ahead\s+and\s+|let'?s\s+|i\s+want\s+(?:you\s+)?to\s+|i\s+need\s+(?:you\s+)?to\s+|i'?d\s+like\s+(?:you\s+)?to\s+|i\s+would\s+like\s+(?:you\s+)?to\s+|help\s+me\s+(?:to\s+)?)+/i;
-
-const TITLE_SMALL_WORDS = new Set(['a', 'an', 'the', 'to', 'of', 'in', 'on', 'for', 'and', 'or', 'with', 'my', 'me', 'is', 'it']);
-
-// Derive a short, action-oriented turn label from the user's message. Purely
-// rule-based (no model call) → instant, free, deterministic. Returns null when
-// there's nothing to summarize, so the caller falls back to `Turn N`.
-function deriveTurnLabel(message: string | undefined): string | null {
-  const raw = (message ?? '').replace(/\s+/g, ' ').trim();
-  if (!raw) return null;
-  for (const [re, label] of TURN_INTENTS) {
-    if (re.test(raw)) return label;
-  }
-  // Generic: strip leading politeness, keep the first few meaningful words,
-  // Title-Case them, and cap the length so the header stays on one line.
-  const core = (raw.replace(TURN_POLITE_PREFIX, '').trim() || raw).replace(/[?.!,:;]+$/g, '');
-  const words = core.split(' ').filter(Boolean).slice(0, 5);
-  if (words.length === 0) return null;
-  let out = words
-    .map((w, i) => {
-      const lower = w.toLowerCase();
-      if (i > 0 && TITLE_SMALL_WORDS.has(lower)) return lower;
-      return lower.charAt(0).toUpperCase() + lower.slice(1);
-    })
-    .join(' ');
-  if (out.length > 32) out = out.slice(0, 31).trimEnd() + '…';
-  else if (core.split(' ').filter(Boolean).length > 5) out += '…';
-  return out;
-}
 
 function RunNode({
   run,
@@ -131,12 +85,14 @@ function RunNode({
   const hasDetails = children.length > 0 || run.tools.length > 0 || Boolean(run.error) || hasEvidence || hasPhases;
   const elapsed = run.completedAt !== undefined ? run.completedAt - run.startedAt : undefined;
   const running = run.status === 'running';
-  // Action-oriented turn heading (e.g. "Fetch Weather") derived from the
-  // user's intent, replacing a bare "Turn N". Ordinal is kept in the badge.
-  const turnLabel = depth === 0 ? deriveTurnLabel(run.task) : null;
+  // Action-oriented turn heading (e.g. "Fetch Weather") named by the parent's
+  // classify call, replacing a bare "Turn N". Falls back to "Turn N" until the
+  // classify result arrives or when the model omitted a title. Ordinal stays
+  // in the badge.
+  const turnLabel = run.role === 'parent' ? (run.title || '').trim() : '';
   const headingLabel =
     run.role === 'parent'
-      ? turnLabel ?? (turnIndex !== undefined ? `Turn ${turnIndex}` : 'Parent Agent')
+      ? turnLabel || (turnIndex !== undefined ? `Turn ${turnIndex}` : 'Parent Agent')
       : run.name;
 
   return (

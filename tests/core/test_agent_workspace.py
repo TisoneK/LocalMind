@@ -189,6 +189,22 @@ def test_run_tree_lifecycle_phases_on_parent():
     assert build_agent_phases(c) == []
 
 
+def test_run_tree_parent_carries_classify_title():
+    """The classify call names the turn ("Fetch Weather") on the
+    agent_initialization_done event; the persisted parent node carries it as
+    `title` so a reloaded run tree heads the turn like the live UI does."""
+    c = _collector(
+        ("agent_initialization_start", {}),
+        ("agent_initialization_done", {"mode": "execute", "objective": "x", "title": "Fetch Weather"}),
+    )
+    runs = build_run_tree(c, task="what's the weather in Kitengela?")
+    assert runs[0]["title"] == "Fetch Weather"
+
+    # No title on the event → no title key (UI falls back to "Turn N").
+    c2 = _collector(("agent_initialization_done", {"mode": "direct"}))
+    assert "title" not in build_run_tree(c2, task="hi")[0]
+
+
 def test_run_tree_child_lifecycle_phases_attach_to_child():
     """Child lifecycle events (agent-tagged by ChildObsProxy) land on the
     child run, not the parent; untagged events stay on the parent."""

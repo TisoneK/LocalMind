@@ -991,6 +991,15 @@ export function useChat(
                   'agent_loop_start',
                   'agent_loop_done',
                 ]);
+                // The classify call names the turn ("Fetch Weather"); use it as
+                // the parent run's heading instead of "Turn N" (rides the
+                // existing init event — no extra model call).
+                if (obs.type === 'agent_initialization_done') {
+                  const title = String((obs.data || obs).title || '').trim();
+                  if (title) {
+                    setAgentRuns((prev) => updateAgentRun(prev, rootRunId, { title }));
+                  }
+                }
                 if (RUN_LIFECYCLE_TYPES.has(obs.type)) {
                   const runPhase = buildAgentPhase(obs.type, obs.data || obs);
                   if (runPhase) {

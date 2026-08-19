@@ -53,6 +53,10 @@ export interface AgentRun {
   role: 'parent' | 'child' | 'parallel';
   parentId?: string;
   task?: string;
+  /** Action-oriented turn heading ("Fetch Weather") produced by the parent's
+   *  classify call and used instead of a bare "Turn N". Absent until the
+   *  classify result streams in, or when the model omitted it. */
+  title?: string;
   status: AgentRunStatus;
   depth: number;
   startedAt: number;
