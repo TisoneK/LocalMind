@@ -56,21 +56,25 @@ function RunNode({
   childMap,
   depth,
   turnIndex,
+  isLast,
 }: {
   run: AgentRun;
   children: AgentRun[];
   childMap: Map<string, AgentRun[]>;
   depth: number;
   turnIndex?: number;
+  isLast?: boolean;
 }) {
   const { reduce: reduceMotion, enter } = useEnterMotion();
-  // Only the ACTIVE run is expanded; a run AUTO-COLLAPSES the moment it stops
-  // running (derived from status every render — a plain useState initializer
-  // only ran once, so a completed turn stayed stuck open and multiple turns
-  // ended up expanded at once). A manual click pins an explicit open/closed
-  // state that overrides the auto behavior for that one run.
+  // The MOST-RECENT card stays expanded — while running AND after it completes —
+  // and only collapses once a NEWER card pushes it down (a lone card stays open).
+  // Derived every render (a one-time useState initializer left completed turns
+  // stuck open). `isLast` marks the newest root turn; child nodes fall back to
+  // "expanded while running". A manual click pins an explicit state that
+  // overrides the auto behavior for that one run.
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
-  const expanded = manualExpanded ?? (run.status === 'running');
+  const defaultExpanded = isLast !== undefined ? isLast : run.status === 'running';
+  const expanded = manualExpanded ?? defaultExpanded;
   const runningTools = run.tools.filter((tool) => isActiveToolStatus(tool.status)).length;
   const completedTools = run.tools.filter((tool) => tool.status === 'done').length;
   // ADR-34 B-9: expand the node when evidence arrives so the user sees
@@ -328,7 +332,7 @@ export function AgentWorkspace({ runs, isStreaming = false }: AgentWorkspaceProp
       <div className="space-y-2">
         <AnimatePresence initial={false}>
           {roots.map((root, i) => (
-            <RunNode key={root.id} run={root} children={childMap.get(root.id) ?? []} childMap={childMap} depth={0} turnIndex={i + 1} />
+            <RunNode key={root.id} run={root} children={childMap.get(root.id) ?? []} childMap={childMap} depth={0} turnIndex={i + 1} isLast={i === roots.length - 1} />
           ))}
         </AnimatePresence>
       </div>

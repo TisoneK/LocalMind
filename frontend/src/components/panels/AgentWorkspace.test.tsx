@@ -88,7 +88,29 @@ describe('AgentWorkspace', () => {
     expect(screen.getByText('3 iterations')).toBeInTheDocument();
   });
 
-  it('collapses completed turns and expands only the active one', () => {
+  it('keeps a lone completed turn expanded (it is the most recent card)', () => {
+    const oneCompleted: AgentRun[] = [
+      {
+        id: 'only-turn',
+        name: 'parent',
+        role: 'parent',
+        task: 'the only question',
+        status: 'completed',
+        depth: 0,
+        startedAt: 1000,
+        completedAt: 2000,
+        tools: [
+          { id: 't1', name: 'web_search', label: 'Search solo docs', status: 'done', input: 'solo', duration: 100 },
+        ],
+      },
+    ];
+    render(<AgentWorkspace runs={oneCompleted} />);
+    // Completed but it is the last/only card → stays expanded (collapses only
+    // when a newer card arrives).
+    expect(screen.getByText('Search solo docs')).toBeInTheDocument();
+  });
+
+  it('collapses an older completed turn once a newer card pushes it down', () => {
     const twoTurns: AgentRun[] = [
       {
         id: 'turn-1',
