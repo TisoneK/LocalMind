@@ -503,11 +503,14 @@ def test_second_empty_after_reasoning_still_fails_fast():
     chunks = _collect_with_dispatch(AgentLoop(adapter=adapter), adapter)
 
     text = "".join(chunk.text for chunk in chunks)
-    assert "empty response" in text.lower() or "what actually ran" in text.lower(), (
-        f"exhausted retries must fail with the evidence fallback — got tail={text[-300:]!r}"
-    )
+    # B-2026-08-18-11: after the bounded retries the loop now SYNTHESIZES a final
+    # answer from the evidence + the model's own reasoning (thinking off) before
+    # falling back to the trace dump — so the turn always ENDS with output. The
+    # invariant this test guards is the retry BOUND, not the specific fallback.
+    assert text.strip(), "the turn must end with a synthesized answer or an honest fallback"
     assert _MAX_EMPTY_REASONING_RECOVERIES == 2
-    # tool call + recovery-budget empty calls + 1 final empty = total calls.
+    # Tool-loop calls are still bounded: tool call + 2 recovery empties + 1 final
+    # empty = 4. The rescue synthesis is a separate plain chat() call, not counted.
     assert adapter.calls == 1 + _MAX_EMPTY_REASONING_RECOVERIES + 1
 
 

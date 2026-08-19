@@ -543,10 +543,22 @@ def _guard_nl_command(command: str) -> None:
         )
 
 
+def _shell_timeout() -> int:
+    """Per-command shell timeout (configurable; sane floor). A legitimate scan
+    needs headroom, and a real hang is bounded by the recovery layer."""
+    from core.config import settings
+
+    try:
+        t = int(getattr(settings, "localmind_shell_timeout", 45) or 45)
+    except (TypeError, ValueError):
+        t = 45
+    return max(5, t)
+
+
 def _run_command(command: str, cwd: str | None = None) -> tuple[str, RiskLevel]:
     """Execute a raw shell command. command must be a literal command string."""
     _guard_nl_command(command)
-    result = _run(command, cwd=cwd)
+    result = _run(command, timeout=_shell_timeout(), cwd=cwd)
     if result["success"]:
         output = result["message"].strip() or "(command completed with no output)"
         return output, RiskLevel.MEDIUM

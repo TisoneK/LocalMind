@@ -2967,6 +2967,10 @@ class AgentLoop:
                 _minimax_stream_ended = False
                 _minimax_error = False
                 _streamed_reasoning = False  # Session 256: did this call stream thinking?
+                _reasoning_buffer = ""  # B-2026-08-18-11: capture the reasoning TEXT
+                # (not just the flag). On GLM/thinking the model sometimes puts its
+                # real answer/analysis in the reasoning channel and leaves content
+                # empty; the endgame salvages this instead of failing the turn.
                 _minimax_error_msg = ""  # Session 187: keep the adapter's error
                 # message (e.g. "zen returned 429: …") — previously dropped, so
                 # the frontend got error="" and rendered nothing.
@@ -2992,6 +2996,7 @@ class AgentLoop:
                     # test stubs may carry a truthy non-str .thinking.)
                     if isinstance(chunk.thinking, str) and chunk.thinking:
                         _streamed_reasoning = True
+                        _reasoning_buffer += chunk.thinking
                         yield StreamChunk(
                             text="",
                             thinking=_filter_system_leaks(chunk.thinking),
@@ -3667,6 +3672,61 @@ class AgentLoop:
                     if not stream_ended_early:
                         async for _drain in result:
                             pass
+
+                    # B-2026-08-18-11: SYNTHESIZE a real answer before giving up.
+                    # The model streamed reasoning but no content — on GLM/thinking
+                    # the substance often lands in the REASONING channel (it "thinks
+                    # but doesn't act"). Hand the model its OWN reasoning + the tool
+                    # evidence back and ask for the final answer with thinking OFF
+                    # (a plain synthesis call, not the tool loop), so a real answer
+                    # is produced from what was already worked out — instead of a
+                    # raw "couldn't summarize" tool dump. Falls through to the dump
+                    # only if this also yields nothing.
+                    try:
+                        active_adapter._one_shot_thinking_off = True
+                    except Exception:
+                        pass
+                    _synth_obs = observation_log
+                    if _reasoning_buffer.strip():
+                        _synth_obs = (
+                            (observation_log + "\n\n" if observation_log.strip() else "")
+                            + "Your own analysis so far (from your reasoning):\n"
+                            + _reasoning_buffer.strip()[-4000:]
+                        )
+                    _synth_answer = ""
+                    if _synth_obs.strip():
+                        try:
+                            async for _sc in self._force_final_answer(
+                                loop_messages=loop_messages,
+                                observation_log=_synth_obs,
+                                active_adapter=active_adapter,
+                                trace=trace,
+                                provider_usage=_provider_usage,
+                                framing="final",
+                                suppress_report=True,
+                                suppress_empty_fallback=True,
+                            ):
+                                if _sc.text:
+                                    _synth_answer += _sc.text
+                        except Exception as _exc:  # pragma: no cover — defensive
+                            logger.warning("[agent.loop] empty-response synthesis failed: %s", _exc)
+                    _synth_answer = _synth_answer.strip()
+                    if _synth_answer:
+                        logger.info(
+                            "[agent.loop] empty-response rescued by synthesis from "
+                            "reasoning+evidence (%d chars)",
+                            len(_synth_answer),
+                        )
+                        if _obs:
+                            _obs.emit(
+                                "empty_response_synthesized",
+                                intent=intent.value,
+                                chars=len(_synth_answer),
+                            )
+                        yield StreamChunk(text=_synth_answer, done=False)
+                        yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
+                        return
+
                     _empty_summary = self._summarize_trace_for_user(trace, observation_log)
                     if _empty_summary:
                         _empty_msg = (
