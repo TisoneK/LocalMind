@@ -4157,3 +4157,18 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-4 (guaranteed weather card); §40 efficiency roadmap.
 - **Report:** this log + backlog B-2026-08-18-4.
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (cont.) — follow-ups ignored context (classify-flake fallback)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user transcript — a weak model (glm) gave wrong facts (hallucinated the EPL first-match teams) AND on follow-ups ("Why did you say Arsenal vs Man City?") replied with a canned context-free "I'm here and ready to help…" ("fails to pick up previous messages").
+- **ROOT CAUSE (fixable half):** when the init/classify JSON is unparseable AND nothing is salvageable, `parse_initialization` returns the generic `_FALLBACK_DIRECT_RESPONSE`, which the loop emitted verbatim — ignoring the conversation. On a long chat (38K-token context) the weak model's classify call returns empty → this canned fallback fired.
+- **SHIPPED (`49bee64`, B-2026-08-18-5):** flag that case (`InitializationDecision.needs_history_answer`); the loop's direct path then does a real `chat()` over the FULL conversation history (with a nudge to address the user's actual message, never a generic "tell me more") and streams that; canned line is only the last resort if even that yields nothing. e2e (real loop, forced flake → answers from history + receives the conversation; dead-chat last-resort). LIVE: "Hello" → "What did I just say?" → "You said 'Hello'…" (context carried; direct path intact). 1969 BE pass.
+- **NOT fixed (honestly): the WRONG-FACTS half** is weak-model hallucination — the model asserted a specific first match not in the evidence. Backlogged B-2026-08-18-6 (synthesis grounding: state only what the evidence supports); the harness can reduce but not eliminate it on a weak model.
+- **Commits:** 2 — 49bee64 (fix + e2e), changelog.
+- **VERIFICATION:** backend 1969 passed / 0 failed; ruff clean; live sanity (no regression + context works); e2e for the flake path.
+- **Outcome:** done — the context-ignoring bug fixed; the fact-hallucination scoped as B-2026-08-18-6.
+- **Open items:** B-2026-08-18-6 (grounding), B-2026-08-18-4 (weather card), §40 efficiency.
+- **Report:** this log + backlog.
+- **Notes:** none
