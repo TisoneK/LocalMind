@@ -4234,3 +4234,17 @@ program + ADR-22). -->
 - **Outcome:** done — general recovery layer replaces the whack-a-mole.
 - **Open items:** B-2026-08-18-4 (weather card), -6 (grounding); could add more structural auto-corrects per known mis-use.
 - **Notes:** none
+
+---
+## 2026-08-19 — Session 298 (cont.) — shell failures now feed the recovery layer (B-2026-08-18-10)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** transcript — "which folder eats the most disk space?" The agent ran a recursive Get-ChildItem over all of C:, it TIMED OUT (20s), retried a similar huge scan, timed out again → empty_response. Tested whether ADR-50 recovery caught it — it DIDN'T, exposing the next layer of the same root cause.
+- **ROOT CAUSE:** `shell.execute()` returned success=True even for a timeout/nonzero exit ("Command failed: …" buried in the output). So the recovery layer never engaged — [RECOVERY] is gated on error_type, the same-tool-failure streak on tool_failed. Shell failures were invisible.
+- **SHIPPED (`b69329e`):** a failed command now returns success=False + a classified error_type (timeout → transient class → "retry smaller/different"; else command_failed). Now shell errors drive the whole recovery layer: the directive fires, the streak (CAP=2) stops the spin with an honest answer from what was gathered, the completion floor blocks a false done. Successful commands unchanged. +3 tests. 1983 BE pass.
+- **CHAIN (now):** recursive scan times out → error_type=timeout → [RECOVERY] "retry smaller/different" → if it keeps timing out → streak → honest stop with the disk facts already gathered (229 GB used, 7.46 free) instead of empty_response.
+- **Commits:** 1 (b69329e) + this.
+- **Outcome:** done — shell failures feed the general recovery layer; the disk-scan dead-end is covered structurally.
+- **LESSON:** the general recovery layer (ADR-50) only works if tools REPORT failures. shell's success=True-on-failure was hiding them (same root as the completion-floor observation-check workaround). Fixing the SOURCE (tool reports failure) is better than working around it downstream.
+- **Open items:** B-2026-08-18-4 (weather card), -6 (grounding).
+- **Notes:** none
