@@ -426,6 +426,76 @@ def same_tool_failure_streak(trace) -> tuple[int, str]:
     return streak, last_tool
 
 
+# ── Tool-error recovery (spec §17 self-correction, §28 error handling) ────────
+# ROOT FIX (B-2026-08-18-9): when a tool FAILS, the loop used to surface only
+# "[Tool 'X' returned error_type='...']" and leave recovery to the model — which
+# a weak model can't reliably do, so the turn dead-ended (empty_response). Every
+# tool error now carries a concrete, model-AGNOSTIC next step keyed on its error
+# CLASS. This is the GENERAL recovery path the per-tool patches were approximating
+# (code_exec→shell, etc.); the harness classifies + directs for every tool and
+# every error, instead of hoping the model reads a raw error. The structural
+# guards still bound it: dispatch_with_retry never retries permission errors, and
+# `same_tool_failure_streak` (CAP=2) forces an honest stop on a repeated failure.
+
+# error_type → recovery class (spec §28). Names cover every error_type emitted by
+# the tools + contracts (grep error_type= across backend/src/tools + core/agent).
+_ERR_PERMISSION = frozenset({
+    "permission", "permission_denied", "invalid_action", "unknown_operation",
+    "unknown_action", "ssrf_blocked", "inline_mutation_not_allowed",
+    "registry_unavailable", "adapter_unavailable",
+})
+_ERR_INPUT = frozenset({
+    "invalid_input", "validation_error", "missing_arg", "missing_ref",
+    "missing_field", "parse_error", "binary_content", "construction_failed",
+    "nl_command_rejected",
+})
+_ERR_NORESULT = frozenset({"not_found", "empty", "io_error", "http_error", "network", "challenge"})
+_ERR_TRANSIENT = frozenset({"timeout", "rate_limit"})
+_ERR_STOP = frozenset({"wall_clock_cap", "recursion_limit"})
+
+
+def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
+    """A concrete, model-agnostic recovery step for a failed tool, by error class.
+
+    Never empty — every failure gets an actionable next step, so no tool error is
+    a dead end the model just gives up on.
+    """
+    et = (error_type or "").strip().lower()
+    if et in _ERR_PERMISSION:
+        return (
+            f"`{tool_name}` is not available or not permitted, so calling it again will fail the "
+            "same way. Take a DIFFERENT approach (another tool or a different plan). If nothing "
+            "available can do this, tell the user it can't be done here — do not claim success."
+        )
+    if et in _ERR_INPUT:
+        return (
+            f"The input to `{tool_name}` was rejected as invalid. Read the message above for what "
+            f"it expects, then EITHER call `{tool_name}` again with corrected input, OR use the tool "
+            "that actually fits this step. Do not repeat the identical call."
+        )
+    if et in _ERR_NORESULT:
+        return (
+            f"`{tool_name}` did not return a usable result. Try a different query, source, or tool. "
+            "If the information genuinely isn't available, say so honestly — do not invent an answer."
+        )
+    if et in _ERR_TRANSIENT:
+        return (
+            f"`{tool_name}` hit a transient failure ({et}). Retry ONCE (smaller/simpler if possible); "
+            "if it fails again, continue with what you have or try another approach."
+        )
+    if et in _ERR_STOP:
+        return (
+            "A hard limit was reached. Stop calling tools and give the best honest answer you can "
+            "from the evidence gathered so far."
+        )
+    # git_error, internal_error, child_exception, parse-anything-else, unknown.
+    return (
+        f"`{tool_name}` failed ({et or 'error'}). Check the message above, then try a corrected call "
+        "or a different tool/approach. If you cannot complete this step, report the actual state "
+        "honestly — never claim success you didn't verify."
+    )
+
+
 def same_tool_repetition_streak(trace) -> tuple[int, str]:
     """Trailing run of consecutive calls to the SAME tool, regardless of
     pass/fail (B-2026-08-18-3).
@@ -2525,10 +2595,14 @@ class AgentLoop:
                         else:
                             safe_obs = _filter_tool_injection(tool_result.content)
 
-                        # Prepend structured error context
+                        # Structured error context + a concrete recovery step
+                        # (B-2026-08-18-9) so a tool error is never a dead end.
                         if not tool_result.success and tool_result.error_type:
                             safe_obs = (
-                                f"[Tool '{tool_name}' returned error_type={tool_result.error_type!r}]\n" + safe_obs
+                                f"[Tool '{tool_name}' returned error_type={tool_result.error_type!r}]\n"
+                                + safe_obs
+                                + "\n[RECOVERY]: "
+                                + tool_error_recovery_directive(tool_name, tool_result.error_type)
                             )
 
                         # Search results are an intermediate observation, not
@@ -3085,11 +3159,14 @@ class AgentLoop:
                                 else:
                                     safe_obs = _filter_tool_injection(tool_result.content)
 
-                                # Prepend structured error context
+                                # Structured error context + a concrete recovery
+                                # step (B-2026-08-18-9) — never a dead end.
                                 if not tool_result.success and tool_result.error_type:
                                     safe_obs = (
                                         f"[Tool '{tc_name}' returned error_type={tool_result.error_type!r}]\n"
                                         + safe_obs
+                                        + "\n[RECOVERY]: "
+                                        + tool_error_recovery_directive(tc_name, tool_result.error_type)
                                     )
 
                                 # A text-encoded search call follows the same
