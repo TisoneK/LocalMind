@@ -4182,3 +4182,16 @@ program + ADR-22). -->
 - **Outcome:** done — left-panel action cards now match the workspace collapse UX.
 - **Open items:** B-2026-08-18-6 (grounding), B-2026-08-18-4 (weather card), §40 efficiency.
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (cont.) — <br>-in-table fix + weather steer (proven unreliable)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user transcript — weather wasn't a table by default (had to ask twice), and the table the model DID make showed literal `<br>` in cells.
+- **SHIPPED (`<br-fix>`):** `ChatMessage.tsx` — `<br>` in table cells now renders as a real line break (`withLineBreaks`, scoped to cells, only <br>, safe). Strengthened the synthesis rule: weather MUST be a Markdown table; never emit raw <br>. FE tsc + 9 chat tests (incl. a <br>-in-cell test); backend ruff clean.
+- **LIVE (glm-4.5-flash):** the STRONGER weather steer STILL failed — glm returned a bold list, not a table (no <br>). So prompt-steering weather format is PROVEN unreliable on the weak model (2nd confirmation). The <br> fix is a real win (any table the model makes now renders cleanly).
+- **CONCLUSION:** the "weather always a table" guarantee needs the STRUCTURED path — sharpened B-2026-08-18-4 (a `weather` tool via wttr.in j1 → harness-formatted table from structured fields, not model prose → renders via the table-card styling). Recommended as the focused next step.
+- **Commits:** 1 (<br> fix + steer) + this log.
+- **Outcome:** done — <br> rendering fixed; steer strengthened but honestly logged as insufficient; guaranteed path scoped.
+- **Open items:** B-2026-08-18-4 (structured weather — the real fix), B-2026-08-18-6 (grounding), §40 efficiency.
+- **Notes:** none
