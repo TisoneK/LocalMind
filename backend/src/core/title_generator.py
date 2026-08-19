@@ -98,7 +98,39 @@ def generate_title_smart(message: str, intent: str | None = None) -> str:
         cut = clean[:32].rsplit(" ", 1)[0]
         clean = cut + "…"
 
-    return clean.capitalize() if clean else "New Chat"
+    # Uppercase only the first character — never .capitalize(), which lowercases
+    # the rest and mangles proper nouns ("Kitengela" → "kitengela").
+    return (clean[:1].upper() + clean[1:]) if clean else "New Chat"
+
+
+# Titles that are placeholders / not yet a real title — safe to overwrite.
+_PLACEHOLDER_TITLES = frozenset({"New Chat", "Error — try again"})
+
+
+def is_placeholder_title(title: str | None) -> bool:
+    """True when the session has no real title yet (None or a placeholder)."""
+    return title is None or title in _PLACEHOLDER_TITLES
+
+
+def title_from_obs(obs) -> str:
+    """Reuse the title the parent's classify call already produced this turn.
+
+    The parent's first-turn classify call names the turn with a clean 2-4 word
+    action phrase ("Fetch Weather") on the ``agent_initialization_done`` obs
+    event. Using it as the session title means the sidebar matches the Agent
+    Workspace heading AND costs no extra model call — the second title-gen LLM
+    request (``refine_title_async``) is only needed as a fallback when the
+    classify call produced no title. Returns "" when none was emitted.
+    """
+    try:
+        for evt in obs.history():
+            if evt.type == "agent_initialization_done":
+                title = str((evt.data or {}).get("title", "")).strip()
+                if title:
+                    return title[:50]
+    except Exception:  # pragma: no cover — never let title-gen break a turn
+        return ""
+    return ""
 
 
 # ── Stage 2: async LLM title ──────────────────────────────────────────────────

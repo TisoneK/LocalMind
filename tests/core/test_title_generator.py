@@ -15,10 +15,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from core.obs import ObsCollector
 from core.title_generator import (
     generate_title_smart,
+    is_placeholder_title,
     refine_title_async,
     should_refine_title,
+    title_from_obs,
 )
 
 # ── generate_title_smart — trivial inputs return "New Chat" ──────────────────
@@ -60,14 +63,14 @@ def test_placeholder_yes_no_returns_new_chat():
 
 
 def test_placeholder_substantive_message_returns_cleaned_text():
-    """Non-trivial messages return a cleaned version of the text.
-    Note: .capitalize() lowercases everything except the first letter —
-    that's pre-existing behavior, not introduced by Session 22."""
-    # .capitalize() lowercases the rest — "How do I fix..." → "How do i fix..."
-    assert generate_title_smart("How do I fix a Python bug?") == "How do i fix a python bug?"
+    """Non-trivial messages return a cleaned version of the text, preserving
+    inner capitalization (proper nouns / acronyms are NOT lowercased — the
+    old .capitalize() mangled "Python" → "python", "Kitengela" → "kitengela")."""
+    assert generate_title_smart("How do I fix a Python bug?") == "How do I fix a Python bug?"
+    assert generate_title_smart("What's the weather in Kitengela?") == "What's the weather in Kitengela?"
     assert generate_title_smart("Write a function to sort a list") == "Write a function to sort a list"
-    # Filler words stripped
-    assert generate_title_smart("Please help me debug") == "Help me debug"
+    # Filler words stripped, first letter uppercased.
+    assert generate_title_smart("please help me debug") == "Help me debug"
     assert generate_title_smart("Can you write a test") == "Write a test"
 
 
@@ -114,6 +117,34 @@ def test_should_refine_placeholder_titles_return_true():
     assert should_refine_title("Fix my code", None) is True
     assert should_refine_title("Fix my code", "New Chat") is True
     assert should_refine_title("Fix my code", "Error — try again") is True
+
+
+# ── is_placeholder_title / title_from_obs — reuse the classify title ─────────
+
+
+def test_is_placeholder_title():
+    assert is_placeholder_title(None) is True
+    assert is_placeholder_title("New Chat") is True
+    assert is_placeholder_title("Error — try again") is True
+    assert is_placeholder_title("Fetch Weather") is False
+    assert is_placeholder_title("Python debug help") is False
+
+
+def test_title_from_obs_reuses_classify_title():
+    """The classify call names the turn on agent_initialization_done; the
+    session title reuses it — no second title-gen LLM call."""
+    obs = ObsCollector()
+    obs.emit("agent_initialization_start")
+    obs.emit("agent_initialization_done", mode="execute", objective="x", title="Fetch Weather")
+    assert title_from_obs(obs) == "Fetch Weather"
+
+
+def test_title_from_obs_empty_when_no_title():
+    obs = ObsCollector()
+    obs.emit("agent_initialization_done", mode="direct")  # model omitted title
+    assert title_from_obs(obs) == ""
+    # Nothing emitted at all.
+    assert title_from_obs(ObsCollector()) == ""
 
 
 # ── refine_title_async — skips trivial inputs ────────────────────────────────

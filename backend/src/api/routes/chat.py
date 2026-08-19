@@ -801,32 +801,54 @@ async def _event_stream(
         except Exception:
             pass
 
-    # ── Stage 2: schedule LLM title as background task ────────────────────
-    # Fires after the response stream completes so it never blocks the user.
+    # ── Stage 2: finalize the session title ───────────────────────────────
+    # Runs after the response stream completes so it never blocks the user.
     #
-    # Session 22: title-gen is now intent-gated, not turn-count-gated.
-    # Instead of firing only on `is_first`, we check `should_refine_title()`
-    # which returns True when:
-    #   - The message is non-trivial (not a greeting/thanks/farewell)
-    #   - AND the title hasn't already been refined (still a placeholder)
-    # This means: if message 1 is "Hi", title-gen skips. If message 2 is
-    # "How do I fix a Python bug?", title-gen fires on that. The sidebar
-    # shows "New Chat" until a substantive message arrives.
+    # The parent's classify call already named this turn (a clean 2-4 word
+    # action phrase like "Fetch Weather") — reuse THAT as the session title
+    # instead of firing a second title-gen LLM call. This makes the sidebar
+    # match the Agent Workspace heading and costs no extra tokens; the LLM
+    # refine (refine_title_async) is only a fallback for when the classify
+    # call produced no title.
+    #
+    # Intent-gated (Session 22): trivial greetings/thanks stay "New Chat"
+    # until a substantive turn. We (re)title when the message is substantive
+    # AND the session has no real title yet — is_first (whose Stage-1 echo
+    # placeholder is not a real title) or a still-placeholder title.
     try:
-        from core.title_generator import should_refine_title
+        from core.title_generator import (
+            is_placeholder_title,
+            title_from_obs,
+        )
+        from core.trivial_input import is_trivial_input
 
         _current_title = _engine._store.get_session_title(session_id)
-        if should_refine_title(message, _current_title):
-            asyncio.create_task(refine_title_async(session_id, message))
-            logger.info(f"[title] LLM refinement scheduled for {session_id[:8]} (message: {message[:30]!r})")
+        _should_title = not is_trivial_input(message) and (
+            is_first or is_placeholder_title(_current_title)
+        )
+        if _should_title:
+            _classify_title = title_from_obs(obs)
+            if _classify_title:
+                # Reuse the classify title — no second LLM call (token-free).
+                _engine._store.update_session_title(session_id, _classify_title)
+                logger.info(
+                    f"[title] reused classify title for {session_id[:8]}: {_classify_title!r}"
+                )
+            else:
+                # Classify emitted no title (e.g. an unparseable classify that
+                # fell back to a direct answer) — fall back to the LLM refine.
+                asyncio.create_task(refine_title_async(session_id, message))
+                logger.info(
+                    f"[title] no classify title — LLM refinement scheduled for {session_id[:8]}"
+                )
         else:
             logger.info(
-                f"[title] skipping LLM refinement for {session_id[:8]} "
-                f"(trivial input or title already refined)"
+                f"[title] skipping (re)title for {session_id[:8]} "
+                f"(trivial input or title already set)"
             )
     except Exception as _title_exc:
-        # Fallback to the old is_first behavior if should_refine_title fails
-        logger.warning(f"[title] should_refine_title check failed: {_title_exc} — using is_first fallback")
+        # Never let title-gen break the turn; fall back to the LLM refine.
+        logger.warning(f"[title] finalize failed: {_title_exc} — using is_first fallback")
         if is_first:
             asyncio.create_task(refine_title_async(session_id, message))
 
