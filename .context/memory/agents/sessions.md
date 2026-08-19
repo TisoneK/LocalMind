@@ -4172,3 +4172,13 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-6 (grounding), B-2026-08-18-4 (weather card), §40 efficiency.
 - **Report:** this log + backlog.
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (cont.) — left-panel action cards: same collapse behavior
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user: apply the Agent-Workspace collapse feature to the LEFT panel action cards — the most-recent action card stays expanded, older collapse, and it collapses when a newer action comes in.
+- **SHIPPED:** `ActionHistory.tsx` — `ActionCard` gains `isMostRecent`; `expanded = manualExpanded ?? isMostRecent`. `ActionHistory` computes the most-recent = the last action rendered (last group → last chain → last action) and passes it down. Older cards collapse; a newer action becomes the expanded one; manual click overrides. Updated 4 content tests (the lone/most-recent card is now auto-expanded → dropped the expand-click) + added a most-recent-vs-older test. 11 ActionHistory tests pass; tsc + eslint clean.
+- **Outcome:** done — left-panel action cards now match the workspace collapse UX.
+- **Open items:** B-2026-08-18-6 (grounding), B-2026-08-18-4 (weather card), §40 efficiency.
+- **Notes:** none
