@@ -85,7 +85,7 @@ describe('ActionHistory', () => {
     expect(screen.getByText('Running now')).toBeInTheDocument();
   });
 
-  it('expands an action to reveal copy buttons for input and output', () => {
+  it('reveals copy buttons for input and output (most-recent card auto-expands)', () => {
     render(
       <ActionHistory
         actions={[
@@ -93,7 +93,7 @@ describe('ActionHistory', () => {
         ]}
       />,
     );
-    fireEvent.click(screen.getByText('Run command'));
+    // The lone/most-recent action is expanded by default — no click needed.
     // The input also appears in the collapsed header preview, so it renders twice.
     expect(screen.getAllByText('ls -la').length).toBeGreaterThan(0);
     expect(screen.getByText('total 4')).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe('ActionHistory', () => {
         actions={[action({ id: 'a1', label: 'Run command', input: 'ls -la', iteration: 1 })]}
       />,
     );
-    fireEvent.click(screen.getByText('Run command'));
+    // Auto-expanded (most recent) — click the copy button directly.
     fireEvent.click(screen.getAllByTitle('Copy')[0]);
     expect(writeText).toHaveBeenCalledWith('ls -la');
   });
@@ -127,7 +127,7 @@ describe('ActionHistory', () => {
         ]}
       />,
     );
-    fireEvent.click(screen.getByText('Write config'));
+    // Auto-expanded (most recent) — the JSON body renders without a click.
     // JSON keys are rendered as blue spans (the key token includes the colon).
     const key = screen.getByText('"name":');
     expect(key.className).toContain('text-brand-blue');
@@ -142,7 +142,7 @@ describe('ActionHistory', () => {
         actions={[action({ id: 'a1', label: 'Run command', reasoning: 'Plan step: list files', iteration: 1 })]}
       />,
     );
-    fireEvent.click(screen.getByText('Run command'));
+    // Auto-expanded (most recent) — the Why block renders without a click.
     expect(screen.getByText('Why')).toBeInTheDocument();
     expect(screen.getByText('Plan step: list files')).toBeInTheDocument();
   });
@@ -161,5 +161,23 @@ describe('ActionHistory', () => {
     // Expanding a whitespace-reasoning card must not reveal an empty Why block.
     fireEvent.click(screen.getByText('Empty reason'));
     expect(screen.queryByText('Why')).not.toBeInTheDocument();
+  });
+
+  it('auto-expands the most-recent action and collapses older ones', () => {
+    render(
+      <ActionHistory
+        actions={[
+          action({ id: 'a1', label: 'Old step', input: 'old-in', output: 'old-output', iteration: 1 }),
+          action({ id: 'a2', label: 'Newest step', input: 'new-in', output: 'new-output', iteration: 2 }),
+        ]}
+      />,
+    );
+    // The newest action (a2) is expanded → its output is visible.
+    expect(screen.getByText('new-output')).toBeInTheDocument();
+    // The older action (a1) is collapsed → its output is hidden.
+    expect(screen.queryByText('old-output')).not.toBeInTheDocument();
+    // Clicking the older one expands it (manual override).
+    fireEvent.click(screen.getByText('Old step'));
+    expect(screen.getByText('old-output')).toBeInTheDocument();
   });
 });

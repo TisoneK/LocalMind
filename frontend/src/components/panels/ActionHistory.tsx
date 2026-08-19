@@ -198,8 +198,13 @@ function groupChainsByTodo(chains: ActionItem[][]): { todoId: string | null; cha
   return groups;
 }
 
-function ActionCard({ action }: { action: ActionItem }) {
-  const [expanded, setExpanded] = useState(false);
+function ActionCard({ action, isMostRecent }: { action: ActionItem; isMostRecent?: boolean }) {
+  // Match the Agent Workspace: the MOST-RECENT action card is expanded and only
+  // collapses once a newer action arrives (older cards tuck away). Derived every
+  // render; a manual click pins an explicit state that overrides the auto behavior.
+  const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
+  const expanded = manualExpanded ?? Boolean(isMostRecent);
+  const setExpanded = (next: boolean) => setManualExpanded(next);
   const status = statusConfig[action.status] ?? statusConfig.pending;
   const hasBody = Boolean(action.output || action.error);
   const verbatim = action.input || action.detail || '';
@@ -353,6 +358,12 @@ export function ActionHistory({ actions }: ActionHistoryProps) {
 
   const groups = groupChainsByTodo(groupChains(actions));
 
+  // The most-recent action = the very last one rendered (last group → last
+  // chain → last action). It stays expanded until a newer action pushes it down.
+  const lastGroup = groups[groups.length - 1];
+  const lastChain = lastGroup?.chains[lastGroup.chains.length - 1];
+  const mostRecentId = lastChain?.[lastChain.length - 1]?.id ?? null;
+
   const stepLabel = (todoId: string) => {
     const m = todoId.match(/^plan-(\d+)$/);
     return m ? `Step ${Number(m[1]) + 1}` : todoId;
@@ -420,7 +431,7 @@ export function ActionHistory({ actions }: ActionHistoryProps) {
                         {i + 1}
                       </span>
                     </div>
-                    <ActionCard action={action} />
+                    <ActionCard action={action} isMostRecent={action.id === mostRecentId} />
                   </motion.div>
                 );
               })}
