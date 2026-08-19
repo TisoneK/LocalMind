@@ -4208,3 +4208,16 @@ program + ADR-22). -->
 - **LESSON:** the earlier "fixed in one place" was wrong — the same instruction was duplicated across tool output + loop feedback + system prompt. For any "remove this phrasing" task, grep ALL generators (tool output, loop-injected evidence, system prompts) — don't trust a single-site fix.
 - **Open items:** B-2026-08-18-4 (weather card), -6 (grounding), §40 efficiency.
 - **Notes:** none
+
+---
+## 2026-08-19 — Session 298 (cont.) — code_exec run-a-file recovery (B-2026-08-18-8)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user transcript — "create fib_check.py … then run it with N=55". The model wrote the file, then called `code_exec("python C:\…\fib_check.py 55")` to run it; code_exec runs INLINE source not a file → `invalid_input` dead-end → empty_response. User: "recovery should catch the mistake and use shell with the same command" (don't rely on a better error message; the weak model won't self-correct).
+- **SHIPPED (`ee07182`):** `code_exec` now RECOVERS structurally — when the input is a run-a-file command (`_RUN_FILE_COMMAND_RE`, checked BEFORE `_extract_code`, which else mis-reads `python3 /path/x.py` as an expression), it runs the command via `shell_exec` and returns the output (shell's permission gate still applies). Inline code still runs; prose still rejected. Trimmed the code_exec schema desc to fit the ADR-40 lean budget. +5 tests.
+- **VERIFICATION:** unit — run-a-file executes via shell (real output "FIBTEST_OK 55"), Windows-path shape routes (no invalid_input), shell-disabled → permission, inline print(6*7)→42, prose rejected. Full backend 1973 passed / 0 failed. LIVE flaked twice on an unrelated z.ai init TIMEOUT (30s classify) — never reached tools; the recovery is deterministic + unit-verified regardless.
+- **LESSON (recurring):** a better error message isn't recovery on a weak model — make the harness DO the right thing. code_exec now fulfills the run-a-file intent instead of hinting.
+- **Commits:** 2 — ee07182 (fix + tests) + changelog.
+- **Outcome:** done — code_exec run-a-file dead-end fixed structurally.
+- **Open items:** B-2026-08-18-4 (weather card), -6 (grounding); the z.ai init-timeout flakiness (known slow-provider, ADR-45) surfaced again on live tests.
+- **Notes:** none
