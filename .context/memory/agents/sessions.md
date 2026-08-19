@@ -4141,3 +4141,19 @@ program + ADR-22). -->
 - **Open items:** the §40 efficiency roadmap (B-2026-08-17-8..12) remains.
 - **Report:** review-67 (search) + ADR-49 (plan); this log.
 - **Notes:** none
+
+---
+## 2026-08-18 — Session 298 (cont.) — workspace card refinement + table-card rendering
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user: (1) refine obs-card collapse — the most-recent card stays open until a NEWER one arrives (a lone card stays open); (2) "can't weather be a nice card + table?" (screenshot of ChatGPT's weather card).
+- **SHIPPED:**
+  - `<obs-refine>` **workspace card:** the newest root card stays expanded (running OR just completed) and only collapses when a newer card pushes it down; `isLast` passed to root RunNodes. +2 tests (lone-completed-stays-open, older-collapses-on-new).
+  - `9d1ac6b` **table card + steer:** GFM tables now render as a polished CARD in `ChatMessage.tsx` (rounded, accent gradient header, zebra rows, hover, tabular figures) — reliable + general. Soft steer in `synthesizer.py` (combined web-synth) + parent contract to prefer a table for tabular data (weather/prices/schedules/comparisons). + changelog.
+- **LIVE (glm-4.5-flash):** table styling is a durable frontend win (any table renders as the card; visual mockup shown to user). The STEER is a nudge, not a guarantee on weak models: "weather rn" → bullets (reasonable single reading); a forecast run flaked on synthesis (empty_response, unrelated). Honest: for a GUARANTEED weather card (C/F toggle, icons) → B-2026-08-18-4 (structured weather path: wttr.in j1 + a WeatherCard from a ```weather block, mirroring DiffBlock — removes the weak-model format dependency).
+- **Commits:** 3 — obs-card refine, 9d1ac6b (table+steer), changelog.
+- **VERIFICATION:** FE tsc + 50 chat tests + AgentWorkspace 6 tests green; backend 1967 passed / 0 failed; ruff clean; harness cleaned (8000 untouched).
+- **Outcome:** done — obs-card refined + tables render as beautiful cards; guaranteed weather card scoped as B-2026-08-18-4.
+- **Open items:** B-2026-08-18-4 (guaranteed weather card); §40 efficiency roadmap.
+- **Report:** this log + backlog B-2026-08-18-4.
+- **Notes:** none

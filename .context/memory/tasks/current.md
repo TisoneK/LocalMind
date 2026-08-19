@@ -1,20 +1,18 @@
 # Current Task
 
-**Status:** IDLE — Session 298 done (2026-08-18). All requested fixes shipped +
-live-verified + pushed. No task in progress.
+**Status:** IDLE — Session 298 done (2026-08-18). All requested work shipped +
+pushed. No task in progress.
 
 ## This stretch shipped
-- Anti-spin nudge (B-2026-08-18-3, `2201cb9`) — soft [PROGRESS CHECK] after N
-  repeated same-tool calls.
-- Agent Workspace UX (`9518666`) — cards auto-collapse (only active expanded) +
-  scroll inside the panel (min-h-0), not the page.
-- **ADR-49 upfront todo plan (`83e6a2b`)** — parent init now emits an ordered
-  `plan` → live Todos panel, checked off by the existing cursor. Prompt-steering
-  the weak model FAILED live; the plan is harness-produced. LIVE-VERIFIED
-  ("weather in Kitengela": 3 todos planned + checked off + full weather report).
+- Workspace card: most-recent stays expanded until a newer card arrives (lone
+  card stays open) + scroll-in-panel + auto-collapse older.
+- Tables render as polished CARDS (ChatMessage.tsx) + soft steer to use tables
+  for tabular data (weather/prices/schedules). Visual mockup shown to user.
 
 ## Next (open, no user decision pending)
-- §40 efficiency roadmap: B-2026-08-17-8..12 (input/output tokens, latency folds).
+- **B-2026-08-18-4** — guaranteed ChatGPT-style weather card (structured wttr.in
+  j1 + a WeatherCard from a ```weather block; removes weak-model format dep).
+- §40 efficiency roadmap: B-2026-08-17-8..12.
 - Carried: B-2026-08-17-4, -7, -2; review-42 classify_failure; L2-secondary.
 
 **Feature:** none
