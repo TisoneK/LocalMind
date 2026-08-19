@@ -4221,3 +4221,16 @@ program + ADR-22). -->
 - **Outcome:** done — code_exec run-a-file dead-end fixed structurally.
 - **Open items:** B-2026-08-18-4 (weather card), -6 (grounding); the z.ai init-timeout flakiness (known slow-provider, ADR-45) surfaced again on live tests.
 - **Notes:** none
+
+---
+## 2026-08-19 — Session 298 (cont.) — GENERAL tool-error recovery (root fix, ADR-50)
+
+- **Agent:** Claude Code | **Model:** claude-opus-4-8 | **Platform:** macOS (Darwin 24.6, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user challenged the symptom-vs-root-cause pattern ("Did you read about fixing symptoms and root cause?"). Owned it — I'd been point-patching each tool dead-end. Built the ROOT fix.
+- **ROOT CAUSE:** on a tool failure the loop surfaced only `[Tool 'X' returned error_type='...']` (loop.py:2529/3089) and left recovery to the (weak) model → empty_response dead-ends. The per-tool patches (code_exec→shell, classify-flake→history) were symptoms.
+- **SHIPPED (`764b0a8`, B-2026-08-18-9, ADR-50):** `tool_error_recovery_directive` classifies EVERY error_type (spec §28: permission/input/no-result/transient/hard-limit/internal) into a concrete, model-agnostic next step, appended as `[RECOVERY]: …` at both error-surface points. Bounded by existing structural guards (dispatch skips permission retries; same_tool_failure_streak CAP=2 → honest stop; completion floor blocks false success). +10 tests (unit per class + e2e: [RECOVERY] reaches the model). 1983 BE pass.
+- **HONEST scope:** the directive is still model-read, so not 100% guaranteed on the weakest models — but the harness now handles all tool errors uniformly (the model-agnostic root fix); structural auto-correct (code_exec→shell) stays the stronger option for KNOWN mis-uses.
+- **Commits:** 1 (764b0a8) + this + ADR-50.
+- **Outcome:** done — general recovery layer replaces the whack-a-mole.
+- **Open items:** B-2026-08-18-4 (weather card), -6 (grounding); could add more structural auto-corrects per known mis-use.
+- **Notes:** none
