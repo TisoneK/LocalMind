@@ -494,6 +494,18 @@ def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
             "that actually fits this step. Do not repeat the identical call."
         )
     if et in _ERR_NORESULT:
+        # B-2026-08-20-19: for web_fetch, the model usually has search results
+        # with multiple URLs already. Point it at the next URL instead of a
+        # generic "try a different source." The model was stopping after one
+        # 404 instead of trying the other results.
+        if tool_name == "web_fetch":
+            return (
+                f"`{tool_name}` did not return a usable result for that URL. "
+                "You already have search results with other URLs — try fetching "
+                "the NEXT URL from the list. If none of the URLs work, synthesize "
+                "the answer from the search snippets you already have, or say so "
+                "honestly. Do not invent an answer."
+            )
         return (
             f"`{tool_name}` did not return a usable result. Try a different query, source, or tool. "
             "If the information genuinely isn't available, say so honestly — do not invent an answer."
