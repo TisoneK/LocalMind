@@ -351,6 +351,50 @@ def _emit_todo_write_events(tool_name: str, tool_result, obs) -> None:
         )
 
 
+# B-2026-08-20-23: terse harness-owned step verbs for the synthesized
+# user-facing checklist. The Todos panel is a rendered artifact of what the
+# agent actually DID — it must never depend on the model choosing to plan,
+# narrate, or call todo_write (free-tier models do none of these reliably;
+# ADR-49's own live-fail evidence showed glm ignoring todo_write entirely).
+_SYNTH_TODO_PREFIX = {
+    "shell": "Run",
+    "file_write": "Write",
+    "edit_file": "Edit",
+    "file_task": "Read",
+    "find_path": "Find",
+    "git": "Git",
+    "web_search": "Search",
+    "web_fetch": "Fetch",
+    "code_exec": "Run code",
+    "memory_op": "Memory op",
+    "process": "Process op",
+    "browse": "Browser",
+    "diagnostics": "Diagnostics",
+    "csv": "Read CSV",
+    "json": "Query JSON",
+    "sql": "Query DB",
+    "calculator": "Calculate",
+    "observe": "Observe",
+    "sysinfo": "System info",
+    "todo_write": "Update todos",
+    "delegate": "Delegate",
+}
+
+
+def _synthetic_todo_text(tool_name: str, tool_input: str) -> str:
+    """One terse imperative step label per real tool execution.
+
+    Distilled from the tool call itself (name + first line of input), not
+    from any model narration — the panel shows what happened, the model's
+    thinking stays its own business.
+    """
+    verb = _SYNTH_TODO_PREFIX.get(tool_name, tool_name.replace("_", " "))
+    first_line = (tool_input or "").strip().splitlines()[0].strip() if (tool_input or "").strip() else ""
+    arg = first_line[:90]
+    label = f"{verb}: {arg}" if arg else verb
+    return label[:120]
+
+
 def _tool_provider(tool_result) -> Optional[str]:
     """Surface which backend engine a tool used, for the Actions-card badge.
 
@@ -1456,6 +1500,40 @@ class AgentLoop:
                     completed=True,
                 )
 
+        # B-2026-08-20-23: synthesized harness-owned checklist. The warm-kernel
+        # runtime (agent_runtime passes skip_planning=True) gates out ALL plan→
+        # todo branches, so the Todos panel was structurally empty and the only
+        # remaining path was the model-voluntary todo_write tool. Instead, when
+        # no plan-based steps exist, synthesize one todo per REAL tool
+        # execution: todo_created on dispatch (pending→in_progress),
+        # todo_completed when the tool lands. Model-agnostic, bounded, and
+        # skipped for scaffolding calls (describe_tool) and single-step noise.
+        _synthetic_todos: list[str] = []
+        _SYNTH_TODO_MAX = 12
+        _SYNTH_SKIP = {"describe_tool"}
+
+        def _synth_begin(tool_name: str, tool_input: str) -> Optional[str]:
+            if _plan_steps or tool_name in _SYNTH_SKIP or not _obs:
+                return None
+            if len(_synthetic_todos) >= _SYNTH_TODO_MAX:
+                return None
+            todo_id = f"syn-{len(_synthetic_todos)}"
+            label = _synthetic_todo_text(tool_name, tool_input)
+            _synthetic_todos.append(label)
+            _obs.emit(
+                "todo_created",
+                id=todo_id,
+                text=label,
+                completed=False,
+                status="in_progress",
+            )
+            return todo_id
+
+        def _synth_end(todo_id: Optional[str], failed: bool) -> None:
+            if not todo_id or not _obs or failed:
+                return
+            _obs.emit("todo_completed", id=todo_id, completed=True)
+
         # ── Inject agent system prompt (with plan context) ──────────────
         loop_messages = list(messages)
 
@@ -2112,7 +2190,9 @@ class AgentLoop:
                 # labels on a narrated transition. All calls in a batch share
                 # the same cursor, so one capture serves the whole batch.
                 _batch_reasoning = _step_reasoning()
+                _syn_ids: list[Optional[str]] = []
                 for call, _inp in valid_calls:
+                    _syn_ids.append(_synth_begin(call.tool_name, _inp))
                     _path = call.tool_args.get("path", "")
                     _command = call.tool_args.get("command", "")
                     _query = call.tool_args.get("query", "")
@@ -2165,7 +2245,7 @@ class AgentLoop:
                             status="started",
                             tool_args=_inp,
                             iteration=iteration + 1,
-                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                            todo_id=_syn_ids[-1] or (f"plan-{_plan_step_cursor}" if _plan_steps else None),
                             thought=result.raw_content or "", reasoning=_batch_reasoning,
                         )
 
@@ -2181,6 +2261,7 @@ class AgentLoop:
                 async def _dispatch_and_emit(idx: int, call, inp: str):
                     res = await _dispatch_single(call.tool_name, inp, call.tool_args)
                     tc_name, tc_obs, tc_failed, tc_lat, tc_provider = res
+                    _syn_id = _syn_ids[idx] if 0 <= idx < len(_syn_ids) else None
                     if _obs:
                         _obs.emit(
                             "tool_call",
@@ -2191,11 +2272,12 @@ class AgentLoop:
                             latency_ms=tc_lat,
                             tool_args=inp,  # this call's input (the batch loop's _inp was stale)
                             iteration=iteration + 1,
-                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                            todo_id=_syn_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None),
                             thought=result.raw_content or "",
                             reasoning=_batch_reasoning,
                             provider=tc_provider,
                         )
+                    _synth_end(_syn_id, tc_failed)
                     return idx, res
 
                 _batch_tasks = [
@@ -2645,6 +2727,7 @@ class AgentLoop:
                 logger.info(
                     f"[agent.loop] iter={iteration + 1} tool={tool_name} input={tool_input[:80]} — {action_label}"
                 )
+                _syn_todo_id = _synth_begin(tool_name, tool_input)
                 if _obs:
                     _obs.emit(
                         "tool_call",
@@ -2653,7 +2736,7 @@ class AgentLoop:
                         status="started",
                         tool_args=tool_input,
                         iteration=iteration + 1,
-                        todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                        todo_id=_syn_todo_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None),
                         thought=result.raw_content or "", reasoning=_step_reasoning(),
                     )
 
@@ -2963,6 +3046,7 @@ class AgentLoop:
                     retry_count = 0
                     latency_ms = round((time.monotonic() - t_tool) * 1000)
 
+                _todo_id = _syn_todo_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None)
                 if tool_failed:
                     last_tool_failed = True
                     consecutive_failures += 1
@@ -2976,7 +3060,7 @@ class AgentLoop:
                             output=_truncate_observation(observation),
                             latency_ms=latency_ms,                                            tool_args=tool_input,
                                             iteration=iteration + 1,
-                                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                            todo_id=_todo_id,
                                             thought=result.raw_content or "", reasoning=_step_reasoning(),
                                             provider=_tool_provider(tool_result),
                                         )
@@ -2996,12 +3080,13 @@ class AgentLoop:
                             output=_truncate_observation(observation),
                             latency_ms=latency_ms,                                            tool_args=tool_input,
                                             iteration=iteration + 1,
-                                            todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                            todo_id=_todo_id,
                                             thought=result.raw_content or "", reasoning=_step_reasoning(),
                                             provider=_tool_provider(tool_result),
 
                                         )
 
+                _synth_end(_syn_todo_id, tool_failed)
                 trace.steps.append(
                     AgentStep(
                         iteration=iteration + 1,
@@ -3356,6 +3441,7 @@ class AgentLoop:
 
                         # Emit status to user — v0.10: use status field
                         yield StreamChunk(text="", done=False, status=action_label)
+                        _syn_todo_id = _synth_begin(tc_name, tool_input)
                         if _obs:
                             _obs.emit(
                                 "tool_call",
@@ -3363,7 +3449,7 @@ class AgentLoop:
                                 label=action_label,
                                 status="started",
                                 iteration=iteration + 1,
-                                todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                todo_id=_syn_todo_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None),
                                 thought=result.raw_content or "", reasoning=_step_reasoning(),
                             )
 
@@ -3491,10 +3577,11 @@ class AgentLoop:
                                 status="done" if not tool_failed else "failed",
                                 latency_ms=latency_ms if "latency_ms" in dir() else 0,
                                 iteration=iteration + 1,
-                                todo_id=f"plan-{_plan_step_cursor}" if _plan_steps else None,
+                                todo_id=_syn_todo_id or (f"plan-{_plan_step_cursor}" if _plan_steps else None),
                                 thought=result.raw_content or "", reasoning=_step_reasoning(),
                             )
 
+                        _synth_end(_syn_todo_id, tool_failed)
                         trace.steps.append(
                             AgentStep(
                                 iteration=iteration + 1,
