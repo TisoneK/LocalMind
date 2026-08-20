@@ -4286,3 +4286,17 @@ program + ADR-22). -->
 - **LIMITATION FOUND:** GLM emitted final prose without a successful corrective tool call. The parent completion floor rejected the prose and issued repeated bounded replans; the trace ended before a clean terminal completion event. A follow-up task that would have tested a corrective tool call was blocked by z.ai HTTP 429 before initialization and is not counted.
 - **Outcome:** live verification is partial but honest: the root contract is proven live; weak-model clean recovery after a failed high-stakes action remains unproven/open.
 - **Report:** `.context/memory/reviews/2026-08-19-review-68.md` (live follow-up appended)
+
+---
+## 2026-08-19 — Session 300 — direct capability UX fast path
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Darwin, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** User transcript showed `Hi`, `What can you do?`, and `Like what` taking 15–30s, spending thousands of prompt tokens, and repeating generic capability prose.
+- **ROOT CAUSE:** the live `AgentRuntime` explicitly bypassed the existing `core.trivial_input` fast-path helpers; every turn paid the parent initialization call, and capability answers were left to weak-model prose.
+- **SHIPPED (`c1e9332`):** restore a runtime fast path for obvious social/conversational turns and stable capability FAQs when no attachment/tool restriction is present. Capability questions now return concise categories; `Like what?` returns concrete examples. Ambiguous/tool-bearing/attachment turns remain parent-routed. Preserved lifecycle, five stage-timing events, persistence, metrics, and workspace artifacts.
+- **LIVE A/B:** same real z.ai/glm-4.5-flash task with isolated settings/home and port 8765 — before: parent init, 19,956ms, 930 prompt tokens, generic 404-char inventory; after: no provider call, 2ms, 12 estimated prompt tokens, concrete categorized answer. Follow-up `Like what?`: 2ms, no provider call, distinct examples. Final smoke confirmed `fast_path=true` and truthful skipped/done stage timings.
+- **VERIFICATION:** full CI **1998 backend passed / 2 skipped**, Ruff/tsc clean, ESLint 0 errors / 71 existing warnings. First CI run caught missing fast-path stage markers; fixed and reran before shipping.
+- **Outcome:** done — simple capability conversations are instant, concrete, and do not consume the parent tool-loop budget.
+- **Open items:** B-2026-08-19-1 (clean weak-model honest-stop after failed high-stakes action), B-2026-08-18-4 (weather card), B-2026-08-18-6 (synthesis grounding).
+- **Report:** `.context/memory/reviews/2026-08-19-review-69.md`
+- **Notes:** live A/B traces were isolated and cleaned; z.ai provider was not called on the after path.

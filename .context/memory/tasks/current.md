@@ -1,9 +1,7 @@
 # Current Task
 
-**Status:** IDLE — Session 299 follow-up done (2026-08-19). Structured
-failure propagation is live-verified; weak-model completion after a failed
-high-stakes action remains bounded but not cleanly completed in the trace.
-No task in progress.
+**Status:** IDLE — Session 300 done (2026-08-19). Direct capability UX fast
+path shipped and live A/B verified. No task in progress.
 
 ## Recovery arc shipped (root-cause, not symptom patches)
 - ADR-50 (`764b0a8`) — general model-agnostic tool-error recovery (classify every
@@ -23,5 +21,15 @@ No task in progress.
 - B-2026-08-19-1 (live clean honest-stop after failed high-stakes action).
 - B-2026-08-18-4 (guaranteed weather card), -6 (synthesis grounding).
 - §40 efficiency roadmap: B-2026-08-17-8..12.
+
+## Session 300 implementation
+- Live root cause: the active AgentRuntime bypassed the existing conversational
+  fast path, so `Hi` and capability FAQs paid for parent initialization.
+- Working fix: deterministic social/capability fast path with truthful lifecycle
+  and stage events; ambiguous/tool-bearing turns remain parent-routed.
+- Live A/B: committed HEAD 19,956ms / 930 prompt tokens / generic answer vs
+  working tree 2ms / 12 estimated prompt tokens / concrete answer. Final CI:
+  1998 passed, 2 skipped.
+- Product commit: `c1e9332`.
 
 **Feature:** none

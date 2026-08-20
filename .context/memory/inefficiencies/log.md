@@ -871,3 +871,11 @@ if literally nothing slowed you down.
 - **Cause:** weak models don't reliably follow multi-tool protocol instructions from a prompt; a behavior you NEED guaranteed can't depend on model goodwill.
 - **Workaround / fix:** produce the artifact in the harness (parse a `plan` field from the init the model already returns) rather than relying on the model to call a tool in a specific order.
 - **Prevent next time:** for any "the agent should ALWAYS do X" requirement on weak models, prefer a harness-guaranteed mechanism over prompt-steering; if you must try steering, LIVE-TEST it on the weak model before building on it. (Same lesson family as the completion-floor gotchas: verify against runtime reality, not assumptions.)
+
+---
+## 2026-08-19 — Buffy / openai/gpt-5.6-luna (Session 300)
+- **Problem:** The first full CI run after restoring the direct fast path failed three observability tests because the new branch returned the correct answer but omitted the existing `stage_timing` events. The focused feature tests passed, so a narrow suite would have missed the workspace polling regression.
+- **Cost:** One full-gate rerun and one small corrective edit.
+- **Cause:** The new fast path duplicated the runtime completion/persistence boundary without first enumerating the stage-timing contract consumed by `_store_observation` and the UI.
+- **Workaround / fix:** Emitted all five truthful stage markers on the fast path (`intent_classify`, `context_build`, `tool_select`, `generate`, `execute`), then reran focused tests and the full CI gate.
+- **Prevent next time:** When adding a new runtime exit path, inspect the complete observability/persistence contract and add its required events before running the focused feature tests; the full gate is still required for cross-surface lifecycle behavior.
