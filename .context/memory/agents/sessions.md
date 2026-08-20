@@ -4588,3 +4588,16 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-20 (new, Medium), B-2026-08-20-10 (High), B-2026-08-20-11 (Medium). B-2026-08-20-19 (broken test-import) checked off — no longer reproduces (3 passed).
 - **Report:** `.context/memory/reviews/2026-08-20-review-89.md`
 - **Notes:** full backend 2077 passed / 2 skipped / 0 failures; ruff + pre-commit gate clean. Re-hit two known traps (logged in inefficiencies): `code_search` vendored-rg ENOTDIR, and the macOS boot-shell reaping backgrounded servers (Session 251/153) — both worked around, boot+curl+kill in one command.
+
+---
+## 2026-08-20 — Session 324 — silent Thinker: filter-before-render for the ADR-42 consult
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-flash | **Platform:** macOS (Tison's local machine, /Users/bao/Code/LocalMind) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** User's transcript + screenshots: "Thinker's raw internal monologue is leaking into the visible transcript" on ALL models — "we are not filtering anything yet". The ADR-42 Thinker's reasoning (including the model echoing its own prompt "You are the Thinker — SILENT and READ-ONLY…" and JSON-format musing) rendered into the Thinking block.
+- **Commits:** 1 product (`db5bfdc`) — `fix(agent): make the Thinker consult silent — never stream its raw reasoning`; then `chore(context):`/`docs(review):` memory commits.
+- **SHIPPED:** (1) `thinker/thinker.py::consult` buffers the model's output internally for parsing only and yields NO user-visible chunks (removed the JSON-marker surfacing machinery); (2) `loop.py` drains the consult silently — render boundary now explicit. Structured analysis still flows to the agent's context (`_thinker_context_block`), to `trace.thinker_analysis` (degraded fallback), and lifecycle stays visible via `agent_thinker_start`/`done` obs events (next_step + counts). Tests: silent-contract test in `test_thinker.py` + loop-level regression in `test_tool_force_recovery.py` (Thinker reasoning never reaches the user's stream even with real evidence).
+- **LIVE-VERIFIED (bankofai/deepseek-v4-flash, isolated 8765):** consult ran (`agent_thinker_start`/`done` iter 1, next_step drove mkdir + file_write) yet **0 of 210 user-visible thinking tokens** contained any Thinker-prompt or JSON-structure marker; main-agent thinking still streams. Also clarified the transcript's "still wired to bankofai, not dropped" flag: Sessions 319-322 RENAMED bai → bankofai (drop the b.ai DOMAIN), did not remove the provider — the footer is correct, no code change.
+- **Outcome:** done — the Thinker is now truly silent across all models; the user-visible thinking stream only carries the agent's own reasoning. Backend 2078 / 2 skipped / 0 failures; ruff + tsc clean.
+- **Open items:** B-2026-08-20-20 (Medium), B-2026-08-20-10 (High), B-2026-08-20-11 (Medium).
+- **Report:** `.context/memory/reviews/2026-08-20-review-90.md`
+- **Notes:** the "bled-in unrelated example" from the transcript is not cross-session bleed — `Evidence.user_message` legitimately captured the loop's corrective nudge, so the Thinker reasoned about it; internal correctness, the visibility was the bug. Live trace iter-3 took 107s (deepseek long-reasoning latency, unrelated).

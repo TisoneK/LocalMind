@@ -991,3 +991,13 @@ if literally nothing slowed you down.
 - **Cause:** Both are stale-environment/tooling issues already documented in this log and `system/environments.md`; I re-discovered them instead of reading first.
 - **Workaround / fix:** grep for repo searches; single-command live-trace recipe for the 8765 harness.
 - **Prevent next time:** Before any `code_search` with a file path or compound cwd, scope to a directory (or use grep). For live traces, always boot+request+teardown in one shell command — a server launched in its own command will be reaped when that shell exits. Also: `~/LocalMind/settings.json` now has `adapter=bankofai, model=deepseek-v4-flash` (Session 322 migration) — the live harness copy uses the bankofai key for traces.
+
+---
+## 2026-08-20 — Buffy / deepseek-v4-flash (Session 324)
+
+- **Problem:** `code_search` failed again with the vendored-rg `ENOTDIR: /Users/bao/.config/manicode/rg` (documented in Sessions 152/197/200/323) when I searched a single file (`backend/src/core/agent/loop.py`). Switched to `grep` immediately.
+- **Cost:** ~30s (one failed call + grep fallback).
+- **Cause:** stale vendored ripgrep path in the local Codebuff search wrapper.
+- **Workaround / fix:** grep for single-file/small-scope searches; directory-scoped `code_search` when the wrapper works.
+- **Prevent next time:** Already logged four times — prefer grep from the start when searching inside `backend/src/`.
+- **Second item:** the user's "logged both to the LocalMind file" (transcript) did NOT land anywhere in the repo — `localmind.md` is the app's auto-generated knowledge file and no `.context/memory` entry existed. This session logged both findings properly (backlog B-2026-08-20-21 + sessions.md). If a user says they "logged to the LocalMind file", verify which file they mean — it may be outside the repo.
