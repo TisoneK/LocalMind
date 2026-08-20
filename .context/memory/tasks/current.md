@@ -1,24 +1,24 @@
 # Current Task
 
-**Status:** IDLE — Session 314 (anti-hedging detector + recovery nudge context) shipped.
+**Status:** IDLE — Session 315 (clean user-facing fallback) shipped.
 
-## Session 314 outcome
-Fixed the user's live transcript failure: model had 8 web_search results with weather data but answered "Would you like me to get the current weather from weather-atlas.com?" — a non-answer after real work.
+## Session 315 outcome
+Fixed the user's live transcript failure: the chat bubble showed raw harness internals ("I ran the requested tools but couldn't synthesize... What to try next: Check the outputs above") instead of a clean answer.
 
-Three fixes:
-1. **Anti-hedging detector** (`answer_hedges_after_evidence`): fires when tools ran + answer contains a hedge phrase ("Would you like me to...", "Which source..."). Injects a [HEDGE] re-prompt forcing the model to synthesize or fetch, not ask. One-shot bounded, parent-scoped, iteration-capped.
-2. **Recovery nudge includes the user's question**: the old generic nudge caused the model to lose context ("I don't have any information about what the original task was"). Now includes `The user's request was: "<original question>"`.
-3. **Parent contract anti-hedging steering**: added an "Anti-hedging rules" section to the parent contract.
+Three fallback paths in `loop.py` were dumping `_summarize_trace_for_user` (raw tool-call list + debug advice) directly to the user when synthesis failed. All three now:
+1. Try ONE more synthesis retry with thinking OFF before giving up.
+2. If that fails, yield a CLEAN message: "I found the information you asked for, but I'm having trouble putting it into a clean final answer right now. The search results and tool outputs are in the Actions panel above — take a look, or ask me again and I'll retry."
 
-13 new tests; 2055 broad regression pass (0 failures); ruff clean.
-Live trace on z.ai/glm-4.5-flash: recovery nudge with context working (model continued through 5 iterations, ran web_search twice). Hedge detector unit-tested but not live-fired (model hit empty-response before hedging).
+The raw tool evidence (shell calls, search results, outputs) is still available in the Actions panel — the chat bubble just stays clean.
+
+8 e2e/unit tests updated to assert the new clean contract. 2055 broad regression pass (0 failures); ruff clean.
 
 ## Next
-- **B-2026-08-20-10 (High):** MiniMax XML interception conflicts with prose-commitment detector — still open from Session 313.
+- **B-2026-08-20-10 (High):** MiniMax XML interception conflicts with prose-commitment detector.
 - **B-2026-08-20-11 (Medium):** 429 rate-limit produces empty answer bubble.
 - **B-2026-08-20-9 (Low):** shell tool JSON-wrapped command hint.
-- Live-verify the hedge detector on a real hedging answer (needs faster provider).
+- The synthesis retry (fix #1) should rescue many turns that previously fell to the clean fallback — live-verify on z.ai with the weather task.
 
 **Feature:** none (idle)
 **ADR:** ADR-54 (ParentSession), ADR-53 (Parent-only), ADR-52 (warm kernel)
-**Review:** `.context/memory/reviews/2026-08-20-review-80.md`
+**Review:** `.context/memory/reviews/2026-08-20-review-81.md` (to be written)

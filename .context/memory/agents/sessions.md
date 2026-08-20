@@ -4476,3 +4476,14 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), B-2026-08-20-9 (shell JSON hint, Low).
 - **Report:** `.context/memory/reviews/2026-08-20-review-80.md`
 - **Notes:** live trace used isolated 8765 + /tmp scratch; no port 8000 touched; no API-key values printed.
+
+---
+## 2026-08-20 — Session 315 — clean user-facing fallback (B-2026-08-20-14)
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** Fix the user's live transcript failure: chat bubble showed "I ran the requested tools but couldn't synthesize a final answer... What to try next: Check the outputs above" — raw harness internals, not a user answer.
+- **ROOT CAUSE:** three fallback paths in loop.py dumped `_summarize_trace_for_user` (raw tool-call list + "What to try next" debug advice) directly to the user when synthesis failed. The user wants a clean answer, not a debug dump.
+- **SHIPPED (`34aa67c`):** (1) `_force_final_answer` empty path: try ONE more synthesis retry with thinking OFF before falling back. If that fails, yield CLEAN message: "I found the information you asked for, but I'm having trouble putting it into a clean final answer right now. The search results and tool outputs are in the Actions panel above — take a look, or ask me again and I'll retry." (2) `_synthesis_failure_fallback` (timeout/exception): same clean message. (3) Empty-response fallthrough + no-text-after-filtering path: same clean message. Raw tool evidence still in Actions panel. 8 e2e/unit tests updated. 2055 broad pass; ruff clean.
+- **Outcome:** done — the chat bubble now shows a clean user-facing message when synthesis fails, not raw harness debug output. The synthesis retry (fix #1) should also rescue many turns that previously fell to the fallback.
+- **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), B-2026-08-20-9 (shell JSON hint, Low).
+- **Report:** `.context/memory/reviews/2026-08-20-review-81.md`
