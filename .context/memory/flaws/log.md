@@ -428,3 +428,12 @@ Flaws from Session 7 are now **fixed**:
 - **Root cause:** the collab event contract is opt-in and unenforced; ad-hoc peer notes in shared durable files are the path of least resistance, and the exit gate doesn't detect coordination that bypassed `context-collab`.
 - **Suggested fix:** (a) `context-gates` could warn when a peer edits a durable review/decision file without a corresponding coordination event in the same session; (b) the collaboration README could name "peer addendum to a review report" as an explicit anti-pattern with the fold-in-to-durable-memory remedy. Package suggestion for a future core release.
 - **Status:** open (suggested for the package).
+
+---
+## 2026-08-20 — Buffy / deepseek/deepseek-v4-pro (Session 321)
+
+- **Flaw:** Rule 7 ("Never echo a secret or token in chat, logs, or commit messages") has no mechanical guard for the common case of inspecting a runtime settings file. While walking `~/LocalMind/settings.json` to locate the stored `bai` key, I printed the `api_keys` object's values in full — my masking filter keyed off leaf key NAMES containing "key/token/secret/password", but the stored leaf keys are provider ids (`gemini`, `cerebras`, `zen`, `chutes`, `zai`, `bai`), so every API key was echoed verbatim in the terminal transcript.
+- **Symptom:** Multiple cloud API keys were written to the session transcript (uncommitted; settings.json is self-gitignored and was never committed, but the echo was still an avoidable exposure).
+- **Root cause:** No reusable "redact settings before display" helper or pitfall exists; my one-off walker masked by key-name substring, which does not match this project's `api_keys: {provider: key}` shape.
+- **Suggested fix:** Add a pitfall/helper: when dumping any runtime/`.env`/settings file, mask EVERY value under an `api_keys`/`key`/`token`/`secret` collection regardless of the leaf key name — and prefer printing only the SET of key names (or masked prefixes/lengths), never values. Consider a `secrets-redact` helper in the core tooling.
+- **Status:** open (corrected in-session by not repeating the values).

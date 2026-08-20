@@ -4552,3 +4552,14 @@ program + ADR-22). -->
 - **Open items:** ADR-55 live smoke (blocked on key), B-2026-08-20-10 (MiniMax XML conflict), B-2026-08-20-11 (429 empty bubble), B-2026-08-20-19 (broken test-import).
 - **Report:** `.context/memory/reviews/2026-08-20-review-86.md`
 - **Notes:** none
+
+---
+## 2026-08-20 — Session 321 — switch B.AI to api.bankofai.io + live-verify (ADR-55)
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (Tison's local machine, /Users/bao/Code/LocalMind) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** User: "Drop b.ai and use bankofai.io" — B.AI in LocalMind still "not working" (the `b.ai` domain is being phased out in favor of `bankofai.io`).
+- **SHIPPED (live-verified):** (1) `bai` `ProviderConfig` base URL `https://api.b.ai/v1` → `https://api.bankofai.io/v1`; display name → `BankOfAI (promo free models — time-limited)`. (2) Removed the earlier browser-User-Agent header — a misdiagnosis: Cloudflare 403 "error code: 1010" only blocks stdlib urllib's `Python-urllib/*` UA, NOT httpx's default `python-httpx/*` UA (live-confirmed). (3) Fixed the user's stale `settings.json` `model` `DeepSeek-V4-Flash` → `deepseek-v4-flash` (this stale value was overriding the Session 320 lowercase default and causing model-not-found). (4) Test updated (`test_bai_needs_no_custom_user_agent` + base-URL pin).
+- **Outcome:** done + LIVE-VERIFIED. `GET /v1/models` (with key) → 38 lowercase model IDs (`deepseek-v4-flash`/`-pro`, `glm-5.x`, `gpt-5.x`, `claude-*`, `gemini-*`, `kimi-*`, `qwen*`, `minimax-*`; `hy3` NOT present). Chat: `deepseek-v4-flash` → 200 "PONG"; `DeepSeek-V4-Flash` → 404 model_not_found. End-to-end via the real adapter (`OpenAICompatAdapter(provider="bai")`) → 38 models + "PONG". Full backend 2071 passed / 1 pre-existing failure (test_parent_recovery_cap.py broken import, B-2026-08-20-19); ruff clean; frontend tsc clean.
+- **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), B-2026-08-20-19 (broken test-import, Low). ADR-55 now live-verified; `hy3` absent from live list (window entry retained as harmless).
+- **Report:** `.context/memory/reviews/2026-08-20-review-87.md`
+- **Notes:** none

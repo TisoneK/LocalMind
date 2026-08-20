@@ -964,3 +964,12 @@ if literally nothing slowed you down.
 - **Cause:** The research brief conflated display names with model IDs, and I didn't cross-check against `docs.b.ai/llmservice/models/<model>` or a live `/v1/models` call before coding the default.
 - **Workaround / fix:** Fixed the IDs + windows (docs-sourced), pinned them with a test. Base URL + Bearer auth were already correct — the bankofai.io↔b.ai domain split the user mentioned is the chat WEB app (chat.b.ai/chat ↔ chat.bankofai.io/chat), not the API.
 - **Prevent next time:** For any new provider, get the model IDs from the provider's `/v1/models` response or per-model docs pages, never from marketing/pricing copy. Display names ≠ model IDs, and OpenAI-compat model IDs are case-sensitive.
+
+---
+## 2026-08-20 — Buffy / deepseek-v4-pro (Session 321)
+
+- **Problem:** I added a browser User-Agent header to the B.AI provider config to bypass Cloudflare 403 "error code: 1010" — a misdiagnosis. The 403 came from the stdlib `urllib` `Python-urllib/*` UA in my test scripts, NOT from httpx (the backend's actual HTTP client).
+- **Cost:** ~5 min of UA-probing plus one wasted header/test (added then removed); the misdiagnosis briefly existed in the uncommitted Session 320→321 work.
+- **Cause:** My live smoke scripts used `urllib.request` (stdlib) out of habit; the backend uses `httpx`. Cloudflare's bot heuristic blocks the stdlib default UA specifically (`Python-urllib/*`), while `python-httpx/*`, `python-requests/*`, and `curl/*` all pass — so I concluded "Cloudflare blocks non-browser UAs" when it really blocks only the stdlib urllib UA.
+- **Workaround / fix:** Removed the header; confirmed live that httpx's default UA returns 200 on both `api.bankofai.io/v1/models` and chat completions.
+- **Prevent next time:** When live-testing a provider the backend will call via httpx, probe with httpx (or at least the exact UA the backend sends), not stdlib urllib — a UA-specific bot-block is invisible to urllib-only testing and produces a false "needs a browser UA" conclusion.
