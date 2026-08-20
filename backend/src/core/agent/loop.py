@@ -378,6 +378,12 @@ _SYNTH_TODO_PREFIX = {
     "sysinfo": "System info",
     "todo_write": "Update todos",
     "delegate": "Delegate",
+    # S326 follow-up: the agent learning a tool's docs is part of "what
+    # happened" — surfacing it shows the how/why of the tool choice (the
+    # model consulted the schema before using the tool). The AGENT's actual
+    # tool knowledge still comes from the returned schema (recorded via
+    # _note_described_tool → next call's native tools param), not the panel.
+    "describe_tool": "Load tool docs",
 }
 
 
@@ -1510,10 +1516,9 @@ class AgentLoop:
         # skipped for scaffolding calls (describe_tool) and single-step noise.
         _synthetic_todos: list[str] = []
         _SYNTH_TODO_MAX = 12
-        _SYNTH_SKIP = {"describe_tool"}
 
         def _synth_begin(tool_name: str, tool_input: str) -> Optional[str]:
-            if _plan_steps or tool_name in _SYNTH_SKIP or not _obs:
+            if _plan_steps or not _obs:
                 return None
             if len(_synthetic_todos) >= _SYNTH_TODO_MAX:
                 return None

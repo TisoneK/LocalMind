@@ -132,9 +132,11 @@ class TestSynthesizedTodos:
         assert any(c.data["id"] == "syn-0" for c in completed), "the synthesized todo must complete"
 
     @pytest.mark.asyncio
-    async def test_describe_tool_scaffolding_does_not_become_a_todo(self):
-        """Loading tool docs (describe_tool) is scaffolding, not a task step —
-        it must not clutter the panel."""
+    async def test_describe_tool_surfaces_as_load_tool_docs_todo(self):
+        """Loading tool docs IS part of what happened — the panel shows the
+        agent learning the tool's schema before using it (the how/why of the
+        tool choice). The AGENT's actual tool knowledge still comes from the
+        returned schema, not the panel."""
         loop = AgentLoop(adapter=MagicMock())
         adapter = _adapter_with_calls(
             ToolCallResult(tool_name="describe_tool", tool_args={"tool_name": "shell"}, raw_content=""),
@@ -146,10 +148,12 @@ class TestSynthesizedTodos:
         await _run(loop, adapter, skip_planning=True, obs=obs)
 
         created = _todo_events(obs, "todo_created")
-        # Only the real tool call becomes a todo — and it is the first one.
-        assert len(created) == 1, [e.data for e in created]
+        # Both the docs-loading step and the real tool call appear, in order.
+        assert len(created) == 2, [e.data for e in created]
         assert created[0].data["id"] == "syn-0"
-        assert created[0].data["text"].startswith("Run:")
+        assert created[0].data["text"] == "Load tool docs: shell", created[0].data
+        assert created[1].data["id"] == "syn-1"
+        assert created[1].data["text"].startswith("Run:")
 
     @pytest.mark.asyncio
     async def test_plan_based_todos_suppress_synthetic_duplicates(self):
@@ -198,3 +202,5 @@ class TestSynthesizedTodos:
         # Unknown tools fall back to a verb-ified name; empty input → verb only.
         assert _synthetic_todo_text("some_custom_tool", "") == "some custom tool"
         assert _synthetic_todo_text("shell", "") == "Run"
+        # describe_tool carries the tool name being learned.
+        assert _synthetic_todo_text("describe_tool", "shell") == "Load tool docs: shell"
