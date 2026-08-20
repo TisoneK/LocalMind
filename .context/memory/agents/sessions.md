@@ -4463,3 +4463,16 @@ program + ADR-22). -->
 - **Outcome:** done — audit complete, findings + 3 new backlog items recorded. No code changes (review session).
 - **Report:** `.context/memory/reviews/2026-08-20-review-79.md`
 - **Notes:** no live traces touched port 8000; no API-key values printed; scratch at /tmp/lm-audit-313 kept for reference.
+
+---
+## 2026-08-20 — Session 314 — anti-hedging detector + recovery nudge context (B-2026-08-20-13)
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** Fix the user's live transcript failure: model had 8 web_search results with "16°, overcast" but answered "Would you like me to get the current weather from weather-atlas.com?" — a non-answer after real work.
+- **ROOT CAUSE:** (1) No deterministic detector for hedging after evidence — the model gathered real data but asked the user to choose instead of synthesizing. (2) The recovery nudge was generic ("You reasoned about this task") and didn't include the user's question — the weak model lost context ("I don't have any information about what the original task was").
+- **SHIPPED (`5a371d3`):** (1) `answer_hedges_after_evidence()` detector + `[HEDGE]` re-prompt at the acceptance gate. Parent-scoped, one-shot bounded, iteration-capped. (2) Recovery nudge now includes `The user's request was: "<original question>"`. (3) Parent contract gains "Anti-hedging rules" section. 13 new tests; 2055 broad regression pass; ruff clean.
+- **LIVE-VERIFIED (z.ai/glm-4.5-flash, isolated 8765):** recovery nudge with context working — model continued through 5 iterations (tool-talk → empty → web_search → empty → web_search) without losing the thread. Hedge detector didn't fire (model hit empty-response before hedging). Trace cut short by tool-call budget.
+- **Outcome:** done — hedging non-answer + context-loss both addressed. The model now has a deterministic backstop that forces it to synthesize from evidence instead of asking the user to choose.
+- **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), B-2026-08-20-9 (shell JSON hint, Low).
+- **Report:** `.context/memory/reviews/2026-08-20-review-80.md`
+- **Notes:** live trace used isolated 8765 + /tmp scratch; no port 8000 touched; no API-key values printed.
