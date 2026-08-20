@@ -940,3 +940,18 @@ if literally nothing slowed you down.
 - **Cause:** I trusted the unit tests. The `system/live-testing.md` protocol explicitly says "unit tests alone are NOT sufficient — the user has stated they 'are designed to pass certain conditions' and do not prove the real model+provider path." I violated this.
 - **Workaround / fix:** live-tested on z.ai/glm-4.5-flash. Fixed all three issues. The DDG fix is the highest-impact — without it, every web_search returned garbage, so the model couldn't answer any factual question.
 - **Prevent next time:** after ANY change to the agent loop, tools, or provider adapters, LIVE-TEST it per `system/live-testing.md` BEFORE claiming done. Unit tests verify structure; live traces prove behavior. The DDG import was structurally correct (the import existed) but behaviorally broken (wrong package name). Only a live trace catches that.
+
+---
+## 2026-08-20 — Buffy / deepseek-v4-pro (Session 319)
+
+- **Problem:** The full backend suite reports 1 failure — `tests/core/test_parent_recovery_cap.py::test_non_parent_path_still_capped_at_two` fails with `ModuleNotFoundError: No module named 'tests'`.
+- **Cost:** ~2 min verifying it is pre-existing and unrelated to this session's provider change (so I don't ship a regression and don't "fix" it out of scope).
+- **Cause:** The test (added Session 310) does `from tests.adapters.test_thinking_policy_adr41 import ...`, but `tests/` has no `__init__.py`, so `tests` is not an importable package under the `cd backend && pytest ../tests` invocation.
+- **Workaround / fix:** Confirmed unrelated (my change doesn't touch that file or package layout). Backlogged as B-2026-08-20-19 for a future session.
+- **Prevent next time:** Any new test that imports a sibling test module should use the `adapters`-relative path (as the rest of the suite does), not a `tests.`-prefixed absolute import.
+
+- **Problem:** `code_search` returned `ENOTDIR: not a directory, posix_spawn '/Users/bao/.config/manicode/rg'` several times when a file path (or a compound cwd) was passed.
+- **Cost:** A few seconds each — resolved by scoping searches to a directory (`backend/src/...`) instead of a file.
+- **Cause:** The local Codebuff search wrapper's vendored ripgrep path is stale, and a file path as `cwd` breaks the spawn.
+- **Workaround / fix:** Use a directory `cwd` for code searches (already logged in Sessions 197/200); the repo remains fully navigable that way.
+- **Prevent next time:** Same as Sessions 197/200 — prefer directory-scoped searches; fall back to direct file windows when the wrapper reports a missing vendored rg binary.

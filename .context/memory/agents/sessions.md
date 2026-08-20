@@ -4529,3 +4529,14 @@ program + ADR-22). -->
 - **Outcome:** done — the user's exact transcript failure is fixed and live-verified. The model now recovers from tool failures and produces clean answers without the loop terminating.
 - **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 on iter=1, Medium).
 - **Report:** `.context/memory/reviews/2026-08-20-review-84.md`
+
+---
+## 2026-08-20 — Session 319 — add B.AI provider (ADR-55, config-only)
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (Tison's local machine, /Users/bao/Code/LocalMind) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** Add B.AI (docs.b.ai) as a new provider per the user's research brief ("Target: new provider"). B.AI is a multi-model OpenAI-compatible aggregator (also Anthropic-compatible /v1/messages) with two time-limited promo free models (`DeepSeek-V4-Flash`, `Hy3`).
+- **SHIPPED (config-only, like ADR-9/ZenMux):** (1) `bai` `ProviderConfig` (base URL `https://api.b.ai/v1`, `BAI_API_KEY`/`BAI_MODEL`, `bai_model`, default `DeepSeek-V4-Flash`) + `DeepSeek-V4-Flash: 128000` context window in `openai_compat.py`. (2) `bai_model` field + `"bai": "BAI_API_KEY"` env map in `config.py`. (3) B.AI in the SettingsModal provider picker + `.env.example`. (4) **Consolidation fix:** `models.py` `_model_setting_attr`/`_build_model_setting_map` + `health.py` `model_setting_map` now DERIVE from `PROVIDER_CONFIGS` — fixing a latent ZenMux (ADR-9) drift where models.py's two hardcoded maps silently omitted `zenmux`. (5) New `tests/api/test_provider_registry.py` (4 tests).
+- **Outcome:** done (config-only) — unit-tested, NOT live-verified. Backend 2069 passed / 1 pre-existing unrelated failure (`test_parent_recovery_cap.py` broken test-import, Session 310 → B-2026-08-20-19); ruff clean; frontend tsc + SettingsModal tests green. Live smoke BLOCKED — no B.AI API key on this machine; ADR-55 marked IMPLEMENTED BUT UNTESTED with smoke steps documented.
+- **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), B-2026-08-20-19 (broken test-import, Low), ADR-55 live smoke (blocked on key).
+- **Report:** `.context/memory/reviews/2026-08-20-review-85.md`
+- **Notes:** none

@@ -1,32 +1,36 @@
 # Current Task
 
-**Status:** IDLE — Session 318 (web_fetch redirect crash + tool-failure recovery) shipped + LIVE-VERIFIED.
+**Status:** IDLE — Session 319 (add B.AI provider, ADR-55) shipped; config-only, unit-tested, live smoke BLOCKED on missing key.
 
-## Session 318 outcome — LIVE-VERIFIED
-Two bugs from the user's live transcript fixed + live-tested on z.ai/glm-4.5-flash:
+## Session 319 outcome — B.AI provider added (ADR-55)
 
-### 1. web_fetch crashed on redirects (the "sync close on an async stream" error)
-- **Bug:** `response.close()` (sync) was called on an httpx async response during redirect handling. This raised "Attempted to call a sync close on an async stream" and crashed web_fetch on every redirect (weather.com 301/302s).
-- **Fix:** `await response.aclose()` — the correct async close.
-- **Live-verified:** web_fetch no longer crashes on redirects.
-
-### 2. Loop terminated on recovered tool failure (the "Agent loop terminated: tool_failure" error)
-- **Bug:** `classify_failure()` returned "tool_failure" if ANY tool step failed — even when the model recovered (tried a different URL, succeeded, produced a real answer). The user saw "Agent loop terminated" AFTER getting the weather answer.
-- **Fix:** only classify as tool_failure when the run did NOT produce a final answer (≥ 20 chars). A recovered tool failure with a real answer is a success.
-- **Live-verified:** no `agent_loop_failure` emitted; the user gets the clean answer without the termination error.
-
-### Live trace (z.ai/glm-4.5-flash, Cheptais weather task)
-- **Real answer produced (212 chars):** "The current weather in Cheptais, Bungoma, Kenya is: Partly Cloudy Night, Temperature: Low 10°C, Precipitation: 20%, Wind: NNE 8 km/h..."
-- **No agent_loop_failure** — the "Agent loop terminated" error is GONE.
-- **No web_fetch sync-close error.**
-- Model ran 8 iterations: web_search → web_fetch → synthesized answer.
-- 2066 broad regression pass (0 failures); ruff clean.
+- **Target:** "new provider" — B.AI (docs.b.ai), per the user's research brief.
+- **Shipped (config-only, like ADR-9/ZenMux):**
+  1. `bai` `ProviderConfig` (`https://api.b.ai/v1`, `BAI_API_KEY`/`BAI_MODEL`,
+     `bai_model`, default `DeepSeek-V4-Flash`) + `DeepSeek-V4-Flash: 128000`
+     context window in `openai_compat.py`.
+  2. `bai_model` settings field + `"bai": "BAI_API_KEY"` env map in `config.py`.
+  3. `bai` in the SettingsModal provider picker + `.env.example`.
+  4. **Consolidation fix:** `models.py` `_model_setting_attr` /
+     `_build_model_setting_map` + `health.py` `model_setting_map` now DERIVE
+     from `PROVIDER_CONFIGS` — this fixed a latent ZenMux drift (ADR-9's entry
+     was silently missing from models.py's two hardcoded maps).
+  5. New `tests/api/test_provider_registry.py` (4 tests) locking the no-drift
+     invariant.
+- **Verification:** backend 2069 passed / 1 pre-existing unrelated failure
+  (`test_parent_recovery_cap.py` broken test-import, Session 310 — backlogged
+  as B-2026-08-20-19); ruff clean; frontend tsc + SettingsModal tests green.
+- **NOT live-verified — BLOCKED:** no B.AI API key on this machine. Per the
+  Session 31/33 flaw log, ADR-55 is marked "IMPLEMENTED BUT UNTESTED". Smoke
+  steps documented in ADR-55.
 
 ## Next
+
 - **B-2026-08-20-10 (High):** MiniMax XML interception conflicts with prose-commitment detector.
 - **B-2026-08-20-11 (Medium):** 429 on iter=1 (before any tool) → empty bubble.
-- Continue live-testing every change before claiming done.
+- **B-2026-08-20-19 (Low):** fix broken test-import in `test_parent_recovery_cap.py`.
+- **ADR-55 smoke test:** live-verify B.AI once a key is available.
 
-**Feature:** none (idle)
-**ADR:** ADR-54 (ParentSession), ADR-53 (Parent-only), ADR-52 (warm kernel)
-**Review:** `.context/memory/reviews/2026-08-20-review-84.md` (to be written)
+**Feature:** none (single-session config addition)
+**ADR:** ADR-55 (B.AI provider), ADR-54 (ParentSession), ADR-53 (Parent-only), ADR-52 (warm kernel)
+**Review:** `.context/memory/reviews/2026-08-20-review-85.md`
