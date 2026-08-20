@@ -4376,3 +4376,17 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-6 (prose-commitment detector + re-prompt), B-2026-08-20-3 (Parent maturity), B-2026-08-20-4 (frontend parent_ready), B-2026-08-20-5 (tune compaction).
 - **Report:** `.context/memory/reviews/2026-08-20-review-73.md`
 - **Notes:** live trace used isolated 8765 + /tmp scratch home; no user app on port 8000 touched; no API-key values printed.
+
+---
+## 2026-08-20 — Session 307 — prose-commitment detector + live findings (B-2026-08-20-6)
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** Implement B-2026-08-20-6 — the prose-tool-commitment detector + bounded re-prompt (fix for the Session 306 finding).
+- **SHIPPED (`5e5bbe6`):** `prose_commits_to_tool_action(text)` detector in `core/agent/loop.py` + wired into `_acceptance_gate_at_final_answer`. Fires when: parent-scoped, no tool ran this run, prose contains BOTH a commitment phrase ("let me describe", "I'll use", "I need to call"...) AND a tool-name mention. One-shot bounded (a `[TOOL COMMITMENT]` marker in loop_messages prevents a second nudge). Iteration-capped. 17 new tests (11 detector unit + 6 gate integration covering positive/negative/one-shot/iteration-cap/non-parent/tool-ran cases); 1003 broad regression pass; ruff clean.
+- **LIVE-VERIFIED (z.ai/glm-4.5-flash, 2 traces, isolated 8765):** boot `[parent-kernel] ready`; `/api/health` parent_ready=true; BOTH traces executed real tools end-to-end (trace 1: describe_tool → shell(ls /tmp), 6 iters; trace 2: shell(uname -a) → sysinfo, 6 iters). The detector did NOT fire on either trace because the EXISTING `_is_tool_talk` path (`core/agent/text_tools.py:399`) caught the prose preamble at the initial-buffer stage first (its regex covers use/call/invoke/run verbs). The new detector is a **backstop** for phrases the existing regex misses (notably "describe" — "Let me first describe the shell tool" doesn't match `(use|call|invoke|run)`).
+- **NEW FINDING (B-2026-08-20-7):** both live traces ended with 0-char final answers despite real tool execution. The recovery cap (B-2026-08-18-11's rescue, 2 per turn) was hit — the model ran tools but couldn't synthesize a final answer. Pre-existing limitation, NOT related to B-2026-08-20-6. Backlogged.
+- **HONEST OUTCOME:** B-2026-08-20-6 implemented + unit-verified (17 tests), NOT live-verified on the specific prose-preamble pattern (the existing path handled it first). The detector adds value as a backstop; a future session could extend the existing `_is_tool_talk` regex to include "describe" (B-2026-08-20-8) for earlier detection.
+- **Outcome:** done — detector shipped + unit-tested; live traces proved the model CAN execute tools on z.ai/glm-4.5-flash; new finding B-2026-08-20-7 backlogged.
+- **Open items:** B-2026-08-20-7 (empty-final-answer after recovery-cap exhaustion), B-2026-08-20-8 (extend `_is_tool_talk` regex to include "describe"), B-2026-08-20-3 (Parent maturity), B-2026-08-20-4 (frontend parent_ready), B-2026-08-20-5 (tune compaction).
+- **Report:** `.context/memory/reviews/2026-08-20-review-74.md`
+- **Notes:** live traces used isolated 8765 + /tmp scratch home; no user app on port 8000 touched; no API-key values printed.
