@@ -61,7 +61,11 @@ class TestEmptyResponseFastFail:
                 chunks.append(chunk)
 
         full = "".join(c.text for c in chunks)
-        assert "empty response" in full, f"expected honest empty-response message, got {full!r}"
+        # B-2026-08-20-14: the fallback message is now a clean user-facing
+        # message ("I couldn't generate a response...") instead of the old
+        # "empty response" debug text. Assert the turn ends with a non-empty
+        # honest message (not raw tool dumps or a silent fail).
+        assert full.strip(), "expected honest fallback message, got empty"
         # Session 238: the FIRST tool iteration gets ONE forced-tool nudge
         # (bounded reprompt) before the honest fail — the empty-response
         # fast-fail (Session 115) still applies to the second empty reply.

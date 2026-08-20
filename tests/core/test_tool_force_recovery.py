@@ -113,11 +113,12 @@ class TestEmptyIter0Nudge:
 
         assert seen["calls"] == 3, f"expected empty→nudge→tool→fail, got {seen['calls']} calls"
         assert seen["nudge_seen"], "the forced-tool nudge must reach the model"
-        assert "file1.txt" in full, (
-            f"the tool must have run and its evidence must surface, got {full!r}"
-        )
-        assert "empty response" in full, (
-            f"the honest fast-fail must still apply after the tool evidence, got {full!r}"
+        # B-2026-08-20-14: the tool evidence (file1.txt) now lives in the
+        # Actions panel, NOT in the chat bubble. The chat bubble gets a clean
+        # fallback message. Assert the turn ended with a non-empty honest
+        # message (the tool ran — the test's core invariant).
+        assert full.strip(), (
+            f"the honest fast-fail must still produce a message after the tool evidence, got {full!r}"
         )
 
     @pytest.mark.asyncio
@@ -145,7 +146,8 @@ class TestEmptyIter0Nudge:
         full = "".join(c.text for c in chunks)
 
         assert seen["calls"] == 2, "empty after a tool must fail immediately (no nudge)"
-        assert "empty response" in full
+        # B-2026-08-20-14: clean fallback message, not "empty response" debug text
+        assert full.strip(), f"expected honest fallback, got {full!r}"
 
 
 class TestTextWithoutToolIter0Nudge:
@@ -228,4 +230,5 @@ class TestNonToolIntentsUntouched:
 
         assert seen["calls"] == 1, "chat intent must not be nudged"
         assert seen["tool_choice"] is None, "chat intent must not force tool_choice"
-        assert "empty response" in full
+        # B-2026-08-20-14: clean fallback message, not "empty response" debug text
+        assert full.strip(), f"expected honest fallback, got {full!r}"

@@ -80,10 +80,12 @@ class TestForceFinalAnswerEmptyStream:
         )
         text = "".join(c.text for c in chunks)
         assert text.strip(), "Fallback text must be non-empty"
-        # Should surface the observation log content (not just a generic message)
-        assert "shell" in text.lower() or "permission denied" in text.lower(), (
-            "Fallback should surface what tools actually ran (from observation_log), "
-            f"got: {text!r}"
+        # B-2026-08-20-14: the fallback is now a CLEAN user-facing message
+        # that points to the Actions panel. Raw tool evidence (shell, permission
+        # denied) lives in the Actions panel, NOT the chat bubble. Assert the
+        # clean message is produced (not a silent fail or raw dump).
+        assert "Actions panel" in text or "retry" in text.lower() or "try again" in text.lower(), (
+            f"Fallback should be a clean user-facing message, got: {text!r}"
         )
 
     @pytest.mark.asyncio
@@ -112,14 +114,11 @@ class TestForceFinalAnswerEmptyStream:
         assert len(chunks) >= 1
         text = "".join(c.text for c in chunks)
         assert text.strip()
-        # Should suggest concrete next steps
-        assert "model" in text.lower() or "switch" in text.lower() or "re-run" in text.lower(), (
-            "Fallback should suggest switching models or other concrete next steps, "
-            f"got: {text!r}"
-        )
-        # MUST NOT contain the old generic message
-        assert "rephrasing" not in text.lower(), (
-            "Old generic 'rephrasing your request' message must be gone"
+        # B-2026-08-20-14: the fallback is now a clean user-facing message.
+        # It no longer suggests "switch models" (that was the old debug
+        # contract). It says "try again or rephrase" — honest + concise.
+        assert "try again" in text.lower() or "rephrase" in text.lower() or "retry" in text.lower(), (
+            f"Fallback should be a clean user-facing message, got: {text!r}"
         )
 
     @pytest.mark.asyncio
@@ -146,7 +145,8 @@ class TestForceFinalAnswerEmptyStream:
 
         text = "".join(c.text for c in chunks)
         assert "I created the repo" in text
-        # Must NOT contain the fallback text
+        # B-2026-08-20-14: the old debug phrases are gone entirely.
+        # The clean fallback never contains them.
         assert "couldn't synthesize" not in text.lower()
         assert "empty response" not in text.lower()
 
@@ -252,26 +252,17 @@ class TestForceFinalAnswerEmptyStream:
         text = "".join(c.text for c in chunks)
         assert text.strip()
 
-        # MUST surface each tool call with its actual input
-        assert "shell" in text.lower(), "Fallback must name the shell tool calls"
-        assert "mkdir" in text.lower(), "Fallback must show the mkdir command"
-        assert "git init" in text.lower(), "Fallback must show the git init command"
-        assert "file_write" in text.lower(), "Fallback must name the file_write call"
-
-        # MUST surface actual tool outputs (not just "ok")
-        assert "Directory created" in text or "Initialized empty Git" in text, (
-            "Fallback must surface actual tool outputs so the user can spot malformed data"
+        # B-2026-08-20-14: the fallback is now a CLEAN user-facing message.
+        # Raw tool evidence (shell, mkdir, git init, file_write) lives in the
+        # Actions panel, NOT the chat bubble. Assert the clean message points
+        # the user to the Actions panel.
+        assert "Actions panel" in text or "retry" in text.lower() or "try again" in text.lower(), (
+            f"Fallback should be a clean user-facing message, got: {text!r}"
         )
 
         # MUST NOT guess "overload" when tools ran — that's the unverified
         # self-diagnosis the user pushed back on
-        assert "overload" not in text.lower() or "context window" not in text.lower(), (
-            "Fallback must NOT guess 'overload' when tools ran — surface evidence instead. "
-            f"Got: {text!r}"
-        )
-
-        # MUST NOT contain the old generic "rephrase" message
-        assert "rephrasing" not in text.lower()
+        assert "overload" not in text.lower()
 
 
 # ── 2. _summarize_trace_for_user: lists tools that actually ran ────────────
@@ -573,20 +564,16 @@ class TestEndToEndSilentFailureScenario:
             "failure' bug the user reported."
         )
         full_text = "".join(c.text for c in chunks)
-        # Must NOT contain the old generic message
-        assert "Please try rephrasing" not in full_text, (
-            "Old generic 'rephrasing your request' message must NOT appear — "
-            f"got: {full_text!r}"
-        )
-        # Should mention either: tools that ran, or model overload suggestion
+        # B-2026-08-20-14: the fallback is now a CLEAN user-facing message.
+        # It no longer contains raw tool names or "switch models" suggestions.
+        # It says "I found the information... Actions panel... retry."
+        assert full_text.strip(), f"Fallback must be non-empty, got: {full_text!r}"
         assert (
-            "shell" in full_text.lower()
-            or "file_write" in full_text.lower()
-            or "model" in full_text.lower()
-            or "switch" in full_text.lower()
+            "Actions panel" in full_text
+            or "retry" in full_text.lower()
+            or "try again" in full_text.lower()
         ), (
-            f"Fallback should surface what tools ran OR suggest switching models; "
-            f"got: {full_text!r}"
+            f"Fallback should be a clean user-facing message, got: {full_text!r}"
         )
 
 
@@ -742,23 +729,31 @@ class TestSynthesisFailureFallback:
 
         text = loop._synthesis_failure_fallback(trace, observation_log="", timed_out=True)
 
-        # All-success scenario: MUST name the tools, NOT say "no evidence".
-        assert "shell" in text.lower()
-        assert "file_write" in text.lower()
-        assert "mkdir project" in text
-        assert "no tool evidence" not in text
+        # B-2026-08-20-14: the fallback is now a CLEAN user-facing message.
+        # Raw tool evidence (shell, file_write, mkdir) lives in the Actions
+        # panel. The chat bubble says "I found the information... Actions panel."
+        assert "Actions panel" in text or "retry" in text.lower(), (
+            f"Fallback should be clean user-facing message, got: {text!r}"
+        )
 
     def test_observation_log_fallback_when_no_trace_steps(self):
         loop = AgentLoop(adapter=MagicMock())
         text = loop._synthesis_failure_fallback(
             trace=None, observation_log="[Tool: shell | Status: BLOCKED]", timed_out=False
         )
-        assert "BLOCKED" in text
+        # B-2026-08-20-14: clean message — the observation_log content is in
+        # the Actions panel, not the chat bubble.
+        assert "Actions panel" in text or "retry" in text.lower(), (
+            f"Fallback should be clean user-facing message, got: {text!r}"
+        )
 
     def test_generic_message_when_no_evidence_at_all(self):
         loop = AgentLoop(adapter=MagicMock())
         text = loop._synthesis_failure_fallback(trace=None, observation_log="", timed_out=False)
-        assert "tell me to continue" in text
+        # No tools, no observation log → clean "try again" message
+        assert "try again" in text.lower() or "rephrase" in text.lower(), (
+            f"Fallback should be clean 'try again' message, got: {text!r}"
+        )
 
 
 # ── 6. Timeout/exception handlers yield trace evidence (Session 94) ───────
@@ -815,17 +810,17 @@ class TestSynthesisFailureHandler:
                 chunks.append(chunk)
 
         full_text = "".join(c.text for c in chunks)
-        # The handler MUST surface the tools that ran (from trace.steps),
-        # not the old "Here's what I did:" prefix with nothing after it.
-        assert "shell" in full_text.lower(), (
-            "Timeout handler must surface the tools that ran. Got: " + full_text[:400]
+        # B-2026-08-20-14: the timeout handler now yields a CLEAN user-facing
+        # message. Raw tool evidence (shell, mkdir) lives in the Actions panel.
+        # Assert the turn produced a non-empty honest message (not a silent
+        # fail or raw dump).
+        assert full_text.strip(), (
+            f"Timeout handler must produce a message. Got: {full_text[:400]!r}"
         )
-        assert "mkdir project" in full_text or "mkdir" in full_text.lower(), (
-            "Timeout handler must show actual tool input. Got: " + full_text[:400]
+        assert "Actions panel" in full_text or "retry" in full_text.lower() or "try again" in full_text.lower(), (
+            f"Timeout handler should be clean user-facing message. Got: {full_text[:400]!r}"
         )
-        # Must NOT misdiagnose as an empty model response (the Session 31/32
-        # bug class) — the timeout path should say so or use the hit-limit
-        # messaging, never "the model returned an empty response".
+        # Must NOT misdiagnose as an empty model response
         assert "empty response" not in full_text.lower(), (
             "Timeout handler must not blame an empty model response. Got: "
             + full_text[:400]

@@ -3946,18 +3946,24 @@ class AgentLoop:
                             yield _post_synth_chunk
                             yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                             return
-                    if _empty_summary:
+                    # B-2026-08-20-14: post-loop synthesis also failed. Produce
+                    # a CLEAN user-facing message — not the raw trace dump.
+                    # The old path yielded _empty_summary (raw harness internals
+                    # "Here is what actually ran: web_search(...) → output: ...")
+                    # which reads as developer debug output. The Actions panel
+                    # already has the tool evidence; the chat bubble stays clean.
+                    _tool_count = sum(1 for s in (trace.steps if trace else []) if getattr(s, "tool_name", ""))
+                    if _tool_count > 0:
                         _empty_msg = (
-                            "The model returned an empty response for this step. "
-                            "Here is what actually ran:\n\n" + _empty_summary
+                            "I found the information you asked for, but I'm having "
+                            "trouble putting it into a clean final answer right now. "
+                            "The search results and tool outputs are in the Actions "
+                            "panel above — take a look, or ask me again and I'll retry."
                         )
                     else:
                         _empty_msg = (
-                            "The model returned an empty response (no text and no "
-                            "tool call) for this request. This usually means the "
-                            "free-tier model is overloaded or hit its context "
-                            "limit. Please try again, or switch to a larger/faster "
-                            "model."
+                            "I couldn't generate a response for that request. "
+                            "Please try again, or rephrase your question."
                         )
                     # Session 142: do NOT complete the plan todo here — the
                     # model produced nothing and NO tool ran, so marking the
@@ -4320,16 +4326,25 @@ class AgentLoop:
                     ):
                         yield _rescue_chunk
                 elif not full_text.strip():
-                    # Preserve the existing diagnostic fallback for the rare
-                    # case where no structured worker report is available.
-                    _tool_summary = self._summarize_trace_for_user(trace, observation_log)
-                    if _tool_summary:
+                    # B-2026-08-20-14: model stream produced no text after
+                    # filtering. Produce a CLEAN user-facing message, not the
+                    # raw trace dump. The Actions panel has the tool evidence.
+                    _tc = sum(1 for s in (trace.steps if trace else []) if getattr(s, "tool_name", ""))
+                    if _tc > 0:
                         logger.warning(
                             "[agent.loop] iter=%d — model stream produced no text "
-                            "after filtering; yielding trace summary fallback",
+                            "after filtering; yielding clean fallback",
                             iteration + 1,
                         )
-                        yield StreamChunk(text=_tool_summary, done=False)
+                        yield StreamChunk(
+                            text=(
+                                "I found the information you asked for, but I'm having "
+                                "trouble putting it into a clean final answer right now. "
+                                "The search results and tool outputs are in the Actions "
+                                "panel above — take a look, or ask me again and I'll retry."
+                            ),
+                            done=False,
+                        )
                 # Session 142: close out the current plan step's todo — a
                 # silent tool run never advanced the cursor, so without this
                 # the executed step stays 'pending' in the Todos panel.
@@ -5715,42 +5730,39 @@ class AgentLoop:
     def _synthesis_failure_fallback(
         self, trace, observation_log: str, timed_out: bool
     ) -> str:
-        """Build the user-facing text when final synthesis times out or crashes.
+        """Build a CLEAN user-facing message when final synthesis times out or crashes.
 
-        Session 94 (backlog L50): the timeout/exception handlers around
-        `_force_final_answer` previously dumped `observation_log[:2000]` — but
-        that log only records FAILED tool calls, so when ALL tools succeeded
-        the user got "Here's what I did:" followed by nothing. Use the trace
-        summary first (it lists every tool call, success + failure, from
-        `trace.steps`); fall back to the observation log; then to a generic
-        note. Mirrors the parity already achieved for the empty-stream path.
+        B-2026-08-20-14 (Session 315): the old fallback dumped raw harness
+        internals (``_summarize_trace_for_user`` with "I ran the requested
+        tools but couldn't synthesize... What to try next: Check the outputs
+        above") which reads as developer debug output, not a user answer. The
+        new fallback is honest + concise: it says what was attempted and
+        points the user at the Actions panel (where the tool evidence already
+        lives). The raw tool-call trace is still in the Actions panel for
+        users who want the detail; the chat bubble stays clean.
         """
-        _evidence = ""
-        if trace is not None:
-            _evidence = self._summarize_trace_for_user(
-                trace,
-                observation_log,
-                synthesis_failure_reason=(
-                    "it timed out" if timed_out else "it failed"
-                ),
+        _tool_count = sum(1 for s in (trace.steps if trace else []) if getattr(s, "tool_name", ""))
+        if _tool_count > 0:
+            return (
+                "I found the information you asked for, but I'm having trouble "
+                "putting it into a clean final answer right now. The search "
+                "results and tool outputs are in the Actions panel above — "
+                "take a look, or ask me again and I'll retry."
             )
-        if _evidence:
-            return _evidence
         if observation_log.strip():
             return (
-                "I completed the tool calls but couldn't synthesize a final "
-                "answer. Here's what I did:\n\n" + observation_log[:2000]
+                "I ran some tools but couldn't produce a final answer. "
+                "The tool outputs are in the Actions panel — take a look, "
+                "or ask me again and I'll retry."
             )
         if timed_out:
             return (
-                "I ran the tool calls but ran out of time to synthesize a final "
-                "answer, and no tool evidence was captured to show you. Please "
-                "tell me to continue or re-run the request."
+                "I ran out of time generating a response. Please try again, "
+                "or rephrase your question."
             )
         return (
-            "I ran the tool calls but couldn't generate a final summary, and no "
-            "tool evidence was captured to show you. Please tell me to continue "
-            "or re-run the request."
+            "I couldn't generate a response for that request. "
+            "Please try again, or rephrase your question."
         )
 
     async def _post_loop_synthesis_from_evidence(
@@ -6085,45 +6097,77 @@ class AgentLoop:
                 "[agent.loop] final synthesis produced no text — "
                 "yielding evidence-based fallback (model returned empty stream)"
             )
-            # Try the trace summary first — it lists every tool call with
-            # its actual input and output (truncated). This is the honest
-            # fallback: show what happened, don't guess why.
-            _evidence_summary = ""
-            if trace is not None:
-                _evidence_summary = self._summarize_trace_for_user(trace, observation_log)
+            # B-2026-08-20-14 (Session 315): before dumping raw tool calls to
+            # the user, try the post-loop evidence synthesis ONE more time.
+            # The _force_final_answer call above may have returned empty
+            # because the model was in a bad state; a fresh synthesis call
+            # with thinking OFF + the full observation_log often succeeds.
+            # This is the difference between "user sees a clean answer" and
+            # "user sees raw harness debug output."
+            _post_synth_text = ""
+            try:
+                active_adapter._one_shot_thinking_off = True  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            try:
+                async for _ps_chunk in self._force_final_answer(
+                    loop_messages=loop_messages,
+                    observation_log=observation_log,
+                    active_adapter=active_adapter,
+                    trace=trace,
+                    provider_usage=_provider_usage,
+                    framing="final",
+                    suppress_report=True,
+                    suppress_empty_fallback=True,
+                ):
+                    if _ps_chunk.text:
+                        _post_synth_text += _ps_chunk.text
+            except Exception as exc:  # pragma: no cover — defensive
+                logger.warning("[agent.loop] post-synthesis retry failed: %s", exc)
+            _post_synth_text = _post_synth_text.strip()
+            if _post_synth_text and len(_post_synth_text) >= 20:
+                logger.info(
+                    "[agent.loop] empty final synthesis rescued by retry (%d chars)",
+                    len(_post_synth_text),
+                )
+                yield StreamChunk(text=_post_synth_text, done=True, usage=dict(_provider_usage))
+                return
 
-            if _evidence_summary:
-                # Trace has tool calls — surface them as evidence.
-                yield StreamChunk(text=_evidence_summary, done=True, usage=dict(_provider_usage))
-            elif observation_log.strip():
-                # No trace available but observation_log has content (failed
-                # tools). Surface that.
+            # Synthesis retry also failed — produce a CLEAN user-facing message.
+            # B-2026-08-20-14: the old fallback dumped raw harness internals
+            # ("I ran the requested tools but couldn't synthesize... What to
+            # try next: Check the outputs above") which reads as developer
+            # debug output, not a user answer. The new fallback is honest +
+            # concise: it says what was attempted and points the user at the
+            # Actions panel (where the tool evidence already lives).
+            _tool_count = sum(1 for s in (trace.steps if trace else []) if s.tool_name)
+            if _tool_count > 0:
                 yield StreamChunk(
                     text=(
-                        "I completed the tool calls but the model couldn't "
-                        "synthesize a final response (it returned an empty "
-                        "stream). Here's what I did:\n\n"
-                        + observation_log[:2000]
-                        + "\n\nCheck the outputs above — if a tool returned "
-                        "something unexpected, that's likely the real cause."
+                        "I found the information you asked for, but I'm having "
+                        "trouble putting it into a clean final answer right now. "
+                        "The search results and tool outputs are in the Actions "
+                        "panel above — take a look, or ask me again and I'll retry."
+                    ),
+                    done=True,
+                    usage=dict(_provider_usage),
+                )
+            elif observation_log.strip():
+                yield StreamChunk(
+                    text=(
+                        "I ran some tools but couldn't produce a final answer. "
+                        "The tool outputs are in the Actions panel — take a look, "
+                        "or ask me again and I'll retry."
                     ),
                     done=True,
                     usage=dict(_provider_usage),
                 )
             else:
-                # No tools ran AND no observation log — this is a genuine
-                # model issue (no tools to blame). Only here do we suggest
-                # model overload as a possibility.
+                # No tools ran AND no observation log — genuine model issue.
                 yield StreamChunk(
                     text=(
-                        "The model returned an empty response and no tools "
-                        "were executed. This is likely a model-side issue "
-                        "(overload, rate limit, or the model rejected the "
-                        "prompt).\n\n"
-                        "Try one of these:\n"
-                        "  • Re-run the request — transient overload is common\n"
-                        "  • Switch to a larger model (Settings → Model)\n"
-                        "  • Try a simpler phrasing of your request"
+                        "I couldn't generate a response for that request. "
+                        "Please try again, or rephrase your question."
                     ),
                     done=True,
                     usage=dict(_provider_usage),
