@@ -10,13 +10,14 @@
 
 # Parent Agent — Complete Functional Architecture & Development Specification
 
-> **Status in LocalMind (decided 2026-08-18, ADR-48):** this spec is LocalMind's
-> standing **quality bar**, *not* a build roadmap. LocalMind has consciously
-> advanced past the spec's single-agent-first phase — the multi-agent runtime is
-> already live and stays first-class (ADR-48, option (c) accept-and-harden). Read
-> §40 (the 12 quality criteria) and §43 (success conditions) as the bar the agent
-> is held to; read §36's "specialists/delegation out of scope this phase" as
-> **superseded by lived reality** (kept verbatim below for provenance). See the
+> **Status in LocalMind (amended 2026-08-20, ADR-53):** this user-authored spec
+> defines the Parent's quality bar and current single-agent target. LocalMind is
+> **Parent-only right now**: the Parent is the sole active agent, and child
+> agents, specialists, delegation, parallel delegation, and inheritance are out
+> of current scope. ADR-48's earlier accept-and-harden decision is historical and
+> is superseded by ADR-53 for active architecture. Read §40 (the 12 quality
+> criteria) and §43 (success conditions) as the Parent's maturity bar; §36's
+> single-agent-first boundary is authoritative for current work. See the
 > Reconciliation note next.
 
 ---
@@ -34,7 +35,7 @@ in its root-agent role."
 
 ---
 
-## Reconciliation with the current LocalMind build (2026-08-18, Session 297)
+## Reconciliation with the current LocalMind build (amended 2026-08-20, Session 303)
 
 This spec defines a **single-agent-first** program: the Parent Agent is the
 entire autonomous intelligence layer for now, and **specialist agents,
@@ -57,18 +58,14 @@ Two facts about the current repo matter when reading this:
    answer — the spec's "don't fake autonomy / don't drag into a loop it didn't
    ask for" principle).
 
-2. **Delegation is already built — ahead of this spec's roadmap.** The codebase
-   ships `backend/src/core/agent/delegation.py`, `tools/delegate.py`, and
-   `tools/delegate_parallel.py` (262 references), and `docs/ARCHITECTURE.md`
-   advertises `delegate / delegate_parallel → isolated specialized child agents`.
-   Per this spec (§36) those capabilities belong to a **later** phase. This is a
-   genuine divergence, not a doc error. It is recorded as **ADR-47** and flagged
-   as a backlog item for the user to steer — the decision to make is whether the
-   existing delegation surface should be (a) kept dormant/unadvertised until the
-   single-agent foundation is proven, or (b) removed to match the spec, or
-   (c) treated as the point where LocalMind consciously moves past this phase.
-   **No delegation code was changed by the documentation session** that captured
-   this spec.
+2. **The repository contains parked delegation code, but it is not current
+   architecture.** The codebase still has `backend/src/core/agent/delegation.py`,
+   delegation tools, and specialist directories for compatibility/history. Per
+   the user's Session 303 decision and ADR-53, those surfaces are dormant/parked:
+   the Parent must not route new work through them, and no child or delegation
+   capability should be extended until the Parent maturity bar is proven and the
+   user explicitly reopens that scope. This reconciliation updates the status
+   header only; the user-authored specification body below remains verbatim.
 
 Everything from here down is the author's specification, verbatim.
 

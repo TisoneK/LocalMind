@@ -1,19 +1,19 @@
 # LocalMind — Architecture
 
-> **Updated:** 2026-08-14 — parent-agent runtime migration
+> **Updated:** 2026-08-20 — Parent-only scope amendment (ADR-53)
 
 > **Naming:** the agent is **LocalMind**; "parent agent" / "Parent Agent" is its
 > architectural *role* (the root agent), not its name — the code says so directly
 > (`agents/parent/context_builder.py`: "You are the user-facing LocalMind agent").
 >
-> **Architecture status (decided 2026-08-18, ADR-48):** LocalMind has accepted it
-> is **past** the single-agent-first phase — the multi-agent runtime below
-> (`delegate / delegate_parallel → child agents`, 11 specialists) is **first-class
-> and endorsed**, not dormant. The Parent Agent spec
-> [`docs/parent-agent-spec.md`](parent-agent-spec.md) is retained as the standing
-> **quality bar** (§40 / §43), not a build roadmap. Remaining agent work is
-> measured against §40 (open hardening: efficiency, tool-selection, recovery,
-> grounding — see the backlog), not against "is it still single-agent."
+> **Architecture status (decided 2026-08-20, ADR-53):** LocalMind is
+> **Parent-only right now**. The Parent is the sole active agent and owns the
+> kernel, session, turn context, tools, planning, execution, observation,
+> verification, recovery, and final synthesis. Child agents, specialist agents,
+> delegation, parallel delegation, and inheritance are not part of the current
+> architecture. Existing multi-agent code remains parked compatibility residue;
+> it is not an active routing or extension target. ADR-8 and ADR-48 remain
+> historical records and are superseded by ADR-53 for current scope.
 
 ## Core model
 
@@ -23,9 +23,7 @@ the **LocalMind parent agent** owns the user objective and runs the closed loop:
 ```text
 surface → API/SSE → AgentRuntime → ParentAgent → AgentLoop
                                       │
-                                      ├─ scoped tools
-                                      ├─ delegate / delegate_parallel
-                                      │       → isolated specialized child agents
+                                      ├─ all Parent-owned tools
                                       ├─ observe evidence
                                       ├─ evaluate acceptance criteria
                                       ├─ replan when evidence is incomplete
@@ -54,29 +52,19 @@ The runtime does **not** classify the request or execute a domain-specific tool
 branch. `client_intent` is recorded only as an ignored UI hint; the parent owns
 tool selection.
 
-## Parent and child agents
+## Parent-only runtime
 
-`agents/parent/` is LocalMind's user-facing coordinator. It is not a copy of
-another product. It provides the parent persona, complete tool allowlist, and
-acceptance-gate stop condition.
+`agents/parent/` is LocalMind's sole active agent and user-facing identity. It
+owns the complete tool allowlist, session context, acceptance gate, execution
+loop, recovery, and final answer. The `ParentKernel` is boot-owned operating
+context for this one Parent; it is not a factory for other agents or an
+inheritance mechanism.
 
-Specialized agents remain directories discovered by `agents/registry.py`:
-
-| Agent | Role | Typical scoped tools |
-|---|---|---|
-| Coding | Build, edit, test, and inspect code | shell, file, code, git, process |
-| Research | Gather and compare external evidence | web search/fetch |
-| Browser | Interact with browser sessions | browse |
-| Verifier | Reproduce and verify outcomes | shell, tests, git |
-| Reviewer | Read-only quality review | file, git, shell |
-| Debugger | Isolate root causes | file, git, shell, diagnostics |
-| Analyst | Clarify requirements and plans | read-only analysis |
-| Direct | Child-only single model call | none |
-
-A child starts with its own system prompt and the exact self-contained task
-passed by the parent. It does not inherit the user's conversation implicitly.
-Child reports return as internal tool results to the parent. Child progress can
-be observed, but raw child tool output is filtered at the SSE boundary.
+Other agent directories, registry entries, and delegation tools may remain in
+the repository for compatibility, but they are parked and out of the current
+architecture. The Parent must not route work to them or extend them. Future
+child/specialist work requires a separate explicit user decision after the
+Parent maturity bar is proven.
 
 ## Parent loop contract
 
@@ -104,8 +92,10 @@ the parent loop. The parent has the complete allowlist, including:
 - shell, code execution, process management, and structured git
 - file read/write/edit and deterministic parsers (CSV, JSON, SQL)
 - memory, system observation, calculator, diagnostics
-- delegation and parallel delegation
-- plans, subgoals, skills, edit proposals, and best-of-N edits
+- plans, subgoals, skills, and edit proposals
+
+Delegation-related implementations remain parked compatibility code and are
+not exposed as the current Parent architecture.
 
 Write-capable tools retain the universal **check before acting** safety rule.
 The tool result is appended to the parent loop's internal context; it is not
@@ -134,8 +124,8 @@ but they are not imported by the request runtime.
 FastAPI streams `StreamChunk` and structured observation events through SSE.
 The CLI calls the same `Engine` compatibility export, which is now an alias for
 `AgentRuntime`. The frontend never needs to know whether a tool was executed by
-the parent or a delegated child; it receives tagged progress and the parent's
-synthesized answer.
+the Parent; it receives the Parent's tagged progress and synthesized answer.
+Parked child/delegation code is not part of the active request lifecycle.
 
 Adapters implement the model boundary (`chat`, `chat_with_tools`, and streaming
 usage normalization). The runtime resolves the configured adapter once per turn
@@ -148,20 +138,20 @@ the API or runtime.
 backend/src/
 ├── agents/
 │   ├── parent/                 LocalMind user-facing parent agent
-│   ├── coding/ research/ browser/ direct/
-│   ├── verifier/ reviewer/ debugger/ analyst/
+│   ├── coding/ research/ browser/ direct/  (parked compatibility)
+│   ├── verifier/ reviewer/ debugger/ analyst/ (parked compatibility)
 │   ├── base_agent.py           shared loop wiring
-│   └── registry.py             directory discovery
+│   └── registry.py             legacy directory registry
 ├── core/
 │   ├── agent_runtime.py        sole request execution boundary
 │   ├── agent/loop.py           plan/act/observe/evaluate loop
-│   ├── agent/delegation.py     isolated parent/child contracts
+│   ├── agent/delegation.py     parked compatibility contracts
 │   ├── context_builder.py      bounded context assembly
 │   ├── safety_gate.py          safety checks
 │   ├── observation.py          workspace/runtime snapshots
 │   ├── memory.py               semantic memory
 │   └── engine/                 lifecycle service modules only
-├── tools/                      native parent/child tool implementations
+├── tools/                      native Parent tool implementations
 ├── adapters/                   Ollama/OpenAI-compatible model adapters
 ├── api/                        FastAPI routes and SSE bridge
 └── storage/                    SQLite history and vector persistence
@@ -171,11 +161,11 @@ backend/src/
 
 1. Add a tool as a registered native function; do not add a route-time tool
    branch.
-2. Add a specialized agent as a directory with `agent.py`, context, stop
-   condition, scoped tools, and playbook/persona when appropriate.
-3. Make the parent delegate a bounded, self-contained task when another domain
-   is needed; pass exact scope, constraints, and output contract.
-4. Keep child output internal and preserve only tagged progress at presentation
-   boundaries.
+2. Keep all active behavior in the Parent; do not add or route through child
+   agents, specialist agents, delegation, parallel delegation, or inheritance.
+3. Grow Parent-owned session memory, execution structure, verification,
+   recovery, and escalation before reconsidering any child boundary.
+4. Treat existing child/delegation modules as parked compatibility code unless
+   the user explicitly reopens that scope.
 5. Verify every new loop path with tests for evidence evaluation, silent
    fallback, abort/steer threading, and SSE visibility.
