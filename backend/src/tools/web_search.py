@@ -184,7 +184,14 @@ async def _search_ddg(query: str) -> tuple[list[dict], str, str]:
 
     for attempt in range(max_attempts):
         try:
-            from ddgs import DDGS
+            # B-2026-08-20-16: the duckduckgo-search package renamed its import.
+            # Prefer the NEW `ddgs` package (the old `duckduckgo_search` is
+            # deprecated and returns 0 results). Fall back to the old name
+            # only if the new one isn't installed.
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS
 
             safe_query = query.encode("utf-8", errors="replace").decode("utf-8")
 

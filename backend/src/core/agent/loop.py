@@ -3582,18 +3582,60 @@ class AgentLoop:
                                 provider_error_code=_normalized_stream_error.get("code", "error"),
                                 evidence_preserved=True,
                             )
-                        _evidence_summary = self._summarize_trace_for_user(
-                            trace,
-                            observation_log,
-                            synthesis_failure_reason=(
-                                "the provider rate-limited the final synthesis call"
-                                if _normalized_stream_error.get("code") == "rate_limit"
-                                else "the provider failed the final synthesis call"
-                            ),
+                        # B-2026-08-20-15 (Session 317): FIRST try deterministic
+                        # extraction from the evidence already in hand — zero
+                        # LLM calls. The provider rate-limited the synthesis,
+                        # but the tool observations (search results, shell
+                        # output) already contain the answer. Extract it
+                        # directly instead of dumping raw harness internals.
+                        _user_msg = _user_message_text(loop_messages) or ""
+                        _extracted = self._extract_answer_from_evidence(
+                            reasoning_buffer=_reasoning_buffer,
+                            observation_log=observation_log,
+                            trace=trace,
+                            user_message=_user_msg,
                         )
-                        if _evidence_summary:
+                        if _extracted:
+                            logger.info(
+                                "[agent.loop] provider-failure rescued by evidence "
+                                "extraction (zero-LLM, %d chars)", len(_extracted),
+                            )
+                            if _obs:
+                                _obs.emit(
+                                    "evidence_extracted",
+                                    intent=intent.value,
+                                    chars=len(_extracted),
+                                    source="provider_failure_recovery",
+                                )
                             yield StreamChunk(
-                                text=_evidence_summary,
+                                text=_extracted,
+                                done=False,
+                                usage=dict(_provider_usage),
+                            )
+                            yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
+                            return
+                        # Extraction failed — yield a CLEAN user-facing message
+                        # (B-2026-08-20-14), NOT the raw _summarize_trace_for_user
+                        # dump. The tool evidence is in the Actions panel.
+                        _tool_count = sum(1 for s in (trace.steps if trace else []) if getattr(s, "tool_name", ""))
+                        if _tool_count > 0:
+                            yield StreamChunk(
+                                text=(
+                                    "I found the information you asked for, but the "
+                                    "model provider rate-limited my final synthesis "
+                                    "call. The search results and tool outputs are in "
+                                    "the Actions panel above — take a look, or ask me "
+                                    "again and I'll retry."
+                                ),
+                                done=False,
+                                usage=dict(_provider_usage),
+                            )
+                        else:
+                            yield StreamChunk(
+                                text=(
+                                    "The model provider rate-limited my request. "
+                                    "Please try again in a moment."
+                                ),
                                 done=False,
                                 usage=dict(_provider_usage),
                             )
@@ -5856,13 +5898,22 @@ class AgentLoop:
             for ent in entities:
                 if ent in sent_lower:
                     score += 2
-            # Factual marker match
+            # Factual marker match — REQUIRED. A sentence without a factual
+            # marker is not an answer, even if it mentions the entity.
+            # ("Let me try a different approach" mentions nothing factual.)
+            has_factual = False
             for marker in factual_markers:
                 if re.search(marker, sent_lower):
                     score += 1
+                    has_factual = True
+            if not has_factual:
+                continue  # skip sentences with no factual content
             # Penalize meta-reasoning ("I should", "I need to", "let me")
-            if any(p in sent_lower for p in ("i should", "i need to", "let me", "i'll ", "i will ")):
-                score -= 3
+            if any(p in sent_lower for p in (
+                "i should", "i need to", "let me", "i'll ",
+                "i will ", "try a different",
+            )):
+                score -= 5
             if score > best_score and score >= 2:
                 best_score = score
                 best = sent.strip()
