@@ -585,6 +585,93 @@ def parent_completion_floor_note(trace) -> Optional[str]:
     return None
 
 
+# B-2026-08-20-6 — prose tool-action commitment detector (Session 307).
+# Phrases that indicate the model is *preamble-ing* a tool call rather than
+# answering. Matched case-insensitively as substrings. Scoped to iterations
+# where no tool_call was emitted, so a legitimate prose answer that happens
+# to contain "tool" is NOT false-triggered (the no-tool_call guard is the
+# real predicate; these phrases only refine "is this prose a commitment?").
+_PROSE_COMMITMENT_PHRASES: tuple[str, ...] = (
+    "let me describe",
+    "let me use",
+    "let me call",
+    "let me run",
+    "let me first",
+    "let me start by",
+    "i'll describe",
+    "i'll use",
+    "i'll call",
+    "i'll run",
+    "i'll first",
+    "i'll help you",  # live-trace: "I'll help you list... using the shell tool"
+    "i need to describe",
+    "i need to use",
+    "i need to call",
+    "i need to run",
+    "i should describe",
+    "i should use",
+    "i should call",
+    "i should run",
+    "first, i should",
+    "first, i'll",
+    "first, let me",
+    "i'm going to describe",
+    "i'm going to use",
+    "i'm going to call",
+    "i'm going to run",
+    "i will use the",
+    "i will call the",
+    "i will run the",
+)
+
+# Tool-name mentions that, combined with a commitment phrase, make the
+# preamble unambiguous. A phrase alone ("let me use") is suspicious but
+# could be conversational; a phrase + tool name ("let me use the shell
+# tool") is a clear commitment the model failed to act on.
+_TOOL_NAME_HINTS: tuple[str, ...] = (
+    "shell",
+    "describe_tool",
+    "file_read",
+    "file_write",
+    "file_task",
+    "file_edit",
+    "web_search",
+    "web_fetch",
+    "code_exec",
+    "calculator",
+    "git",
+    "todo_write",
+    "memory",
+    "find_path",
+    "browser",
+    "tool",
+)
+
+
+def prose_commits_to_tool_action(text: str) -> bool:
+    """Detect "model committed to a tool action in prose but didn't emit one".
+
+    Returns True when ``text`` contains BOTH a commitment phrase (e.g.
+    "let me describe", "I'll use") AND a tool-name mention (e.g. "shell",
+    "describe_tool", "tool"). The conjunction is required — a phrase alone
+    is too easy to false-trigger on legitimate prose ("let me use an
+    analogy"), and a tool name alone is common in capability questions
+    ("what tools do you have?").
+
+    Called by ``_acceptance_gate_at_final_answer`` ONLY on iterations where
+    no ``tool_call`` was emitted this run, so the detector never fires on a
+    turn that actually executed a tool.
+    """
+    if not text:
+        return False
+    lower = text.lower()
+    has_phrase = any(phrase in lower for phrase in _PROSE_COMMITMENT_PHRASES)
+    if not has_phrase:
+        return False
+    has_tool = any(hint in lower for hint in _TOOL_NAME_HINTS)
+    return has_tool
+
+
 class AgentLoop:
     """
     Runs the think → act → observe cycle for a single user turn using
@@ -4308,6 +4395,58 @@ class AgentLoop:
             # unchanged (return the legacy model-assertion path below).
             _floor_note = parent_completion_floor_note(trace) if is_parent else None
             if _floor_note is None:
+                # B-2026-08-20-6 (Session 307) — the prose-tool-commitment
+                # detector. Distinct from the completion floor (which fires
+                # when a tool RAN and failed): this fires when NO tool ran
+                # this run AND the model's prose *commits* to a tool action
+                # ("I'll use the shell tool", "let me describe..."). The
+                # model intended to act but didn't emit the tool_call — a
+                # known weak-model pattern (glm-4.5-flash live trace,
+                # Session 306). Inject ONE bounded re-prompt; if the model
+                # still doesn't emit a tool_call on the next iteration, the
+                # one-shot guard below prevents an infinite nudge loop and
+                # the turn falls through to the honest-stop path.
+                if is_parent and not any(
+                    getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
+                ):
+                    _final_text = getattr(trace, "final_response", "") or ""
+                    if prose_commits_to_tool_action(_final_text):
+                        # One-shot: if we already nudged on this run, don't
+                        # nudge again — fall through to accept (the model
+                        # had its chance and still didn't emit a tool_call).
+                        _already_nudged = any(
+                            getattr(m, "content", "").find("[TOOL COMMITMENT]") >= 0
+                            if isinstance(getattr(m, "content", ""), str)
+                            else False
+                            for m in (loop_messages or [])
+                        ) or any(
+                            isinstance(m, dict)
+                            and isinstance(m.get("content", ""), str)
+                            and "[TOOL COMMITMENT]" in m.get("content", "")
+                            for m in (loop_messages or [])
+                        )
+                        if not _already_nudged and iteration + 1 < effective_max_iter:
+                            if obs:
+                                obs.emit(
+                                    "agent_loop_gate_failed_replan",
+                                    intent=intent.value,
+                                    iteration=iteration + 1,
+                                    unmet=["model committed to a tool action in prose but emitted no tool_call"],
+                                )
+                            loop_messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        "\n[TOOL COMMITMENT] You wrote that you would use a "
+                                        "tool (e.g. describe_tool, shell), but you did not "
+                                        "actually emit the tool_call — you only described "
+                                        "what you intend to do. Emit the tool_call now with "
+                                        "the correct arguments, or proceed with the action. "
+                                        "Do not describe the call; make it.\n"
+                                    ),
+                                }
+                            )
+                            return "", False
                 return "", True
             _streak, _streak_tool = same_tool_failure_streak(trace)
             if iteration + 1 >= effective_max_iter or _streak >= _SAME_TOOL_REPLAN_CAP:
