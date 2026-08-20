@@ -685,6 +685,47 @@ def prose_commits_to_tool_action(text: str) -> bool:
     return has_tool
 
 
+# B-2026-08-20-13 (Session 314): hedge detection. After tools ran and produced
+# evidence, weak models sometimes produce a non-answer that asks the user to
+# choose or confirm instead of synthesizing the answer from the evidence they
+# already have. Live transcript: model had 8 search results with "16°,
+# overcast" but answered "Would you like me to get the current weather from
+# weather-atlas.com?" — a hedging non-answer.
+_HEDGE_PHRASES: tuple[str, ...] = (
+    "would you like me to",
+    "would you prefer",
+    "which source would",
+    "which would you prefer",
+    "shall i fetch",
+    "shall i get",
+    "do you want me to",
+    "i would need to fetch",
+    "i'd need to fetch",
+    "i can fetch one of these",
+    "i'd be happy to fetch",
+    "let me know which",
+    "please let me know if you'd like",
+)
+
+
+def answer_hedges_after_evidence(text: str) -> bool:
+    """Detect a hedging non-answer after tools ran.
+
+    Returns True when the text contains a hedge phrase ("Would you like me
+    to...", "Which source would you prefer?") — indicating the model is
+    asking the user to choose or confirm instead of synthesizing the answer
+    from the evidence it already gathered.
+
+    Called by ``_acceptance_gate_at_final_answer`` ONLY on iterations where
+    at least one tool ran this run (evidence exists), so the detector never
+    fires on a turn that didn't gather evidence.
+    """
+    if not text or len(text.strip()) < 10:
+        return False
+    lower = text.lower()
+    return any(phrase in lower for phrase in _HEDGE_PHRASES)
+
+
 class AgentLoop:
     """
     Runs the think → act → observe cycle for a single user turn using
@@ -3794,14 +3835,25 @@ class AgentLoop:
                         # Keep message-role alternation for strict providers:
                         # an empty assistant frame, then the corrective nudge.
                         loop_messages.append({"role": "assistant", "content": ""})
+                        # B-2026-08-20-13 (Session 314): include the user's
+                        # ORIGINAL question in the nudge so the model can
+                        # re-anchor. The generic "You reasoned about this task"
+                        # caused the model to lose context on weak models
+                        # (live transcript: "I don't have any information about
+                        # what the original task was" — even though the user's
+                        # message was in loop_messages). Restating the question
+                        # explicitly gives the model a concrete anchor.
+                        _original_question = _user_message_text(loop_messages) or "the user's request"
                         loop_messages.append(
                             {
                                 "role": "user",
                                 "content": (
-                                    "You reasoned about this task but returned no answer "
-                                    "and no tool call. Do NOT reason further — act now: "
-                                    "call the next tool you need, or give the final answer "
-                                    "directly in plain text."
+                                    f"You reasoned about this task but returned no answer "
+                                    f"and no tool call. The user's request was: "
+                                    f"\"{_original_question[:500]}\". "
+                                    f"Do NOT reason further — act now: "
+                                    f"call the next tool you need, or give the final answer "
+                                    f"directly in plain text."
                                 ),
                             }
                         )
@@ -4487,6 +4539,50 @@ class AgentLoop:
                                         "what you intend to do. Emit the tool_call now with "
                                         "the correct arguments, or proceed with the action. "
                                         "Do not describe the call; make it.\n"
+                                    ),
+                                }
+                            )
+                            return "", False
+                # B-2026-08-20-13 (Session 314): the hedge detector. Distinct
+                # from the prose-commitment detector (which fires when NO tool
+                # ran): this fires when tools DID run (evidence exists) but the
+                # model's answer hedges — "Would you like me to fetch...?",
+                # "Which source would you prefer?" — instead of synthesizing
+                # from the evidence it already gathered. Live transcript: model
+                # had 8 search results with "16°, overcast" but answered
+                # "Would you like me to get the current weather from
+                # weather-atlas.com?" — a non-answer after real work was done.
+                # Inject ONE bounded re-prompt; one-shot guard prevents loops.
+                if is_parent and any(
+                    getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
+                ):
+                    _final_text = getattr(trace, "final_response", "") or ""
+                    if answer_hedges_after_evidence(_final_text):
+                        _already_hedge_nudged = any(
+                            isinstance(m, dict)
+                            and isinstance(m.get("content", ""), str)
+                            and "[HEDGE]" in m.get("content", "")
+                            for m in (loop_messages or [])
+                        )
+                        if not _already_hedge_nudged and iteration + 1 < effective_max_iter:
+                            if obs:
+                                obs.emit(
+                                    "agent_loop_gate_failed_replan",
+                                    intent=intent.value,
+                                    iteration=iteration + 1,
+                                    unmet=["model hedged after evidence — asked user to choose"],
+                                )
+                            loop_messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        "\n[HEDGE] You gathered evidence (tools ran) but then asked "
+                                        "the user to choose or confirm instead of synthesizing the "
+                                        "answer. Do NOT ask 'Would you like me to...' or 'Which "
+                                        "source would you prefer?'. You already have the evidence — "
+                                        "synthesize a direct answer from it NOW, or fetch ONE specific "
+                                        "page if the snippets lack the detail you need. Do not ask the "
+                                        "user to decide; act.\n"
                                     ),
                                 }
                             )
