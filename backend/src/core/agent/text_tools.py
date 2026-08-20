@@ -398,9 +398,15 @@ _TOOL_TALK_PATTERNS = [
     # the turn ended with zero files (the user's exact "clever but limited"
     # symptom, second half). Requires a creation verb + a file-like noun so
     # legitimate prose ("I'll create a summary/table") never false-triggers.
+    # Session 326 addendum 3: the single-adjective group was \w-only, so a
+    # hyphenated or dotted adjective — "the path-test folder", "the a.txt
+    # file" — defeated the pattern and the commitment streamed as a final
+    # answer, ending the turn with zero files (user's live Windows trace:
+    # "Let me create the path-test folder and the two files" → 2/2 todos,
+    # no file_write). Widened to [\w.-].
     re.compile(
         r"(i('ll| will|'m going to| am going to)|let me) (now |then |next )?"
-        r"(create|write|make|build|add) (the |a |this )?(\w+ )?"
+        r"(create|write|make|build|add) (the |a |this )?([\w.-]+ )?"
         r"(project|file|files|script|module|package|folder|directory)s?",
         re.IGNORECASE,
     ),

@@ -149,6 +149,14 @@ def test_is_tool_talk_detects_creation_commitment():
     # "Now I'll write the source modules and tests" (iter-7 of the second trace)
     assert _is_tool_talk("Now I'll write the source modules and tests") is True
     assert _is_tool_talk("I will build the new project package") is True
+    # Session 326 addendum 3: hyphenated/dotted adjectives. The user's live
+    # Windows trace ended with "Let me create the path-test folder and the two
+    # files" (recon only, no file_write) and the panel showed 2/2 as if the
+    # task were done — the single-adjective group was \w-only, so "path-test"
+    # and "a.txt" defeated the detector and the commitment streamed as the
+    # final answer. Widened to [\w.-].
+    assert _is_tool_talk("Let me create the path-test folder and the two files") is True
+    assert _is_tool_talk("Let me write the a.txt file") is True
 
 
 def test_is_tool_talk_ignores_creation_of_non_files():
