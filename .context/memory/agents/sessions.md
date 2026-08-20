@@ -4656,3 +4656,29 @@ program + ADR-22). -->
 - **LIVE-VERIFIED (bankofai/deepseek-v4-flash, isolated 8765):** the create-test-run task produced the full story — Load tool docs: shell → Run: mkdir → Load tool docs: file_write → Write: test-run/notes.txt → Load tool docs: file_task → Read: test-run/notes.txt, all created AND completed; task finished (19-byte notes.txt). This run also used RELATIVE paths (test-run/notes.txt) and the read-back succeeded — consistent with S325's extraction fix.
 - **Outcome:** done — full backend 2087 / 2 skipped / 0 failures, ruff clean.
 - **Report:** `.context/memory/reviews/2026-08-20-review-92.md` (note in Session 326 addendum)
+
+## Session 329 — hyphenated creation-commitment talk accepted as complete turn
+
+- **Trigger:** user live trace (bankofai/deepseek-v4-flash on Windows): path-test task — the agent
+  ran ONE tool (shell listing of Dev/) then stopped mid-sentence ("Let me create the path-test
+  folder and the two files") with NO files created, yet the UI reported Todos 2/2, 100% and
+  "Turn complete". User: "i think you have completely broken the agent now".
+- **Honest split:** the premature stop is NOT the todos change (pre-existing S323-class free-tier
+  failure; loop termination untouched; harness runs showed the same stop before the change) — BUT
+  the "2/2, 100%" panel IS our artifact (synthesized todos = tools that ran, so a recon-only stop
+  looks complete).
+- **Real bug:** "Let me create the path-test folder and the two files" was ACCEPTED as a final
+  answer — `_is_tool_talk`'s creation-commitment pattern has adjective group `(\w+ )?` which
+  cannot match hyphenated/dotted tokens ("path-test folder", "a.txt"). Confirmed by direct call:
+  the exact reproduction returns False while S323's "source modules" still returns True. The
+  check runs on streamed responses regardless of tool calls — the pattern miss is the only reason
+  it slipped.
+- **SHIPPED (`93d59d6`):** adjective group widened to `(\w+(?:[.\-]\w+)* )?` — the exact
+  reproduction is now caught, S323 preserved, safe negatives safe. Regression test with the user's
+  exact sentence in `test_dsml_interception.py`.
+- **LIVE-VERIFIED (bankofai/deepseek-v4-flash, isolated 8765, user's exact task):** this run the
+  model completed everything correctly (Load docs → mkdir → Load docs → Write a.txt → Write b.txt
+  → Load docs → Read both; all files created with exact content) — the deterministic proof is the
+  unit test with the exact sentence.
+- **Outcome:** done — full backend 2087 / 2 skipped / 0 failures, ruff clean.
+- **Report:** `.context/memory/reviews/2026-08-20-review-93.md`

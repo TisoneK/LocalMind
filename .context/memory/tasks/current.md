@@ -1,6 +1,24 @@
 # Current Task
 
-**Status:** IDLE — Session 326 shipped the synthesized-todos fix (B-2026-08-20-23 done, `a0e43f3`).
+**Status:** IDLE — Session 329 shipped the hyphenated creation-commitment tool-talk fix (`93d59d6`).
+
+## Session 329 outcome — recon-only turn reported as complete
+
+- User live trace (bankofai/deepseek-v4-flash on Windows): path-test task — the agent ran ONE
+  tool (shell listing of Dev/) then stopped mid-sentence ("Let me create the path-test folder and
+  the two files") with NO files created, yet the UI reported Todos 2/2, 100% and "Turn complete".
+- **Honest split:** the premature stop is NOT the synthesized-todos change (pre-existing S323-class
+  free-tier behavior; loop termination untouched) — but the "2/2, 100%" panel IS our artifact
+  (synthesized todos = tools that ran, so a recon-only stop looks complete).
+- **Real bug:** "Let me create the path-test folder and the two files" was ACCEPTED as a final
+  answer — `_is_tool_talk`'s creation-commitment adjective group `(\w+ )?` cannot match
+  hyphenated/dotted tokens ("path-test folder", "a.txt"). Widened to `(\w+(?:[.\-]\w+)* )?`;
+  exact repro caught, S323 preserved, safe negatives safe; regression test with the user's exact
+  sentence in `test_dsml_interception.py`.
+- **SHIPPED (`93d59d6`), live-verified** (bankofai/deepseek-v4-flash, isolated 8765): full backend
+  2087 / 2 skipped / 0 failures, ruff clean.
+- **Next:** user restarts the backend and re-runs the path-test task — on failure-mode runs the
+  "path-test folder" commitment is now caught and the agent nudged to actually create the files.
 
 ## Session 326 outcome — empty Todos panel root-caused and fixed
 
@@ -61,4 +79,4 @@ path is unit-covered but awaits a live relative-path Windows run.
 
 **Feature:** none (single-session tool fix)
 **ADR:** none
-**Review:** `.context/memory/reviews/2026-08-20-review-91.md`
+**Review:** `.context/memory/reviews/2026-08-20-review-93.md`
