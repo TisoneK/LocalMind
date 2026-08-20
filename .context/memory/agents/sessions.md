@@ -4498,3 +4498,20 @@ program + ADR-22). -->
 - **Outcome:** done — the user's insight shipped. When the model's reasoning or tool output contains the answer, the user gets it with zero latency instead of a retry or a fallback message.
 - **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), live-verify the extractor on z.ai.
 - **Report:** `.context/memory/reviews/2026-08-20-review-82.md`
+
+---
+## 2026-08-20 — Session 317 — live-tested fixes: DDG + 429 path + stricter extractor (B-2026-08-20-16/17)
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** The user called out: "tests passing doesn't mean the agent passing real (live-test)." Live-test the Sessions 314-316 work on z.ai/glm-4.5-flash.
+- **LIVE-VERIFIED (z.ai/glm-4.5-flash, isolated 8765):** found + fixed THREE issues unit tests didn't catch:
+  1. **DDG search broken:** `from ddgs import DDGS` but installed package was `duckduckgo_search` (deprecated, returns 0 results). Every web_search fell back to Bing. Fixed: prefer `ddgs`, fall back to old name. Live-verified: DDG now returns 8 real Kitengela weather results.
+  2. **FOURTH raw-dump path:** the 429 preserve-evidence path (line 3571) leaked `_summarize_trace_for_user` ("I ran the requested tools... What to try next") — a path missed in Session 315. Fixed: tries deterministic extraction first, then clean message.
+  3. **Extractor too loose:** pulled "Let me try a different approach" (meta-reasoning). Fixed: require a factual marker (temperature, "is X", units); stronger meta-reasoning penalties.
+- **Extractor confirmed live:** `answer extracted from reasoning buffer (274 chars, zero-LLM)` + `empty-response rescued by evidence extraction`. The deterministic extractor fires on the real model.
+- **Rate-limit caveat:** z.ai 429'd under repeated testing; the DDG fix + extractor are verified independently. A re-run after the rate-limit window would confirm the full end-to-end weather answer.
+- **SHIPPED (`88911cc`):** DDG import fix + 429 path fix + stricter extractor. 2066 broad pass; ruff clean.
+- **Outcome:** done — the user was right; live testing caught three real issues that unit tests missed. The DDG fix is the highest-impact (without it, every web_search returned garbage).
+- **Open items:** B-2026-08-20-10 (MiniMax XML conflict), B-2026-08-20-11 (429 on iter=1 → empty bubble), re-run weather trace after rate-limit clears.
+- **Report:** `.context/memory/reviews/2026-08-20-review-83.md`
+- **Notes:** logged an inefficiency entry for the "shipped without live-testing" anti-pattern.
