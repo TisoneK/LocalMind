@@ -1,22 +1,20 @@
 # Current Task
 
-**Status:** IDLE — Session 305 (B-2026-08-20-1) completed; ready for Session 306.
+**Status:** IDLE — Session 306 (B-2026-08-20-2) partially verified + new finding backlogged; ready for Session 307.
 
-## Completed (Session 305)
-- Implemented `ParentSession` (rolling summary + bounded recent tail) in `core/parent_session.py`.
-- Added migration 009 (`parent_sessions` table) + `SessionStore.save_parent_session` / `get_parent_session`.
-- Wired ParentSession into `agent_runtime`: loaded at turn start, summary injected as a system message before the recent tail, updated + persisted after turn completion.
-- Added `parent_ready` / `parent_degraded` / `parent_recovered` readiness telemetry — queued by `_ensure_parent_kernel`, drained onto the first turn's ObsCollector, surfaced in `/api/health` and `/api/observability/{sid}`.
-- 13 ParentSession unit tests + 6 readiness telemetry tests; 1023 broad regression tests pass.
-- Live-verified on real z.ai/glm-4.5-flash via isolated 8765 harness: boot ready log, `/api/health` parent_ready=true, first-turn SSE parent_ready event, 3-turn conversation persists turn_count across backend restart.
-- ADR-54 records the design; review-72 records the implementation + live evidence.
+## Session 306 outcome
+- **Partially verified** B-2026-08-20-2: boot kernel, readiness telemetry, `describe_tool` bootstrap, and the model's *understanding* of the tool contract all proven live on z.ai/glm-4.5-flash (HTTP 200, no 429, 1414 prompt / 108 completion tokens).
+- **New finding (B-2026-08-20-6):** glm-4.5-flash produced a prose "I'll describe the shell tool..." preamble without ever emitting the actual `tool_call`. The loop correctly treated the prose as the final answer (no criteria, no failed tool, non-empty content). This is a distinct weak-model behavior gap from B-2026-08-18-11 (empty content after reasoning) — here the content is non-empty prose that *commits* to a tool action.
+- No code changes this session — the finding is a model-behavior gap, not a defect in shipped code.
+- review-73 records the live evidence + the new backlog item.
 
 ## Next Parent-only implementation slices
-- **B-2026-08-20-2 (Session 306):** clean GLM native tool trace after provider recovery — live-verify `describe_tool` → real tool call → grounded completion on z.ai/glm-4.5-flash (rate-limit window should now be clear).
-- **B-2026-08-20-3:** continue maturing the single Parent before reconsidering children (ADR-53).
-- Frontend: render `parent_ready` / `parent_degraded_reason` in StatusBar (backlogged).
-- Tune compaction thresholds (`RECENT_TAIL_MAX`, `SUMMARY_MAX_CHARS`) based on real long-conversation workload (backlogged, low-priority).
+- **B-2026-08-20-6 (next session):** implement the prose-tool-commitment detector + bounded re-prompt in the loop. Live-verify on glm-4.5-flash with the `list /tmp files` task.
+- **B-2026-08-20-3:** continue maturing the single Parent (ADR-53).
+- **B-2026-08-20-4:** frontend should render `parent_ready` / `parent_degraded_reason`.
+- **B-2026-08-20-5:** tune ParentSession compaction thresholds.
+- Re-run the tool trace on a faster provider (Zen/hy3-free or Cerebras) to confirm whether the prose-commitment gap is glm-4.5-flash-specific.
 
 **Feature:** none (idle)
-**ADR:** ADR-54 (ParentSession + readiness), ADR-53 (Parent-only), ADR-52 (warm kernel)
-**Review:** `.context/memory/reviews/2026-08-20-review-72.md`
+**ADR:** ADR-54 (ParentSession), ADR-53 (Parent-only), ADR-52 (warm kernel)
+**Review:** `.context/memory/reviews/2026-08-20-review-73.md`

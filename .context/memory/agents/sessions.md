@@ -4363,3 +4363,16 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-2 (clean GLM native tool trace), B-2026-08-20-3 (continue Parent maturity), B-2026-08-20-4 (frontend parent_ready indicator), B-2026-08-20-5 (tune compaction thresholds).
 - **Report:** `.context/memory/reviews/2026-08-20-review-72.md`
 - **Notes:** ADR-54 appended to `plans/decisions.md`. Live traces used isolated 8765 + /tmp scratch home; no user app on port 8000 touched; no API-key values printed. PAT was used via a local git credential helper (not stored in any tracked file); rotated per protocol at closeout.
+
+---
+## 2026-08-20 — Session 306 — GLM native tool trace (B-2026-08-20-2) — partial verification + new finding
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** Live-verify the warm-kernel + describe_tool bootstrap executes a real tool task end-to-end on z.ai/glm-4.5-flash (the Session 302 rate-limit window should be clear).
+- **LIVE-VERIFIED (z.ai/glm-4.5-flash, isolated 8765):** boot `[parent-kernel] ready adapter=zai model=glm-4.5-flash tools=32`; `/api/health` parent_ready=true; SSE carried the `parent_ready` event (ADR-54); `POST /chat/completions → HTTP 200` (no 429 — rate-limit cleared); provider_usage 1414 prompt / 108 completion tokens; model reasoning correctly identified the `describe_tool(shell) → shell` flow ("The user wants me to list the files in /tmp... Let me start by describing the shell tool.").
+- **NEW FINDING (B-2026-08-20-6):** the model produced a prose preamble ("I'll help you list the files in the /tmp directory using the shell tool. Let me first describe the shell tool to understand its schema.") and then STOPPED — no `tool_call` event was emitted. The loop correctly treated the prose as the final answer (`_acceptance_gate_at_final_answer` returned `("", True)` — no criteria, no failed tool, non-empty content). This is a distinct weak-model behavior gap from B-2026-08-18-11 (empty content after reasoning — there the synthesis rescue fires); here the content is non-empty prose that *commits* to a tool action. The acceptance gate has no contract for "model committed to a tool action in prose but didn't emit one."
+- **HONEST OUTCOME:** B-2026-08-20-2 partially verified — boot kernel + describe_tool bootstrap + model understanding all proven; actual tool-call emission did not happen on this trace. No regression; no code changes. The fix (B-2026-08-20-6) is backlogged: detect prose tool-action commitment on a no-tool_call iteration and inject a bounded re-prompt.
+- **Outcome:** done — honest partial verification + new finding logged for the next session.
+- **Open items:** B-2026-08-20-6 (prose-commitment detector + re-prompt), B-2026-08-20-3 (Parent maturity), B-2026-08-20-4 (frontend parent_ready), B-2026-08-20-5 (tune compaction).
+- **Report:** `.context/memory/reviews/2026-08-20-review-73.md`
+- **Notes:** live trace used isolated 8765 + /tmp scratch home; no user app on port 8000 touched; no API-key values printed.
