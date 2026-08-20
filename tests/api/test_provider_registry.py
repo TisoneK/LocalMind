@@ -27,21 +27,36 @@ def test_build_model_setting_map_covers_every_provider():
 
 
 def test_bai_is_registered():
-    """B.AI (ADR-55) is a first-class OpenAI-compatible provider."""
+    """BankOfAI (ADR-55) is a first-class OpenAI-compatible provider."""
     cfg = PROVIDER_CONFIGS["bai"]
     assert cfg.name == "bai"
-    assert cfg.base_url == "https://api.b.ai/v1"
+    # Session 321: canonical domain is api.bankofai.io (b.ai → bankofai.io).
+    assert cfg.base_url == "https://api.bankofai.io/v1"
     assert cfg.key_env == "BAI_API_KEY"
     assert cfg.model_env == "BAI_MODEL"
     assert cfg.settings_field == "bai_model"
-    # Model IDs are LOWERCASE on B.AI (the capitalized forms are display
+    # Model IDs are LOWERCASE on BankOfAI (the capitalized forms are display
     # names only) — Session 320 fixed a case mismatch that made the default
-    # model unresolvable ("DeepSeek-V4-Flash" → 400 model-not-found).
+    # model unresolvable ("DeepSeek-V4-Flash" → 404 model_not_found, live).
     assert cfg.default_model == "deepseek-v4-flash"
 
 
+def test_bai_needs_no_custom_user_agent():
+    """BankOfAI's Cloudflare protection does not require a custom UA.
+
+    Session 321 correction: an earlier (uncommitted) browser-UA header was
+    added on a misdiagnosis — the 403 "error code: 1010" was triggered by the
+    stdlib urllib "Python-urllib/*" UA used in the test scripts, NOT by httpx
+    (the backend's HTTP client). httpx's default "python-httpx/*" UA passes
+    Cloudflare (live-confirmed), so the provider config must carry no custom
+    User-Agent header.
+    """
+    cfg = PROVIDER_CONFIGS["bai"]
+    assert cfg.headers is None
+
+
 def test_bai_model_context_windows():
-    """B.AI context windows match docs.b.ai (Session 320 correction)."""
+    """BankOfAI context windows (Session 320 + live /models list)."""
     assert MODEL_CONTEXT_WINDOWS["deepseek-v4-flash"] == 1000000
     assert MODEL_CONTEXT_WINDOWS["hy3"] == 256000
 

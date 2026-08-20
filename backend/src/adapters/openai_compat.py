@@ -128,12 +128,11 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "deepseek/deepseek-v4-flash": 131072,
     "moonshotai/kimi-k3": 262144,
     "minimax/minimax-m3": 128000,
-    # B.AI — multi-model aggregator (docs.b.ai), OpenAI-compatible.
-    # ADR-55: model IDs are LOWERCASE (deepseek-v4-flash, hy3 — the
-    # capitalized "DeepSeek-V4-Flash"/"Hy3" are display names only).
-    # Context windows from docs.b.ai/llmservice/models/<model>:
-    # deepseek-v4-flash = 1M tokens, hy3 = 256K. Free promo models are
-    # time-limited (not a stable tier) and revert to paid pricing.
+    # BankOfAI (B.AI) — multi-model aggregator (api.bankofai.io),
+    # OpenAI-compatible. ADR-55: model IDs are LOWERCASE (live-confirmed:
+    # "deepseek-v4-flash" → 200, "DeepSeek-V4-Flash" → 404 model_not_found).
+    # Context windows: deepseek-v4-flash = 1M tokens, hy3 = 256K. Free
+    # promo models are time-limited (not a stable tier) and revert to paid.
     "deepseek-v4-flash": 1000000,
     "hy3": 256000,
     # Default fallback
@@ -453,25 +452,27 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         model_env="ZAI_MODEL",
         settings_field="zai_model",
     ),
-    # B.AI — multi-model aggregator (docs.b.ai), OpenAI-compatible
-    # (/v1/chat/completions) and Anthropic-compatible (/v1/messages). One
-    # API surface in front of GPT, Claude, Gemini, DeepSeek, GLM, Qwen,
-    # Kimi, MiniMax, Grok, etc. Auth: Authorization: Bearer <key> (also
-    # accepts x-api-key) — the default Bearer header already covers it.
+    # BankOfAI (B.AI) — multi-model aggregator, OpenAI-compatible
+    # (/v1/chat/completions). One API surface in front of GPT, Claude,
+    # Gemini, DeepSeek, GLM, Qwen, Kimi, MiniMax, Grok, etc. Auth:
+    # Authorization: Bearer <key> — the default Bearer header covers it.
     #
-    # ADR-55: model IDs are LOWERCASE (deepseek-v4-flash, hy3 — the
-    # capitalized "DeepSeek-V4-Flash"/"Hy3" are display names only). The
-    # "free" models are rotating time-limited 0-Credit promotions, NOT a
-    # stable free tier — they revert to paid pricing when the promo ends.
-    # Treat B.AI as an opportunistic/fallback provider, not a primary
-    # free default. Key signup is gated behind chat.b.ai (Google OAuth or
-    # Web3 wallet), and the platform is crypto-payment oriented — a
-    # different trust posture than a plain SaaS API vendor. No published
-    # rate limits for the free promo models.
+    # ADR-55 + Session 321: the canonical API domain is api.bankofai.io
+    # (the b.ai → bankofai.io brand consolidation). Model IDs are LOWERCASE
+    # (live-confirmed: "deepseek-v4-flash" → 200, "DeepSeek-V4-Flash" →
+    # 404 model_not_found). The "free" models are rotating time-limited
+    # 0-Credit promotions, NOT a stable free tier — they revert to paid
+    # pricing when the promo ends; treat as opportunistic/fallback, not a
+    # primary free default. Key signup is gated behind chat.b.ai (Google
+    # OAuth or Web3 wallet) and the platform is crypto-payment oriented. No
+    # published rate limits for the free promo models. NOTE: the API sits
+    # behind Cloudflare bot protection (error code 1010), but it only blocks
+    # the stdlib urllib "Python-urllib/*" UA — httpx's default
+    # "python-httpx/*" UA passes, so NO custom User-Agent header is needed.
     "bai": ProviderConfig(
         name="bai",
-        display_name="B.AI (promo free models — time-limited)",
-        base_url="https://api.b.ai/v1",
+        display_name="BankOfAI (promo free models — time-limited)",
+        base_url="https://api.bankofai.io/v1",
         api_key="",
         default_model="deepseek-v4-flash",
         key_env="BAI_API_KEY",

@@ -152,7 +152,7 @@ class Settings(BaseSettings):
     zai_model: str = ""
     # ADR-9: ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked).
     zenmux_model: str = ""
-    # ADR-55: B.AI — IMPLEMENTED BUT UNTESTED (smoke test blocked, no key).
+    # ADR-55: BankOfAI (B.AI) — api.bankofai.io, live-tested (Session 321).
     bai_model: str = ""
 
     # Server
@@ -525,7 +525,7 @@ class Settings(BaseSettings):
             # ADR-9: ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked,
             # free plan has no API access). See ADR-9 for details.
             "zenmux": "ZENMUX_API_KEY",
-            # ADR-55: B.AI — IMPLEMENTED BUT UNTESTED (smoke test blocked).
+            # ADR-55: BankOfAI (B.AI) — api.bankofai.io, live-tested.
             "bai": "BAI_API_KEY",
         }
         env_var = env_key_map.get(provider)
