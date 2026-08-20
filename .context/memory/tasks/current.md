@@ -1,24 +1,28 @@
 # Current Task
 
-**Status:** IDLE — Session 315 (clean user-facing fallback) shipped.
+**Status:** IDLE — Session 316 (deterministic evidence extraction) shipped.
 
-## Session 315 outcome
-Fixed the user's live transcript failure: the chat bubble showed raw harness internals ("I ran the requested tools but couldn't synthesize... What to try next: Check the outputs above") instead of a clean answer.
+## Session 316 outcome
+Implemented the user's insight: "the thinking text and other evidence already has all the answers." When synthesis fails, the answer often already exists in the reasoning buffer or tool observations. Added `_extract_answer_from_evidence()` — a DETERMINISTIC extractor that pulls the answer directly from evidence already in hand, with ZERO LLM calls and ZERO latency.
 
-Three fallback paths in `loop.py` were dumping `_summarize_trace_for_user` (raw tool-call list + debug advice) directly to the user when synthesis failed. All three now:
-1. Try ONE more synthesis retry with thinking OFF before giving up.
-2. If that fails, yield a CLEAN message: "I found the information you asked for, but I'm having trouble putting it into a clean final answer right now. The search results and tool outputs are in the Actions panel above — take a look, or ask me again and I'll retry."
+It runs FIRST (before the retry and clean-message fallback) at two synthesis-failure paths:
+1. Empty-response fallthrough (reasoning buffer available): extracts the answer sentence from the model's reasoning.
+2. `_force_final_answer` empty path: extracts from tool observations (search snippets, shell output).
 
-The raw tool evidence (shell calls, search results, outputs) is still available in the Actions panel — the chat bubble just stays clean.
+When extraction succeeds → user sees the answer immediately, no retry, no extra LLM call, no latency. When it fails → falls through to retry-then-clean-message.
 
-8 e2e/unit tests updated to assert the new clean contract. 2055 broad regression pass (0 failures); ruff clean.
+11 new tests; 2066 broad regression pass (0 failures); ruff clean.
+
+## The three-layer fallback (priority order)
+1. **Deterministic extraction** (Session 316) — zero LLM calls, <1ms. Pulls from reasoning + observations.
+2. **Synthesis retry** (Session 315) — one LLM call with thinking OFF. Fresh attempt.
+3. **Clean message** (Session 315) — "I found the information... Actions panel... retry."
 
 ## Next
 - **B-2026-08-20-10 (High):** MiniMax XML interception conflicts with prose-commitment detector.
 - **B-2026-08-20-11 (Medium):** 429 rate-limit produces empty answer bubble.
-- **B-2026-08-20-9 (Low):** shell tool JSON-wrapped command hint.
-- The synthesis retry (fix #1) should rescue many turns that previously fell to the clean fallback — live-verify on z.ai with the weather task.
+- Live-verify the extractor on z.ai with the weather task.
 
 **Feature:** none (idle)
 **ADR:** ADR-54 (ParentSession), ADR-53 (Parent-only), ADR-52 (warm kernel)
-**Review:** `.context/memory/reviews/2026-08-20-review-81.md` (to be written)
+**Review:** `.context/memory/reviews/2026-08-20-review-82.md` (to be written)

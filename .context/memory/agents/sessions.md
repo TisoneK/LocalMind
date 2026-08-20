@@ -4487,3 +4487,14 @@ program + ADR-22). -->
 - **Outcome:** done — the chat bubble now shows a clean user-facing message when synthesis fails, not raw harness debug output. The synthesis retry (fix #1) should also rescue many turns that previously fell to the fallback.
 - **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), B-2026-08-20-9 (shell JSON hint, Low).
 - **Report:** `.context/memory/reviews/2026-08-20-review-81.md`
+
+---
+## 2026-08-20 — Session 316 — deterministic evidence extraction (B-2026-08-20-15)
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** Implement the user's insight: "if it already has real answers why retry and fallbacks... the thinking text and other evidence already has all the answers."
+- **ROOT CAUSE:** the Session 315 fix (retry-then-clean-message) still made an extra LLM call when the answer was already in the reasoning buffer or tool observations. The user correctly identified this as latency waste — the answer is there, just extract it.
+- **SHIPPED (`306dae1`):** `_extract_answer_from_evidence()` — a DETERMINISTIC extractor with ZERO LLM calls. Runs FIRST at two synthesis-failure paths. (1) Reasoning buffer: score sentences by entity match + factual markers (temperature, "is X", units), penalize meta-reasoning. (2) Tool observations: score lines by factual markers (°C, 4-digit numbers), penalize URLs/headers. When extraction succeeds → user sees the answer immediately. Three-layer fallback: (1) deterministic extraction [zero-LLM], (2) synthesis retry [one LLM call], (3) clean message. 11 new tests; 2066 broad pass; ruff clean.
+- **Outcome:** done — the user's insight shipped. When the model's reasoning or tool output contains the answer, the user gets it with zero latency instead of a retry or a fallback message.
+- **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), live-verify the extractor on z.ai.
+- **Report:** `.context/memory/reviews/2026-08-20-review-82.md`
