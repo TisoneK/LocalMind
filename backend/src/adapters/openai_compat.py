@@ -469,15 +469,15 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
     # behind Cloudflare bot protection (error code 1010), but it only blocks
     # the stdlib urllib "Python-urllib/*" UA — httpx's default
     # "python-httpx/*" UA passes, so NO custom User-Agent header is needed.
-    "bai": ProviderConfig(
-        name="bai",
+    "bankofai": ProviderConfig(
+        name="bankofai",
         display_name="BankOfAI (promo free models — time-limited)",
         base_url="https://api.bankofai.io/v1",
         api_key="",
         default_model="deepseek-v4-flash",
-        key_env="BAI_API_KEY",
-        model_env="BAI_MODEL",
-        settings_field="bai_model",
+        key_env="BANKOFAI_API_KEY",
+        model_env="BANKOFAI_MODEL",
+        settings_field="bankofai_model",
     ),
 }
 
