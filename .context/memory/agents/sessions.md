@@ -4262,3 +4262,17 @@ program + ADR-22). -->
 - **Outcome:** done — the empty_response dead-end is fixed at the root (the answer was in the reasoning channel; now captured + synthesized). Completes the recovery arc (ADR-50 + B-2026-08-18-8/-10/-11).
 - **Open items:** B-2026-08-18-4 (weather card), -6 (grounding).
 - **Notes:** none
+
+---
+## 2026-08-19 — Session 299 — structured tool failure recovery boundary
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Darwin, local) | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** none
+- **Task:** User reported that thinking and recovery were broken. Investigated the shared dispatch/recovery boundary after the prior reasoning-channel rescue.
+- **ROOT CAUSE:** `dispatch_with_retry()` returned `failed=False` for structured `ToolResult(success=False)` values. The AgentLoop then treated failed actions as successful evidence, allowed Thinker to run on the error, and skipped failure-memory/streak recovery and the completion-floor signal.
+- **SHIPPED (`e806f07`):** dispatch now marks `None` or `result.success=False` as failed, including non-retriable structured errors. Added dispatch-contract and loop-boundary regressions; the loop test verifies failed status, Thinker suppression, `tool_failure` memory, and continued recovery.
+- **VERIFICATION:** focused 28 tests passed; changed-file Ruff clean; full CI **1994 backend passed / 2 skipped**, frontend TypeScript passed, ESLint 0 errors / 71 existing warnings. The isolated live z.ai/GLM trace that exposed the defect confirmed the repaired failed-action/recovery event path.
+- **Outcome:** done — model-agnostic recovery now receives the tool's actual structured failure signal.
+- **Open items:** B-2026-08-18-4 (weather card), B-2026-08-18-6 (synthesis grounding).
+- **Report:** `.context/memory/reviews/2026-08-19-review-68.md`
+- **Notes:** Generated untracked `backend/MagicMock/` was intentionally excluded from the product commit.
