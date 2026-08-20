@@ -129,13 +129,13 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     "moonshotai/kimi-k3": 262144,
     "minimax/minimax-m3": 128000,
     # B.AI — multi-model aggregator (docs.b.ai), OpenAI-compatible.
-    # ADR-55: IMPLEMENTED BUT UNTESTED. Free models are time-limited
-    # promotions (not a stable tier) and revert to paid pricing when the
-    # promo ends. Model IDs + context windows must be verified against
-    # GET /v1/models once a key is available.
-    "DeepSeek-V4-Flash": 128000,
-    # "Hy3" intentionally omitted — unknown context window; falls back to
-    # "default": 32768 until verified live.
+    # ADR-55: model IDs are LOWERCASE (deepseek-v4-flash, hy3 — the
+    # capitalized "DeepSeek-V4-Flash"/"Hy3" are display names only).
+    # Context windows from docs.b.ai/llmservice/models/<model>:
+    # deepseek-v4-flash = 1M tokens, hy3 = 256K. Free promo models are
+    # time-limited (not a stable tier) and revert to paid pricing.
+    "deepseek-v4-flash": 1000000,
+    "hy3": 256000,
     # Default fallback
     "default": 32768,
 }
@@ -459,22 +459,21 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
     # Kimi, MiniMax, Grok, etc. Auth: Authorization: Bearer <key> (also
     # accepts x-api-key) — the default Bearer header already covers it.
     #
-    # ADR-55 (Session 319): IMPLEMENTED BUT UNTESTED. The "free" models
-    # (DeepSeek-V4-Flash since Aug 17 2026, Hy3 since Aug 20 2026) are
-    # rotating time-limited 0-Credit promotions, NOT a stable free tier —
-    # they revert to paid pricing when the promo ends. Treat B.AI as an
-    # opportunistic/fallback provider, not a primary free default. Key
-    # signup is gated behind chat.b.ai (Google OAuth or Web3 wallet), and
-    # the platform is crypto-payment oriented — a different trust posture
-    # than a plain SaaS API vendor. No published rate limits for the free
-    # promo models. Per the flaw log (Session 31/33), do NOT claim this
-    # works without a real-API smoke test.
+    # ADR-55: model IDs are LOWERCASE (deepseek-v4-flash, hy3 — the
+    # capitalized "DeepSeek-V4-Flash"/"Hy3" are display names only). The
+    # "free" models are rotating time-limited 0-Credit promotions, NOT a
+    # stable free tier — they revert to paid pricing when the promo ends.
+    # Treat B.AI as an opportunistic/fallback provider, not a primary
+    # free default. Key signup is gated behind chat.b.ai (Google OAuth or
+    # Web3 wallet), and the platform is crypto-payment oriented — a
+    # different trust posture than a plain SaaS API vendor. No published
+    # rate limits for the free promo models.
     "bai": ProviderConfig(
         name="bai",
         display_name="B.AI (promo free models — time-limited)",
         base_url="https://api.b.ai/v1",
         api_key="",
-        default_model="DeepSeek-V4-Flash",
+        default_model="deepseek-v4-flash",
         key_env="BAI_API_KEY",
         model_env="BAI_MODEL",
         settings_field="bai_model",

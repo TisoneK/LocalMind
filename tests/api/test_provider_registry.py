@@ -9,7 +9,7 @@ it). Both now derive from ``PROVIDER_CONFIGS``. These tests lock that
 invariant so a future provider addition cannot drift out of the derived maps.
 """
 
-from adapters.openai_compat import PROVIDER_CONFIGS
+from adapters.openai_compat import MODEL_CONTEXT_WINDOWS, PROVIDER_CONFIGS
 from api.routes import models as models_mod
 
 
@@ -34,7 +34,16 @@ def test_bai_is_registered():
     assert cfg.key_env == "BAI_API_KEY"
     assert cfg.model_env == "BAI_MODEL"
     assert cfg.settings_field == "bai_model"
-    assert cfg.default_model == "DeepSeek-V4-Flash"
+    # Model IDs are LOWERCASE on B.AI (the capitalized forms are display
+    # names only) — Session 320 fixed a case mismatch that made the default
+    # model unresolvable ("DeepSeek-V4-Flash" → 400 model-not-found).
+    assert cfg.default_model == "deepseek-v4-flash"
+
+
+def test_bai_model_context_windows():
+    """B.AI context windows match docs.b.ai (Session 320 correction)."""
+    assert MODEL_CONTEXT_WINDOWS["deepseek-v4-flash"] == 1000000
+    assert MODEL_CONTEXT_WINDOWS["hy3"] == 256000
 
 
 def test_bai_resolves_in_derived_maps():
