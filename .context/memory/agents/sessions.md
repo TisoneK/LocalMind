@@ -4647,3 +4647,12 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-20 (Medium), B-2026-08-20-10 (High), B-2026-08-20-11 (Medium).
 - **Report:** `.context/memory/reviews/2026-08-20-review-92.md` (Follow-up appended)
 - **Notes:** the "upfront plan" (ADR-49's original directive) is NOT restored — the harness-derived surface supersedes it per the user's new framing; if the user later wants the panel to also show the pre-task plan, that is a separate follow-up (upfront plan in the warm-kernel first call) layered on top of this. The user's checklist-shaped Thinking observation remains model behavior, unchanged by this fix.
+
+---
+## 2026-08-20 — Session 326 addendum 2 — describe_tool surfaces as "Load tool docs" todos (`31b9067`)
+
+- **Trigger:** user asked "does describe_tool surface on todo and planner also — this way the agent gets more info about how and why to use those tools". Answered: it was EXCLUDED from synthesized todos (scaffolding), not in the planner, but already visible in the Actions panel; and clarified the mechanism — the AGENT's tool knowledge comes from describe_tool's RETURNED SCHEMA (recorded via `_note_described_tool` → next call's native tools param) plus the in-prompt tool list, NOT from the panel (the panel is user-facing only).
+- **SHIPPED (`31b9067`):** removed describe_tool from `_SYNTH_SKIP` and added a "Load tool docs" verb — the panel now shows the agent consulting a tool's schema right before using it (the visible how-and-why). Test flipped (`test_describe_tool_surfaces_as_load_tool_docs_todo` asserts syn-0 "Load tool docs: shell" then syn-1 "Run: …") + label unit check.
+- **LIVE-VERIFIED (bankofai/deepseek-v4-flash, isolated 8765):** the create-test-run task produced the full story — Load tool docs: shell → Run: mkdir → Load tool docs: file_write → Write: test-run/notes.txt → Load tool docs: file_task → Read: test-run/notes.txt, all created AND completed; task finished (19-byte notes.txt). This run also used RELATIVE paths (test-run/notes.txt) and the read-back succeeded — consistent with S325's extraction fix.
+- **Outcome:** done — full backend 2087 / 2 skipped / 0 failures, ruff clean.
+- **Report:** `.context/memory/reviews/2026-08-20-review-92.md` (note in Session 326 addendum)
