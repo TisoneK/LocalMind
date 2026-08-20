@@ -1,10 +1,12 @@
 """
 Legacy conversational classifiers and direct-response helpers.
 
-The live request runtime no longer invokes these functions for routing. Every
-turn enters the parent agent, whose model-owned initialization decision chooses
-between a direct response, clarification, and tool execution. These helpers
-remain available for isolated utilities and compatibility tests only.
+The live request runtime uses these helpers at the conversation boundary.
+Obvious social turns and short context-backed questions use one direct-chat
+call; ambiguous or tool-bearing turns enter the parent agent, whose
+model-owned initialization decision chooses between clarification and
+execution. This boundary is generic — it does not special-case individual
+capability questions.
 
 Problem (Session 21): A one-word greeting like "Hi" was burning 11.5s
 and ~4.8k tokens because it entered capability inference before being
@@ -223,6 +225,15 @@ _CONVERSATIONAL_OPENER_RE = re.compile(
     re.IGNORECASE,
 )
 
+# History-backed follow-ups may omit an interrogative opener, but they still
+# need a conversational shape. This keeps imperative/action messages such as
+# "inspect the project" or "build the app" on the parent tool path without
+# enumerating individual intents.
+_CONVERSATIONAL_FOLLOWUP_RE = re.compile(
+    r"^(?:like\b|such\s+as\b|for\s+example\b|and\s+\S+)",
+    re.IGNORECASE,
+)
+
 # Keywords that force a message through normal parent-agent handling. Word-boundary
 # matched, case-insensitive. Organized by why they must NOT be fast-pathed:
 #  - realtime/data → dispatcher adds WEB_SEARCH + realtime_sensitive
@@ -340,10 +351,10 @@ _CONVERSATIONAL_MAX_CHARS = 140
 _CONVERSATIONAL_MAX_WORDS = 20
 
 
-def is_conversational_question(message: str) -> bool:
+def is_conversational_question(message: str, history: Optional[list[object]] = None) -> bool:
     """
-    Detect whether a message is an OBVIOUSLY-conversational question that
-    can be answered with a single direct chat call — no tools.
+    Detect whether a message is an OBVIOUSLY-conversational question or
+    short follow-up that can be answered with a single direct chat call — no tools.
 
     Conservative by design: the message must start with an interrogative
     opener AND contain none of the tool/realtime/system keywords, so
@@ -353,6 +364,8 @@ def is_conversational_question(message: str) -> bool:
 
     Args:
         message: the user's message text.
+        history: optional prior messages used to recognize short conversational
+            follow-ups without routing action-oriented requests away from tools.
 
     Returns:
         True if the input is a conversational question that should
@@ -371,9 +384,27 @@ def is_conversational_question(message: str) -> bool:
     if len(words) > _CONVERSATIONAL_MAX_WORDS:
         return False
 
-    # Must open like a question about the assistant/itself/ideas.
+    # Must open like a question about the assistant/itself/ideas. A short
+    # follow-up can omit the opener ("Like what?", "And why?") when it has a
+    # prior assistant answer and the conversation has not used tools.
     if not _CONVERSATIONAL_OPENER_RE.match(cleaned):
-        return False
+        if (
+            not history
+            or len(words) > 8
+            or not cleaned.endswith("?")
+            and not _CONVERSATIONAL_FOLLOWUP_RE.match(cleaned)
+        ):
+            return False
+        has_assistant_answer = False
+        for item in history:
+            role = item.get("role") if isinstance(item, dict) else getattr(item, "role", "")
+            tool_calls = item.get("tool_calls") if isinstance(item, dict) else getattr(item, "tool_calls", None)
+            if tool_calls:
+                return False
+            if getattr(role, "value", role) == "assistant":
+                has_assistant_answer = True
+        if not has_assistant_answer:
+            return False
 
     # Must not reference anything that needs tools, live data, or system
     # info — those must reach the dispatcher for correct routing.
@@ -385,71 +416,6 @@ def is_conversational_question(message: str) -> bool:
         return False
 
     return True
-
-
-# Capability questions are stable product metadata, not model reasoning tasks.
-# Answering these deterministically avoids spending a slow GLM call on a
-# generic inventory and gives short follow-ups ("Like what?") concrete examples
-# instead of repeating the same paragraph.
-_CAPABILITY_INQUIRY_RE = re.compile(
-    r"^(?:what can you do|what do you do|what are your capabilities|"
-    r"what tools do you have|what can you help with)\??$",
-    re.IGNORECASE,
-)
-_CAPABILITY_FOLLOWUP_RE = re.compile(
-    r"^(?:like what|such as what|for example\??)$",
-    re.IGNORECASE,
-)
-
-
-def is_capability_question(message: str, history: Optional[list[object]] = None) -> bool:
-    """Return whether a short message asks for LocalMind capability examples."""
-    del history  # Reserved for future context-sensitive capability families.
-    cleaned = (message or "").strip().rstrip(_TRIVIAL_PUNCT).strip()
-    if not cleaned or len(cleaned) > 80 or len(cleaned.split()) > 12:
-        return False
-    return bool(_CAPABILITY_INQUIRY_RE.match(cleaned) or _CAPABILITY_FOLLOWUP_RE.match(cleaned))
-
-
-_CAPABILITY_OVERVIEW = (
-    "I can help with:\n"
-    "- **Coding:** create, edit, debug, explain, and run scripts.\n"
-    "- **Files:** find, read, summarize, create, and update local documents.\n"
-    "- **Research:** search the live web and fetch specific pages.\n"
-    "- **Your computer:** check time, hardware, disk, and browser state.\n"
-    "- **Thinking work:** calculate, compare, plan, and turn ideas into clear writing.\n\n"
-    "Tell me the outcome you want, such as “find my resume” or “debug this Python error.”"
-)
-_CAPABILITY_EXAMPLES = (
-    "Here are concrete examples:\n"
-    "- “Create a Python script that renames these files.”\n"
-    "- “Find and summarize my resume.”\n"
-    "- “Search the web for the latest battery prices.”\n"
-    "- “Explain this error and show me how to fix it.”\n"
-    "- “Compare these two approaches and recommend one.”\n\n"
-    "Give me the goal in plain language; I’ll choose the right tools when the task needs them."
-)
-
-
-async def capability_response(
-    message: str,
-    history: Optional[list[object]] = None,
-) -> AsyncIterator[StreamChunk]:
-    """Yield a concise, deterministic capability answer without an LLM call."""
-    del history
-    cleaned = (message or "").strip().rstrip(_TRIVIAL_PUNCT).strip()
-    text = _CAPABILITY_EXAMPLES if _CAPABILITY_FOLLOWUP_RE.match(cleaned) else _CAPABILITY_OVERVIEW
-    prompt_estimate = _approx_tokens(f"LocalMind capability catalog.\n{message}")
-    yield StreamChunk(
-        text=text,
-        done=False,
-        usage={"prompt_tokens": prompt_estimate, "completion_tokens": _approx_tokens(text)},
-    )
-    yield StreamChunk(
-        text="",
-        done=True,
-        usage={"prompt_tokens": prompt_estimate, "completion_tokens": _approx_tokens(text)},
-    )
 
 
 def conversational_intent(message: str) -> str:
@@ -715,8 +681,11 @@ async def conversational_response(
         history,
         system_prompt=(
             "You are LocalMind, a local AI assistant. Answer the user's "
-            "question naturally and briefly. Do not output your reasoning "
-            "process — just give the response directly."
+            "latest message naturally and briefly using the recent conversation "
+            "as context. Resolve short follow-ups against what was just said; "
+            "do not repeat a previous answer when the user asks for more detail. "
+            "Give concrete examples when examples are requested. Do not output "
+            "your reasoning process — just give the response directly."
         ),
     ):
         yield chunk

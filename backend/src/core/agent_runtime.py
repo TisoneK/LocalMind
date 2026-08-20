@@ -498,20 +498,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         started: float,
         kind: str,
     ) -> AsyncIterator[StreamChunk]:
-        """Serve obvious social/capability turns without parent initialization.
+        """Serve obvious conversational turns without parent initialization.
 
         The parent initializer is the right boundary for ambiguous work, but a
-        greeting or a capability FAQ is neither ambiguous nor an execution
-        task. Keeping these turns deterministic makes the common conversational
-        path instant and prevents a weak model from repeating a generic catalog.
+        greeting or a short context-backed conversation is neither ambiguous
+        nor an execution task. Keeping these turns on one generic direct-chat
+        boundary avoids making the model classify and answer in one JSON call.
         """
-        from core.trivial_input import capability_response, conversational_response, trivial_response
+        from core.trivial_input import conversational_response, trivial_response
 
-        if kind == "capability":
-            title = "Describe Capabilities"
-            acknowledgement = "Here are a few concrete things I can help with."
-            stream = capability_response(message, history)
-        elif kind == "trivial":
+        if kind == "trivial":
             title = "Greet User"
             acknowledgement = "Hi!"
             stream = trivial_response(message, self._adapter_for_parent(), history)
@@ -695,21 +691,18 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         )
 
         # Keep the parent initializer for ambiguous work, but do not spend a
-        # slow model call on obvious social turns or the stable capability FAQ.
-        # These are safe, read-only direct answers; tool-bearing requests and
+        # slow meta-classification call on obvious conversational turns. These
+        # are safe, read-only direct answers; tool-bearing requests and
         # attached-file turns continue through the parent unchanged.
         if not any((file, filename, content_type, original_path)) and allowed_tool_names is None:
             from core.trivial_input import (
-                is_capability_question,
                 is_conversational_question,
                 is_trivial_input,
             )
 
             if is_trivial_input(message, history):
                 _fast_kind = "trivial"
-            elif is_capability_question(message, history):
-                _fast_kind = "capability"
-            elif is_conversational_question(message):
+            elif is_conversational_question(message, history):
                 _fast_kind = "conversation"
             else:
                 _fast_kind = ""

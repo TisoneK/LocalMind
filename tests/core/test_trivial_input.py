@@ -9,10 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from core.trivial_input import (
-    capability_response,
     conversational_intent,
     conversational_response,
-    is_capability_question,
     is_conversational_question,
     is_trivial_input,
     trivial_intent,
@@ -309,29 +307,14 @@ def test_conversational_intent():
     assert conversational_intent("what is the weather today?") == "chat"
 
 
-def test_capability_question_detection_is_narrow_and_includes_followups():
-    assert is_capability_question("What can you do?") is True
-    assert is_capability_question("Like what?") is True
-    assert is_capability_question("what can you do with my files?") is False
-    assert is_capability_question("What is the weather?") is False
-
-
-@pytest.mark.asyncio
-async def test_capability_response_is_concrete_and_deterministic():
-    chunks = [c async for c in capability_response("What can you do?")]
-    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
-    assert "Coding" in text
-    assert "Files" in text
-    assert "Research" in text
-    assert any(getattr(c, "done", False) for c in chunks)
-
-
-@pytest.mark.asyncio
-async def test_capability_followup_response_expands_with_examples():
-    chunks = [c async for c in capability_response("Like what?")]
-    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
-    assert "Create a Python script" in text
-    assert "Find and summarize my resume" in text
+def test_conversational_followup_uses_prior_assistant_context():
+    history = [
+        {"role": "user", "content": "What can you do?"},
+        {"role": "assistant", "content": "I can help with coding and research."},
+    ]
+    assert is_conversational_question("Like what?", history) is True
+    assert is_conversational_question("Like what?") is False
+    assert is_conversational_question("Run it", history) is False
 
 
 # ── Conversational response helper ──────────────────────────────────────────
@@ -740,30 +723,38 @@ async def test_engine_greeting_uses_the_zero_model_fast_path(message):
 
 
 @pytest.mark.asyncio
-async def test_engine_capability_followup_is_contextual_and_skips_provider():
-    """Capability FAQs should be instant and should not repeat a generic list."""
+async def test_engine_conversational_followup_uses_direct_chat_context():
+    """Direct follow-ups use one generic chat boundary, not a phrase shortcut."""
     from core.engine import Engine
     from core.obs import ObsCollector
 
     engine = Engine()
     obs = ObsCollector()
-    calls = 0
+    calls: list[list[dict]] = []
 
-    async def mock_chat(*args, **kwargs):
-        nonlocal calls
-        calls += 1
-        raise AssertionError("capability fast path must not call the provider")
-        yield  # pragma: no cover
+    async def mock_chat(messages, intent="chat", **kwargs):
+        calls.append(messages)
+        answer = (
+            "I can help with coding, files, and research."
+            if len(calls) == 1
+            else "For example, I can create a script or find a document."
+        )
+        yield MagicMock(text=answer, done=False, error=None, usage={"prompt_tokens": 30})
+        yield MagicMock(text="", done=True, error=None, usage={"prompt_tokens": 30, "completion_tokens": 12})
 
     mock_adapter = MagicMock()
     mock_adapter.chat = mock_chat
     with patch("core.agent_runtime.get_adapter", return_value=mock_adapter):
-        first = [c async for c in engine.process("What can you do?", "sess-capability-fast", obs=obs)]
-        second = [c async for c in engine.process("Like what?", "sess-capability-fast", obs=obs)]
+        first = [c async for c in engine.process("What can you do?", "sess-conversation-fast", obs=obs)]
+        second = [c async for c in engine.process("Like what?", "sess-conversation-fast", obs=obs)]
 
     first_text = "".join(c.text for c in first if getattr(c, "text", ""))
     second_text = "".join(c.text for c in second if getattr(c, "text", ""))
-    assert "Coding" in first_text and "Research" in first_text
-    assert "Create a Python script" in second_text
-    assert calls == 0
+    assert "coding" in first_text.lower()
+    assert "script" in second_text.lower()
+    assert len(calls) == 2
+    assert any(
+        message.get("content") == "I can help with coding, files, and research."
+        for message in calls[1]
+    )
     assert all(event.data.get("fast_path") for event in obs.history() if event.type == "agent_initialization_done")
