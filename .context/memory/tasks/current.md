@@ -1,7 +1,9 @@
 # Current Task
 
-**Status:** IDLE — Session 299 done (2026-08-19). Structured tool-failure
-recovery contract repaired and live-verified. No task in progress.
+**Status:** IDLE — Session 299 follow-up done (2026-08-19). Structured
+failure propagation is live-verified; weak-model completion after a failed
+high-stakes action remains bounded but not cleanly completed in the trace.
+No task in progress.
 
 ## Recovery arc shipped (root-cause, not symptom patches)
 - ADR-50 (`764b0a8`) — general model-agnostic tool-error recovery (classify every
@@ -13,9 +15,12 @@ recovery contract repaired and live-verified. No task in progress.
   confirmed live); shell timeout now a configurable Settings field (default 45).
 - `e806f07` (Session 299) — propagate structured `ToolResult(success=False)` as
   a failed dispatch so Thinker, failure memory, streak recovery, and the
-  completion floor receive the real tool failure.
+  completion floor receive the real tool failure. Live GLM trace confirmed the
+  failed SSE/evidence path; the model's clean corrective completion remains an
+  open live behavior gap.
 
 ## Next (open, no user decision pending)
+- B-2026-08-19-1 (live clean honest-stop after failed high-stakes action).
 - B-2026-08-18-4 (guaranteed weather card), -6 (synthesis grounding).
 - §40 efficiency roadmap: B-2026-08-17-8..12.
 

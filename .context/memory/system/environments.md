@@ -67,7 +67,7 @@ block (and its "last verified" date) every time you run on it again.
     - `sh .context/core/bin/context-sync status` → "core: 0.5.0, locked: 0.5.0, source: none reachable — skipping, this is fine"
     - `git clone https://github.com/CodebuffAI/open-codebuff.git` → succeeded (public, anonymous HTTPS, no auth needed)
 
-## Local macOS development machine (last verified 2026-08-16, Session 273)
+## Local macOS development machine (last verified 2026-08-19, Session 299 live follow-up)
 
 - **Identify by:** workspace path `/Users/bao/Code`; macOS host; local project checkout at `/Users/bao/Code/LocalMind`
 - **OS:** macOS 15.7.7
@@ -129,6 +129,7 @@ block (and its "last verified" date) every time you run on it again.
 - **Quirks:** The `python` command is unavailable and system `python3` is 3.9.6, below the backend's `>=3.10` requirement; use `backend/.venv/bin/python` (Python 3.12.13 via uv). Backend Ruff currently reports 132 E501 findings plus 3 non-E501 findings. `npm ci` reported 18 dependency vulnerabilities (17 high, 1 critical) and deprecated transitive packages. Local agent uses the user's existing git credentials and does not need a PAT for this public clone. The optional `agent-browser` CLI is not installed; BrowserAgent tests must mock `_run_browser_cmd` unless the CLI is installed for live smoke testing.
   - **Port 8000 is ALWAYS occupied** by the user's running LocalMind app instance — start trace servers on `LOCALMIND_PORT=8765` instead; never kill the user's instance.
   - **The ACTIVE provider is gemini-2.5-flash**, set via the app's Settings UI (its key is NOT in `backend/.env` — only `ZEN_API_KEY` is). The server startup log prints `adapter: <x> | model: <y>` — read it to learn the real active provider.
+  - **Live recovery trace (Session 299, 2026-08-19):** isolated `LOCALMIND_HOME` + copied settings + `LOCALMIND_PORT=8765` + real z.ai `glm-4.5-flash` with thinking enabled successfully exercised a missing-path shell failure; the SSE carried `success:false`, `error_type=command_failed`, failed `tool_call`, `evidence_to_parent.failed=true`, `[RECOVERY]`, and no `agent_thinker_start`. A second corrective-follow-up trace was blocked by z.ai HTTP 429 and is not considered verification.
   - **`LOCALMIND_SHELL_ENABLED=false` in `backend/.env`** — trace servers must set `LOCALMIND_SHELL_ENABLED=true` or the shell tool reports "Shell tool is disabled".
   - **No `timeout` CLI on macOS** (GNU coreutils) — use `curl --max-time N`.
   - `test_prompt_budget.py::test_init_prompt_is_under_budget` was stale before Session 239; classify-only init now passes the 2,500-character budget. Keep the test as a guard for future prompt growth.

@@ -4276,3 +4276,13 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-4 (weather card), B-2026-08-18-6 (synthesis grounding).
 - **Report:** `.context/memory/reviews/2026-08-19-review-68.md`
 - **Notes:** Generated untracked `backend/MagicMock/` was intentionally excluded from the product commit.
+
+---
+## 2026-08-19 — Session 299 live follow-up — real GLM trace
+
+- **Task:** User explicitly asked to trust the established Claude live-testing procedure over regression tests for the thinking/recovery fix.
+- **Procedure:** isolated `LOCALMIND_HOME` copied from the user's settings, z.ai `glm-4.5-flash`, thinking enabled, shell enabled, port 8765, deliberate missing-path shell task, direct log/SSE inspection, then cleanup.
+- **LIVE RESULT:** real iteration-1 shell call returned `success:false` with `error_type=command_failed`; SSE showed failed `tool_call`, `evidence_to_parent.failed=true`, concrete `[RECOVERY]`, and no `agent_thinker_start`. This validates the repaired dispatch/recovery boundary against the real provider.
+- **LIMITATION FOUND:** GLM emitted final prose without a successful corrective tool call. The parent completion floor rejected the prose and issued repeated bounded replans; the trace ended before a clean terminal completion event. A follow-up task that would have tested a corrective tool call was blocked by z.ai HTTP 429 before initialization and is not counted.
+- **Outcome:** live verification is partial but honest: the root contract is proven live; weak-model clean recovery after a failed high-stakes action remains unproven/open.
+- **Report:** `.context/memory/reviews/2026-08-19-review-68.md` (live follow-up appended)
