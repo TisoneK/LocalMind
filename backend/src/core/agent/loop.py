@@ -3870,6 +3870,35 @@ class AgentLoop:
                         async for _drain in result:
                             pass
 
+                    # B-2026-08-20-15 (Session 316): FIRST try deterministic
+                    # extraction from the reasoning buffer — ZERO LLM calls.
+                    # The user's insight: "the thinking text already has all
+                    # the answers." The model's reasoning often contains a
+                    # direct answer sentence ("the temperature is 16°C and
+                    # overcast"). Extract it before making another LLM call.
+                    _user_msg = _user_message_text(loop_messages) or ""
+                    _extracted = self._extract_answer_from_evidence(
+                        reasoning_buffer=_reasoning_buffer,
+                        observation_log=observation_log,
+                        trace=trace,
+                        user_message=_user_msg,
+                    )
+                    if _extracted:
+                        logger.info(
+                            "[agent.loop] empty-response rescued by evidence extraction "
+                            "(zero-LLM, %d chars)", len(_extracted),
+                        )
+                        if _obs:
+                            _obs.emit(
+                                "evidence_extracted",
+                                intent=intent.value,
+                                chars=len(_extracted),
+                                source="reasoning_or_observations",
+                            )
+                        yield StreamChunk(text=_extracted, done=False)
+                        yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
+                        return
+
                     # B-2026-08-18-11: SYNTHESIZE a real answer before giving up.
                     # The model streamed reasoning but no content — on GLM/thinking
                     # the substance often lands in the REASONING channel (it "thinks
@@ -5724,6 +5753,176 @@ class AgentLoop:
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
+    # Deterministic evidence extraction (ZERO LLM calls — B-2026-08-20-15)
+    # ------------------------------------------------------------------
+
+    def _extract_answer_from_evidence(
+        self,
+        *,
+        reasoning_buffer: str,
+        observation_log: str,
+        trace,
+        user_message: str,
+    ) -> str:
+        """Extract the answer directly from evidence already in hand — no LLM call.
+
+        B-2026-08-20-15 (Session 316): the user's insight — "the thinking text
+        and other evidence already has all the answers." When the model's
+        synthesis call fails (empty/timeout), the answer often already exists in:
+        1. The reasoning buffer (the model's own analysis — "the temperature is
+           16°C and overcast").
+        2. The tool observations (search result snippets, shell output).
+
+        This method extracts the answer DETERMINISTICALLY — no retry, no extra
+        LLM call, zero latency. It's the first thing tried when synthesis fails;
+        the retry-then-clean-message path is only the last resort.
+
+        Extraction strategy (in priority order):
+        - If the reasoning buffer contains a direct answer statement (mentions
+          the user's key entity + a value/fact), extract the relevant sentence(s).
+        - If tool observations contain the answer (e.g. search snippets with
+          temperature, a shell output with the hostname), extract the relevant
+          snippet.
+        - Otherwise return "" (caller falls through to retry/clean-message).
+        """
+        # Strategy 1: extract from the reasoning buffer.
+        # The model's reasoning often contains a sentence like "the current
+        # temperature is 16°C" or "the hostname is xyz". Find sentences that
+        # mention the user's key entity and look like answers.
+        if reasoning_buffer and reasoning_buffer.strip():
+            extracted = self._extract_answer_sentence(reasoning_buffer, user_message)
+            if extracted:
+                logger.info(
+                    "[agent.loop] answer extracted from reasoning buffer (%d chars, zero-LLM)",
+                    len(extracted),
+                )
+                return extracted
+
+        # Strategy 2: extract from tool observations.
+        # Search results often contain the answer in the snippet itself
+        # (e.g. "Current Time: 7 июн 2026 г. 02:45:08.12 °C").
+        if observation_log and observation_log.strip():
+            extracted = self._extract_answer_from_observations(observation_log, user_message)
+            if extracted:
+                logger.info(
+                    "[agent.loop] answer extracted from tool observations (%d chars, zero-LLM)",
+                    len(extracted),
+                )
+                return extracted
+
+        return ""
+
+    def _extract_answer_sentence(self, reasoning: str, user_message: str) -> str:
+        """Extract a direct-answer sentence from the model's reasoning buffer.
+
+        Looks for sentences that contain factual answer markers (numbers with
+        units, "is X", "temperature", "hostname", etc.) and the user's key
+        entity. Returns the best candidate, or "" if none found.
+        """
+        import re
+
+        if not reasoning or not reasoning.strip():
+            return ""
+        # Extract key entities from the user's message (lowercased, >3 chars).
+        # e.g. "weather in Kitengela" → ["weather", "kitengela"]
+        user_lower = (user_message or "").lower()
+        entities = [
+            w for w in re.findall(r"[a-z]{4,}", user_lower)
+            if w not in {"what", "where", "when", "how", "tell", "give", "show",
+                         "find", "list", "check", "please", "could", "would",
+                         "should", "current", "about"}
+        ]
+        # Split reasoning into sentences.
+        sentences = re.split(r'(?<=[.!?])\s+', reasoning.strip())
+        # Score each sentence: does it mention an entity + a factual marker?
+        factual_markers = (
+            r'\d+\s*°?',  # temperature / numbers
+            r'\d+\s*(?:km|kg|mb|gb|hz|ghz|mhz|fps|rpm|mph|kph) ?',  # units
+            r'is\s+[\w-]+',  # "is X"
+            r'are\s+[\w-]+',  # "are X"
+            r'temperature',
+            r'hostname',
+            r'overcast|sunny|rainy|cloudy|clear',  # weather
+            r'located|found|returned',
+        )
+        best = ""
+        best_score = 0
+        for sent in sentences:
+            sent_lower = sent.lower()
+            if len(sent) < 15 or len(sent) > 400:
+                continue
+            score = 0
+            # Entity match
+            for ent in entities:
+                if ent in sent_lower:
+                    score += 2
+            # Factual marker match
+            for marker in factual_markers:
+                if re.search(marker, sent_lower):
+                    score += 1
+            # Penalize meta-reasoning ("I should", "I need to", "let me")
+            if any(p in sent_lower for p in ("i should", "i need to", "let me", "i'll ", "i will ")):
+                score -= 3
+            if score > best_score and score >= 2:
+                best_score = score
+                best = sent.strip()
+        return best
+
+    def _extract_answer_from_observations(self, obs_log: str, user_message: str) -> str:
+        """Extract a direct answer from tool observations (search snippets, etc.).
+
+        Search results often contain the answer in the snippet. e.g.:
+        "Current Time: 7 июн 2026 г. 02:45:08.12 °C"
+        This extracts the most relevant snippet line.
+        """
+        import re
+
+        if not obs_log or not obs_log.strip():
+            return ""
+        user_lower = (user_message or "").lower()
+        entities = [
+            w for w in re.findall(r"[a-z]{4,}", user_lower)
+            if w not in {"what", "where", "when", "how", "tell", "give", "show",
+                         "find", "list", "check", "please", "could", "would",
+                         "should", "current", "about"}
+        ]
+        # Look for lines in the observation log that contain a factual value
+        # (number, temperature, etc.). Entity match is a bonus but the factual
+        # marker is the primary signal — a line with "12 °C" is an answer even
+        # if it doesn't repeat the user's entity word.
+        lines = obs_log.splitlines()
+        best = ""
+        best_score = 0
+        for line in lines:
+            line = line.strip()
+            if len(line) < 10 or len(line) > 300:
+                continue
+            line_lower = line.lower()
+            score = 0
+            # Entity match (bonus)
+            for ent in entities:
+                if ent in line_lower:
+                    score += 1
+            # Factual value markers (PRIMARY signal — weighted higher)
+            if re.search(r'\d+\s*°', line_lower):  # temperature
+                score += 5
+            if re.search(r'\d{4}', line):  # year / time
+                score += 2
+            if re.search(r'(?:is|are|was|were)\s+\S', line_lower):
+                score += 1
+            # Penalize URLs / headers / result-count lines
+            if line_lower.startswith("http"):
+                score -= 10
+            if line_lower.startswith("search results"):
+                score -= 10
+            if re.match(r'^\d+\.\s', line):  # numbered result header
+                score -= 2
+            if score > best_score and score >= 3:
+                best_score = score
+                best = line
+        return best
+
+    # ------------------------------------------------------------------
     # Forced final answer after iteration limit
     # ------------------------------------------------------------------
 
@@ -6097,6 +6296,23 @@ class AgentLoop:
                 "[agent.loop] final synthesis produced no text — "
                 "yielding evidence-based fallback (model returned empty stream)"
             )
+            # B-2026-08-20-15 (Session 316): FIRST try deterministic evidence
+            # extraction — ZERO LLM calls, ZERO latency. The user's insight:
+            # "the thinking text and other evidence already has all the answers."
+            # The model's reasoning buffer + tool observations often contain
+            # the answer directly (e.g. "the temperature is 16°C" in reasoning,
+            # or "Current Time: ... 12 °C" in a search snippet). Extract it
+            # before falling back to the retry-then-clean-message path.
+            _user_msg = _user_message_text(loop_messages) or ""
+            _extracted = self._extract_answer_from_evidence(
+                reasoning_buffer="",  # _force_final_answer doesn't have the reasoning buffer
+                observation_log=observation_log,
+                trace=trace,
+                user_message=_user_msg,
+            )
+            if _extracted:
+                yield StreamChunk(text=_extracted, done=True, usage=dict(_provider_usage))
+                return
             # B-2026-08-20-14 (Session 315): before dumping raw tool calls to
             # the user, try the post-loop evidence synthesis ONE more time.
             # The _force_final_answer call above may have returned empty
