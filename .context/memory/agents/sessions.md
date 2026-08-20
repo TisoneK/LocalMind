@@ -4418,3 +4418,17 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-10 (overlap init+memory, latency), B-2026-08-17-11 (fold classify+first-action, risky), B-2026-08-20-9 (shell JSON hint), B-2026-08-20-3 (Parent maturity), B-2026-08-20-5 (tune compaction).
 - **Report:** `.context/memory/reviews/2026-08-20-review-76.md`
 - **Notes:** no live traces this session (tool-call budget); frontend tests cover the indicator; backend tests cover the cap raise.
+
+---
+## 2026-08-20 — Session 311 — overlap ParentSession DB load with memory retrieval (B-2026-08-17-10)
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** B-2026-08-17-10 — overlap the init LLM call with memory retrieval for a latency win.
+- **ROOT CAUSE ADDRESSED:** the Session 302 warm-kernel refactor already overlapped `_gather_nonessential()` (memory_facts + failure/decision recall + attachment parsing) with adapter setup. But the Session 305 ParentSession load was a SEPARATE synchronous DB read that ran AFTER the memory await — blocking the event loop. Turn-start latency was serial: memory_await + parent_session_load + adapter_setup.
+- **SHIPPED (`174b245`):** moved the `ParentSession.from_store(...)` load into `_gather_nonessential()`, wrapped in `asyncio.to_thread()` (the SQLite read is synchronous). The task now returns `(facts, attach, parent_session)`. Removed the duplicate serial load later in `_process_unlocked`. **After:** turn-start latency = max(memory, parent_session_load, adapter_setup) — all three concurrent.
+- **VERIFICATION:** 2041 broad regression tests pass (1 pre-existing `test_shell_command_retains_trailing_output` failure — a shell brace-expansion env quirk, confirmed pre-existing by running on the clean commit). Ruff clean. NOT live-verified — the win is structural (serial → concurrent) and doesn't change behavior; provable from the code structure.
+- **SCOPE NOTE:** the original backlog item was about overlapping the "init LLM call" — but Session 302's warm-kernel refactor already eliminated the per-turn init LLM call entirely. What remained was the ParentSession DB load (Session 305), which this session overlaps. The backlog item is now fully resolved: no serial work between turn-start and the first LLM call except the concurrent task's tail.
+- **Outcome:** done — turn-start latency optimized; the only remaining per-turn latency lever is B-2026-08-17-11 (fold classify + first action, risky).
+- **Open items:** B-2026-08-17-11 (fold classify+first-action, risky), B-2026-08-17-12 (create→file_write steering), B-2026-08-20-9 (shell JSON hint), B-2026-08-20-3 (Parent maturity), B-2026-08-20-5 (tune compaction).
+- **Report:** `.context/memory/reviews/2026-08-20-review-77.md`
+- **Notes:** no live trace (structural win); full CI gate run (2041 pass).
