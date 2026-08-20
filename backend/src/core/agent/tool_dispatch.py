@@ -96,8 +96,8 @@ async def dispatch_with_retry(
 
     Returns:
         (result, failed, retry_count)
-        - result:      ToolResult on success, None on exhausted retries
-        - failed:      True if all attempts failed
+        - result:      ToolResult on success or structured failure, None on exhausted retries
+        - failed:      True when the result is None or ``result.success`` is False
         - retry_count: number of retries used (0 = succeeded first try)
     """
     effective_allowed = allowed_tool_names if allowed_tool_names is not None else _allowed_tool_names.get()
@@ -139,14 +139,17 @@ async def dispatch_with_retry(
             )
             # Short-circuit: if the tool returned a structured non-retriable error,
             # return immediately — retrying the same input is guaranteed to fail
-            # the same way and wastes the retry budget.
+            # the same way and wastes the retry budget. The second tuple value
+            # is the tool's failure signal, not whether dispatch itself raised;
+            # callers use it to drive recovery, Thinker gating, failure memory,
+            # and the acceptance floor.
             if result is not None and not result.success and result.error_type in _NON_RETRIABLE:
                 logger.info(
                     f"[agent.dispatch] tool={tool_intent.value} non-retriable "
                     f"error_type={result.error_type!r} — skipping retries"
                 )
-                return result, False, attempt
-            return result, False, attempt
+                return result, True, attempt
+            return result, result is None or not result.success, attempt
         except asyncio.TimeoutError:
             last_error = TimeoutError(
                 f"tool {tool_intent.value} timed out after {timeout_secs:.0f}s"

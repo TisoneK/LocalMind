@@ -17,13 +17,13 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from core.agent.loop import AgentLoop
 from core.agent.models import AgentStep, AgentTrace
 from core.models import Intent, StreamChunk
 
-# shell.py wraps a nonzero-exit command as this (with ToolResult.success=True),
-# so `tool_failed` alone would miss it — the observation check catches it.
+# shell.py wraps a nonzero-exit command as this. The dispatch layer now also
+# propagates ToolResult.success=False as `tool_failed`; the observation check
+# remains the defensive floor for command-level failures from other tools.
 _SHELL_FAIL_OBS = "Command failed:\ncat: /nonexistent_xyz.txt: No such file or directory"
 _SHELL_OK_OBS = "floor-smoke-ok"
 
@@ -99,7 +99,7 @@ async def test_parent_successful_last_action_accepts_done():
     no replan."""
     loop = AgentLoop(adapter=MagicMock())
     trace = _trace(("shell", _SHELL_OK_OBS, False))
-    suffix, is_final, loop_messages, adapter = await _run_gate(loop, trace, is_parent=True)
+    _suffix, is_final, loop_messages, adapter = await _run_gate(loop, trace, is_parent=True)
 
     assert is_final is True
     assert adapter.replan_calls == []
@@ -112,7 +112,7 @@ async def test_non_parent_is_unaffected_legacy_path():
     trace and no criteria keeps the legacy model-assertion path (is_final True)."""
     loop = AgentLoop(adapter=MagicMock())
     trace = _trace(("shell", _SHELL_FAIL_OBS, False))
-    suffix, is_final, _lm, adapter = await _run_gate(loop, trace, is_parent=False)
+    _suffix, is_final, _lm, adapter = await _run_gate(loop, trace, is_parent=False)
 
     assert is_final is True
     assert adapter.replan_calls == []
@@ -138,7 +138,7 @@ async def test_parent_low_stakes_failure_is_not_gated():
     """A failed READ/analysis tool is not high-stakes → no floor, done accepted."""
     loop = AgentLoop(adapter=MagicMock())
     trace = _trace(("file_task", "error: file not found", False))
-    suffix, is_final, _lm, adapter = await _run_gate(loop, trace, is_parent=True)
+    _suffix, is_final, _lm, adapter = await _run_gate(loop, trace, is_parent=True)
 
     assert is_final is True
     assert adapter.replan_calls == []
@@ -150,7 +150,7 @@ async def test_parent_tool_level_failure_also_rejects():
     caught even without error markers in the observation."""
     loop = AgentLoop(adapter=MagicMock())
     trace = _trace(("code_exec", "", True))
-    suffix, is_final, loop_messages, adapter = await _run_gate(loop, trace, is_parent=True)
+    _suffix, is_final, loop_messages, adapter = await _run_gate(loop, trace, is_parent=True)
 
     assert is_final is False
     assert len(adapter.replan_calls) == 1

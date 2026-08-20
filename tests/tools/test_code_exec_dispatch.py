@@ -90,9 +90,10 @@ async def test_dispatch_with_retry_raw_code_executes():
 @pytest.mark.asyncio
 async def test_dispatch_with_retry_rejection_short_circuits():
     # error_type=invalid_input is in the non-retriable set — the loop must
-    # not burn retries on a rejection (attempt count 0).
+    # not burn retries on a rejection (attempt count 0), but it must still
+    # receive the structured failure signal for recovery.
     result, failed, retries = await dispatch_with_retry(Intent.CODE_EXEC, NL_PROSE)
-    assert not failed
+    assert failed
     assert retries == 0
     assert result is not None
     assert not result.success

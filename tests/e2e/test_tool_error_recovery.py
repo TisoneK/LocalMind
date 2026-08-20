@@ -14,10 +14,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from core.agent.loop import AgentLoop, tool_error_recovery_directive
+from core.agent.tool_dispatch import dispatch_with_retry
 from core.models import Intent, RiskLevel, StreamChunk, ToolResult
-
 
 # ── unit: every error class → a concrete, non-empty directive ────────────────
 
@@ -58,7 +57,98 @@ def test_unknown_errors_still_get_an_actionable_directive(et):
     assert d and "honestly" in d.lower()  # falls back to a real next step + honesty
 
 
+# ── dispatch contract: structured failures remain failures ───────────────────
+
+
+@pytest.mark.asyncio
+async def test_dispatch_marks_structured_tool_failure_for_the_loop(monkeypatch):
+    """A tool returning success=False must drive the loop's failed branch.
+
+    Before this contract fix, dispatch_with_retry returned failed=False for
+    structured failures, so the loop marked the action done, ran Thinker on the
+    error output, and skipped failure-memory/recovery guards.
+    """
+    failed_result = ToolResult(
+        content="Command failed: missing path",
+        source="shell",
+        success=False,
+        error_type="command_failed",
+    )
+
+    async def fake_dispatch(*args, **kwargs):
+        return failed_result
+
+    monkeypatch.setattr("core.agent.tool_dispatch.dispatch", fake_dispatch)
+    result, failed, retries = await dispatch_with_retry(Intent.SHELL, "ls /missing")
+
+    assert result is failed_result
+    assert failed is True
+    assert retries == 0
+
+
 # ── e2e: the [RECOVERY] line reaches the model after a tool error ────────────
+
+
+@pytest.mark.asyncio
+async def test_loop_treats_structured_failure_as_failed_and_skips_thinker():
+    """The failed signal reaches the loop, not just the recovery text."""
+    from adapters.ollama import ToolCallResult
+    from core.obs import ObsCollector
+
+    loop = AgentLoop(adapter=MagicMock())
+    obs = ObsCollector()
+    seen = {"calls": 0}
+
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        seen["calls"] += 1
+        if seen["calls"] == 1:
+            return ToolCallResult(tool_name="shell", tool_args={"command": "ls /missing"})
+
+        async def _stream():
+            yield StreamChunk(text="I recovered honestly.", done=True)
+
+        return _stream()
+
+    async def fake_dispatch(*args, **kwargs):
+        return (
+            ToolResult(
+                content="Command failed: missing path",
+                source="shell",
+                success=False,
+                error_type="command_failed",
+            ),
+            True,
+            0,
+        )
+
+    adapter = MagicMock()
+    adapter.chat_with_tools = chat_with_tools
+    adapter.chat = lambda *args, **kwargs: iter(())
+    adapter.thinking_enabled = True
+
+    with patch("core.agent.loop.dispatch_with_retry", fake_dispatch), patch(
+        "core.agent.loop._filter_tool_injection", side_effect=lambda value: value
+    ), patch("core.agent.loop._filter_system_leaks", side_effect=lambda value: value):
+        chunks = [
+            chunk
+            async for chunk in loop.run(
+                messages=[{"role": "user", "content": "recover from a failed command"}],
+                intent=Intent.SHELL,
+                initial_tool_result=None,
+                available_tools=[],
+                adapter=adapter,
+                obs=obs,
+                skip_planning=True,
+            )
+        ]
+
+    assert "I recovered honestly." in "".join(chunk.text for chunk in chunks)
+    events = obs.history()
+    tool_events = [event for event in events if event.type == "tool_call"]
+    assert any(event.data.get("status") == "failed" for event in tool_events)
+    assert not any(event.type == "agent_thinker_start" for event in events)
+    failure = next(event for event in events if event.type == "agent_loop_failure")
+    assert failure.data["failure_type"] == "tool_failure"
 
 
 @pytest.mark.asyncio
