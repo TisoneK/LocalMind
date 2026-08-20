@@ -488,6 +488,140 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         self._last_turn_prompt_tokens = int(merged.get("context_tokens", 0) or 0)
         self._last_turn_session_id = session_id
 
+    async def _stream_fast_direct(
+        self,
+        *,
+        message: str,
+        session_id: str,
+        history: list[Message],
+        collector: ObsCollector,
+        started: float,
+        kind: str,
+    ) -> AsyncIterator[StreamChunk]:
+        """Serve obvious social/capability turns without parent initialization.
+
+        The parent initializer is the right boundary for ambiguous work, but a
+        greeting or a capability FAQ is neither ambiguous nor an execution
+        task. Keeping these turns deterministic makes the common conversational
+        path instant and prevents a weak model from repeating a generic catalog.
+        """
+        from core.trivial_input import capability_response, conversational_response, trivial_response
+
+        if kind == "capability":
+            title = "Describe Capabilities"
+            acknowledgement = "Here are a few concrete things I can help with."
+            stream = capability_response(message, history)
+        elif kind == "trivial":
+            title = "Greet User"
+            acknowledgement = "Hi!"
+            stream = trivial_response(message, self._adapter_for_parent(), history)
+        else:
+            title = "Answer Question"
+            acknowledgement = "I’ll answer that directly."
+            adapter = self._adapter_for_parent()
+            chat_history = [
+                {
+                    "role": item.role.value if hasattr(item.role, "value") else str(item.role),
+                    "content": item.content,
+                }
+                for item in history[-4:]
+            ]
+            stream = conversational_response(message, adapter, chat_history)
+
+        collector.emit("agent_context_ready", memory_facts=0, attachment=False, fast_path=True)
+        collector.emit("agent_initialization_start", intent=Intent.ANALYZE.value, fast_path=True)
+        collector.emit(
+            "agent_initialization_ack",
+            acknowledgement=acknowledgement,
+            elapsed_ms=0,
+            fast_path=True,
+        )
+        collector.emit(
+            "agent_initialization_done",
+            mode="direct",
+            objective=message[:200],
+            title=title,
+            confidence=1.0,
+            init_prompt_chars=0,
+            fast_path=True,
+        )
+        collector.emit("agent_loop_start", intent=Intent.ANALYZE.value, fast_path=True)
+        yield StreamChunk(text="", status=acknowledgement)
+
+        response_parts: list[str] = []
+        usage: dict[str, int] = {}
+        async for chunk in stream:
+            if chunk.usage:
+                usage.update(chunk.usage)
+            if chunk.text:
+                response_parts.append(chunk.text)
+                yield chunk.model_copy(update={"done": False})
+
+        response_text = "".join(response_parts).strip()
+        prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+        completion_tokens = int(usage.get("completion_tokens", 0) or _approx_tokens(response_text))
+        total_ms = round((time.monotonic() - started) * 1000)
+        if not response_text:
+            response_text = "I’m here and ready to help. What would you like to do?"
+            yield StreamChunk(text=response_text, done=False)
+        if prompt_tokens or completion_tokens:
+            self._metrics.record_streaming_complete(
+                total_tokens=prompt_tokens + completion_tokens,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+            )
+
+        # Preserve the polling/UI stage contract even though this path skips
+        # the model-owned initializer and all tool stages.
+        collector.emit("stage_timing", stage="intent_classify", latency_ms=0, status="skipped")
+        collector.emit("stage_timing", stage="context_build", latency_ms=0, status="skipped")
+        collector.emit("stage_timing", stage="tool_select", latency_ms=0, status="skipped")
+        collector.emit("stage_timing", stage="generate", latency_ms=total_ms, status="done")
+        collector.emit("stage_timing", stage="execute", latency_ms=0, status="skipped")
+        collector.emit("agent_loop_done", intent=Intent.ANALYZE.value, direct=True, fast_path=True)
+        collector.emit(
+            "agent_runtime_done",
+            agent="parent",
+            elapsed_ms=total_ms,
+            response_chars=len(response_text),
+            fast_path=True,
+        )
+        collector.emit(
+            "turn_complete",
+            intent="parent",
+            confidence=1.0,
+            tokens_approx=completion_tokens,
+            prompt_tokens_approx=prompt_tokens,
+            total_latency_ms=total_ms,
+            memory_facts=0,
+            agent_mode=True,
+            fast_path=True,
+            provider_usage=usage,
+        )
+        agent_runs, agent_phases = build_workspace_artifacts(collector, task=message)
+        self._persist_assistant(
+            session_id,
+            response_text,
+            acknowledgement=acknowledgement,
+            metrics={
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "latency_ms": total_ms,
+            },
+            agent_runs=agent_runs,
+            agent_phases=agent_phases,
+        )
+        self._store_observation(
+            session_id,
+            collector,
+            intent="parent",
+            confidence=1.0,
+            memory_hits=0,
+            context_tokens=prompt_tokens,
+            latency_ms=total_ms,
+        )
+        yield StreamChunk(text="", done=True, usage=usage)
+
     async def process(
         self,
         message: str,
@@ -559,6 +693,37 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             file_size=len(file) if file else None,
             file_type=content_type,
         )
+
+        # Keep the parent initializer for ambiguous work, but do not spend a
+        # slow model call on obvious social turns or the stable capability FAQ.
+        # These are safe, read-only direct answers; tool-bearing requests and
+        # attached-file turns continue through the parent unchanged.
+        if not any((file, filename, content_type, original_path)) and allowed_tool_names is None:
+            from core.trivial_input import (
+                is_capability_question,
+                is_conversational_question,
+                is_trivial_input,
+            )
+
+            if is_trivial_input(message, history):
+                _fast_kind = "trivial"
+            elif is_capability_question(message, history):
+                _fast_kind = "capability"
+            elif is_conversational_question(message):
+                _fast_kind = "conversation"
+            else:
+                _fast_kind = ""
+            if _fast_kind:
+                async for _fast_chunk in self._stream_fast_direct(
+                    message=message,
+                    session_id=session_id,
+                    history=history,
+                    collector=collector,
+                    started=started,
+                    kind=_fast_kind,
+                ):
+                    yield _fast_chunk
+                return
 
         # ADR-37: no hardcoded stage narration. The parent's real model
         # output (acknowledgement + thinking stream) is the status signal;

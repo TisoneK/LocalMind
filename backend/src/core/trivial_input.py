@@ -387,6 +387,71 @@ def is_conversational_question(message: str) -> bool:
     return True
 
 
+# Capability questions are stable product metadata, not model reasoning tasks.
+# Answering these deterministically avoids spending a slow GLM call on a
+# generic inventory and gives short follow-ups ("Like what?") concrete examples
+# instead of repeating the same paragraph.
+_CAPABILITY_INQUIRY_RE = re.compile(
+    r"^(?:what can you do|what do you do|what are your capabilities|"
+    r"what tools do you have|what can you help with)\??$",
+    re.IGNORECASE,
+)
+_CAPABILITY_FOLLOWUP_RE = re.compile(
+    r"^(?:like what|such as what|for example\??)$",
+    re.IGNORECASE,
+)
+
+
+def is_capability_question(message: str, history: Optional[list[object]] = None) -> bool:
+    """Return whether a short message asks for LocalMind capability examples."""
+    del history  # Reserved for future context-sensitive capability families.
+    cleaned = (message or "").strip().rstrip(_TRIVIAL_PUNCT).strip()
+    if not cleaned or len(cleaned) > 80 or len(cleaned.split()) > 12:
+        return False
+    return bool(_CAPABILITY_INQUIRY_RE.match(cleaned) or _CAPABILITY_FOLLOWUP_RE.match(cleaned))
+
+
+_CAPABILITY_OVERVIEW = (
+    "I can help with:\n"
+    "- **Coding:** create, edit, debug, explain, and run scripts.\n"
+    "- **Files:** find, read, summarize, create, and update local documents.\n"
+    "- **Research:** search the live web and fetch specific pages.\n"
+    "- **Your computer:** check time, hardware, disk, and browser state.\n"
+    "- **Thinking work:** calculate, compare, plan, and turn ideas into clear writing.\n\n"
+    "Tell me the outcome you want, such as “find my resume” or “debug this Python error.”"
+)
+_CAPABILITY_EXAMPLES = (
+    "Here are concrete examples:\n"
+    "- “Create a Python script that renames these files.”\n"
+    "- “Find and summarize my resume.”\n"
+    "- “Search the web for the latest battery prices.”\n"
+    "- “Explain this error and show me how to fix it.”\n"
+    "- “Compare these two approaches and recommend one.”\n\n"
+    "Give me the goal in plain language; I’ll choose the right tools when the task needs them."
+)
+
+
+async def capability_response(
+    message: str,
+    history: Optional[list[object]] = None,
+) -> AsyncIterator[StreamChunk]:
+    """Yield a concise, deterministic capability answer without an LLM call."""
+    del history
+    cleaned = (message or "").strip().rstrip(_TRIVIAL_PUNCT).strip()
+    text = _CAPABILITY_EXAMPLES if _CAPABILITY_FOLLOWUP_RE.match(cleaned) else _CAPABILITY_OVERVIEW
+    prompt_estimate = _approx_tokens(f"LocalMind capability catalog.\n{message}")
+    yield StreamChunk(
+        text=text,
+        done=False,
+        usage={"prompt_tokens": prompt_estimate, "completion_tokens": _approx_tokens(text)},
+    )
+    yield StreamChunk(
+        text="",
+        done=True,
+        usage={"prompt_tokens": prompt_estimate, "completion_tokens": _approx_tokens(text)},
+    )
+
+
 def conversational_intent(message: str) -> str:
     """
     Return the conversation intent for a conversational-question input,

@@ -9,8 +9,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from core.trivial_input import (
+    capability_response,
     conversational_intent,
     conversational_response,
+    is_capability_question,
     is_conversational_question,
     is_trivial_input,
     trivial_intent,
@@ -305,6 +307,31 @@ def test_conversational_question_blank():
 def test_conversational_intent():
     assert conversational_intent("What can you do?") == "question"
     assert conversational_intent("what is the weather today?") == "chat"
+
+
+def test_capability_question_detection_is_narrow_and_includes_followups():
+    assert is_capability_question("What can you do?") is True
+    assert is_capability_question("Like what?") is True
+    assert is_capability_question("what can you do with my files?") is False
+    assert is_capability_question("What is the weather?") is False
+
+
+@pytest.mark.asyncio
+async def test_capability_response_is_concrete_and_deterministic():
+    chunks = [c async for c in capability_response("What can you do?")]
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert "Coding" in text
+    assert "Files" in text
+    assert "Research" in text
+    assert any(getattr(c, "done", False) for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_capability_followup_response_expands_with_examples():
+    chunks = [c async for c in capability_response("Like what?")]
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert "Create a Python script" in text
+    assert "Find and summarize my resume" in text
 
 
 # ── Conversational response helper ──────────────────────────────────────────
@@ -622,7 +649,7 @@ async def test_engine_conversational_question_skips_dispatcher():
     mock_adapter.chat = mock_chat
 
     with patch("core.engine.get_adapter", return_value=mock_adapter):
-        chunks = [c async for c in engine.process("What can you do?", "sess-conv-fast")]
+        chunks = [c async for c in engine.process("Why is Python popular?", "sess-conv-fast")]
 
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert "help" in text.lower()
@@ -658,7 +685,7 @@ async def test_engine_conversational_question_emits_prompt_tokens():
 
     obs = ObsCollector()
     with patch("core.engine.get_adapter", return_value=mock_adapter):
-        chunks = [c async for c in engine.process("What can you do?", "sess-conv-usage", obs=obs)]
+        chunks = [c async for c in engine.process("Why is Python popular?", "sess-conv-usage", obs=obs)]
 
     assert any(getattr(c, "text", "") for c in chunks), "expected a streamed reply"
     turn_completes = [e for e in obs.history() if e.type == "turn_complete"]
@@ -673,8 +700,8 @@ async def test_engine_conversational_question_emits_prompt_tokens():
 
 @pytest.mark.parametrize("message", ["Hi", "Hey LM", "Hello LocalMind"])
 @pytest.mark.asyncio
-async def test_engine_greeting_is_decided_by_parent_initialization(message):
-    """Social wording is handled by the generic parent decision, not a regex route."""
+async def test_engine_greeting_uses_the_zero_model_fast_path(message):
+    """Pure social wording should not spend a provider call."""
     from core.engine import Engine
     from core.obs import ObsCollector
 
@@ -705,7 +732,38 @@ async def test_engine_greeting_is_decided_by_parent_initialization(message):
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert "localmind" in text.lower()
     assert any(getattr(c, "done", False) for c in chunks)
-    assert calls == 1
+    assert calls == 0
     initialization = [event for event in obs.history() if event.type == "agent_initialization_done"]
     assert initialization and initialization[0].data["mode"] == "direct"
+    assert initialization[0].data["fast_path"] is True
     assert not any(event.type == "tool_call" for event in obs.history())
+
+
+@pytest.mark.asyncio
+async def test_engine_capability_followup_is_contextual_and_skips_provider():
+    """Capability FAQs should be instant and should not repeat a generic list."""
+    from core.engine import Engine
+    from core.obs import ObsCollector
+
+    engine = Engine()
+    obs = ObsCollector()
+    calls = 0
+
+    async def mock_chat(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        raise AssertionError("capability fast path must not call the provider")
+        yield  # pragma: no cover
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+    with patch("core.agent_runtime.get_adapter", return_value=mock_adapter):
+        first = [c async for c in engine.process("What can you do?", "sess-capability-fast", obs=obs)]
+        second = [c async for c in engine.process("Like what?", "sess-capability-fast", obs=obs)]
+
+    first_text = "".join(c.text for c in first if getattr(c, "text", ""))
+    second_text = "".join(c.text for c in second if getattr(c, "text", ""))
+    assert "Coding" in first_text and "Research" in first_text
+    assert "Create a Python script" in second_text
+    assert calls == 0
+    assert all(event.data.get("fast_path") for event in obs.history() if event.type == "agent_initialization_done")
