@@ -28,7 +28,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from adapters.ollama import ToolCallResult
 from core.agent.loop import AgentLoop
 from core.models import Intent, RiskLevel, StreamChunk, ToolResult
@@ -206,6 +205,60 @@ class TestTextWithoutToolIter0Nudge:
 
         assert seen["calls"] == 2, f"exactly one nudge, then accept — got {seen['calls']} calls"
         assert "There are two files in the folder." in full
+
+
+class TestThinkerStreamSilent:
+    """Session 324: the ADR-42 Thinker consult must never forward its raw
+    reasoning to the user-visible thinking stream. Live screenshots showed the
+    model's Thinker-prompt echoes ("You are the Thinker… SILENT and
+    READ-ONLY…") and JSON-format musing rendering into the ThinkingBlock on
+    every model — there was no filter-before-render step. The loop drains the
+    consult silently; only the parsed analysis feeds the agent's context."""
+
+    @pytest.mark.asyncio
+    async def test_thinker_reasoning_not_streamed_to_user(self):
+        loop = AgentLoop(adapter=MagicMock())
+        seen = {"calls": 0, "thinker_ran": False}
+
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+            seen["calls"] += 1
+            if seen["calls"] == 1:
+                # A successful tool run produces evidence → the Thinker consults.
+                return ToolCallResult(
+                    tool_name="shell",
+                    tool_args={"command": "ls -la"},
+                    raw_content="",
+                )
+            return _text_stream("Done — the evidence is analyzed.")
+
+        async def chat(messages, temperature=0.4, intent="analyze", **kwargs):
+            # The Thinker consult: prompt echo + reasoning + JSON tail.
+            seen["thinker_ran"] = True
+            yield StreamChunk(
+                text="You are the Thinker — SILENT and READ-ONLY... ",
+                thinking="You are the Thinker — SILENT and READ-ONLY... ",
+                done=False,
+            )
+            yield StreamChunk(
+                text='{"facts": ["file1.txt"], "next_step": "read file1.txt", "confidence": 0.8}',
+                done=False,
+            )
+            yield StreamChunk(text="", done=True)
+
+        mock_adapter = MagicMock()
+        mock_adapter.thinking_enabled = True
+        mock_adapter.chat_with_tools = chat_with_tools
+        mock_adapter.chat = chat
+
+        chunks = await _run(loop, mock_adapter, message="analyze the files")
+
+        leaked = [getattr(c, "thinking", "") for c in chunks if getattr(c, "thinking", None)]
+        assert seen["thinker_ran"], "the Thinker consult must have run (evidence present)"
+        assert not leaked, (
+            "the Thinker's raw reasoning must not reach the user's thinking stream, "
+            f"got: {leaked!r}"
+        )
+        assert "Done — the evidence is analyzed." in "".join(c.text for c in chunks)
 
 
 class TestNonToolIntentsUntouched:

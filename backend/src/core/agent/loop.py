@@ -3070,10 +3070,15 @@ class AgentLoop:
                 )
 
                 # ── ADR-42: Thinker consult on the first real evidence ──────
-                # A silent, read-only reasoning pass on what was just GATHERED
-                # (not the raw request) — streams genuine reasoning to the
-                # ThinkingBlock and feeds a next-step/facts/ambiguities analysis
-                # forward to shape the next action. Gated: once per turn, only
+                # A SILENT, read-only reasoning pass on what was just GATHERED
+                # (not the raw request) — feeds a next-step/facts/ambiguities
+                # analysis forward to shape the next action. The Thinker's raw
+                # monologue is NEVER surfaced to the user (Session 324: no
+                # filter-before-render step existed, so the model's prompt
+                # echoes and JSON-format musing leaked into the ThinkingBlock
+                # on every model); the loop injects the structured analysis
+                # into the agent's context below and reports the lifecycle via
+                # the agent_thinker_* obs events. Gated: once per turn, only
                 # tool-capable intents, only when the model actually reasons
                 # (thinking enabled), only on a real successful observation. Any
                 # failure/timeout is swallowed — the Thinker never blocks a turn.
@@ -3105,9 +3110,11 @@ class AgentLoop:
                                     "localmind_reasoning_plan_timeout_secs", REASONING_PLAN_TIMEOUT_SECS
                                 )
                             )
+                            # Drain the consult silently — the Thinker yields
+                            # no user-visible chunks by contract; only the
+                            # parsed analysis matters.
                             async for _tc in _thinker.consult(_ev, active_adapter):
-                                if _tc.thinking:
-                                    yield StreamChunk(text="", thinking=_tc.thinking, done=False)
+                                pass
                             _analysis = _thinker.last_analysis
                             if _analysis and not _analysis.is_empty:
                                 loop_messages.append(

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from core.agent.thinker import (
     Evidence,
     Thinker,
@@ -103,28 +102,33 @@ class _MockAdapter:
 
 
 @pytest.mark.asyncio
-async def test_consult_streams_reasoning_then_analysis():
+async def test_consult_is_silent_but_parses_analysis():
+    """Session 324: the Thinker is a SILENT analyst — its raw monologue must
+    never surface as user-visible thinking (the model's prompt echoes and
+    JSON-format musing used to leak into the ThinkingBlock on every model; no
+    filter-before-render step existed). The consult still parses the
+    structured analysis so the loop can inject it into the agent's context."""
     chunks = [
+        StreamChunk(text="You are the Thinker... SILENT and READ-ONLY... ", done=False),
         StreamChunk(text="Found two files; ", done=False),
         StreamChunk(text="the newer one matches. ", done=False),
         StreamChunk(text='{"facts": ["f1"], "next_step": "read it", "confidence": 0.7}', done=False),
         StreamChunk(text="", done=True),
     ]
     thinker = Thinker()
-    thought = []
+    surfaced = []
     final = None
     async for ch in thinker.consult(Evidence(observations="ls output"), _MockAdapter(chunks)):
         if ch.thinking:
-            thought.append(ch.thinking)
+            surfaced.append(ch.thinking)
         if ch.done:
             final = ch
-    joined = "".join(thought)
-    # Prose reasoning surfaced; the JSON tail did NOT leak into the thought.
-    assert "Found two files" in joined and "the newer one matches" in joined
-    assert "{" not in joined and "facts" not in joined
-    # Structured analysis parsed + attached.
+    # Nothing — not the prose, not the prompt echo, not the JSON — is surfaced.
+    assert surfaced == [], f"Thinker reasoning must stay internal, got: {surfaced!r}"
+    # Structured analysis still parsed + attached for the agent's context.
     assert thinker.last_analysis.facts == ["f1"]
     assert thinker.last_analysis.next_step == "read it"
+    assert "You are the Thinker" in thinker.last_analysis.reasoning  # kept for context
     assert final.metadata["thinker_analysis"]["next_step"] == "read it"
 
 
