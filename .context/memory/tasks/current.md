@@ -1,21 +1,25 @@
 # Current Task
 
-**Status:** DECISION NEEDED — Session 326 investigation found the Todos panel is structurally empty in the
-warm-kernel runtime (B-2026-08-20-23, High). User to pick the fix direction before implementation.
+**Status:** IDLE — Session 326 shipped the synthesized-todos fix (B-2026-08-20-23 done, `a0e43f3`).
 
-## Session 326 outcome — investigation, no code change
+## Session 326 outcome — empty Todos panel root-caused and fixed
 
 - Grounded the user's transcript claims against code + a live trace (bankofai/deepseek-v4-flash):
   (1) file_task relative paths — already fixed by S325, unit-proven; the successful Windows run used absolute
   paths so it never exercised it; fresh-chat relative retest needed on Windows. (2) "Keep JSON concise." — NOT
   the Thinker (string absent from codebase; it is the model echoing the planner prompt; that trace predates the
   S324 restart); current build live-verified 0 Thinker markers in thinking tokens. (3) checklist-shaped thinking
-  = model behavior (user's own conclusion), BUT the empty Todos panel is structural: `agent_runtime.py:917`
+  = model behavior (user's own conclusion), BUT the empty Todos panel was structural: `agent_runtime.py:917`
   hardcodes `skip_planning=True`, gating out all three plan→todo branches (loop.py 1238/1312/1334); only the
-  model-voluntary `todo_write` tool remains. Logged as **B-2026-08-20-23 (High)**.
-- **Next:** user picks the fix direction — (A) restore upfront plan in the warm-kernel first call (ADR-49
-  intent), (B) harness-derive todos from the tool sequence (deterministic, post-hoc), (C) both. Then implement
-  + live-verify.
+  model-voluntary `todo_write` tool remained.
+- **FIX (`a0e43f3`, live-verified):** per the user's design input ("todos = rendered artifact of what happened;
+  the plan constrains what happens next"), the loop now synthesizes one todo per real tool execution
+  (todo_created on dispatch, todo_completed on landing), wired into all three dispatch paths, describe_tool
+  excluded, plan-based checklists still take precedence. Live trace: syn-0 "Run: mkdir -p test-run" + syn-1
+  "Write: …" created AND completed; task completed. Backend 2087/2.
+- **Next:** user restarts the app backend to pick up the fix, then runs a multi-step task — the Todos panel
+  should now fill live. Optional follow-up (not started): upfront plan in the warm-kernel first call, layered on
+  top of the synthesized surface, if the user wants the panel to show the pre-task plan again.
 
 ## Session 325 outcome — read-back-after-write on Windows
 

@@ -4636,3 +4636,14 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-23 (High — todos), B-2026-08-20-20 (Medium), B-2026-08-20-10 (High), B-2026-08-20-11 (Medium).
 - **Report:** `.context/memory/reviews/2026-08-20-review-92.md`
 - **Notes:** the live harness ran first-try (no traps this time). The user's transcript also discussed testing the checklist pattern on harder tasks — deferred until the todos direction is decided (the panel fix changes what the checklist means).
+
+---
+## 2026-08-20 — Session 326 addendum — harness-owned synthesized todos shipped (B-2026-08-20-23 done)
+
+- **Trigger:** the user's design input (pasted transcript): "a todo describes what happened; a plan constrains what's allowed to happen next, before it happens" — the user-facing todos should be a later-rendered artifact of the plan's outcomes, never what the model is doing instead of reasoning. That resolved the open A/B/C question toward harness-owned todos.
+- **SHIPPED (`a0e43f3`):** `loop.py` now synthesizes one todo per REAL tool execution when no plan-based steps exist (the warm-kernel reality): `_synth_begin()` emits `todo_created` (id syn-N, in_progress) on dispatch, `_synth_end()` emits `todo_completed` on landing. Wired into ALL THREE dispatch paths (main single-tool, second single-tool, parallel batch). describe_tool scaffolding excluded, bounded at 12, and plan-based checklists still take precedence (no double-todos). Label distilled from the tool call itself (`_synthetic_todo_text`: "Run: <cmd>" / "Write: <path>" …). 4 regression tests (`tests/core/test_synthesized_todos.py`) incl. the plan-suppression test.
+- **LIVE-VERIFIED (bankofai/deepseek-v4-flash, isolated 8765):** the same create-test-run task — trace showed `todo_created` syn-0 "Run: mkdir -p test-run" + syn-1 "Write: /Users/bao/test-run/notes.txt:" each followed by `todo_completed`; describe_tool (4 calls) produced NO todos; the task completed (19-byte notes.txt with exact content). One earlier attempt stopped after describe_tool (free-tier premature-stop variance, unrelated).
+- **Outcome:** done — the Todos panel now populates live on every tool-running turn, model-agnostically. Backend 2087 passed / 2 skipped / 0 failures (2083 + 4 new); ruff clean (one accidental line-merge in the emit blocks caught by ruff and fixed).
+- **Open items:** B-2026-08-20-20 (Medium), B-2026-08-20-10 (High), B-2026-08-20-11 (Medium).
+- **Report:** `.context/memory/reviews/2026-08-20-review-92.md` (Follow-up appended)
+- **Notes:** the "upfront plan" (ADR-49's original directive) is NOT restored — the harness-derived surface supersedes it per the user's new framing; if the user later wants the panel to also show the pre-task plan, that is a separate follow-up (upfront plan in the warm-kernel first call) layered on top of this. The user's checklist-shaped Thinking observation remains model behavior, unchanged by this fix.
