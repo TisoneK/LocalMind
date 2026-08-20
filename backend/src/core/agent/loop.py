@@ -384,6 +384,19 @@ _MAX_TOOL_FORCE_RECOVERIES = 2
 # stays intact (this + the Phase-1 500-chunk reasoning cap bound it).
 _MAX_EMPTY_REASONING_RECOVERIES = 2
 
+# B-2026-08-20-7 / Session 310: parent turns get a higher recovery cap. Live
+# traces on z.ai/glm-4.5-flash (Sessions 306-308) showed the model frequently
+# hits empty-response-after-reasoning on multiple iterations of a single
+# tool-bearing turn — the cap of 2 was exhausted before the model could
+# complete the turn, leaving only the post-loop synthesis to produce an answer.
+# Raising the parent cap to 3 gives weak models one more recovery attempt,
+# which is often the difference between "model ran tools and synthesized a
+# real answer itself" vs "harness had to synthesize from evidence." The
+# non-parent cap stays at 2 (don't loosen legacy/child paths). The hard
+# upper bound (3) + the iteration cap (MAX_ITERATIONS) + the post-loop
+# synthesis together bound the turn — no infinite-loop risk.
+_MAX_EMPTY_REASONING_RECOVERIES_PARENT = 3
+
 
 # Session 192 — same-tool replan bound. After this many CONSECUTIVE
 # failures on the SAME tool, the acceptance gate stops replanning and
@@ -3740,14 +3753,24 @@ class AgentLoop:
                     # progress, so do ONE bounded retry with a nudge before
                     # the honest fail. Two consecutive empties still fail
                     # fast — the think-only protection stays intact.
-                    if _streamed_reasoning and trace.empty_reasoning_recoveries < _MAX_EMPTY_REASONING_RECOVERIES:  # noqa: E501
+                    #
+                    # B-2026-08-20-7 / Session 310: parent turns get a higher
+                    # cap (3 vs 2) — weak models on the parent path frequently
+                    # need the extra recovery attempt to complete a tool-bearing
+                    # turn. The post-loop synthesis remains the final safety net.
+                    _empty_reasoning_cap = (
+                        _MAX_EMPTY_REASONING_RECOVERIES_PARENT
+                        if _parent_native_turn
+                        else _MAX_EMPTY_REASONING_RECOVERIES
+                    )
+                    if _streamed_reasoning and trace.empty_reasoning_recoveries < _empty_reasoning_cap:  # noqa: E501
                         trace.empty_reasoning_recoveries += 1
                         logger.warning(
                             "[agent.loop] iter=%d — empty response after reasoning "
                             "streamed (recovery %d/%d) — nudging to continue",
                             iteration + 1,
                             trace.empty_reasoning_recoveries,
-                            _MAX_EMPTY_REASONING_RECOVERIES,
+                            _empty_reasoning_cap,
                         )
                         if _obs:
                             _obs.emit(
