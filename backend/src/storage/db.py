@@ -769,6 +769,63 @@ class SessionStore:
             "snapshot": self._decode_json(row["snapshot"]) if row["snapshot"] else None,
         }
 
+    # ── ParentSession: rolling summary + bounded recent tail (ADR-52 phase 2) ─
+
+    def save_parent_session(
+        self,
+        session_id: str,
+        rolling_summary: Optional[str],
+        recent_tail: Optional[list[dict]],
+        turn_count: int,
+    ) -> None:
+        """Upsert the ParentSession row for a chat session.
+
+        Called after every parent turn. ``rolling_summary`` is the compacted
+        prose for older turns; ``recent_tail`` is the exact last N user/
+        assistant pairs (preserved verbatim). ``turn_count`` is the durable
+        counter that survives a backend restart.
+        """
+        self.ensure_session(session_id)
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO parent_sessions(session_id, rolling_summary, recent_tail, turn_count, updated_at)
+                VALUES(?, ?, ?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    rolling_summary = excluded.rolling_summary,
+                    recent_tail     = excluded.recent_tail,
+                    turn_count      = excluded.turn_count,
+                    updated_at      = excluded.updated_at
+                """,
+                (
+                    session_id,
+                    rolling_summary,
+                    json.dumps(recent_tail) if recent_tail is not None else None,
+                    int(turn_count),
+                    time.time(),
+                ),
+            )
+
+    def get_parent_session(self, session_id: str) -> Optional[dict]:
+        """Return the persisted ParentSession, or None.
+
+        Shape: ``{"rolling_summary": str|None, "recent_tail": list[dict]|None,
+        "turn_count": int, "updated_at": float}``.
+        """
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT rolling_summary, recent_tail, turn_count, updated_at FROM parent_sessions WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "rolling_summary": row["rolling_summary"],
+            "recent_tail": self._decode_json(row["recent_tail"]) if row["recent_tail"] else None,
+            "turn_count": int(row["turn_count"] or 0),
+            "updated_at": float(row["updated_at"] or 0.0),
+        }
+
     # ── A4: Tool reliability tracking ─────────────────────────────────────
 
     def record_tool_result(self, tool_name: str, success: bool, latency_ms: int = 0) -> None:

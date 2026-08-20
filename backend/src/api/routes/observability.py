@@ -68,6 +68,12 @@ class ObservabilityData(BaseModel):
     # Observe panel renders these as alert cards instead of silently
     # displaying the bad numbers.
     anomalies: Optional[list] = None
+    # ADR-52 phase 2: the ParentSession's rolling summary for this chat.
+    # Surfaced so the Observe panel can show what the parent remembers of
+    # older turns (the compacted history that's actually in the prompt).
+    # None for a fresh chat with no completed turns.
+    parent_session_summary: Optional[str] = None
+    parent_session_turn_count: int = 0
 
 
 def _get_engine():
@@ -107,6 +113,14 @@ async def get_observability(session_id: str):
         if persisted:
             obs_data = persisted.get("data")
             snapshot = persisted.get("snapshot")
+            # ADR-52 phase 2: also load the persisted ParentSession so the
+            # Observe panel can show the rolling summary even after a backend
+            # restart (the in-memory engine state dies; the DB row survives).
+            parent_sess = None
+            try:
+                parent_sess = engine._store.get_parent_session(session_id)
+            except Exception:
+                parent_sess = None
             if obs_data:
                 return ObservabilityData(
                     session_id=session_id,
@@ -124,10 +138,20 @@ async def get_observability(session_id: str):
                     stage_timings=obs_data.get("stage_timings"),
                     tool_timings=obs_data.get("tool_timings"),
                     anomalies=obs_data.get("anomalies"),
+                    parent_session_summary=(parent_sess or {}).get("rolling_summary"),
+                    parent_session_turn_count=(parent_sess or {}).get("turn_count", 0),
                 )
 
     if obs_data:
         snapshot = getattr(engine, "_last_observation_snapshots", {}).get(session_id)
+        # ADR-52 phase 2: load the persisted ParentSession for this chat so
+        # the Observe panel can show the rolling summary alongside the
+        # latest turn's metrics.
+        parent_sess = None
+        try:
+            parent_sess = engine._store.get_parent_session(session_id)
+        except Exception:
+            parent_sess = None
         return ObservabilityData(
             session_id=session_id,
             intent=obs_data.get("intent"),
@@ -144,6 +168,8 @@ async def get_observability(session_id: str):
             stage_timings=obs_data.get("stage_timings"),
             tool_timings=obs_data.get("tool_timings"),
             anomalies=obs_data.get("anomalies"),
+            parent_session_summary=(parent_sess or {}).get("rolling_summary"),
+            parent_session_turn_count=(parent_sess or {}).get("turn_count", 0),
         )
 
     # B-2026-08-09-5: no per-session observation → return the honest empty

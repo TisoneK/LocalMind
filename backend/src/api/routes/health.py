@@ -33,6 +33,12 @@ class HealthResponse(BaseModel):
     status: str
     provider_reachable: bool
     engine_ready: bool
+    # ADR-52 phase 2: distinct parent-kernel readiness (separate from
+    # engine_ready, which only tracks startup completion). parent_ready
+    # is True when the boot kernel is built and not in a degraded state;
+    # parent_degraded_reason carries the warmup failure string when set.
+    parent_ready: bool = False
+    parent_degraded_reason: str = ""
     model: str
     adapter: str
     tools: list[dict]
@@ -90,10 +96,27 @@ async def health():
     }
     current_model = model_setting_map.get(adapter_name) or settings.ollama_model
 
+    # ADR-52 phase 2: surface the parent kernel's distinct readiness state.
+    # ``engine_ready`` only confirms startup completed; ``parent_ready``
+    # confirms the boot kernel built without a degraded_reason (provider
+    # warmup succeeded). The two can differ when a cloud provider is down
+    # at boot — the engine is up but the parent is degraded until the first
+    # turn's lazy retry recovers it.
+    from api.routes.chat import _engine
+
+    parent_ready = bool(getattr(_engine, "parent_ready", False))
+    parent_degraded_reason = str(getattr(_engine, "parent_degraded_reason", "") or "")
+
+    # Overall status: ok requires provider reachable, engine ready, AND
+    # parent ready. A degraded parent still serves requests (lazy retry),
+    # but the status reflects that something is wrong.
+    overall_ok = reachable and _engine_ready and parent_ready
     return HealthResponse(
-        status="ok" if reachable and _engine_ready else "degraded",
+        status="ok" if overall_ok else "degraded",
         provider_reachable=reachable,
         engine_ready=_engine_ready,
+        parent_ready=parent_ready,
+        parent_degraded_reason=parent_degraded_reason,
         model=current_model,
         adapter=adapter_name,
         tools=available_tools(),

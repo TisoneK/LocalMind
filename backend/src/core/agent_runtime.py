@@ -47,6 +47,7 @@ from core.models import AgentAbortedError, Intent, Message, Role, StreamChunk
 from core.obs import ObsCollector
 from core.observation import ObservationSnapshot
 from core.parent_kernel import ParentKernel, active_parent_model
+from core.parent_session import ParentSession
 from core.safety_gate import check as safety_check
 from core.session_context import SessionContextManager
 from core.workspace_state import snapshot as workspace_snapshot
@@ -113,6 +114,33 @@ def _collect_tool_calls(collector: ObsCollector) -> list[dict]:
     return list(calls.values())
 
 
+def _summarize_tool_actions(collector: ObsCollector) -> str:
+    """One-line summary of the most significant tool actions this turn.
+
+    Folded into the ParentSession's rolling summary so the summary records
+    what the agent *did* (tool calls), not just what it said (prose). Bounded
+    to the first 3 distinct tools to keep the summary entry compact — a long
+    tool list is noise, the names of the actions taken are the signal.
+    """
+    seen: list[str] = []
+    for evt in collector.history():
+        if evt.type != "tool_call":
+            continue
+        d = evt.data
+        if d.get("status") not in ("completed", "done", "success"):
+            continue
+        tool = str(d.get("tool", "unknown"))
+        args = str(d.get("tool_args", "") or "").strip()
+        # Compact the args to a short hint (first 60 chars, single line).
+        args_hint = args.replace("\n", " ")[:60]
+        entry = f"{tool}({args_hint})" if args_hint else tool
+        if entry not in seen:
+            seen.append(entry)
+        if len(seen) >= 3:
+            break
+    return ", ".join(seen)
+
+
 class _ParentAdapterCompat:
     """Give simple chat-only adapters the parent loop's tool-call seam.
 
@@ -150,6 +178,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         self._agent_loop = AgentLoop(adapter=None)
         self._parent_kernel: ParentKernel | None = None
         self._parent_agent: ParentAgent | None = None
+        # Readiness transitions queued since the last turn. Drained onto the
+        # next turn's ObsCollector so the frontend SSE learns the parent's
+        # boot-time state (ready / degraded / recovered) without needing a
+        # separate push channel. Each entry: {"event": str, "reason": str}.
+        self._pending_readiness: list[dict[str, str]] = []
+        self._parent_readiness_emitted: bool = False
         self._episodes = EpisodeMemory(store=self._store)
         self._session_ctx = SessionContextManager()
         self._session_locks: dict[str, asyncio.Lock] = {}
@@ -169,7 +203,15 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         self._warmed_up = False
 
     async def _ensure_parent_kernel(self, *, refresh_provider: bool = False) -> ParentKernel:
-        """Return the boot-owned kernel, rebuilding it after settings changes."""
+        """Return the boot-owned kernel, rebuilding it after settings changes.
+
+        Records readiness transitions on ``self._pending_readiness`` so the
+        next turn's SSE stream carries ``parent_ready`` / ``parent_degraded``
+        / ``parent_recovered`` to the frontend. The kernel's ``degraded_reason``
+        field remains the authoritative state; this queue is the wire-level
+        notification channel.
+        """
+        was_degraded = bool(self._parent_kernel and self._parent_kernel.degraded_reason)
         if self._parent_kernel and self._parent_kernel.matches_current_settings():
             return self._parent_kernel
 
@@ -189,6 +231,15 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             degraded_reason=degraded_reason,
         )
         self._parent_agent = ParentAgent(adapter=adapter, loop=self._agent_loop)
+        # Queue the readiness transition for the next turn's SSE. The first
+        # build emits ``parent_ready`` (or ``parent_degraded``); a rebuild
+        # that recovers from a prior degraded state emits ``parent_recovered``.
+        if degraded_reason:
+            self._pending_readiness.append({"event": "parent_degraded", "reason": degraded_reason})
+        elif was_degraded:
+            self._pending_readiness.append({"event": "parent_recovered", "reason": ""})
+        else:
+            self._pending_readiness.append({"event": "parent_ready", "reason": ""})
         logger.info(
             "[parent-kernel] %s adapter=%s model=%s tools=%d%s",
             "ready" if self._parent_kernel.ready else "degraded",
@@ -198,6 +249,29 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             f" reason={degraded_reason}" if degraded_reason else "",
         )
         return self._parent_kernel
+
+    def drain_pending_readiness(self) -> list[dict[str, str]]:
+        """Return and clear queued readiness transitions (called once per turn).
+
+        The chat route emits these as SSE events at the start of the stream
+        so the frontend's StatusBar can reflect the parent's boot-time /
+        post-settings-change state without polling.
+        """
+        if not self._pending_readiness:
+            return []
+        drained = list(self._pending_readiness)
+        self._pending_readiness.clear()
+        return drained
+
+    @property
+    def parent_ready(self) -> bool:
+        """True when the boot kernel is built and not in a degraded state."""
+        return bool(self._parent_kernel and self._parent_kernel.ready)
+
+    @property
+    def parent_degraded_reason(self) -> str:
+        """The degraded reason string (empty when the parent is ready)."""
+        return (self._parent_kernel.degraded_reason if self._parent_kernel else "") or ""
 
     async def startup(self) -> None:
         """Build the parent kernel and warm local memory best-effort."""
@@ -582,6 +656,18 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             return
 
         collector.emit("agent_runtime_start", agent="parent")
+        # Drain queued readiness transitions (parent_ready / parent_degraded /
+        # parent_recovered) onto this turn's ObsCollector so the frontend
+        # SSE learns the parent's boot-time / post-settings-change state on
+        # the very first turn after boot or a settings change. No-op when
+        # there is nothing pending (the steady-state path).
+        for transition in self.drain_pending_readiness():
+            collector.emit(
+                transition["event"],
+                reason=transition.get("reason", ""),
+                adapter=settings.localmind_adapter,
+                model=active_parent_model() or "(default)",
+            )
         if client_intent:
             collector.emit(
                 "routing_hint_ignored",
@@ -696,7 +782,25 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # duplicated identity, tools, environment, and knowledge) is not
         # rebuilt here. The AgentLoop adds dynamic environment/workspace
         # context and the native bootstrap capability surface.
+        #
+        # ADR-52 phase 2: load the per-chat ParentSession and inject its
+        # rolling summary as a system message BEFORE the recent tail. The
+        # summary compacts older turns so long conversations stay bounded
+        # in the prompt while the most recent turns remain verbatim below.
+        # The session is loaded from the persisted store (survives backend
+        # restart) and updated after the turn completes.
+        try:
+            parent_session = ParentSession.from_store(
+                session_id,
+                self._store.get_parent_session(session_id),
+            )
+        except Exception:
+            logger.debug("[agent-runtime] parent session load failed; using empty session", exc_info=True)
+            parent_session = ParentSession(session_id=session_id)
+        summary_section = parent_session.to_prompt_section()
         prompt_messages: list[dict] = []
+        if summary_section:
+            prompt_messages.append({"role": "system", "content": summary_section})
         for item in history[-8:]:
             if item.role not in (Role.USER, Role.ASSISTANT) or not item.content.strip():
                 continue
@@ -915,6 +1019,27 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             agent_runs=agent_runs,
             agent_phases=agent_phases,
         )
+        # ADR-52 phase 2: fold this turn into the per-chat ParentSession and
+        # persist. The rolling summary compacts older turns; the recent tail
+        # holds the last N pairs verbatim. Skip when the turn produced no
+        # usable response (the empty-response fallback path already wrote a
+        # placeholder assistant message above; compacting it would add noise).
+        if response_text and response_text == "".join(response_chunks).strip():
+            try:
+                tool_summary = _summarize_tool_actions(collector)
+                parent_session.update_with_turn(
+                    user_message=message,
+                    assistant_message=response_text,
+                    tool_summary=tool_summary,
+                )
+                self._store.save_parent_session(
+                    session_id,
+                    rolling_summary=parent_session.rolling_summary or None,
+                    recent_tail=parent_session.recent_tail or None,
+                    turn_count=parent_session.turn_count,
+                )
+            except Exception:
+                logger.debug("[agent-runtime] parent session update skipped", exc_info=True)
         # prompt_tokens/completion_tokens were normalized above, with a local
         # estimate when a provider omits streaming usage.
         collector.emit(
