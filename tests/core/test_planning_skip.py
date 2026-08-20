@@ -14,7 +14,7 @@ from core.models import StreamChunk
 
 
 @pytest.mark.asyncio
-async def test_parent_runtime_does_not_select_or_skip_planning():
+async def test_parent_runtime_skips_the_retired_parent_initializer():
     engine = Engine()
     captured: dict = {}
 
@@ -34,5 +34,7 @@ async def test_parent_runtime_does_not_select_or_skip_planning():
 
     assert chunks
     assert captured["agent_config"].name == "parent"
-    assert captured["skip_planning"] is False
+    # Phase 1 warm-kernel architecture: the first native parent call owns
+    # direct-vs-tool behavior; the per-turn JSON initializer is retired.
+    assert captured["skip_planning"] is True
     assert captured["agent_config"].tools_enabled is True

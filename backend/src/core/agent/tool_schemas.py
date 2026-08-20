@@ -758,11 +758,11 @@ DESCRIBE_TOOL_DEFINITION: dict = {
     "function": {
         "name": "describe_tool",
         "description": (
-            "Load the FULL usage schema for a tool that is NOT loaded by "
-            "default (an on-demand tool), then call that tool in your NEXT "
-            "step — loading persists for the rest of this run. Call this "
-            "BEFORE using any on-demand tool; do not call the tool until it "
-            "has been described. "
+            "Load the FULL usage schema for a capability before using it. "
+            "The schema is loaded for the NEXT native step and persists for "
+            "the rest of this run. Call this first for core tools or on-demand "
+            "tools; do not call a capability until it has been described. "
+            f"Core tools: {', '.join(sorted(CORE_TOOL_NAMES))}. "
             f"On-demand tools: {long_tail_tool_summary()}."
         ),
         "parameters": {
@@ -783,6 +783,8 @@ def tool_defs_for_call(
     filtered_defs: list[dict],
     scoped_allowed: frozenset[str] | set[str],
     loaded_tools: set[str] | None = None,
+    *,
+    bootstrap_only: bool = False,
 ) -> list[dict]:
     """Compose the per-iteration native ``tools`` parameter (ADR-40 option C).
 
@@ -801,8 +803,19 @@ def tool_defs_for_call(
 
     Returns:
         The per-iteration ``tools`` param: core defs (catalog order) +
-        ``describe_tool`` + loaded full defs (sorted by name).
+        ``describe_tool`` + loaded full defs (sorted by name). In bootstrap
+        mode, only ``describe_tool`` and explicitly loaded tools are sent so
+        direct conversation does not pay the full tool-schema cost.
     """
+    if bootstrap_only:
+        defs = [DESCRIBE_TOOL_DEFINITION]
+        for name in sorted(loaded_tools or ()):
+            if name in scoped_allowed:
+                td = get_full_tool_def(name)
+                if td is not None:
+                    defs.append(td)
+        return defs
+
     defs = [td for td in filtered_defs if td["function"]["name"] in CORE_TOOL_NAMES]
     defs.append(DESCRIBE_TOOL_DEFINITION)
     # Only LONG-TAIL names can be loaded — core tools are already in the base

@@ -683,8 +683,8 @@ async def test_engine_conversational_question_emits_prompt_tokens():
 
 @pytest.mark.parametrize("message", ["Hi", "Hey LM", "Hello LocalMind"])
 @pytest.mark.asyncio
-async def test_engine_greeting_uses_the_zero_model_fast_path(message):
-    """Pure social wording should not spend a provider call."""
+async def test_engine_greeting_uses_the_warm_parent_boundary(message):
+    """Greetings use one native parent call, not a per-turn initializer or shortcut."""
     from core.engine import Engine
     from core.obs import ObsCollector
 
@@ -696,10 +696,7 @@ async def test_engine_greeting_uses_the_zero_model_fast_path(message):
         nonlocal calls
         calls += 1
         yield MagicMock(
-            text=(
-                '{"mode":"direct","acknowledgement":"Hi!",'
-                '"response":"Hi! I am LocalMind. How can I help?"}'
-            ),
+            text="Hi! I am LocalMind. How can I help?",
             done=False,
             error=None,
             usage={"prompt_tokens": 20, "completion_tokens": 12},
@@ -715,10 +712,8 @@ async def test_engine_greeting_uses_the_zero_model_fast_path(message):
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert "localmind" in text.lower()
     assert any(getattr(c, "done", False) for c in chunks)
-    assert calls == 0
-    initialization = [event for event in obs.history() if event.type == "agent_initialization_done"]
-    assert initialization and initialization[0].data["mode"] == "direct"
-    assert initialization[0].data["fast_path"] is True
+    assert calls == 1
+    assert not any(event.type == "agent_initialization_done" for event in obs.history())
     assert not any(event.type == "tool_call" for event in obs.history())
 
 

@@ -42,6 +42,7 @@ async def describe_tool(message: str) -> ToolResult:
         return ToolResult(
             content=(
                 "'tool_name' is required for the describe_tool tool. "
+                f"Core tools: {', '.join(sorted(CORE_TOOL_NAMES))}. "
                 f"On-demand tools: {long_tail_tool_summary()}."
             ),
             risk=RiskLevel.LOW,
@@ -94,7 +95,8 @@ async def describe_tool(message: str) -> ToolResult:
 
     return ToolResult(
         content=(
-            f"Tool {name!r} not found. On-demand tools: {long_tail_tool_summary()}."
+            f"Tool {name!r} not found. Core tools: {', '.join(sorted(CORE_TOOL_NAMES))}. "
+            f"On-demand tools: {long_tail_tool_summary()}."
         ),
         risk=RiskLevel.LOW,
         source="describe_tool",
@@ -108,8 +110,9 @@ register_tool(
     Intent.DESCRIBE_TOOL,
     describe_tool,
     description=(
-        "Load the FULL usage schema for a tool that is not loaded by default "
-        "(an on-demand tool), then call that tool in your NEXT step. "
+        "Load the FULL usage schema for a capability before using it, then "
+        "call it in your NEXT step. Core and on-demand tools are supported. "
+        f"Core tools: {', '.join(sorted(CORE_TOOL_NAMES))}. "
         f"On-demand tools: {long_tail_tool_summary()}."
     ),
     cost=0.0,

@@ -6,10 +6,9 @@ The ParentAgent owns the actual decision loop and tool/delegation choices.
 
 The old engine pipeline classified each request, selected a tool, and then
 chose an agent. This runtime deliberately does none of that. Every user turn
-enters one parent AgentLoop with the full parent tool contract. The parent's
-initialization call decides whether the turn is direct conversation,
-clarification, or tool work. Specialized agents are reached only through the
-parent's delegation tools.
+enters one parent AgentLoop with the boot-owned parent contract and native tool
+surface. The first parent call can answer in prose or select tools. Specialized
+agents are reached only through the parent's delegation tools.
 """
 
 from __future__ import annotations
@@ -28,7 +27,10 @@ from core.agent.loop import AgentLoop, TerminalProviderError
 from core.agent_workspace import build_workspace_artifacts
 from core.anomalies import detect_turn_anomalies
 from core.config import settings
-from core.context_builder import build as build_context
+
+# Compatibility export: the parent kernel no longer calls the legacy generic
+# builder, but integrations/tests may still patch this symbol.
+from core.context_builder import build as build_context  # noqa: F401 — compatibility patch seam
 from core.decision_ledger import format_ledger_hint
 from core.engine._helpers import _approx_tokens
 from core.engine._memory_mixin import _MemoryMixin
@@ -40,10 +42,11 @@ from core.failure_memory import format_recall_hint
 from core.flywheel import FlywheelLogger
 from core.memory import MemoryComposer
 from core.metrics import MetricsStore
-from core.model_router import best_model_for, update_pulled_models
-from core.models import AgentAbortedError, EngineContext, Intent, Message, Role, StreamChunk
+from core.model_router import update_pulled_models
+from core.models import AgentAbortedError, Intent, Message, Role, StreamChunk
 from core.obs import ObsCollector
 from core.observation import ObservationSnapshot
+from core.parent_kernel import ParentKernel, active_parent_model
 from core.safety_gate import check as safety_check
 from core.session_context import SessionContextManager
 from core.workspace_state import snapshot as workspace_snapshot
@@ -131,9 +134,9 @@ class _ParentAdapterCompat:
 class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
     """Single front door for LocalMind's parent-agent execution model.
 
-    Every user turn crosses the same parent boundary. Request interpretation
-    belongs to the parent's model-owned initialization stage, not to a
-    runtime regex or deterministic prompt shortcut.
+    Every user turn crosses the same native parent boundary. Request
+    interpretation belongs to the parent model, not to a runtime regex,
+    per-turn initializer, or deterministic prompt shortcut.
     """
 
     def __init__(self):
@@ -145,6 +148,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # AgentLoop receives the request adapter at run time, so this object
         # remains safe when settings or tests change providers between turns.
         self._agent_loop = AgentLoop(adapter=None)
+        self._parent_kernel: ParentKernel | None = None
+        self._parent_agent: ParentAgent | None = None
         self._episodes = EpisodeMemory(store=self._store)
         self._session_ctx = SessionContextManager()
         self._session_locks: dict[str, asyncio.Lock] = {}
@@ -163,13 +168,45 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         self._last_turn_session_id = ""
         self._warmed_up = False
 
+    async def _ensure_parent_kernel(self, *, refresh_provider: bool = False) -> ParentKernel:
+        """Return the boot-owned kernel, rebuilding it after settings changes."""
+        if self._parent_kernel and self._parent_kernel.matches_current_settings():
+            return self._parent_kernel
+
+        model = active_parent_model()
+        adapter = get_adapter(settings.localmind_adapter, model_override=model)
+        degraded_reason = ""
+        if refresh_provider:
+            try:
+                update_pulled_models(await adapter.list_models())
+            except Exception as exc:
+                degraded_reason = str(exc)[:180]
+                logger.warning("[parent-kernel] provider warmup degraded: %s", degraded_reason)
+
+        self._parent_kernel = ParentKernel.build(
+            adapter,
+            available_tools(),
+            degraded_reason=degraded_reason,
+        )
+        self._parent_agent = ParentAgent(adapter=adapter, loop=self._agent_loop)
+        logger.info(
+            "[parent-kernel] %s adapter=%s model=%s tools=%d%s",
+            "ready" if self._parent_kernel.ready else "degraded",
+            settings.localmind_adapter,
+            model or "(default)",
+            len(self._parent_kernel.available_tools),
+            f" reason={degraded_reason}" if degraded_reason else "",
+        )
+        return self._parent_kernel
+
     async def startup(self) -> None:
-        """Refresh adapter metadata and warm local memory best-effort."""
+        """Build the parent kernel and warm local memory best-effort."""
         try:
-            adapter = get_adapter(settings.localmind_adapter)
-            update_pulled_models(await adapter.list_models())
+            await self._ensure_parent_kernel(refresh_provider=True)
         except Exception as exc:
-            logger.warning("[agent-runtime] model refresh failed (non-fatal): %s", exc)
+            # Boot must remain usable when a provider is unavailable or
+            # unconfigured. The first real turn retries lazily.
+            logger.warning("[parent-kernel] startup degraded: %s", str(exc)[:180])
 
         if self._warmed_up:
             return
@@ -215,7 +252,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             return False
 
     def _adapter_for_parent(self):
-        model = best_model_for(Intent.ANALYZE, fallback=settings.ollama_model)
+        if self._parent_kernel and self._parent_kernel.matches_current_settings():
+            return self._parent_kernel.adapter
+        model = active_parent_model()
         return get_adapter(settings.localmind_adapter, model_override=model)
 
     # Compatibility names for transport and existing integrations. These are
@@ -488,136 +527,6 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         self._last_turn_prompt_tokens = int(merged.get("context_tokens", 0) or 0)
         self._last_turn_session_id = session_id
 
-    async def _stream_fast_direct(
-        self,
-        *,
-        message: str,
-        session_id: str,
-        history: list[Message],
-        collector: ObsCollector,
-        started: float,
-        kind: str,
-    ) -> AsyncIterator[StreamChunk]:
-        """Serve obvious conversational turns without parent initialization.
-
-        The parent initializer is the right boundary for ambiguous work, but a
-        greeting or a short context-backed conversation is neither ambiguous
-        nor an execution task. Keeping these turns on one generic direct-chat
-        boundary avoids making the model classify and answer in one JSON call.
-        """
-        from core.trivial_input import conversational_response, trivial_response
-
-        if kind == "trivial":
-            title = "Greet User"
-            acknowledgement = "Hi!"
-            stream = trivial_response(message, self._adapter_for_parent(), history)
-        else:
-            title = "Answer Question"
-            acknowledgement = "I’ll answer that directly."
-            adapter = self._adapter_for_parent()
-            chat_history = [
-                {
-                    "role": item.role.value if hasattr(item.role, "value") else str(item.role),
-                    "content": item.content,
-                }
-                for item in history[-4:]
-            ]
-            stream = conversational_response(message, adapter, chat_history)
-
-        collector.emit("agent_context_ready", memory_facts=0, attachment=False, fast_path=True)
-        collector.emit("agent_initialization_start", intent=Intent.ANALYZE.value, fast_path=True)
-        collector.emit(
-            "agent_initialization_ack",
-            acknowledgement=acknowledgement,
-            elapsed_ms=0,
-            fast_path=True,
-        )
-        collector.emit(
-            "agent_initialization_done",
-            mode="direct",
-            objective=message[:200],
-            title=title,
-            confidence=1.0,
-            init_prompt_chars=0,
-            fast_path=True,
-        )
-        collector.emit("agent_loop_start", intent=Intent.ANALYZE.value, fast_path=True)
-        yield StreamChunk(text="", status=acknowledgement)
-
-        response_parts: list[str] = []
-        usage: dict[str, int] = {}
-        async for chunk in stream:
-            if chunk.usage:
-                usage.update(chunk.usage)
-            if chunk.text:
-                response_parts.append(chunk.text)
-                yield chunk.model_copy(update={"done": False})
-
-        response_text = "".join(response_parts).strip()
-        prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
-        completion_tokens = int(usage.get("completion_tokens", 0) or _approx_tokens(response_text))
-        total_ms = round((time.monotonic() - started) * 1000)
-        if not response_text:
-            response_text = "I’m here and ready to help. What would you like to do?"
-            yield StreamChunk(text=response_text, done=False)
-        if prompt_tokens or completion_tokens:
-            self._metrics.record_streaming_complete(
-                total_tokens=prompt_tokens + completion_tokens,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-            )
-
-        # Preserve the polling/UI stage contract even though this path skips
-        # the model-owned initializer and all tool stages.
-        collector.emit("stage_timing", stage="intent_classify", latency_ms=0, status="skipped")
-        collector.emit("stage_timing", stage="context_build", latency_ms=0, status="skipped")
-        collector.emit("stage_timing", stage="tool_select", latency_ms=0, status="skipped")
-        collector.emit("stage_timing", stage="generate", latency_ms=total_ms, status="done")
-        collector.emit("stage_timing", stage="execute", latency_ms=0, status="skipped")
-        collector.emit("agent_loop_done", intent=Intent.ANALYZE.value, direct=True, fast_path=True)
-        collector.emit(
-            "agent_runtime_done",
-            agent="parent",
-            elapsed_ms=total_ms,
-            response_chars=len(response_text),
-            fast_path=True,
-        )
-        collector.emit(
-            "turn_complete",
-            intent="parent",
-            confidence=1.0,
-            tokens_approx=completion_tokens,
-            prompt_tokens_approx=prompt_tokens,
-            total_latency_ms=total_ms,
-            memory_facts=0,
-            agent_mode=True,
-            fast_path=True,
-            provider_usage=usage,
-        )
-        agent_runs, agent_phases = build_workspace_artifacts(collector, task=message)
-        self._persist_assistant(
-            session_id,
-            response_text,
-            acknowledgement=acknowledgement,
-            metrics={
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "latency_ms": total_ms,
-            },
-            agent_runs=agent_runs,
-            agent_phases=agent_phases,
-        )
-        self._store_observation(
-            session_id,
-            collector,
-            intent="parent",
-            confidence=1.0,
-            memory_hits=0,
-            context_tokens=prompt_tokens,
-            latency_ms=total_ms,
-        )
-        yield StreamChunk(text="", done=True, usage=usage)
-
     async def process(
         self,
         message: str,
@@ -664,6 +573,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
     ) -> AsyncIterator[StreamChunk]:
         collector = obs or ObsCollector()
         started = time.monotonic()
+        kernel = await self._ensure_parent_kernel()
         safe, reason = safety_check(message)
         if not safe:
             collector.emit("safety_blocked", reason=reason[:120])
@@ -690,33 +600,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             file_type=content_type,
         )
 
-        # Keep the parent initializer for ambiguous work, but do not spend a
-        # slow meta-classification call on obvious conversational turns. These
-        # are safe, read-only direct answers; tool-bearing requests and
-        # attached-file turns continue through the parent unchanged.
-        if not any((file, filename, content_type, original_path)) and allowed_tool_names is None:
-            from core.trivial_input import (
-                is_conversational_question,
-                is_trivial_input,
-            )
-
-            if is_trivial_input(message, history):
-                _fast_kind = "trivial"
-            elif is_conversational_question(message, history):
-                _fast_kind = "conversation"
-            else:
-                _fast_kind = ""
-            if _fast_kind:
-                async for _fast_chunk in self._stream_fast_direct(
-                    message=message,
-                    session_id=session_id,
-                    history=history,
-                    collector=collector,
-                    started=started,
-                    kind=_fast_kind,
-                ):
-                    yield _fast_chunk
-                return
+        # Every turn now enters the same native parent loop. The server-lifetime
+        # kernel owns static parent state; this request contributes only session
+        # history and turn-specific context. There is no per-turn JSON
+        # initialization or phrase-specific direct shortcut.
 
         # ADR-37: no hardcoded stage narration. The parent's real model
         # output (acknowledgement + thinking stream) is the status signal;
@@ -736,14 +623,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         except Exception:
             pass
 
-        # ADR-34 B-7: kick off nonessential memory + attachment work as a
-        # concurrent task so the model-owned initializer can start without
-        # waiting behind it.  The initializer only needs the user message +
-        # recent history + tool catalog; memory_facts and attachment context
-        # are consumed by the execution loop AFTER the initializer returns.
-        # On a healthy provider the initializer takes multi-second TTFB, so
-        # overlapping it with memory retrieval saves the full memory latency
-        # instead of serializing it.
+        # Gather nonessential memory + attachment work concurrently with
+        # adapter setup. The resulting facts and attachment evidence are
+        # injected into this turn's native parent context; they never rebuild
+        # or replace the boot-owned kernel.
         async def _gather_nonessential() -> tuple[list[str], Optional[dict]]:
             facts = await self._memory_facts(message, session_id)
             try:
@@ -776,7 +659,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
         nonessential_task = asyncio.create_task(_gather_nonessential())
 
-        adapter = self._adapter_for_parent()
+        adapter = kernel.adapter
         if not inspect.iscoroutinefunction(getattr(adapter, "chat_with_tools", None)):
             adapter = _ParentAdapterCompat(adapter)
         # Warm the model's real declared context window (Ollama /api/show) so
@@ -792,8 +675,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         if not isinstance(context_window, (int, float)) or context_window <= 0:
             context_window = 8192
 
-        # Await nonessential work before build_context — but the task has been
-        # running concurrently with the adapter setup above, so the effective
+        # Await nonessential work before assembling the turn — but the task
+        # has been running concurrently with adapter setup, so the effective
         # wait is only the unoverlapped tail.
         try:
             memory_facts, attachment = await nonessential_task
@@ -806,23 +689,40 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         clock = _StageClock(collector)
         clock.mark("intent_classify", 0, "skipped")
         clock.start("context_build")
-        prompt_messages = build_context(
-            EngineContext(
-                session_id=session_id,
-                message=message,
-                intent=Intent.ANALYZE,
-                history=history,
-                file_attachment=attachment,
-                memory_facts=memory_facts,
-                session_cwd=session_cwd,
-            ),
-            int(context_window),
-        )
+
+        # Phase 1: the kernel supplies the immutable parent contract. The
+        # turn carries only a bounded recent conversational tail plus the
+        # current user message; the legacy generic system prompt (which
+        # duplicated identity, tools, environment, and knowledge) is not
+        # rebuilt here. The AgentLoop adds dynamic environment/workspace
+        # context and the native bootstrap capability surface.
+        prompt_messages: list[dict] = []
+        for item in history[-8:]:
+            if item.role not in (Role.USER, Role.ASSISTANT) or not item.content.strip():
+                continue
+            prompt_messages.append(
+                {
+                    "role": item.role.value,
+                    "content": item.content[-4000:],
+                }
+            )
+        if attachment and attachment.chunks:
+            attachment_text = "\n\n---\n\n".join(attachment.chunks[:8])[:12000]
+            prompt_messages.append(
+                {
+                    "role": "system",
+                    "content": (
+                        f"[Attached file: {attachment.filename}]\n{attachment_text}\n"
+                        "Use this file as evidence for the current request."
+                    ),
+                }
+            )
+        prompt_messages.append({"role": "user", "content": message})
         clock.end("context_build")
         clock.skip("tool_select")
         clock.start("generate")
 
-        parent = ParentAgent(adapter=adapter, loop=self._agent_loop)
+        parent = self._parent_agent or ParentAgent(adapter=adapter, loop=self._agent_loop)
         requested_tools = frozenset(allowed_tool_names) if allowed_tool_names is not None else AGENT_ALLOWED_TOOLS
         parent_tools = requested_tools.intersection(AGENT_ALLOWED_TOOLS)
         response_chunks: list[str] = []
@@ -837,7 +737,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 messages=prompt_messages,
                 intent=Intent.ANALYZE,
                 initial_tool_result=None,
-                available_tools=available_tools(),
+                available_tools=list(kernel.available_tools),
                 confidence=1.0,
                 adapter=adapter,
                 obs=collector,
@@ -845,8 +745,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 allowed_tool_names=parent_tools,
                 steering_queue=self._queue_for(session_id),
                 abort_signal=self._abort_for(session_id),
+                skip_planning=True,
                 task_type="",
                 reformulated_message=message,
+                agent_context_override=kernel.parent_context,
             ):
                 if chunk.usage:
                     usage.update(chunk.usage)
@@ -920,14 +822,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         clock.mark("execute", 0, "done" if any(evt.type == "tool_call" for evt in collector.history()) else "skipped")
 
         response_text = "".join(response_chunks).strip()
-        # Prompt-token estimate when the provider omits streaming usage.
-        # A DIRECT turn only sent the compact initialization prompt to the
-        # provider — the full assembled context (build_context) was prepared
-        # but never sent. Approximating that full context over-counted ~5x and
-        # grew with conversation history (Session 233: a greeting reported
-        # ~5,100 tokens when ~900 were actually sent). So when the provider
-        # gives no usage and no tool ran, estimate from the initialization
-        # prompt that was actually sent, not the unsent full context.
+        # Prompt-token estimate when the provider omits streaming usage. The
+        # parent kernel + bounded turn context are the actual request boundary;
+        # never estimate from the retired generic prompt builder.
         provider_prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
         if provider_prompt_tokens:
             prompt_tokens = provider_prompt_tokens

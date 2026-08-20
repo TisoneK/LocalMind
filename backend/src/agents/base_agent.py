@@ -214,6 +214,7 @@ class BaseAgent(ABC):
         obs=None,
         memory_facts: Optional[list[str]] = None,
         orchestrator_context: Optional[str] = None,
+        agent_context_override: Optional[str] = None,
         skip_planning: bool = False,
         # Session 134: when the engine skips the separate planning call
         # when a caller has an explicit plan, those step labels come through
@@ -315,21 +316,27 @@ class BaseAgent(ABC):
         # build_agent_system_prompt(). Without this call, the playbook
         # files sit on disk unused (Session 33 finding); with it, they
         # govern HOW the agent uses its scoped tools.
-        try:
-            agent_context_str = self.build_context(
-                messages=messages,
-                intent=intent,
-                memory_facts=memory_facts,
-                orchestrator_context=orchestrator_context,
-            )
-        except Exception as exc:
-            # Best-effort: if the context builder throws, log and
-            # continue with empty context — the agent loop still runs.
-            logger.warning(
-                "[base_agent] %s build_context() failed: %s — continuing with empty agent_context",
-                cfg.name, exc,
-            )
-            agent_context_str = ""
+        if agent_context_override is not None:
+            # A boot-owned kernel may provide an already-compiled immutable
+            # contract. Dynamic memory remains a separate loop input; do not
+            # rebuild the server-lifetime context for every turn.
+            agent_context_str = agent_context_override
+        else:
+            try:
+                agent_context_str = self.build_context(
+                    messages=messages,
+                    intent=intent,
+                    memory_facts=memory_facts,
+                    orchestrator_context=orchestrator_context,
+                )
+            except Exception as exc:
+                # Best-effort: if the context builder throws, log and
+                # continue with empty context — the agent loop still runs.
+                logger.warning(
+                    "[base_agent] %s build_context() failed: %s — continuing with empty agent_context",
+                    cfg.name, exc,
+                )
+                agent_context_str = ""
 
         # Append the fixed output contract so
         # the model's system prompt demands the JSON shape. Gated to

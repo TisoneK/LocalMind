@@ -121,6 +121,11 @@ async def lifespan(app: FastAPI):
 
     from api.routes.health import set_engine_ready
 
+    # Build the boot-owned ParentKernel before accepting requests. This is
+    # static parent state only — no fake user prompt is sent during startup.
+    # Provider warmup is best-effort; the kernel can report degraded and retry
+    # lazily on the first real turn.
+    await _chat_engine.startup()
     set_engine_ready()
 
     if settings.localmind_adapter != "ollama":
@@ -138,9 +143,6 @@ async def lifespan(app: FastAPI):
     # Single authoritative startup: warms LLM router, embed model,
     # RiskAwareRouter, and FlywheelLogger on the exact engine instance
     # that handles requests.
-    from api.routes.chat import _engine as _chat_engine
-
-    await _chat_engine.startup()
     await objective_runtime.start()
     logger.info("[startup] engine ready — accepting requests")
 

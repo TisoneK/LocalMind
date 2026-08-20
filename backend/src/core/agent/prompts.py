@@ -437,6 +437,7 @@ def build_agent_system_prompt(
     orchestrator_context: Optional[str] = None,
     agent_context: Optional[str] = None,
     tool_defs: Optional[list[dict]] = None,
+    native_bootstrap: bool = False,
 ) -> str:
     """
     Return the agent execution-phase system prompt string.
@@ -495,6 +496,50 @@ def build_agent_system_prompt(
             for t in available_tools
             if t["intent"] in AGENT_ALLOWED_TOOLS
         )
+
+    # Warm-kernel bootstrap: the first native parent call gets only the
+    # describe_tool schema plus this compact capability index. Full tool
+    # schemas are loaded on demand after the model selects a tool. This keeps
+    # ordinary direct conversation from paying the entire tool catalog while
+    # preserving one model-owned parent boundary for every turn.
+    if native_bootstrap:
+        # The first native call must stay light. It only needs a capability
+        # index so it can name a tool for describe_tool; sending every
+        # registry description here recreates the old kitchen-sink prompt.
+        names = [str(t.get("intent", "")).strip() for t in available_tools if t.get("intent")]
+        compact_tool_list = ", ".join(dict.fromkeys(names))
+        memory_section = ""
+        if memory_facts:
+            memory_section = (
+                "\n## Retrieved memory\n"
+                + "\n".join(f"- {fact}" for fact in memory_facts[:10])
+                + "\n"
+            )
+        return f"""You are LocalMind, the user-facing parent agent running locally on the user's machine.
+
+{agent_context or ''}
+{memory_section}
+
+You own the user's complete objective. On this first parent call, either answer
+naturally in plain text when no external evidence is needed, or use the native
+tool API when the request needs files, current information, code, or system
+state. Never fabricate tool results.
+
+Capability names:
+{compact_tool_list}
+
+The initial native tool surface contains only `describe_tool`. For a request
+that needs external evidence, call `describe_tool` with the exact capability
+name first — including core names such as `shell`, `file_task`, `web_search`,
+or `sysinfo`. The full schema will be loaded for your next native call. Then
+execute the tool, inspect its evidence, and continue until you can answer
+accurately. For ordinary conversation, answer directly in plain text and do
+not call describe_tool.
+
+Safety: check current state before writes, edits, deletes, or other destructive
+actions. Keep the final answer concise and grounded in evidence. Do not emit
+XML tool calls or expose internal reasoning.
+"""
 
     # Chat mode: natural conversational response — rich, thoughtful, alive
     if intent == Intent.CHAT:

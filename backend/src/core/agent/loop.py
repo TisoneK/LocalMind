@@ -311,7 +311,14 @@ def _note_described_tool(tool_name: str, tool_result, loaded_tools: set[str]) ->
     """
     if tool_name != "describe_tool" or tool_result is None or not tool_result.success:
         return
-    loaded = (tool_result.metadata or {}).get("loaded_tool")
+    metadata = tool_result.metadata or {}
+    loaded = metadata.get("loaded_tool")
+    if not loaded and metadata.get("already_loaded"):
+        # Core tools historically expose `already_loaded` + `tool_name`
+        # without a `loaded_tool` field. Bootstrap mode still needs to add
+        # that schema to the next native call, so infer it at the loop seam
+        # rather than changing the public ToolResult shape.
+        loaded = metadata.get("tool_name")
     if loaded:
         loaded_tools.add(loaded)
         logger.info("[agent.loop] describe_tool loaded %r for this run", loaded)
@@ -820,6 +827,13 @@ class AgentLoop:
             scoped_tools = frozenset(scoped_tools or AGENT_ALLOWED_TOOLS).intersection(intent_scope)
         filtered_tools = _filtered_tool_defs(scoped_tools)
 
+        # Phase 1 warm-kernel parent turns enter the native loop directly.
+        # Resolve this before composing the first tool definitions because the
+        # bootstrap surface is intentionally smaller than the normal surface.
+        _parent_native_turn = (
+            bool(skip_planning) and getattr(agent_config, "name", "") == "parent"
+        )
+
         # ADR-40 option C: the native `tools` param is composed PER CALL —
         # scoped CORE tools + describe_tool + any long-tail tools loaded this
         # run via describe_tool (on-demand full-tool-context). Loaded tools
@@ -827,7 +841,12 @@ class AgentLoop:
         # ever added.
         def _current_tool_defs() -> list[dict]:
             _allowed = scoped_tools if scoped_tools is not None else AGENT_ALLOWED_TOOLS
-            return tool_defs_for_call(filtered_tools, _allowed, loaded_tools)
+            return tool_defs_for_call(
+                filtered_tools,
+                _allowed,
+                loaded_tools,
+                bootstrap_only=_parent_native_turn,
+            )
 
         # Scope the metadata tool list the same way so the system-prompt
         # "Available tools" section and the planner see the same small
@@ -1265,6 +1284,7 @@ class AgentLoop:
             # ADR-40: render the in-prompt "Available tools" list from the SAME
             # scoped defs as the native tools param (single source of truth).
             tool_defs=filtered_tools,
+            native_bootstrap=_parent_native_turn,
         )
 
         # Session 245 (agent-loop token efficiency, Lever 1): the environment
@@ -1468,6 +1488,9 @@ class AgentLoop:
         set_inline_mutation_scope(_inline_scope)
 
         # ── Main loop ──────────────────────────────────────────────────
+        # Phase 1 warm-kernel parent turns enter this loop directly. Their
+        # first native response may be ordinary prose, so they must not be
+        # treated as a skipped tool call or forced into a tool recovery.
         # ADR-8 Phase 2: use _effective_max_iter / _effective_max_wall
         # (agent_config overrides when provided; module-level defaults
         # otherwise) instead of the raw MAX_ITERATIONS / MAX_WALL_CLOCK_SECS.
@@ -1741,6 +1764,7 @@ class AgentLoop:
                 and intent in AGENT_INTENTS
                 and not trace.steps
                 and bool(filtered_tools)
+                and not _parent_native_turn
             )
             try:
                 result = await asyncio.wait_for(
@@ -3305,7 +3329,12 @@ class AgentLoop:
                 # The model may be describing what it would do instead of actually
                 # calling tools. Emit a warning so the observability pipeline can
                 # track this pattern.
-                if iteration == 0 and intent in AGENT_INTENTS and not trace.steps:
+                if (
+                    iteration == 0
+                    and intent in AGENT_INTENTS
+                    and not trace.steps
+                    and not _parent_native_turn
+                ):
                     fabrication_risk += 1
                     if _obs:
                         _obs.emit(
