@@ -391,6 +391,19 @@ _TOOL_TALK_PATTERNS = [
     re.compile(r"\bsearching\.{3,}\b", re.IGNORECASE),  # "Searching..." theatrical animation
     re.compile(r"\bfetching\.{3,}\b", re.IGNORECASE),
     re.compile(r"\blooking up\.{3,}\b", re.IGNORECASE),
+    # Session 323 (B-2026-08-20-20): creation-commitment narration. Live trace
+    # on deepseek-v4-flash: the model created the dir via shell, then ended the
+    # turn with "Now I'll create the project files — a modular Python project…"
+    # — a commitment to file creation with NO file_write/file_task call, and
+    # the turn ended with zero files (the user's exact "clever but limited"
+    # symptom, second half). Requires a creation verb + a file-like noun so
+    # legitimate prose ("I'll create a summary/table") never false-triggers.
+    re.compile(
+        r"(i('ll| will|'m going to| am going to)|let me) (now |then |next )?"
+        r"(create|write|make|build|add) (the |a |this )?(\w+ )?"
+        r"(project|file|files|script|module|package|folder|directory)s?",
+        re.IGNORECASE,
+    ),
 ]
 
 _MAX_TOOL_TALK_RECOVERIES = 2

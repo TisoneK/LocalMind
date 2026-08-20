@@ -129,6 +129,37 @@ def test_is_tool_talk_still_ignores_plain_text():
     assert _is_tool_talk("the sky is blue today") is False
 
 
+# ── Creation-commitment narration (Session 323) ────────────────────────────
+# Live trace on deepseek-v4-flash (the user's "create a project" session):
+# after the directory was made, the model ended the turn with "Now I'll
+# create the project files — a modular Python project…" — a commitment to
+# file creation with no file_write/file_task call, so the turn ended with
+# zero files. The detector must flag creation commitments (the recovery
+# nudge then anchors the model back to the task) without false-triggering
+# on legitimate prose that describes a non-file deliverable.
+
+
+def test_is_tool_talk_detects_creation_commitment():
+    # The exact live-trace ending: "Now I'll create the project files …"
+    assert _is_tool_talk("Now I'll create the project files with a modular structure") is True
+    assert _is_tool_talk("I will create the project files next") is True
+    assert _is_tool_talk("Let me create the project files now") is True
+    assert _is_tool_talk("I'm going to write the module files now") is True
+    # Live-trace variant with an adjective between article and noun:
+    # "Now I'll write the source modules and tests" (iter-7 of the second trace)
+    assert _is_tool_talk("Now I'll write the source modules and tests") is True
+    assert _is_tool_talk("I will build the new project package") is True
+
+
+def test_is_tool_talk_ignores_creation_of_non_files():
+    # Legitimate final answers describing a non-file deliverable must NOT be
+    # intercepted as tool-talk.
+    assert _is_tool_talk("I'll create a summary of the search results") is False
+    assert _is_tool_talk("I'll create a table for you") is False
+    # Past tense = the work is done, not a commitment.
+    assert _is_tool_talk("I created the project files") is False
+
+
 # ── Bare <tool_call> format (Session 195) ──────────────────────────────────
 # The live leak: the model emitted
 #   <tool_call>web_search<arg_key>query</arg_key><arg_value>Kitengela ...</arg_value></tool_call>

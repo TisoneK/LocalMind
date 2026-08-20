@@ -720,6 +720,41 @@ _HEDGE_PHRASES: tuple[str, ...] = (
 )
 
 
+def _recovery_nudge_tail(loop_messages: list[dict], trace=None) -> str:
+    """Task-anchor a recovery nudge: the user's ORIGINAL request, plus an
+    advancement hint when tools already ran this turn.
+
+    B-2026-08-20-20 / Session 323 (the user's "create a new project" trace):
+    the tool-talk / forced-tool / empty-response nudges were task-blind —
+    "Call the tool now using the function-calling format", with no reference
+    to the actual request. A weak model reads that as "prove you can call a
+    tool" and re-runs reconnaissance (ls / Get-ChildItem) instead of taking
+    the next real step, burning iterations until the turn ends with zero
+    progress. Session 314 already anchored the empty-reasoning nudge (include
+    the original question); this gives the remaining nudges the same anchor
+    plus a "do not repeat tools you already ran" advancement hint.
+    """
+    parts: list[str] = []
+    question = _user_message_text(loop_messages)
+    if question:
+        parts.append(f'The user\'s request was: "{question[:300]}"')
+    ran: list[str] = []
+    if trace is not None:
+        for step in getattr(trace, "steps", []) or []:
+            name = getattr(step, "tool_name", "") or ""
+            if name and name not in ran:
+                ran.append(name)
+    if ran:
+        parts.append(
+            "You have already run these tools this turn: "
+            + ", ".join(ran)
+            + ". Do NOT repeat them — call the tool that takes the NEXT step "
+            "toward the request above (e.g. creating or writing files, not "
+            "re-listing directories)."
+        )
+    return ("\n" + "\n".join(parts)) if parts else ""
+
+
 def answer_hedges_after_evidence(text: str) -> bool:
     """Detect a hedging non-answer after tools ran.
 
@@ -3539,6 +3574,7 @@ class AgentLoop:
                                     "You MUST invoke a tool now via the function-calling API "
                                     "(e.g. shell, file_task, web_search) before answering. "
                                     "Do NOT narrate what you would do — call the tool directly."
+                                    + _recovery_nudge_tail(loop_messages, trace)
                                 ),
                             }
                         )
@@ -3709,6 +3745,7 @@ class AgentLoop:
                                 "You described wanting to use a tool but did not call it. "
                                 "You MUST use the tool-calling API directly — do NOT narrate or describe "
                                 "your intent. Call the tool now using the function-calling format."
+                                + _recovery_nudge_tail(loop_messages, trace)
                             ),
                         }
                     )
@@ -3834,6 +3871,7 @@ class AgentLoop:
                                     "You returned an empty response. This request requires "
                                     "tool use — call the appropriate tool NOW via the "
                                     "function-calling API (do not answer from memory)."
+                                    + _recovery_nudge_tail(loop_messages, trace)
                                 ),
                             }
                         )
