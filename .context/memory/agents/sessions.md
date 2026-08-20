@@ -4449,3 +4449,17 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-11 (fold classify+first-action, risky), B-2026-08-17-12 (create→file_write steering), B-2026-08-20-9 (shell JSON hint).
 - **Report:** `.context/memory/reviews/2026-08-20-review-78.md`
 - **Notes:** logged an inefficiency entry for the "dismissed test" anti-pattern.
+
+---
+## 2026-08-20 — Session 313 — thorough end-to-end system audit (real-user walkthrough)
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer (review) | **Core:** 0.8.0
+- **Task:** Boot the real app + walk through a realistic user session from bootup to closure. Note all issues + plus points.
+- **METHOD:** isolated 8765 + z.ai/glm-4.5-flash, 9 phases (bootup, greeting, capability, tool task, file create, multi-turn, web search, error handling, persistence). Captured SSE + log + DB state.
+- **PLUS POINTS (7):** boot fast+clean; conversational turns substantive (Hi/What can you do?/Like what?); thinking streams real-time; tool execution works end-to-end (list /tmp → shell → synthesized answer); session persistence solid (sessions+messages+parent_sessions survive restart); observability correct (turn_count); turn-init parallelism <1s.
+- **ISSUES (6):** H1 — MiniMax XML interception conflicts with prose-commitment detector (hostname task produced prose preamble as final answer, no tool call); M1 — 429 rate-limit produces empty answer bubble; M2 — recall accuracy after restart (model said first Q was "Like what?" not "Hi"); M3 — MiniMax XML fires on every turn; L1 — latency 8.6s for "Hi" (z.ai API); L2 — embedding failure when Ollama down silently disables memory; L3 — no POST /api/sessions.
+- **HONEST SCOPE:** phases D-G (file create, multi-turn under load, web search, error handling) hit z.ai's 429 rate limit and couldn't be fully evaluated. Phases A-C, H, I are solid.
+- **NEW BACKLOG:** B-2026-08-20-10 (High — fix MiniMax XML / prose-commitment conflict), B-2026-08-20-11 (Medium — surface 429 errors to user), B-2026-08-20-12 (Low — embedding fallback when Ollama down).
+- **Outcome:** done — audit complete, findings + 3 new backlog items recorded. No code changes (review session).
+- **Report:** `.context/memory/reviews/2026-08-20-review-79.md`
+- **Notes:** no live traces touched port 8000; no API-key values printed; scratch at /tmp/lm-audit-313 kept for reference.
