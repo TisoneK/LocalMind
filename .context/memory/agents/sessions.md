@@ -4575,3 +4575,16 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-10 (High), B-2026-08-20-11 (Medium), B-2026-08-20-19 (Low). User to restart backend before retrying.
 - **Report:** `.context/memory/reviews/2026-08-20-review-88.md`
 - **Notes:** none
+
+---
+## 2026-08-20 — Session 323 — task-anchored recovery nudges + creation-commitment detection
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-flash | **Platform:** macOS (Tison's local machine, /Users/bao/Code/LocalMind) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** The user's real session ("The model feels clever but the agent is limited?"): deepseek-v4-flash planned a modular project but the loop's task-blind recovery nudges bounced it into re-recon (2 turns, 8 tool steps, zero files).
+- **Commits:** 1 product (`3880cfc`) — `fix(agent): task-anchor recovery nudges + catch creation-commitment narration`; then `chore(context):`/`docs(review):` memory commits.
+- **SHIPPED:** (1) `_recovery_nudge_tail()` in loop.py — appends the user's ORIGINAL request + an advancement hint ("do NOT repeat tools you already ran — take the NEXT step") to the three task-blind nudges (tool-talk, forced-tool, empty-response); (2) creation-commitment pattern in `_TOOL_TALK_PATTERNS` catching "I'll create/write the project files…" narration with no tool call (creation verb + file-like noun, one optional adjective, no past-tense/false positives). 3 new tests in `test_task_anchored_nudges.py` + creation-commitment cases in `test_dsml_interception.py`.
+- **LIVE-VERIFIED (bankofai/deepseek-v4-flash, isolated 8765 + scratch home, 3 traces):** trace 1 — narration → anchored nudge → `mkdir` (no re-recon, the user's exact symptom fixed); trace 2 — "Now I'll write the project files" caught by the new pattern → real verified `file_write` (pyproject.toml) → finished cleanly at iter-7; trace 3 hit the separate deepseek 500-chunk-reasoning-then-empty quirk (Session 31/256 territory) → B-2026-08-20-20. Before/after: user session 8 recon steps/0 files → trace 2 real file written + verified.
+- **Outcome:** done — the user's "clever but limited" failure is fixed and live-verified; remaining gaps backlogged (B-2026-08-20-20, and the standing B-2026-08-20-10/11).
+- **Open items:** B-2026-08-20-20 (new, Medium), B-2026-08-20-10 (High), B-2026-08-20-11 (Medium). B-2026-08-20-19 (broken test-import) checked off — no longer reproduces (3 passed).
+- **Report:** `.context/memory/reviews/2026-08-20-review-89.md`
+- **Notes:** full backend 2077 passed / 2 skipped / 0 failures; ruff + pre-commit gate clean. Re-hit two known traps (logged in inefficiencies): `code_search` vendored-rg ENOTDIR, and the macOS boot-shell reaping backgrounded servers (Session 251/153) — both worked around, boot+curl+kill in one command.

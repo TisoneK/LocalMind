@@ -1,32 +1,35 @@
 # Current Task
 
-**Status:** IDLE — Session 322 (rename B.AI provider bai → bankofai, drop "bai") shipped.
+**Status:** IDLE — Session 323 (task-anchored recovery nudges + creation-commitment detection) shipped and live-verified.
 
-## Session 322 outcome — provider key renamed; 404 root cause found
+## Session 323 outcome — the "model feels clever but the agent is limited" fix
 
-- **Target:** "Still referencing bai? Failing with 404 — I said drop bai."
-- **Renamed:** `bai` → `bankofai` everywhere (ProviderConfig key/name,
-  `config.py` `bankofai_model` + env map, `models.py` listable tuple,
-  `SettingsModal.tsx` id, `.env.example`, `test_provider_registry.py`).
-  Env vars `BAI_API_KEY`/`BAI_MODEL` → `BANKOFAI_API_KEY`/`BANKOFAI_MODEL`.
-- **404 root cause:** the still-running OLD backend re-wrote
-  `model: DeepSeek-V4-Flash` back into `settings.json` (overriding the
-  Session 321 lowercase fix) and sent the case-mismatched ID → model_not_found.
-  Migrated `settings.json` (`adapter` + `api_keys.bai` → `bankofai`) and
-  re-fixed `model` → `deepseek-v4-flash`.
-- **Verification (live):** `OpenAICompatAdapter(provider="bankofai")` →
-  base `https://api.bankofai.io/v1`, model `deepseek-v4-flash`,
-  `list_models()` = 38, `chat()` → "PONG". Full backend 2071 passed / 1
-  pre-existing failure (`test_parent_recovery_cap.py`); ruff clean; tsc clean.
-- **⚠ User action required:** restart the backend/app — the running process
-  is old code and will keep clobbering the fix until restarted.
+- **Target:** user's real parent-turn trace (deepseek-v4-flash via bankofai, "create a new coding project in dev/{name}/"):
+  the model planned well but narrated tool intent instead of calling tools; the task-blind tool-talk nudge ("call the
+  tool now") bounced it back into `ls`/`Get-ChildItem` re-recon — 2 turns, 8 tool steps, zero files.
+- **Shipped (`3880cfc`):**
+  1. `_recovery_nudge_tail(loop_messages, trace)` in `loop.py` — appends the user's ORIGINAL request (Session 314
+     pattern) plus, when tools already ran this turn, an advancement hint ("do NOT repeat them — call the tool that
+     takes the NEXT step") to the three task-blind nudges (tool-talk, forced-tool, empty-response).
+  2. Creation-commitment pattern in `_TOOL_TALK_PATTERNS` (`text_tools.py`) — catches "I'll create/write the project
+     files…" narration with no tool call (requires creation verb + file-like noun; allows one adjective word).
+- **Regression tests:** `tests/core/test_task_anchored_nudges.py` (3) + creation-commitment cases in
+  `tests/core/test_dsml_interception.py`.
+- **Live-verified (bankofai/deepseek-v4-flash, isolated 8765, 3 traces):** trace 1 — narration → anchored nudge →
+  `mkdir` (no re-recon, vs the user's re-recon loop); trace 2 — "Now I'll write the project files" caught by the new
+  pattern → real verified `file_write` (pyproject.toml); trace 3 hit the separate deepseek 500-chunk-reasoning-then-empty
+  quirk (Session 31/256 territory) → B-2026-08-20-20 backlogged.
+- **Verification:** full backend 2077 passed / 2 skipped / 0 failures; ruff clean; pre-commit gate (tsc + ruff) passed.
+  Note: the pre-existing `test_parent_recovery_cap.py` import failure (B-2026-08-20-19) no longer reproduces (3 passed).
 
 ## Next
 
+- **B-2026-08-20-20 (Medium):** deepseek-v4-flash streamed 500 reasoning chunks then nothing — turn ended with only the
+  provider-error fallback message (live trace 3). Investigate converting this case into the empty-reasoning recovery
+  instead of the generic provider-error message.
 - **B-2026-08-20-10 (High):** MiniMax XML interception conflicts with prose-commitment detector.
 - **B-2026-08-20-11 (Medium):** 429 on iter=1 → empty bubble.
-- **B-2026-08-20-19 (Low):** fix broken test-import in `test_parent_recovery_cap.py`.
 
-**Feature:** none (single-session config rename)
-**ADR:** ADR-55 (B.AI → BankOfAI provider, renamed + live-verified), ADR-54, ADR-53, ADR-52
-**Review:** `.context/memory/reviews/2026-08-20-review-88.md`
+**Feature:** none (single-session loop fix)
+**ADR:** none
+**Review:** `.context/memory/reviews/2026-08-20-review-89.md`

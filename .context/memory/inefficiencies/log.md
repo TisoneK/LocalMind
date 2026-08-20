@@ -982,3 +982,12 @@ if literally nothing slowed you down.
 - **Cause:** The user's backend process was still running the OLD code (default `DeepSeek-V4-Flash`, base `api.b.ai`). A running backend re-writes `model` into `settings.json` from its in-memory default whenever the provider is (re)selected or a turn runs, so the old process overwrote the corrected lowercase value — and sent the case-mismatched ID → 404. My Session 321 fix was a file edit, which is not durable while an old process is live.
 - **Workaround / fix:** Re-fixed the model value and renamed the provider key (`bai` → `bankofai`) + migrated `adapter`/`api_keys`. The user must fully restart the backend for the new code to take effect.
 - **Prevent next time:** After editing a runtime settings file (or renaming a persisted config key), explicitly tell the user to restart the running backend/app — a live process will clobber the file edit from its stale in-memory state, so a file fix alone can look like it "didn't work" on the next 404.
+
+---
+## 2026-08-20 — Buffy / deepseek-v4-flash (Session 323)
+
+- **Problem:** Two known traps re-hit this session: (1) `code_search` failed with `ENOTDIR: not a directory, posix_spawn '/Users/bao/.config/manicode/rg'` — the vendored rg path is stale (Sessions 152/197/200); (2) the isolated 8765 live server died between commands because the macOS harness reaps backgrounded processes when the boot shell exits (Sessions 153/251).
+- **Cost:** ~2 min total — switched to `grep` for the test-file search, and re-ran the live harness as boot+curl+kill in ONE terminal command (the documented Session 251 recipe).
+- **Cause:** Both are stale-environment/tooling issues already documented in this log and `system/environments.md`; I re-discovered them instead of reading first.
+- **Workaround / fix:** grep for repo searches; single-command live-trace recipe for the 8765 harness.
+- **Prevent next time:** Before any `code_search` with a file path or compound cwd, scope to a directory (or use grep). For live traces, always boot+request+teardown in one shell command — a server launched in its own command will be reaped when that shell exits. Also: `~/LocalMind/settings.json` now has `adapter=bankofai, model=deepseek-v4-flash` (Session 322 migration) — the live harness copy uses the bankofai key for traces.
