@@ -4390,3 +4390,17 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-7 (empty-final-answer after recovery-cap exhaustion), B-2026-08-20-8 (extend `_is_tool_talk` regex to include "describe"), B-2026-08-20-3 (Parent maturity), B-2026-08-20-4 (frontend parent_ready), B-2026-08-20-5 (tune compaction).
 - **Report:** `.context/memory/reviews/2026-08-20-review-74.md`
 - **Notes:** live traces used isolated 8765 + /tmp scratch home; no user app on port 8000 touched; no API-key values printed.
+
+---
+## 2026-08-20 — Session 308 — post-loop evidence synthesis (B-2026-08-20-7)
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** Fix the empty-final-answer after recovery-cap-exhaustion issue (Session 307 finding).
+- **SHIPPED (`f3c7a1d`):** `_post_loop_synthesis_from_evidence()` in `core/agent/loop.py` + wired into the empty-response fallthrough path. Fires when tools ran + observation_log non-empty + final text empty. Calls `_force_final_answer(framing="final")` with thinking OFF. Does NOT count against the recovery budget. Guards: no-tools → skip; empty-log → skip; trivial synth (<20 chars) → skip; exception → caught. Emits `post_loop_synthesis` obs event. 7 new tests; 1010 broad regression pass; ruff clean.
+- **LIVE-VERIFIED (z.ai/glm-4.5-flash, 2 traces, isolated 8765):** trace 1 captured 5 iters (describe_tool → shell(ls /tmp)) before the tool-call budget timed out; trace 2 fully captured 6 iters (shell(hostname) → shell(JSON-wrapped) → empty → B-2026-08-18-11 reasoning rescue fired, produced 327 chars). The post-loop synthesis did NOT fire on either trace because the B-2026-08-18-11 reasoning rescue fired FIRST and produced non-empty answers — the CORRECT behavior. The post-loop synthesis is a **backstop** for when there's no reasoning buffer; unit-tested but the specific backstop case wasn't exercised live.
+- **NEW FINDING (B-2026-08-20-9):** the shell tool's error message when given a JSON-wrapped command (`{"action":"execute","command":"hostname"}`) doesn't guide the model toward the correct plain-string form. The model concluded "the shell tool does not include a direct hostname command" — a capability hallucination. Backlogged.
+- **HONEST OUTCOME:** B-2026-08-20-7 implemented + unit-verified (7 tests), NOT live-verified on the specific empty-no-reasoning pattern (the reasoning rescue handled it first). The post-loop synthesis adds value as a backstop for the case where the model's final empty iteration had no reasoning buffer.
+- **Outcome:** done — safety net shipped + unit-tested; live traces proved the reasoning rescue is the primary path; new finding B-2026-08-20-9 backlogged.
+- **Open items:** B-2026-08-20-9 (shell JSON-wrapped error hint), B-2026-08-20-4 (frontend parent_ready), recovery & speed focus (raise recovery cap, overlap init+memory, fold classify+first-action).
+- **Report:** `.context/memory/reviews/2026-08-20-review-75.md`
+- **Notes:** live traces used isolated 8765 + /tmp scratch home; no user app on port 8000 touched; no API-key values printed.
