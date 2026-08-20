@@ -713,7 +713,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # adapter setup. The resulting facts and attachment evidence are
         # injected into this turn's native parent context; they never rebuild
         # or replace the boot-owned kernel.
-        async def _gather_nonessential() -> tuple[list[str], Optional[dict]]:
+        #
+        # B-2026-08-17-10 (Session 311): the ParentSession DB load is also
+        # overlapped here (it's a synchronous read that would otherwise block
+        # the event loop after the memory await). Bundling it into the
+        # concurrent task means the effective turn-start latency is
+        # max(memory, parent_session_load, adapter_setup) instead of their sum.
+        async def _gather_nonessential() -> tuple[list[str], Optional[dict], ParentSession]:
             facts = await self._memory_facts(message, session_id)
             try:
                 failures = self._store.recall_failures(message=message, intent=Intent.ANALYZE.value)
@@ -741,7 +747,19 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     )
                 except Exception as exc:
                     collector.emit("attachment_failed", error=str(exc)[:120])
-            return facts, attach
+            # B-2026-08-17-10: load the ParentSession concurrently with the
+            # memory/attachment work. The DB read is synchronous, so wrap it
+            # in to_thread to yield to the event loop.
+            parent_sess: ParentSession
+            try:
+                stored = await asyncio.to_thread(
+                    self._store.get_parent_session, session_id
+                )
+                parent_sess = ParentSession.from_store(session_id, stored)
+            except Exception:
+                logger.debug("[agent-runtime] parent session load failed; using empty session", exc_info=True)
+                parent_sess = ParentSession(session_id=session_id)
+            return facts, attach, parent_sess
 
         nonessential_task = asyncio.create_task(_gather_nonessential())
 
@@ -765,10 +783,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # has been running concurrently with adapter setup, so the effective
         # wait is only the unoverlapped tail.
         try:
-            memory_facts, attachment = await nonessential_task
+            memory_facts, attachment, parent_session = await nonessential_task
         except Exception:
             logger.debug("[agent-runtime] nonessential gather failed; proceeding with empty context", exc_info=True)
             memory_facts, attachment = [], None
+            parent_session = ParentSession(session_id=session_id)
 
         collector.emit("agent_context_ready", memory_facts=len(memory_facts), attachment=bool(attachment))
         self._metrics.start_request()
@@ -783,20 +802,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # rebuilt here. The AgentLoop adds dynamic environment/workspace
         # context and the native bootstrap capability surface.
         #
-        # ADR-52 phase 2: load the per-chat ParentSession and inject its
-        # rolling summary as a system message BEFORE the recent tail. The
-        # summary compacts older turns so long conversations stay bounded
-        # in the prompt while the most recent turns remain verbatim below.
-        # The session is loaded from the persisted store (survives backend
-        # restart) and updated after the turn completes.
-        try:
-            parent_session = ParentSession.from_store(
-                session_id,
-                self._store.get_parent_session(session_id),
-            )
-        except Exception:
-            logger.debug("[agent-runtime] parent session load failed; using empty session", exc_info=True)
-            parent_session = ParentSession(session_id=session_id)
+        # ADR-52 phase 2: the per-chat ParentSession's rolling summary is
+        # injected as a system message BEFORE the recent tail. The summary
+        # compacts older turns so long conversations stay bounded in the
+        # prompt while the most recent turns remain verbatim below. The
+        # session was loaded concurrently with memory/attachment retrieval
+        # in _gather_nonessential (B-2026-08-17-10) and survives backend
+        # restart via the persisted store.
         summary_section = parent_session.to_prompt_section()
         prompt_messages: list[dict] = []
         if summary_section:
