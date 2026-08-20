@@ -1,13 +1,13 @@
 # Current Task
 
-**Status:** IN PROGRESS — Session 303 is recording the user's Parent-only architecture clarification.
+**Status:** IDLE — Session 303 Parent-only architecture clarification completed.
 
-## Scope decision
-- LocalMind currently has exactly one active agent: the Parent (user-facing identity: LocalMind).
-- The Parent owns the kernel, session context, tools, planning, execution, verification, recovery, and final answers.
-- Child agents, specialist agents, delegation, parallel delegation, and agent inheritance are not part of the current architecture or implementation scope.
-- Existing child/delegation code is legacy/parked compatibility surface; do not extend it, route new work through it, or use it as evidence that the architecture is multi-agent.
-- Children may be reconsidered only after the Parent maturity bar is proven and the user explicitly changes scope.
+## Completed
+- Recorded ADR-53 as the authoritative current-scope amendment.
+- LocalMind is explicitly Parent-only: the Parent is the sole active agent and owns the kernel, session context, tools, planning, execution, verification, recovery, and final answer.
+- Updated the active workflow target, `AGENTS.md`, review-71, backlog, session summary, and inefficiency log.
+- Updated `docs/ARCHITECTURE.md` and the reconciliation/status section of `docs/parent-agent-spec.md`.
+- Preserved historical ADR-8/ADR-48 records and left existing child/delegation code untouched as parked compatibility surface.
 
 ## Next Parent-only implementation slices
 - Persist a rolling `ParentSession` summary while preserving the bounded verified tail.
