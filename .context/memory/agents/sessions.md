@@ -4432,3 +4432,20 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-11 (fold classify+first-action, risky), B-2026-08-17-12 (create→file_write steering), B-2026-08-20-9 (shell JSON hint), B-2026-08-20-3 (Parent maturity), B-2026-08-20-5 (tune compaction).
 - **Report:** `.context/memory/reviews/2026-08-20-review-77.md`
 - **Notes:** no live trace (structural win); full CI gate run (2041 pass).
+
+---
+## 2026-08-20 — Session 312 — test fix + turn-init parallelism audit (user feedback)
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** Address user feedback: (1) fix the failing test I dismissed, (2) verify actual parallelism, (3) make the user feel the answer is instant.
+- **ROOT CAUSE ADDRESSED:** I dismissed `test_shell_command_retains_trailing_output` as "pre-existing" in Session 311. The user correctly pushed back: "protocol says when you find an error even if its not yours you fix it." Also, I claimed "concurrent" turn-init without auditing the real serial path.
+- **SHIPPED (`c03ac63`):**
+  1. **Test fix:** rewrote the test to use POSIX `seq+tr` instead of bash-specific brace expansion. The shell tool runs `/bin/sh` (dash) which doesn't support `{1..5000}`. Test now passes.
+  2. **Turn-init parallelism:** (a) `_persist_user` is now fire-and-forget via `asyncio.create_task(asyncio.to_thread(...))` — the DB write is NOT on the critical path. (b) `get_history` folded into the concurrent `_gather_nonessential` task — runs via `asyncio.to_thread` alongside memory + parent_session, all three via `asyncio.gather`. (c) The concurrent task is created FIRST — before cwd sync + adapter setup. **Before:** safety_check + get_history(serial) + persist_user(serial) + cwd_sync + max(memory, parent_session, adapter_prime). **After:** safety_check + cwd_sync + max(history, memory, parent_session, adapter_prime).
+- **LIVE AUDIT (z.ai/glm-4.5-flash, "Hello" trace):** turn-init ~1s (parallelism working — down from the serial sum), LLM call 8.5s (z.ai API latency — the real bottleneck, cannot control from harness). The user feels "instant" only with a faster provider; the harness now adds <1s on top of model latency. Thinking tokens DO stream in real-time via SSE.
+- **VERIFICATION:** 2042 broad regression tests pass (0 failures — the previously-dismissed fail is now fixed). Ruff clean.
+- **HONEST ANSWERS:** (1) "Did you fix everything?" — No, I dismissed the test. Now fixed. (2) "Parallel or serial?" — Before: get_history + persist_user were serial. Now: all concurrent via gather+to_thread. (3) "Instant feel?" — Turn-init <1s; the 8.5s is z.ai's API; need a faster provider for sub-second first-token.
+- **Outcome:** done — test fixed, turn-init genuinely parallel, honest audit delivered.
+- **Open items:** B-2026-08-17-11 (fold classify+first-action, risky), B-2026-08-17-12 (create→file_write steering), B-2026-08-20-9 (shell JSON hint).
+- **Report:** `.context/memory/reviews/2026-08-20-review-78.md`
+- **Notes:** logged an inefficiency entry for the "dismissed test" anti-pattern.

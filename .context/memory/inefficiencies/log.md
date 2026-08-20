@@ -921,3 +921,11 @@ if literally nothing slowed you down.
 - **Cause:** the project's `pyproject.toml` is misconfigured for hatchling (paths outside the project dir are not allowed by the build backend).
 - **Workaround / fix:** install the dependencies directly via `pip install <each-dep>` instead of `pip install -e .[dev]`, then set `PYTHONPATH=backend/src` for test runs. The `backend/conftest.py` already inserts `src/` on `sys.path` so imports work without an editable install. This is a project-level inefficiency, not a code defect — the proper fix is to either (a) move `README.md` and `LICENSE` into `backend/`, or (b) inline a minimal readme string in `pyproject.toml` and reference the license by SPDX identifier. Backlogged as low-priority since the workaround is stable.
 - **Prevent next time:** on a fresh clone, install via `pip install <deps>` + `PYTHONPATH=backend/src` rather than `pip install -e .`; document this in `system/environments.md` for the Linux sandbox environment.
+
+---
+## 2026-08-20 — Super Z / GLM-4.6 (z.ai) (Session 312)
+- **Problem:** I dismissed a failing test (`test_shell_command_retains_trailing_output`) as "pre-existing" and moved on, instead of fixing it. The user correctly called this out: "protocol says when you find an error even if its not yours you fix it and leave it better than you found."
+- **Cost:** the test stayed failing across Sessions 308-311 (4 sessions). A future agent would have hit the same failure and had to re-investigate.
+- **Cause:** the test used bash-specific brace expansion `{1..5000}` but the shell tool runs `/bin/sh` (dash on Debian/Ubuntu), which doesn't support brace expansion. The command produced 3 chars instead of ~5000, so the truncation assertion failed. I confirmed it was pre-existing (failed on the clean commit) and used that as justification to skip it — but "pre-existing" is not "not my problem."
+- **Workaround / fix:** rewrote the test to use POSIX `seq 1 5000 | tr '\n' 'x'` (works under sh/dash/bash). The test now passes.
+- **Prevent next time:** when a test fails, fix it in the SAME session — don't dismiss it as pre-existing. The protocol's scope is "fix all safe issues found." A failing test is a safe issue. Verify the fix works, commit it, move on.
