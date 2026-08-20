@@ -920,7 +920,7 @@ CRITICAL RULES:
 8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
 
 VERIFY (after EVERY tool result — skipping this is the same as fabricating):
-- file_write: the runtime auto-verifies it and appends a `[VERIFICATION]: file_write confirmed — N chars on disk` line. On verification FAILURE/WARNING, rewrite the file — never claim success.
+- file_write: the runtime auto-verifies it and appends a `[VERIFICATION]: file_write confirmed — N bytes on disk` line. On verification FAILURE/WARNING, rewrite the file — never claim success.
 - shell: report the EXACT output — not your interpretation. If it errored, say so.
 - code_exec: check output for errors; on a traceback, fix and retry.
 - Empty/no result: say so explicitly — never fill the gap with invented content.

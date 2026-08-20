@@ -375,7 +375,12 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                     content=f"File: {p}\nSize: {len(data):,} bytes\n\n{preview}",
                     risk=RiskLevel.LOW,
                     source="file_reader",
-                    metadata={"path": str(p), "filename": p.name, "chunks": len(attachment.chunks)},
+                    metadata={
+                        "path": str(p),
+                        "filename": p.name,
+                        "chunks": len(attachment.chunks),
+                        "size_bytes": len(data),
+                    },
                 )
             except Exception as e:
                 logger.warning("[file_task] failed to read %s: %s", p, e)

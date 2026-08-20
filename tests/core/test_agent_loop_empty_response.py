@@ -20,7 +20,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from core.agent.loop import AgentLoop, TerminalProviderError
 from core.models import Intent, StreamChunk
 
@@ -465,7 +464,12 @@ class TestFileWriteVerificationReadbackDirective:
 
         async def fake_dispatch(intent, path, max_retries=0, allowed_tool_names=None):
             return (
-                ToolResult(source="file_task", content="Fact A\nFact B\nFact C", success=True),
+                ToolResult(
+                    source="file_task",
+                    content="Fact A\nFact B\nFact C",
+                    success=True,
+                    metadata={"path": path, "size_bytes": 20},
+                ),
                 False,
                 0,
             )
@@ -483,6 +487,79 @@ class TestFileWriteVerificationReadbackDirective:
         # … and NO instruction about reading the file back, either way.
         assert "do NOT read it back" not in msg, f"prohibition leaked: {msg!r}"
         assert "read it back" not in msg.lower(), f"read-back directive leaked: {msg!r}"
+
+    @pytest.mark.asyncio
+    async def test_verification_reports_file_size_not_report_length(self):
+        """B-2026-08-20-22: the verification number is the file's REAL on-disk
+        size from file_task metadata — not the length of the read-back report.
+        Live Windows trace: file_write confirmed "79 chars verified on disk"
+        for a 19-byte file because len(content) counted the "File: <path> / Size:
+        N bytes" header + preview, not the file."""
+        from core.models import ToolResult
+
+        loop = AgentLoop(adapter=MagicMock())
+        report = (
+            "File: C:\\Users\\tison\\Dev\\test-run\\notes.txt\n"
+            "Size: 19 bytes\n\n"
+            "hello from deepseek"
+        )
+
+        async def fake_dispatch(intent, path, max_retries=0, allowed_tool_names=None):
+            return (
+                ToolResult(
+                    source="file_task",
+                    content=report,
+                    success=True,
+                    metadata={"path": path, "size_bytes": 19},
+                ),
+                False,
+                0,
+            )
+
+        with patch("core.agent.loop.dispatch_with_retry", new=fake_dispatch):
+            msg = await loop._verify_tool_result(
+                tool_name="file_write",
+                tool_args={"path": "dev\\test-run\\notes.txt", "content": "hello from deepseek"},
+                observation="",
+            )
+
+        assert msg is not None
+        # The reported number is the file's 19 bytes, NOT the ~79-char report.
+        assert "19 bytes verified on disk" in msg, f"got: {msg!r}"
+        assert "79 chars" not in msg
+
+    @pytest.mark.asyncio
+    async def test_verification_flags_truncation_by_file_size_not_header(self):
+        """B-2026-08-20-22: the truncation check compares the file's real size
+        against what was written. Under the old len(report) metric, the ~60-char
+        header masked real content loss — a 200-char write that landed as 90
+        bytes produced a report ~150 chars long and slipped past the 50% bar."""
+        from core.models import ToolResult
+
+        loop = AgentLoop(adapter=MagicMock())
+        report = "File: C:/t/f.txt\nSize: 90 bytes\n\n" + "x" * 90
+
+        async def fake_dispatch(intent, path, max_retries=0, allowed_tool_names=None):
+            return (
+                ToolResult(
+                    source="file_task",
+                    content=report,
+                    success=True,
+                    metadata={"path": path, "size_bytes": 90},
+                ),
+                False,
+                0,
+            )
+
+        with patch("core.agent.loop.dispatch_with_retry", new=fake_dispatch):
+            msg = await loop._verify_tool_result(
+                tool_name="file_write",
+                tool_args={"path": "C:/t/f.txt", "content": "x" * 200},
+                observation="",
+            )
+
+        assert msg is not None
+        assert "may be truncated" in msg, f"truncation not flagged: {msg!r}"
 
     @pytest.mark.asyncio
     async def test_loop_surfaces_factual_verification_without_readback_directive(self):

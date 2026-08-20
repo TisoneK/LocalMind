@@ -5641,10 +5641,23 @@ class AgentLoop:
                     )
 
                 actual_content = verify_result.content or ""
-                actual_len = len(actual_content)
+                # B-2026-08-20-22: count the FILE, not the read-back report.
+                # len(content) counts the file_task REPORT ("File: <path> / Size:
+                # N bytes" header + preview), so a 19-byte file reported as ~79
+                # "chars" and the ~60-char header skewed the truncation heuristic
+                # (real content loss could hide under it). file_task now surfaces
+                # the real on-disk size in metadata; fall back to the report
+                # length only for callers that don't provide it.
+                verify_meta = verify_result.metadata or {}
+                if "size_bytes" in verify_meta:
+                    actual_len = verify_meta["size_bytes"]
+                else:
+                    actual_len = len(actual_content)
 
                 # Check if the file was written with reasonable content
-                if actual_len == 0:
+                # (guard with expected_len > 0 so a deliberately empty write is
+                # not reported as a failure).
+                if actual_len == 0 and expected_len > 0:
                     return (
                         f"File verification FAILED — '{path}' exists but is empty. "
                         f"Expected {expected_len} chars of content."
@@ -5654,7 +5667,7 @@ class AgentLoop:
                 if expected_len > 100 and actual_len < expected_len * 0.5:
                     return (
                         f"File verification WARNING — '{path}' may be truncated. "
-                        f"Written {actual_len} chars but expected ~{expected_len} chars. "
+                        f"Written {actual_len} bytes but expected ~{expected_len} chars. "
                         f"Consider rewriting the file with complete content."
                     )
 
@@ -5668,7 +5681,7 @@ class AgentLoop:
                 # phantom "do NOT read it back" / "read it back" instruction is a
                 # bug (it fought legitimate user requests and second-guessed the
                 # agent); the agent decides based on the actual task (B-2026-08-18-7).
-                return f"file_write confirmed — {actual_len} chars verified on disk at {path}."
+                return f"file_write confirmed — {actual_len} bytes verified on disk at {path}."
 
             # ── code_exec verification ───────────────────────────────────
             if tool_name == "code_exec" and VERIFY_CODE_EXEC:
