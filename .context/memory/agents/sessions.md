@@ -4338,3 +4338,13 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-1 rolling ParentSession summary/readiness telemetry; B-2026-08-20-2 clean GLM native tool trace; B-2026-08-20-3 Parent maturity before any future child scope.
 - **Report:** `.context/memory/reviews/2026-08-20-review-71.md` (scope amendment appended)
 - **Notes:** context-only update; generated untracked `backend/MagicMock/` remains excluded.
+
+---
+## 2026-08-20 — Session 304 — closeout worktree rule
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS local | **Role:** engineer | **Core:** 0.8.0
+- **Task:** User directed that the worktree must always be cleared during closeout.
+- **Decision:** add a standing override: inspect untracked paths, remove only known session-generated residue, and verify `git status` is clean before reporting completion. Tracked or user-owned changes must never be deleted.
+- **Action:** inspected `backend/MagicMock/` (192K, one generated settings fixture), removed it, and confirmed the worktree is clean.
+- **Outcome:** done — closeout rule recorded for future sessions and pushed.
+- **Notes:** no product code changed; no tests required for this workflow-only change.

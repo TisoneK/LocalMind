@@ -905,3 +905,11 @@ if literally nothing slowed you down.
 - **Cause:** ADR-48 and ADR-8 were valid historical decisions at the time they were written, but their current-scope consequences were not explicitly superseded after the user's new architectural decision.
 - **Fix:** added ADR-53 as the authoritative Parent-only amendment, updated the active workflow/task state, root agent instructions, review, backlog, session summary, and this log. Existing child/delegation code remains untouched and parked; no new multi-agent work is authorized.
 - **Prevent next time:** when the user changes the architectural target, append an explicit superseding decision and update every active entry point in the same session; do not rely on a later agent inferring that a newer chat clarification outweighs older ADR prose.
+
+---
+## 2026-08-20 — Buffy / openai/gpt-5.6-luna (Session 304 closeout)
+- **Problem:** The prior session reported completion while a known generated `backend/MagicMock/` directory remained untracked.
+- **Cost:** one cleanup pass after closeout and a standing process correction.
+- **Cause:** closeout verification checked for tracked changes but tolerated generated untracked residue.
+- **Fix:** inspected and removed the 192K generated fixture directory, then verified `git status` was clean. Added a project override requiring every closeout to inspect/remove session-generated residue and verify a clean worktree.
+- **Prevent next time:** never report closeout while any generated/untracked session residue remains; inspect first and preserve tracked/user-owned changes.

@@ -25,3 +25,5 @@ Example:
 
 - **ADR template in core 0.5.0 has no `Author:` line** → **LocalMind's ADRs include `- **Author:** <agent> / <model> (Session N)` ahead of core.** Per the 0.3.0 design's "folded-in small fix" — every other template carries the author line, ADRs were the one record type without it. (set by Super Z / GLM-5.2, Session 13, 2026-07-26)
 
+- **Closeout may leave generated or temporary worktree residue** → **every session closeout must clear generated/untracked artifacts it created, then verify `git status` is clean before reporting completion.** Never delete tracked or user-owned changes; inspect an untracked path first and remove only known session-generated residue. (set by user, 2026-08-20)
+
