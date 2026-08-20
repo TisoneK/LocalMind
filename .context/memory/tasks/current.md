@@ -1,24 +1,24 @@
 # Current Task
 
-**Status:** COMPLETE — Session 301 (2026-08-20). Restored the generic direct-conversation boundary instead of keeping the phrase-specific capability response patch.
+**Status:** PLAN APPROVED — Session 302 (2026-08-20). User selected the warm Parent Kernel architecture and phase 1 scope: eliminate the per-turn parent-initialization model call.
 
-## Product change
-- Removed the capability-specific detector and deterministic capability catalog.
-- Short context-backed conversational turns use one normal adapter chat call with recent history and a generic follow-up-aware prompt.
-- Evidence-requiring, action-shaped, attachment, and tool-restricted turns remain on the parent/tool loop.
-- Preserved lifecycle, stage timings, persistence, metrics, and workspace artifacts.
+## Architectural plan
+- Boot a server-lifetime immutable `ParentKernel` with LocalMind identity/instructions, safety/playbooks, agent registry, lean tool schemas, provider/model adapter, metadata, and readiness state.
+- Keep `ParentSession` state per chat: rolling summary + recent tail, objective, cwd, memory/failure recall, todos, steering, and abort state.
+- Build a per-turn `TurnContext` with the latest message, attachments, workspace delta, and new tool evidence.
+- Replace the current per-turn JSON initializer with the first normal native tool-capable parent call; it must handle direct prose and tools without intent-specific shortcuts.
+- Start degraded if provider warmup fails and retry lazily; invalidate/rebuild the kernel on provider/model/key/thinking/tool/playbook/context-window changes.
+- Do not assume cross-provider hidden KV-cache reuse; only cache immutable prompt sections, clients, and Ollama model residency.
 
-## Live verification
-- Established isolated Claude harness: copied settings into isolated `LOCALMIND_HOME`, z.ai `glm-4.5-flash`, thinking enabled, shell enabled, port 8765, direct SSE/log inspection, cleanup.
-- Real GLM generic shapes: `Tell me about yourself` (11.4s / 83 prompt tokens), `I had a long day` (13.5s / 143), and `Can you explain recursion simply?` (15.7s / 171) all used `fast_path=true` and returned useful direct answers.
-- Final exact flow: `What can you do?` (14.3s / 83) followed by `Like what` (10.5s / 138) used the same generic path and produced concrete non-repeated examples.
-- Real read-only tool request remained `fast_path=false`, `mode=execute`, made four shell calls, adapted paths, and returned the actual listing.
+## Decisions
+- **Phase 1:** eliminate per-turn initialization — selected by user.
+- **Context default:** summary + recent tail — recommended, awaiting override only if needed.
+- **Boot failure default:** start degraded and lazy-retry — recommended, awaiting override only if needed.
 
-## Verification
-- Focused: 112 passed.
-- Full CI: 1996 backend passed / 2 skipped; Ruff clean; TypeScript clean; ESLint 0 errors / 71 existing warnings.
-- First full-gate run caught five regressions caused by over-broad history follow-up routing; the structural follow-up guard fixed them before the final green run.
+## Constraints
+- Preserve the closed-loop, recovery, completion-floor, safety, persistence, workspace, and live-testing contracts.
+- The current `cb42a88` direct-boundary change is an interim measured fix, not the final warm-kernel architecture.
 
 **Feature:** none
-**Report:** `.context/memory/reviews/2026-08-20-review-70.md`
-**Working tree note:** generated untracked `backend/MagicMock/` is excluded.
+**ADR:** `.context/memory/plans/decisions.md` ADR-52
+**Next implementation step:** design `ParentKernel`/`ParentSession` interfaces and live-test the first native tool-capable call before changing routing.
