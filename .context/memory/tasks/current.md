@@ -4,6 +4,16 @@
 
 ## Session 325 outcome — read-back-after-write on Windows
 
+**Addendum (same trace):** the user restarted and re-ran the task on Windows — it COMPLETED
+end-to-end (mkdir Dev/test-run → file_write 19 bytes → file_task read-back "hello from deepseek"
+→ confirmed match). The S325 fix held live. The trace also exposed `[VERIFICATION]: file_write
+confirmed — 79 chars verified on disk` for a 19-byte file: `_verify_tool_result` counted the
+READ-BACK REPORT string, not the file, and the ~60-char header skewed the truncation heuristic.
+Shipped `8460829` — file_task surfaces `size_bytes` in metadata; the verifier uses it and reports
+"N bytes verified on disk"; empty-write guard + 2 new regression tests. Backend 2083/2.
+Caveat: the run used absolute `C:\...` paths, so it exercised S264 — the S325 relative-backslash
+path is unit-covered but awaits a live relative-path Windows run.
+
 - **Reported (user's live trace, bankofai/deepseek-v4-flash on Windows):** the agent wrote
   `dev\test-run\notes.txt` ("Wrote 19 bytes to C:\Users\tison\Dev\test-run\notes.txt") and the
   IMMEDIATE read of the same relative path failed with `not_found`, then the turn ended without
