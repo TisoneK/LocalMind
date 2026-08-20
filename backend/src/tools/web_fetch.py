@@ -346,7 +346,13 @@ async def web_fetch(url: str) -> ToolResult:
                         error_message=f"Redirect target blocked: {reason}",
                         metadata={"url": url, "redirect_url": redirect_url},
                     )
-                response.close()
+                # B-2026-08-20-18: close the redirect response properly.
+                # httpx async responses need aclose(), not close() — the sync
+                # close raises "Attempted to call a sync close on an async
+                # stream" which crashed web_fetch on every redirect (e.g.
+                # weather.com redirects, so the tool failed before the model
+                # could fetch any page that 301/302s).
+                await response.aclose()
                 current_url = redirect_url
             else:
                 # Loop exhausted — too many redirects

@@ -147,8 +147,16 @@ async def test_loop_treats_structured_failure_as_failed_and_skips_thinker():
     tool_events = [event for event in events if event.type == "tool_call"]
     assert any(event.data.get("status") == "failed" for event in tool_events)
     assert not any(event.type == "agent_thinker_start" for event in events)
-    failure = next(event for event in events if event.type == "agent_loop_failure")
-    assert failure.data["failure_type"] == "tool_failure"
+    # B-2026-08-20-18: a recovered tool failure (model produced a real answer
+    # after the failure) should NOT emit agent_loop_failure. The run is a
+    # success — the user got their answer. The old behavior emitted
+    # "tool_failure" even on recovery, which showed "Agent loop terminated"
+    # to the user after they already had the answer.
+    failure_events = [event for event in events if event.type == "agent_loop_failure"]
+    assert not failure_events, (
+        f"recovered tool failure must not emit agent_loop_failure — "
+        f"the model produced a real answer. Got: {failure_events}"
+    )
 
 
 @pytest.mark.asyncio

@@ -40,6 +40,14 @@ def classify_failure(trace: object) -> str:
          explicitly False at the end (the acceptance contract was not
          verified)
       3. tool_failure — at least one tool step failed this run
+
+    B-2026-08-20-18 (Session 318): a tool_failure is only classified as
+    a failure when the run did NOT produce a final answer. If the model
+    recovered from a failed tool (tried a different URL, retried, etc.)
+    and produced a real answer, the run is a SUCCESS — emitting
+    agent_loop_failure would show "Agent loop terminated: tool_failure"
+    to the user even though they got their answer. Check final_response
+    before classifying tool_failure.
     """
     if getattr(trace, "hit_limit", False):
         return "iteration_limit"
@@ -49,6 +57,12 @@ def classify_failure(trace: object) -> str:
     gate_passed = getattr(trace, "gate_passed", None)
     if criteria and gate_passed is False:
         return "criteria_unmet"
+    # B-2026-08-20-18: only classify as tool_failure if the run did NOT
+    # produce a final answer. A recovered tool failure (model tried a
+    # different approach and succeeded) is a success, not a failure.
+    final_response = (getattr(trace, "final_response", "") or "").strip()
+    if final_response and len(final_response) >= 20:
+        return ""  # the model produced a real answer — not a failure
     if any(getattr(step, "tool_failed", False) for step in getattr(trace, "steps", [])):
         return "tool_failure"
     return ""
