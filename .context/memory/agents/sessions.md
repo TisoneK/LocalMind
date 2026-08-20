@@ -4515,3 +4515,17 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-10 (MiniMax XML conflict), B-2026-08-20-11 (429 on iter=1 → empty bubble), re-run weather trace after rate-limit clears.
 - **Report:** `.context/memory/reviews/2026-08-20-review-83.md`
 - **Notes:** logged an inefficiency entry for the "shipped without live-testing" anti-pattern.
+
+---
+## 2026-08-20 — Session 318 — web_fetch redirect + tool-failure recovery (B-2026-08-20-18, live-tested)
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** Fix two bugs from the user's live transcript: web_fetch crashed on redirects ("Attempted to call a sync close on an async stream") + loop terminated with "tool_failure" even though the model had recovered and produced a real answer.
+- **LIVE-VERIFIED (z.ai/glm-4.5-flash, isolated 8765, Cheptais weather task):**
+  - **Fix 1 (web_fetch):** `response.close()` (sync) → `await response.aclose()` (async). The sync close crashed on every redirect. Live: no more sync-close error.
+  - **Fix 2 (classify_failure):** only classify as tool_failure when the run did NOT produce a final answer (≥ 20 chars). A recovered tool failure with a real answer is a success. Live: no agent_loop_failure emitted.
+  - **Result:** real 212-char weather answer produced ("The current weather in Cheptais, Bungoma, Kenya is: Partly Cloudy Night, Temperature: Low 10°C, Precipitation: 20%, Wind: NNE 8 km/h..."). No "Agent loop terminated" error. Model ran 8 iterations: web_search → web_fetch → synthesized answer.
+- **SHIPPED (`93a6613`):** both fixes + updated test. 2066 broad pass; ruff clean.
+- **Outcome:** done — the user's exact transcript failure is fixed and live-verified. The model now recovers from tool failures and produces clean answers without the loop terminating.
+- **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 on iter=1, Medium).
+- **Report:** `.context/memory/reviews/2026-08-20-review-84.md`
