@@ -4404,3 +4404,17 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-9 (shell JSON-wrapped error hint), B-2026-08-20-4 (frontend parent_ready), recovery & speed focus (raise recovery cap, overlap init+memory, fold classify+first-action).
 - **Report:** `.context/memory/reviews/2026-08-20-review-75.md`
 - **Notes:** live traces used isolated 8765 + /tmp scratch home; no user app on port 8000 touched; no API-key values printed.
+
+---
+## 2026-08-20 — Sessions 309-310 — frontend indicator + parent recovery cap
+
+- **Agent:** Super Z | **Model:** GLM-4.6 (z.ai) | **Platform:** Linux sandbox (cloud) | **Role:** engineer | **Core:** 0.8.0
+- **Tasks:** B-2026-08-20-4 (frontend parent_ready indicator) + Session 310 (raise empty-reasoning recovery cap for parent turns).
+- **SHIPPED (`a7d0b1e` + `3b7d3d8`):**
+  - **Session 309:** frontend parent-degraded indicator in CenterPanel status bar. `HealthResponse` + `HealthState` carry `parent_ready`/`parent_degraded_reason`; CenterPanel renders an amber dot (`bg-brand-amber`, `data-testid="parent-degraded-indicator"`) when `isOnline && health.parentReady === false`, with a tooltip. 5 new render tests; 262 frontend pass; tsc clean; eslint 0 errors / 71 warnings. Also stubbed `Element.scrollTo` in test/setup.ts (jsdom gap).
+  - **Session 310:** `_MAX_EMPTY_REASONING_RECOVERIES_PARENT = 3` for parent turns (was 2). Gated on `_parent_native_turn`. Non-parent cap stays at 2. 3 new tests; 1035 broad regression pass; ruff clean.
+- **HONEST LIVE STATUS:** neither session was live-verified on the real model — z.ai free tier ~30s/iter makes full live traces exceed the 10-min tool-call budget. Both are unit-tested + conservative + no-regression.
+- **Outcome:** done — frontend now surfaces parent readiness; parent path gets one more recovery attempt before falling to the post-loop synthesis.
+- **Open items:** B-2026-08-17-10 (overlap init+memory, latency), B-2026-08-17-11 (fold classify+first-action, risky), B-2026-08-20-9 (shell JSON hint), B-2026-08-20-3 (Parent maturity), B-2026-08-20-5 (tune compaction).
+- **Report:** `.context/memory/reviews/2026-08-20-review-76.md`
+- **Notes:** no live traces this session (tool-call budget); frontend tests cover the indicator; backend tests cover the cap raise.
