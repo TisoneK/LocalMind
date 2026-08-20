@@ -888,3 +888,12 @@ if literally nothing slowed you down.
 - **Workaround / fix:** Added a structural follow-up guard: opener-less history turns must be question-shaped or use a natural follow-up grammar (`Like what`, `And why`, etc.). No phrase-to-answer branch was added. Re-ran the affected 112-test slice and full CI.
 - **Verification:** 112 focused tests passed; full CI 1996 passed / 2 skipped; final live GLM trace verified both `What can you do?` → `Like what` direct behavior and a separate read-only tool request staying in execute mode.
 - **Prevent next time:** After changing a routing predicate to consult persisted history, run the parent-runtime contract tests and a full gate before trusting the happy-path live trace; stale/history-backed sessions can make an apparently safe classifier over-match.
+
+---
+## 2026-08-20 — Buffy / openai/gpt-5.6-luna (Session 302 warm-kernel implementation)
+- **Problem:** The first warm-kernel implementation skipped the JSON initializer but still passed the legacy `context_builder.build()` output into the parent loop. A real GLM trace showed the new native path still consumed 6,401 prompt tokens, defeating the architectural goal.
+- **Cost:** One live trace and one redesign pass before the clean trace.
+- **Cause:** The initializer and generic prompt assembly were treated as the same boundary; removing only the model call left the duplicated static system/tool context in place.
+- **Workaround / fix:** Use the boot-compiled parent contract via `agent_context_override`, assemble only a bounded recent turn tail + current message, and let the loop add dynamic environment/workspace context and the lean bootstrap tool index.
+- **Verification:** post-fix GLM direct trace completed natively at 1,621 prompt tokens; Zen/hy3-free loaded `describe_tool(shell)` and executed shell calls. Cerebras returned a real 402 and z.ai tool execution a real 429, both recorded rather than treated as success.
+- **Prevent next time:** For a "warm context" architecture, inspect the actual provider payload/token usage immediately after the first implementation. A cached Python object does not reduce the request unless the old prompt builder is removed from the request path.

@@ -4313,3 +4313,15 @@ program + ADR-22). -->
 - **Outcome:** done — the fix is a generic boundary correction, not a capability phrase-to-answer map.
 - **Report:** `.context/memory/reviews/2026-08-20-review-70.md`
 - **Notes:** generated untracked `backend/MagicMock/` remains excluded.
+
+---
+## 2026-08-20 — Session 302 — warm Parent Kernel phase one
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS local | **Role:** engineer | **Core:** 0.8.0
+- **Task:** Implement the user's approved phase-one architecture: initialize the parent at server boot, eliminate the per-turn JSON parent initializer, and keep mutable session/turn state separate.
+- **ROOT CAUSE:** removing a per-turn initializer alone was insufficient. The runtime also rebuilt and sent the legacy generic `context_builder` prompt, so the first native call still carried 6,401 prompt tokens. The actual fix required both a boot-owned kernel contract and a lean parent-turn message boundary.
+- **SHIPPED LOCALLY:** `ParentKernel`; application-startup warmup; degraded/lazy retry; settings/key/thinking/context invalidation; compiled parent-context override; bounded recent-tail turn assembly; native first-call prose/tool handling; lean `describe_tool` bootstrap with core-schema compatibility; removal of the dead generic direct shortcut.
+- **LIVE:** isolated z.ai/glm-4.5-flash with thinking enabled booted `parent-kernel ready`; clean direct trace had no initializer event, one native iteration, no tool event, and 1,621 prompt tokens. A repeated GLM trace hit bounded tool-talk/empty-reasoning recovery with no clean final text. Isolated Zen/hy3-free tool trace selected `describe_tool(shell)`, loaded it, executed shell calls, and returned terminal evidence without schema validation errors. Cerebras was attempted and returned real HTTP 402 payment_required; z.ai tool execution was real HTTP 429.
+- **VERIFICATION:** focused 75 passed; full CI 1,996 passed / 2 skipped; Ruff clean; TypeScript clean; ESLint 0 errors / 71 existing warnings.
+- **LIMITATIONS:** rolling ParentSession summary and explicit readiness event/health detail remain next slices; clean GLM native tool trace remains owed after rate-limit recovery. Review: `.context/memory/reviews/2026-08-20-review-71.md`.
+- **Notes:** generated untracked `backend/MagicMock/` remains excluded; no API-key values were printed or committed.

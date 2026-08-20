@@ -135,6 +135,8 @@ block (and its "last verified" date) every time you run on it again.
   - **`LOCALMIND_SHELL_ENABLED=false` in `backend/.env`** — trace servers must set `LOCALMIND_SHELL_ENABLED=true` or the shell tool reports "Shell tool is disabled".
   - **No `timeout` CLI on macOS** (GNU coreutils) — use `curl --max-time N`.
   - `test_prompt_budget.py::test_init_prompt_is_under_budget` was stale before Session 239; classify-only init now passes the 2,500-character budget. Keep the test as a guard for future prompt growth.
+  - `sh scripts/ci-check.sh` → all pass: backend 1996 passed / 2 skipped; Ruff clean; TypeScript clean; ESLint 0 errors / 71 existing warnings (2026-08-20, Session 302)
+  - Isolated live harness on port 8765: z.ai/glm-4.5-flash direct native parent turn → no initializer event, one iteration, 1621 provider prompt tokens; Zen/hy3-free tool turn → describe_tool(shell) then shell execution; Cerebras headroom trace returned real 402 payment_required (2026-08-20, Session 302)
   - `sh scripts/ci-check.sh` → all pass: ruff clean; pytest 1293 passed (61.18s); tsc clean; eslint 0 errors / 61 warnings (2026-08-12, Session 152)
 
 ## 2026-08-13 — Super Z / GLM-5.2 (Session 176 sandbox)
