@@ -40,6 +40,33 @@ def test_extract_bare_filename_and_no_path():
     assert _extract_path_candidates("just prose, nothing to open here") == []
 
 
+# ── Windows-RELATIVE backslash paths survive whole (S325) ─────────────────────
+# The S264 fix covered drive-absolute paths; a WINDOWS-RELATIVE path
+# (dev\test-run\notes.txt) still hit the forward-slash-only bare class and was
+# truncated to the bare filename — so a file the writer just created read back
+# as not_found (live trace on bankofai/deepseek-v4-flash: file_write reported
+# "Wrote 19 bytes to C:\Users\tison\Dev\test-run\notes.txt" and the immediate
+# read of the same relative path failed).
+def test_extract_windows_relative_path_kept_whole():
+    got = _extract_path_candidates(r"read dev\test-run\notes.txt")
+    assert r"dev\test-run\notes.txt" in got
+
+
+def test_extract_windows_relative_path_not_truncated_to_filename():
+    got = _extract_path_candidates(r"dev\test-run\notes.txt")
+    assert got == [r"dev\test-run\notes.txt"], (
+        "the full Windows-relative path must be the candidate, not the truncated "
+        f"bare filename — got {got!r}"
+    )
+
+
+def test_extract_windows_relative_prose_and_mixed_separators():
+    got = _extract_path_candidates(r"please read dev\test-run\notes.txt back")
+    assert r"dev\test-run\notes.txt" in got
+    # Forward-slash relative paths keep working.
+    assert _extract_path_candidates("read subdir/notes.txt")[0] == "subdir/notes.txt"
+
+
 def test_chunk_text_basic():
     text = "Paragraph one.\n\nParagraph two.\n\nParagraph three."
     chunks = _chunk_text(text, chunk_size=50, overlap=10)

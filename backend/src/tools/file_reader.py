@@ -281,17 +281,20 @@ _READ_EXTS = r"py|js|ts|txt|md|csv|pdf|docx|xlsx|json|yaml|yml|toml|html|sh|rs|g
 # Ordered path patterns for pulling a file reference out of a message.
 # Matches: "quoted path.ext", C:\Windows\path.ext, /unix/path.ext, ~/path, bare.ext
 #
-# NOTE ON ORDER: the bare Unix pattern's char class is [\w.\-/] — forward slash
-# ONLY. A Windows absolute path (C:\Users\tison\Desktop\file.md) would otherwise
-# be truncated at the backslashes down to the bare filename, then looked up under
-# ~/ and cwd and never found — so a file the agent just wrote to the Desktop reads
-# back as not_found (Session 264). The dedicated Windows-drive pattern (backslashes
-# OR forward slashes, spaces allowed) MUST run before the Unix pattern so the full
-# absolute path is offered as the first candidate.
+# NOTE ON ORDER: the bare pattern's char class is [\w.\\\-/] — forward slashes
+# AND backslashes. A Windows absolute path (C:\Users\tison\Desktop\file.md) would
+# otherwise be truncated at the backslashes down to the bare filename, then looked
+# up under ~/ and cwd and never found — so a file the agent just wrote to the
+# Desktop reads back as not_found (Session 264). The dedicated Windows-drive
+# pattern (backslashes OR forward slashes, spaces allowed) MUST run before the
+# bare pattern so the full absolute path is offered as the first candidate. The
+# backslash in the bare class is what lets a WINDOWS-RELATIVE path
+# (dev\test-run\notes.txt) survive whole instead of truncating to notes.txt —
+# the read-back-after-write failure reproduced live on Windows (Session 325).
 _PATH_PATTERNS = [
     re.compile(rf"""["']([^"'\n]+?\.(?:{_READ_EXTS}))["']"""),
     re.compile(rf"""([A-Za-z]:[\\/][^\n\r"'<>|*?]+?\.(?:{_READ_EXTS}))"""),
-    re.compile(rf"((?:~/|\.{{0,2}}/)?[\w.\-/]+\.(?:{_READ_EXTS}))"),
+    re.compile(rf"((?:~/|\.{{0,2}}/)?[\w.\\\-/]+\.(?:{_READ_EXTS}))"),
 ]
 
 
