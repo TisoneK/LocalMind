@@ -4540,3 +4540,15 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), B-2026-08-20-19 (broken test-import, Low), ADR-55 live smoke (blocked on key).
 - **Report:** `.context/memory/reviews/2026-08-20-review-85.md`
 - **Notes:** none
+
+---
+## 2026-08-20 — Session 320 — fix B.AI model ID casing + context windows (ADR-55 correction)
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** User reported "b.ai in LocalMind is wrong / not working". Investigated against the official docs (docs.b.ai sitemap → llmservice/api + models pages).
+- **ROOT CAUSE:** Session 319 used the DISPLAY names (`DeepSeek-V4-Flash`, `Hy3`) as API model IDs and guessed a context window. B.AI model IDs are LOWERCASE (`deepseek-v4-flash`, `hy3`); the case-mismatched default model resolved to model-not-found. Base URL `https://api.b.ai/v1` + Bearer auth were already correct; the `bankofai.io`↔`b.ai` domain split is the chat web app (chat.b.ai/chat ↔ chat.bankofai.io/chat alternates), NOT the API.
+- **FIXED:** `default_model` → `deepseek-v4-flash`; `MODEL_CONTEXT_WINDOWS` corrected (`deepseek-v4-flash` 128000→1000000, added `hy3`=256000, per docs.b.ai/llmservice/models/*). Test updated to pin lowercase IDs + windows.
+- **Outcome:** done (docs-verified, unit-tested) — 203 targeted tests pass, ruff clean. NOT live-verified: no `bai` key in `settings.json` (active provider still z.ai; api_keys = gemini/cerebras/zen/chutes/zai). Live smoke blocked on key.
+- **Open items:** ADR-55 live smoke (blocked on key), B-2026-08-20-10 (MiniMax XML conflict), B-2026-08-20-11 (429 empty bubble), B-2026-08-20-19 (broken test-import).
+- **Report:** `.context/memory/reviews/2026-08-20-review-86.md`
+- **Notes:** none

@@ -955,3 +955,12 @@ if literally nothing slowed you down.
 - **Cause:** The local Codebuff search wrapper's vendored ripgrep path is stale, and a file path as `cwd` breaks the spawn.
 - **Workaround / fix:** Use a directory `cwd` for code searches (already logged in Sessions 197/200); the repo remains fully navigable that way.
 - **Prevent next time:** Same as Sessions 197/200 — prefer directory-scoped searches; fall back to direct file windows when the wrapper reports a missing vendored rg binary.
+
+---
+## 2026-08-20 — Buffy / deepseek-v4-pro (Session 320)
+
+- **Problem:** B.AI "not working" in LocalMind. Root cause: I (Session 319) took the provider's MARKETING display names (`DeepSeek-V4-Flash`, `Hy3`) from the user's research brief as the API model IDs, and guessed a context window. The real IDs are lowercase (`deepseek-v4-flash`, `hy3`), so the case-mismatched default model resolved to model-not-found — which reads as a dead/404 provider, not an auth or domain error.
+- **Cost:** ~10 min of endpoint probing (both api.b.ai and api.bankofai.io return 401 unauth) before pulling the authoritative docs sitemap → model pages, which immediately exposed the lowercase IDs and the real windows (1M / 256K).
+- **Cause:** The research brief conflated display names with model IDs, and I didn't cross-check against `docs.b.ai/llmservice/models/<model>` or a live `/v1/models` call before coding the default.
+- **Workaround / fix:** Fixed the IDs + windows (docs-sourced), pinned them with a test. Base URL + Bearer auth were already correct — the bankofai.io↔b.ai domain split the user mentioned is the chat WEB app (chat.b.ai/chat ↔ chat.bankofai.io/chat), not the API.
+- **Prevent next time:** For any new provider, get the model IDs from the provider's `/v1/models` response or per-model docs pages, never from marketing/pricing copy. Display names ≠ model IDs, and OpenAI-compat model IDs are case-sensitive.
