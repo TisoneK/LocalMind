@@ -913,3 +913,11 @@ if literally nothing slowed you down.
 - **Cause:** closeout verification checked for tracked changes but tolerated generated untracked residue.
 - **Fix:** inspected and removed the 192K generated fixture directory, then verified `git status` was clean. Added a project override requiring every closeout to inspect/remove session-generated residue and verify a clean worktree.
 - **Prevent next time:** never report closeout while any generated/untracked session residue remains; inspect first and preserve tracked/user-owned changes.
+
+---
+## 2026-08-20 — Super Z / GLM-4.6 (z.ai) (Session 305)
+- **Problem:** the backend `pyproject.toml` declares `readme = "../README.md"` and `license = { file = "../LICENSE" }` (paths outside the project dir). Hatchling rejects this with `ValueError: Readme path must be within the project directory`, so `pip install -e ".[dev]"` fails on a fresh clone. Existing prior agents must have hit this too — the `.venv` was not present in the cloned repo, and there's no recorded workaround.
+- **Cost:** ~10 minutes discovering the error + finding the workaround.
+- **Cause:** the project's `pyproject.toml` is misconfigured for hatchling (paths outside the project dir are not allowed by the build backend).
+- **Workaround / fix:** install the dependencies directly via `pip install <each-dep>` instead of `pip install -e .[dev]`, then set `PYTHONPATH=backend/src` for test runs. The `backend/conftest.py` already inserts `src/` on `sys.path` so imports work without an editable install. This is a project-level inefficiency, not a code defect — the proper fix is to either (a) move `README.md` and `LICENSE` into `backend/`, or (b) inline a minimal readme string in `pyproject.toml` and reference the license by SPDX identifier. Backlogged as low-priority since the workaround is stable.
+- **Prevent next time:** on a fresh clone, install via `pip install <deps>` + `PYTHONPATH=backend/src` rather than `pip install -e .`; document this in `system/environments.md` for the Linux sandbox environment.
