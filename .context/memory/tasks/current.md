@@ -1,25 +1,20 @@
 # Current Task
 
-**Status:** IDLE — Session 302 phase one completed and verified.
+**Status:** IN PROGRESS — Session 303 is recording the user's Parent-only architecture clarification.
 
-## Completed
-- Boot-owned `ParentKernel` is built during application startup and reused across turns.
-- Parent turns no longer perform the per-turn JSON initialization model call.
-- Parent-native bootstrap uses a lean capability index plus `describe_tool`; real Zen live trace loaded and executed `shell` successfully.
-- Parent runtime sends bounded recent conversation context instead of rebuilding the legacy generic prompt.
-- Provider warmup is degraded/lazy-retry safe, and kernel invalidation tracks provider/model/key/thinking/context settings.
+## Scope decision
+- LocalMind currently has exactly one active agent: the Parent (user-facing identity: LocalMind).
+- The Parent owns the kernel, session context, tools, planning, execution, verification, recovery, and final answers.
+- Child agents, specialist agents, delegation, parallel delegation, and agent inheritance are not part of the current architecture or implementation scope.
+- Existing child/delegation code is legacy/parked compatibility surface; do not extend it, route new work through it, or use it as evidence that the architecture is multi-agent.
+- Children may be reconsidered only after the Parent maturity bar is proven and the user explicitly changes scope.
 
-## Verification
-- Full CI: 1996 backend passed, 2 skipped; Ruff and TypeScript clean; ESLint 0 errors / 71 existing warnings.
-- Real z.ai/GLM direct trace: one clean native parent turn with no initializer event and 1,621 prompt tokens; one repeat exposed the known weak-thinking tool-talk/empty-stream limitation.
-- Real Zen/hy3-free tool trace: `describe_tool(shell)` → shell execution → terminal evidence; no schema validation error.
-- Cerebras trace was blocked by real HTTP 402 payment_required; z.ai tool trace was blocked by real HTTP 429.
-
-## Next architectural slices
-- Add a persisted rolling `ParentSession` summary while preserving the bounded verified tail.
-- Re-run a clean z.ai/GLM native tool trace after the provider rate-limit window; do not claim that path from the Zen trace.
-- Consider a boot readiness event/health detail exposing `parent_ready` vs `parent_degraded`.
+## Next Parent-only implementation slices
+- Persist a rolling `ParentSession` summary while preserving the bounded verified tail.
+- Add explicit `parent_ready` / `parent_degraded` readiness telemetry.
+- Grow Parent-owned execution structure, verification, recovery, and model-escalation behavior.
+- Re-run a clean z.ai/GLM native tool trace after provider recovery; do not claim that path from the Zen trace.
 
 **Feature:** none
-**ADR:** `.context/memory/plans/decisions.md` ADR-52
+**ADR:** `.context/memory/plans/decisions.md` ADR-53 (Parent-only scope amendment), building on ADR-52
 **Review:** `.context/memory/reviews/2026-08-20-review-71.md`

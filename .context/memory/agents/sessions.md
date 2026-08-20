@@ -4325,3 +4325,16 @@ program + ADR-22). -->
 - **VERIFICATION:** focused 75 passed; full CI 1,996 passed / 2 skipped; Ruff clean; TypeScript clean; ESLint 0 errors / 71 existing warnings.
 - **LIMITATIONS:** rolling ParentSession summary and explicit readiness event/health detail remain next slices; clean GLM native tool trace remains owed after rate-limit recovery. Review: `.context/memory/reviews/2026-08-20-review-71.md`.
 - **Notes:** generated untracked `backend/MagicMock/` remains excluded; no API-key values were printed or committed.
+
+---
+## 2026-08-20 — Session 303 — Parent-only architecture amendment
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS local | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** none — context-only architecture clarification
+- **Task:** User explicitly clarified that LocalMind currently has one agent only: the Parent; update the architecture records so no historical multi-agent wording is mistaken for the active target.
+- **Decision:** ADR-53 accepted. The Parent alone owns the ParentKernel, ParentSession, TurnContext, complete tools, planning, execution, observation, verification, recovery, and final answer. Child agents, specialists, delegation, parallel delegation, and inheritance are out of current scope. Existing code remains parked compatibility surface; no product code was changed or removed.
+- **Updates:** amended ADR-52 with ADR-53, changed the active workflow target and current task, added the Parent-only instruction to `AGENTS.md`, and updated review-71, backlog, summary, and inefficiency records. Historical ADR-8/ADR-48 entries were not rewritten.
+- **Outcome:** done — active architecture is now unambiguously Parent-only.
+- **Open items:** B-2026-08-20-1 rolling ParentSession summary/readiness telemetry; B-2026-08-20-2 clean GLM native tool trace; B-2026-08-20-3 Parent maturity before any future child scope.
+- **Report:** `.context/memory/reviews/2026-08-20-review-71.md` (scope amendment appended)
+- **Notes:** context-only update; generated untracked `backend/MagicMock/` remains excluded.

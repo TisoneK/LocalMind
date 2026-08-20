@@ -897,3 +897,11 @@ if literally nothing slowed you down.
 - **Workaround / fix:** Use the boot-compiled parent contract via `agent_context_override`, assemble only a bounded recent turn tail + current message, and let the loop add dynamic environment/workspace context and the lean bootstrap tool index.
 - **Verification:** post-fix GLM direct trace completed natively at 1,621 prompt tokens; Zen/hy3-free loaded `describe_tool(shell)` and executed shell calls. Cerebras returned a real 402 and z.ai tool execution a real 429, both recorded rather than treated as success.
 - **Prevent next time:** For a "warm context" architecture, inspect the actual provider payload/token usage immediately after the first implementation. A cached Python object does not reduce the request unless the old prompt builder is removed from the request path.
+
+---
+## 2026-08-20 — Buffy / openai/gpt-5.6-luna (Session 303 scope amendment)
+- **Problem:** The newly implemented Parent Kernel records and active instructions still inherited conflicting historical language that treated the multi-agent runtime as the current architecture, even after the user clarified: "RIGHT NOW ITS JUST PARENT! NOTHING ELSE."
+- **Cost:** no product behavior change; one context reconciliation pass was required to prevent future sessions from expanding the wrong surface.
+- **Cause:** ADR-48 and ADR-8 were valid historical decisions at the time they were written, but their current-scope consequences were not explicitly superseded after the user's new architectural decision.
+- **Fix:** added ADR-53 as the authoritative Parent-only amendment, updated the active workflow/task state, root agent instructions, review, backlog, session summary, and this log. Existing child/delegation code remains untouched and parked; no new multi-agent work is authorized.
+- **Prevent next time:** when the user changes the architectural target, append an explicit superseding decision and update every active entry point in the same session; do not rely on a later agent inferring that a newer chat clarification outweighs older ADR prose.

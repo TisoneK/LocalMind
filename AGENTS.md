@@ -164,52 +164,34 @@ reintroduces the "Tools execution failure" bug:
 
 Regression tests: `tests/e2e/test_iteration_limit_and_safety.py`.
 
-## LocalMind architectural target — ADR-8 (added 2026-07-27, Session 34)
+## LocalMind architectural target — ADR-8 (historical; current scope amended by ADR-53)
 
-The standing Target is now **ADR-8: agent-centric routing** (tasks →
-agents → tools, not tasks → tools → agents). See the full ADR in
-`.context/memory/plans/decisions.md` ADR-8 for the five principles
-(classification by task type, agents own tools, agents collaborate,
-the workflow is the value, agents are directories) and the four
-implementation phases.
+ADR-8 remains a historical record of the earlier agent-centric proposal
+(tasks → agents → tools) and its relationship to the CODING HARNESS closed
+loop. It is **not the active implementation target now**. The user's Session
+303 decision in ADR-53 is authoritative: LocalMind is Parent-only, with one
+active Parent and no child-agent, specialist, delegation, parallel-delegation,
+or inheritance work in scope.
 
-**This supersedes ADR-5 as the standing Target** — but it does NOT
-supersede ADR-5 architecturally (per ADR-8's "Supersedes / builds on"
-section: ADR-8 *builds on* ADR-5; the 5-step closed-loop shape stays;
-agents just get richer context and delegation ability). All the
-Session 31-33 fixes (iteration cap, hit-limit-aware fallback,
-check-before-acting safety workflow, `_obs.all()` not `drain()` in
-the engine) are still in force and must not be regressed.
+The closed-loop shape and the Session 31-33 safety contracts remain active and
+must not be regressed: iteration cap, hit-limit-aware fallback,
+check-before-acting safety workflow, and `_obs.all()` rather than `drain()` in
+the engine. The old ADR-8 feature directory is retained as historical memory,
+not an instruction to start multi-agent phases.
 
-**Four phases, multi-session:**
-1. **Agents as directories** — structural foundation. Move
-   `coding_agent.py` → `agents/coding/agent.py`,
-   `research_agent.py` → `agents/research/agent.py`,
-   `browser_agent.py` → `agents/browser/agent.py`,
-   `direct_agent.py` → `agents/direct/agent.py`. Move
-   `backend/data/workflows/<name>.md` →
-   `agents/<name>/playbook.md`. Move inline personas from
-   `prompts.py:_PERSONA_MAP` → `agents/<name>/persona.md`.
-   Registry auto-discovers directories with `agent.py`. Backlog item:
-   "Wire `build_context()` into `BaseAgent.run()`" (Session 33) is
-   Phase 2's prerequisite and currently blocked on Phase 1.
-2. **Wire `build_context()` into `BaseAgent.run()`** — playbook files
-   finally reach the model. Highest-leverage piece. Backlog item
-   already filed (Session 33).
-3. **Agent-initiated delegation** — completed: the retired pre-loop
-   keyword heuristic is removed; agents delegate through scoped `delegate`,
-   `delegate_parallel`, and `delegate_inline` tools (parallel or handoff).
-4. **Task-type classifier** — replace or augment the intent classifier
-   so "create hello world repo" routes to `task_type=coding` (not
-   `intent=SHELL`).
+**Historical feature directory:**
+`.context/memory/features/adr-8-agent-centric-routing/` (read it only when
+reviewing that historical decision; do not start its multi-agent phases).
 
-**Per the flaw log (Session 31/33): every phase needs real-model
-testing before shipping.** ADR-8 is currently **proposed** (Session 33
-filed it; Session 34 — this session — switches the standing Target
-from ADR-5 to ADR-8 and seeds the feature-scoped memory at
-`.context/memory/features/adr-8-agent-centric-routing/`). No code
-changes this session — this is context-only initialization.
+## Parent-only scope amendment (added 2026-08-20, Session 303)
 
-**Active feature directory:**
-`.context/memory/features/adr-8-agent-centric-routing/` (read its
-`manifest.md` + `notes.md` before starting Phase 1 work).
+The user's current architectural decision is authoritative: **LocalMind is
+Parent-only right now.** The Parent is the sole active agent and owns the
+kernel, session, turn context, tools, planning, execution, verification,
+recovery, and final answer. Do not add, route through, extend, or design around
+child agents, specialist agents, delegation, parallel delegation, or agent
+inheritance. Existing multi-agent code is parked/legacy compatibility surface,
+not the current architecture. This amendment supersedes ADR-8's agent-centric
+implementation target and ADR-48's accept-and-harden scope for active work;
+the historical records remain unchanged. See ADR-53 in
+`.context/memory/plans/decisions.md`.
