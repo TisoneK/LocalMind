@@ -23,55 +23,30 @@ router = APIRouter()
 
 
 def _model_setting_attr(provider: str) -> str | None:
-    """Return the Settings attribute name for a provider's model field."""
-    return {
-        "openai": "openai_model",
-        "anthropic": "anthropic_model",
-        "openrouter": "openrouter_model",
-        "deepseek": "deepseek_model",
-        "lite-llm": "litellm_model",
-        "zen": "zen_model",
-        "groq": "groq_model",
-        "together": "together_model",
-        "fireworks": "fireworks_model",
-        "deepinfra": "deepinfra_model",
-        "mistral": "mistral_model",
-        "cohere": "cohere_model",
-        "vercel": "vercel_model",
-        "cloudflare": "cloudflare_model",
-        "cerebras": "cerebras_model",
-        "sambanova": "sambanova_model",
-        "gemini": "gemini_model",
-        "chutes": "chutes_model",
-        "zai": "zai_model",
-    }.get(provider)
+    """Return the Settings attribute name for a provider's model field.
+
+    Derived from PROVIDER_CONFIGS (single source of truth) so a new provider
+    is picked up automatically and can never drift out of this map. (The
+    pre-Session-319 hardcoded dict silently omitted ZenMux — added in ADR-9 —
+    so its model field resolved to None here while health.py still had it.)
+    """
+    from adapters.openai_compat import PROVIDER_CONFIGS
+
+    cfg = PROVIDER_CONFIGS.get(provider)
+    return cfg.settings_field if cfg else None
 
 
 def _build_model_setting_map() -> dict[str, str]:
-    """Return {provider_id: current_model_value} for all cloud providers."""
+    """Return {provider_id: current_model_value} for all cloud providers.
+
+    Derived from PROVIDER_CONFIGS (single source of truth) — same fix as
+    _model_setting_attr (ZenMux was omitted from the old hardcoded dict).
+    """
+    from adapters.openai_compat import PROVIDER_CONFIGS
+
     return {
-        prov: getattr(settings, attr, "") or ""
-        for prov, attr in {
-            "openai": "openai_model",
-            "anthropic": "anthropic_model",
-            "openrouter": "openrouter_model",
-            "deepseek": "deepseek_model",
-            "lite-llm": "litellm_model",
-            "zen": "zen_model",
-            "groq": "groq_model",
-            "together": "together_model",
-            "fireworks": "fireworks_model",
-            "deepinfra": "deepinfra_model",
-            "mistral": "mistral_model",
-            "cohere": "cohere_model",
-            "vercel": "vercel_model",
-            "cloudflare": "cloudflare_model",
-            "cerebras": "cerebras_model",
-            "sambanova": "sambanova_model",
-            "gemini": "gemini_model",
-            "chutes": "chutes_model",
-            "zai": "zai_model",
-        }.items()
+        key: getattr(settings, cfg.settings_field, "") or ""
+        for key, cfg in PROVIDER_CONFIGS.items()
     }
 
 
@@ -283,7 +258,7 @@ async def list_models(provider: str | None = None):
         # Gemini: generativelanguage.googleapis.com/v1beta/openai/models
         # Chutes: llm.chutes.ai/v1/models (all TEE-suffixed)
         # Z.ai: api.z.ai/api/paas/v4/models (GLM-5.2, GLM-4.5-Flash, etc.)
-        if adapter_name in ("zen", "cerebras", "gemini", "chutes", "zai"):
+        if adapter_name in ("zen", "cerebras", "gemini", "chutes", "zai", "bai"):
             try:
                 available = await adapter.list_models()
                 for m in available:

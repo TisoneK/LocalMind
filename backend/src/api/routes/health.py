@@ -69,30 +69,16 @@ async def health():
 
     uptime = round(_time.time() - _SERVER_START, 2)
 
-    # Get model based on adapter
+    # Get model based on adapter. Derived from PROVIDER_CONFIGS (single
+    # source of truth) so a new provider is picked up automatically — the
+    # old hardcoded dict here was the last remaining duplicate and had
+    # already drifted from models.py (Session 319).
     adapter_name = settings.localmind_adapter
+    from adapters.openai_compat import PROVIDER_CONFIGS
+
     model_setting_map = {
-        "openai": settings.openai_model,
-        "anthropic": settings.anthropic_model,
-        "openrouter": settings.openrouter_model,
-        "deepseek": settings.deepseek_model,
-        "lite-llm": settings.litellm_model,
-        "zen": settings.zen_model,
-        "groq": settings.groq_model,
-        "together": settings.together_model,
-        "fireworks": settings.fireworks_model,
-        "deepinfra": settings.deepinfra_model,
-        "mistral": settings.mistral_model,
-        "cohere": settings.cohere_model,
-        "vercel": settings.vercel_model,
-        "cloudflare": settings.cloudflare_model,
-        "cerebras": settings.cerebras_model,
-        "sambanova": settings.sambanova_model,
-        "gemini": settings.gemini_model,
-        "chutes": settings.chutes_model,
-        "zai": settings.zai_model,
-        # ADR-9: ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked).
-        "zenmux": settings.zenmux_model,
+        key: getattr(settings, cfg.settings_field, "") or ""
+        for key, cfg in PROVIDER_CONFIGS.items()
     }
     current_model = model_setting_map.get(adapter_name) or settings.ollama_model
 

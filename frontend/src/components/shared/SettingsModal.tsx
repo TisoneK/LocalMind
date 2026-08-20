@@ -20,6 +20,7 @@ interface ProviderDef {
 
 const PROVIDERS: ProviderDef[] = [
   { id: 'anthropic', name: 'Anthropic' },
+  { id: 'bai', name: 'B.AI (promo free models — time-limited)' },
   { id: 'cerebras', name: 'Cerebras (1M tokens/day free)' },
   { id: 'chutes', name: 'Chutes AI' },
   { id: 'cloudflare', name: 'Cloudflare AI Gateway' },

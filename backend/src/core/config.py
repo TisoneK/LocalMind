@@ -152,6 +152,8 @@ class Settings(BaseSettings):
     zai_model: str = ""
     # ADR-9: ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked).
     zenmux_model: str = ""
+    # ADR-55: B.AI — IMPLEMENTED BUT UNTESTED (smoke test blocked, no key).
+    bai_model: str = ""
 
     # Server
     localmind_host: str = "127.0.0.1"
@@ -523,6 +525,8 @@ class Settings(BaseSettings):
             # ADR-9: ZenMux — IMPLEMENTED BUT UNTESTED (smoke test blocked,
             # free plan has no API access). See ADR-9 for details.
             "zenmux": "ZENMUX_API_KEY",
+            # ADR-55: B.AI — IMPLEMENTED BUT UNTESTED (smoke test blocked).
+            "bai": "BAI_API_KEY",
         }
         env_var = env_key_map.get(provider)
         if env_var:
