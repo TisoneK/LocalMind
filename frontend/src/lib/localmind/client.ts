@@ -126,6 +126,11 @@ interface HealthResponse {
   uptime?: number;
   provider_reachable?: boolean;
   engine_ready?: boolean;
+  // ADR-52 phase 2 (Session 305): distinct parent-kernel readiness.
+  // parent_ready is true when the boot kernel built without a degraded
+  // state; parent_degraded_reason carries the warmup failure string.
+  parent_ready?: boolean;
+  parent_degraded_reason?: string;
   model?: string;
   adapter?: string;
 }

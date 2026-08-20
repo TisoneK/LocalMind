@@ -35,4 +35,11 @@ if (typeof window !== 'undefined') {
     }
     (window as unknown as Record<string, unknown>).ResizeObserver = ResizeObserverStub;
   }
+
+  // scrollTo — jsdom does not implement Element.scrollTo. CenterPanel's
+  // messages-container effect calls container.scrollTo({behavior:'smooth'})
+  // on mount; without this stub it throws and fails every render test.
+  if (typeof Element !== 'undefined' && !Element.prototype.scrollTo) {
+    Element.prototype.scrollTo = () => {};
+  }
 }

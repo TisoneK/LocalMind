@@ -104,6 +104,13 @@ interface HealthState {
   status: 'online' | 'offline' | 'checking';
   version?: string;
   uptime?: number;
+  // ADR-52 phase 2 (Session 305): distinct parent-kernel readiness.
+  // parent_ready is true when the boot kernel built without a degraded
+  // state; parent_degraded_reason carries the warmup failure string.
+  // These are distinct from `status` (which aggregates provider +
+  // engine + parent) so the UI can show the parent's specific state.
+  parentReady?: boolean;
+  parentDegradedReason?: string;
 }
 
 export function useHealth(intervalMs = 30000) {  // 30s - reduced polling to save data
@@ -120,6 +127,8 @@ export function useHealth(intervalMs = 30000) {  // 30s - reduced polling to sav
             status: res.status === 'ok' ? 'online' : 'offline',
             version: res.version,
             uptime: res.uptime,
+            parentReady: res.parent_ready,
+            parentDegradedReason: res.parent_degraded_reason,
           });
         }
       } catch {

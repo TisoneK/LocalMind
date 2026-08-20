@@ -21,6 +21,12 @@ interface HealthState {
   status: 'online' | 'offline' | 'checking';
   version?: string;
   uptime?: number;
+  // ADR-52 phase 2 (Session 309): distinct parent-kernel readiness.
+  // When parentReady is false, the boot kernel is degraded (provider
+  // warmup failed) — the parent will retry lazily on the first turn.
+  // parentDegradedReason carries the failure string for the tooltip.
+  parentReady?: boolean;
+  parentDegradedReason?: string;
 }
 
 /**
@@ -167,6 +173,22 @@ export function CenterPanel({
               <WifiOff className="h-3 w-3 text-brand-red" />
             )}
           </div>
+          {/* ADR-52 phase 2 (Session 309): distinct parent-kernel readiness.
+              Shows a warning dot when the parent kernel is degraded (provider
+              warmup failed at boot). The parent still serves requests via
+              lazy retry, but the user should know something is off. Hidden
+              when health is checking/offline or parentReady is true/undefined. */}
+          {isOnline && health.parentReady === false && (
+            <div
+              className="flex items-center gap-1"
+              title={`Parent kernel degraded${health.parentDegradedReason ? `: ${health.parentDegradedReason}` : ''}. The first turn may be slow while it retries.`}
+            >
+              <span
+                className="h-2 w-2 rounded-full bg-brand-amber"
+                data-testid="parent-degraded-indicator"
+              />
+            </div>
+          )}
           <div className="flex items-center gap-1" title="Local execution">
             <Shield className="h-3 w-3 text-brand-green" />
             <span className="text-[9px] text-brand-green-muted">Local</span>
