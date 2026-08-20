@@ -973,3 +973,12 @@ if literally nothing slowed you down.
 - **Cause:** My live smoke scripts used `urllib.request` (stdlib) out of habit; the backend uses `httpx`. Cloudflare's bot heuristic blocks the stdlib default UA specifically (`Python-urllib/*`), while `python-httpx/*`, `python-requests/*`, and `curl/*` all pass — so I concluded "Cloudflare blocks non-browser UAs" when it really blocks only the stdlib urllib UA.
 - **Workaround / fix:** Removed the header; confirmed live that httpx's default UA returns 200 on both `api.bankofai.io/v1/models` and chat completions.
 - **Prevent next time:** When live-testing a provider the backend will call via httpx, probe with httpx (or at least the exact UA the backend sends), not stdlib urllib — a UA-specific bot-block is invisible to urllib-only testing and produces a false "needs a browser UA" conclusion.
+
+---
+## 2026-08-20 — Buffy / deepseek-v4-pro (Session 322)
+
+- **Problem:** B.AI kept 404ing after the Session 321 fix. The 404 was model_not_found, and `settings.json` had reverted to `model: DeepSeek-V4-Flash` even though Session 321 had written `deepseek-v4-flash`.
+- **Cost:** ~5 min re-diagnosing why the fix didn't stick; the rename work itself was trivial.
+- **Cause:** The user's backend process was still running the OLD code (default `DeepSeek-V4-Flash`, base `api.b.ai`). A running backend re-writes `model` into `settings.json` from its in-memory default whenever the provider is (re)selected or a turn runs, so the old process overwrote the corrected lowercase value — and sent the case-mismatched ID → 404. My Session 321 fix was a file edit, which is not durable while an old process is live.
+- **Workaround / fix:** Re-fixed the model value and renamed the provider key (`bai` → `bankofai`) + migrated `adapter`/`api_keys`. The user must fully restart the backend for the new code to take effect.
+- **Prevent next time:** After editing a runtime settings file (or renaming a persisted config key), explicitly tell the user to restart the running backend/app — a live process will clobber the file edit from its stale in-memory state, so a file fix alone can look like it "didn't work" on the next 404.

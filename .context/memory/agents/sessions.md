@@ -4563,3 +4563,15 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), B-2026-08-20-19 (broken test-import, Low). ADR-55 now live-verified; `hy3` absent from live list (window entry retained as harmless).
 - **Report:** `.context/memory/reviews/2026-08-20-review-87.md`
 - **Notes:** none
+
+---
+## 2026-08-20 — Session 322 — rename B.AI provider bai → bankofai (drop "bai")
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-pro | **Platform:** macOS (Tison's local machine, /Users/bao/Code/LocalMind) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** User: "Still referencing bai? Failing with 404 — I said drop bai."
+- **SHIPPED:** renamed the provider key `bai` → `bankofai` everywhere (`openai_compat.py` ProviderConfig, `config.py` `bankofai_model` + env map, `models.py` listable-models tuple, `SettingsModal.tsx` id, `.env.example`, `test_provider_registry.py`). Env vars `BAI_API_KEY`/`BAI_MODEL` → `BANKOFAI_API_KEY`/`BANKOFAI_MODEL`.
+- **ROOT CAUSE of the 404:** the user's still-running backend was OLD code, which re-wrote `model: DeepSeek-V4-Flash` back into `settings.json` (overriding the Session 321 lowercase fix) and sent the case-mismatched ID → `model_not_found`. Migrated `settings.json` (`adapter` + `api_keys.bai` → `bankofai`) and re-fixed the model; a full backend restart is required.
+- **Outcome:** done + LIVE-VERIFIED. `OpenAICompatAdapter(provider="bankofai")` → base `https://api.bankofai.io/v1`, model `deepseek-v4-flash`, `list_models()` = 38, `chat()` → "PONG". Full backend 2071 passed / 1 pre-existing failure (B-2026-08-20-19); ruff clean; frontend tsc clean.
+- **Open items:** B-2026-08-20-10 (High), B-2026-08-20-11 (Medium), B-2026-08-20-19 (Low). User to restart backend before retrying.
+- **Report:** `.context/memory/reviews/2026-08-20-review-88.md`
+- **Notes:** none

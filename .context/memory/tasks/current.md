@@ -1,34 +1,32 @@
 # Current Task
 
-**Status:** IDLE — Session 321 (switch B.AI to api.bankofai.io + live-verify, ADR-55) shipped.
+**Status:** IDLE — Session 322 (rename B.AI provider bai → bankofai, drop "bai") shipped.
 
-## Session 321 outcome — B.AI now live-verified on bankofai.io
+## Session 322 outcome — provider key renamed; 404 root cause found
 
-- **Target:** "Drop b.ai and use bankofai.io" — B.AI in LocalMind still
-  "not working".
-- **Root causes (two):** (1) the canonical API domain moved from `api.b.ai`
-  to `api.bankofai.io`; (2) the user's `settings.json` still held the stale
-  Session 319 model `DeepSeek-V4-Flash`, which OVERRODE the Session 320
-  lowercase default → `model_not_found`.
-- **Fixed:** base URL → `https://api.bankofai.io/v1`; display name →
-  `BankOfAI (promo free models — time-limited)`; removed the misdiagnosed
-  browser-UA header (Cloudflare 403 only blocks stdlib urllib's
-  `Python-urllib/*` UA, not httpx's `python-httpx/*`); corrected
-  `settings.json` `model` → `deepseek-v4-flash`.
-- **Verification (live):** `GET /v1/models` → 38 lowercase model IDs
-  (`deepseek-v4-flash` present, `hy3` ABSENT); `deepseek-v4-flash` chat →
-  200 "PONG"; `DeepSeek-V4-Flash` → 404 model_not_found. End-to-end through
-  the real adapter (`OpenAICompatAdapter(provider="bai")`) → 38 models +
-  "PONG". Full backend 2071 passed / 1 pre-existing failure
-  (`test_parent_recovery_cap.py` broken `tests.` import); ruff clean; tsc clean.
+- **Target:** "Still referencing bai? Failing with 404 — I said drop bai."
+- **Renamed:** `bai` → `bankofai` everywhere (ProviderConfig key/name,
+  `config.py` `bankofai_model` + env map, `models.py` listable tuple,
+  `SettingsModal.tsx` id, `.env.example`, `test_provider_registry.py`).
+  Env vars `BAI_API_KEY`/`BAI_MODEL` → `BANKOFAI_API_KEY`/`BANKOFAI_MODEL`.
+- **404 root cause:** the still-running OLD backend re-wrote
+  `model: DeepSeek-V4-Flash` back into `settings.json` (overriding the
+  Session 321 lowercase fix) and sent the case-mismatched ID → model_not_found.
+  Migrated `settings.json` (`adapter` + `api_keys.bai` → `bankofai`) and
+  re-fixed `model` → `deepseek-v4-flash`.
+- **Verification (live):** `OpenAICompatAdapter(provider="bankofai")` →
+  base `https://api.bankofai.io/v1`, model `deepseek-v4-flash`,
+  `list_models()` = 38, `chat()` → "PONG". Full backend 2071 passed / 1
+  pre-existing failure (`test_parent_recovery_cap.py`); ruff clean; tsc clean.
+- **⚠ User action required:** restart the backend/app — the running process
+  is old code and will keep clobbering the fix until restarted.
 
 ## Next
 
 - **B-2026-08-20-10 (High):** MiniMax XML interception conflicts with prose-commitment detector.
 - **B-2026-08-20-11 (Medium):** 429 on iter=1 → empty bubble.
 - **B-2026-08-20-19 (Low):** fix broken test-import in `test_parent_recovery_cap.py`.
-- **Optional:** rename provider key `bai` → `bankofai` (needs key/env migration; deferred).
 
-**Feature:** none (single-session config fix)
-**ADR:** ADR-55 (B.AI provider, live-verified), ADR-54, ADR-53, ADR-52
-**Review:** `.context/memory/reviews/2026-08-20-review-87.md`
+**Feature:** none (single-session config rename)
+**ADR:** ADR-55 (B.AI → BankOfAI provider, renamed + live-verified), ADR-54, ADR-53, ADR-52
+**Review:** `.context/memory/reviews/2026-08-20-review-88.md`

@@ -437,3 +437,12 @@ Flaws from Session 7 are now **fixed**:
 - **Root cause:** No reusable "redact settings before display" helper or pitfall exists; my one-off walker masked by key-name substring, which does not match this project's `api_keys: {provider: key}` shape.
 - **Suggested fix:** Add a pitfall/helper: when dumping any runtime/`.env`/settings file, mask EVERY value under an `api_keys`/`key`/`token`/`secret` collection regardless of the leaf key name — and prefer printing only the SET of key names (or masked prefixes/lengths), never values. Consider a `secrets-redact` helper in the core tooling.
 - **Status:** open (corrected in-session by not repeating the values).
+
+---
+## 2026-08-20 — Buffy / deepseek/deepseek-v4-pro (Session 322)
+
+- **Flaw:** The exit checklist has no step for "when you rename a config identifier that is persisted in the user's runtime settings (adapter id, api_keys key, model mapping), migrate that persisted state and flag that a restart is required." Renaming `bai` → `bankofai` orphaned the stored key (`api_keys.bai`) and the `adapter` value unless migrated by hand, and the old live process clobbered the corrected model — both were only caught by the user's next 404 report.
+- **Symptom:** A code-level rename looked complete (tests green) while the user's installed instance stayed broken (404) until the runtime file + process restart were handled manually.
+- **Root cause:** The protocol treats "code change" and "runtime/persisted state" as the same unit of work; there is no durable-memory note that a provider/config-key rename is a breaking change for any running instance and needs a migration + restart flag.
+- **Suggested fix:** Add a pitfall: renaming a key that appears in `settings.json`/`.env` requires (a) migrating the persisted value, and (b) telling the user to restart the backend — a running process re-writes stale defaults and masks the fix. Optionally, a `context-gates` check could warn when a committed diff renames a key also present in a tracked `.env.example`/settings schema.
+- **Status:** open (corrected in-session by migrating settings.json and flagging the restart).
