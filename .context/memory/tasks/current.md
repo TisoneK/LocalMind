@@ -1,35 +1,24 @@
 # Current Task
 
-**Status:** IDLE — Session 300 done (2026-08-19). Direct capability UX fast
-path shipped and live A/B verified. No task in progress.
+**Status:** COMPLETE — Session 301 (2026-08-20). Restored the generic direct-conversation boundary instead of keeping the phrase-specific capability response patch.
 
-## Recovery arc shipped (root-cause, not symptom patches)
-- ADR-50 (`764b0a8`) — general model-agnostic tool-error recovery (classify every
-  error_type → concrete [RECOVERY] directive).
-- `b69329e` (B-2026-08-18-10) — shell surfaces timeout/nonzero-exit as a real
-  error so the recovery layer engages.
-- `0bb0126` (B-2026-08-18-11) — capture the reasoning channel + synthesize a real
-  answer from reasoning+evidence instead of empty_response (user's hypothesis
-  confirmed live); shell timeout now a configurable Settings field (default 45).
-- `e806f07` (Session 299) — propagate structured `ToolResult(success=False)` as
-  a failed dispatch so Thinker, failure memory, streak recovery, and the
-  completion floor receive the real tool failure. Live GLM trace confirmed the
-  failed SSE/evidence path; the model's clean corrective completion remains an
-  open live behavior gap.
+## Product change
+- Removed the capability-specific detector and deterministic capability catalog.
+- Short context-backed conversational turns use one normal adapter chat call with recent history and a generic follow-up-aware prompt.
+- Evidence-requiring, action-shaped, attachment, and tool-restricted turns remain on the parent/tool loop.
+- Preserved lifecycle, stage timings, persistence, metrics, and workspace artifacts.
 
-## Next (open, no user decision pending)
-- B-2026-08-19-1 (live clean honest-stop after failed high-stakes action).
-- B-2026-08-18-4 (guaranteed weather card), -6 (synthesis grounding).
-- §40 efficiency roadmap: B-2026-08-17-8..12.
+## Live verification
+- Established isolated Claude harness: copied settings into isolated `LOCALMIND_HOME`, z.ai `glm-4.5-flash`, thinking enabled, shell enabled, port 8765, direct SSE/log inspection, cleanup.
+- Real GLM generic shapes: `Tell me about yourself` (11.4s / 83 prompt tokens), `I had a long day` (13.5s / 143), and `Can you explain recursion simply?` (15.7s / 171) all used `fast_path=true` and returned useful direct answers.
+- Final exact flow: `What can you do?` (14.3s / 83) followed by `Like what` (10.5s / 138) used the same generic path and produced concrete non-repeated examples.
+- Real read-only tool request remained `fast_path=false`, `mode=execute`, made four shell calls, adapted paths, and returned the actual listing.
 
-## Session 300 implementation
-- Live root cause: the active AgentRuntime bypassed the existing conversational
-  fast path, so `Hi` and capability FAQs paid for parent initialization.
-- Working fix: deterministic social/capability fast path with truthful lifecycle
-  and stage events; ambiguous/tool-bearing turns remain parent-routed.
-- Live A/B: committed HEAD 19,956ms / 930 prompt tokens / generic answer vs
-  working tree 2ms / 12 estimated prompt tokens / concrete answer. Final CI:
-  1998 passed, 2 skipped.
-- Product commit: `c1e9332`.
+## Verification
+- Focused: 112 passed.
+- Full CI: 1996 backend passed / 2 skipped; Ruff clean; TypeScript clean; ESLint 0 errors / 71 existing warnings.
+- First full-gate run caught five regressions caused by over-broad history follow-up routing; the structural follow-up guard fixed them before the final green run.
 
 **Feature:** none
+**Report:** `.context/memory/reviews/2026-08-20-review-70.md`
+**Working tree note:** generated untracked `backend/MagicMock/` is excluded.

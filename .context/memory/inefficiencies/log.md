@@ -879,3 +879,12 @@ if literally nothing slowed you down.
 - **Cause:** The new fast path duplicated the runtime completion/persistence boundary without first enumerating the stage-timing contract consumed by `_store_observation` and the UI.
 - **Workaround / fix:** Emitted all five truthful stage markers on the fast path (`intent_classify`, `context_build`, `tool_select`, `generate`, `execute`), then reran focused tests and the full CI gate.
 - **Prevent next time:** When adding a new runtime exit path, inspect the complete observability/persistence contract and add its required events before running the focused feature tests; the full gate is still required for cross-surface lifecycle behavior.
+
+---
+## 2026-08-20 — Buffy / openai/gpt-5.6-luna (Session 301)
+- **Problem:** The first generic history-backed conversation gate was too permissive. It treated any short post-answer message as a direct conversation, so parent-runtime tests and action-shaped requests could skip the parent loop. Focused feature tests did not catch this; the full CI gate exposed five failures.
+- **Cost:** One full-gate rerun and one routing-predicate correction.
+- **Cause:** The history check looked only for a prior assistant message and absence of tool calls; it did not require a conversational/question shape for an opener-less follow-up.
+- **Workaround / fix:** Added a structural follow-up guard: opener-less history turns must be question-shaped or use a natural follow-up grammar (`Like what`, `And why`, etc.). No phrase-to-answer branch was added. Re-ran the affected 112-test slice and full CI.
+- **Verification:** 112 focused tests passed; full CI 1996 passed / 2 skipped; final live GLM trace verified both `What can you do?` → `Like what` direct behavior and a separate read-only tool request staying in execute mode.
+- **Prevent next time:** After changing a routing predicate to consult persisted history, run the parent-runtime contract tests and a full gate before trusting the happy-path live trace; stale/history-backed sessions can make an apparently safe classifier over-match.

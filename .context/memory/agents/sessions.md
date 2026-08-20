@@ -4300,3 +4300,16 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-19-1 (clean weak-model honest-stop after failed high-stakes action), B-2026-08-18-4 (weather card), B-2026-08-18-6 (synthesis grounding).
 - **Report:** `.context/memory/reviews/2026-08-19-review-69.md`
 - **Notes:** live A/B traces were isolated and cleaned; z.ai provider was not called on the after path.
+
+---
+## 2026-08-20 — Session 301 — generic direct-conversation boundary
+
+- **Agent:** Buffy | **Model:** openai/gpt-5.6-luna | **Platform:** macOS (Darwin, local) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** User rejected the Session 300 capability FAQ patch as symptom-fixing and asked for the documented Claude live-testing/root-cause process.
+- **ROOT CAUSE:** the live runtime sent every turn through a classification-plus-answer parent initializer. The existing generic direct-chat helpers were present but not used by the live entry point; GLM therefore paid a large meta-call and produced repetitive prose.
+- **SHIPPED:** removed the capability-specific response branch; restored the generic direct-chat boundary with recent history and a follow-up-aware prompt. Opener-less follow-ups are structurally constrained so action requests remain parent-routed.
+- **LIVE:** isolated real z.ai/glm-4.5-flash with thinking enabled: generic conversation shapes all used `fast_path=true`; final `What can you do?` → `Like what` used the same path (14.3s/83 prompt tokens, then 10.5s/138) and produced distinct concrete examples. A real file-list request stayed `fast_path=false`, `mode=execute`, made four shell calls, and returned actual evidence.
+- **VERIFICATION:** focused 112 passed; full CI **1996 backend passed / 2 skipped**, Ruff/tsc clean, ESLint 0 errors / 71 warnings. The first full gate caught five over-broad history-routing regressions; the structural follow-up guard fixed them before the final green run.
+- **Outcome:** done — the fix is a generic boundary correction, not a capability phrase-to-answer map.
+- **Report:** `.context/memory/reviews/2026-08-20-review-70.md`
+- **Notes:** generated untracked `backend/MagicMock/` remains excluded.

@@ -67,7 +67,7 @@ block (and its "last verified" date) every time you run on it again.
     - `sh .context/core/bin/context-sync status` → "core: 0.5.0, locked: 0.5.0, source: none reachable — skipping, this is fine"
     - `git clone https://github.com/CodebuffAI/open-codebuff.git` → succeeded (public, anonymous HTTPS, no auth needed)
 
-## Local macOS development machine (last verified 2026-08-19, Session 299 live follow-up)
+## Local macOS development machine (last verified 2026-08-20, Session 301 live verification)
 
 - **Identify by:** workspace path `/Users/bao/Code`; macOS host; local project checkout at `/Users/bao/Code/LocalMind`
 - **OS:** macOS 15.7.7
@@ -131,6 +131,7 @@ block (and its "last verified" date) every time you run on it again.
   - **The ACTIVE provider is gemini-2.5-flash**, set via the app's Settings UI (its key is NOT in `backend/.env` — only `ZEN_API_KEY` is). The server startup log prints `adapter: <x> | model: <y>` — read it to learn the real active provider.
   - **Live recovery trace (Session 299, 2026-08-19):** isolated `LOCALMIND_HOME` + copied settings + `LOCALMIND_PORT=8765` + real z.ai `glm-4.5-flash` with thinking enabled successfully exercised a missing-path shell failure; the SSE carried `success:false`, `error_type=command_failed`, failed `tool_call`, `evidence_to_parent.failed=true`, `[RECOVERY]`, and no `agent_thinker_start`. A second corrective-follow-up trace was blocked by z.ai HTTP 429 and is not considered verification.
   - **Live capability A/B (Session 300, 2026-08-19):** same isolated z.ai/GLM task on committed HEAD vs working tree — parent initialization dropped from 19,956ms / 930 prompt tokens to a deterministic 2ms / 12 estimated prompt tokens; `Like what?` also completed in 2ms with distinct examples. Final smoke carried `fast_path=true` plus truthful skipped/done stage timings.
+  - **Live generic direct boundary (Session 301, 2026-08-20):** isolated z.ai/glm-4.5-flash with thinking enabled verified generic conversational shapes and the exact `What can you do?` → `Like what` flow through one context-aware chat boundary; a real file-list request stayed `fast_path=false`, `mode=execute`, and made four shell calls. Final full CI 1996 passed / 2 skipped.
   - **`LOCALMIND_SHELL_ENABLED=false` in `backend/.env`** — trace servers must set `LOCALMIND_SHELL_ENABLED=true` or the shell tool reports "Shell tool is disabled".
   - **No `timeout` CLI on macOS** (GNU coreutils) — use `curl --max-time N`.
   - `test_prompt_budget.py::test_init_prompt_is_under_budget` was stale before Session 239; classify-only init now passes the 2,500-character budget. Keep the test as a guard for future prompt growth.
