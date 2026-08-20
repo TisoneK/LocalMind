@@ -21,11 +21,28 @@ async def test_code_exec_retains_trailing_output():
 
 
 def test_shell_command_retains_trailing_output():
+    """A shell command that produces output exceeding the bound must retain
+    its head and tail with a truncation marker in between.
+
+    Uses ``seq`` + ``tr`` (POSIX, works under both bash and dash) instead of
+    bash-specific brace expansion — the shell tool runs ``/bin/sh`` on Linux,
+    which is dash on Debian/Ubuntu and does NOT support ``{1..5000}``.
+    """
     from tools import shell
 
-    result = shell._run("printf 'HEAD-%s-TAIL' \"$(printf x%.0s {1..5000})\"")
+    # `seq 1 5000` produces 5000 lines (~23k chars) — well over any reasonable
+    # output bound. `tr '\n' 'x'` flattens to a single line so head/tail are
+    # distinct. Both seq and tr are POSIX; this runs identically under sh/dash/bash.
+    result = shell._run("seq 1 5000 | tr '\\n' 'x'")
 
-    assert result["success"]
-    assert TRUNCATION_MARKER in result["message"]
-    assert result["message"].startswith("HEAD-")
-    assert result["message"].endswith("-TAIL")
+    assert result["success"], f"command should succeed, got: {result.get('message', '')[:200]}"
+    assert TRUNCATION_MARKER in result["message"], (
+        f"expected truncation marker in output of length {len(result['message'])}; "
+        f"got: {result['message'][:120]!r}"
+    )
+    assert result["message"].startswith("1x"), (
+        f"output should start with the first seq value, got: {result['message'][:40]!r}"
+    )
+    assert result["message"].endswith("5000x"), (
+        f"output should end with the last seq value, got: {result['message'][-40:]!r}"
+    )

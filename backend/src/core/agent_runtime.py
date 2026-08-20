@@ -430,6 +430,21 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         except Exception:
             logger.exception("[agent-runtime] failed to persist user message")
 
+    async def _persist_user_safe(self, session_id: str, message: str, **file_data) -> None:
+        """Fire-and-forget wrapper around _persist_user for the turn-init path.
+
+        B-2026-08-17-10 (Session 312): the user-message DB write is NOT on the
+        critical path to the first LLM token (the prompt is assembled from
+        get_history + the `message` arg, not from the persisted row). Running
+        it in a background task removes a serial DB write from the pre-first-
+        token path. Errors are logged (same as _persist_user) but never
+        propagated — a failed history write must not fail the turn.
+        """
+        try:
+            await asyncio.to_thread(self._persist_user, session_id, message, **file_data)
+        except Exception:
+            logger.debug("[agent-runtime] fire-and-forget user persist failed", exc_info=True)
+
     def _persist_assistant(
         self,
         session_id: str,
@@ -676,25 +691,116 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 reason="parent agent owns tool selection",
             )
 
-        history = self._store.get_history(session_id)
-        self._persist_user(
-            session_id,
-            message,
-            file_name=filename,
-            file_path=original_path,
-            file_size=len(file) if file else None,
-            file_type=content_type,
+        # B-2026-08-17-10 (Session 312): maximize turn-init parallelism so the
+        # first LLM token streams ASAP. Three changes vs the prior serial path:
+        #
+        # 1. _persist_user is fire-and-forget. It writes the user's message to
+        #    the DB for history — the LLM call does NOT depend on it (the
+        #    prompt is assembled from get_history + the `message` arg directly).
+        #    Scheduling it as a background task removes a serial DB write from
+        #    the pre-first-token path.
+        #
+        # 2. get_history is folded into the concurrent _gather_nonessential
+        #    task (alongside memory + parent_session + adapter prime). It's a
+        #    DB read — no reason for it to run serially.
+        #
+        # 3. The concurrent task is created FIRST — before the cwd sync, before
+        #    the adapter setup. This gives it the maximum head start: by the
+        #    time the cwd sync + adapter prime complete, history + memory +
+        #    parent_session may all be ready.
+        #
+        # Net effect: the pre-first-token serial path is now just safety_check
+        # + emit + cwd sync (all sub-millisecond), and the concurrent task
+        # runs max(history, memory, parent_session, adapter_prime) in parallel.
+        # The user sees the first thinking token as soon as the LLM's first
+        # chunk arrives, with no serial DB round-trips in between.
+        asyncio.create_task(
+            self._persist_user_safe(
+                session_id, message,
+                file_name=filename,
+                file_path=original_path,
+                file_size=len(file) if file else None,
+                file_type=content_type,
+            )
         )
 
-        # Every turn now enters the same native parent loop. The server-lifetime
-        # kernel owns static parent state; this request contributes only session
-        # history and turn-specific context. There is no per-turn JSON
-        # initialization or phrase-specific direct shortcut.
+        # B-2026-08-17-10 (Session 312): the turn-init concurrent task. Runs
+        # ALL DB reads + memory retrieval + attachment parsing in parallel,
+        # overlapped with the adapter setup below. The task is created FIRST
+        # (before the cwd sync + adapter setup) so it gets a head start.
+        #
+        # Returns (history, facts, attach, parent_session) — everything the
+        # prompt assembly needs. The effective turn-start latency is
+        # max(history, memory, parent_session, adapter_prime) instead of the
+        # serial sum.
+        async def _gather_nonessential() -> tuple[list, list[str], Optional[dict], ParentSession]:
+            # History + parent_session are synchronous DB reads — run them in
+            # threads so they don't block the event loop. Memory retrieval is
+            # already async. All three run concurrently via gather.
+            async def _load_history():
+                try:
+                    return await asyncio.to_thread(self._store.get_history, session_id)
+                except Exception:
+                    logger.debug("[agent-runtime] history load failed; proceeding with empty", exc_info=True)
+                    return []
 
-        # ADR-37: no hardcoded stage narration. The parent's real model
-        # output (acknowledgement + thinking stream) is the status signal;
-        # the frontend's neutral fallback covers the pre-first-token gap.
+            async def _load_parent_session():
+                try:
+                    stored = await asyncio.to_thread(
+                        self._store.get_parent_session, session_id
+                    )
+                    return ParentSession.from_store(session_id, stored)
+                except Exception:
+                    logger.debug("[agent-runtime] parent session load failed; using empty session", exc_info=True)
+                    return ParentSession(session_id=session_id)
 
+            async def _load_facts_and_attach():
+                facts = await self._memory_facts(message, session_id)
+                try:
+                    failures = self._store.recall_failures(message=message, intent=Intent.ANALYZE.value)
+                    hint = format_recall_hint(failures)
+                    if hint:
+                        facts.append(hint)
+                except Exception:
+                    logger.debug("[agent-runtime] failure memory recall skipped", exc_info=True)
+                try:
+                    hint = format_ledger_hint(self._store.recall_decisions(task_type=""))
+                    if hint:
+                        facts.append(hint)
+                except Exception:
+                    logger.debug("[agent-runtime] decision memory recall skipped", exc_info=True)
+                attach = None
+                if file and filename:
+                    try:
+                        from tools.file_reader import parse_file
+                        attach = await parse_file(
+                            data=file,
+                            filename=filename,
+                            content_type=content_type or "application/octet-stream",
+                            chunk_size=settings.localmind_chunk_size_tokens,
+                            original_path=original_path,
+                        )
+                    except Exception as exc:
+                        collector.emit("attachment_failed", error=str(exc)[:120])
+                return facts, attach
+
+            # Run all three concurrently. asyncio.gather schedules them as
+            # separate tasks on the event loop; the to_thread calls release
+            # the GIL-thread so the DB reads don't block each other or the
+            # memory retrieval.
+            history, parent_sess, facts_attach = await asyncio.gather(
+                _load_history(),
+                _load_parent_session(),
+                _load_facts_and_attach(),
+            )
+            facts, attach = facts_attach
+            return history, facts, attach, parent_sess
+
+        # Start the concurrent task FIRST — before cwd sync + adapter setup.
+        nonessential_task = asyncio.create_task(_gather_nonessential())
+
+        # Terminal/cwd sync — fast, runs while the concurrent task is already
+        # doing DB reads + memory retrieval in the background.
         try:
             from api.routes.terminal import _terminal_sessions
             terminal = _terminal_sessions.get(session_id)
@@ -708,60 +814,6 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             set_session_cwd(session_cwd)
         except Exception:
             pass
-
-        # Gather nonessential memory + attachment work concurrently with
-        # adapter setup. The resulting facts and attachment evidence are
-        # injected into this turn's native parent context; they never rebuild
-        # or replace the boot-owned kernel.
-        #
-        # B-2026-08-17-10 (Session 311): the ParentSession DB load is also
-        # overlapped here (it's a synchronous read that would otherwise block
-        # the event loop after the memory await). Bundling it into the
-        # concurrent task means the effective turn-start latency is
-        # max(memory, parent_session_load, adapter_setup) instead of their sum.
-        async def _gather_nonessential() -> tuple[list[str], Optional[dict], ParentSession]:
-            facts = await self._memory_facts(message, session_id)
-            try:
-                failures = self._store.recall_failures(message=message, intent=Intent.ANALYZE.value)
-                hint = format_recall_hint(failures)
-                if hint:
-                    facts.append(hint)
-            except Exception:
-                logger.debug("[agent-runtime] failure memory recall skipped", exc_info=True)
-            try:
-                hint = format_ledger_hint(self._store.recall_decisions(task_type=""))
-                if hint:
-                    facts.append(hint)
-            except Exception:
-                logger.debug("[agent-runtime] decision memory recall skipped", exc_info=True)
-            attach = None
-            if file and filename:
-                try:
-                    from tools.file_reader import parse_file
-                    attach = await parse_file(
-                        data=file,
-                        filename=filename,
-                        content_type=content_type or "application/octet-stream",
-                        chunk_size=settings.localmind_chunk_size_tokens,
-                        original_path=original_path,
-                    )
-                except Exception as exc:
-                    collector.emit("attachment_failed", error=str(exc)[:120])
-            # B-2026-08-17-10: load the ParentSession concurrently with the
-            # memory/attachment work. The DB read is synchronous, so wrap it
-            # in to_thread to yield to the event loop.
-            parent_sess: ParentSession
-            try:
-                stored = await asyncio.to_thread(
-                    self._store.get_parent_session, session_id
-                )
-                parent_sess = ParentSession.from_store(session_id, stored)
-            except Exception:
-                logger.debug("[agent-runtime] parent session load failed; using empty session", exc_info=True)
-                parent_sess = ParentSession(session_id=session_id)
-            return facts, attach, parent_sess
-
-        nonessential_task = asyncio.create_task(_gather_nonessential())
 
         adapter = kernel.adapter
         if not inspect.iscoroutinefunction(getattr(adapter, "chat_with_tools", None)):
@@ -780,13 +832,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             context_window = 8192
 
         # Await nonessential work before assembling the turn — but the task
-        # has been running concurrently with adapter setup, so the effective
-        # wait is only the unoverlapped tail.
+        # has been running concurrently with cwd sync + adapter setup, so the
+        # effective wait is only the unoverlapped tail (whichever of history /
+        # memory / parent_session / adapter_prime finishes last).
         try:
-            memory_facts, attachment, parent_session = await nonessential_task
+            history, memory_facts, attachment, parent_session = await nonessential_task
         except Exception:
             logger.debug("[agent-runtime] nonessential gather failed; proceeding with empty context", exc_info=True)
-            memory_facts, attachment = [], None
+            history, memory_facts, attachment = [], [], None
             parent_session = ParentSession(session_id=session_id)
 
         collector.emit("agent_context_ready", memory_facts=len(memory_facts), attachment=bool(attachment))
