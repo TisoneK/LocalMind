@@ -3850,6 +3850,27 @@ class AgentLoop:
                         return
 
                     _empty_summary = self._summarize_trace_for_user(trace, observation_log)
+                    # B-2026-08-20-7: LAST safety net. The B-2026-08-18-11
+                    # synthesis-from-reasoning rescue above (line ~3819) failed
+                    # or didn't fire (no reasoning buffer). But if tools ran
+                    # this turn, there IS evidence to synthesize from — the
+                    # model just couldn't produce the final answer itself.
+                    # Try ONE deterministic post-loop synthesis from the tool
+                    # evidence before falling back to the empty message.
+                    # This does NOT count against the recovery budget.
+                    async for _post_synth_chunk in self._post_loop_synthesis_from_evidence(
+                        loop_messages=loop_messages,
+                        observation_log=observation_log,
+                        active_adapter=active_adapter,
+                        trace=trace,
+                        provider_usage=_provider_usage,
+                        intent=intent,
+                        obs=_obs,
+                    ):
+                        if _post_synth_chunk.text:
+                            yield _post_synth_chunk
+                            yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
+                            return
                     if _empty_summary:
                         _empty_msg = (
                             "The model returned an empty response for this step. "
@@ -5612,6 +5633,79 @@ class AgentLoop:
             "tool evidence was captured to show you. Please tell me to continue "
             "or re-run the request."
         )
+
+    async def _post_loop_synthesis_from_evidence(
+        self,
+        *,
+        loop_messages: list[dict],
+        observation_log: str,
+        active_adapter,
+        trace,
+        provider_usage: dict[str, int],
+        intent,
+        obs,
+    ) -> AsyncIterator[StreamChunk]:
+        """B-2026-08-20-7: deterministic post-loop synthesis when tools ran
+        but the model produced no usable final text.
+
+        This is the LAST safety net before the empty-response fallback. It
+        fires when:
+        - at least one tool ran this turn (``trace.steps`` has a tool_name), AND
+        - the final text is empty or trivially short.
+
+        Unlike the B-2026-08-18-11 synthesis-from-reasoning rescue (which
+        fires on empty-WITH-reasoning and counts against the recovery budget),
+        this fires AFTER the loop has terminated and does NOT count against
+        any recovery budget — it's a single final attempt to synthesize a
+        real answer from the gathered tool evidence.
+
+        Yields the synthesized text if non-empty; otherwise yields nothing
+        (the caller falls through to the existing empty-message path).
+        """
+        # Guard: only fire when tools actually ran. A no-tool empty turn has
+        # no evidence to synthesize from — the empty-message fallback is the
+        # honest answer there.
+        has_tool_evidence = any(
+            getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
+        )
+        if not has_tool_evidence:
+            return
+        # Guard: only fire when there's observation log content to synthesize.
+        if not (observation_log or "").strip():
+            return
+        _synth = ""
+        try:
+            active_adapter._one_shot_thinking_off = True  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        try:
+            async for _chunk in self._force_final_answer(
+                loop_messages=loop_messages,
+                observation_log=observation_log,
+                active_adapter=active_adapter,
+                trace=trace,
+                provider_usage=provider_usage,
+                framing="final",
+                suppress_report=True,
+                suppress_empty_fallback=True,
+            ):
+                if _chunk.text:
+                    _synth += _chunk.text
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.warning("[agent.loop] post-loop evidence synthesis failed: %s", exc)
+        _synth = _synth.strip()
+        if _synth and len(_synth) >= 20:
+            logger.info(
+                "[agent.loop] empty-final-answer rescued by post-loop evidence "
+                "synthesis (%d chars)", len(_synth),
+            )
+            if obs:
+                obs.emit(
+                    "post_loop_synthesis",
+                    intent=getattr(intent, "value", ""),
+                    chars=len(_synth),
+                )
+            yield StreamChunk(text=_synth, done=False)
 
     async def _rescue_final_answer(
         self,
