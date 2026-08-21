@@ -154,6 +154,12 @@ Rules:
 - clarify is a LAST RESORT — only when the request is genuinely underspecified
   in a way NO search or inspection could resolve AND guessing would risk a
   wrong irreversible action. When in doubt, execute with a reasonable default.
+  CRITICAL EXCEPTION: if the user's message is a bare verb phrase or pronoun
+  with NO referent and NO prior context provides one (e.g. "fix it", "do that",
+  "help", "run it", "check this" in a fresh session), you MUST choose clarify.
+  These inputs have no discoverable target — searching the filesystem or running
+  random commands CANNOT resolve pure ambiguity. Ask what they want fixed/done.
+  Only choose execute if the conversation history makes the referent obvious.
 - For an execute task, `plan` is the ordered checklist the agent will follow to
   reach the objective — the user sees it as a live task list. Keep steps
   concrete and few; the agent may reorder, add, or skip steps as real evidence

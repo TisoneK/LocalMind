@@ -475,6 +475,12 @@ _MAX_TOTAL_GATE_REPLANS = 2
 # hard bound.
 _SAME_TOOL_REPETITION_NUDGE_CAP = 3
 
+# B-2026-08-21: divergent-tool budget. If the model calls N different tools
+# (or same tool with materially different inputs) but never sets criteria and
+# never completes a subgoal, the task is a goose chase (e.g. "fix it" with no
+# context → random filesystem exploration). Force an honest stop.
+_DIVERGENT_TOOL_BUDGET = 5
+
 
 def same_tool_failure_streak(trace) -> tuple[int, str]:
     """Count CONSECUTIVE same-tool failures at the end of a trace.
@@ -1852,6 +1858,7 @@ class AgentLoop:
         # (agent_config overrides when provided; module-level defaults
         # otherwise) instead of the raw MAX_ITERATIONS / MAX_WALL_CLOCK_SECS.
         _repetition_nudged = False  # B-2026-08-18-3: fire the progress nudge once per turn
+        _divergent_stop = False  # B-2026-08-21: divergent tool budget broke the loop
         for iteration in range(_effective_max_iter):
             trace.iterations_used = iteration + 1
 
@@ -1932,6 +1939,48 @@ class AgentLoop:
                             streak=_rep_streak,
                             iteration=iteration + 1,
                         )
+
+            # B-2026-08-21: divergent-tool budget. If the model has called many
+            # real tools (excluding todo metadata ops) but never set criteria,
+            # the task is a goose chase (e.g. "fix it" with no context).
+            # Force an honest stop.
+            _real_tool_calls = [
+                s for s in (trace.steps or [])
+                if getattr(s, "tool_name", "") and getattr(s, "tool_name", "") not in ("todo_write",)
+            ]
+            _has_criteria = bool(getattr(task_state, "criteria", None))
+            if (
+                len(_real_tool_calls) >= _DIVERGENT_TOOL_BUDGET
+                and not _has_criteria
+            ):
+                logger.info(
+                    "[agent.loop] divergent-tool budget hit: %d real tool calls, "
+                    "no criteria, no real completed subgoals — forcing honest stop",
+                    len(_real_tool_calls),
+                )
+                loop_messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "[DIVERGENT STOP] You have made many tool calls but have not "
+                            "defined what success looks like or completed any concrete step. "
+                            "STOP exploring and give the best answer you can from what you "
+                            "have gathered. If the user's request was unclear, say so and ask "
+                            "them what they meant."
+                        ),
+                    }
+                )
+                if _obs:
+                    _obs.emit(
+                        "agent_loop_divergent_stop",
+                        tool_calls=len(_real_tool_calls),
+                        iteration=iteration + 1,
+                    )
+                # Break the loop — the nudge is advisory and strong models
+                # ignore it. Fall through to synthesis with what we have.
+                logger.info("[agent.loop] divergent stop: breaking loop")
+                _divergent_stop = True
+                break
 
             # Session 180 — F3 Structured Planner DAG. Advance the plan
             # nodes based on the latest tool execution. Heuristic: the
@@ -4139,6 +4188,20 @@ class AgentLoop:
                                 ),
                             }
                         )
+                        # B-2026-08-21: on the LAST empty-reasoning retry for a tool-bearing intent,
+                        # force tool_choice so the model MUST call a tool instead of producing
+                        # another empty response or prose. This cuts zai's wasted iterations
+                        # in half (empty-think -> nudge -> force-tool-call).
+                        if (
+                            trace.empty_reasoning_recoveries >= _empty_reasoning_cap - 1
+                            and intent in AGENT_INTENTS
+                            and filtered_tools
+                            and _gate_force_tool is not None
+                        ):
+                            _gate_force_tool[0] = True
+                            logger.info(
+                                "[agent.loop] last empty-reasoning retry — forcing tool_choice"
+                            )
                         continue  # retry with thinking OFF so the model acts
 
                     trace.empty_response = True  # ADR-18 P2: remember this failure
