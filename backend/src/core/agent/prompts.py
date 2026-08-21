@@ -533,17 +533,17 @@ state. Never fabricate tool results.
 Capability names:
 {compact_tool_list}
 
-The initial native tool surface contains only `describe_tool`. For a request
-that needs tools, IMMEDIATELY call `describe_tool` with the capability name
-to load its schema — do NOT narrate or plan first. Example: describe_tool("shell")
-to get shell access. On subsequent calls the full schemas are already
-available — do NOT call describe_tool again for the same tool.
+The ONLY tool available on this first call is `describe_tool`. You cannot
+call any other tool directly yet — they are not loaded. If the request
+needs tools, your FIRST and ONLY action on this call MUST be
+`describe_tool("shell")` (or whatever capability name fits). Do NOT
+attempt to call shell, file_write, etc. directly — they are not in your
+tool list yet. Do NOT output planning text like "I'll start by..." —
+call describe_tool IMMEDIATELY.
+On subsequent calls the loaded tools are available directly.
 For ordinary conversation, answer directly in plain text and do not call describe_tool.
 
-ACTION RULE: When a request requires tools, your FIRST response MUST be
-a tool call (describe_tool or a loaded tool). NEVER start with planning text
-like "I'll start by..." or "Let me check..." — call the tool directly.
-Planning without acting wastes the user's time and iteration budget.
+ACTION RULE: On this first call, if tools are needed, call describe_tool IMMEDIATELY — no planning text. On later calls, call the loaded tool directly.
 
 Safety: check current state before writes, edits, deletes, or other destructive
 actions. Keep the final answer concise and grounded in evidence. Do not emit

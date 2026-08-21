@@ -4974,6 +4974,56 @@ class AgentLoop:
                                 }
                             )
                             return "", False
+                # B-2026-08-21: broader action-narration detector. The
+                # prose_commits_to_tool_action detector requires BOTH a
+                # commitment phrase AND a tool-name mention. But weak models
+                # say "I'll start by exploring the Dev/ folder" — an action
+                # phrase with no tool name. On the parent agent, if the model
+                # produced an action-oriented final answer with ZERO real tool
+                # calls on iteration 1, and the intent is execute/analyze,
+                # nudge once to force a tool call.
+                if (
+                    is_parent
+                    and iteration == 0
+                    and intent != Intent.CHAT
+                    and not any(
+                        getattr(s, "tool_name", "")
+                        and getattr(s, "tool_name", "") not in ("todo_write",)
+                        for s in getattr(trace, "steps", []) or []
+                    )
+                ):
+                    _final_text = getattr(trace, "final_response", "") or ""
+                    _already_action_nudged = any(
+                        isinstance(m, dict)
+                        and isinstance(m.get("content", ""), str)
+                        and "[ACTION NARRATION]" in m.get("content", "")
+                        for m in (loop_messages or [])
+                    )
+                    if not _already_action_nudged and len(_final_text.strip()) > 10:
+                        if obs:
+                            obs.emit(
+                                "agent_loop_gate_failed_replan",
+                                intent=intent.value,
+                                iteration=iteration + 1,
+                                unmet=["model narrated an action plan but made zero tool calls"],
+                            )
+                        loop_messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "\n[ACTION NARRATION] You described what you would do "
+                                    "(e.g. 'I'll start by exploring...') but did not "
+                                    "actually call any tool. Your task requires tool execution. "
+                                    "You MUST emit a tool_call NOW — use shell to run commands, "
+                                    "file_read to read files, web_search to search, etc. "
+                                    "Do NOT just describe your plan; execute it via a tool call.\n"
+                                ),
+                            }
+                        )
+                        # Signal the main loop to force tool_choice
+                        if gate_force_tool is not None:
+                            gate_force_tool[0] = True
+                        return "", False
                 # B-2026-08-20-13 (Session 314): the hedge detector. Distinct
                 # from the prose-commitment detector (which fires when NO tool
                 # ran): this fires when tools DID run (evidence exists) but the
