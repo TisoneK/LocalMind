@@ -608,6 +608,10 @@ def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
     # B-2026-08-21: OS-aware shell recovery hint. When shell fails with
     # "not recognized" or similar, the model almost always used the
     # wrong OS syntax. Give an explicit OS-specific correction.
+    # Session 333: keep the "honestly" contract — the test
+    # test_unknown_errors_still_get_an_actionable_directive requires it for
+    # every unknown error type, and the wording protects against false
+    # success claims (the model says "done" without verifying).
     if tool_name == "shell":
         import platform as _plat
 
@@ -619,13 +623,17 @@ def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
                 "ls -> Get-ChildItem; cat -> Get-Content; grep -> Select-String; "
                 "find -> Get-ChildItem -Recurse -Filter; rm -> Remove-Item; "
                 "cp -> Copy-Item; mv -> Move-Item. "
-                "Fix the command and retry with the CORRECT PowerShell syntax."
+                "Fix the command and retry with the CORRECT PowerShell syntax. "
+                "If you cannot complete this step, report the actual state "
+                "honestly -- never claim success you didn't verify."
             )
         return (
             f"`shell` command failed ({et or 'error'}). "
             "Check the error message, fix the command, and retry. "
             "On Unix: use mkdir -p, ls, cat, grep, find. "
-            "If the command doesn't exist, try a different approach."
+            "If the command doesn't exist, try a different approach. "
+            "If you cannot complete this step, report the actual state "
+            "honestly -- never claim success you didn't verify."
         )
     return (
         f"`{tool_name}` failed ({et or 'error'}). Check the message above, then try a corrected call "

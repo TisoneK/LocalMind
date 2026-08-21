@@ -712,7 +712,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 is_trivial_input,
                 trivial_response,
             )
-            from core.engine._helpers import _approx_tokens
+            # _approx_tokens is already imported at module top (line 35).
+            # Session 333: do NOT re-import here — a local `from X import Y`
+            # makes Y function-local, shadowing the module-level import for
+            # the ENTIRE function (Python scoping rule), and breaking the
+            # parent-agent path's prompt-token estimate at line 1192 when
+            # the fast-path doesn't fire.
 
             # Light history load for follow-up detection ("Like what?").
             try:
@@ -733,19 +738,23 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 logger.info(
                     "[agent-runtime] fast-path(%s) for %r", _path, message[:60]
                 )
+                # Session 333: emit stage_timings matching the test contract
+                # (intent_classify skipped — no classifier runs; tool_select/
+                # execute skipped — no tools; generate done with real latency
+                # measured at the end). Previously emitted a "fast_path"
+                # status which the tests didn't expect and which broke the
+                # Observe panel's stage-status contract.
                 collector.emit("agent_loop_start", intent="chat")
                 collector.emit(
-                    "stage_timing", stage="intent_classify", latency_ms=0, status="fast_path"
+                    "stage_timing", stage="intent_classify", latency_ms=0, status="skipped"
                 )
                 collector.emit(
                     "stage_timing", stage="tool_select", latency_ms=0, status="skipped"
                 )
                 collector.emit(
-                    "stage_timing", stage="context_build", latency_ms=0, status="fast_path"
+                    "stage_timing", stage="context_build", latency_ms=0, status="skipped"
                 )
-                collector.emit(
-                    "stage_timing", stage="execute", latency_ms=0, status="skipped"
-                )
+                _gen_start = time.monotonic()
                 _response_chunks: list[str] = []
                 _fast_usage: dict[str, int] = {}
                 if _is_trivial:
@@ -769,6 +778,18 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     if _chunk.done:
                         continue
                     yield _chunk
+
+                # generate stage done — measured from before the stream
+                # started until the stream finished. Even the trivial
+                # canned-reply path ran "generation" logic (string lookup),
+                # so report done with the measured latency.
+                _gen_ms = round((time.monotonic() - _gen_start) * 1000)
+                collector.emit(
+                    "stage_timing", stage="generate", latency_ms=_gen_ms, status="done"
+                )
+                collector.emit(
+                    "stage_timing", stage="execute", latency_ms=0, status="skipped"
+                )
 
                 # Finalize: persist + emit turn_complete (mirror the parent-
                 # agent path's epilog so observability and history survive

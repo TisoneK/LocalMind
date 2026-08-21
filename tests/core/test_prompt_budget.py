@@ -42,17 +42,28 @@ def _sample_tools() -> list[dict]:
 
 
 def test_init_prompt_is_under_budget():
-    """The init prompt must stay lean: no tool catalog. ADR-49 added a small
-    ordered `plan` output (the live Todos checklist), a ~260-char increase, so
-    the budget is 3000 (still far below the old monolithic plan-stream prompt)."""
+    """The init prompt must stay lean: no tool catalog.
+
+    Budget history:
+    - Pre-B-12: 7039 chars (monolithic plan-stream prompt)
+    - ADR-38: 2969 chars (classify-only, capability summary)
+    - ADR-49: +260 chars (ordered `plan` output for live Todos checklist) → 3000 budget
+    - Session 331 (B-2026-08-21): +450 chars (clarify exception for bare verb phrases,
+      ACT-not-ask bias refinement, acknowledgement/title contract) → 3500 budget
+    - Session 332 (cyber-café fix): no init-prompt changes (fast-path bypasses init
+      entirely for trivial/conversational prompts)
+
+    Current size: ~3453 chars. Budget is 3500 to give headroom for the next
+    small wording refinement without breaking the test.
+    """
     prompt = build_initialization_prompt(
         user_message="whats the time?",
         env_context="",
         history=[],
     )
-    assert len(prompt) < 3000, (
+    assert len(prompt) < 3500, (
         f"budget violation: init prompt is {len(prompt)} chars, "
-        f"expected under 3000 (lean classify + short plan)."
+        f"expected under 3500 (lean classify + short plan + clarify exceptions)."
     )
 
 

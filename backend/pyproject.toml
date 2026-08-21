@@ -122,7 +122,14 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["../tests"]
-pythonpath = ["src"]
+# Session 333: add ".." (repo root) to pythonpath so cross-test imports like
+# `from tests.adapters.test_thinking_policy_adr41 import _collect_with_dispatch`
+# (in test_parent_recovery_cap.py) resolve. Previously only "src" was on the
+# path, causing `ModuleNotFoundError: No module named 'tests'`.
+# The `tools` package conflict (tests/tools/ vs src/tools/) is handled by
+# importmode=importlib below — pytest imports each test by file path, not
+# by package name, so the two `tools` directories never collide.
+pythonpath = ["src", ".."]
 # Use importlib mode to avoid package name conflicts between tests/tools/
 # and backend/src/tools/ — both define a "tools" package, and the default
 # prepend mode causes the test package to shadow the source package.
