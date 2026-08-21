@@ -4682,3 +4682,37 @@ program + ADR-22). -->
   unit test with the exact sentence.
 - **Outcome:** done — full backend 2087 / 2 skipped / 0 failures, ruff clean.
 - **Report:** `.context/memory/reviews/2026-08-20-review-93.md`
+
+## Session 330 — synthesize/evaluate stage: fixed goal checklist gates completion
+
+- **Trigger:** user transcript — the consolidated finding: the three observed failures
+  (premature completion, todos mutating to match whatever ran, the 2/2-100% lie on recon-only
+  stops) are symptoms of ONE missing piece: no fixed goal-checklist held independently of
+  execution, and nothing compared outcomes against it before declaring completion. The user's
+  directive: "implement a synthesize/evaluate stage — goal-derived fixed checklist, real
+  comparison of tool outcomes against it, completion gated on that comparison, not on tool-call
+  success."
+- **Root cause (code):** the warm-kernel parent path (agent_runtime:917) passes no
+  success_criteria; `_acceptance_gate_at_final_answer`'s no-criteria branch accepts any final
+  text. The S327 synthesized todos (syn-N = tools-that-ran) made the panel's denominator
+  self-mutating; `_finalize_plan_todos` (chat.py:191) then flipped ALL remaining plan todos to
+  complete at turn end ("done or moot") — the 100% lie at the persistence layer.
+- **SHIPPED (`30e37b8`):** deterministic `derive_goal_items(message)` (zero LLM calls — the
+  user's request defines the deliverables: named files with write verbs, folders with create
+  verbs; conversational/abstract → [] → legacy). Wired as BOTH plan_steps (fixed Todos
+  denominator, plan-0..N up front) and success_criteria (gate contract) with
+  `skip_head_gate=True` (criteria gate at the FINAL-ANSWER point, never the iteration head — no
+  bare "✓ n/n" before the model's synthesis). Gate no longer auto-accepts goal turns with ZERO
+  tool evidence (live-found: "I'll set up the tools needed for file operations." → 3/3 todos,
+  zero files) — falls through to all-unmet → replan/honest-stop. Honest stop emits
+  `agent_loop_gate_honest_stop` + completes only passed goal items; chat.py finalize skips on
+  that signal (unmet stay pending — panel shows true fraction). verify.py `_norm()` adds
+  Windows-backslash tolerance (S264/S325 family).
+- **LIVE-VERIFIED (bankofai/deepseek-v4-flash, isolated 8765, exact task shape):** BEFORE the
+  fix, the model produced one token, ran zero tools, zero files, turn completed 3/3. AFTER:
+  `agent_loop_gate_failed_replan` fired, model created the folder + a.txt="first" +
+  b.txt="second" (on disk), finished `criteria=3 gate=pass` "✓ 3/3 criteria met". Honest-stop
+  cap path + SSE skip: unit-verified (the live model cooperated after the replan).
+- **Outcome:** done — full backend 2106 / 2 skipped / 0 failures (2087 + 19 new), ruff clean.
+- **Open items:** `todo_failed` event for unmet goal items (failed styling) — optional follow-up.
+- **Report:** `.context/memory/reviews/2026-08-20-review-94.md`

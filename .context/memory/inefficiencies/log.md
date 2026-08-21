@@ -1006,3 +1006,11 @@ if literally nothing slowed you down.
 - **Cause:** the local terminal wrapper wraps the command in single quotes; apostrophes in the heredoc content or the `'EOF'` marker terminate it early.
 - **Workaround / fix:** use an UNQUOTED `<<EOF` heredoc (no `'EOF'`), and avoid apostrophes entirely in the message body (rephrase "reader's" → "the reader", "The agent's" → "the agent"). Backslashes like `C:\Users\tison` are safe in an unquoted heredoc.
 - **Prevent next time:** when composing a git commit message for this environment, write it with no single quotes at all: unquoted heredoc delimiter + apostrophe-free message. Also: the `run_terminal_command` `cwd` must EXIST before spawn (first attempt with a not-yet-created `/tmp/lm325-scratch` failed with ENOENT posix_spawn — create the dir inside the command instead of passing it as cwd).
+
+---
+## 2026-08-20 — Buffy / deepseek-v4-flash (Session 330)
+- **Problem:** the live-testing harness could not keep a backgrounded server alive across separate run_terminal_command calls. `nohup ... &` inside a SYNC command worked while that command was running (health OK), but the server died between commands; `process_type=BACKGROUND` is not implemented. Two failed launch attempts before falling back to a self-contained command (launch + health wait + curl trace + kill in ONE invocation).
+- **Cost:** ~5 minutes and two retries.
+- **Cause:** the terminal broker reaps background children when the SYNC command's process group is cleaned up; there is no persistent-background mode.
+- **Workaround / fix:** run the isolated-harness trace as ONE self-contained command: start server with `nohup ... &`, capture `SRV=$!`, poll /api/health, fire the curl -m270 trace, then `kill $SRV` — all inside a single run_terminal_command with timeout_seconds >= 300.
+- **Prevent next time:** update `system/live-testing.md` with the self-contained-command recipe so the next session does not rediscover this.

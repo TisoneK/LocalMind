@@ -1,75 +1,45 @@
 # Current Task
 
-**Status:** IDLE — Session 329 shipped the hyphenated creation-commitment tool-talk fix (`93d59d6`).
+**Status:** IDLE — Session 330 shipped the synthesize/evaluate stage (fixed goal-checklist
+gating completion, `30e37b8`; ADR-54; B-2026-08-20-24 done).
 
-## Session 329 outcome — recon-only turn reported as complete
+## Session 330 outcome — completion gated on a goal-derived fixed checklist
 
-- User live trace (bankofai/deepseek-v4-flash on Windows): path-test task — the agent ran ONE
-  tool (shell listing of Dev/) then stopped mid-sentence ("Let me create the path-test folder and
-  the two files") with NO files created, yet the UI reported Todos 2/2, 100% and "Turn complete".
-- **Honest split:** the premature stop is NOT the synthesized-todos change (pre-existing S323-class
-  free-tier behavior; loop termination untouched) — but the "2/2, 100%" panel IS our artifact
-  (synthesized todos = tools that ran, so a recon-only stop looks complete).
-- **Real bug:** "Let me create the path-test folder and the two files" was ACCEPTED as a final
-  answer — `_is_tool_talk`'s creation-commitment adjective group `(\w+ )?` cannot match
-  hyphenated/dotted tokens ("path-test folder", "a.txt"). Widened to `(\w+(?:[.\-]\w+)* )?`;
-  exact repro caught, S323 preserved, safe negatives safe; regression test with the user's exact
-  sentence in `test_dsml_interception.py`.
-- **SHIPPED (`93d59d6`), live-verified** (bankofai/deepseek-v4-flash, isolated 8765): full backend
-  2087 / 2 skipped / 0 failures, ruff clean.
-- **Next:** user restarts the backend and re-runs the path-test task — on failure-mode runs the
-  "path-test folder" commitment is now caught and the agent nudged to actually create the files.
+- The user's consolidated finding: premature completion, todos mutating to match whatever ran
+  (always 100%), and the 2/2 lie are symptoms of ONE missing piece — no synthesize/evaluate
+  stage holds a fixed goal-checklist and compares outcomes against it before declaring done.
+- **FIX (`30e37b8`, live-verified):** deterministic `derive_goal_items(message)` (zero LLM
+  calls) derives the fixed checklist from the request (named files + write verbs, folders +
+  create verbs; conversational/abstract → [] → legacy path). agent_runtime passes it as BOTH
+  plan_steps (fixed Todos denominator, plan-0..N up front) and success_criteria (gate
+  contract), with `skip_head_gate=True` (criteria gate at the final-answer point, never the
+  iteration head). The gate no longer auto-accepts a goal turn with ZERO tool evidence
+  (live-found: "I'll set up the tools needed for file operations." → 3/3 todos, zero files) —
+  all-unmet → replan → honest-stop at cap (`agent_loop_gate_honest_stop` + per-goal todo
+  state); chat.py `_finalize_plan_todos(skip=True)` stops flipping unmet items (no false
+  100%). verify.py `_norm()` Windows-backslash tolerance (S264/S325 family).
+- **LIVE before/after (bankofai/deepseek-v4-flash, isolated 8765):** before — no-tool stop
+  accepted with 3/3 todos and no files; after — `agent_loop_gate_failed_replan` fired, the
+  model created the folder + a.txt="first" + b.txt="second" (on disk), finished
+  `criteria=3 gate=pass` "✓ 3/3 criteria met". Backend 2106 / 2 skipped / 0 failures.
+  Honest-stop cap path + SSE skip: unit-verified (the live model cooperated after the replan).
+- **Next:** user restarts the app backend and re-runs the path-test / notes-txt tasks — the
+  panel shows the fixed checklist up front and completion only with evidence. Optional
+  follow-ups (backlogged): `todo_failed` event for unmet items (failed styling); LLM
+  goal-derivation tier for abstract tasks (deliberately deferred — false-fail + latency risk).
 
-## Session 326 outcome — empty Todos panel root-caused and fixed
+## Session 329 outcome — hyphenated creation-commitment tool-talk fix
 
-- Grounded the user's transcript claims against code + a live trace (bankofai/deepseek-v4-flash):
-  (1) file_task relative paths — already fixed by S325, unit-proven; the successful Windows run used absolute
-  paths so it never exercised it; fresh-chat relative retest needed on Windows. (2) "Keep JSON concise." — NOT
-  the Thinker (string absent from codebase; it is the model echoing the planner prompt; that trace predates the
-  S324 restart); current build live-verified 0 Thinker markers in thinking tokens. (3) checklist-shaped thinking
-  = model behavior (user's own conclusion), BUT the empty Todos panel was structural: `agent_runtime.py:917`
-  hardcodes `skip_planning=True`, gating out all three plan→todo branches (loop.py 1238/1312/1334); only the
-  model-voluntary `todo_write` tool remained.
-- **FIX (`a0e43f3`, live-verified):** per the user's design input ("todos = rendered artifact of what happened;
-  the plan constrains what happens next"), the loop now synthesizes one todo per real tool execution
-  (todo_created on dispatch, todo_completed on landing), wired into all three dispatch paths, describe_tool
-  excluded, plan-based checklists still take precedence. Live trace: syn-0 "Run: mkdir -p test-run" + syn-1
-  "Write: …" created AND completed; task completed. Backend 2087/2.
-- **Next:** user restarts the app backend to pick up the fix, then runs a multi-step task — the Todos panel
-  should now fill live. Optional follow-up (not started): upfront plan in the warm-kernel first call, layered on
-  top of the synthesized surface, if the user wants the panel to show the pre-task plan again.
-
-## Session 325 outcome — read-back-after-write on Windows
-
-**Addendum (same trace):** the user restarted and re-ran the task on Windows — it COMPLETED
-end-to-end (mkdir Dev/test-run → file_write 19 bytes → file_task read-back "hello from deepseek"
-→ confirmed match). The S325 fix held live. The trace also exposed `[VERIFICATION]: file_write
-confirmed — 79 chars verified on disk` for a 19-byte file: `_verify_tool_result` counted the
-READ-BACK REPORT string, not the file, and the ~60-char header skewed the truncation heuristic.
-Shipped `8460829` — file_task surfaces `size_bytes` in metadata; the verifier uses it and reports
-"N bytes verified on disk"; empty-write guard + 2 new regression tests. Backend 2083/2.
-Caveat: the run used absolute `C:\...` paths, so it exercised S264 — the S325 relative-backslash
-path is unit-covered but awaits a live relative-path Windows run.
-
-- **Reported (user's live trace, bankofai/deepseek-v4-flash on Windows):** the agent wrote
-  `dev\test-run\notes.txt` ("Wrote 19 bytes to C:\Users\tison\Dev\test-run\notes.txt") and the
-  IMMEDIATE read of the same relative path failed with `not_found`, then the turn ended without
-  completing the request.
-- **Root cause (code):** `file_reader._PATH_PATTERNS[2]` (bare path) had a forward-slash-only char
-  class `[\w.\-/]`. A Windows-RELATIVE path (`dev\test-run\notes.txt`) truncated at the backslashes
-  to `notes.txt`, which was looked up under home/cwd → `not_found`. Session 264 fixed drive-ABSOLUTE
-  paths (dedicated drive pattern runs before the bare one) but left the bare class relative-broken.
-- **Shipped (`75b6a5c`):** bare-path char class widened to `[\w.\\\-/]` (forward slashes AND
-  backslashes) + NOTE ON ORDER comment updated. Extraction now yields the full `dev\test-run\notes.txt`
-  as the single candidate, never the truncated `notes.txt`; absolute-path-first ordering unchanged.
-  3 new regression tests in `test_file_reader.py`.
-- **Verification:** full backend 2081 passed / 2 skipped / 0 failures (2078 + 3 new); ruff clean;
-  extraction proven on the exact repro string (ABS first ✓, REL single-candidate ✓, UNIX/BARE/PROSE ✓).
-  macOS cannot do a faithful on-disk read-back (POSIX: backslash = filename char, so the relative
-  path is ONE component there vs 3 on Windows) — that is a test-environment limitation; resolution
-  is unchanged stdlib pathlib. The user must restart the backend and re-run on Windows to confirm.
-- **Next:** user restarts the app backend and re-runs the "create test-run/notes.txt, read it back"
-  task — the read should now succeed and the turn complete.
+- User live trace: path-test task ran ONE tool (shell listing of Dev/) then stopped mid-sentence
+  ("Let me create the path-test folder and the two files") with no files created, yet the UI
+  reported Todos 2/2, 100% and "Turn complete". Honest split: the premature stop is NOT the
+  synthesized-todos change (pre-existing S323-class free-tier behavior) — but the "2/2 100%"
+  panel IS our artifact (synthesized todos = tools that ran). Real bug: `_is_tool_talk`'s
+  creation-commitment adjective group `(\w+ )?` can't match hyphenated/dotted tokens
+  ("path-test folder", "a.txt"); widened to `(\w+(?:[.\-]\w+)* )?` — exact repro caught, S323
+  preserved, safe negatives safe; regression test with the user's exact sentence. `93d59d6`.
+  Backend 2087/2. (Note: Session 330's goal-checklist gate now also catches this class — a
+  no-tool "I will create X" final answer fails the criteria gate instead of being accepted.)
 
 ## Next
 
@@ -77,6 +47,6 @@ path is unit-covered but awaits a live relative-path Windows run.
 - **B-2026-08-20-10 (High):** MiniMax XML interception conflicts with prose-commitment detector.
 - **B-2026-08-20-11 (Medium):** 429 on iter=1 → empty bubble.
 
-**Feature:** none (single-session tool fix)
-**ADR:** none
-**Review:** `.context/memory/reviews/2026-08-20-review-93.md`
+**Feature:** none (single-session loop fix)
+**ADR:** ADR-54 (completion gated on a goal-derived fixed checklist)
+**Review:** `.context/memory/reviews/2026-08-20-review-94.md`

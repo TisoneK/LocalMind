@@ -91,6 +91,25 @@ artifacts the trace created.
    the weak model didn't exercise a path (e.g. didn't mark a todo completed), say
    so — don't imply it did.
 
+## Harness gotcha (Session 330): run the whole trace as ONE self-contained command
+
+A backgrounded server (`nohup ... &`) does NOT survive across separate
+run_terminal_command calls — the broker reaps background children when the
+SYNC command's process group is cleaned up (and `process_type=BACKGROUND` is
+not implemented). Run the trace as a SINGLE command:
+
+```bash
+SC=<scratch>; pkill -f "LOCALMIND_PORT=8765"; lsof -ti:8765 | xargs kill -9 2>/dev/null; sleep 1
+cd backend
+LOCALMIND_PORT=8765 LOCALMIND_HOME="$SC/tracehome" LOCALMIND_SHELL_ENABLED=true nohup .venv/bin/python server.py > "$SC/trace.log" 2>&1 &
+SRV=$!
+for i in $(seq 1 45); do curl -s -m2 http://localhost:8765/api/health >/dev/null 2>&1 && break; sleep 1; done
+curl -sN -m270 -X POST http://localhost:8765/api/chat -F "message=<task>" -F "session_id=t$(date +%s)" > "$SC/trace.sse"
+kill $SRV 2>/dev/null; pkill -f "LOCALMIND_PORT=8765" 2>/dev/null
+```
+
+Run with `timeout_seconds` >= 300 so the 270s curl fits.
+
 ## Environment gotchas (logged across sessions)
 
 - Port 8000 is the user's app; `LOCALMIND_SHELL_ENABLED` may be `false` in
