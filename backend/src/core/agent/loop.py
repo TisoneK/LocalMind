@@ -458,6 +458,12 @@ _MAX_EMPTY_REASONING_RECOVERIES_PARENT = 3
 # streak, so legitimate strategy pivots are never blocked.
 _SAME_TOOL_REPLAN_CAP = 2
 
+# Session fix: total replan cap. The acceptance gate can replan on every
+# "done" claim, burning iterations on re-planning instead of executing.
+# Weak models hit 8 replan cycles with zero progress. Cap total gate
+# replans per run so the model is forced to produce a real answer.
+_MAX_TOTAL_GATE_REPLANS = 2
+
 # B-2026-08-18-3 — repetition nudge bound. A model can spin on a tool that keeps
 # SUCCEEDING but isn't advancing (the "current weather Kitengela" transcript: 3
 # web_searches all returned results, none useful, then an empty synthesis). The
@@ -571,10 +577,32 @@ def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
             "from the evidence gathered so far."
         )
     # git_error, internal_error, child_exception, parse-anything-else, unknown.
+    # B-2026-08-21: OS-aware shell recovery hint. When shell fails with
+    # "not recognized" or similar, the model almost always used the
+    # wrong OS syntax. Give an explicit OS-specific correction.
+    if tool_name == "shell":
+        import platform as _plat
+
+        _os_name = _plat.system()
+        if _os_name == "Windows":
+            return (
+                f"`shell` command failed ({et or 'error'}) -- you are on WINDOWS. "
+                "Common fixes: mkdir -p -> New-Item -ItemType Directory -Force; "
+                "ls -> Get-ChildItem; cat -> Get-Content; grep -> Select-String; "
+                "find -> Get-ChildItem -Recurse -Filter; rm -> Remove-Item; "
+                "cp -> Copy-Item; mv -> Move-Item. "
+                "Fix the command and retry with the CORRECT PowerShell syntax."
+            )
+        return (
+            f"`shell` command failed ({et or 'error'}). "
+            "Check the error message, fix the command, and retry. "
+            "On Unix: use mkdir -p, ls, cat, grep, find. "
+            "If the command doesn't exist, try a different approach."
+        )
     return (
         f"`{tool_name}` failed ({et or 'error'}). Check the message above, then try a corrected call "
         "or a different tool/approach. If you cannot complete this step, report the actual state "
-        "honestly — never claim success you didn't verify."
+        "honestly -- never claim success you didn't verify."
     )
 
 
@@ -1521,6 +1549,8 @@ class AgentLoop:
         # todo_completed when the tool lands. Model-agnostic, bounded, and
         # skipped for scaffolding calls (describe_tool) and single-step noise.
         _synthetic_todos: list[str] = []
+        # Session fix: track total gate replans to cap replanning loops
+        _gate_replan_count: int = 0
         _SYNTH_TODO_MAX = 12
 
         def _synth_begin(tool_name: str, tool_input: str) -> Optional[str]:
@@ -4383,8 +4413,11 @@ class AgentLoop:
                         intent_history=intent_history,
                         is_parent=(getattr(agent_config, "name", "") == "parent"),
                         plan_steps=_plan_steps,
+                        gate_replan_count=_gate_replan_count,
                     )
                     if not _gate_final:
+                        _gate_replan_count += 1
+                        logger.info("[agent.loop] gate replan #%d", _gate_replan_count)
                         continue
                     # Session 237: the gate passed but the model may have run
                     # the tool without writing an answer — synthesize the real
@@ -4512,8 +4545,11 @@ class AgentLoop:
                     intent_history=intent_history,
                     is_parent=(getattr(agent_config, "name", "") == "parent"),
                     plan_steps=_plan_steps,
+                    gate_replan_count=_gate_replan_count,
                 )
                 if not _gate_final:
+                    _gate_replan_count += 1
+                    logger.info("[agent.loop] gate replan #%d (alt)", _gate_replan_count)
                     continue
                 # Session 237: gate passed but no model answer — synthesize the
                 # real content from tool evidence (not just "✓ n/n criteria met").
@@ -4734,6 +4770,8 @@ class AgentLoop:
         # Session 330 — the harness-derived goal checklist (plan_steps).
         # Used to emit the per-goal todo state on an honest stop.
         plan_steps: Optional[list[str]] = None,
+        # Session fix: total gate replan count
+        gate_replan_count: int = 0,
     ) -> tuple[str, bool]:
         """Gate the model's "done" claim against the success criteria.
 
@@ -4925,6 +4963,8 @@ class AgentLoop:
         # pattern (17 same-tool retries, never pivoting).
         _streak, _streak_tool = same_tool_failure_streak(trace)
         _block_replan = _streak >= _SAME_TOOL_REPLAN_CAP
+        # Session fix: also block if total replans exceeded
+        _block_replan = _block_replan or gate_replan_count >= _MAX_TOTAL_GATE_REPLANS
         if trace.gate_passed:
             trace.gate_summary = format_gate_results(results)
             # Session 179 — F4 Mandatory post-execution verifier for

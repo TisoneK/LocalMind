@@ -758,11 +758,12 @@ DESCRIBE_TOOL_DEFINITION: dict = {
     "function": {
         "name": "describe_tool",
         "description": (
-            "Load the FULL usage schema for a capability before using it. "
+            "Load the FULL usage schema for an ON-DEMAND tool before using it. "
             "The schema is loaded for the NEXT native step and persists for "
-            "the rest of this run. Call this first for core tools or on-demand "
-            "tools; do not call a capability until it has been described. "
-            f"Core tools: {', '.join(sorted(CORE_TOOL_NAMES))}. "
+            "the rest of this run. "
+            "Core tools (shell, file_task, file_write, edit_file, code_exec, "
+            "web_search, web_fetch, git, sysinfo, find_path, memory_op) "
+            "already have their schemas loaded — do NOT call describe_tool for them. "
             f"On-demand tools: {long_tail_tool_summary()}."
         ),
         "parameters": {

@@ -37,15 +37,15 @@ _BUDGETS = {
     # message and the formatting example trimmed — ~2,270 chars off each
     # execute intent. Budgets tightened to lock the reduction in.
     Intent.SHELL: 11_500,  # measured 10,713 (was 12,981 pre-245)
-    Intent.SYSINFO: 10_000,  # measured 9,386
-    Intent.CODE_EXEC: 11_500,  # measured 10,775
-    Intent.FILE_WRITE: 11_500,  # measured 10,815
-    Intent.FILE_EDIT: 11_500,  # measured 10,820
-    Intent.FILE_TASK: 12_000,  # measured 11,298
-    Intent.WEB_SEARCH: 12_000,  # measured 11,362
-    Intent.WEB_FETCH: 11_500,  # measured 10,549
-    Intent.MEMORY_OP: 10_500,  # measured 9,882
-    Intent.BROWSE: 11_000,  # measured 10,017
+    Intent.SYSINFO: 10_500,  # 2026-08-21: +500 (describe_tool + completion enforcement)
+    Intent.CODE_EXEC: 11_800,  # 2026-08-21: +300 (describe_tool core-guard + completion enforcement)
+    Intent.FILE_WRITE: 12_000,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
+    Intent.FILE_EDIT: 12_000,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
+    Intent.FILE_TASK: 12_500,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
+    Intent.WEB_SEARCH: 12_500,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
+    Intent.WEB_FETCH: 12_000,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
+    Intent.MEMORY_OP: 11_000,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
+    Intent.BROWSE: 11_500,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
     Intent.CHAT: 6_000,  # measured 4,730 (unchanged — env not in CHAT branch)
 }
 

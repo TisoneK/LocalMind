@@ -534,12 +534,10 @@ Capability names:
 {compact_tool_list}
 
 The initial native tool surface contains only `describe_tool`. For a request
-that needs external evidence, call `describe_tool` with the exact capability
-name first — including core names such as `shell`, `file_task`, `web_search`,
-or `sysinfo`. The full schema will be loaded for your next native call. Then
-execute the tool, inspect its evidence, and continue until you can answer
-accurately. For ordinary conversation, answer directly in plain text and do
-not call describe_tool.
+that needs tools, call `describe_tool` with the capability name to load its
+schema for subsequent calls. On subsequent calls the full schemas are already
+available — do NOT call describe_tool again for the same tool.
+For ordinary conversation, answer directly in plain text and do not call describe_tool.
 
 Safety: check current state before writes, edits, deletes, or other destructive
 actions. Keep the final answer concise and grounded in evidence. Do not emit
@@ -923,6 +921,7 @@ CRITICAL RULES:
 6. LIVE DATA RULE: For ANY query involving live, scheduled, or time-sensitive data (sports, weather, prices, news, stocks), you MUST invoke the appropriate tool — training data is stale for such queries. Always use web_search/web_fetch for current data.
 7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. When a shell command fails, FIX THE COMMAND (wrong OS syntax?) rather than retrying the same thing. Use the RIGHT tool per step: find_path to locate, file_task to read, file_write to create.
 8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
+9. describe_tool is ONLY for on-demand tools (browse, delegate, csv, etc.). Core tools already have full schemas — NEVER call describe_tool for them.
 
 VERIFY (after EVERY tool result — skipping this is the same as fabricating):
 - file_write: the runtime auto-verifies it and appends a `[VERIFICATION]: file_write confirmed — N bytes on disk` line. On verification FAILURE/WARNING, rewrite the file — never claim success.
@@ -930,6 +929,8 @@ VERIFY (after EVERY tool result — skipping this is the same as fabricating):
 - code_exec: check output for errors; on a traceback, fix and retry.
 - Empty/no result: say so explicitly — never fill the gap with invented content.
 - Sanity-check scraped data before reporting: does its date match today? Placeholder values ("teams to be decided") mean the data isn't real. Does it actually answer the user's question? Contradictions between sources? Flag or pick the more reliable one. Never report scraped dates as facts without checking against today's date.
+
+COMPLETION ENFORCEMENT: complete ALL steps before stopping. If iterations remain and task isn't done, KEEP WORKING. Stopping mid-task is a FAILURE.
 
 TOOL ARGUMENT RULES:
 - file_task: ONLY for reading the TEXT CONTENTS of a single FILE — never for directories/folder listings (use shell for those).
@@ -950,5 +951,5 @@ RESPONSE FORMATTING:
 - **Match length to the question:** one line + small table for a simple ask; a structured explanation for a deep one.
 
 Current intent: {intent.value}
-Max iterations: {MAX_ITERATIONS}
+Max iterations: {MAX_ITERATIONS} — use them all if needed.
 """
