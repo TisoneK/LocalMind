@@ -758,3 +758,34 @@ async def test_engine_conversational_followup_uses_direct_chat_context():
         for message in calls[1]
     )
     assert all(event.data.get("fast_path") for event in obs.history() if event.type == "agent_initialization_done")
+
+
+# ── Session 332-D — message_implies_tool_action helper ─────────────────────
+
+
+def test_message_implies_tool_action_positive():
+    """Messages with tool/file/code keywords must return True (need tools)."""
+    from core.trivial_input import message_implies_tool_action
+
+    assert message_implies_tool_action("find files in /tmp") is True
+    assert message_implies_tool_action("run pytest in the backend") is True
+    assert message_implies_tool_action("create hello.py") is True
+    assert message_implies_tool_action("what's the weather today") is True
+    assert message_implies_tool_action("search the web for news") is True
+    assert message_implies_tool_action("open the file at /etc/hosts") is True
+    assert message_implies_tool_action("https://example.com") is True
+    assert message_implies_tool_action("how much RAM do I have") is True
+
+
+def test_message_implies_tool_action_negative():
+    """Purely conversational messages must return False (don't need tools)."""
+    from core.trivial_input import message_implies_tool_action
+
+    assert message_implies_tool_action("Give me three ideas for a cyber café") is False
+    assert message_implies_tool_action("What can you do?") is False
+    assert message_implies_tool_action("Recommend a good book on business") is False
+    assert message_implies_tool_action("Suggest a name for my project") is False
+    assert message_implies_tool_action("Brainstorm marketing strategies") is False
+    assert message_implies_tool_action("Propose three solutions") is False
+    assert message_implies_tool_action("What do you think about remote work") is False
+    assert message_implies_tool_action("") is False

@@ -30,6 +30,12 @@ PROMPTS = [
     ("cybercafe", "Give me three ideas for improving a cyber café business."),
     ("hello", "Hello"),
     ("weather_simple", "What is the capital of France?"),
+    # Session 332-D: prompts that bypass the fast-path (no opener) AND don't
+    # imply a tool action. Before Fix #3, these triggered the action-narration
+    # detector → replan → duplicate answer. After Fix #3, the detector skips
+    # because message_implies_tool_action returns False.
+    ("ideas_no_opener", "Ideas for improving a cyber café business."),
+    ("tips_no_opener", "Tips to grow my small business."),
 ]
 
 

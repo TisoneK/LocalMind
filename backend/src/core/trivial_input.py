@@ -441,6 +441,33 @@ def conversational_intent(message: str) -> str:
     return "chat"
 
 
+def message_implies_tool_action(message: str) -> bool:
+    """
+    Session 332-D — does this user message imply a tool/file/code action?
+
+    Returns True when the message references tool/file/code/realtime/system
+    keywords that would need a tool to satisfy (e.g. "find files in /tmp",
+    "run pytest", "create hello.py", "what's the weather"). Returns False
+    for purely conversational messages ("give me ideas for a cyber café",
+    "what do you think about X", "recommend a book").
+
+    Used by the action-narration detector in the parent-agent loop to scope
+    its replan trigger: only fire when the user actually expected a tool
+    action, not when the model produced a conversational answer to a
+    conversational question.
+    """
+    if not message:
+        return False
+    if _CONVERSATIONAL_BLOCKED_RE.search(message):
+        return True
+    if _CONVERSATIONAL_FILE_EXT_RE.search(message):
+        return True
+    if _CONVERSATIONAL_URL_RE.search(message):
+        return True
+    return False
+
+
+
 # ── Direct chat response helper ──────────────────────────────────────────────
 
 

@@ -131,6 +131,28 @@ from core.workspace_state import snapshot as workspace_snapshot
 logger = logging.getLogger(__name__)
 
 
+# Session 332-D — lazy wrapper to avoid circular import:
+# core.agent.loop → core.trivial_input → core.engine._helpers →
+# core.engine.__init__ → core.agent_runtime → core.agent.loop.
+# The trivial_input helpers are stable; importing once per process is cheap,
+# so we cache the function reference on first call.
+_message_implies_tool_action_fn = None
+
+
+def _message_implies_tool_action(message: str) -> bool:
+    """Return True if the user's message implies a tool/file/code action.
+
+    Wraps core.trivial_input.message_implies_tool_action via lazy import.
+    Used by the action-narration detector to scope its replan trigger:
+    only fire when the user actually expected a tool action.
+    """
+    global _message_implies_tool_action_fn
+    if _message_implies_tool_action_fn is None:
+        from core.trivial_input import message_implies_tool_action as _fn
+        _message_implies_tool_action_fn = _fn
+    return _message_implies_tool_action_fn(message)
+
+
 class TerminalProviderError(RuntimeError):
     """A provider error that must terminate the current turn immediately."""
 
@@ -5012,10 +5034,23 @@ class AgentLoop:
                 # produced an action-oriented final answer with ZERO real tool
                 # calls on iteration 1, and the intent is execute/analyze,
                 # nudge once to force a tool call.
+                #
+                # Session 332-D — replanning threshold: only fire when the
+                # user's message ACTUALLY implies a tool action. Conversational
+                # requests ("give me ideas", "what do you think", "recommend
+                # a book") don't need tools — the model's prose answer IS the
+                # correct response. Firing the detector here caused the
+                # cyber-café duplicate-answer bug: the model produced a valid
+                # conversational answer, the gate failed it as "narration",
+                # and the loop streamed ANOTHER answer into the same bubble.
                 if (
                     is_parent
                     and iteration == 0
                     and intent != Intent.CHAT
+                    # Session 332-D — lazy import to avoid circular dependency
+                    # (core.trivial_input → core.engine._helpers → core.engine
+                    # → core.agent_runtime → core.agent.loop).
+                    and _message_implies_tool_action(reformulated_message or "")
                     and not any(
                         getattr(s, "tool_name", "")
                         and getattr(s, "tool_name", "") not in ("todo_write",)
