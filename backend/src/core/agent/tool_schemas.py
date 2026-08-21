@@ -301,11 +301,11 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "shell",
-            "description": "Run a system command or list directory contents (ls/dir). Use for folder listings, finding files, git, disk checks, OS commands. To READ file contents use file_task — NOT shell ('cat'/'type' fail on PDFs/DOCX/XLSX). To CREATE a new file use file_write — do NOT stop after listing a folder if the user asked you to create a file there. Commands must match the current OS (Windows: PowerShell cmdlets like Get-ChildItem work).",  # noqa: E501
+            "description": "Run a system command. Use for folder listings, finding files, git, disk checks, OS commands. To READ file contents use file_task — NOT shell. To CREATE a file use file_write. Commands MUST match the current OS (Windows=PowerShell: Get-ChildItem, New-Item -ItemType Directory -Force; Unix=bash: ls, mkdir -p, cat, grep, find). NEVER use Unix syntax on Windows.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "Shell command; use 'dir <path>' (Windows) or 'ls <path>' (Unix) for listings"},  # noqa: E501
+                    "command": {"type": "string", "description": "Shell command — MUST match the OS (check env). Windows: Get-ChildItem, New-Item -ItemType Directory -Force. Unix: ls, mkdir -p, cat."},  # noqa: E501
                 },
                 "required": ["command"],
             },

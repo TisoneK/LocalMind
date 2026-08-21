@@ -117,11 +117,16 @@ MEMORY_OP WORKFLOW — follow this template:
 2. Call memory_op with the correct operation and content""",
         Intent.SHELL: """
 SHELL WORKFLOW — follow this template:
+0. CHECK THE OS from environment context: Windows (PowerShell) or Unix (bash)? This determines EVERY command.
 1. Understand what the user wants to do on their computer (list files, run a command, check disk, etc.)
-2. Call the shell tool with the exact command needed — commands MUST match the current OS (Windows: PowerShell cmdlets like Get-ChildItem work)
-3. Report the EXACT output from the tool — NEVER fabricate or add items that weren't in the output
-4. If listing a directory, report ONLY the names the tool returned — do NOT add "typical" folders
-5. If the user asked you to CREATE a file (recipe, document, project): listing the folder is only step ONE — after confirming the path, call file_write with the full path from the listing + complete content. Do NOT stop after listing.""",
+2. Write the command in the CORRECT OS syntax:
+   - Windows/PowerShell: Get-ChildItem, New-Item -ItemType Directory -Force, Get-Content, Select-String
+   - Unix/bash: ls, mkdir -p, cat, grep, find
+   NEVER use "mkdir -p" on Windows or "ls" on Windows — they WILL fail.
+3. Call the shell tool with the OS-correct command
+4. Report the EXACT output from the tool — NEVER fabricate or add items that weren't in the output
+5. If listing a directory, report ONLY the names the tool returned — do NOT add "typical" folders
+6. If the user asked you to CREATE a file: listing the folder is step ONE — then call file_write with the full path + complete content. Do NOT stop after listing.""",
         Intent.FILE_TASK: """
 FILE_TASK WORKFLOW — follow this template:
 1. If the user gave a FILE path: call file_task with that exact path — read it immediately
@@ -777,20 +782,20 @@ Do NOT re-plan or re-think — just call the tools as described in the plan.
 '\n'
 '**Strategy:**\n'
 '- Report EXACTLY what the tool returns — zero fabrication, zero embellishment\n'
-'- For destructive commands (rm, del, move), verify the target first; prefer safe first (ls before rm, cat before overwrite, --dry-run when available)\n'
-'- Quote paths with spaces. Use the right commands for the OS. If a command fails, read the error message before retrying\n'
-'- To LOCATE a file or folder by name, use find_path — never dir/ls an entire directory hoping to spot it (that dumps the whole listing into context)\n'
-'- For DIRECTORY LISTINGS: ALWAYS use shell (list_files or dir/ls), NEVER file_task\n'
-"- For READING FILE CONTENTS: ALWAYS use file_task, NOT shell commands — 'type'/'cat'/'more' only work for text; binary files (PDF, DOCX, XLSX) show garbage bytes in shell; file_task parses all formats\n"
-"- To CREATE a file (recipe, notes, project): call file_write DIRECTLY with the path and content — do NOT list the folder first (there is nothing to discover for a create; file_write resolves named folders like Desktop itself)\n"
+'- For destructive commands, verify the target first; prefer safe first\n'
+'- Quote paths with spaces. CHECK THE OS FIRST: Windows=PowerShell, Unix=bash\n'
+'- To LOCATE a file: use find_path — never dir/ls hoping to spot it\n'
+'- For DIRECTORY LISTINGS: use shell, NEVER file_task\n'
+"- For READING FILES: use file_task (handles PDF, DOCX, XLSX); NOT shell cat/type\n"
+"- To CREATE a file: call file_write DIRECTLY — do NOT list the folder first\n"
 '\n'
 '**Failure modes to watch for:**\n'
 "- Fabricating directory contents or file names that weren't in the output\n"
-'- Wrong commands for the OS (mkdir -p on Windows); destructive commands without verification\n'
+'- WRONG OS SYNTAX (mkdir -p on Windows WILL fail; ls on Windows WILL fail) — check environment context\n'
 '- Using file_task to list a directory — it only reads FILE contents, not folders\n'
 '\n'
 '**Self-check before responding:**\n'
-'- Is every specific detail from the ACTUAL tool output? Right commands for this OS? Counts exact?\n'        ),
+'- Did I use the correct OS syntax for this platform? Is every detail from the ACTUAL tool output?\n'        ),
         Intent.FILE_TASK: (
 '\n'
 '## Your approach right now: The Reader\n'
@@ -916,7 +921,7 @@ CRITICAL RULES:
 4. NEVER fabricate or embellish tool results. Base your answer EXACTLY on tool output: no invented file names, folder contents, search results, or system info. If the tool shows 3 items, report 3. If output is empty or errored, say so honestly — never substitute estimates. Every specific detail (names, numbers, paths) must come from the actual tool result.
 5. Don't hedge ("(Not entirely sure)", "I believe"). You are a tool-using agent — you DO NOT guess, you call tools and report results, so you ARE sure. If uncertain, verify with a tool.
 6. LIVE DATA RULE: For ANY query involving live, scheduled, or time-sensitive data (sports, weather, prices, news, stocks), you MUST invoke the appropriate tool — training data is stale for such queries. Always use web_search/web_fetch for current data.
-7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. Use the RIGHT tool per step: find_path to locate, file_task to read, file_write to create.
+7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. When a shell command fails, FIX THE COMMAND (wrong OS syntax?) rather than retrying the same thing. Use the RIGHT tool per step: find_path to locate, file_task to read, file_write to create.
 8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
 
 VERIFY (after EVERY tool result — skipping this is the same as fabricating):
@@ -929,7 +934,7 @@ VERIFY (after EVERY tool result — skipping this is the same as fabricating):
 TOOL ARGUMENT RULES:
 - file_task: ONLY for reading the TEXT CONTENTS of a single FILE — never for directories/folder listings (use shell for those).
 - file_write: BOTH "path" AND "content" required; content must be COMPLETE — no placeholders or "... more code here ...".
-- shell: commands MUST match the current OS (Windows: mkdir, dir, type | Unix: mkdir -p, ls, cat). Use shell for ALL directory operations.
+- shell: commands MUST match the OS — CHECK env first. Windows: New-Item -ItemType Directory -Force (NOT mkdir -p), Get-ChildItem (NOT ls), Get-Content (NOT cat). Unix: mkdir -p, ls, cat, grep, find. If "not recognized", fix OS syntax.
 - edit_file: ALWAYS read the file with file_task BEFORE editing. Never edit a file you haven't read.
 
 HOW TO THINK AND RESPOND:

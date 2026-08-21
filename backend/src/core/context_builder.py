@@ -135,20 +135,22 @@ def _build_environment_context(
     # ── OS-specific guidance ──
     if system == "Windows":
         os_guidance = (
-            "Windows: use backslash `\\\\` for paths, `.bat`/`.cmd` for scripts, not `.sh`"
+            "CRITICAL: You are on WINDOWS with PowerShell. NEVER use Unix commands (mkdir -p, ls, cat, rm -rf, grep, find). Use ONLY PowerShell: New-Item -ItemType Directory -Force, Get-ChildItem, Get-Content, Set-Content, Remove-Item, Select-String. Use backslash `\\\\` for paths."
         )
-        # Session 189: the shell tool runs PowerShell-flavored commands through
-        # the real PowerShell executable on Windows — list cmdlet-style
-        # commands so the model generates syntax the executor actually runs
-        # (Get-ChildItem/Where-Object instead of dir/type, which failed with
-        # "not recognized as an internal or external command").
         common_cmds = (
-            "Common commands: `Get-ChildItem`, `Get-Content`, `Select-String`, `Copy-Item`"
+            "Windows PowerShell commands — USE THESE ONLY:\n"
+            "  mkdir -> New-Item -ItemType Directory -Force\n"
+            "  ls/dir -> Get-ChildItem\n"
+            "  cat/type -> Get-Content\n"
+            "  grep -> Select-String\n"
+            "  find -> Get-ChildItem -Recurse -Filter\n"
+            "  cp -> Copy-Item | mv -> Move-Item | rm -> Remove-Item\n"
+            "  pwd -> Get-Location | echo -> Write-Output"
         )
         shell_name = "PowerShell"
     else:
         os_guidance = "Unix/Linux: use forward slash `/` for paths, `.sh` for scripts"
-        common_cmds = "Common commands: `ls`, `cat`, `cp`, `mv`, `mkdir`, `rm`, `chmod`"
+        common_cmds = "Unix commands: `ls`, `cat`, `cp`, `mv`, `mkdir -p`, `rm`, `chmod`, `grep`, `find`"
         shell_name = "bash"
 
     # ── Hardware (lightweight — no psutil dependency) ──
@@ -242,7 +244,7 @@ You have access to these tools: {tool_summary}
 
 ## What You Know
 - Today is {date_str}. Use this to ground all time-sensitive queries.
-- You are running on {system} {release}. Use {shell_name}-compatible commands.
+- You are running on {system} {release}. Use {shell_name}-compatible commands ONLY. If Windows, NEVER use mkdir -p, ls, cat, grep — use PowerShell equivalents.
 - The user's home directory is {home}. Default file operations should be relative to here.
 - You have {memory_count} facts in memory about this user."""
 
