@@ -331,3 +331,64 @@ Updated `test_conversational_question_size_caps` to use 26-word fixture (was 22,
 
 - `e200baf` — fix(prompt): stop system-prompt pollution from workspace context (334)
 - PAT stripped from `git config remote.origin.url` after push
+
+## Session 335 — 2026-08-22 — Knowledge imperatives bypass blocked-keyword guard (system-prompt leak fix)
+
+### Diagnosis
+
+User reported the RAM-vs-storage prompt leaked system-prompt text. The model's "Approach" block literally quoted the system prompt instruction back to the user:
+> *"The instruction says: 'For ordinary conversation, answer directly in plain text and do not call describe_tool.'"*
+
+Confirmed root cause: `RAM` is in `_CONVERSATIONAL_BLOCKED_KEYWORDS` (it's a sysinfo keyword for "how much RAM do I have"). The prompt didn't match any conversational opener (`Summarize` wasn't in the list) AND tripped the blocked-keyword guard, so it fell through to the parent-agent pipeline. The pipeline injected system prompt + workspace context + tool catalog, and the model's `thinking_token` stream leaked both reasoning AND quoted system instructions.
+
+### Three-layer fix (commit 9efaea1)
+
+1. **Add knowledge-imperative openers** (`trivial_input.py`)
+   - `summarize`, `compare`, `contrast`, `outline`, `list`, `name`
+   - Join the existing brainstorming imperatives (`give me`, `suggest`, `propose`, `recommend`, `brainstorm`) as recognized fast-path entry points
+
+2. **Bypass `_CONVERSATIONAL_BLOCKED_RE` for messages starting with a knowledge imperative**
+   - The imperative makes intent unambiguous: "Summarize the difference between RAM and storage" is exposition (RAM is the topic), NOT a request for the user's RAM specs
+   - File-extension and URL patterns are still checked (structural tool signals)
+
+3. **Hard-block debugging keywords even under knowledge imperatives**
+   - `error`, `bug`, `exception`, `crash`, `traceback`, `failed`, `failure`
+   - "Explain this error message" is a debugging request — the user has a real error and needs tool evidence (file reads, shell output, code inspection), not exposition about errors
+
+4. **Update `message_implies_tool_action` to return False for knowledge imperatives**
+   - So the parent-agent loop's `workspace_state` injection is skipped (in case the fast-path doesn't catch a future prompt shape)
+   - File-ext and URL patterns still return True
+
+### Live-verified (bankofai/deepseek-v4-flash, isolated port 8765)
+
+| Prompt | Before (user's trace) | After fix #335 |
+|--------|----------------------|----------------|
+| "Summarize the difference between RAM and storage." | 13.0s, 2,086 prompt tokens, 2 iter, **system-prompt text leaked to UI** | **2.2s**, ~150 prompt tokens, 1 iter, **0 thinking_token events (no leak!)** |
+| "Compare TCP and UDP." | (would have been polluted) | **5.6s**, fast-path, 238-word comparison table |
+
+Both prompts:
+- 0 tools called (no `describe_tool`, no `shell`)
+- 0 `thinking_token` events in the SSE (no system-prompt leak!)
+- 0 `workspace_state` log entries (no git/Branch: main pollution)
+- Correct, well-formatted answers
+
+### Test contract
+
+7 new tests in `tests/core/test_trivial_input.py`:
+- `test_conversational_question_knowledge_imperative_openers` — RAM-vs-storage + TCP-vs-UDP + gravity + photosynthesis + coffee + planets
+- `test_knowledge_imperative_bypasses_blocked_keywords` — RAM/CPU/SSD/HDD/GPU under summarize/explain/compare/describe
+- `test_knowledge_imperative_does_not_bypass_file_or_url_patterns` — `summarize app.py`, `compare URLs` still fall through
+- `test_knowledge_imperative_does_not_bypass_debugging_keywords` — `explain error`, `describe bug`, `summarize traceback`, etc. still fall through
+- `test_message_implies_tool_action_knowledge_imperative_is_false` — workspace_state injection skipped
+- `test_message_implies_tool_action_real_sysinfo_still_true` — `how much RAM do I have` still implies tool action
+- `test_message_implies_tool_action_knowledge_with_file_pattern` — `summarize app.py` still implies tool action
+
+### Regression check
+
+- Full backend suite: **2120 pass / 0 fail / 2 skipped** (was 2113/0/2 — +7 new tests)
+- Full frontend suite: **262 pass / 0 fail**
+
+### Pushed
+
+- `9efaea1` — fix(prompt): knowledge imperatives bypass blocked-keyword guard (335)
+- PAT stripped from `git config remote.origin.url` after push
