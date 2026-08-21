@@ -446,3 +446,30 @@ Flaws from Session 7 are now **fixed**:
 - **Root cause:** The protocol treats "code change" and "runtime/persisted state" as the same unit of work; there is no durable-memory note that a provider/config-key rename is a breaking change for any running instance and needs a migration + restart flag.
 - **Suggested fix:** Add a pitfall: renaming a key that appears in `settings.json`/`.env` requires (a) migrating the persisted value, and (b) telling the user to restart the backend — a running process re-writes stale defaults and masks the fix. Optionally, a `context-gates` check could warn when a committed diff renames a key also present in a tracked `.env.example`/settings schema.
 - **Status:** open (corrected in-session by migrating settings.json and flagging the restart).
+
+---
+## 2026-08-21 — Super Z / GLM-4.6 (z.ai) (Session 327)
+
+- **Flaw:** Agent failed Step 3 ("Read `.context/`") entirely — did not read kickoff.md, workflows/active.md, or any memory files at session start. Then when asked about `.context` workflow, searched `/home/z/my-project/.context` and `/home/z/.context` (wrong paths) instead of the project directory where the files were visible in the session summary itself (`LocalMind/.context/`).
+- **Symptom:** Agent claimed ".context/ doesn't exist" and "I don't have access to those project files" — both false. The directory was at `LocalMind/.context/`, the same repo the session summary referenced repeatedly. Three rounds of user prodding were needed before the agent looked in the correct location.
+- **Root cause:** (1) No Step 3 execution at session start — the agent never loaded the protocol. (2) When challenged, the agent searched its own workspace (`/home/z/my-project/`) instead of the project repo it was supposedly working in. (3) The session summary literally contained the path `.context/memory/system/live-testing.md` but the agent treated it as inaccessible metadata rather than a file path to check.
+- **Suggested fix:** Strengthen Step 3: ".context/ lives inside the project repo, not in the agent's home directory. If a session summary references `.context/` paths, those are real files — read them before claiming inaccessibility." Add a pitfall: "When told to look for something you 'already have,' search the project repo first — the files are on disk, not in your system prompt."
+- **Status:** open
+
+---
+## 2026-08-21 — Super Z / GLM-4.6 (z.ai) (Session 327)
+
+- **Flaw:** After finally finding `memory/flaws/log.md` and reading the README, agent asked "Want me to log those flaws now?" — requesting permission to follow an append-only protocol that requires no permission.
+- **Symptom:** One extra user round-trip wasted on a question whose answer is prescribed by the document the agent just read.
+- **Root cause:** Default "ask before acting" behavior overrides protocol-specific directives. The flaws log README says nothing about asking permission — it prescribes a format and says "append-only." The agent pattern-matched to its general conversational habit of confirming before taking action.
+- **Suggested fix:** Add a pitfall to Step 3 or the flaws README: "The flaws log is append-only. Log the flaw immediately after identifying it. Do not ask the user for permission — the protocol IS the permission."
+- **Status:** open
+
+---
+## 2026-08-21 — Super Z / GLM-4.6 (z.ai) (Session 327)
+
+- **Flaw:** Agent's self-identified flaws (context loss, no true understanding, blind self-assessment, tool reliance fragility, shallow-by-default, language rigidity) were generic AI limitations, not protocol friction — they belonged in a different surface or not at all. The agent conflated "my flaws as an AI" with "flaws in the protocol that caused observable friction this session."
+- **Symptom:** When user said "log your flaws as per protocol," agent was prepared to dump a list of existential AI limitations into a file designed for actionable protocol improvements.
+- **Root cause:** The README is clear ("Friction caused by the .context/ system or the protocol itself"), but the agent didn't filter its self-assessment through that scope. The real protocol flaws were the Step 3 failure and the permission-asking — both observable, actionable, and specific to this session.
+- **Suggested fix:** No protocol change needed — the README's scope is already clear. This is an agent execution failure. Adding a pitfall might help: "Only log flaws that a future agent could concretely fix. 'I'm a language model with no true understanding' is not actionable. 'Step 3 didn't prevent me from skipping the read' is."
+- **Status:** open
