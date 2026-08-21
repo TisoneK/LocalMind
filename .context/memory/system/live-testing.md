@@ -226,3 +226,14 @@ Live-traced the cyber-café prompt through ALL 4 fixes:
 Full backend suite: **2098 pass / 10 fail (all pre-existing)** — verified by stashing all 4 fixes and confirming the same 10 failures exist on baseline. My changes introduced ZERO new test failures.
 
 Full frontend suite: **262 pass / 0 fail** — including updated ThinkingBlock tests.
+
+## Push & cleanup
+
+- All 4 commits pushed to `main` (32c56a4, 8bdeb8c, 7086fbd, dbc49fa, 13fcb1f)
+- PAT stripped from `git config remote.origin.url` (kept clean per protocol)
+- `tasks/current.md` updated to reflect Session 332 completion
+- `sessions/2026-08-22-332/notes.md` retains the per-session plan
+
+## Summary
+
+Session 332 reproduced the user's cyber-café duplicate-answer bug, identified the root cause (mid-iteration text streamed before acceptance gate, then re-streamed after replan), and shipped 4 surgical fixes that together reduced latency from 57.7s to 8.6s, eliminated the duplicate, suppressed raw thinking exposure for fast-pathed turns, and renamed the "Thought process" UI label to "Approach".
