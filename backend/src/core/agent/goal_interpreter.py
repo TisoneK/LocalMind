@@ -279,9 +279,15 @@ _QUOTED_FOLDER_RE = re.compile(
 
 # File tokens: a path-like token with a code/config/text extension. Same
 # shape as verify._PATH_RE so every derived item is checkable by the gate.
+# Two alternatives: (1) normal paths with a leading name
+# component ("src/app.tsx"), (2) dotfiles (".env", ".gitignore")
+# which start with a dot and have no name before it.
+_DOTFILE_EXT = ("env", "gitignore", "editorconfig", "prettierrc", "eslintrc",
+                "babelrc", "npmrc", "nvmrc", "dockerignore", "cfignore")
 _FILE_TOKEN_RE = re.compile(
     r"([\w./\\-]+\.(?:py|js|ts|tsx|jsx|md|json|txt|toml|yaml|yml|html|css|sh|"
-    r"sql|c|h|cpp|go|rs|java|rb|php|ipynb|cfg|ini|env|log|bat|ps1))\b",
+    r"sql|c|h|cpp|go|rs|java|rb|php|ipynb|cfg|ini|log|bat|ps1))\b"
+    r"|\.(?:" + "|".join(_DOTFILE_EXT) + r")\b",
     re.IGNORECASE,
 )
 
@@ -332,7 +338,9 @@ def derive_goal_items(message: str, max_items: int = _MAX_GOAL_ITEMS) -> list[st
 
     if commits_to_write:
         for m in _FILE_TOKEN_RE.finditer(message):
-            token = _clean_token(m.group(1))
+            # Group 1 = normal file token ("src/app.tsx").
+            # No group 1 but group 0 = dotfile (".env").
+            token = _clean_token(m.group(1) or m.group(0))
             if not token:
                 continue
             _add(f"file exists at {token} with content")
