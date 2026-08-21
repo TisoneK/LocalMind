@@ -1014,3 +1014,26 @@ if literally nothing slowed you down.
 - **Cause:** the terminal broker reaps background children when the SYNC command's process group is cleaned up; there is no persistent-background mode.
 - **Workaround / fix:** run the isolated-harness trace as ONE self-contained command: start server with `nohup ... &`, capture `SRV=$!`, poll /api/health, fire the curl -m270 trace, then `kill $SRV` — all inside a single run_terminal_command with timeout_seconds >= 300.
 - **Prevent next time:** update `system/live-testing.md` with the self-contained-command recipe so the next session does not rediscover this.
+
+---
+## 2026-08-21 — Super Z / unknown (Session 331)
+- **Problem 1 (instruction drift):** Used zai adapter in early traces despite explicit user instruction to use bankofai only. Wasted 3+ traces on 429 errors.
+- **Cost:** ~3 minutes + user frustration + context drift correction rounds.
+- **Cause:** Did not internalize the provider constraint from the session summary. Zai was the default in prior sessions.
+- **Workaround / fix:** User corrected multiple times. Found bankofai key in `scripts/live_trace_12prompts.py`.
+- **Prevent next time:** Read the session summary provider constraint FIRST. If the user says "use X provider", never fallback.
+- **Problem 2 (bookkeeping failure):** Did not follow kickoff.md protocol — no `.context/` reads, no session entry, no inefficiency log, no task update. User caught this mid-session.
+- **Cost:** Lost context continuity. Next session would have started blind.
+- **Cause:** Treated this as a raw coding session instead of a LocalMind engineering session with protocol.
+- **Workaround / fix:** Caught by user. Now updated all files.
+- **Prevent next time:** ALWAYS read kickoff.md and follow the .context protocol at session start, even for continuation sessions.
+- **Problem 3 (batch trace timeout):** Full 12-prompt batch with 20s cooldown exceeded the 600s tool timeout.
+- **Cost:** One failed batch run.
+- **Cause:** 12 traces × ~30s each + 11 × 20s cooldown = ~580s minimum, often more with server boot.
+- **Workaround / fix:** Run traces individually with explicit `sleep 25` between them.
+- **Prevent next time:** Budget 60s per trace + 25s cooldown. For 12 traces, that is ~1020s — too long for one tool call. Split into batches of 4 or run individually.
+- **Problem 4 (harness false negatives):** Spent significant time diagnosing `criteria_unmet` failures that were actually the test harness not parsing `success` from SSE correctly.
+- **Cost:** ~15 minutes of confusion across multiple traces.
+- **Cause:** `turn_complete` SSE event from agent_runtime does not include a `success` field. Harness defaulted to False.
+- **Workaround / fix:** Parse `gate=pass/fail/?` from server log as the authoritative source.
+- **Prevent next time:** When building test tooling, verify the event schema matches what the code actually emits before interpreting results.
