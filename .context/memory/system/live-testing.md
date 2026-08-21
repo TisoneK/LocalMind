@@ -120,3 +120,32 @@ Run with `timeout_seconds` >= 300 so the 270s curl fits.
   `backend/.env` — copy that file to know what's really loaded.
 - glm-4.5-flash reasoning can't be bounded by a budget param — `reasoning_effort`
   (level) is the lever; unbounded thinking overflows context ("context too long").
+
+## Session 332 — 2026-08-22 — Cyber-café duplicate-answer reproduction + fixes
+
+### Baseline (before any fix)
+
+**Provider:** bankofai / deepseek-v4-flash (isolated port 8765, scratch LOCALMIND_HOME)
+**Prompt:** "Give me three ideas for improving a cyber café business."
+**Latency:** 13.4s — **0 tools** — 0 errors
+**SSE events:** 14 obs_event, 76 thinking_token, **2 token, 1 done**
+**Bug confirmed:** the 2 token events each carry a COMPLETE answer (~1700 chars each):
+- Token 1: "Here are three practical ideas...Diversify beyond pure browsing...If you want, I can help draft a loyalty-program structure..."
+- Token 2: "Here are three practical ideas...Diversify beyond raw hourly PC rental...Want me to dig deeper into any one of these?"
+
+Both open with the same line; user-visible bubble = 516 words / 3439 chars (suspected duplicate via heuristic: idea markers > 6 AND word_count > 350).
+
+**Root cause** (verified by code reading + SSE inspection):
+- `loop.py:4584-4637` streams `chunk.text` live as it arrives (`yield StreamChunk(text=_chunk_clean, ...)`)
+- `loop.py:4652-4669` runs `_acceptance_gate_at_final_answer` AFTER streaming
+- For ANALYZE intent with zero tools, the gate's success criterion `"analysis produced findings with evidence"` fails (no tools → no evidence)
+- `loop.py:4670-4673` increments `_gate_replan_count` and `continue`s
+- Iteration 2 then streams MORE text into the same SSE stream
+- Frontend `useLocalMind.ts:690-726` accumulates `currentContent += token` across iterations — no boundary awareness
+
+**Fix plan (each fix = its own sub-session):**
+- 332-B: Buffer per-iteration text; only emit AFTER gate confirms is_final=True
+- 332-C: Wire `is_trivial_input` + `is_conversational_question` fast-path into `agent_runtime._process_unlocked`; extend openers
+- 332-D: Add replanning threshold — don't replan when nothing changed; cap zero-tool replans at 1
+- 332-E: Replace raw "Thought process" UI with user-facing activity summary
+

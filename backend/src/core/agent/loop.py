@@ -4497,9 +4497,12 @@ class AgentLoop:
                                 )
                         continue  # continue the loop so the model can produce a final answer
 
-                # Yield the clean initial buffer
-                if _stripped_buffer.strip():
-                    yield StreamChunk(text=_stripped_buffer, done=False)
+                # Session 332-B: do NOT yield the initial buffer here. Buffer
+                # the iteration's text and only emit it AFTER the acceptance
+                # gate confirms is_final=True. If the gate fails, the buffered
+                # text is discarded so the user doesn't see a duplicate answer
+                # from a doomed iteration.
+                # (Previously: `if _stripped_buffer.strip(): yield StreamChunk(text=_stripped_buffer, done=False)` here.)
 
                 # If the stream already ended (short response), we're done
                 if stream_ended_early:
@@ -4537,7 +4540,19 @@ class AgentLoop:
                     if not _gate_final:
                         _gate_replan_count += 1
                         logger.info("[agent.loop] gate replan #%d", _gate_replan_count)
+                        # Session 332-B: discard this iteration's text — don't
+                        # emit it. The next iteration will produce the answer.
+                        if _obs:
+                            _obs.emit(
+                                "agent_loop_iteration_discarded",
+                                iteration=iteration + 1,
+                                reason="gate_failed_text_withheld",
+                                discarded_chars=len(_stripped_buffer),
+                            )
                         continue
+                    # Session 332-B: gate passed — flush the buffered text now.
+                    if _stripped_buffer.strip():
+                        yield StreamChunk(text=_stripped_buffer, done=False, usage=dict(_provider_usage))
                     # Session 237: the gate passed but the model may have run
                     # the tool without writing an answer — synthesize the real
                     # content from evidence so the reply isn't just "✓ n/n".
@@ -4579,8 +4594,13 @@ class AgentLoop:
                     return
 
                 # Stream remaining chunks — with mid-stream MiniMax detection
+                # Session 332-B: buffer chunks instead of yielding live. Emit
+                # only after the gate confirms is_final=True. If the gate fails,
+                # the buffer is discarded so the user doesn't see a duplicate
+                # answer from a doomed iteration.
                 _mid_stream_minimax_buffer = ""
                 _mid_stream_text = ""
+                _iteration_clean_text = ""  # Session 332-B
                 async for chunk in result:
                     # B-2026-08-02-2 (A2): respond to abort DURING streaming —
                     # the longest phase (up to PER_CALL_TIMEOUT_SECS). is_set()
@@ -4631,10 +4651,9 @@ class AgentLoop:
                     # whitespace; the final answer is assembled from full_text.
                     _chunk_clean = _strip_minimax_tool_calls_stream(filtered_text)
                     if _chunk_clean:
-                        # Keep the terminal marker until report enforcement has
-                        # completed below; otherwise the client can finalize
-                        # before the worker report is delivered.
-                        yield StreamChunk(text=_chunk_clean, done=False, usage=dict(_provider_usage))
+                        # Session 332-B: buffer instead of yield. The flush
+                        # happens after the acceptance gate confirms is_final.
+                        _iteration_clean_text += _chunk_clean
 
                 trace.final_response = full_text
                 trace.steps.append(
@@ -4670,7 +4689,18 @@ class AgentLoop:
                 if not _gate_final:
                     _gate_replan_count += 1
                     logger.info("[agent.loop] gate replan #%d (alt)", _gate_replan_count)
+                    # Session 332-B: discard the buffered text — don't emit it.
+                    if _obs:
+                        _obs.emit(
+                            "agent_loop_iteration_discarded",
+                            iteration=iteration + 1,
+                            reason="gate_failed_text_withheld",
+                            discarded_chars=len(_iteration_clean_text),
+                        )
                     continue
+                # Session 332-B: gate passed — flush the buffered text now.
+                if _iteration_clean_text.strip():
+                    yield StreamChunk(text=_iteration_clean_text, done=False, usage=dict(_provider_usage))
                 # Session 237: gate passed but no model answer — synthesize the
                 # real content from tool evidence (not just "✓ n/n criteria met").
                 if not full_text.strip():
