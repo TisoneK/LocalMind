@@ -188,16 +188,26 @@ def _drain_live_lifecycle_events(obs: ObsCollector):
             )
 
 
-def _finalize_plan_todos(session_id: str) -> list[dict]:
+def _finalize_plan_todos(session_id: str, skip: bool = False) -> list[dict]:
     """Session 121: mark any plan todos the loop didn't explicitly advance as
     complete. The plan covers the whole turn, so when the turn ends the
     remaining steps are done (or moot) — this makes the persisted Todos panel
     agree with reality instead of leaving trailing "pending" rows.
 
+    Session 330: `skip=True` when the acceptance gate ended the turn with an
+    HONEST STOP (unmet goal criteria — the loop emitted
+    `agent_loop_gate_honest_stop`). Flipping the remaining plan todos then
+    would re-lie the self-mutating checklist: the unmet goal items would
+    show as complete and the panel would read 100% on a turn that did not
+    finish its work. On an honest stop the unmet items stay pending, so the
+    panel shows the true fraction.
+
     Returns the todos that were flipped so the SSE bridge can emit live
     todo_completed events. Best-effort — never raises into the stream."""
 
     flipped: list[dict] = []
+    if skip:
+        return flipped
     try:
         for row in _engine._store.list_todos(session_id):
             if row.get("id", "").startswith("plan-") and not row.get("completed"):
@@ -297,6 +307,12 @@ async def _event_stream(
     obs = ObsCollector()
     file_path_written = None
     file_name_written = None
+    # Session 330: set when the acceptance gate ended the turn with unmet
+    # goal criteria (agent_loop_gate_honest_stop). Captured from the
+    # collector's non-destructive history BEFORE the final drain; both
+    # _finalize_plan_todos call sites skip flipping plan todos on an honest
+    # stop so the unmet goal items stay pending (no false 100%).
+    _honest_stop = False
 
     # ── SSE keepalive state ──────────────────────────────────────────────
     # Track the last time we sent ANY SSE data. If more than KEEPALIVE_INTERVAL_S
@@ -731,6 +747,12 @@ async def _event_stream(
             # being buffered by the server's write buffer.
             await asyncio.sleep(0)
 
+        # Session 330: capture the honest-stop signal before the destructive
+        # flush (history survives drain, but read it now for clarity).
+        _honest_stop = any(
+            evt.type == "agent_loop_gate_honest_stop" for evt in obs.history()
+        )
+
         # Capture a structured observation before the destructive SSE flush.
         # The snapshot uses read-only collector access, so every event below
         # remains available to the existing stream bridge.
@@ -757,8 +779,10 @@ async def _event_stream(
 
         # Session 121: the plan covers the whole turn — mark any plan todos
         # the loop didn't advance as complete, live (the finally block repeats
-        # the DB update for aborted/disconnected streams).
-        for _td in _finalize_plan_todos(session_id):
+        # the DB update for aborted/disconnected streams). Session 330: skip
+        # on an honest stop — unmet goal items must stay pending (no false
+        # 100%), and the loop already completed the passed ones itself.
+        for _td in _finalize_plan_todos(session_id, skip=_honest_stop):
             yield _sse({"type": "todo_completed", "todo": _td})
 
     except Exception as exc:
@@ -794,10 +818,11 @@ async def _event_stream(
         # Session 121: mark any plan todos the loop didn't explicitly advance
         # as done — the plan covers the whole turn, so a turn that ended (even
         # via abort/timeout) means the remaining steps are done or moot.
+        # Session 330: skip on an honest stop (same reason as above).
         # Best-effort DB-only here (no yield in finally); the live SSE update
         # is emitted on the normal completion path above.
         try:
-            _finalize_plan_todos(session_id)
+            _finalize_plan_todos(session_id, skip=_honest_stop)
         except Exception:
             pass
 

@@ -894,6 +894,22 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         parent = self._parent_agent or ParentAgent(adapter=adapter, loop=self._agent_loop)
         requested_tools = frozenset(allowed_tool_names) if allowed_tool_names is not None else AGENT_ALLOWED_TOOLS
         parent_tools = requested_tools.intersection(AGENT_ALLOWED_TOOLS)
+        # B-2026-08-20-23 / Session 330: the FIXED goal checklist. Derive the
+        # user's concrete deliverables from the message (deterministic, zero
+        # LLM calls) and hand them to the loop as BOTH the Todos panel plan
+        # (fixed denominator — never mutated by what ran) and the acceptance
+        # gate's success criteria (completion gated on evidence against these
+        # items, not on tool-call success). Conversational/abstract turns
+        # derive [] → None → no contract, legacy behavior unchanged.
+        from core.agent.goal_interpreter import derive_goal_items
+
+        goal_items = derive_goal_items(message)
+        if goal_items:
+            collector.emit(
+                "agent_goal_checklist",
+                goal_count=len(goal_items),
+                goals="; ".join(goal_items)[:400],
+            )
         response_chunks: list[str] = []
         # Session 266: accumulate the reasoning trace so the persisted message
         # carries the thinking block the user saw (survives reload). The loop
@@ -918,6 +934,18 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 task_type="",
                 reformulated_message=message,
                 agent_context_override=kernel.parent_context,
+                # Fixed goal checklist: seeds the Todos panel (plan-{i}, the
+                # denominator never mutates) AND the acceptance gate's
+                # success criteria (completion gated on evidence against
+                # these items). None when nothing concrete was derived.
+                plan_steps=goal_items or None,
+                success_criteria=goal_items or None,
+                # The criteria must gate at the FINAL-ANSWER point (the
+                # model says done → gate verifies → replan or honest
+                # report), never at the iteration head — an early
+                # criteria-verified stop would end the turn with a bare
+                # "✓ n/n" summary before the model writes its synthesis.
+                skip_head_gate=bool(goal_items),
             ):
                 if chunk.usage:
                     usage.update(chunk.usage)

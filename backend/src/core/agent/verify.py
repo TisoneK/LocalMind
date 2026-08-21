@@ -100,6 +100,15 @@ _PATH_RE = re.compile(
 # ── Evidence extraction ──────────────────────────────────────────────────────
 
 
+def _norm(s: str) -> str:
+    """Normalize a string for substring evidence matching: lowercase and
+    treat Windows backslashes as path separators. Session 330 — a criterion
+    derived from the user's forward-slash message must match tool evidence
+    the model produced with backslashes on Windows (same disease family as
+    S264/S325: platform-aware path handling)."""
+    return (s or "").lower().replace("\\", "/")
+
+
 def _evidence(trace: AgentTrace) -> list[dict]:
     """Flatten trace steps into tool-evidence records."""
     return [
@@ -177,8 +186,8 @@ def _check_file(
                 return True, f"{raw} exists on disk"
     # Evidence fallback: a write/edit tool input or observation names the file.
     for ev in _evidence(trace):
-        hay = f"{ev['input']} {ev['observation']}".lower()
-        if any(raw.lower() in hay for raw in paths):
+        hay = _norm(f"{ev['input']} {ev['observation']}")
+        if any(_norm(raw) in hay for raw in paths):
             return True, f"{paths[0]} referenced in tool evidence"
     return False, f"{paths[0]} not found on disk or in tool evidence"
 
@@ -284,8 +293,8 @@ def _fallback_evidence(criterion: str, trace: AgentTrace) -> tuple[bool, str]:
     if not keys:
         return False, "criterion has no checkable tokens"
     for ev in _evidence(trace):
-        hay = f"{ev['input']} {ev['observation']}".lower()
-        if any(key in hay for key in keys):
+        hay = _norm(f"{ev['input']} {ev['observation']}")
+        if any(_norm(key) in hay for key in keys):
             return True, "tool evidence quotes the criterion's key tokens"
     return False, "no tool evidence quotes the criterion's key tokens"
 

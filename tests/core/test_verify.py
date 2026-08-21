@@ -319,3 +319,55 @@ def test_format_gate_results_unmet():
 
 def test_format_gate_results_empty():
     assert format_gate_results([]) == ""
+
+
+# ── Windows separator tolerance (Session 330) ───────────────────────────────
+
+
+def test_file_criterion_matches_backslash_evidence():
+    """A criterion derived from the user's forward-slash message must match
+    tool evidence the model produced with Windows backslashes — same disease
+    family as S264/S325 (platform-aware path handling). Without the
+    separator normalization the write evidence "Dev\\path-test\\a.txt"
+    would not match the criterion's "Dev/path-test/a.txt" token."""
+    from core.agent.models import AgentStep
+
+    trace = AgentTrace()
+    trace.steps.extend(
+        [
+            AgentStep(
+                iteration=1,
+                thought="",
+                tool_name="shell",
+                tool_input=r"mkdir Dev\path-test",
+                observation="(command completed with no output)",
+            ),
+            AgentStep(
+                iteration=2,
+                thought="",
+                tool_name="file_write",
+                tool_input=r"Dev\path-test\a.txt",
+                observation=r"Wrote 5 bytes to Dev\path-test\a.txt.",
+            ),
+        ]
+    )
+    results = evaluate_criteria(
+        ["file exists at Dev/path-test/a.txt with content"],
+        trace,
+        cwd="/nonexistent-cwd",
+    )
+    assert results[0][1] is True, results[0]
+
+
+def test_fallback_criterion_matches_backslash_evidence():
+    trace = _trace_with([_shell_step("mkdir Dev\\path-test", "ok")])
+    results = evaluate_criteria(["folder created at Dev/path-test"], trace, cwd="/nonexistent-cwd")
+    assert results[0][1] is True, results[0]
+
+
+def test_evidence_still_required_with_backslashes():
+    """Separator tolerance must not invent evidence: no tool ran -> unmet."""
+    trace = _trace_with([])
+    results = evaluate_criteria(["folder created at Dev/path-test"], trace, cwd="/nonexistent-cwd")
+    assert results[0][1] is False
+    assert "no tool evidence" in results[0][2]

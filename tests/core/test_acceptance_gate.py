@@ -19,7 +19,6 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from core.agent.loop import _SAME_TOOL_REPLAN_CAP, AgentLoop, same_tool_failure_streak
 from core.agent.models import AgentStep, AgentTrace
 from core.models import Intent, StreamChunk
@@ -432,6 +431,156 @@ async def test_gate_unmet_at_cap_is_honest_final():
     # Honest report: the unmet criterion is stated, no replan fired at cap.
     assert "tsc clean" in suffix
     assert adapter.replan_calls == []
+
+
+@pytest.mark.asyncio
+async def test_gate_honest_stop_emits_event_and_todo_state():
+    """Session 330: at the cap with unmet criteria the gate must emit the
+    honest-stop signal + per-goal todo state — the panel shows the TRUE
+    fraction and the SSE bridge skips finalizing the unmet items."""
+    loop = AgentLoop(adapter=MagicMock())
+    obs = ObsCollector()
+    trace = _trace_with_tool_runs(
+        [("shell", "pytest", "$ pytest\n1 passed")],
+        criteria=["pytest passes", "tsc clean"],
+    )
+    suffix, is_final = await loop._acceptance_gate_at_final_answer(
+        trace=trace,
+        iteration=7,  # last allowed iteration
+        effective_max_iter=8,
+        loop_messages=[],
+        observation_log="$ pytest\n1 passed",
+        active_adapter=_ReplanAdapter(),
+        intent=Intent.SHELL,
+        obs=obs,
+        plan_steps=["run tests", "typecheck"],  # the fixed goal checklist
+    )
+    assert is_final is True
+    assert "✗ 1/2 criteria met" in suffix
+    events = obs.history()
+    types = [e.type for e in events]
+    # Honest-stop signal present so the SSE bridge skips finalization.
+    assert "agent_loop_gate_honest_stop" in types
+    honest = next(e for e in events if e.type == "agent_loop_gate_honest_stop")
+    assert honest.data["unmet_count"] == 1
+    # Per-goal todo state: the PASSED item completed, the unmet one NOT.
+    completed_ids = [
+        e.data.get("id") for e in events if e.type == "todo_completed"
+    ]
+    assert "plan-0" in completed_ids
+    assert "plan-1" not in completed_ids
+
+
+@pytest.mark.asyncio
+async def test_emit_honest_stop_passed_only():
+    loop = AgentLoop(adapter=MagicMock())
+    obs = ObsCollector()
+    results = [("a exists", True, "ok"), ("b exists", False, "not found")]
+    loop._emit_honest_stop(["a exists", "b exists"], results, obs, ["a", "b"])
+    types = [e.type for e in obs.history()]
+    assert "agent_loop_gate_honest_stop" in types
+    completed_ids = [e.data.get("id") for e in obs.history() if e.type == "todo_completed"]
+    assert completed_ids == ["plan-0"]
+
+
+@pytest.mark.asyncio
+async def test_loop_skip_head_gate_prevents_premature_criteria_stop():
+    """Session 330: with a harness-derived goal checklist the criteria gate
+    must NOT fire at the iteration head — an early criteria-verified stop
+    would end the turn with a bare "✓ n/n" before the model's synthesis.
+    The gate still runs at the final-answer point instead."""
+    loop = AgentLoop(adapter=MagicMock())
+    obs = ObsCollector()
+    adapter = _GateLoopAdapter()
+    called = []
+
+    def always_done(iterations, wall_clock_secs, last_tool_result, trace):
+        called.append(iterations)
+        trace.gate_passed = True
+        trace.gate_summary = "✓ 1/1 criteria met"
+        return True, trace.gate_summary
+
+    chunks = []
+    async for chunk in loop.run(
+        messages=[{"role": "user", "content": "create hello repo"}],
+        intent=Intent.SHELL,
+        initial_tool_result=None,
+        available_tools=[],
+        adapter=adapter,
+        is_done_fn=always_done,
+        skip_head_gate=True,  # goal-checklist turns: gate at final-answer only
+        obs=obs,
+    ):
+        chunks.append(chunk)
+
+    # The head gate never ran — the model call proceeded normally (the
+    # head-gate-preempted control case would show chat_with_tools_calls == 0).
+    assert called == []
+    assert adapter.chat_with_tools_calls >= 1
+    assert any(c.done for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_gate_goal_checklist_no_tool_evidence_replans():
+    """Session 330 live-verified hole: with a goal checklist present, a turn
+    where the model ran NO tool must NOT be accepted — the model committed to
+    work but did nothing (live trace: "I'll set up the tools needed for file
+    operations.", zero tool calls, zero files, yet 3/3 todos completed). It
+    must replan so the loop continues toward the deliverables."""
+    loop = AgentLoop(adapter=MagicMock())
+    obs = ObsCollector()
+    criteria = [
+        "file exists at a.txt with content",
+        "file exists at b.txt with content",
+        "folder created at path-test",
+    ]
+    trace = _trace_with_tool_runs([], criteria=criteria)
+    adapter = _ReplanAdapter()
+    loop_messages = [{"role": "user", "content": "create a.txt and b.txt"}]
+    suffix, is_final = await loop._acceptance_gate_at_final_answer(
+        trace=trace,
+        iteration=0,
+        effective_max_iter=8,
+        loop_messages=loop_messages,
+        observation_log="",
+        active_adapter=adapter,
+        intent=Intent.SHELL,
+        obs=obs,
+        plan_steps=criteria,
+    )
+    assert is_final is False
+    assert suffix == ""
+    assert len(adapter.replan_calls) == 1
+    assert "ACCEPTANCE GATE" in loop_messages[-1]["content"]
+    assert "Do NOT report done" in loop_messages[-1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_gate_goal_checklist_no_tool_evidence_honest_stop_at_cap():
+    """At the cap with zero tool evidence the gate honest-stops: the unmet
+    goal items stay pending and the honest-stop signal fires (no false
+    ‌100% — the panel and the final answer both report the truth)."""
+    loop = AgentLoop(adapter=MagicMock())
+    obs = ObsCollector()
+    criteria = ["file exists at a.txt with content"]
+    trace = _trace_with_tool_runs([], criteria=criteria)
+    suffix, is_final = await loop._acceptance_gate_at_final_answer(
+        trace=trace,
+        iteration=7,
+        effective_max_iter=8,
+        loop_messages=[],
+        observation_log="",
+        active_adapter=_ReplanAdapter(),
+        intent=Intent.SHELL,
+        obs=obs,
+        plan_steps=criteria,
+    )
+    assert is_final is True
+    assert "✗ 0/1 criteria met" in suffix
+    types = [e.type for e in obs.history()]
+    assert "agent_loop_gate_honest_stop" in types
+    # The unmet goal item was NOT completed — the panel shows 0/1, never 100%.
+    assert not any(e.type == "todo_completed" for e in obs.history())
 
 
 @pytest.mark.asyncio

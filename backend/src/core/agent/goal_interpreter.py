@@ -236,6 +236,131 @@ def _first_step_args(execution_plan_steps: list[dict]) -> Optional[dict[str, Any
     return None
 
 
+# ── Message-derived goal checklist (the fixed denominator) ───────────────────
+#
+# The acceptance gate can only be honest when it has a contract to check.
+# The warm-kernel parent path (agent_runtime) carries no explicit
+# success_criteria and always settles intent to ANALYZE, so the per-intent
+# templates above never fire for the user-facing parent. This derivation
+# instead extracts the CONCRETE deliverables the user named in the message
+# (files to write, folders to create) and phrases each as a checkable goal
+# item — the user's request defines "done" up front, and the gate compares
+# tool outcomes against this fixed list. Purely deterministic (zero LLM
+# calls): a regex pass per turn, returning [] for conversational or
+# abstract requests (no contract → the legacy model-assertion path is
+# unchanged).
+
+# Verbs that commit the agent to WRITING a named file. Conservative — a
+# named file only becomes a goal item when one of these verbs is present.
+_WRITE_VERBS = (
+    "create", "write", "save", "add", "make", "generate", "new", "put",
+    "copy", "rename", "update", "edit", "modify", "append", "change",
+    "overwrite", "set up", "produce", "build",
+)
+
+# Verbs that commit the agent to CREATING a folder.
+_FOLDER_VERBS = ("create", "make", "new", "add", "mkdir", "set up", "build")
+
+# Marker phrases that introduce a folder name: "a folder called path-test",
+# "folder named X", "directory path-test". Greedy path-ish token (no spaces)
+# so hyphenated/dotted names survive whole; quoted multi-word names are
+# handled by the quoted-token fallback below.
+_FOLDER_REF_RE = re.compile(
+    r"(?:folder|directory)\s+(?:called\s+|named\s+)?[\"']?"
+    r"([A-Za-z0-9][A-Za-z0-9_.\-/\\]*)[\"']?",
+    re.IGNORECASE,
+)
+
+# Quoted tokens that follow a folder/directory marker: "folder called 'my stuff'".
+_QUOTED_FOLDER_RE = re.compile(
+    r"(?:folder|directory)\s+(?:called|named)\s+[\"']([^\"']+)[\"']",
+    re.IGNORECASE,
+)
+
+# File tokens: a path-like token with a code/config/text extension. Same
+# shape as verify._PATH_RE so every derived item is checkable by the gate.
+_FILE_TOKEN_RE = re.compile(
+    r"([\w./\\-]+\.(?:py|js|ts|tsx|jsx|md|json|txt|toml|yaml|yml|html|css|sh|"
+    r"sql|c|h|cpp|go|rs|java|rb|php|ipynb|cfg|ini|env|log|bat|ps1))\b",
+    re.IGNORECASE,
+)
+
+_MAX_GOAL_ITEMS = 6
+_MAX_GOAL_ITEM_CHARS = 120
+
+
+def _clean_token(token: str) -> str:
+    """Strip surrounding quotes, trailing sentence punctuation and whitespace;
+    bound length."""
+    return (token or "").strip().strip('"\'').rstrip(".,;:!?)")[:160]
+
+
+def derive_goal_items(message: str, max_items: int = _MAX_GOAL_ITEMS) -> list[str]:
+    """Derive a FIXED goal checklist from the user's message.
+
+    Deterministic (zero LLM calls), intended for the warm-kernel parent
+    path: the user's request defines the deliverables, so completion is
+    gated on evidence against THESE items — never on what tools happened
+    to run (the self-mutating checklist bug).
+
+    Rules (conservative by design):
+      - A named file (``a.txt``, ``src/utils/helper.py``) becomes a goal
+        item ONLY when the message also commits to writing it (create /
+        write / save / update / edit / ...). Read-only mentions ("show
+        me config.json") produce no item — no false gate.
+      - A folder name introduced by "folder/directory [called|named] X"
+        becomes an item when the message commits to creating it.
+      - Items are phrased exactly like the gate's checkable criteria
+        ("file exists at <path> with content", "folder created at <name>")
+        so verify.py can evaluate them against tool evidence.
+      - No derivable deliverables → [] → no contract (legacy path).
+    """
+    if not message or not message.strip():
+        return []
+    lowered = message.lower()
+    items: list[str] = []
+    seen: set[str] = set()
+
+    def _add(item: str) -> None:
+        item = item.strip()[: _MAX_GOAL_ITEM_CHARS]
+        if item and item.lower() not in seen:
+            seen.add(item.lower())
+            items.append(item)
+
+    commits_to_write = any(v in lowered for v in _WRITE_VERBS)
+    commits_to_folder = any(v in lowered for v in _FOLDER_VERBS)
+
+    if commits_to_write:
+        for m in _FILE_TOKEN_RE.finditer(message):
+            token = _clean_token(m.group(1))
+            if not token:
+                continue
+            _add(f"file exists at {token} with content")
+            if len(items) >= max_items:
+                break
+
+    if commits_to_folder:
+        # Quoted names first ("folder called 'my stuff'"), then unquoted.
+        folder_names: list[str] = []
+        for m in _QUOTED_FOLDER_RE.finditer(message):
+            folder_names.append(_clean_token(m.group(1)))
+        for m in _FOLDER_REF_RE.finditer(message):
+            folder_names.append(_clean_token(m.group(1)))
+        for name in folder_names:
+            if not name:
+                continue
+            # Drop partial duplicates: the unquoted regex also matches a
+            # prefix of a quoted name ("my" from "my stuff") — keep the
+            # longer name.
+            if any(other and name != other and name in other for other in folder_names):
+                continue
+            _add(f"folder created at {name}")
+            if len(items) >= max_items:
+                break
+
+    return items[:_MAX_GOAL_ITEMS]
+
+
 # ── Public API ───────────────────────────────────────────────────────────────
 
 

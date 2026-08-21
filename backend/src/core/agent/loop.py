@@ -892,6 +892,12 @@ class AgentLoop:
         # notification; _replan_for_gate runs alone).
         orchestrator=None,
         reformulated_message: str = "",
+        # Session 330: when the caller supplies a harness-derived goal
+        # checklist, the criteria must gate at the FINAL-ANSWER point
+        # (_acceptance_gate_at_final_answer), never at the iteration head
+        # is_done_fn — an early criteria-verified stop would end the turn
+        # with a bare "✓ n/n" summary before the model writes its answer.
+        skip_head_gate: bool = False,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -1886,7 +1892,7 @@ class AgentLoop:
             if task_state_refresh:
                 task_state_refresh = "\n\n" + task_state_refresh
 
-            if is_done_fn is not None:
+            if is_done_fn is not None and not skip_head_gate:
                 _done, _done_reason = is_done_fn(
                     iteration + 1,
                     _elapsed,
@@ -4376,6 +4382,7 @@ class AgentLoop:
                         memory_facts=memory_facts,
                         intent_history=intent_history,
                         is_parent=(getattr(agent_config, "name", "") == "parent"),
+                        plan_steps=_plan_steps,
                     )
                     if not _gate_final:
                         continue
@@ -4504,6 +4511,7 @@ class AgentLoop:
                     memory_facts=memory_facts,
                     intent_history=intent_history,
                     is_parent=(getattr(agent_config, "name", "") == "parent"),
+                    plan_steps=_plan_steps,
                 )
                 if not _gate_final:
                     continue
@@ -4680,6 +4688,31 @@ class AgentLoop:
             )
             return ""
 
+    def _emit_honest_stop(self, criteria, results, obs, plan_steps) -> None:
+        """Session 330 — the synthesize/evaluate stage's honest-stop report.
+
+        When the acceptance gate ends the turn with UNMET criteria (iteration
+        cap / same-tool streak), emit the per-goal todo state so the Todos
+        panel shows the TRUE fraction (never 100%), and flag the turn so the
+        SSE bridge skips its end-of-turn todo finalization — which would
+        otherwise flip the unmet items to completed (the self-mutating
+        checklist lie the user diagnosed: whatever ran defines "done"
+        retroactively).
+
+        Passed goal items are completed here; unmet items stay pending.
+        """
+        if not obs:
+            return
+        unmet = [c for c, _p, _n in (results or []) if not _p]
+        obs.emit(
+            "agent_loop_gate_honest_stop",
+            unmet_count=len(unmet),
+            unmet="; ".join(unmet)[:400],
+        )
+        for i, (_c, passed, _n) in enumerate(results or []):
+            if passed and plan_steps and 0 <= i < len(plan_steps):
+                obs.emit("todo_completed", id=f"plan-{i}", completed=True)
+
     async def _acceptance_gate_at_final_answer(
         self,
         *,
@@ -4698,6 +4731,9 @@ class AgentLoop:
         memory_facts: Optional[list[str]] = None,
         intent_history: Optional[list[str]] = None,
         is_parent: bool = False,
+        # Session 330 — the harness-derived goal checklist (plan_steps).
+        # Used to emit the per-goal todo state on an honest stop.
+        plan_steps: Optional[list[str]] = None,
     ) -> tuple[str, bool]:
         """Gate the model's "done" claim against the success criteria.
 
@@ -4856,8 +4892,20 @@ class AgentLoop:
             return "", False
         # Run-scoped evidence guard (same as is_coding_done): never gate on
         # pre-existing workspace state before this run executed a tool.
+        #
+        # Session 330 (goal-checklist turns): with a harness-derived goal
+        # checklist (plan_steps), a turn whose model ran NO tool must NOT be
+        # accepted — the user asked for deliverables, there are no tool
+        # outcomes to compare, so the criteria are unmet. Falling through to
+        # evaluate_criteria yields all-unmet → replan while iterations remain,
+        # or the honest-stop report at the cap (live-verified: the model
+        # answered "I'll set up the tools needed for file operations." with
+        # zero tool calls and the old guard completed the turn with 3/3
+        # todos and no files created). The legacy path (no plan_steps) keeps
+        # the old accept-on-no-evidence behavior.
         if not any(step.tool_name for step in getattr(trace, "steps", [])):
-            return "", True
+            if not plan_steps:
+                return "", True
 
         from core.agent.verify import evaluate_criteria, format_gate_results, gate_passed
 
@@ -4999,6 +5047,7 @@ class AgentLoop:
                         f" Stopped after {_streak} consecutive failures on "
                         f"'{_streak_tool}' — retrying the same tool won't fix it."
                     )
+                self._emit_honest_stop(criteria, results, obs, plan_steps)
                 return f"\n\n{trace.gate_summary}", True
             return f"\n\n{trace.gate_summary}", True
 
@@ -5124,6 +5173,7 @@ class AgentLoop:
                 f" Stopped replanning after {_streak} consecutive failures on "
                 f"'{_streak_tool}' — the current approach is not converging."
             )
+        self._emit_honest_stop(criteria, results, obs, plan_steps)
         return f"\n\n{trace.gate_summary}", True
 
     async def _replan_for_gate(

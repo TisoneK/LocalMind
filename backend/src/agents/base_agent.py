@@ -238,6 +238,12 @@ class BaseAgent(ABC):
         # verify-fail path. None = legacy (no orchestrator notification).
         orchestrator=None,
         reformulated_message: str = "",
+        # Session 330: when the caller supplies a harness-derived goal
+        # checklist (success_criteria), the criteria must gate at the
+        # FINAL-ANSWER point — never at the iteration head, where a
+        # criteria-verified stop would end the turn with a bare "✓ n/n"
+        # summary before the model writes its synthesis.
+        skip_head_gate: bool = False,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run this agent through the parent-owned AgentLoop:
@@ -376,6 +382,7 @@ class BaseAgent(ABC):
             abort_signal=abort_signal,  # B-2026-08-02-2 (A2)
             orchestrator=orchestrator,  # Session 178
             reformulated_message=reformulated_message,  # Session 178
+            skip_head_gate=skip_head_gate,  # Session 330
         ):
             yield chunk
 
