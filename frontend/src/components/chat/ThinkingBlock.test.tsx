@@ -3,7 +3,8 @@
  *
  * The block renders the model's reasoning; while streaming it stays open
  * with a live indicator, and once finished it shows a duration and the
- * "Thought process" label. Structured "[Label] detail" step lines render
+ * "Approach" label (Session 332-E — was "Thought process", exposing
+ * internal reasoning). Structured "[Label] detail" step lines render
  * the label as a chip.
  */
 
@@ -25,14 +26,14 @@ describe('ThinkingBlock', () => {
     expect(screen.getByText(/Weighing two approaches/)).toBeInTheDocument();
   });
 
-  it('shows the "Thinking" label while streaming', () => {
+  it('shows the "Working" label while streaming', () => {
     render(<ThinkingBlock thinking="reasoning…" isStreaming />);
-    expect(screen.getByText('Thinking')).toBeInTheDocument();
+    expect(screen.getByText('Working')).toBeInTheDocument();
   });
 
-  it('shows the "Thought process" label and duration once finished', () => {
+  it('shows the "Approach" label and duration once finished', () => {
     render(<ThinkingBlock thinking="Considered the trade-offs" thinkMs={2400} isStreaming={false} />);
-    expect(screen.getByText('Thought process')).toBeInTheDocument();
+    expect(screen.getByText('Approach')).toBeInTheDocument();
     expect(screen.getByText('2.4s')).toBeInTheDocument();
   });
 
@@ -49,9 +50,9 @@ describe('ThinkingBlock', () => {
 
   it('collapses the reasoning by default once the turn is done (ADR-36)', () => {
     // Collapse-after-done: when not streaming, the block starts collapsed so
-    // only the "Thought process" header shows — not a persistent scrollback.
+    // only the "Approach" header shows — not a persistent scrollback.
     render(<ThinkingBlock thinking="hidden reasoning" isStreaming={false} />);
-    expect(screen.getByText('Thought process')).toBeInTheDocument();
+    expect(screen.getByText('Approach')).toBeInTheDocument();
     expect(screen.queryByText(/hidden reasoning/)).not.toBeInTheDocument();
   });
 
@@ -59,7 +60,7 @@ describe('ThinkingBlock', () => {
     render(<ThinkingBlock thinking="expandable reasoning" isStreaming={false} />);
     expect(screen.queryByText(/expandable reasoning/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Thought process'));
+    fireEvent.click(screen.getByText('Approach'));
     expect(screen.getByText(/expandable reasoning/)).toBeInTheDocument();
   });
 

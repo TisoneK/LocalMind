@@ -115,7 +115,12 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
           }`}
         />
         <span className={`text-[10px] font-medium uppercase tracking-wider ${stepColor || (isStreaming ? 'text-brand-amber' : 'text-brand-green-muted')}`}>
-          {stepLabel || (isStreaming ? 'Thinking' : 'Thought process')}
+          {/* Session 332-E — user-facing label. Previously "Thought process"
+              (exposing internal reasoning). Now "Approach" when streaming
+              ended, "Working" while streaming. The raw model thinking is
+              still accessible via expand, but the label no longer reads as
+              an internal debug trace. */}
+          {stepLabel || (isStreaming ? 'Working' : 'Approach')}
         </span>
         {isStreaming ? (
           <ThinkingDots reduceMotion={reduceMotion} />
