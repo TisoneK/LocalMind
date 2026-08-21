@@ -1551,6 +1551,12 @@ class AgentLoop:
         _synthetic_todos: list[str] = []
         # Session fix: track total gate replans to cap replanning loops
         _gate_replan_count: int = 0
+        # B-2026-08-21: zero-tool force flag. When the acceptance gate
+        # detects zero tool calls with criteria unmet (model narrating
+        # instead of acting), it sets this so the next iteration forces
+        # tool_choice="required". Single-element list for mutability
+        # across the gate call boundary.
+        _gate_force_tool: list[bool] = [False]
         _SYNTH_TODO_MAX = 12
 
         def _synth_begin(tool_name: str, tool_input: str) -> Optional[str]:
@@ -2067,12 +2073,17 @@ class AgentLoop:
             # here — later iterations keep the default so the model can
             # synthesize its final answer without further tool calls.
             _force_tool_choice = (
-                iteration == 0
-                and intent in AGENT_INTENTS
-                and not trace.steps
-                and bool(filtered_tools)
-                and not _parent_native_turn
+                (iteration == 0
+                 and intent in AGENT_INTENTS
+                 and not trace.steps
+                 and bool(filtered_tools)
+                 and not _parent_native_turn)
+                or _gate_force_tool[0]
             )
+            # Consume the gate force flag after applying it — only
+            # force ONE iteration, then let the model respond normally.
+            if _gate_force_tool[0]:
+                _gate_force_tool[0] = False
             try:
                 result = await asyncio.wait_for(
                     active_adapter.chat_with_tools(
@@ -4414,6 +4425,7 @@ class AgentLoop:
                         is_parent=(getattr(agent_config, "name", "") == "parent"),
                         plan_steps=_plan_steps,
                         gate_replan_count=_gate_replan_count,
+                        gate_force_tool=_gate_force_tool,
                     )
                     if not _gate_final:
                         _gate_replan_count += 1
@@ -4546,6 +4558,7 @@ class AgentLoop:
                     is_parent=(getattr(agent_config, "name", "") == "parent"),
                     plan_steps=_plan_steps,
                     gate_replan_count=_gate_replan_count,
+                    gate_force_tool=_gate_force_tool,
                 )
                 if not _gate_final:
                     _gate_replan_count += 1
@@ -4772,6 +4785,8 @@ class AgentLoop:
         plan_steps: Optional[list[str]] = None,
         # Session fix: total gate replan count
         gate_replan_count: int = 0,
+        # B-2026-08-21: mutable flag for gate→loop zero-tool force signal
+        gate_force_tool: list[bool] | None = None,
     ) -> tuple[str, bool]:
         """Gate the model's "done" claim against the success criteria.
 
@@ -4944,6 +4959,39 @@ class AgentLoop:
         if not any(step.tool_name for step in getattr(trace, "steps", [])):
             if not plan_steps:
                 return "", True
+            # B-2026-08-21: zero-tool force. When criteria/plan_steps
+            # exist but NO tools have run, the model is narrating instead
+            # of acting ("I'll start by checking...", "Let me use the
+            # shell tool"). The LLM replan call below just produces MORE
+            # planning text without any tool call — a replan loop.
+            # Instead: skip the replan, inject a direct nudge, and signal
+            # the main loop to force tool_choice="required" on the next
+            # iteration so the provider API itself compels a tool call.
+            if iteration + 1 < effective_max_iter:
+                if obs:
+                    obs.emit(
+                        "agent_loop_gate_failed_replan",
+                        intent=intent.value,
+                        iteration=iteration + 1,
+                        unmet=["zero tool calls across entire run — model narrating instead of acting"],
+                    )
+                loop_messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "\n[ZERO-TOOL] You have written text but made ZERO tool calls. "
+                            "Your task requires actual tool execution (creating files, "
+                            "running commands, etc.). Narration does NOT create files.\n\n"
+                            "STOP planning. STOP narrating. You MUST call a tool NOW "
+                            "via the function-calling API. If describe_tool is your only "
+                            "available tool, call describe_tool(\"shell\") to load it.\n"
+                        ),
+                    }
+                )
+                # Signal the main loop to force tool_choice on next iter
+                if gate_force_tool is not None:
+                    gate_force_tool[0] = True
+                return "", False
 
         from core.agent.verify import evaluate_criteria, format_gate_results, gate_passed
 

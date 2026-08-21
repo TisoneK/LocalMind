@@ -525,8 +525,13 @@ async def test_gate_goal_checklist_no_tool_evidence_replans():
     """Session 330 live-verified hole: with a goal checklist present, a turn
     where the model ran NO tool must NOT be accepted — the model committed to
     work but did nothing (live trace: "I'll set up the tools needed for file
-    operations.", zero tool calls, zero files, yet 3/3 todos completed). It
-    must replan so the loop continues toward the deliverables."""
+    operations.", zero tool calls, zero files, yet 3/3 todos completed).
+
+    B-2026-08-21: instead of an expensive LLM replan call (which just
+    produced more narration without tool calls), the gate now injects a
+    direct [ZERO-TOOL] nudge and signals the main loop to force
+    tool_choice="required" on the next iteration.
+    """
     loop = AgentLoop(adapter=MagicMock())
     obs = ObsCollector()
     criteria = [
@@ -537,6 +542,7 @@ async def test_gate_goal_checklist_no_tool_evidence_replans():
     trace = _trace_with_tool_runs([], criteria=criteria)
     adapter = _ReplanAdapter()
     loop_messages = [{"role": "user", "content": "create a.txt and b.txt"}]
+    gate_force = [False]  # mutable flag for gate→loop communication
     suffix, is_final = await loop._acceptance_gate_at_final_answer(
         trace=trace,
         iteration=0,
@@ -547,12 +553,16 @@ async def test_gate_goal_checklist_no_tool_evidence_replans():
         intent=Intent.SHELL,
         obs=obs,
         plan_steps=criteria,
+        gate_force_tool=gate_force,
     )
     assert is_final is False
     assert suffix == ""
-    assert len(adapter.replan_calls) == 1
-    assert "ACCEPTANCE GATE" in loop_messages[-1]["content"]
-    assert "Do NOT report done" in loop_messages[-1]["content"]
+    # No LLM replan call — the gate injects a direct nudge instead
+    assert len(adapter.replan_calls) == 0
+    # The nudge contains the ZERO-TOOL marker
+    assert "ZERO-TOOL" in loop_messages[-1]["content"]
+    # The gate signals the main loop to force tool_choice
+    assert gate_force[0] is True
 
 
 @pytest.mark.asyncio

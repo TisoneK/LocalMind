@@ -761,9 +761,10 @@ DESCRIBE_TOOL_DEFINITION: dict = {
             "Load the FULL usage schema for an ON-DEMAND tool before using it. "
             "The schema is loaded for the NEXT native step and persists for "
             "the rest of this run. "
-            "Core tools (shell, file_task, file_write, edit_file, code_exec, "
-            "web_search, web_fetch, git, sysinfo, find_path, memory_op) "
-            "already have their schemas loaded — do NOT call describe_tool for them. "
+            "NEVER call this for core tools (shell, file_task, file_write, edit_file, "
+            "code_exec, web_search, web_fetch, git, sysinfo, find_path, memory_op) "
+            "— they already have their schemas loaded. Calling describe_tool "
+            "for a core tool wastes an iteration. "
             f"On-demand tools: {long_tail_tool_summary()}."
         ),
         "parameters": {
