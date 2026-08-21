@@ -691,6 +691,143 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 reason="parent agent owns tool selection",
             )
 
+        # Session 332-C: fast-path for trivial inputs (greetings/thanks/
+        # farewells — zero LLM call) and obviously-conversational questions
+        # ("What can you do?", "Give me three ideas for ...") — one direct
+        # chat call, bypassing the parent-agent loop entirely.
+        #
+        # Why: the user's review of a cyber-café run showed 57.7s latency /
+        # 2,101 prompt tokens / 2 iterations for a no-tool conversational
+        # prompt. The full parent-agent pipeline pays 4 LLM round-trips
+        # (init + iter 1 + replan + iter 2) for a question that needs ONE call.
+        #
+        # Safety: never fast-path when (a) a file is attached, (b) the client
+        # sent a routing hint, or (c) the message contains tool/realtime/
+        # system keywords (handled by is_conversational_question's blocked
+        # keyword guard).
+        if file is None and not client_intent:
+            from core.trivial_input import (
+                conversational_response,
+                is_conversational_question,
+                is_trivial_input,
+                trivial_response,
+            )
+            from core.engine._helpers import _approx_tokens
+
+            # Light history load for follow-up detection ("Like what?").
+            try:
+                _hist = await asyncio.to_thread(self._store.get_history, session_id)
+                _hist_dicts = [
+                    {"role": h.role.value, "content": h.content}
+                    for h in _hist[-4:]
+                    if h.content
+                ]
+            except Exception:
+                _hist_dicts = []
+
+            _adapter = kernel.adapter
+            _is_trivial = is_trivial_input(message, _hist_dicts)
+            _is_conv = (not _is_trivial) and is_conversational_question(message, _hist_dicts)
+            if _is_trivial or _is_conv:
+                _path = "trivial" if _is_trivial else "conversational"
+                logger.info(
+                    "[agent-runtime] fast-path(%s) for %r", _path, message[:60]
+                )
+                collector.emit("agent_loop_start", intent="chat")
+                collector.emit(
+                    "stage_timing", stage="intent_classify", latency_ms=0, status="fast_path"
+                )
+                collector.emit(
+                    "stage_timing", stage="tool_select", latency_ms=0, status="skipped"
+                )
+                collector.emit(
+                    "stage_timing", stage="context_build", latency_ms=0, status="fast_path"
+                )
+                collector.emit(
+                    "stage_timing", stage="execute", latency_ms=0, status="skipped"
+                )
+                _response_chunks: list[str] = []
+                _fast_usage: dict[str, int] = {}
+                if _is_trivial:
+                    _stream = trivial_response(message, _adapter, _hist_dicts)
+                else:
+                    _stream = conversational_response(message, _adapter, _hist_dicts)
+                async for _chunk in _stream:
+                    if _chunk.usage:
+                        _fast_usage.update(_chunk.usage)
+                    if _chunk.text:
+                        _response_chunks.append(_chunk.text)
+                        if _chunk.done:
+                            # The helper yields its own done=True chunk with
+                            # text — strip done so we emit our own canonical
+                            # done at the end (mirrors parent-agent pattern
+                            # at line 1113 in this file).
+                            yield _chunk.model_copy(update={"done": False})
+                            continue
+                    # Swallow the helper's bare done chunk — the parent
+                    # runtime owns the transport completion marker.
+                    if _chunk.done:
+                        continue
+                    yield _chunk
+
+                # Finalize: persist + emit turn_complete (mirror the parent-
+                # agent path's epilog so observability and history survive
+                # reload).
+                _response_text = "".join(_response_chunks)
+                _total_ms = round((time.monotonic() - started) * 1000)
+                _prompt_tokens = int(_fast_usage.get("prompt_tokens", 0) or 0) or _approx_tokens(
+                    f"You are LocalMind.\n{message}"
+                )
+                _completion_tokens = int(
+                    _fast_usage.get("completion_tokens", 0) or _approx_tokens(_response_text)
+                )
+                self._persist_assistant(
+                    session_id,
+                    _response_text,
+                    thinking=None,
+                    acknowledgement=None,
+                    error=None,
+                    tool_calls=None,
+                    metrics={
+                        "prompt_tokens": _prompt_tokens,
+                        "completion_tokens": _completion_tokens,
+                        "latency_ms": _total_ms,
+                    },
+                )
+                collector.emit(
+                    "agent_runtime_done",
+                    agent="parent",
+                    elapsed_ms=_total_ms,
+                    response_chars=len(_response_text),
+                )
+                collector.emit(
+                    "turn_complete",
+                    intent="chat",
+                    confidence=1.0,
+                    tokens_approx=_completion_tokens,
+                    prompt_tokens_approx=_prompt_tokens,
+                    total_latency_ms=_total_ms,
+                    memory_facts=0,
+                    agent_mode=False,
+                    provider_usage=_fast_usage,
+                )
+                self._store_observation(
+                    session_id,
+                    collector,
+                    intent="chat",
+                    confidence=1.0,
+                    memory_hits=0,
+                    context_tokens=_prompt_tokens,
+                    latency_ms=_total_ms,
+                )
+                self._metrics.record_streaming_complete(
+                    total_tokens=_prompt_tokens + _completion_tokens,
+                    prompt_tokens=_prompt_tokens,
+                    completion_tokens=_completion_tokens,
+                )
+                yield StreamChunk(text="", done=True, usage=_fast_usage)
+                return
+
         # B-2026-08-17-10 (Session 312): maximize turn-init parallelism so the
         # first LLM token streams ASAP. Three changes vs the prior serial path:
         #

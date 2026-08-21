@@ -219,6 +219,16 @@ _CONVERSATIONAL_OPENERS = [
     r"what can you",
     r"what do you",
     r"how do you",
+    # Session 332-C: brainstorming/idea imperatives. These signal a
+    # conversational request for suggestions/ideas — no tools, files, code,
+    # or live data needed. The blocked-keyword guard below still catches
+    # tool-bearing phrasings ("give me the weather", "suggest a script that
+    # ...", "recommend a file manager").
+    r"give me",
+    r"suggest",
+    r"propose",
+    r"recommend",
+    r"brainstorm",
 ]
 _CONVERSATIONAL_OPENER_RE = re.compile(
     r"^(?:" + "|".join(_CONVERSATIONAL_OPENERS) + r")\b",

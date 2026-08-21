@@ -684,7 +684,11 @@ async def test_engine_conversational_question_emits_prompt_tokens():
 @pytest.mark.parametrize("message", ["Hi", "Hey LM", "Hello LocalMind"])
 @pytest.mark.asyncio
 async def test_engine_greeting_uses_the_warm_parent_boundary(message):
-    """Greetings use one native parent call, not a per-turn initializer or shortcut."""
+    """Session 332-C: greetings use the trivial fast-path — canned reply,
+    zero LLM calls (immune to provider rate-limits). Previously the parent
+    agent handled greetings via a native call (1 LLM call); the user's
+    review flagged this as overkill for trivial inputs.
+    """
     from core.engine import Engine
     from core.obs import ObsCollector
 
@@ -712,7 +716,8 @@ async def test_engine_greeting_uses_the_warm_parent_boundary(message):
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert "localmind" in text.lower()
     assert any(getattr(c, "done", False) for c in chunks)
-    assert calls == 1
+    # Session 332-C: trivial greetings get a canned reply — zero LLM calls.
+    assert calls == 0
     assert not any(event.type == "agent_initialization_done" for event in obs.history())
     assert not any(event.type == "tool_call" for event in obs.history())
 

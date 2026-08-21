@@ -58,14 +58,17 @@ class TestTrivialTurnComplete:
         completes = [e for e in obs.history() if e.type == "turn_complete"]
         assert len(completes) == 1
         data = completes[0].data
-        assert data["intent"] == "parent"
+        # Session 332-C: trivial turns now use the fast-path (canned reply,
+        # zero LLM calls). intent="chat" reflects that the parent agent did
+        # NOT run. agent_mode=False because no parent-agent loop executed.
+        assert data["intent"] == "chat"
         assert data["tokens_approx"] > 0
         assert data["total_latency_ms"] >= 0
-        assert data["agent_mode"] is True
+        assert data["agent_mode"] is False
 
         stored = engine._last_observation.get("sess-tc-trivial")
         assert stored is not None
-        assert stored["intent"] == "parent"
+        assert stored["intent"] == "chat"
         assert stored["tools_used"] == ""
         assert stored["latency_ms"] >= 0
         # The stage clock marked tool_select/execute skipped — the stored
@@ -88,13 +91,15 @@ class TestTrivialTurnComplete:
         completes = [e for e in obs.history() if e.type == "turn_complete"]
         assert len(completes) == 1
         data = completes[0].data
-        assert data["intent"] == "parent"
+        # Session 332-C: conversational questions use the fast-path (one direct
+        # chat call, no parent-agent loop). intent="chat" reflects that.
+        assert data["intent"] == "chat"
         assert data["tokens_approx"] > 0
         assert data["total_latency_ms"] >= 0
 
         stored = engine._last_observation.get("sess-tc-conv")
         assert stored is not None
-        assert stored["intent"] == "parent"
+        assert stored["intent"] == "chat"
         assert stored["tools_used"] == ""
 
 
