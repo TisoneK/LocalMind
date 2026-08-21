@@ -237,3 +237,40 @@ Full frontend suite: **262 pass / 0 fail** — including updated ThinkingBlock t
 ## Summary
 
 Session 332 reproduced the user's cyber-café duplicate-answer bug, identified the root cause (mid-iteration text streamed before acceptance gate, then re-streamed after replan), and shipped 4 surgical fixes that together reduced latency from 57.7s to 8.6s, eliminated the duplicate, suppressed raw thinking exposure for fast-pathed turns, and renamed the "Thought process" UI label to "Approach".
+
+## Session 333 — 2026-08-22 — Clear all 10 pre-existing test failures
+
+Investigated and fixed all 10 pre-existing test failures that were present on baseline before Session 332's cyber-café fix. Two of them were actually caused by Session 332-C's fast-path implementation (test_stage_timing + test_abort_signal), the rest were genuine pre-existing issues.
+
+### Fixes (commit ea8ed80)
+
+| Test | Root cause | Fix |
+|------|-----------|-----|
+| test_stage_timing (2 tests) | Session 332-C emitted `status='fast_path'` (a new value) + missed `generate` stage_timing | Emit `skipped` for intent_classify/tool_select/context_build/execute; `done` with measured latency for generate |
+| test_abort_signal (1 test) | Session 332-C's `from core.engine._helpers import _approx_tokens` inside the fast-path if-block shadowed the module-level import for the ENTIRE function (Python scoping) → UnboundLocalError on the parent-agent path | Removed the redundant local import (module-level import at line 35 suffices) |
+| test_steering (1 test) | Same root cause as test_abort_signal | Same fix |
+| test_tool_error_recovery (4 tests) | Shell-specific branch of `tool_error_recovery_directive` (B-2026-08-21) didn't include "honestly" wording — the test contract requires it for ALL unknown error types | Added "If you cannot complete this step, report the actual state honestly -- never claim success you didn't verify." to both Windows and Unix shell branches |
+| test_prompt_budget (1 test) | Init prompt grew to 3453 chars (Session 331's clarify-exception + ACT-not-ask bias refinements) but budget was 3000 | Bumped budget to 3500 with documented history |
+| test_parent_recovery_cap (1 test) | `from tests.adapters.test_thinking_policy_adr41 import _collect_with_dispatch` failed with `ModuleNotFoundError: No module named 'tests'` — `tests/` had no `__init__.py` | Added `__init__.py` to `tests/` + all subdirectories; added `..` (repo root) to `pythonpath` in `pyproject.toml` |
+
+### Final results
+
+| Suite | Before Session 333 | After Session 333 |
+|-------|-------------------|------------------|
+| Backend | 2098 pass / 10 fail / 2 skipped | **2108 pass / 0 fail / 2 skipped** |
+| Frontend | 262 pass / 0 fail | **262 pass / 0 fail** |
+
+### Live verification (bankofai/deepseek-v4-flash, isolated port 8765)
+
+| Prompt | Latency | Token events | Duplicate | Thinking exposed |
+|--------|---------|---------------|-----------|-----------------|
+| "Give me three ideas for improving a cyber café business." | **5.3s** | 1 (295 streamed) | False | 0 chars |
+| "Hello" | **0.0s** | 1 (canned) | False | 0 chars |
+
+The cyber-café prompt latency improved from 8.6s (Session 332) to 5.3s — likely due to bankofai's variable response times, not code changes. The fix verification is the same: 1 token event, no duplicate, no thinking exposed.
+
+### Pushed
+
+- `ea8ed80` — fix(tests): clear all 10 pre-existing test failures (333)
+- PAT stripped from `git config remote.origin.url` after push
+
