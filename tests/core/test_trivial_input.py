@@ -866,3 +866,92 @@ def test_message_implies_tool_action_git_branch_is_true():
 
     assert message_implies_tool_action("What is the current git branch?") is True
     assert message_implies_tool_action("Show me the diff on this branch") is True
+
+
+# ── Session 335 — knowledge-imperative openers (RAM-vs-storage bug) ───────
+
+
+def test_conversational_question_knowledge_imperative_openers():
+    """Knowledge-imperative openers (summarize, compare, explain, describe,
+    etc.) fast-path even when the message contains a blocked keyword like
+    'RAM' — the imperative makes the intent unambiguous (exposition, not
+    sysinfo). Session 335: this is the RAM-vs-storage system-prompt
+    pollution fix.
+    """
+    # The user's actual report:
+    assert is_conversational_question(
+        "Summarize the difference between RAM and storage."
+    ) is True
+    # Similar shapes:
+    assert is_conversational_question("Compare TCP and UDP.") is True
+    assert is_conversational_question("Contrast TCP vs UDP.") is True
+    assert is_conversational_question("Explain how gravity works.") is True
+    assert is_conversational_question("Describe photosynthesis.") is True
+    assert is_conversational_question("Outline the steps for brewing coffee.") is True
+    assert is_conversational_question("Name three planets in our solar system.") is True
+
+
+def test_knowledge_imperative_bypasses_blocked_keywords():
+    """Knowledge imperatives skip the blocked-keyword guard. 'RAM' and
+    'disk' are sysinfo keywords, but 'Summarize the difference between
+    RAM and storage' is exposition, not a request for the user's RAM."""
+    # Without the bypass, these would all be False (blocked by RAM/disk/etc.)
+    assert is_conversational_question("Summarize the difference between RAM and storage.") is True
+    assert is_conversational_question("Explain how CPU caches work.") is True
+    assert is_conversational_question("Compare SSD vs HDD storage types.") is True
+    assert is_conversational_question("Describe how a GPU renders a frame.") is True
+
+
+def test_knowledge_imperative_does_not_bypass_file_or_url_patterns():
+    """File-extension and URL patterns are still checked even under
+    knowledge imperatives — those are structural tool signals regardless
+    of intent."""
+    assert is_conversational_question("Summarize the contents of app.py.") is False
+    assert is_conversational_question("Compare the script.py and module.py files.") is False
+    assert is_conversational_question("Explain what's at https://example.com.") is False
+
+
+def test_knowledge_imperative_does_not_bypass_debugging_keywords():
+    """Debugging-context keywords (error, bug, exception, crash) remain
+    hard-blocked even under knowledge imperatives. 'Explain this error
+    message' is a debugging request — the user has a real error and needs
+    tool evidence, not exposition about errors."""
+    assert is_conversational_question("Explain this error message") is False
+    assert is_conversational_question("Describe the bug in my code.") is False
+    assert is_conversational_question("Summarize the traceback I just saw.") is False
+    assert is_conversational_question("Explain why this exception is thrown.") is False
+    assert is_conversational_question("Describe how to fix this crash.") is False
+
+
+def test_message_implies_tool_action_knowledge_imperative_is_false():
+    """The RAM-vs-storage prompt must NOT imply a tool action — so the
+    parent-agent loop's workspace_state injection is skipped. Session 335:
+    this prevents the model from seeing 'Branch: main' / 'dirty working
+    tree' on knowledge questions."""
+    from core.trivial_input import message_implies_tool_action
+
+    assert message_implies_tool_action(
+        "Summarize the difference between RAM and storage."
+    ) is False
+    assert message_implies_tool_action("Compare TCP and UDP.") is False
+    assert message_implies_tool_action("Explain how gravity works.") is False
+
+
+def test_message_implies_tool_action_real_sysinfo_still_true():
+    """Real sysinfo queries must still imply a tool action — so
+    workspace_state injection fires (the user actually wants their RAM
+    specs)."""
+    from core.trivial_input import message_implies_tool_action
+
+    assert message_implies_tool_action("How much RAM do I have?") is True
+    assert message_implies_tool_action("What's my disk space?") is True
+    assert message_implies_tool_action("Check my CPU specs") is True
+
+
+def test_message_implies_tool_action_knowledge_with_file_pattern():
+    """Knowledge imperatives with file/URL patterns still imply a tool
+    action — the file/URL is a structural signal that tools are needed."""
+    from core.trivial_input import message_implies_tool_action
+
+    assert message_implies_tool_action("Summarize the contents of app.py.") is True
+    assert message_implies_tool_action("Explain what's at https://example.com") is True

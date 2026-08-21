@@ -229,9 +229,56 @@ _CONVERSATIONAL_OPENERS = [
     r"propose",
     r"recommend",
     r"brainstorm",
+    # Session 335: knowledge-imperative openers. These signal a request
+    # for general-knowledge exposition — no tools, files, code, or live
+    # data needed. Even when the message contains a blocked keyword like
+    # "RAM" or "disk", the IMPERATIVE makes it clear the user wants an
+    # explanation, not a tool action ("summarize the difference between
+    # RAM and storage" is exposition, NOT a request for sysinfo).
+    # The blocked-keyword guard is bypassed for messages starting with
+    # these openers (see _KNOWLEDGE_IMPERATIVES below).
+    r"summarize",
+    r"compare",
+    r"contrast",
+    r"outline",
+    r"list",
+    r"name",
 ]
 _CONVERSATIONAL_OPENER_RE = re.compile(
     r"^(?:" + "|".join(_CONVERSATIONAL_OPENERS) + r")\b",
+    re.IGNORECASE,
+)
+
+# Session 335: knowledge-imperative openers. When a message STARTS with one
+# of these, the user is asking for general-knowledge exposition ("Summarize
+# the difference between RAM and storage", "Compare TCP vs UDP"). The
+# blocked-keyword guard is bypassed because the imperative makes the intent
+# unambiguous — "RAM" here is the topic, not a request for the user's RAM.
+# Tool/file/code/URL patterns are still checked separately, so "Summarize
+# the contents of /etc/passwd" or "Compare these two URLs" still fall
+# through.
+_KNOWLEDGE_IMPERATIVES = (
+    "summarize",
+    "compare",
+    "contrast",
+    "outline",
+    "explain",
+    "describe",
+    "define",
+    "brainstorm",
+    "suggest",
+    "propose",
+    "recommend",
+    "give me",
+    "name",
+)
+
+# Session 335: debugging-context keywords that remain hard-blocked even
+# under knowledge imperatives. "explain this error message" is a debugging
+# request — the user has a real error and needs tool evidence (file reads,
+# shell output, code inspection) to debug it, not exposition about errors.
+_DEBUGGING_BLOCKED_RE = re.compile(
+    r"\b(?:error|bug|exception|crash|traceback|stack\s*trace|failed|failure)\b",
     re.IGNORECASE,
 )
 
@@ -447,8 +494,26 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
 
     # Must not reference anything that needs tools, live data, or system
     # info — those must reach the dispatcher for correct routing.
-    if _CONVERSATIONAL_BLOCKED_RE.search(cleaned):
-        return False
+    # Session 335: knowledge-imperative openers bypass the blocked-keyword
+    # guard. "Summarize the difference between RAM and storage" contains
+    # "RAM" (a sysinfo keyword) but the IMPERATIVE makes the intent
+    # unambiguous — the user wants exposition, not their system's RAM.
+    # File-extension and URL patterns are still checked (those are
+    # structural signals of tool action regardless of intent).
+    # Session 335 addendum: error/bug/exception/crash remain hard-blocked
+    # even under knowledge imperatives — "explain this error message" is a
+    # debugging request that needs tool evidence (file reads, shell, code),
+    # not exposition.
+    _is_knowledge_imperative = any(
+        cleaned.lower().startswith(imp) for imp in _KNOWLEDGE_IMPERATIVES
+    )
+    if _is_knowledge_imperative:
+        # Hard-blocked even under knowledge imperatives (debugging context)
+        if _DEBUGGING_BLOCKED_RE.search(cleaned):
+            return False
+    else:
+        if _CONVERSATIONAL_BLOCKED_RE.search(cleaned):
+            return False
     if _CONVERSATIONAL_FILE_EXT_RE.search(cleaned):
         return False
     if _CONVERSATIONAL_URL_RE.search(cleaned):
@@ -484,8 +549,23 @@ def message_implies_tool_action(message: str) -> bool:
     its replan trigger: only fire when the user actually expected a tool
     action, not when the model produced a conversational answer to a
     conversational question.
+
+    Session 335: knowledge-imperative openers ("summarize", "compare",
+    "explain", etc.) return False even when the message contains a blocked
+    keyword like "RAM" — the imperative makes the intent unambiguous
+    (exposition, not sysinfo). This prevents the parent-agent loop from
+    injecting workspace/git context on knowledge questions.
     """
     if not message:
+        return False
+    cleaned = message.strip().rstrip(_TRIVIAL_PUNCT).strip()
+    # Knowledge-imperative bypass
+    if any(cleaned.lower().startswith(imp) for imp in _KNOWLEDGE_IMPERATIVES):
+        # Still check file-ext/URL — those are structural tool signals
+        if _CONVERSATIONAL_FILE_EXT_RE.search(cleaned):
+            return True
+        if _CONVERSATIONAL_URL_RE.search(cleaned):
+            return True
         return False
     if _CONVERSATIONAL_BLOCKED_RE.search(message):
         return True

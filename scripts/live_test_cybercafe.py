@@ -30,10 +30,12 @@ PROMPTS = [
     ("cybercafe", "Give me three ideas for improving a cyber café business."),
     ("hello", "Hello"),
     ("weather_simple", "What is the capital of France?"),
-    # Session 334: branch-count logic question — previously polluted by
-    # git workspace context. Should fast-path now.
     ("branch_count", "We have three branches. Actually, one branch closed last month. We opened two new branches. How many branches do we currently have?"),
     ("apple_math", "I have 10 apples. I gave 3 to my friend. How many do I have left?"),
+    # Session 335: knowledge-imperative prompt that previously leaked
+    # system-prompt text. Should fast-path now.
+    ("ram_storage", "Summarize the difference between RAM and storage."),
+    ("tcp_udp", "Compare TCP and UDP."),
 ]
 
 
