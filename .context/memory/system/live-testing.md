@@ -274,3 +274,60 @@ The cyber-café prompt latency improved from 8.6s (Session 332) to 5.3s — like
 - `ea8ed80` — fix(tests): clear all 10 pre-existing test failures (333)
 - PAT stripped from `git config remote.origin.url` after push
 
+
+## Session 334 — 2026-08-22 — System-prompt pollution fix (workspace context leak)
+
+### Diagnosis
+
+User reported the branch-count prompt was being polluted by system context. Confirmed: the parent-agent loop injected `# Workspace State\nBranch: main\nHEAD: <hash>\nWorking tree: dirty (uncommitted changes)` into the prompt on EVERY turn, regardless of whether the user's message had anything to do with git/files.
+
+The model's "Approach" trace literally showed the pollution:
+> *"The workspace state mentions 'Branch: main' and git repo with dirty working tree... could be interpreted as business branches or git branches... Should I check git?"*
+
+Some runs even called `describe_tool(shell)` to load the shell tool (presumably to run `git branch`), wasting an LLM round-trip.
+
+### Two-layer fix (commit e200baf)
+
+1. **Extended the conversational fast-path** (`backend/src/core/trivial_input.py`)
+   - Accept EITHER an opener OR a trailing "?" with ≥5 words
+   - Bumped size cap from 140chars/20words → 200chars/25words
+   - The 5-word minimum excludes fragments like "Like what?" that need prior assistant context
+   - The blocked-keyword guard still catches routing-sensitive queries
+
+2. **Strip workspace_state injection from the parent-agent loop** (`backend/src/core/agent/loop.py` line ~1716)
+   - Gate the `workspace_snapshot()` call behind `_message_implies_tool_action(user_message)`
+   - When the user's message has no tool/file/code/git keywords, skip the git subprocesses entirely AND don't inject the snapshot
+   - Saves ~100ms of subprocess time + the prompt tokens the snapshot would have consumed
+
+### Live-verified (bankofai/deepseek-v4-flash, isolated port 8765)
+
+| Prompt | Before (user's trace) | After fix #334 |
+|--------|----------------------|----------------|
+| "We have three branches..." | 5.7s, 2,146 prompt tokens, 1 iter, model polluted by git context | **1.4s**, ~150 prompt tokens, 0 iter (fast-path), 0 thinking exposed |
+| "I have 10 apples..." | (would have been polluted) | **2.8s**, fast-path, "You have 7 apples left." |
+| cyber-café | 8.6s (Session 332) | **4.3s** |
+| hello | 0.0s (Session 332) | **0.0s** |
+| "What is the capital of France?" | 1.6s (Session 332) | **1.3s** |
+
+All 5 prompts: 0 tools called, 0 thinking exposed, 0 workspace pollution, correct answers.
+
+### Test contract
+
+5 new tests in `tests/core/test_trivial_input.py`:
+- `test_conversational_question_complete_thought_ending_in_question_mark` — branch-count + apple-math + ratio prompts fast-path
+- `test_conversational_question_short_fragment_without_history_falls_through` — "Like what?" / "And why?" / "So what?" still need history
+- `test_conversational_question_blocked_keywords_override_question_mark` — weather/file prompts with "?" still fall through
+- `test_message_implies_tool_action_branch_count_is_false` — workspace_state injection skipped
+- `test_message_implies_tool_action_git_branch_is_true` — real git prompts still get workspace_state
+
+Updated `test_conversational_question_size_caps` to use 26-word fixture (was 22, which now passes the bumped 25-word cap).
+
+### Regression check
+
+- Full backend suite: **2113 pass / 0 fail / 2 skipped** (was 2108/0/2 — +5 new tests)
+- Full frontend suite: **262 pass / 0 fail**
+
+### Pushed
+
+- `e200baf` — fix(prompt): stop system-prompt pollution from workspace context (334)
+- PAT stripped from `git config remote.origin.url` after push
