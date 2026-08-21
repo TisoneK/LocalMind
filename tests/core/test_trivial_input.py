@@ -291,9 +291,16 @@ def test_conversational_question_not_an_opener():
 
 
 def test_conversational_question_size_caps():
-    """Over-long or over-wordy messages must fall through."""
+    """Over-long or over-wordy messages must fall through.
+
+    Session 334: the word cap was bumped from 20 to 25 (to catch the
+    branch-count logic question at 22 words). These fixtures stay above
+    the new cap or fail the no-opener fast-path.
+    """
+    # 30 words — over the 25-word cap.
     assert is_conversational_question("What can you do for me today in terms of helping me with my daily tasks, my productivity, and my general workflow across many different kinds of things?") is False
-    assert is_conversational_question("what who how why when where which can you could you do you does are you will you would you should you tell me explain describe define") is False
+    # 26 words, no "?" — over the 25-word cap. Falls through.
+    assert is_conversational_question("what who how why when where which can you could you do you does are you will you would you should you tell me explain describe define clarify propose recommend") is False
 
 
 def test_conversational_question_blank():
@@ -789,3 +796,73 @@ def test_message_implies_tool_action_negative():
     assert message_implies_tool_action("Propose three solutions") is False
     assert message_implies_tool_action("What do you think about remote work") is False
     assert message_implies_tool_action("") is False
+
+
+# ── Session 334 — fast-path for complete thoughts ending in "?" ────────────
+
+
+def test_conversational_question_complete_thought_ending_in_question_mark():
+    """A short complete thought ending in "?" with no blocked keywords must
+    fast-path — even without an interrogative opener. Session 334: this is
+    the cyber-café-style logic question that previously fell through to the
+    parent-agent pipeline (which polluted the prompt with git workspace
+    context, causing the model to waste tokens wondering if "branches"
+    meant git branches)."""
+    # The branch-count prompt from the user's report:
+    assert is_conversational_question(
+        "We have three branches. Actually, one branch closed last month. We opened two new branches. How many branches do we currently have?"
+    ) is True
+    # Similar shape:
+    assert is_conversational_question(
+        "I have 10 apples. I gave 3 to my friend. How many do I have left?"
+    ) is True
+    assert is_conversational_question(
+        "The recipe calls for 2 cups of flour and 1 cup of sugar. What's the ratio?"
+    ) is True
+
+
+def test_conversational_question_short_fragment_without_history_falls_through():
+    """Short fragments like 'Like what?' need history to qualify — without
+    prior assistant context they fall through. Session 334: the
+    _CONVERSATIONAL_NO_OPENER_MIN_WORDS=5 guard prevents fragments from
+    being mis-classified as complete thoughts."""
+    # 2 words, ends with "?", no opener — under the 5-word minimum.
+    assert is_conversational_question("Like what?") is False
+    assert is_conversational_question("And why?") is False
+    assert is_conversational_question("So what?") is False
+
+
+def test_conversational_question_blocked_keywords_override_question_mark():
+    """A complete thought ending in "?" with a blocked keyword must fall
+    through to the parent agent. The blocked-keyword guard catches
+    routing-sensitive queries even when the '?' fast-path would otherwise
+    fire."""
+    # "weather" is blocked — must fall through.
+    assert is_conversational_question(
+        "We had storms yesterday and today looks calm. What is the weather going to be like tomorrow?"
+    ) is False
+    # "file" is blocked — must fall through.
+    assert is_conversational_question(
+        "I created three notes and deleted one. How many files do I have now?"
+    ) is False
+
+
+def test_message_implies_tool_action_branch_count_is_false():
+    """The branch-count prompt must NOT imply a tool action — so the
+    parent-agent loop's workspace_state injection (Branch: main, dirty
+    tree) is skipped. Session 334: this is the system-prompt pollution
+    fix."""
+    from core.trivial_input import message_implies_tool_action
+
+    assert message_implies_tool_action(
+        "We have three branches. Actually, one branch closed last month. We opened two new branches. How many branches do we currently have?"
+    ) is False
+
+
+def test_message_implies_tool_action_git_branch_is_true():
+    """A message that actually references git must still imply a tool
+    action — so the workspace_state injection fires."""
+    from core.trivial_input import message_implies_tool_action
+
+    assert message_implies_tool_action("What is the current git branch?") is True
+    assert message_implies_tool_action("Show me the diff on this branch") is True

@@ -1700,8 +1700,20 @@ class AgentLoop:
         # consumed by the execute prompt — the parent initialization call
         # never sees it. Deferred here (after init/plan decided mode=execute)
         # so DIRECT and CLARIFY turns skip the subprocesses entirely.
+        #
+        # Session 334 — system-prompt pollution guard: skip the workspace
+        # snapshot entirely when the user's message doesn't imply a tool/
+        # file/code/git action. Previously the snapshot (Branch: main, dirty
+        # working tree, HEAD, untracked files) was injected on EVERY turn,
+        # which polluted the prompt for conversational/logic questions —
+        # e.g. "We have three branches... How many do we currently have?"
+        # made the model waste tokens wondering if "branches" meant git
+        # branches, then call describe_tool(shell) to load git, then re-ask.
+        # Skipping the subprocesses also saves ~100ms of git subprocess time
+        # on turns that don't need them.
         workspace_context = ""
-        if WORKSPACE_STATE_ENABLED:
+        _user_msg = reformulated_message or _user_message_text(loop_messages) or ""
+        if WORKSPACE_STATE_ENABLED and _message_implies_tool_action(_user_msg):
             try:
                 mark_turn_start()
                 ws_snap = workspace_snapshot()
@@ -1716,6 +1728,12 @@ class AgentLoop:
                 # log and continue with empty context.
                 logger.warning("[agent_loop] workspace_state failed: %s", ws_exc)
                 workspace_context = ""
+        elif WORKSPACE_STATE_ENABLED:
+            logger.debug(
+                "[agent_loop] workspace_state skipped — user message doesn't "
+                "imply a tool/file/code/git action (%d chars of context not injected)",
+                0,
+            )
 
         # S295: the trailing turn-context is re-sent on EVERY loop iteration —
         # drop the redundant tool-list prose (kept in the native param + the

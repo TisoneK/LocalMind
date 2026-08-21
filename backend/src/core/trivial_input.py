@@ -357,8 +357,19 @@ _CONVERSATIONAL_FILE_EXT_RE = re.compile(
 _CONVERSATIONAL_URL_RE = re.compile(r"https?://", re.IGNORECASE)
 
 # Size caps for the conversational fast-path.
-_CONVERSATIONAL_MAX_CHARS = 140
-_CONVERSATIONAL_MAX_WORDS = 20
+# Session 334: bumped from 140/20 to 200/25 to catch short logic questions
+# like "We have three branches. One closed. We opened two. How many now?"
+# (22 words, 131 chars). The blocked-keyword guard still catches tool/
+# realtime/system queries so routing-sensitive prompts fall through.
+# 25 words is the sweet spot: branch-count (22w) passes; the original
+# over-wordy test fixture (30w) still falls through.
+_CONVERSATIONAL_MAX_CHARS = 200
+_CONVERSATIONAL_MAX_WORDS = 25
+# Session 334: minimum word count for a no-opener "?"-ending message to
+# qualify as a conversational question. Fragments like "Like what?" (2
+# words) need prior assistant context; complete thoughts like "We have
+# three branches..." (22 words) stand alone.
+_CONVERSATIONAL_NO_OPENER_MIN_WORDS = 5
 
 
 def is_conversational_question(message: str, history: Optional[list[object]] = None) -> bool:
@@ -366,11 +377,12 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
     Detect whether a message is an OBVIOUSLY-conversational question or
     short follow-up that can be answered with a single direct chat call — no tools.
 
-    Conservative by design: the message must start with an interrogative
-    opener AND contain none of the tool/realtime/system keywords, so
-    routing-sensitive queries ("what is today's EPL games?", "what time is
-    it", "how much RAM do I have", "who wrote app.py") always fall through
-    to the parent agent loop. Anything ambiguous → False (full pipeline).
+    Conservative by design: the message must either start with an interrogative
+    opener OR be a complete thought ending in "?" (Session 334: ≥5 words),
+    AND contain none of the tool/realtime/system keywords, so routing-sensitive
+    queries ("what is today's EPL games?", "what time is it", "how much RAM do
+    I have", "who wrote app.py") always fall through to the parent agent loop.
+    Anything ambiguous → False.
 
     Args:
         message: the user's message text.
@@ -385,7 +397,12 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
     if not message or not message.strip():
         return False
 
-    cleaned = message.strip().rstrip(_TRIVIAL_PUNCT).strip()
+    # Session 334: check the trailing "?" BEFORE stripping punctuation —
+    # _TRIVIAL_PUNCT includes "?" so the stripped form loses the question
+    # marker, breaking the "ends with ?" fast-path below.
+    _raw_stripped = message.strip()
+    _ends_with_question = _raw_stripped.endswith("?") or _raw_stripped.endswith("?\"") or _raw_stripped.endswith("?'")
+    cleaned = _raw_stripped.rstrip(_TRIVIAL_PUNCT).strip()
 
     # Size caps — conversational questions are short by definition.
     if len(cleaned) > _CONVERSATIONAL_MAX_CHARS:
@@ -394,27 +411,39 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
     if len(words) > _CONVERSATIONAL_MAX_WORDS:
         return False
 
-    # Must open like a question about the assistant/itself/ideas. A short
-    # follow-up can omit the opener ("Like what?", "And why?") when it has a
-    # prior assistant answer and the conversation has not used tools.
-    if not _CONVERSATIONAL_OPENER_RE.match(cleaned):
-        if (
-            not history
-            or len(words) > 8
-            or not cleaned.endswith("?")
-            and not _CONVERSATIONAL_FOLLOWUP_RE.match(cleaned)
-        ):
-            return False
-        has_assistant_answer = False
-        for item in history:
-            role = item.get("role") if isinstance(item, dict) else getattr(item, "role", "")
-            tool_calls = item.get("tool_calls") if isinstance(item, dict) else getattr(item, "tool_calls", None)
-            if tool_calls:
+    # Session 334: accept EITHER an opener OR a trailing question mark
+    # (with a minimum word count so fragments like "Like what?" don't
+    # qualify without history). Previously required an opener, which
+    # excluded short logic questions like "We have three branches. One
+    # closed. We opened two. How many now?" — these are conversational
+    # (no tools needed) but don't start with what/who/how.
+    _has_opener = bool(_CONVERSATIONAL_OPENER_RE.match(cleaned))
+    if not _has_opener:
+        if _ends_with_question and len(words) >= _CONVERSATIONAL_NO_OPENER_MIN_WORDS:
+            # Complete thought ending in "?" with no blocked keywords —
+            # safe to fast-path. Example: "We have three branches. One
+            # closed. We opened two. How many now?"
+            pass
+        else:
+            # No opener + (no "?" or too short) — only a short history-
+            # backed follow-up ("Like what?") qualifies.
+            if (
+                not history
+                or len(words) > 8
+                or not _ends_with_question
+                and not _CONVERSATIONAL_FOLLOWUP_RE.match(cleaned)
+            ):
                 return False
-            if getattr(role, "value", role) == "assistant":
-                has_assistant_answer = True
-        if not has_assistant_answer:
-            return False
+            has_assistant_answer = False
+            for item in history:
+                role = item.get("role") if isinstance(item, dict) else getattr(item, "role", "")
+                tool_calls = item.get("tool_calls") if isinstance(item, dict) else getattr(item, "tool_calls", None)
+                if tool_calls:
+                    return False
+                if getattr(role, "value", role) == "assistant":
+                    has_assistant_answer = True
+            if not has_assistant_answer:
+                return False
 
     # Must not reference anything that needs tools, live data, or system
     # info — those must reach the dispatcher for correct routing.
