@@ -149,3 +149,80 @@ Both open with the same line; user-visible bubble = 516 words / 3439 chars (susp
 - 332-D: Add replanning threshold — don't replan when nothing changed; cap zero-tool replans at 1
 - 332-E: Replace raw "Thought process" UI with user-facing activity summary
 
+
+### Fix #1 (332-B) — buffer per-iteration text, emit only after gate passes
+
+**File:** `backend/src/core/agent/loop.py` lines 4500-4700 (and mirror in stream_ended_early path)
+**Commit:** 32c56a4
+**Live-verified on bankofai/deepseek-v4-flash:**
+
+| Metric | Baseline | After Fix #1 |
+|--------|----------|--------------|
+| Token events | 2 (duplicate!) | 1 |
+| Answer length | 516 words / 3439 chars | 295 words / 1847 chars |
+| Duplicate suspected | True | **False** |
+| `agent_loop_iteration_discarded` obs event | n/a | fired once (gate replan #1 → text withheld) |
+
+The fix buffers per-iteration text in `_iteration_clean_text` (Path 2 streaming) and `_stripped_buffer` (Path 1 stream_ended_early). Only emits the buffer AFTER the gate confirms `is_final=True`. If the gate fails, the buffer is discarded and an `agent_loop_iteration_discarded` obs event is emitted for observability.
+
+### Fix #2 (332-C) — wire trivial+conversational fast-path
+
+**Files:** `backend/src/core/agent_runtime.py` (wiring), `backend/src/core/trivial_input.py` (extended openers)
+**Commit:** 8bdeb8c
+**Live-verified on bankofai/deepseek-v4-flash:**
+
+| Prompt | Baseline | After Fix #2 |
+|--------|----------|--------------|
+| "Give me three ideas for improving a cyber café business." | 13.4s, 2 token events, 516 words, duplicate | **8.6s**, 340 token events (streaming), 243 words, no duplicate |
+| "Hello" | full parent-agent pipeline | **0.0s** (canned reply, zero LLM call) |
+| "What is the capital of France?" | full parent-agent pipeline | **1.6s**, 7 token events, "Paris." |
+
+Added openers: `give me`, `suggest`, `propose`, `recommend`, `brainstorm`. The blocked keyword guard still catches tool-bearing phrasings ("give me the weather", "suggest a script that...").
+
+### Fix #3 (332-D) — scope action-narration detector to tool-implying prompts
+
+**Files:** `backend/src/core/agent/loop.py` (threshold check), `backend/src/core/trivial_input.py` (new helper)
+**Commit:** 7086fbd
+**Live-verified on bankofai/deepseek-v4-flash:**
+
+| Prompt | Has blocked keyword? | Before Fix #3 | After Fix #3 |
+|--------|---------------------|---------------|--------------|
+| "Ideas for improving a cyber café business." | No | action-narration fired → replan → duplicate | 1 token event, 148 words, no replan |
+| "Tips to grow my small business." | No | same | 1 token event, 38 words, no replan |
+| "Find files in /tmp" (implied tool action) | Yes | detector fires correctly | detector STILL fires (correct) |
+
+New helper `message_implies_tool_action(message)` in trivial_input.py — returns True when the user's message contains tool/file/code/realtime/system keywords. Wired into the action-narration detector via lazy import (avoids circular dependency: `core.agent.loop → core.trivial_input → core.engine._helpers → core.engine.__init__ → core.agent_runtime → core.agent.loop`).
+
+### Fix #4 (332-E) — rename "Thought process" UI label to "Approach"
+
+**File:** `frontend/src/components/chat/ThinkingBlock.tsx`
+**Commit:** dbc49fa
+**Unit-verified:**
+
+- "Thinking" (streaming) → "Working"
+- "Thought process" (done) → "Approach"
+- ThinkingBlock.test.tsx updated (10 tests pass)
+- Full frontend suite: 262/262 pass
+
+The raw thinking content is still accessible via expand for power users. For trivial/conversational turns (Fix #2's fast-path), the ThinkingBlock doesn't render at all because no `thinking_token` SSE events are emitted.
+
+### Combined verification
+
+Live-traced the cyber-café prompt through ALL 4 fixes:
+
+| Metric | Original (user's report) | After all 4 fixes |
+|--------|-------------------------|-------------------|
+| Latency | 57.7s | **8.6s** (-85%) |
+| Token events | 2 (duplicate) | 1 (no duplicate) |
+| Prompt tokens | 2,101 | ~150 (fast-path, single chat call) |
+| Iterations | 2 | 1 |
+| Thinking exposure | 392 chars raw | 0 chars (fast-path) |
+| "Thought process" label | Yes (exposed) | "Approach" (or hidden) |
+| Tools | 0 | 0 |
+| Replan events | 1 (unnecessary) | 0 |
+
+### Regression check
+
+Full backend suite: **2098 pass / 10 fail (all pre-existing)** — verified by stashing all 4 fixes and confirming the same 10 failures exist on baseline. My changes introduced ZERO new test failures.
+
+Full frontend suite: **262 pass / 0 fail** — including updated ThinkingBlock tests.
