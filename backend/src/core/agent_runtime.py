@@ -691,6 +691,18 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 reason="parent agent owns tool selection",
             )
 
+        # Session 337 — pre-init deterministic guards run BEFORE the
+        # trivial/conversational fast-path. This catches the 4 root-cause
+        # clusters (hallucination refusal, analyze-only, pressure-induced
+        # fabrication, impossible constraints) even when the prompt would
+        # otherwise match the conversational fast-path (e.g. "Give me
+        # exactly three examples. Do not use numbers. Number each." matches
+        # the "give me" opener but is a Cluster D impossible-constraint
+        # prompt that should clarify, not fast-path).
+        from core.agent.pre_init_classifier import classify_pre_init
+
+        _pre_init_override = classify_pre_init(message)
+
         # Session 332-C: fast-path for trivial inputs (greetings/thanks/
         # farewells — zero LLM call) and obviously-conversational questions
         # ("What can you do?", "Give me three ideas for ...") — one direct
@@ -702,10 +714,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # (init + iter 1 + replan + iter 2) for a question that needs ONE call.
         #
         # Safety: never fast-path when (a) a file is attached, (b) the client
-        # sent a routing hint, or (c) the message contains tool/realtime/
+        # sent a routing hint, (c) the message contains tool/realtime/
         # system keywords (handled by is_conversational_question's blocked
-        # keyword guard).
-        if file is None and not client_intent:
+        # keyword guard), OR (d) the pre-init classifier returned an override
+        # mode (Session 337 — Cluster A/D overrides must reach the parent
+        # agent loop's direct-return path, not the fast-path's chat call).
+        if file is None and not client_intent and _pre_init_override.mode is None:
             from core.trivial_input import (
                 conversational_response,
                 is_conversational_question,

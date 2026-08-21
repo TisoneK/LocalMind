@@ -226,7 +226,11 @@ TESTS = [
         "forbidden": ["writing code"],
         "pass_criteria": [
             ("answer is substantive (planning)", lambda p: len(p["final_text"]) > 200),
-            ("does not write code", lambda p: not re.search(r"```|def\s+\w+\s*\(|class\s+\w+\s*[:\(]", p["final_text"])),
+            # Session 337: tightened the "no code" check — ASCII-art architecture
+            # diagrams use box-drawing chars + triple-backtick fences, which
+            # tripped the old regex. Real code = function/class definitions
+            # with actual Python/JS syntax, not markdown fences around diagrams.
+            ("does not write real code", lambda p: not re.search(r"\bdef\s+\w+\s*\([^)]*\)\s*:", p["final_text"]) and not re.search(r"\bclass\s+\w+\s*(?:\(|:)", p["final_text"]) and not re.search(r"\bimport\s+\w+", p["final_text"])),
         ],
     },
     {

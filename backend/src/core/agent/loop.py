@@ -153,6 +153,22 @@ def _message_implies_tool_action(message: str) -> bool:
     return _message_implies_tool_action_fn(message)
 
 
+# Session 337 (Cluster B): lazy wrapper for should_skip_workspace_state.
+# Avoids circular import: pre_init_classifier imports nothing heavy.
+_should_skip_workspace_state_fn = None
+
+
+def _should_skip_workspace_state(message: str) -> bool:
+    """Return True if the user's message is 'analyze-only' (do not
+    implement yet / first analyze). Wraps the pre_init_classifier helper
+    via lazy import + caches the function reference."""
+    global _should_skip_workspace_state_fn
+    if _should_skip_workspace_state_fn is None:
+        from core.agent.pre_init_classifier import should_skip_workspace_state as _fn
+        _should_skip_workspace_state_fn = _fn
+    return _should_skip_workspace_state_fn(message)
+
+
 class TerminalProviderError(RuntimeError):
     """A provider error that must terminate the current turn immediately."""
 
@@ -1247,6 +1263,77 @@ class AgentLoop:
             and not initial_tool_result
             and not skip_planning
         )
+
+        # Session 337 — pre-init deterministic guards (4 root-cause clusters):
+        #   A. hallucination-class prompts → direct refusal (no tools)
+        #   B. analyze-only prompts → skip workspace_state + skip action-narration
+        #   C. pressure-induced fabrication → refusal-strengthening reminder
+        #   D. impossible constraints → clarify the conflict
+        # When the classifier returns a mode, the LLM init call is skipped
+        # and the deterministic decision is used directly. This runs BEFORE
+        # the _parent_initialization block so it fires even when
+        # skip_planning=True (the production code path).
+        from core.agent.pre_init_classifier import classify_pre_init
+
+        _user_msg_for_pre = reformulated_message or _user_message_text(messages) or ""
+        _pre_init_override = classify_pre_init(_user_msg_for_pre)
+        logger.info(
+            "[agent.loop] pre_init_classifier for %r → mode=%s skip_ws=%s reminder=%s",
+            _user_msg_for_pre[:80],
+            _pre_init_override.mode,
+            _pre_init_override.skip_workspace_state,
+            bool(_pre_init_override.extra_system_reminder),
+        )
+
+        if _pre_init_override.mode and getattr(agent_config, "name", "") == "parent":
+            # Deterministic decision — skip the LLM init call entirely.
+            initialization = InitializationDecision(
+                mode=_pre_init_override.mode,
+                response=_pre_init_override.response or "",
+                acknowledgement=_pre_init_override.acknowledgement or "",
+                objective=_pre_init_override.objective or "",
+                title=_pre_init_override.title or "",
+                clarifying_question=_pre_init_override.clarifying_question or "",
+                confidence=1.0,
+            )
+            if _obs:
+                _obs.emit(
+                    "agent_initialization_done",
+                    mode=initialization.mode,
+                    objective=initialization.objective,
+                    title=initialization.title,
+                    confidence=initialization.confidence,
+                    init_prompt_chars=0,
+                    pre_init_override=True,
+                )
+                _obs.emit(
+                    "stage_timing",
+                    stage="agent_initialize",
+                    latency_ms=0,
+                    status="pre_init_override",
+                )
+
+            # Session 337: emit the direct/clarify response + done chunk
+            # and return immediately. Do NOT fall through to the execute
+            # phase — that would run tools despite the deterministic
+            # refusal/clarify decision.
+            if initialization.is_direct:
+                if _obs:
+                    _obs.emit("agent_loop_done", intent=intent.value, direct=True)
+                if initialization.acknowledgement:
+                    yield StreamChunk(text="", done=False, status=initialization.acknowledgement)
+                yield StreamChunk(text=initialization.response, done=False)
+                yield StreamChunk(text="", done=True)
+                return
+            elif initialization.is_clarification:
+                if _obs:
+                    _obs.emit("agent_loop_done", intent=intent.value, clarified=True)
+                if initialization.acknowledgement:
+                    yield StreamChunk(text="", done=False, status=initialization.acknowledgement)
+                yield StreamChunk(text=initialization.clarifying_question, done=False)
+                yield StreamChunk(text="", done=True)
+                return
+
         if _parent_initialization:
             if abort_signal is not None and abort_signal.is_set():
                 raise AgentAbortedError("aborted by user before initialization")
@@ -1263,10 +1350,18 @@ class AgentLoop:
             # one-line classify note doesn't belong in the user's chat thread).
             initialization: Optional[InitializationDecision] = None
             streaming_ack_emitted = False
+
             # Session 289: the classify/init call gets a COMPACT env (no tool
             # prose, no hardware lines) — ~half the tokens of the full block,
             # which matters most on the slow local models this app targets.
             init_env_context = _build_environment_context(compact=True)
+            # Session 337 (Cluster C): inject the refusal-strengthening reminder
+            # into the init prompt (prepended to the env_context) when the
+            # pre-init classifier detected pressure on a sensitive topic.
+            if _pre_init_override.extra_system_reminder:
+                init_env_context = (
+                    _pre_init_override.extra_system_reminder + "\n\n" + init_env_context
+                )
             async for event_type, payload in self._initialize_parent_streaming(
                 active_adapter=active_adapter,
                 messages=messages,
@@ -1713,7 +1808,11 @@ class AgentLoop:
         # on turns that don't need them.
         workspace_context = ""
         _user_msg = reformulated_message or _user_message_text(loop_messages) or ""
-        if WORKSPACE_STATE_ENABLED and _message_implies_tool_action(_user_msg):
+        # Session 337 (Cluster B): when the pre-init classifier flagged this
+        # message as "analyze-only" (do not write code yet / first analyze),
+        # skip workspace_state injection. The user wants abstract analysis,
+        # not inspection of the on-disk repo.
+        if WORKSPACE_STATE_ENABLED and _message_implies_tool_action(_user_msg) and not _should_skip_workspace_state(_user_msg):
             try:
                 mark_turn_start()
                 ws_snap = workspace_snapshot()
@@ -1728,7 +1827,12 @@ class AgentLoop:
                 # log and continue with empty context.
                 logger.warning("[agent_loop] workspace_state failed: %s", ws_exc)
                 workspace_context = ""
-        elif WORKSPACE_STATE_ENABLED:
+        elif WORKSPACE_STATE_ENABLED and _should_skip_workspace_state(_user_msg):
+            logger.debug(
+                "[agent_loop] workspace_state skipped — analyze-only prompt "
+                "(user said 'do not implement yet' / 'first analyze')",
+            )
+        else:
             logger.debug(
                 "[agent_loop] workspace_state skipped — user message doesn't "
                 "imply a tool/file/code/git action (%d chars of context not injected)",
@@ -5077,6 +5181,11 @@ class AgentLoop:
                     # (core.trivial_input → core.engine._helpers → core.engine
                     # → core.agent_runtime → core.agent.loop).
                     and _message_implies_tool_action(reformulated_message or "")
+                    # Session 337 (Cluster B): don't fire the action-narration
+                    # detector when the user explicitly said "do not write code
+                    # yet" / "first analyze". The model's prose answer IS the
+                    # correct response — the user asked for analysis, not tools.
+                    and not _should_skip_workspace_state(reformulated_message or "")
                     and not any(
                         getattr(s, "tool_name", "")
                         and getattr(s, "tool_name", "") not in ("todo_write",)
