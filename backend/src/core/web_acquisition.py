@@ -95,19 +95,128 @@ class AcquisitionMethod(Enum):
     SEARCH_ONLY = "search_only"  # only snippets available, no full content
 
 
+# ── Session 341: WebIntent — capability selection, not fallback hierarchy ───
+#
+# The user's correction:
+#   > Do not model the browser as: "Static fetch failed, therefore try browser."
+#   > Model it as: "The task requires rendered/live/interactive information;
+#   > therefore select the browser capability."
+#
+# WebIntent is a peer-level classification — DISCOVER/RETRIEVE/BROWSE/RESEARCH.
+# BROWSE is NOT a fallback from RETRIEVE; it's a first-class capability selected
+# when the task requires a live/interactive/rendered website.
+
+
+class WebIntent(Enum):
+    """The type of web capability the task requires.
+
+    Peers, NOT a fallback chain:
+      - DISCOVER: find sources about a topic → search capability
+      - RETRIEVE: get the contents of a specific URL → fetch capability
+      - BROWSE: navigate/interact with a live website → browser capability
+      - RESEARCH: find AND verify information → acquisition planner (orchestrates
+        search + fetch + browser as needed, with evidence validation)
+    """
+
+    DISCOVER = "discover"
+    RETRIEVE = "retrieve"
+    BROWSE = "browse"
+    RESEARCH = "research"
+
+
+def classify_web_intent(message: str, url_provided: bool = False) -> WebIntent:
+    """Classify the web intent from the user's message.
+
+    This is the capability-selection layer — it determines WHICH web capability
+    the parent agent should use, NOT how the capability internally executes.
+
+    Selection rules:
+    - If the user provided a specific URL → RETRIEVE (fetch that URL) or BROWSE
+      (if the URL is known to need JS rendering — e.g. Twitter, React apps)
+    - If the user asks to "open" / "navigate to" / "go to" a website → BROWSE
+    - If the user asks to "find" / "search for" sources → DISCOVER
+    - If the user asks for "current" / "latest" information without a URL → RESEARCH
+      (needs multi-source acquisition + validation)
+    - Default → RESEARCH (the safest, most complete path)
+    """
+    if not message:
+        return WebIntent.RESEARCH
+
+    lower = message.lower().strip()
+
+    # BROWSE intent — explicit navigation/interaction cues
+    browse_cues = [
+        r"\bopen\s+(?:the\s+)?(?:website|page|url|site|dashboard|app)\b",
+        r"\bnavigate\s+to\b",
+        r"\bgo\s+to\s+(?:the\s+)?(?:website|page|url|site)\b",
+        r"\bcheck\s+(?:the\s+)?(?:live|website|page|dashboard)\b",
+        r"\binspect\s+(?:the\s+)?(?:page|website|dom)\b",
+        r"\binteract\s+with\b",
+        r"\bclick\s+on\b",
+        r"\bscroll\s+(?:down|up|to)\b",
+        r"\bfill\s+(?:in\s+)?(?:the\s+)?(?:form|field)\b",
+    ]
+    for pattern in browse_cues:
+        if re.search(pattern, lower):
+            return WebIntent.BROWSE
+
+    # RETRIEVE intent — user provided a specific URL
+    if url_provided or re.search(r"https?://\S+", message):
+        return WebIntent.RETRIEVE
+
+    # DISCOVER intent — user wants to find sources, not acquire content yet
+    discover_cues = [
+        r"\bfind\s+(?:articles?|sources?|websites?)\s+(?:about|on|for)\b",
+        r"\bsearch\s+for\s+(?:articles?|sources?|websites?)\b",
+        r"\blist\s+(?:some\s+)?(?:websites?|sources?)\b",
+        r"\bwhere\s+(?:can\s+i\s+find|is\s+there)\b",
+    ]
+    for pattern in discover_cues:
+        if re.search(pattern, lower):
+            return WebIntent.DISCOVER
+
+    # RESEARCH intent — user needs verified, current information
+    # (the default for "current X", "latest Y", "what is the Z standings")
+    research_cues = [
+        r"\bcurrent\b",
+        r"\blatest\b",
+        r"\b(?:today|tonight|tomorrow|now)\b",
+        r"\bstandings?\b",
+        r"\btable\b",
+        r"\bscores?\b",
+        r"\bweather\b",
+        r"\bnews\b",
+        r"\bprice\b",
+        r"\bresults?\b",
+    ]
+    for pattern in research_cues:
+        if re.search(pattern, lower):
+            return WebIntent.RESEARCH
+
+    # Default — RESEARCH (safest, most complete)
+    return WebIntent.RESEARCH
+
+
 @dataclass
 class WebResult:
     """The result of a web acquisition attempt.
 
-    Follows the user's acquisition contract:
+    Session 341: extended with evidence-validation fields per the user's
+    recommendation:
       WebResult {
           status
           source
-          acquisition_method
+          method
           content
-          structured_data
           freshness
           confidence
+          acquisition_trace        ← NEW
+          failure_reason           ← NEW
+          source_timestamp         ← NEW
+          retrieved_at             ← NEW
+          entity_validated         ← NEW
+          freshness_validated      ← NEW
+          authority_score          ← NEW
       }
     """
 
@@ -120,6 +229,15 @@ class WebResult:
     confidence: float = 0.0  # 0.0-1.0 — how confident we got the requested data
     error: Optional[str] = None  # if FAILED, why
     attempted_strategies: list[str] = field(default_factory=list)
+
+    # Session 341: evidence-validation fields
+    acquisition_trace: list[str] = field(default_factory=list)  # ordered steps taken
+    failure_reason: Optional[str] = None  # categorized failure: "stale", "wrong_entity", "boilerplate", "unreachable", "js_render_failed"
+    source_timestamp: Optional[str] = None  # when the source's data was last updated (if known)
+    retrieved_at: Optional[str] = None  # when we retrieved it (ISO timestamp)
+    entity_validated: bool = False  # did we verify the content is about the right entity?
+    freshness_validated: bool = False  # did we verify the data is current enough?
+    authority_score: float = 0.0  # 0.0-1.0 — how authoritative is the source?
 
     def is_success(self) -> bool:
         return self.status == AcquisitionStatus.SUCCESS
@@ -540,6 +658,8 @@ async def web_research(
             url[:80],
         )
         result = await acquire_web_content(url, query=query)
+        # Session 341: run evidence validation after acquisition
+        result = validate_web_result(result, query=query)
         if result.is_success():
             return result  # got it — return immediately
         if result.status == AcquisitionStatus.PARTIAL:
@@ -571,3 +691,236 @@ def _extract_urls_from_search(search_content: str) -> list[str]:
         if line.startswith("http://") or line.startswith("https://"):
             urls.append(line)
     return urls[:5]  # cap at 5 sources
+
+
+# ── Session 341: Evidence-aware validation pipeline ─────────────────────────
+#
+# The user's diagnosis:
+#   > keyword overlap can produce false confidence. A page containing
+#   > "Premier League Standings 2024/25" may have excellent keyword overlap
+#   > while being stale.
+#
+# This pipeline validates:
+#   1. Entity — is the content about the right thing (not the Championship)?
+#   2. Data presence — are there actual data rows (not just nav)?
+#   3. Temporal/freshness — is the data current enough for the request?
+#   4. Authority — is the source credible?
+#   5. Cross-source consistency — do multiple sources agree?
+
+
+# Known-authoritative domains for common topics
+_AUTHORITY_DOMAINS = {
+    # Sports
+    "premierleague.com": 0.95,
+    "bbc.com": 0.90, "bbc.co.uk": 0.90,
+    "skysports.com": 0.85,
+    "espn.com": 0.85,
+    "fotmob.com": 0.80,
+    # General reference
+    "wikipedia.org": 0.75,
+    "python.org": 0.95,
+    "docs.python.org": 0.95,
+    # News
+    "reuters.com": 0.90,
+    "apnews.com": 0.90,
+    "theguardian.com": 0.80,
+    # Weather
+    "weather.com": 0.85,
+    "metoffice.gov.uk": 0.85,
+}
+
+# Domains known to be low-authority or user-generated
+_LOW_AUTHORITY_DOMAINS = {
+    "reddit.com": 0.40,
+    "quora.com": 0.35,
+    "pinterest.com": 0.20,
+    "facebook.com": 0.30,
+}
+
+
+def _assess_authority(url: str) -> float:
+    """Score the authority of a source URL (0.0-1.0)."""
+    if not url:
+        return 0.0
+    lower = url.lower()
+    # Check high-authority domains
+    for domain, score in _AUTHORITY_DOMAINS.items():
+        if domain in lower:
+            return score
+    # Check low-authority domains
+    for domain, score in _LOW_AUTHORITY_DOMAINS.items():
+        if domain in lower:
+            return score
+    # Unknown domain — neutral
+    return 0.5
+
+
+def _validate_entity(content: str, query: str) -> tuple[bool, Optional[str]]:
+    """Validate that the content is about the right entity.
+
+    Returns (is_valid, failure_reason).
+    Catches the "Championship standings when user asked for EPL" failure.
+    """
+    if not content or not query:
+        return True, None  # can't validate — assume valid
+
+    lower_content = content.lower()
+    lower_query = query.lower()
+
+    # Entity mismatch detection — if the query asks for one thing and the
+    # content clearly discusses a different entity, flag it.
+    entity_pairs = [
+        # (query_entity, wrong_entity)
+        ("premier league", "championship"),
+        ("epl", "championship"),
+        ("premier league", "la liga"),
+        ("premier league", "serie a"),
+        ("premier league", "bundesliga"),
+        ("nairobi", "lagos"),
+        ("nairobi", "cape town"),
+        ("python", "javascript"),
+        ("python", "java"),
+    ]
+    for query_entity, wrong_entity in entity_pairs:
+        if query_entity in lower_query and wrong_entity in lower_content:
+            # Only flag if the wrong entity is MORE prominent than the right one
+            # (the content might mention both in a comparison)
+            if lower_content.count(wrong_entity) > lower_content.count(query_entity):
+                return False, f"wrong_entity: content is about {wrong_entity}, query asked for {query_entity}"
+
+    return True, None
+
+
+def _validate_freshness(
+    content: str,
+    query: str,
+    freshness: Optional[str],
+) -> tuple[bool, Optional[str]]:
+    """Validate that the data is fresh enough for the request.
+
+    Returns (is_fresh, failure_reason).
+    Catches the "2024/25 table when user asked for current" failure.
+    """
+    if not query:
+        return True, None  # can't validate — assume fresh
+
+    lower_query = query.lower()
+    # Only enforce freshness if the user explicitly asked for "current" / "latest"
+    requires_fresh = any(
+        w in lower_query for w in ["current", "latest", "today", "now", "live"]
+    )
+    if not requires_fresh:
+        return True, None  # no freshness requirement
+
+    if not freshness:
+        # No date detected — can't validate. Don't fail, but don't mark as validated.
+        return True, None
+
+    # Check if the freshness year is current
+    import datetime as _dt
+    current_year = _dt.datetime.now().year
+    try:
+        # Extract year from the freshness string
+        year_match = re.search(r"\b(20\d{2})\b", freshness)
+        if year_match:
+            content_year = int(year_match.group(1))
+            # Allow current year and previous year (for season-spanning data)
+            if content_year < current_year - 1:
+                return False, f"stale: content is from {content_year}, current year is {current_year}"
+    except (ValueError, AttributeError):
+        pass
+
+    return True, None
+
+
+def _validate_data_presence(content: str) -> tuple[bool, Optional[str]]:
+    """Validate that the content has actual data rows, not just navigation.
+
+    Returns (has_data, failure_reason).
+    Catches the "got navigation/footer/cookie-banner instead of the table" failure.
+    """
+    if not content:
+        return False, "empty_content"
+    if _is_boilerplate(content):
+        return False, "boilerplate: content is navigation/cookie-banner, not data"
+    # Check for table-like data (numbered rows, or rows with numbers)
+    lines = content.splitlines()
+    data_lines = 0
+    for line in lines:
+        # A "data line" has a number (points, score, etc.) or looks like a table row
+        if re.search(r"\d+", line) and len(line.strip()) > 5:
+            data_lines += 1
+    if data_lines < 2:
+        return False, f"no_data: content has {data_lines} data lines (expected ≥2)"
+    return True, None
+
+
+def validate_web_result(
+    result: WebResult,
+    query: str,
+) -> WebResult:
+    """Run the evidence-validation pipeline on a WebResult.
+
+    Updates the result's evidence fields (entity_validated, freshness_validated,
+    authority_score, failure_reason) and may downgrade the status if validation
+    fails.
+
+    Pipeline:
+      1. Entity validation — is the content about the right thing?
+      2. Data presence — are there actual data rows?
+      3. Temporal/freshness — is the data current enough?
+      4. Authority assessment — is the source credible?
+    """
+    if not result.is_success() and result.status != AcquisitionStatus.PARTIAL:
+        return result  # already failed — no point validating
+
+    # 1. Authority assessment (always runs)
+    result.authority_score = _assess_authority(result.source)
+
+    # 2. Entity validation
+    entity_ok, entity_reason = _validate_entity(result.content, query)
+    result.entity_validated = entity_ok
+    if not entity_ok:
+        result.failure_reason = entity_reason
+        result.status = AcquisitionStatus.FAILED
+        result.confidence = 0.0
+        logger.info(
+            "[web-validate] entity validation failed for %s: %s",
+            result.source[:80],
+            entity_reason,
+        )
+        return result
+
+    # 3. Data presence validation
+    data_ok, data_reason = _validate_data_presence(result.content)
+    if not data_ok:
+        result.failure_reason = data_reason
+        result.status = AcquisitionStatus.FAILED
+        result.confidence = 0.0
+        logger.info(
+            "[web-validate] data presence failed for %s: %s",
+            result.source[:80],
+            data_reason,
+        )
+        return result
+
+    # 4. Freshness validation
+    fresh_ok, fresh_reason = _validate_freshness(result.content, query, result.freshness)
+    result.freshness_validated = fresh_ok
+    if not fresh_ok:
+        result.failure_reason = fresh_reason
+        result.status = AcquisitionStatus.FAILED
+        result.confidence = 0.0
+        logger.info(
+            "[web-validate] freshness validation failed for %s: %s",
+            result.source[:80],
+            fresh_reason,
+        )
+        return result
+
+    # All validations passed — boost confidence
+    result.confidence = min(1.0, result.confidence + 0.1)
+    if result.authority_score > 0.8:
+        result.confidence = min(1.0, result.confidence + 0.1)  # authoritative source bonus
+
+    return result

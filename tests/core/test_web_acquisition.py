@@ -413,3 +413,249 @@ class TestWebResearch:
 
         assert result.status == AcquisitionStatus.FAILED
         assert "web_search failed" in (result.error or "")
+
+
+# ── Session 341: WebIntent classification tests ─────────────────────────────
+
+
+class TestWebIntentClassification:
+    def test_current_standings_is_RESEARCH(self):
+        from core.web_acquisition import WebIntent, classify_web_intent
+        assert classify_web_intent("Give me the current EPL standings.") == WebIntent.RESEARCH
+
+    def test_open_website_is_BROWSE(self):
+        from core.web_acquisition import WebIntent, classify_web_intent
+        assert classify_web_intent("Open the BBC website and check the live table.") == WebIntent.BROWSE
+
+    def test_navigate_to_is_BROWSE(self):
+        from core.web_acquisition import WebIntent, classify_web_intent
+        assert classify_web_intent("Navigate to premierleague.com/tables") == WebIntent.BROWSE
+
+    def test_specific_url_is_RETRIEVE(self):
+        from core.web_acquisition import WebIntent, classify_web_intent
+        assert classify_web_intent("Read https://example.com/article") == WebIntent.RETRIEVE
+
+    def test_find_articles_is_DISCOVER(self):
+        from core.web_acquisition import WebIntent, classify_web_intent
+        assert classify_web_intent("Find articles about AI regulation.") == WebIntent.DISCOVER
+
+    def test_weather_query_is_RESEARCH(self):
+        from core.web_acquisition import WebIntent, classify_web_intent
+        assert classify_web_intent("What is the weather in Nairobi?") == WebIntent.RESEARCH
+
+    def test_empty_message_defaults_to_RESEARCH(self):
+        from core.web_acquisition import WebIntent, classify_web_intent
+        assert classify_web_intent("") == WebIntent.RESEARCH
+
+    def test_browse_click_is_BROWSE(self):
+        from core.web_acquisition import WebIntent, classify_web_intent
+        assert classify_web_intent("Click on the standings tab") == WebIntent.BROWSE
+
+    def test_browse_scroll_is_BROWSE(self):
+        from core.web_acquisition import WebIntent, classify_web_intent
+        assert classify_web_intent("Scroll down to see more results") == WebIntent.BROWSE
+
+
+# ── Session 341: Evidence validation pipeline tests ─────────────────────────
+
+
+class TestAuthorityAssessment:
+    def test_premierleague_is_high_authority(self):
+        from core.web_acquisition import _assess_authority
+        assert _assess_authority("https://www.premierleague.com/tables") >= 0.9
+
+    def test_bbc_is_high_authority(self):
+        from core.web_acquisition import _assess_authority
+        assert _assess_authority("https://www.bbc.com/sport/football") >= 0.85
+
+    def test_reddit_is_low_authority(self):
+        from core.web_acquisition import _assess_authority
+        assert _assess_authority("https://reddit.com/r/soccer") <= 0.5
+
+    def test_unknown_domain_is_neutral(self):
+        from core.web_acquisition import _assess_authority
+        assert _assess_authority("https://unknown.com/page") == 0.5
+
+
+class TestEntityValidation:
+    def test_correct_entity_passes(self):
+        from core.web_acquisition import _validate_entity
+        content = "Premier League Table\n1. Manchester City — 85 pts\n2. Arsenal — 84 pts"
+        ok, reason = _validate_entity(content, "current EPL standings")
+        assert ok is True
+
+    def test_wrong_entity_fails(self):
+        """WEB-12: relevant keywords, wrong entity."""
+        from core.web_acquisition import _validate_entity
+        # Content about Championship (not EPL) but has "standings" keyword
+        content = (
+            "Championship Standings\n"
+            "1. Leeds United — 90 pts\n"
+            "2. Leicester City — 88 pts\n"
+            "3. Ipswich Town — 85 pts\n"
+            "The Championship table shows Leeds leading."
+        )
+        ok, reason = _validate_entity(content, "current Premier League standings")
+        assert ok is False
+        assert "wrong_entity" in (reason or "")
+
+    def test_no_query_passes(self):
+        from core.web_acquisition import _validate_entity
+        ok, reason = _validate_entity("some content", "")
+        assert ok is True
+
+
+class TestFreshnessValidation:
+    def test_current_year_passes(self):
+        from core.web_acquisition import _validate_freshness
+        import datetime
+        current_year = datetime.datetime.now().year
+        ok, reason = _validate_freshness("some content", "current EPL standings", str(current_year))
+        assert ok is True
+
+    def test_stale_year_fails(self):
+        """WEB-9: search result is relevant but stale."""
+        from core.web_acquisition import _validate_freshness
+        ok, reason = _validate_freshness("some content", "current EPL standings", "2023")
+        assert ok is False
+        assert "stale" in (reason or "")
+
+    def test_no_freshness_requirement_passes(self):
+        from core.web_acquisition import _validate_freshness
+        ok, reason = _validate_freshness("some content", "explain how a car engine works", "2010")
+        assert ok is True  # no freshness requirement
+
+    def test_no_freshness_detected_passes(self):
+        from core.web_acquisition import _validate_freshness
+        ok, reason = _validate_freshness("some content", "current EPL standings", None)
+        assert ok is True  # can't validate — don't fail
+
+
+class TestDataPresenceValidation:
+    def test_table_data_passes(self):
+        from core.web_acquisition import _validate_data_presence
+        content = (
+            "Premier League Table\n"
+            "1. Manchester City — 85 pts\n"
+            "2. Arsenal — 84 pts\n"
+            "3. Liverpool — 82 pts"
+        )
+        ok, reason = _validate_data_presence(content)
+        assert ok is True
+
+    def test_navigation_fails(self):
+        """WEB-10: HTTP success but acquisition failure."""
+        from core.web_acquisition import _validate_data_presence
+        content = "Menu\nHome\nSign in\nFooter\nCopyright 2024"
+        ok, reason = _validate_data_presence(content)
+        assert ok is False
+        assert "boilerplate" in (reason or "")
+
+    def test_empty_content_fails(self):
+        from core.web_acquisition import _validate_data_presence
+        ok, reason = _validate_data_presence("")
+        assert ok is False
+        assert "empty" in (reason or "")
+
+
+class TestValidateWebResult:
+    def test_valid_result_passes_all_validations(self):
+        from core.web_acquisition import (
+            WebResult, AcquisitionStatus, AcquisitionMethod, validate_web_result,
+        )
+        result = WebResult(
+            status=AcquisitionStatus.SUCCESS,
+            source="https://www.premierleague.com/tables",
+            acquisition_method=AcquisitionMethod.STATIC_FETCH,
+            content=(
+                "Premier League Table — 2026 Season\n"
+                "1. Manchester City — 85 pts (W26 D7 L5)\n"
+                "2. Arsenal — 84 pts (W25 D9 L4)\n"
+                "3. Liverpool — 82 pts (W25 D7 L6)"
+            ),
+            confidence=0.7,
+            freshness="2026",
+        )
+        validated = validate_web_result(result, query="current EPL standings")
+        assert validated.is_success()
+        assert validated.entity_validated is True
+        assert validated.freshness_validated is True
+        assert validated.authority_score >= 0.9
+        # Confidence should be boosted
+        assert validated.confidence > 0.7
+
+    def test_wrong_entity_downgrades_to_failed(self):
+        """WEB-12: relevant keywords, wrong entity."""
+        from core.web_acquisition import (
+            WebResult, AcquisitionStatus, AcquisitionMethod, validate_web_result,
+        )
+        result = WebResult(
+            status=AcquisitionStatus.SUCCESS,
+            source="https://example.com/championship",
+            acquisition_method=AcquisitionMethod.STATIC_FETCH,
+            content=(
+                "Championship Standings\n"
+                "1. Leeds United — 90 pts\n"
+                "2. Leicester City — 88 pts\n"
+                "3. Ipswich Town — 85 pts"
+            ),
+            confidence=0.8,
+            freshness="2026",
+        )
+        validated = validate_web_result(result, query="current Premier League standings")
+        assert validated.status == AcquisitionStatus.FAILED
+        assert "wrong_entity" in (validated.failure_reason or "")
+
+    def test_stale_data_downgrades_to_failed(self):
+        """WEB-9: search result is relevant but stale."""
+        from core.web_acquisition import (
+            WebResult, AcquisitionStatus, AcquisitionMethod, validate_web_result,
+        )
+        result = WebResult(
+            status=AcquisitionStatus.SUCCESS,
+            source="https://example.com/old-table",
+            acquisition_method=AcquisitionMethod.STATIC_FETCH,
+            content=(
+                "Premier League Table — 2023 Season\n"
+                "1. Manchester City — 89 pts (W27 D8 L3)\n"
+                "2. Arsenal — 84 pts (W25 D9 L4)\n"
+                "3. Liverpool — 82 pts (W25 D7 L6)"
+            ),
+            confidence=0.8,
+            freshness="2023",
+        )
+        validated = validate_web_result(result, query="current EPL standings")
+        assert validated.status == AcquisitionStatus.FAILED
+        assert "stale" in (validated.failure_reason or "")
+
+    def test_boilerplate_downgrades_to_failed(self):
+        """WEB-10: HTTP success but acquisition failure (navigation only)."""
+        from core.web_acquisition import (
+            WebResult, AcquisitionStatus, AcquisitionMethod, validate_web_result,
+        )
+        result = WebResult(
+            status=AcquisitionStatus.SUCCESS,
+            source="https://example.com/js-only-page",
+            acquisition_method=AcquisitionMethod.STATIC_FETCH,
+            content="Menu\nHome\nSign in\nFooter\nEnable JavaScript",
+            confidence=0.5,
+            freshness=None,
+        )
+        validated = validate_web_result(result, query="current EPL standings")
+        assert validated.status == AcquisitionStatus.FAILED
+        assert "boilerplate" in (validated.failure_reason or "")
+
+    def test_already_failed_result_is_not_validated(self):
+        from core.web_acquisition import (
+            WebResult, AcquisitionStatus, AcquisitionMethod, validate_web_result,
+        )
+        result = WebResult(
+            status=AcquisitionStatus.FAILED,
+            source="https://example.com",
+            acquisition_method=AcquisitionMethod.STATIC_FETCH,
+            content="",
+            error="connection refused",
+        )
+        validated = validate_web_result(result, query="current EPL standings")
+        assert validated.status == AcquisitionStatus.FAILED
+        assert validated.entity_validated is False  # not checked
