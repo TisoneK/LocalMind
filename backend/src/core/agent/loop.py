@@ -893,6 +893,52 @@ _HEDGE_PHRASES: tuple[str, ...] = (
     "please let me know if you'd like",
 )
 
+# Session 348: follow-through failure phrases — the model says "let me try"
+# after a failed tool but doesn't actually call a tool on this iteration.
+# These phrases indicate the model INTENDS to continue but is stopping
+# prematurely — the acceptance gate should reject and force a real tool call.
+_FOLLOW_THROUGH_PHRASES: tuple[str, ...] = (
+    "let me try the next",
+    "let me try another",
+    "let me try a different",
+    "i'll try the next",
+    "i'll try another",
+    "i'll try a different",
+    "let me fetch the next",
+    "let me fetch another",
+    "i'll fetch the next",
+    "let me try the other",
+    "i'll try the other",
+    "let me check the next",
+    "let me check another",
+    "let me attempt",
+    "let me pull up",
+    "i'll pull up",
+)
+
+
+def answer_fails_follow_through(text: str, had_tool_failure: bool) -> bool:
+    """Detect a follow-through failure: the model says 'let me try...' after
+    a tool failed, but doesn't actually call a tool on this iteration.
+
+    Session 348: the model fetched AccuWeather, got 403, saw the [RECOVERY]
+    directive to 'try the NEXT URL', then produced a short text response:
+    'AccuWeather blocked the request. Let me try the next sources.'
+    The acceptance gate accepted this as a final answer — ending the turn
+    prematurely. The user saw no weather data.
+
+    This detector fires when:
+    1. A tool failed this run (had_tool_failure=True)
+    2. The model's text contains a follow-through phrase ('let me try')
+    3. No tool call was emitted this iteration (checked by the caller)
+
+    Returns True when the gate should REJECT and force a real tool call.
+    """
+    if not text or not had_tool_failure:
+        return False
+    lower = text.lower()
+    return any(phrase in lower for phrase in _FOLLOW_THROUGH_PHRASES)
+
 
 def _recovery_nudge_tail(loop_messages: list[dict], trace=None) -> str:
     """Task-anchor a recovery nudge: the user's ORIGINAL request, plus an
@@ -5264,6 +5310,49 @@ class AgentLoop:
                                         "synthesize a direct answer from it NOW, or fetch ONE specific "
                                         "page if the snippets lack the detail you need. Do not ask the "
                                         "user to decide; act.\n"
+                                    ),
+                                }
+                            )
+                            return "", False
+                # Session 348: follow-through failure — the model says "let me
+                # try the next source" after a 403 but doesn't actually call a
+                # tool. Reject and force a real tool call.
+                if is_parent and any(
+                    getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
+                ):
+                    _final_text = getattr(trace, "final_response", "") or ""
+                    # Check if any tool FAILED this run
+                    _had_tool_failure = any(
+                        getattr(s, "tool_failed", False) or
+                        "error" in (getattr(s, "observation", "") or "").lower()
+                        for s in getattr(trace, "steps", []) or []
+                    )
+                    if answer_fails_follow_through(_final_text, _had_tool_failure):
+                        _already_followup_nudged = any(
+                            isinstance(m, dict)
+                            and isinstance(m.get("content", ""), str)
+                            and "[FOLLOW-THROUGH]" in m.get("content", "")
+                            for m in (loop_messages or [])
+                        )
+                        if not _already_followup_nudged and iteration + 1 < effective_max_iter:
+                            if obs:
+                                obs.emit(
+                                    "agent_loop_gate_failed_replan",
+                                    intent=intent.value,
+                                    iteration=iteration + 1,
+                                    unmet=["model said 'let me try' but didn't call a tool — follow-through failure"],
+                                )
+                            loop_messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        "\n[FOLLOW-THROUGH] You said 'let me try the next source' "
+                                        "but did not actually call web_fetch or web_research. "
+                                        "Your previous tool failed (e.g. 403 Forbidden). You MUST "
+                                        "call web_fetch with the NEXT URL from the search results "
+                                        "NOW, or call web_research to handle multi-source acquisition "
+                                        "automatically. Do NOT stop with a partial response — "
+                                        "the user needs the actual weather data, not a status update.\n"
                                     ),
                                 }
                             )
