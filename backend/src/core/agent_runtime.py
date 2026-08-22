@@ -823,11 +823,26 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # agent loop's direct-return path, not the fast-path's chat call).
         if file is None and not client_intent and _pre_init_override.mode is None:
             from core.trivial_input import (
+                _direct_chat_response,
                 conversational_response,
                 is_conversational_question,
                 is_trivial_input,
                 trivial_response,
             )
+
+            async def _conversational_response_with_context(msg, adptr, hist, thinker_ctx):
+                """Session 354: conversational response with Thinker context injected."""
+                sys_prompt = (
+                    "You are LocalMind, a local AI assistant. Answer the user's "
+                    "latest message naturally and briefly using the recent conversation "
+                    "as context. Resolve short follow-ups against what was just said; "
+                    "do not repeat a previous answer when the user asks for more detail. "
+                    "Give concrete examples when examples are requested. Do not output "
+                    "your reasoning process — just give the response directly.\n\n"
+                    f"Context from reasoning: {thinker_ctx}"
+                )
+                async for chunk in _direct_chat_response(msg, adptr, hist, sys_prompt):
+                    yield chunk
             # _approx_tokens is already imported at module top (line 35).
             # Session 333: do NOT re-import here — a local `from X import Y`
             # makes Y function-local, shadowing the module-level import for
@@ -871,12 +886,61 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     "stage_timing", stage="context_build", latency_ms=0, status="skipped"
                 )
                 _gen_start = time.monotonic()
+
+                # Session 354: run the Thinker BEFORE the conversational
+                # response — even on the fast-path, the model needs
+                # understanding/intent analysis to avoid clarification loops.
+                # Only for the CONVERSATIONAL path (not trivial — trivial gets
+                # a canned reply with zero LLM calls).
+                _thinker_context = ""
+                if not _is_trivial:
+                    try:
+                        from core.agent.thinker import Evidence, Thinker
+                        _hist_text = "\n".join(
+                            f"{h.get('role', '?')}: {h.get('content', '')[:200]}"
+                            for h in _hist_dicts[-4:]
+                            if h.get("content")
+                        )
+                        _ev = Evidence(
+                            user_message=message,
+                            conversation_history=_hist_text,
+                            observations="",
+                            iteration=0,
+                        )
+                        if _ev.has_evidence and getattr(_adapter, "thinking_enabled", False):
+                            if collector:
+                                collector.emit("agent_thinker_start", iteration=0)
+                            _thinker = Thinker(timeout_secs=15.0)
+                            async for _tc in _thinker.consult(_ev, _adapter):
+                                pass
+                            _analysis = _thinker.last_analysis
+                            if _analysis and not _analysis.is_empty:
+                                _thinker_context = _analysis.reasoning[:500]
+                                if collector:
+                                    collector.emit(
+                                        "agent_thinker_done",
+                                        iteration=0,
+                                        next_step=_analysis.next_step[:200],
+                                        facts=len(_analysis.facts),
+                                        ambiguities=len(_analysis.ambiguities),
+                                    )
+                    except Exception as _thx:
+                        logger.debug("[agent-runtime] Thinker on fast-path skipped: %s", _thx)
+
                 _response_chunks: list[str] = []
                 _fast_usage: dict[str, int] = {}
                 if _is_trivial:
                     _stream = trivial_response(message, _adapter, _hist_dicts)
                 else:
-                    _stream = conversational_response(message, _adapter, _hist_dicts)
+                    # Session 354: if the Thinker provided context, inject it
+                    # into the conversational response's system prompt so the
+                    # model has understanding guidance.
+                    if _thinker_context:
+                        _stream = _conversational_response_with_context(
+                            message, _adapter, _hist_dicts, _thinker_context
+                        )
+                    else:
+                        _stream = conversational_response(message, _adapter, _hist_dicts)
                 async for _chunk in _stream:
                     if _chunk.usage:
                         _fast_usage.update(_chunk.usage)

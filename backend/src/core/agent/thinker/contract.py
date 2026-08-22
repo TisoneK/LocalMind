@@ -14,21 +14,36 @@ from dataclasses import dataclass, field
 
 @dataclass
 class Evidence:
-    """What the Thinker reasons ON — the gathered state so far, NOT the raw
-    request. Assembled by the agent loop after at least one tool has run."""
+    """What the Thinker reasons ON — the gathered state so far.
+
+    Session 354: extended to support pre-tool understanding. The Thinker
+    can now reason about the user's REQUEST itself (intent, context,
+    conversation history) even when no tools have run yet. This was the
+    root cause of Gemini's failure on 'How's the going' — the fast-path
+    bypassed the Thinker entirely, so the model had no understanding
+    layer and produced a clarification loop.
+    """
 
     objective: str = ""          # what the user wants (from init) — context, not the subject
     user_message: str = ""       # the latest user message — context
     observations: str = ""       # the real gathered evidence (tool results / observation log)
     last_action: str = ""        # the tool/action that produced the newest evidence
     iteration: int = 0           # which loop step this consult happens at
+    # Session 354: conversation history for pre-tool understanding
+    conversation_history: str = ""  # recent user/assistant turns for context
 
     @property
     def has_evidence(self) -> bool:
-        """A Thinker consult is only meaningful once real evidence exists —
-        before anything is gathered there is nothing concrete to reason about
-        (that is exactly the upfront-echo failure this module replaces)."""
-        return bool(self.observations.strip())
+        """A Thinker consult is meaningful when EITHER:
+        - Real tool evidence exists (observations), OR
+        - The user's message itself is worth reasoning about (pre-tool understanding)
+
+        Session 354: previously this returned False when no tools had run,
+        which meant the Thinker never fired on the conversational fast-path
+        or on the first iteration before any tool was called. The model
+        then had no understanding layer and produced clarification loops.
+        """
+        return bool(self.observations.strip() or self.user_message.strip())
 
 
 @dataclass

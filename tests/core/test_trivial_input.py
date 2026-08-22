@@ -741,9 +741,12 @@ async def test_engine_conversational_followup_uses_direct_chat_context():
 
     async def mock_chat(messages, intent="chat", **kwargs):
         calls.append(messages)
+        # Session 354: the Thinker now runs on the conversational fast-path,
+        # so the first call is the Thinker consult, the second is the actual
+        # response. Adjust the call-counting accordingly.
         answer = (
             "I can help with coding, files, and research."
-            if len(calls) == 1
+            if len(calls) == 2
             else "For example, I can create a script or find a document."
         )
         yield MagicMock(text=answer, done=False, error=None, usage={"prompt_tokens": 30})
@@ -759,7 +762,9 @@ async def test_engine_conversational_followup_uses_direct_chat_context():
     second_text = "".join(c.text for c in second if getattr(c, "text", ""))
     assert "coding" in first_text.lower()
     assert "script" in second_text.lower()
-    assert len(calls) == 2
+    # Session 354: the Thinker now runs on the conversational fast-path,
+    # adding 1 extra LLM call per conversational turn. 2 turns × (Thinker + response) = 4 calls.
+    assert len(calls) == 4
     assert any(
         message.get("content") == "I can help with coding, files, and research."
         for message in calls[1]
