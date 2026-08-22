@@ -1477,20 +1477,24 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # the text stream. The frontend renders these natively (tables, charts,
         # diagrams, metrics) instead of forcing everything through Markdown.
         # The agent decides WHAT to show; the UI decides HOW it looks.
+        #
+        # Session 346: do NOT emit a TextBlock that duplicates the text already
+        # streamed via token events — that causes a double-reply in the UI.
+        # Only emit structured blocks (table, chart, diagram, metric, etc.)
+        # when the presentation type is NOT plain text. For TEXT responses,
+        # the text stream IS the rendering — no blocks needed.
         _response_blocks = []
         try:
-            from core.presentation import classify_presentation, text_block, PresentationType
+            from core.presentation import classify_presentation, PresentationType
 
             _pres_type = classify_presentation(message, response_text)
-            if _pres_type == PresentationType.TEXT:
-                # Simple text response — emit a single TextBlock
-                _response_blocks = [text_block(response_text).to_dict()]
-            else:
-                # For non-text types, still emit the text as a TextBlock so
-                # the frontend has the raw content. The presentation type
-                # hint is in the metadata for future Phase 4 rendering.
+            if _pres_type != PresentationType.TEXT:
+                # Non-text presentation — emit a presentation hint so the
+                # frontend knows the intended format. The actual structured
+                # blocks (table rows, chart data, diagram nodes) will be
+                # produced by future Phase 4 agent-side block generation.
+                # For now, just the hint — no TextBlock duplication.
                 _response_blocks = [
-                    text_block(response_text).to_dict(),
                     {"type": "presentation_hint", "presentation_type": _pres_type.value},
                 ]
         except Exception:
