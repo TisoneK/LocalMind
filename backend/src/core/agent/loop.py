@@ -4100,18 +4100,36 @@ class AgentLoop:
                             yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                             return
                         # Extraction failed — yield a CLEAN user-facing message
-                        # (B-2026-08-20-14), NOT the raw _summarize_trace_for_user
-                        # dump. The tool evidence is in the Actions panel.
+                        # with the actual evidence, NOT "check the Actions panel."
+                        # Session 349: the user should never be told to look at
+                        # the Actions panel — that's a developer debug UX, not
+                        # a user-facing response. Instead, build a simple summary
+                        # from the tool observations we already have.
                         _tool_count = sum(1 for s in (trace.steps if trace else []) if getattr(s, "tool_name", ""))
                         if _tool_count > 0:
+                            # Build a simple evidence summary from trace steps
+                            _evidence_lines = []
+                            for s in (trace.steps if trace else []):
+                                _obs = getattr(s, "observation", "") or ""
+                                if _obs and len(_obs.strip()) > 20:
+                                    # Truncate to first 500 chars of useful content
+                                    _evidence_lines.append(_obs.strip()[:500])
+                            if _evidence_lines:
+                                _summary = (
+                                    "Here's what I found (the model provider was "
+                                    "rate-limited on my final synthesis, so this "
+                                    "is the raw evidence):\n\n"
+                                    + "\n\n---\n\n".join(_evidence_lines[:3])
+                                )
+                            else:
+                                _summary = (
+                                    "I gathered the information you asked for, but "
+                                    "the model provider was rate-limited. Please "
+                                    "try again in a moment and I'll give you a "
+                                    "clean summary."
+                                )
                             yield StreamChunk(
-                                text=(
-                                    "I found the information you asked for, but the "
-                                    "model provider rate-limited my final synthesis "
-                                    "call. The search results and tool outputs are in "
-                                    "the Actions panel above — take a look, or ask me "
-                                    "again and I'll retry."
-                                ),
+                                text=_summary,
                                 done=False,
                                 usage=dict(_provider_usage),
                             )
@@ -6739,17 +6757,29 @@ class AgentLoop:
         """
         _tool_count = sum(1 for s in (trace.steps if trace else []) if getattr(s, "tool_name", ""))
         if _tool_count > 0:
+            # Session 349: build a simple evidence summary instead of
+            # telling the user to "check the Actions panel"
+            _evidence_lines = []
+            for s in (trace.steps if trace else []):
+                _obs = getattr(s, "observation", "") or ""
+                if _obs and len(_obs.strip()) > 20:
+                    _evidence_lines.append(_obs.strip()[:400])
+            if _evidence_lines:
+                return (
+                    "Here's what I found:\n\n"
+                    + "\n\n---\n\n".join(_evidence_lines[:3])
+                    + "\n\n(I had trouble generating a clean summary — "
+                      "the raw evidence above is from the tools I ran.)"
+                )
             return (
-                "I found the information you asked for, but I'm having trouble "
-                "putting it into a clean final answer right now. The search "
-                "results and tool outputs are in the Actions panel above — "
-                "take a look, or ask me again and I'll retry."
+                "I found the information you asked for, but I'm having "
+                "trouble putting it into a clean final answer right now. "
+                "Please try again and I'll retry."
             )
         if observation_log.strip():
             return (
                 "I ran some tools but couldn't produce a final answer. "
-                "The tool outputs are in the Actions panel — take a look, "
-                "or ask me again and I'll retry."
+                "Please try again, or rephrase your question."
             )
         if timed_out:
             return (
@@ -7155,13 +7185,27 @@ class AgentLoop:
             # Actions panel (where the tool evidence already lives).
             _tool_count = sum(1 for s in (trace.steps if trace else []) if s.tool_name)
             if _tool_count > 0:
-                yield StreamChunk(
-                    text=(
+                # Session 349: build evidence summary instead of "check Actions panel"
+                _evidence_lines = []
+                for s in (trace.steps if trace else []):
+                    _obs = getattr(s, "observation", "") or ""
+                    if _obs and len(_obs.strip()) > 20:
+                        _evidence_lines.append(_obs.strip()[:400])
+                if _evidence_lines:
+                    _summary = (
+                        "Here's what I found:\n\n"
+                        + "\n\n---\n\n".join(_evidence_lines[:3])
+                        + "\n\n(I had trouble generating a clean summary — "
+                          "the raw evidence above is from the tools I ran.)"
+                    )
+                else:
+                    _summary = (
                         "I found the information you asked for, but I'm having "
                         "trouble putting it into a clean final answer right now. "
-                        "The search results and tool outputs are in the Actions "
-                        "panel above — take a look, or ask me again and I'll retry."
-                    ),
+                        "Please try again and I'll retry."
+                    )
+                yield StreamChunk(
+                    text=_summary,
                     done=True,
                     usage=dict(_provider_usage),
                 )
@@ -7169,8 +7213,7 @@ class AgentLoop:
                 yield StreamChunk(
                     text=(
                         "I ran some tools but couldn't produce a final answer. "
-                        "The tool outputs are in the Actions panel — take a look, "
-                        "or ask me again and I'll retry."
+                        "Please try again, or rephrase your question."
                     ),
                     done=True,
                     usage=dict(_provider_usage),

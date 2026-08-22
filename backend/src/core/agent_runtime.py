@@ -1365,7 +1365,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             else:
                 response_text = (
                     "I ran the parent agent loop, but it produced no usable final answer. "
-                    "The Actions panel shows the work that actually ran."
+                    "Please try again, or rephrase your question."
                 )
             yield StreamChunk(text=response_text, done=False)
 
