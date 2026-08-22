@@ -146,7 +146,11 @@ async def test_loop_treats_structured_failure_as_failed_and_skips_thinker():
     events = obs.history()
     tool_events = [event for event in events if event.type == "tool_call"]
     assert any(event.data.get("status") == "failed" for event in tool_events)
-    assert not any(event.type == "agent_thinker_start" for event in events)
+    # Session 350: the Thinker now runs after tool failures too — it needs
+    # to analyze the failure and tell the model what to do next (e.g. "try
+    # the next URL"). The old behavior skipped the Thinker on failure, which
+    # meant the model never got guidance on how to recover.
+    # We no longer assert that agent_thinker_start is absent.
     # B-2026-08-20-18: a recovered tool failure (model produced a real answer
     # after the failure) should NOT emit agent_loop_failure. The run is a
     # success — the user got their answer. The old behavior emitted

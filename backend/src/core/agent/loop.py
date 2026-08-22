@@ -3511,12 +3511,22 @@ class AgentLoop:
                 # (thinking enabled), only on a real successful observation. Any
                 # failure/timeout is swallowed — the Thinker never blocks a turn.
                 if (
-                    not _thinker_consulted
-                    and not tool_failed
-                    and observation
+                    observation
                     and intent in AGENT_INTENTS
                     and getattr(active_adapter, "thinking_enabled", False)
                 ):
+                    # Session 350: removed the `_thinker_consulted` once-per-turn
+                    # gate and the `not tool_failed` gate. The Thinker should
+                    # consult after EVERY tool result — including failures —
+                    # because:
+                    # 1. After a 403, the Thinker can tell the model "the fetch
+                    #    failed, try the next URL from the search results"
+                    # 2. After a successful first fetch, the Thinker can tell the
+                    #    model "you have enough evidence, synthesize the answer"
+                    # 3. After a second successful fetch, the Thinker can evaluate
+                    #    whether the new evidence contradicts or supplements
+                    # Bounded by: it's still a no-op on empty observations, and
+                    # its timeout prevents hanging.
                     _thinker_consulted = True
                     try:
                         from core.agent.thinker import Evidence, Thinker
