@@ -927,17 +927,53 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     return ParentSession(session_id=session_id)
 
             async def _load_facts_and_attach():
-                facts = await self._memory_facts(message, session_id)
+                # Session 339: gate memory retrieval by conversation state.
+                # A casual opener ("Hi", "How's it going?") or the first turn
+                # of a new chat must NOT trigger memory retrieval — memory
+                # should enrich the conversation, not choose its topic.
+                # The user's 6 invariants:
+                #   1. New conversation begins without an assumed topic.
+                #   2. Memory may support intent but not introduce a topic.
+                #   3. Unresolved tasks are conversation state, not memory.
+                from core.conversation_state import classify_conversation
+
+                # Load the parent session's turn_count synchronously (the
+                # _load_parent_session task runs concurrently but we need
+                # the count NOW to classify the conversation state). If the
+                # session store is unavailable, default to 0 (first turn).
+                try:
+                    _stored = await asyncio.to_thread(
+                        self._store.get_parent_session, session_id
+                    )
+                    _turn_count = int((_stored or {}).get("turn_count") or 0)
+                except Exception:
+                    _turn_count = 0
+
+                conv_state = classify_conversation(
+                    message=message,
+                    turn_count=_turn_count,
+                    has_pending_work=False,  # pending-work retrieval is a separate concern
+                )
+                logger.info(
+                    "[agent-runtime] conversation_state: mode=%s retrieve_memory=%s reason=%s",
+                    conv_state.mode.value,
+                    conv_state.should_retrieve_memory,
+                    conv_state.reason,
+                )
+                if conv_state.should_retrieve_memory:
+                    facts = await self._memory_facts(message, session_id)
+                else:
+                    facts = []  # no memory injection for casual openers / new chats
                 try:
                     failures = self._store.recall_failures(message=message, intent=Intent.ANALYZE.value)
                     hint = format_recall_hint(failures)
-                    if hint:
+                    if hint and conv_state.should_retrieve_memory:
                         facts.append(hint)
                 except Exception:
                     logger.debug("[agent-runtime] failure memory recall skipped", exc_info=True)
                 try:
                     hint = format_ledger_hint(self._store.recall_decisions(task_type=""))
-                    if hint:
+                    if hint and conv_state.should_retrieve_memory:
                         facts.append(hint)
                 except Exception:
                     logger.debug("[agent-runtime] decision memory recall skipped", exc_info=True)

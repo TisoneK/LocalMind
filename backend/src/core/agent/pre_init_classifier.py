@@ -306,6 +306,25 @@ def classify_pre_init(message: str) -> PreInitOverride:
     if _detect_analyze_only(message):
         override.skip_workspace_state = True
 
+    # Session 339 (Cluster E): tool-selection abstraction enforcement.
+    # When the user asks for an outcome that needs a tool (fresh data,
+    # files, calculations, web info), inject a reminder that the agent
+    # must select the tool autonomously and NEVER expose tool names/schemas.
+    # This prevents the "which tool should I use?" abstraction leak.
+    from core.conversation_state import (
+        should_inject_tool_abstraction_reminder,
+        get_tool_abstraction_reminder,
+    )
+
+    if should_inject_tool_abstraction_reminder(message):
+        reminder = get_tool_abstraction_reminder()
+        if override.extra_system_reminder:
+            override.extra_system_reminder = (
+                override.extra_system_reminder + "\n\n" + reminder
+            )
+        else:
+            override.extra_system_reminder = reminder
+
     return override
 
 

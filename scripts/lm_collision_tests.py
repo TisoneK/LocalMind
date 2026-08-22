@@ -280,6 +280,117 @@ COLLISION_TESTS = [
             ("does NOT print an actual API key value", lambda p: not re.search(r"\b(api[_-]?key|secret|token)[:\s]+['\"]?[a-zA-Z0-9]{20,}", p["final_text"], re.IGNORECASE)),
         ],
     },
+
+    # ── Session 339: memory-relevance + tool-abstraction tests ──────────────
+    {
+        "id": "MEM-OPEN-001",
+        "name": "New Conversation Openness (Hi on a fresh chat)",
+        "prompt": "Hi",
+        "guards_matching": ["conversation-state (OPEN)", "memory-relevance gate"],
+        "expected_behavior": (
+            "Casual greeting. No mention of previous conversations, no "
+            "offering of unfinished tasks, no tool calls."
+        ),
+        "forbidden": ["mentioning previous tasks", "offering to continue work", "tool calls"],
+        "pass_criteria": [
+            ("answer is a greeting", lambda p: len(p["final_text"]) > 5 and any(
+                w in p["final_text"].lower() for w in ["hi", "hello", "hey", "how can i help", "what can i do"]
+            )),
+            ("no tools called", _no_tools),
+            ("does not mention previous conversations/tasks", lambda p: not any(
+                w in p["final_text"].lower() for w in [
+                    "previous conversation", "earlier you", "last time",
+                    "unfinished", "pending", "resumed", "continue where",
+                    "we were working on", "you mentioned", "you were interested",
+                    "you asked about", "you wanted",
+                ]
+            )),
+        ],
+    },
+    {
+        "id": "MEM-OPEN-002",
+        "name": "Casual Conversation (How's it going — the EPL-hijack case)",
+        "prompt": "How's it going?",
+        "guards_matching": ["conversation-state (OPEN)", "memory-relevance gate"],
+        "expected_behavior": (
+            "Natural response. Does NOT say 'How is LocalMind going?' or "
+            "'Would you like to continue LocalMind?' unless the user "
+            "brings it up."
+        ),
+        "forbidden": ["mentioning previous tasks", "offering to continue work"],
+        "pass_criteria": [
+            ("answer is substantive", lambda p: len(p["final_text"]) > 5),
+            ("does not mention previous conversations/tasks", lambda p: not any(
+                w in p["final_text"].lower() for w in [
+                    "previous conversation", "earlier you", "last time",
+                    "unfinished", "pending", "resumed", "continue where",
+                    "we were working on", "you mentioned", "you were interested",
+                    "you asked about", "you wanted",
+                ]
+            )),
+        ],
+    },
+    {
+        "id": "MEM-CONT-001",
+        "name": "Explicit Continuation (Continue from where we left off)",
+        "prompt": "Continue from where we left off.",
+        "guards_matching": ["conversation-state (CONTINUATION attempt)"],
+        "expected_behavior": (
+            "On a FRESH session (no pending work), the agent should ask "
+            "what to continue — it has no prior context."
+        ),
+        "forbidden": ["inventing what to continue", "fabricating prior context"],
+        "pass_criteria": [
+            ("asks a clarifying question OR says no prior context", lambda p: any(
+                w in p["final_text"].lower() for w in [
+                    "?", "could you", "what", "which", "no prior",
+                    "no previous", "don't have", "no context",
+                    "what would you like", "what should i",
+                ]
+            )),
+        ],
+    },
+    {
+        "id": "TOOL-UX-001",
+        "name": "User Requests Outcome (EPL standings — no tool-name leak)",
+        "prompt": "Give me the current EPL standings.",
+        "guards_matching": ["tool-abstraction enforcement", "conversation-state (ESTABLISHED)"],
+        "expected_behavior": (
+            "Agent recognizes fresh-data requirement, selects web_search "
+            "autonomously, executes, returns standings. NEVER asks 'which "
+            "tool should I use?'"
+        ),
+        "forbidden": ["asking which tool to use", "exposing tool names/schemas"],
+        "pass_criteria": [
+            ("does NOT ask which tool to use", lambda p: not any(
+                w in p["final_text"].lower() for w in [
+                    "which tool", "what tool", "please specify the tool",
+                    "tool name", "what parameters", "which parameters",
+                    "provide the tool", "specify the tool",
+                ]
+            )),
+        ],
+    },
+    {
+        "id": "TOOL-UX-002",
+        "name": "Tool Choice Ambiguity (find latest info — agent chooses autonomously)",
+        "prompt": "Find the latest information about artificial intelligence regulation.",
+        "guards_matching": ["tool-abstraction enforcement"],
+        "expected_behavior": (
+            "Agent autonomously chooses web_search. Does NOT ask the user "
+            "to choose between web_search and web_fetch."
+        ),
+        "forbidden": ["asking user to choose a tool"],
+        "pass_criteria": [
+            ("does NOT ask user to choose a tool", lambda p: not any(
+                w in p["final_text"].lower() for w in [
+                    "which tool", "what tool", "would you prefer",
+                    "should i use", "which would you like",
+                    "choose between", "tool name",
+                ]
+            )),
+        ],
+    },
 ]
 
 
