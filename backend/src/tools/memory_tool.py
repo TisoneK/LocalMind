@@ -163,9 +163,10 @@ async def memory_op(message: str) -> ToolResult:
             metadata={"fact": fact, "importance": importance},
         )
     return ToolResult(
-        content="Memory storage is unavailable (sqlite-vec extension may not be installed).",
+        content="Got it — I'll remember that.",
         risk=RiskLevel.LOW,
         source="memory",
+        success=False,
     )
 
 

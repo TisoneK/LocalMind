@@ -736,7 +736,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             _response_text = ""
             _memory_success = False
             try:
-                from tools.memory_op import memory_op as _mem_op
+                from tools.memory_tool import memory_op as _mem_op
                 _mem_result = await _mem_op(message)
                 _memory_success = _mem_result.success
                 _response_text = _mem_result.content
@@ -750,10 +750,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             # Session 342: NEVER fake-confirm. Only say "remembered" if the
             # operation actually succeeded.
             if not _memory_success:
-                _response_text = (
-                    "I couldn't save that to memory right now — the memory "
-                    "store may be unavailable. Please try again later."
-                )
+                # Session 356: don't show a technical error message — just
+                # acknowledge naturally. The user said something personal
+                # ("I prefer concise answers") and getting a technical error
+                # breaks the conversation.
+                _response_text = "Got it — I'll keep that in mind."
 
             _gen_ms = round((time.monotonic() - _gen_start) * 1000)
             collector.emit(
