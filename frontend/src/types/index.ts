@@ -2,6 +2,10 @@ export type MessageRole = 'user' | 'assistant';
 export type ToolStatus = 'running' | 'started' | 'in_progress' | 'done' | 'failed' | 'pending';
 export type IntentType = 'code' | 'file' | 'chat' | 'search' | 'shell' | 'memory';
 
+// Session 344: Response Block System — structured output from Presentation Intelligence.
+import type { ResponseBlock as _ResponseBlock } from './response-blocks';
+export type ResponseBlock = _ResponseBlock;
+
 export interface ToolCall {
   id: string;
   name: string;
@@ -149,6 +153,11 @@ export interface ChatMessage {
    *  replanning / switching to a different approach" — the literal
    *  difference between a chat-with-tools and an agent. */
   agentPhases?: AgentPhase[];
+  /** Session 344: structured response blocks from the Presentation Intelligence
+   *  layer. When present, the frontend renders these natively (tables, charts,
+   *  diagrams, metrics) instead of forcing everything through Markdown.
+   *  The agent decides WHAT to show; the UI decides HOW it looks. */
+  responseBlocks?: ResponseBlock[];
   /** Session 267: the Agent Workspace run tree for this turn (rebuilt
    *  server-side from obs events and persisted with the message). The Agents
    *  tab restores the last turn's tree from here on reload. */

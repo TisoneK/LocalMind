@@ -1394,6 +1394,28 @@ export function useChat(
                 break;
               }
 
+              // Session 344 Phase 3: structured response blocks from the
+              // Presentation Intelligence layer. The backend emits these
+              // alongside the text stream so the frontend can render tables,
+              // charts, diagrams, and metrics natively.
+              case 'response_blocks': {
+                const blocks = parsed.blocks;
+                if (Array.isArray(blocks) && blocks.length > 0) {
+                  setMessages((prev) => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last && last.role === 'assistant') {
+                      updated[updated.length - 1] = {
+                        ...last,
+                        responseBlocks: blocks,
+                      };
+                    }
+                    return updated;
+                  });
+                }
+                break;
+              }
+
               case 'error': {
                 const err = parsed.error;
                 if (err && typeof err === 'object' && (err as any).code) {

@@ -1471,4 +1471,34 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             context_tokens=prompt_tokens,
             latency_ms=total_ms,
         )
-        yield StreamChunk(text="", done=True, usage=usage)
+
+        # Session 344 Phase 3: Presentation Intelligence — classify the
+        # response's presentation type and emit structured blocks alongside
+        # the text stream. The frontend renders these natively (tables, charts,
+        # diagrams, metrics) instead of forcing everything through Markdown.
+        # The agent decides WHAT to show; the UI decides HOW it looks.
+        _response_blocks = []
+        try:
+            from core.presentation import classify_presentation, text_block, PresentationType
+
+            _pres_type = classify_presentation(message, response_text)
+            if _pres_type == PresentationType.TEXT:
+                # Simple text response — emit a single TextBlock
+                _response_blocks = [text_block(response_text).to_dict()]
+            else:
+                # For non-text types, still emit the text as a TextBlock so
+                # the frontend has the raw content. The presentation type
+                # hint is in the metadata for future Phase 4 rendering.
+                _response_blocks = [
+                    text_block(response_text).to_dict(),
+                    {"type": "presentation_hint", "presentation_type": _pres_type.value},
+                ]
+        except Exception:
+            logger.debug("[agent-runtime] presentation classification skipped", exc_info=True)
+
+        yield StreamChunk(
+            text="",
+            done=True,
+            usage=usage,
+            metadata={"response_blocks": _response_blocks} if _response_blocks else {},
+        )

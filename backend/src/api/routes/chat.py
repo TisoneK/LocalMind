@@ -710,6 +710,15 @@ async def _event_stream(
                     pending = chunk.metadata.get("pending_write")
                     if pending:
                         done_payload["requires_confirmation"] = pending
+                    # Session 344 Phase 3: emit structured response blocks
+                    # so the frontend can render tables, charts, diagrams
+                    # natively instead of forcing everything through Markdown.
+                    response_blocks = chunk.metadata.get("response_blocks")
+                    if response_blocks:
+                        yield _sse({
+                            "type": "response_blocks",
+                            "blocks": response_blocks,
+                        })
                 yield _sse(done_payload)
                 _last_sent_time = time.monotonic()
 

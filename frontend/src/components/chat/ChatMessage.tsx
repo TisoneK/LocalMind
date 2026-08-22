@@ -52,6 +52,7 @@ import { ChatMessage as ChatMessageType, FileResult, PendingWrite } from '@/type
 import { formatLatency } from '@/lib/localmind/progress';
 import { repairMarkdown } from '@/lib/markdownRepair';
 import { ThinkingBlock } from './ThinkingBlock';
+import { ResponseBlockRenderer } from './ResponseBlockRenderer';
 import { ToolSteps } from './ToolSteps';
 import { AgentPhases } from './AgentPhases';
 import { ErrorMessage } from './ErrorMessage';
@@ -737,6 +738,13 @@ export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps)
             ) : (
               <MarkdownContent text={message.content} />
             )
+          )}
+
+          {/* Session 344: structured response blocks from Presentation Intelligence.
+              When the backend emits response_blocks SSE events, render them natively
+              (tables, metrics, diagrams, etc.) instead of forcing everything through Markdown. */}
+          {message.responseBlocks && message.responseBlocks.length > 0 && !isStreaming && (
+            <ResponseBlockRenderer blocks={message.responseBlocks} />
           )}
 
           {/* Code blocks (from parsed message.codeBlocks — legacy path) */}
