@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from core.models import RiskLevel, ToolResult
+from core.models import Intent, RiskLevel, ToolResult
 from core.web_acquisition import web_research
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ TOOL_DESCRIPTION = (
     "that needs current information from the web — news, weather, sports scores, "
     "standings, prices, documentation, etc."
 )
-TOOL_INTENT = "web_search"  # reuse the existing intent for routing
+TOOL_INTENT = "web_research"  # Session 340: new intent for adaptive web acquisition
 TOOL_RISK = RiskLevel.LOW
 
 
@@ -100,8 +100,19 @@ async def web_research_tool(query: str, **kwargs: Any) -> ToolResult:
 
 
 # Tool registration
+from tools import register_tool  # noqa: E402
+
+register_tool(
+    Intent.WEB_RESEARCH,
+    web_research_tool,
+    description=TOOL_DESCRIPTION,
+    cost=0.5,
+    latency_ms=5000,
+    parallelizable=False,  # web_research does sequential search→fetch→browser
+)
+
 TOOL_DEF = {
-    "intent": TOOL_INTENT,
+    "intent": "web_research",
     "name": TOOL_NAME,
     "description": TOOL_DESCRIPTION,
     "handler": web_research_tool,

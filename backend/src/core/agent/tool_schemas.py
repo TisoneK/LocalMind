@@ -82,6 +82,7 @@ CORE_TOOL_NAMES: frozenset[str] = frozenset(
         "find_path",
         "web_search",
         "web_fetch",
+        "web_research",  # Session 340: adaptive web acquisition — always loaded
         "code_exec",
         "git",  # coding agent's #1 companion — keep always-present
         "process",
@@ -143,6 +144,20 @@ TOOL_DEFINITIONS: list[dict] = [
                     "url": {"type": "string"},
                 },
                 "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_research",  # Session 340: adaptive web acquisition
+            "description": "Research a topic on the web and return the most relevant, current content. Automatically searches for sources, fetches the best one (with JavaScript rendering if needed), validates the result, and falls back to alternative sources. Use this for ANY request needing current web information (weather, news, scores, standings, prices, etc.) — it handles search + fetch + browser escalation internally.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "What information to find on the web."},
+                },
+                "required": ["query"],
             },
         },
     },

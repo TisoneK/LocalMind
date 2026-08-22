@@ -172,6 +172,7 @@ AGENT_INTENTS: frozenset[Intent] = frozenset(
         Intent.SHELL,
         Intent.WEB_SEARCH,
         Intent.WEB_FETCH,
+        Intent.WEB_RESEARCH,  # Session 340: adaptive web acquisition
         Intent.BROWSE,
     }
 )
@@ -180,6 +181,7 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
     {
         "web_search",
         "web_fetch",
+        "web_research",  # Session 340: adaptive web acquisition
         "browse",
         "code_exec",
         "file_write",

@@ -31,20 +31,20 @@ def _catalog_chars() -> int:
 
 
 def test_lean_catalog_size_budget() -> None:
-    """The full 30-tool catalog must stay under the lean budget.
+    """The full tool catalog must stay under the lean budget.
 
     Pre-ADR-40: 24,230 chars (~6,057 est tokens). Post-cut (Session 251):
-    ~15,981 chars (~3,995 est tokens). Budget 17,000 keeps headroom for a
-    future tool while pinning the ~34% reduction. The lower bound guards
-    against an accidental empty/truncated catalog.
+    ~15,981 chars (~3,995 est tokens). Budget was 17,000; bumped to 18,500
+    after Session 340 added web_research tool (~600 chars). The lower bound
+    guards against an accidental empty/truncated catalog.
     """
     size = _catalog_chars()
-    assert 9_000 < size < 17_000, f"catalog size {size} outside the lean budget"
+    assert 9_000 < size < 18_500, f"catalog size {size} outside the lean budget"
 
 
 def test_all_tools_keep_callable_structure() -> None:
     """Every def keeps the OpenAI function-calling contract intact."""
-    assert len(TOOL_DEFINITIONS) == 31  # +todo_write (ADR-43)
+    assert len(TOOL_DEFINITIONS) == 32  # +todo_write (ADR-43)
     for td in TOOL_DEFINITIONS:
         assert td["type"] == "function"
         fn = td["function"]
