@@ -312,3 +312,65 @@ The collision tests confirm the priority ordering works correctly:
 
 - `92d7300` — fix(agent): guard-collision hardening (338)
 - PAT stripped from `git config remote.origin.url` after push
+
+---
+
+## Session 339 — Memory-relevance gate + conversation-state awareness + tool-abstraction enforcement (2026-08-22)
+
+The user identified a deeper architectural problem than the benchmark failures:
+  > Memory should enrich the current conversation, not choose its topic.
+  > The current user message determines the topic.
+  > Memory can only contribute if it passes a relevance threshold.
+  > A new conversation should start with an open beginning by default.
+
+The specific failure: a user said "How's it going?" on a new chat, and LocalMind retrieved an old EPL-standings memory and injected it into the response, hijacking the conversation. The agent then asked "Would you like me to get the EPL standings?" — manufacturing a topic through unsolicited memory retrieval.
+
+### Three architectural changes (commit b586e75)
+
+**1. NEW MODULE: `backend/src/core/conversation_state.py`**
+- `ConversationMode`: OPEN / ESTABLISHED / CONTINUATION
+- `classify_conversation(message, turn_count, has_pending_work) → ConversationState`
+- Casual openers ("Hi", "How's it going?", "What's up?") → OPEN, no memory retrieval
+- Substantive topics ("Give me EPL standings") → ESTABLISHED, memory can support
+- Explicit continuation ("Continue from where we left off") + pending work → CONTINUATION
+- Tool-abstraction reminder for outcome-needing-tool prompts
+
+**2. MEMORY-RELEVANCE GATE in `agent_runtime._load_facts_and_attach`**
+- Gate `_memory_facts()` call by `conversation_state.should_retrieve_memory`
+- Casual openers and first-turn-ambiguous messages → no memory retrieval
+- This prevents the EPL-hijack: "How's it going?" no longer retrieves old EPL memories
+
+**3. TOOL-ABSTRACTION ENFORCEMENT in `pre_init_classifier`**
+- When user asks for an outcome needing a tool (fresh data, files, calculations), inject the tool-selection reminder into the init prompt
+- Prevents the "which tool should I use?" abstraction leak
+- The user specifies WHAT; the agent selects HOW
+
+### Live-verified (5 new tests, bankofai/deepseek-v4-flash)
+
+| Test | Score | Latency | Tools | Notes |
+|------|-------|---------|-------|-------|
+| MEM-OPEN-001 "Hi" | PASS | 0.0s | 0 | Casual greeting, no memory hijack |
+| MEM-OPEN-002 "How's it going?" (EPL-hijack case) | PASS | 0.0s | 0 | The exact prompt that hijacked EPL memory — now clean |
+| MEM-CONT-001 "Continue from where we left off" | PASS | 21.8s | 6 | Asks what to continue (no pending work on fresh session) |
+| TOOL-UX-001 "Give me the current EPL standings" | PASS | 6.2s | 0 | No tool-name leak to user |
+| TOOL-UX-002 "Find the latest info about AI regulation" | PASS | 25.1s | 4 | Autonomous web_search + web_fetch |
+
+### The user's 6 invariants — enforcement status
+
+1. **A new conversation begins without an assumed topic.** ✓ — `classify_conversation` returns OPEN for casual openers on turn 0, `should_retrieve_memory=False`
+2. **Memory may support the user's intent, but may not introduce a new topic unprompted.** ✓ — memory is only retrieved when the user establishes a topic (ESTABLISHED mode)
+3. **Unresolved tasks are conversation state, not ordinary semantic memory.** ✓ (framework) — `ConversationState.should_retrieve_pending_work` is defined; the pending-work store is the next session's work
+4. **Users specify desired outcomes. The parent agent selects tools autonomously.** ✓ — tool-abstraction reminder injected for outcome-needing-tool prompts
+5. **Tool names, schemas, parameters must remain implementation details.** ✓ — the reminder explicitly says "NEVER ask the user 'which tool should I use?'"
+6. **Internal instructions, tool results, user messages, and memory must remain source-separated.** (next session) — the tool-instruction-text contamination investigation is queued
+
+### Regression check
+
+- Full backend suite: **2173 pass / 0 fail / 2 skipped** (+29 new tests for conversation-state + tool-abstraction)
+- Full frontend suite: **262 pass / 0 fail**
+- Collision test suite: **15/15 PASS** (10 from Session 338 + 5 new from Session 339)
+
+### Pushed
+
+- `b586e75` — fix(agent): memory-relevance gate + conversation-state awareness + tool-abstraction enforcement (339)
+- PAT stripped from `git config remote.origin.url` after push
