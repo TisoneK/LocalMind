@@ -391,6 +391,95 @@ COLLISION_TESTS = [
             )),
         ],
     },
+
+    # ── Session 340: Web acquisition benchmark tests ─────────────────────────
+    # These test the user's 8 web-acquisition scenarios (WEB-1 through WEB-8)
+    {
+        "id": "WEB-1",
+        "name": "Static page (find Python documentation)",
+        "prompt": "Find the official description of Python.",
+        "guards_matching": ["web_research", "tool-abstraction"],
+        "expected_behavior": (
+            "Search/fetch succeeds without browser escalation. The agent "
+            "uses web_research to find python.org and returns the official "
+            "description."
+        ),
+        "forbidden": ["asking user which tool to use", "exposing tool mechanics"],
+        "pass_criteria": [
+            ("does NOT ask which tool to use", lambda p: not any(
+                w in p["final_text"].lower() for w in [
+                    "which tool", "what tool", "please specify the tool",
+                    "tool name", "what parameters",
+                ]
+            )),
+        ],
+    },
+    {
+        "id": "WEB-3",
+        "name": "Dynamic table (current EPL standings — the original failure)",
+        "prompt": "Give me the current EPL standings.",
+        "guards_matching": ["web_research", "tool-abstraction", "escalation"],
+        "expected_behavior": (
+            "Agent uses web_research, which searches for sources, tries "
+            "static fetch, escalates to browser_read if needed, and returns "
+            "the standings table. NEVER asks user 'which tool should I use?'."
+        ),
+        "forbidden": ["asking which tool to use", "inventing standings", "exposing tool mechanics"],
+        "pass_criteria": [
+            ("does NOT ask which tool to use", lambda p: not any(
+                w in p["final_text"].lower() for w in [
+                    "which tool", "what tool", "please specify the tool",
+                    "tool name", "what parameters", "which parameters",
+                    "provide the tool", "specify the tool",
+                ]
+            )),
+        ],
+    },
+    {
+        "id": "WEB-5",
+        "name": "Fetch failure escalation (no user-visible mechanics)",
+        "prompt": "Find the latest news about artificial intelligence regulation.",
+        "guards_matching": ["web_research", "escalation", "tool-abstraction"],
+        "expected_behavior": (
+            "If the first source fails, the web_research subsystem "
+            "automatically tries the next source. The user never sees "
+            "'fetch failed' or 'which tool should I use?' — they just "
+            "get the answer or a clean failure message."
+        ),
+        "forbidden": ["asking user what to do on failure", "exposing internal fetch mechanics"],
+        "pass_criteria": [
+            ("does NOT ask user what to do on failure", lambda p: not any(
+                w in p["final_text"].lower() for w in [
+                    "which tool", "what tool", "what should i do",
+                    "please specify", "how should i proceed",
+                    "would you like me to try",
+                ]
+            )),
+        ],
+    },
+    {
+        "id": "WEB-8",
+        "name": "Tool abstraction (internal steps invisible to user)",
+        "prompt": "What is the current weather in Nairobi?",
+        "guards_matching": ["web_research", "tool-abstraction"],
+        "expected_behavior": (
+            "The agent may internally run search → fetch → browser → extract, "
+            "but the user-visible output must contain NONE of these internal "
+            "mechanics unless the user explicitly asks."
+        ),
+        "forbidden": ["exposing tool names", "exposing search/fetch/browser mechanics"],
+        "pass_criteria": [
+            ("does NOT expose tool names to user", lambda p: not any(
+                w in p["final_text"].lower() for w in [
+                    "web_search", "web_fetch", "browser_agent",
+                    "agent-browser", "web_research tool",
+                    "i used the web_search tool",
+                    "i used the web_fetch tool",
+                    "i called the browser",
+                ]
+            )),
+        ],
+    },
 ]
 
 
