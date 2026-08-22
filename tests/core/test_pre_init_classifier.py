@@ -110,6 +110,36 @@ class TestClusterBAnalyzeOnly:
         )
         assert o.skip_workspace_state is True
 
+    def test_do_not_inspect_any_files_yet_skips_workspace_state(self):
+        """Session 338 (COL-6): 'do not inspect any files yet' must
+        skip workspace_state injection. The user is explicitly saying
+        'don't run inspection tools'."""
+        o = classify_pre_init(
+            "I want to improve my workspace setup. Do not inspect any files yet. "
+            "First analyze the architecture of a good developer workspace."
+        )
+        assert o.skip_workspace_state is True
+
+    def test_ask_me_before_accessing_skips_workspace_state(self):
+        """Session 338 (COL-6): 'ask me before accessing it' — conditional-
+        clarify pattern that implies analyze-only (don't auto-fetch)."""
+        o = classify_pre_init(
+            "First analyze the architecture. If you need information from "
+            "the existing codebase, ask me before accessing it."
+        )
+        assert o.skip_workspace_state is True
+
+    def test_analyze_what_john_told_me_triggers_hallucination(self):
+        """Session 338 (COL-3): 'analyze the architecture of what John told
+        me' must trigger Cluster A direct refusal (not just Cluster B
+        analyze-only). The 'what X told me' pattern is unanswerable."""
+        o = classify_pre_init(
+            "Do not write code yet. First, analyze the architecture of what "
+            "John told me about the database last Tuesday."
+        )
+        assert o.mode == "direct"
+        assert o.skip_workspace_state is True  # Cluster A also sets skip_ws
+
     def test_normal_execute_prompt_does_not_skip_workspace_state(self):
         """Sanity: normal execute prompts must still get workspace_state."""
         for p in [

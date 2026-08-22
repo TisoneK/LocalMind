@@ -73,10 +73,19 @@ class PreInitOverride:
 
 # Past-tense / third-party cues that signal "I cannot know this"
 _HALLUCINATION_CUES = [
-    # Third-party past-tense references
+    # Third-party past-tense references — "what did X tell me" OR
+    # "what X told me" (Session 338: COL-3 revealed the pattern is broader
+    # than "what did" — "analyze what John told me" also qualifies).
     r"\bwhat\s+did\s+\w+\s+tell\s+me\b",
     r"\bwhat\s+did\s+\w+\s+say\b",
     r"\bwhat\s+did\s+(?:john|mary|alice|bob|sarah|mike|he|she|they|we|you)\b",
+    # "what X told me" / "what X said" — without "did". Catches
+    # "analyze what John told me about the database".
+    r"\bwhat\s+(?:john|mary|alice|bob|sarah|mike|he|she|they|we|you)\s+(?:told|said|tells|says)\b",
+    # "what X told me about Y" — the Y can be any noun.
+    r"\bwhat\s+\w+\s+told\s+me\s+about\b",
+    # "about what X told/said" — catches "analyze the architecture of what John told me"
+    r"\babout\s+what\s+\w+\s+(?:told|said)\b",
     # Private/secret queries — "password" / "api key" / "secret" / "token"
     # / "credential" — may be preceded by "database", "config", "stored",
     # etc. Match the "what is/was [optional noun] password" pattern.
@@ -116,8 +125,17 @@ _ANALYZE_ONLY_CUES = [
     r"\bdo\s+not\s+implement\s+(?:anything|it|yet)\b",
     r"\bdo\s*n['']?t\s+implement\s+(?:anything|it|yet)\b",
     r"\bdo\s+not\s+write\s+implementation\s+code\b",
+    # Session 338 (COL-6): "do not inspect any files yet" — the user
+    # is explicitly saying "don't run inspection tools". Treat as
+    # analyze-only.
+    r"\bdo\s+not\s+inspect\s+(?:any\s+)?(?:files?|the\s+\w+)\s*(?:yet|before)\b",
+    r"\bdo\s*n['']?t\s+inspect\s+(?:any\s+)?(?:files?|the\s+\w+)\s*(?:yet|before)\b",
+    # "ask me before accessing it" — conditional-clarify pattern that
+    # implies analyze-only (don't auto-fetch).
+    r"\bask\s+me\s+before\s+accessing\b",
     r"\bbefore\s+(?:suggesting|writing|implementing)\s+implementation\b",
     r"\bfirst\s+analyz(?:e|s)\s+the\s+problem\b",
+    r"\bfirst\s+analyz(?:e|s)\b",  # broadened: any "first analyze" qualifies
     r"\bfirst\s+identify\b",
     r"\bbefore\s+(?:suggesting|writing|implementing)[^.]{0,80}\bidentify\b",
     r"\banalyz(?:e|s)\s+what\s+needs\s+to\s+be\s+considered\b",
