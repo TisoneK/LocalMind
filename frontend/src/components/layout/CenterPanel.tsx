@@ -242,9 +242,14 @@ export function CenterPanel({
           const hasContent = lastMsg && lastMsg.role === 'assistant' && lastMsg.content && lastMsg.content.trim().length > 0;
           const hasToolCalls = lastMsg && lastMsg.role === 'assistant' && lastMsg.toolCalls && lastMsg.toolCalls.length > 0;
           const hasThinking = lastMsg && lastMsg.role === 'assistant' && lastMsg.thinking && lastMsg.thinking.trim().length > 0;
-          // If there's content or tool calls already visible in the message,
-          // don't show the separate indicator — the message itself is the feedback.
-          if (hasContent || hasToolCalls) return null;
+          // Session 352: only hide the status indicator when the FINAL ANSWER
+          // (content) is being streamed — not when thinking text is visible.
+          // The old check (hasContent || hasToolCalls) hid the status as soon
+          // as thinking started, leaving the user in the dark for the entire
+          // tool execution phase. Tool calls should NOT hide the status —
+          // the status shows "Searching..." / "Fetching..." alongside the
+          // tool cards in the Actions panel.
+          if (hasContent) return null;
           // Get the status text — prefer the real pipeline status, fall back
           // to "Thinking" only if the model is actually reasoning, otherwise
           // "Working on it..." as the initial acknowledgment.

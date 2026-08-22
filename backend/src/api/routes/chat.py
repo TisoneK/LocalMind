@@ -46,7 +46,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 _INTERNAL_DELEGATION_TOOLS = frozenset({"delegate", "delegate_parallel", "delegate_inline"})
-LIVE_PROGRESS_INTERVAL_S = 15
+LIVE_PROGRESS_INTERVAL_S = 5  # Session 352: was 15s — too long, user stays in the dark
 LIVE_TOOL_EVENT_TYPES = frozenset({"tool_call", "tool_status", "terminal_output"})
 
 
