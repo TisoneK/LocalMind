@@ -703,6 +703,108 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
         _pre_init_override = classify_pre_init(message)
 
+        # Session 342: deterministic memory-write path.
+        # The user's principle:
+        #   > EXPLICIT MEMORY REQUESTS ARE ACTION REQUESTS,
+        #   > NOT SUGGESTIONS FOR THE LLM TO CONSIDER.
+        # When the user says "Remember this", call memory_op directly —
+        # no LLM planning, no describe_tool, no replanning, no fake
+        # confirmation. Only confirm after successful persistence.
+        from core.memory_intent import classify_memory_intent, MemoryOperation
+
+        _memory_intent = classify_memory_intent(message)
+
+        if _memory_intent.is_write and not _pre_init_override.mode:
+            # Deterministic memory-write — call memory_op directly
+            logger.info(
+                "[agent-runtime] deterministic memory-write: type=%s source_knowledge=%s content=%r",
+                _memory_intent.memory_type.value,
+                _memory_intent.is_source_knowledge,
+                _memory_intent.content[:80],
+            )
+            collector.emit("agent_loop_start", intent="memory_op")
+            collector.emit(
+                "stage_timing", stage="intent_classify", latency_ms=0, status="memory_write"
+            )
+            collector.emit(
+                "stage_timing", stage="tool_select", latency_ms=0, status="skipped"
+            )
+            collector.emit(
+                "stage_timing", stage="context_build", latency_ms=0, status="memory_write"
+            )
+            _gen_start = time.monotonic()
+            _response_text = ""
+            _memory_success = False
+            try:
+                from tools.memory_op import memory_op as _mem_op
+                _mem_result = await _mem_op(message)
+                _memory_success = _mem_result.success
+                _response_text = _mem_result.content
+            except Exception as _mem_exc:
+                logger.warning("[agent-runtime] memory_op failed: %s", _mem_exc)
+                _response_text = (
+                    "I couldn't save that to memory right now. "
+                    f"Error: {_mem_exc}"
+                )
+
+            # Session 342: NEVER fake-confirm. Only say "remembered" if the
+            # operation actually succeeded.
+            if not _memory_success:
+                _response_text = (
+                    "I couldn't save that to memory right now — the memory "
+                    "store may be unavailable. Please try again later."
+                )
+
+            _gen_ms = round((time.monotonic() - _gen_start) * 1000)
+            collector.emit(
+                "stage_timing", stage="generate", latency_ms=_gen_ms, status="done"
+            )
+            collector.emit(
+                "stage_timing", stage="execute", latency_ms=0, status="skipped"
+            )
+            self._persist_assistant(
+                session_id,
+                _response_text,
+                thinking=None,
+                acknowledgement=None,
+                error=None,
+                tool_calls=None,
+                metrics={
+                    "prompt_tokens": 0,
+                    "completion_tokens": len(_response_text) // 4,
+                    "latency_ms": _gen_ms,
+                },
+            )
+            collector.emit(
+                "agent_runtime_done",
+                agent="parent",
+                elapsed_ms=_gen_ms,
+                response_chars=len(_response_text),
+            )
+            collector.emit(
+                "turn_complete",
+                intent="memory_op",
+                confidence=1.0,
+                tokens_approx=len(_response_text) // 4,
+                prompt_tokens_approx=0,
+                total_latency_ms=_gen_ms,
+                memory_facts=0,
+                agent_mode=False,
+                provider_usage={},
+            )
+            self._store_observation(
+                session_id,
+                collector,
+                intent="memory_op",
+                confidence=1.0,
+                memory_hits=0,
+                context_tokens=0,
+                latency_ms=_gen_ms,
+            )
+            yield StreamChunk(text=_response_text, done=False)
+            yield StreamChunk(text="", done=True)
+            return
+
         # Session 332-C: fast-path for trivial inputs (greetings/thanks/
         # farewells — zero LLM call) and obviously-conversational questions
         # ("What can you do?", "Give me three ideas for ...") — one direct
