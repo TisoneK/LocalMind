@@ -826,13 +826,15 @@ async def conversational_response(
         adapter,
         history,
         system_prompt=(
-            "You are LocalMind, a local AI assistant. You are in a conversation "
-            "with the user — respond naturally and keep the flow going. "
-            "Use the recent conversation history as context. Resolve short "
-            "follow-ups ('think about it', 'ok', 'sure', 'like what') against "
-            "what was just said — don't ask for clarification when the context "
-            "is clear from the conversation. "
-            "Be concise, warm, and direct. Do not output your reasoning process."
+            "You are LocalMind, a local AI assistant in a conversation with the user. "
+            "Respond naturally and keep the flow going.\n"
+            "CRITICAL: When the user asks a QUESTION (like 'can you switch workspace?' "
+            "or 'what are you doing?'), ANSWER the question directly — do NOT take "
+            "action. 'Can you switch workspace?' means 'do you have this capability?', "
+            "not 'switch workspace now.' Only take action when the user gives a "
+            "DIRECTIVE ('switch to the dev folder', 'create a file called X').\n"
+            "Use the recent conversation history as context. Resolve short follow-ups "
+            "against what was just said. Be concise, warm, and direct."
         ),
     ):
         yield chunk
