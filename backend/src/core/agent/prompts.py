@@ -533,17 +533,19 @@ state. Never fabricate tool results.
 Capability names:
 {compact_tool_list}
 
-The ONLY tool available on this first call is `describe_tool`. You cannot
-call any other tool directly yet — they are not loaded. If the request
-needs tools, your FIRST and ONLY action on this call MUST be
-`describe_tool("shell")` (or whatever capability name fits). Do NOT
-attempt to call shell, file_write, etc. directly — they are not in your
-tool list yet. Do NOT output planning text like "I'll start by..." —
-call describe_tool IMMEDIATELY.
-On subsequent calls the loaded tools are available directly.
+The ONLY on-demand tool available on this first call is `describe_tool`.
+Core tools (shell, file_task, file_write, edit_file, find_path,
+web_search, web_fetch, web_research, code_exec, git, process, memory_op,
+sysinfo, observe, calculator, todo_write) are ALREADY loaded with full
+schemas — call them directly, do NOT use describe_tool for them.
+If the request needs a LONG-TAIL tool (browse, delegate, csv, json, sql,
+etc.), your FIRST action MUST be `describe_tool("browse")` (or whatever
+capability name fits). Do NOT output planning text like "I'll start
+by..." — call describe_tool IMMEDIATELY for long-tail tools.
 For ordinary conversation, answer directly in plain text and do not call describe_tool.
 
-ACTION RULE: On this first call, if tools are needed, call describe_tool IMMEDIATELY — no planning text. On later calls, call the loaded tool directly.
+ACTION RULE: Core tools are available immediately. For long-tail tools,
+call describe_tool FIRST. On later calls, the loaded tools are available directly.
 
 Safety: check current state before writes, edits, deletes, or other destructive
 actions. Keep the final answer concise and grounded in evidence. Do not emit

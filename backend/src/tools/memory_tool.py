@@ -108,6 +108,53 @@ async def memory_op(message: str) -> ToolResult:
         },
     )
 
+    # Session 347: fallback to plain SQLite storage when the vector store
+    # fails (sqlite-vec not installed, embedding service unavailable, etc.)
+    # The user should never see "Memory storage is unavailable" for a simple
+    # "remember this" — the fact is stored as plain text in vector_facts
+    # and retrievable by keyword match even without vector search.
+    if not success:
+        try:
+            import json as _json
+            import sqlite3 as _sqlite3
+            from core.config import settings
+            import os as _os
+
+            db_path = _os.path.join(
+                str(settings.localmind_home or _os.path.expanduser("~/LocalMind")),
+                "localmind.db",
+            )
+            conn = _sqlite3.connect(db_path)
+            # Ensure the table exists (VectorStore creates it, but it may not
+            # have been created yet if VectorStore init failed)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS vector_facts (
+                    id          TEXT PRIMARY KEY,
+                    content     TEXT NOT NULL,
+                    metadata    TEXT NOT NULL DEFAULT '{}',
+                    created_at  REAL NOT NULL DEFAULT (unixepoch('now'))
+                )
+            """)
+            import uuid as _uuid
+            metadata = _json.dumps({
+                "session_id": effective_session_id,
+                "source": "user",
+                "memory_type": "semantic",
+                "importance": str(importance),
+                "access_count": "0",
+                "fallback": "true",  # stored without embedding
+            })
+            conn.execute(
+                "INSERT INTO vector_facts (id, content, metadata) VALUES (?, ?, ?)",
+                (str(_uuid.uuid4()), fact, metadata),
+            )
+            conn.commit()
+            conn.close()
+            success = True
+            logger.info("[memory_op] vector store failed — stored as plain text fallback")
+        except Exception as fallback_exc:
+            logger.warning("[memory_op] fallback storage also failed: %s", fallback_exc)
+
     if success:
         return ToolResult(
             content=f"Remembered: *{fact}*",
