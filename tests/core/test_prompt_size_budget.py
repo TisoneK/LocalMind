@@ -36,9 +36,9 @@ _BUDGETS = {
     # Session 245 (Lever 1 + 3): env context moved to a trailing turn-context
     # message and the formatting example trimmed — ~2,270 chars off each
     # execute intent. Budgets tightened to lock the reduction in.
-    Intent.SHELL: 11_500,  # measured 10,713 (was 12,981 pre-245)
+    Intent.SHELL: 11_600,  # Session 351: +100 (web_research preference in LIVE DATA RULE)
     Intent.SYSINFO: 10_500,  # 2026-08-21: +500 (describe_tool + completion enforcement)
-    Intent.CODE_EXEC: 11_800,  # 2026-08-21: +300 (describe_tool core-guard + completion enforcement)
+    Intent.CODE_EXEC: 11_900,  # Session 351: +100 (web_research preference in LIVE DATA RULE)
     Intent.FILE_WRITE: 12_000,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
     Intent.FILE_EDIT: 12_000,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
     Intent.FILE_TASK: 12_500,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
