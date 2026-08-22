@@ -87,13 +87,20 @@ _CASUAL_OPENING_CUES = [
     r"^\s*greetings\s*[!.?]?\s*$",
     r"^\s*good\s+(?:morning|afternoon|evening|day)\s*[!.?]?\s*$",
     # "How's it going" / "How are you" — the EPL-hijack case
-    r"^\s*how(?:'s|s|\s+is)\s+(?:it\s+going|it\s+going|everything|things)\s*[!.?]?\s*$",
+    r"^\s*how(?:'s|s|\s+is)\s+(?:it\s+going|it\s+going|everything|things|the\s+going)\s*[!.?]?\s*$",
     r"^\s*how\s+are\s+you\s*[!.?]?\s*$",
     r"^\s*how\s+are\s+(?:things|you\s+doing)\s*[!.?]?\s*$",
     r"^\s*what(?:'s|s|\s+is)\s+up\s*[!.?]?\s*$",
     r"^\s*what(?:'s|s|\s+is)\s+new\s*[!.?]?\s*$",
     r"^\s*how\s+do\s+you\s+do\s*[!.?]?\s*$",
     r"^\s*nice\s+to\s+(?:meet|see)\s+you\s*[!.?]?\s*$",
+    # "How's the going" / "How's it" — common colloquial variants
+    r"^\s*how(?:'s|s|\s+is)\s+(?:the\s+going|it)\s*[!.?]?\s*$",
+    r"^\s*whats\s+up\s*[!.?]?\s*$",
+    r"^\s*how\s+goes\s+it\s*[!.?]?\s*$",
+    r"^\s*what\s+good\s*[!.?]?\s*$",
+    r"^\s*everything\s+(?:good|ok|cool|alright)\s*[!.?]?\s*$",
+    r"^\s*you\s+good\s*\??\s*$",
 ]
 _CASUAL_OPENING_RE = re.compile("|".join(_CASUAL_OPENING_CUES), re.IGNORECASE)
 
