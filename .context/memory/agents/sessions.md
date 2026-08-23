@@ -5470,3 +5470,13 @@ authoritative.
 - **Outcome:** done — `derive_goal_tree()` in goal_interpreter.py returns `DerivedGoal(goal, sub_goals)`; runtime derives plain dicts and threads `goal_tree=` runtime → `BaseAgent.run` → `AgentLoop.run`; loop seeds `plan-{i}-sub-{j}` todos (both init + plan_steps branches), completes them with the parent (`_complete_sub_goals`), and injects `_render_goal_route` into the system prompt as an ordered "# Goal route". Frontend `TodoList` renders sub-rows nested under their parent (↳ connector, data-testid todo-subrow), excluded from the n/n denominator (parents only). Tests: +5 derive (test_goal_derive.py), +3 loop-level incl. prompt-injection assert (test_goal_tree_loop.py), +2 frontend TodoList. Backend 2498 / 2 skipped, frontend 348, ruff/tsc/eslint clean.
 - **Scoped out:** the "efficient planner" half (no redundant recon, no tool-first detours) is orthogonal — belongs to B-2026-08-23-10 (concrete planning).
 - **Open items:** next candidates -33 op permissions, -34 chat modes, -35 never-rude, -37 write stats, -21/-22 UI wins, -26 panel overflow.
+## Session 382-addendum — B-2026-08-23-8 live verification on deepseek-v4-flash — 2026-08-23
+
+- **Task:** run the goal-tree feature live (user requested) — boot the backend (`LOCALMIND_PORT=8765`, bankofai adapter), stream a full chat turn via `POST /api/chat`, inspect the SSE.
+- **Outcome:** verified end-to-end in 2 live runs on `bankofai/deepseek-v4-flash`:
+  1. Goal checklist derived (3 goals: a.txt / b.txt / folder path-test) + **9 sub-goal rows seeded in order** (`plan-{i}-sub-{j}`: check → write → verify per file; check → create-if-missing → verify for folder) — deduped SSE shows the exact ordered route.
+  2. **Route injection followed by the model:** its FIRST action was `if [ -d path-test ] … echo FOLDER EXISTS` (= sub-goal 0 check-before-act), then `mkdir -p path-test && printf hello > a.txt && …` (= sub-goals 1-2). This is the fastest+safest pattern the prompt route steers — previously the model guessed/detoured.
+  3. **Sub-goals complete with their parent** (`plan-0` + `plan-0-sub-0..2` done together on narration-advance).
+  4. **Deliverables landed:** `/Users/bao/path-test/{a.txt="hello", b.txt="world"}` on disk.
+  - Run 1 ended on a provider **rate limit** at iter 5 (evidence preserved; `agent_loop_degraded` — env, not harness); run 2 finished cleanly in 4 iterations + `agent_loop_done`.
+  - Note: the model placed the folder at `/Users/bao/path-test` (its own guess) instead of the session workspace — same free-tier habit as past traces; B-2026-08-23-17 keeps steering this. Left the test artifact in place for user inspection; /tmp scripts cleaned.
