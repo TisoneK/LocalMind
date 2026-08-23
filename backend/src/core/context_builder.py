@@ -287,7 +287,9 @@ You have access to these tools: {tool_summary}
 - edit_file: Edit existing files with search/replace/insert operations
 - sysinfo: Get current time/date/day and system specs (CPU, RAM, disk) — instant and offline.
   Use it exclusively for time/date questions.
-- memory_op: Store and retrieve persistent facts across conversations"""
+- memory_op: Store and retrieve persistent facts across conversations
+- grep_search: Search file contents for text patterns (works without shell)
+"""
 
     context = f"""## Environment
 - {os_info}

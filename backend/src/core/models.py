@@ -58,6 +58,7 @@ class Intent(str, Enum):
     FILE_EDIT = "file_edit"
     BROWSE = "browse"  # Real browser interaction (click, fill, scroll, screenshot)
     GIT = "git"  # Structured Git operations (status, diff, log, branch, commit, etc.)
+    GREP_SEARCH = "grep_search"  # B-2026-08-23-31: grep-like text search (works without shell)
     PROCESS = "process"  # Process management (start, stop, restart, status, logs, wait)
     VERIFY = "verify"  # Verification (run tests, reproduce bugs, check acceptance criteria)
     REVIEW = "review"  # Code review (spec conformance, quality assessment, best practices)
