@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Database, TrendingUp, Clock, Trash2, Plus, Search, X, Loader2, Pencil, Check } from 'lucide-react';
+import { Database, TrendingUp, Clock, Trash2, Plus, Search, X, Loader2, Pencil, Check, Sparkles } from 'lucide-react';
 import { MemoryFact } from '@/types';
+import { localmindClient } from '@/lib/localmind/client';
 
 interface MemoryTabProps {
   facts: MemoryFact[];
@@ -184,6 +185,14 @@ export function MemoryTab({ facts, onDelete, onStore, onEdit, onRefresh }: Memor
   const [draft, setDraft] = useState('');
   const [storing, setStoring] = useState(false);
   const [storeError, setStoreError] = useState<string | null>(null);
+  // Semantic recall (B-2026-08-23-14 follow-up): top-k most relevant facts
+  // for a query, via the vector store — distinct from the local substring
+  // filter above.
+  const [recallQuery, setRecallQuery] = useState('');
+  const [recallResults, setRecallResults] = useState<MemoryFact[] | null>(null);
+  const [recalling, setRecalling] = useState(false);
+  const [recallError, setRecallError] = useState<string | null>(null);
+  const [recallSearched, setRecallSearched] = useState('');
 
   // Live refresh: while the tab is visible, poll so facts stored by the agent
   // mid-session appear without a manual reload. Polling stops on unmount.
@@ -218,6 +227,31 @@ export function MemoryTab({ facts, onDelete, onStore, onEdit, onRefresh }: Memor
     } finally {
       setStoring(false);
     }
+  };
+
+  const runRecall = async () => {
+    const q = recallQuery.trim();
+    if (!q || recalling) return;
+    setRecalling(true);
+    setRecallError(null);
+    try {
+      const results = await localmindClient.searchMemory(q, 5);
+      setRecallResults(results);
+      setRecallSearched(q);
+    } catch {
+      setRecallResults([]);
+      setRecallSearched(q);
+      setRecallError('Recall failed');
+    } finally {
+      setRecalling(false);
+    }
+  };
+
+  const clearRecall = () => {
+    setRecallQuery('');
+    setRecallResults(null);
+    setRecallSearched('');
+    setRecallError(null);
   };
 
   return (
@@ -295,6 +329,63 @@ export function MemoryTab({ facts, onDelete, onStore, onEdit, onRefresh }: Memor
           )}
         </div>
       )}
+
+      {/* Semantic recall (B-2026-08-23-14 follow-up): top-k most relevant
+          facts for a query via the vector store. Distinct from the local
+          substring filter above — this answers "what do I remember about X?". */}
+      <div className="bg-brand-bg-code border border-brand-border rounded-md p-2" data-testid="memory-recall">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <Sparkles className="h-3 w-3 text-brand-amber" />
+          <span className="text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">
+            Recall
+          </span>
+        </div>
+        <div className="flex gap-1.5">
+          <input
+            value={recallQuery}
+            onChange={(e) => setRecallQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') runRecall(); }}
+            placeholder="e.g. what do I remember about dark mode?"
+            className="flex-1 min-w-0 px-2 py-1 rounded border border-brand-border bg-brand-bg-base text-[11px] text-brand-green-soft placeholder:text-brand-green-faint focus:outline-none focus:border-brand-green/40"
+            data-testid="memory-recall-input"
+          />
+          <button
+            onClick={runRecall}
+            disabled={recalling || !recallQuery.trim()}
+            className="shrink-0 flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-brand-amber/10 text-brand-amber hover:bg-brand-amber/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            data-testid="memory-recall-button"
+          >
+            {recalling ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Search className="h-2.5 w-2.5" />}
+            Recall
+          </button>
+        </div>
+
+        {recallError && <div className="mt-1.5 text-[10px] text-brand-red">{recallError}</div>}
+
+        {recallResults !== null && !recalling && (
+          <div className="mt-2">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className="text-[10px] text-brand-green-muted">
+                {recallResults.length > 0
+                  ? `Top ${recallResults.length} for “${recallSearched}”`
+                  : `No relevant facts for “${recallSearched}”`}
+              </span>
+              <button
+                onClick={clearRecall}
+                className="ml-auto text-[9px] text-brand-green-muted hover:text-brand-green-soft"
+                data-testid="memory-recall-clear"
+              >
+                Clear
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {recallResults.map((fact) => (
+                <FactCard key={fact.id} fact={fact} onDelete={onDelete} onEdit={onEdit} />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Recent facts */}
       <div>

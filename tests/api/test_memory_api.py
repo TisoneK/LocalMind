@@ -64,6 +64,13 @@ class FakeStore:
         self.facts[new_id] = {**old, "id": new_id, "fact": new_content}
         return new_id
 
+    async def recall_with_scores(self, query, top_k=10, session_id=None):
+        # Deterministic fake: facts whose content contains a query keyword are
+        # "relevant"; rank by a fake similarity score.
+        q = query.lower()
+        hits = [(f["fact"], 0.2, f) for f in self.facts.values() if q in f["fact"].lower()]
+        return hits[:top_k]
+
 
 @pytest.fixture()
 def fake_store(monkeypatch):
@@ -148,3 +155,35 @@ class TestMemoryUpdate:
         with pytest.raises(HTTPException) as exc:
             _run(update_memory("does-not-exist", type("R", (), {"content": "x"})()))
         assert exc.value.status_code == 404
+
+
+class TestMemorySearch:
+    def test_semantic_recall_returns_top_k_with_relevance(self, fake_store):
+        from api.routes.memory import search_memory
+
+        _run(store_memory(type("R", (), {"fact": "User prefers dark mode", "session_id": "s1",
+                                          "memory_type": "semantic", "importance": 0.5,
+                                          "source": "user"})()))
+        _run(store_memory(type("R", (), {"fact": "The project uses FastAPI", "session_id": "s1",
+                                          "memory_type": "semantic", "importance": 0.5,
+                                          "source": "agent"})()))
+
+        result = _run(search_memory("dark mode", 5))
+        facts = result["facts"]
+        assert len(facts) == 1
+        assert facts[0]["content"] == "User prefers dark mode"
+        # relevance = 1 - distance (0.2) = 0.8, matching the frontend scale.
+        assert facts[0]["relevance"] == 0.8
+        assert facts[0]["source"] == "user"
+
+    def test_empty_query_returns_no_results(self, fake_store):
+        from api.routes.memory import search_memory
+
+        assert _run(search_memory("", 5)) == {"facts": []}
+
+    def test_top_k_is_capped(self, fake_store):
+        from api.routes.memory import search_memory
+
+        assert _run(search_memory("query", 500))["facts"] == []  # valid, just empty
+        # top_k clamps to [1, 50] — a huge value must not raise.
+        assert _run(search_memory("dark", 500))["facts"] == []

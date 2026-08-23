@@ -383,6 +383,21 @@ def _cosine_to_score(dot: float) -> float:
     return (1.0 - max(-1.0, min(1.0, dot))) / 2.0
 
 
+def _l2_to_score(distance: float) -> float:
+    """vec0 L2 (Euclidean) distance → [0,1] similarity distance.
+
+    vec0's default metric returns the plain Euclidean distance (0 = identical,
+    sqrt(2) = orthogonal for unit vectors), NOT a dot product. For unit
+    vectors: l2^2 = 2 - 2*cos, so score = (1 - cos)/2 = l2^2 / 4.
+
+    This was the root cause of the memory-collapse bug (S370 follow-up): the
+    dedup and recall paths fed the raw L2 distance into _cosine_to_score,
+    which clamps to [-1,1] — so almost ANY pair of facts scored ~0, dedup
+    merged distinct facts into one row, and recall returned garbage scores.
+    """
+    return min(1.0, (distance * distance) / 4.0)
+
+
 # ── SQLite connection pool ─────────────────────────────────────────────────────
 _pool: dict[str, sqlite3.Connection] = {}
 _pool_lock = threading.Lock()
@@ -795,7 +810,8 @@ class VectorStore:
                         """,
                         [blob],
                     ).fetchall():
-                        if _cosine_to_score(row["distance"]) < 0.15:
+                        # distance is vec0 L2, not a dot product — see _l2_to_score.
+                        if _l2_to_score(row["distance"]) < 0.15:
                             target_id = row["id"]
                             logger.debug("[memory] dedup id=%s", target_id[:8])
                             break
@@ -871,7 +887,8 @@ class VectorStore:
                 if session_id and meta.get("session_id") != session_id:
                     continue
                 meta["id"] = row["id"]
-                results.append((row["content"], _cosine_to_score(row["distance"]), meta))
+                # distance is vec0 L2, not a dot product — see _l2_to_score.
+                results.append((row["content"], _l2_to_score(row["distance"]), meta))
             return results
         except Exception as exc:
             logger.error("recall_with_scores failed: %s", exc)

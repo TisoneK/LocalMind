@@ -2,6 +2,7 @@
 Memory API routes — F4
 
 GET    /api/memory              — list all stored facts with metadata
+GET    /api/memory/search       — semantic recall: top-k most relevant facts
 POST   /api/memory              — manually store a new fact
 PATCH  /api/memory/{fact_id}   — correct an existing fact's content
 DELETE /api/memory/{fact_id}   — delete a specific fact by ID
@@ -72,6 +73,40 @@ async def list_memory():
             }
         )
 
+    return {"facts": memory_facts}
+
+
+# ── GET /api/memory/search ───────────────────────────────────────────────────
+
+
+@router.get("/memory/search")
+async def search_memory(q: str = "", top_k: int = 5):
+    """Semantic recall: the top-k most relevant facts for a query.
+
+    Uses the vector store's recall_with_scores (embedding similarity, NOT a
+    substring match — this is the "recall" affordance the Memory tab wants).
+    Returns facts in the same frontend MemoryFact shape as list_memory, with
+    relevance = 1 - cosine distance (higher = more similar).
+    """
+    query = (q or "").strip()
+    if not query:
+        return {"facts": []}
+    top_k = max(1, min(int(top_k or 5), 50))
+
+    results = await _store.recall_with_scores(query=query, top_k=top_k)
+    memory_facts = []
+    for content, distance, meta in results:
+        memory_facts.append(
+            {
+                "id": meta.get("id", ""),
+                "content": content,
+                "source": meta.get("source", "unknown"),
+                # distance is a [0,1] cosine-distance (0 = identical); flip so
+                # higher relevance = more similar, matching list_memory's scale.
+                "relevance": max(0.0, min(1.0, 1.0 - float(distance))),
+                "timestamp": meta.get("timestamp", 0) or 0,
+            }
+        )
     return {"facts": memory_facts}
 
 

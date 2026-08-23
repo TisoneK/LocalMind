@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryTab } from './MemoryTab';
+import { localmindClient } from '@/lib/localmind/client';
 import type { MemoryFact } from '@/types';
 
 const facts: MemoryFact[] = [
@@ -129,5 +130,44 @@ describe('MemoryTab fact editing (B-2026-08-23-14 follow-up)', () => {
     fireEvent.change(screen.getByTestId('fact-edit-input-f1'), { target: { value: 'new text' } });
     fireEvent.click(screen.getByTestId('fact-edit-save-f1'));
     expect(await screen.findByText('Failed to save the correction')).toBeInTheDocument();
+  });
+});
+
+describe('MemoryTab semantic recall (B-2026-08-23-14 follow-up)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('recalls the top-k most relevant facts for a query', async () => {
+    vi.spyOn(localmindClient, 'searchMemory').mockResolvedValue([
+      { id: 'f1', content: 'User prefers dark mode', source: 'user', relevance: 0.95, timestamp: '1720000000000' },
+    ]);
+    renderTab();
+    fireEvent.change(screen.getByTestId('memory-recall-input'), { target: { value: 'dark mode' } });
+    fireEvent.click(screen.getByTestId('memory-recall-button'));
+    expect(await screen.findByText('Top 1 for “dark mode”')).toBeInTheDocument();
+    expect(localmindClient.searchMemory).toHaveBeenCalledWith('dark mode', 5);
+  });
+
+  it('shows the no-results state when recall finds nothing', async () => {
+    vi.spyOn(localmindClient, 'searchMemory').mockResolvedValue([]);
+    renderTab();
+    fireEvent.change(screen.getByTestId('memory-recall-input'), { target: { value: 'zzz' } });
+    fireEvent.click(screen.getByTestId('memory-recall-button'));
+    expect(await screen.findByText('No relevant facts for “zzz”')).toBeInTheDocument();
+  });
+
+  it('clear resets the recall view back to the fact list', async () => {
+    vi.spyOn(localmindClient, 'searchMemory').mockResolvedValue([
+      { id: 'f1', content: 'User prefers dark mode', source: 'user', relevance: 0.95, timestamp: '1720000000000' },
+    ]);
+    renderTab();
+    fireEvent.change(screen.getByTestId('memory-recall-input'), { target: { value: 'dark' } });
+    fireEvent.click(screen.getByTestId('memory-recall-button'));
+    await screen.findByText(/Top 1 for/);
+    fireEvent.click(screen.getByTestId('memory-recall-clear'));
+    expect(screen.queryByTestId('memory-recall-input')).toHaveValue('');
+    // The full fact list is visible again.
+    expect(screen.getByText('Project uses FastAPI')).toBeInTheDocument();
   });
 });

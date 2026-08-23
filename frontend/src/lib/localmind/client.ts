@@ -1022,6 +1022,18 @@ class LocalMindClient {
     });
   }
 
+  /** Semantic recall: top-k most relevant facts for a query. */
+  async searchMemory(query: string, topK = 5): Promise<MemoryFact[]> {
+    try {
+      const data = await this.request<{ facts: MemoryFact[] }>(
+        `/api/memory/search?q=${encodeURIComponent(query)}&top_k=${topK}`
+      );
+      return data.facts || [];
+    } catch {
+      return [];
+    }
+  }
+
   // ── Settings / Adapter ──────────────────────────────────────────────
 
   async getSettings(): Promise<{

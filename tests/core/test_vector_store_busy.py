@@ -84,6 +84,49 @@ class TestUpdateContent:
         assert asyncio.run(store.update_content("nope", "anything")) is None
 
 
+class TestDistinctFactsSurvive:
+    """Regression for the memory-collapse bug (S370 follow-up): vec0 returns
+    Euclidean L2 distance but the dedup/recall code treated it as a dot
+    product, so almost any pair of distinct facts scored ~0 and dedup merged
+    them into a single row — the store held ONE fact total."""
+
+    def test_distinct_facts_are_not_deduped(self, tmp_path, monkeypatch):
+        from storage.vector import _l2_to_score
+
+        # Orthogonal unit vectors: L2 = sqrt(2) → score 0.5 (NOT ~0).
+        assert _l2_to_score(2 ** 0.5) == pytest.approx(0.5)
+        # Identical vectors: L2 = 0 → score 0.
+        assert _l2_to_score(0.0) == 0.0
+
+        monkeypatch.setattr(settings, "localmind_db_path", str(tmp_path / "localmind.db"))
+        monkeypatch.setattr(settings, "ollama_embed_model", "test-embed")
+        store = _make_store(str(tmp_path / "localmind.db"))
+
+
+        # Deterministic, CLEARLY distinct embeddings per fact text — one-hot on
+        # its own axis so cosine similarity between facts ≈ 0 (real facts are
+        # far below the 0.15 dedup threshold; near-duplicates are what merge).
+        _axes = {"dark mode": 0, "fastapi": 1, "colors": 2}
+
+        async def _fake_embed(text):
+            axis = next((a for kw, a in _axes.items() if kw in text), 3)
+            vec = [0.0] * 8
+            vec[axis] = 1.0
+            return vec
+
+        monkeypatch.setattr(store, "_embed", _fake_embed)
+
+        import asyncio
+
+        facts = ["fact alpha about dark mode", "fact beta about fastapi", "fact gamma about colors"]
+        for f in facts:
+            assert asyncio.run(store.store(f, "manual", source="user")) is True
+
+        stored = asyncio.run(store.list_all())
+        assert len(stored) == 3, f"distinct facts collapsed into {len(stored)}: {stored}"
+        assert set(stored) == set(facts)
+
+
 class TestPersistBusyRace:
     def test_plain_begin_fails_snapshot_upgrade(self, tmp_path):
         """Documents the bug: a deferred BEGIN that reads then writes dies
