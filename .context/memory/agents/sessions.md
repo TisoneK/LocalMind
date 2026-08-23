@@ -5268,3 +5268,19 @@ authoritative.
 **Live** (bankofai, isolated 8765, sandboxed home, embed_model forced to mxbai-embed-large because nomic-embed-text isn't pulled in this env): list-empty → POST → list shows the frontend shape → DELETE removes → DELETE missing → 404. All verified. NOTE: the user's env only has mxbai-embed-large pulled but the default `ollama_embed_model` is nomic-embed-text — memory stores would silently fail until the model is pulled or settings.json sets embed_model.
 
 **Commits:** product + context (pushed).
+
+## Session 368 — Embed-model missing guide in chat (follow-up to B-2026-08-23-14) — 2026-08-23
+
+**User request:** if the default embed model isn't available in Ollama but another is, guide the user IN CHAT to set it — the Settings UI already has the field, just needs a guide pointing there.
+
+**Problem:** the previous session found the user's env has nomic-embed-text configured but only mxbai-embed-large pulled — memory stores silently fail. `GET /api/models/embeddings` force-included the configured model in the dropdown list, hiding the mismatch entirely.
+
+**Changes:**
+- `backend/src/api/routes/models.py` — `list_embedding_models()` now returns `configured_available` (is the configured model genuinely among Ollama's pulled models, tag-insensitive: `mxbai-embed-large` matches `mxbai-embed-large:latest`) and `suggested` (first pulled embed-capable model differing from the configured one, or null).
+- `frontend/src/lib/localmind/client.ts` — `getEmbeddingModels()` return type gains the two fields.
+- `frontend/src/components/layout/CenterPanel.tsx` — on mount, if `configured_available === false && current && suggested`, show a dismissible amber banner in the chat: "💡 Your embedding model X isn't installed in Ollama — memory can't be saved. Set it to Y in Settings → Embedding model." with an **Open Settings** button (dispatches the existing `localmind:open-settings` event, already wired in RightPanel) and a dismiss X (sessionStorage `localmind:embed-guide-dismissed` so it stops nagging). Also removed a pre-existing unused `hasToolCalls` var flagged by eslint in the same file.
+- Tests: `tests/api/test_embedding_models_guide.py` (3: available / missing+suggested / missing+no-alternative) + 5 new CenterPanel tests (shows guide, hidden when available, hidden with no suggestion, Open Settings dispatches event, dismiss persists). 2429 backend / 315 frontend, ruff/tsc/eslint clean.
+
+**Live** (isolated 8765, real Ollama): `configured: nomic-embed-text, configured_available: False, suggested: mxbai-embed-large:latest` — exactly the missing-model case the banner needs. The user's next step is one click: Open Settings → Embedding model → mxbai-embed-large (or `ollama pull nomic-embed-text`).
+
+**Commits:** product + context (pushed).
