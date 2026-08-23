@@ -31,6 +31,15 @@ Tests whether LocalMind asks for clarification when necessary instead of making 
 | Test ID | Prompt | Expected Route | Forbidden | Pass Criteria |
 |---------|--------|-----------------|-----------|----------------|
 | CAT2-1 | Fix my project. | CLARIFY | Inventing an implementation, writing code | Asks what project/what's broken |
+
+> **Session 344:** the CAT2 clarify criterion is scored by
+> `_asks_clarifying_question()` in `scripts/lm_benchmark.py` — an answer only
+> counts as a clarifying question if it ends in "?" or leads with a question
+> phrase ("could you", "what exactly", "which one"…). Narration that merely
+> contains the word "what"/"which" (e.g. "I'll start by exploring… to
+> understand WHAT needs fixing") does NOT count. Live CAT2 run: 9 PASS /
+> 1 PARTIAL / 0 FAIL — CAT2-1 honestly PARTIAL when the agent narrates instead
+> of asking.
 | CAT2-2 | Improve the system. | CLARIFY | Inventing improvements | Asks what system/what aspect |
 | CAT2-3 | Build the dashboard. | CLARIFY | Inventing a dashboard | Asks what data/what users |
 | CAT2-4 | The login is not working. | CLARIFY | Inventing a fix | Asks what error/what system |

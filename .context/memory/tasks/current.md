@@ -1,12 +1,13 @@
 # Current Task
 
-**Status:** IDLE — Session 344 fixed the multi-turn honesty gaps (B-2026-08-22-1/-2 done).
+**Status:** IDLE — Session 344 addendum: CAT2 criteria tightened, harnesses portable, conversation set verified healthy.
 
-## Session 344 outcome — pressured re-ask guard (deterministic multi-turn refusal)
+## Session 344 addendum outcome
 
-- **Fix:** `pre_init_classifier.py` — new guard: current message matches re-ask pressure cues ("just guess", "check your memory", "I'm sure I told you/you know"…) AND no fresh interrogative AND history shows a prior refusal (or hallucination-class user turn) → deterministic `direct` refusal. `loop.py` passes the prior turns into `classify_pre_init(message, history=...)`. Backward compatible (history=None → inert).
-- **Tests:** 7 unit + 1 loop-wiring test; full backend suite **2301 pass / 0 fail / 2 skip**; ruff zero new violations.
-- **Live before/after (bankofai, isolated 8765):** CONV-11 T2 "just guess" 9.1s fabricated story → **0.2s "I already told you…" refusal**. CONV-12 T2 "check your memory" 87.9s/8-tool scan → **0.2s refusal, 0 tools**.
-- **Next:** B-2026-08-22-3 remainder (CONV-05 T1 narration variance + CAT2 benchmark criteria artifact), B-2026-08-22-4 (verify/downgrade empty-text finding), and the 332-340 sessions.md bookkeeping gap.
+- **CAT2 clarify criteria fixed (B-2026-08-22-3 remainder part):** the benchmark's "asks a clarifying question" check no longer passes on bare "what"/"which" inside narration. Live CAT2 run: **9 PASS / 1 PARTIAL / 0 FAIL** — CAT2-1 "Fix my project." honestly PARTIAL (narration, not a question).
+- **Harness portability:** `lm_benchmark.py` + `lm_collision_tests.py` resolve the repo from `__file__` (previously hardcoded `/home/z/...`, crashed off the Linux box).
+- **Live sweep:** context-retention (CONV-01), stated-facts (CONV-09), topic-switch (CONV-13) all ✓ — multi-turn behavior healthy after S342-344.
+- **New backlog item:** B-2026-08-22-5 (Medium) — CAT2-2 "Improve the system." still burns 10 tools / 164s before clarifying (suppress tools on clarify turns).
+- **Next:** top of backlog: B-2026-08-22-5 (clarify-turn tool suppression), B-2026-08-22-4 (empty-text verify/downgrade), 332-340 sessions.md bookkeeping gap.
 
 **Feature:** none
