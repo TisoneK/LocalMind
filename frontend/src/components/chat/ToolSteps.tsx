@@ -19,6 +19,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
 import { ToolCall } from '@/types';
 import { useEnterMotion } from '@/lib/localmind/motion';
+import { formatLatency } from '@/lib/localmind/progress';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface ToolStepsProps {
   toolCalls: ToolCall[];
@@ -173,9 +180,14 @@ function StepDetail({ toolCall }: { toolCall: ToolCall }) {
       {isFileWrite && filePath && (
         <>
           <div className="text-[10px] text-brand-green-muted mb-1">File:</div>
-          <div className="text-[11px] text-brand-green font-mono bg-brand-bg-base rounded px-2 py-1 mb-1.5 break-all overflow-hidden">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('localmind:open-file-preview', { detail: filePath }))}
+            className="text-[11px] text-brand-blue hover:text-brand-blue-bright font-mono bg-brand-bg-base rounded px-2 py-1 mb-1.5 break-all overflow-hidden cursor-pointer transition-colors text-left"
+            title={`Click to preview ${filePath}`}
+          >
             {filePath}
-          </div>
+          </button>
         </>
       )}
       {!isCodeTool && !isFileWrite && toolCall.input && (
@@ -223,14 +235,11 @@ function TimelineRow({
   // it must not make the row expandable to an empty Why block.
   const hasDetail = !!(toolCall.reasoning?.trim() || toolCall.input || toolCall.output);
 
-  const durationLabel =
-    toolCall.duration !== undefined
-      ? toolCall.duration >= 1000
-        ? `${(toolCall.duration / 1000).toFixed(1)}s`
-        : `${toolCall.duration}ms`
-      : toolCall.status === 'done'
-        ? '0ms'
-        : '';
+  const durationLabel = toolCall.duration !== undefined
+    ? formatLatency(toolCall.duration)
+    : toolCall.status === 'done'
+      ? '0ms'
+      : '';
 
   return (
     <motion.div
@@ -337,7 +346,7 @@ function ActionTimeline({ toolCalls, isStreaming }: { toolCalls: ToolCall[]; isS
   }, [active, isStreaming]);
 
   const totalMs = toolCalls.reduce((sum, tc) => sum + (tc.duration || 0), 0);
-  const totalLabel = totalMs >= 1000 ? `${(totalMs / 1000).toFixed(1)}s` : totalMs > 0 ? `${totalMs}ms` : '';
+  const totalLabel = formatLatency(totalMs);
 
   const headerColor = active ? 'text-brand-amber' : failed ? 'text-brand-red' : 'text-brand-green-soft';
   const runningLabel =
@@ -466,27 +475,52 @@ function ShellDisabledTip() {
 
 export function ToolSteps({ toolCalls, compact, isStreaming }: ToolStepsProps) {
   const blocked = toolCalls?.some(isShellBlocked);
-  // v0.7: Compact mode — minimal inline chips showing tool status
+  // v0.7: Compact mode — minimal inline chips showing tool status.
+  // B-2026-08-23-9: each pill gets a hover Tooltip with full input/output summary.
   if (compact) {
     return (
-      <div className="flex flex-wrap gap-1.5 items-center">
-        {toolCalls.map((tc) => {
-          const status = statusConfig[tc.status] || statusConfig.pending;
-          const icon = toolIcons[tc.name] || <Terminal className="h-3 w-3" />;
-          const label = tc.label || toolLabels[tc.name] || tc.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
-          return (
-            <div
-              key={tc.id}
-              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-mono ${status.bg} ${status.color}`}
-            >
-              {icon}
-              <span className="truncate max-w-[120px]">{label}</span>
-              {status.icon}
-            </div>
-          );
-        })}
-        {blocked && <ShellDisabledTip />}
-      </div>
+      <TooltipProvider delayDuration={400}>
+        <div className="flex flex-wrap gap-1.5 items-center">
+          {toolCalls.map((tc) => {
+            const status = statusConfig[tc.status] || statusConfig.pending;
+            const icon = toolIcons[tc.name] || <Terminal className="h-3 w-3" />;
+            const label = tc.label || toolLabels[tc.name] || tc.name.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase());
+            const dur = tc.duration !== undefined ? formatLatency(tc.duration) : '';
+            // Build a rich tooltip summary from the tool call's data
+            const tooltipLines: string[] = [];
+            if (tc.reasoning?.trim()) tooltipLines.push(`Why: ${tc.reasoning.trim()}`);
+            if (tc.input) tooltipLines.push(`Input: ${tc.input.length > 300 ? tc.input.slice(0, 300) + '…' : tc.input}`);
+            if (tc.output) tooltipLines.push(`Output: ${tc.output.length > 300 ? tc.output.slice(0, 300) + '…' : tc.output}`);
+            if (tc.error) tooltipLines.push(`Error: ${tc.error}`);
+            if (dur) tooltipLines.push(`Duration: ${dur}`);
+            const tooltipText = tooltipLines.join('\n');
+            return (
+              <Tooltip key={tc.id}>
+                <TooltipTrigger asChild>
+                  <div
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-mono cursor-default ${status.bg} ${status.color}`}
+                  >
+                    {icon}
+                    <span className="truncate max-w-[120px]">{label}</span>
+                    {dur && <span className="text-[8px] opacity-70">{dur}</span>}
+                    {status.icon}
+                  </div>
+                </TooltipTrigger>
+                {tooltipText && (
+                  <TooltipContent
+                    side="top"
+                    align="center"
+                    className="max-w-xs whitespace-pre-wrap break-words text-[10px] font-mono leading-relaxed"
+                  >
+                    {tooltipText}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            );
+          })}
+          {blocked && <ShellDisabledTip />}
+        </div>
+      </TooltipProvider>
     );
   }
 

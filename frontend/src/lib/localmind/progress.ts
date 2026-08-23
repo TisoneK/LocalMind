@@ -85,13 +85,37 @@ export function estimateTokens(text: string): number {
 
 /**
  * Adaptive latency formatting shared by every surface that shows time:
- * sub-second → whole ms ("340ms"), ≥1s → one-decimal seconds ("1.2s",
- * "39.9s"). B-2026-08-09-4: the Observe panel previously showed a raw
- * unlabeled millisecond number; every surface now uses this formatter so
- * units are consistent across the bottom bar, Observe panel, and chat.
+ * <1s → whole ms ("340ms"), ≥1s → seconds ("39.9s"),
+ * ≥60s → minutes+seconds ("1m 23s"), ≥1h → hours+minutes ("1h 5m").
+ * B-2026-08-09-4 / B-2026-08-23-21: natural duration formatting.
  */
 export function formatLatency(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return '—';
   if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
+  const totalSec = ms / 1000;
+  if (totalSec < 60) return `${totalSec.toFixed(1)}s`;
+  const totalMin = totalSec / 60;
+  if (totalMin < 60) {
+    const m = Math.floor(totalMin);
+    const s = Math.round(totalSec - m * 60);
+    return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  }
+  const h = Math.floor(totalMin / 60);
+  const m = Math.round(totalMin - h * 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+/**
+ * Compact token count formatting: 128000 → "128K", 1500000 → "1.5M".
+ * B-2026-08-23-22: short-form token display across all UI surfaces.
+ */
+export function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return '—';
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) {
+    const k = n / 1000;
+    return k >= 100 ? `${Math.round(k)}K` : `${k.toFixed(1)}K`;
+  }
+  const m = n / 1_000_000;
+  return m >= 100 ? `${Math.round(m)}M` : `${m.toFixed(1)}M`;
 }

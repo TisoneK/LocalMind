@@ -5,6 +5,7 @@ import {
   applyTodoUpdated,
   estimateTokens,
   formatLatency,
+  formatTokens,
   normalizeTodoEvent,
   isActiveToolStatus,
 } from './progress';
@@ -99,5 +100,38 @@ describe('formatLatency (B-2026-08-09-4 / ADR-13)', () => {
     expect(formatLatency(-5)).toBe('—');
     expect(formatLatency(NaN)).toBe('—');
     expect(formatLatency(Infinity)).toBe('—');
+  });
+
+  it('formats minutes and hours (B-2026-08-23-21)', () => {
+    expect(formatLatency(60_000)).toBe('1m');
+    expect(formatLatency(90_000)).toBe('1m 30s');
+    expect(formatLatency(3_600_000)).toBe('1h');
+    expect(formatLatency(3_660_000)).toBe('1h 1m');
+    expect(formatLatency(7_200_000)).toBe('2h');
+  });
+});
+
+describe('formatTokens (B-2026-08-23-22)', () => {
+  it('renders small counts as-is', () => {
+    expect(formatTokens(0)).toBe('0');
+    expect(formatTokens(42)).toBe('42');
+    expect(formatTokens(999)).toBe('999');
+  });
+
+  it('renders thousands with K suffix', () => {
+    expect(formatTokens(1000)).toBe('1.0K');
+    expect(formatTokens(128000)).toBe('128K');
+    expect(formatTokens(999_999)).toBe('1000K');
+  });
+
+  it('renders millions with M suffix', () => {
+    expect(formatTokens(1_000_000)).toBe('1.0M');
+    expect(formatTokens(1_500_000)).toBe('1.5M');
+    expect(formatTokens(100_000_000)).toBe('100M');
+  });
+
+  it('returns em-dash for negative and non-finite', () => {
+    expect(formatTokens(-1)).toBe('—');
+    expect(formatTokens(NaN)).toBe('—');
   });
 });

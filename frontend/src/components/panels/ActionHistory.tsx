@@ -22,6 +22,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActionItem } from '@/types';
 import { useEnterMotion } from '@/lib/localmind/motion';
+import { formatLatency } from '@/lib/localmind/progress';
 
 function isRunning(status: ActionItem['status']): boolean {
   return status === 'running' || status === 'started' || status === 'in_progress';
@@ -278,9 +279,7 @@ function ActionCard({ action, isMostRecent }: { action: ActionItem; isMostRecent
         </span>
         {action.duration != null && (
           <span className="text-[9px] text-brand-green-muted shrink-0">
-            {action.duration >= 60
-              ? `${(action.duration / 60).toFixed(1)}m`
-              : `${action.duration.toFixed(1)}s`}
+            {formatLatency(action.duration * 1000)}
           </span>
         )}
         {action.timestamp && (

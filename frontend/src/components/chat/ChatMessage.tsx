@@ -49,7 +49,7 @@ SyntaxHighlighter.registerLanguage('xml', html);
 SyntaxHighlighter.registerLanguage('shell', shell);
 SyntaxHighlighter.registerLanguage('shell-session', shell);
 import { ChatMessage as ChatMessageType, FileResult, PendingWrite, DiffData } from '@/types';
-import { formatLatency } from '@/lib/localmind/progress';
+import { formatLatency, formatTokens } from '@/lib/localmind/progress';
 import { repairMarkdown } from '@/lib/markdownRepair';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ResponseBlockRenderer } from './ResponseBlockRenderer';
@@ -126,7 +126,16 @@ function CodeBlockComponent({ code, language, filename }: { code: string; langua
       <div className="flex items-center justify-between px-3 py-1.5 bg-brand-bg-code border-b border-brand-border">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[10px] font-mono text-brand-green-muted uppercase shrink-0">{language || 'text'}</span>
-          {filename && <span className="text-[10px] text-brand-green-muted truncate">— {filename}</span>}
+          {filename ? (
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('localmind:open-file-preview', { detail: filename }))}
+              className="text-[10px] text-brand-blue hover:text-brand-blue-bright truncate cursor-pointer transition-colors"
+              title={`Click to preview ${filename}`}
+            >
+              — {filename}
+            </button>
+          ) : null}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isRunnable && (
@@ -521,7 +530,7 @@ function MessageMetrics({ performance }: { performance: NonNullable<ChatMessageT
   const prompt = performance.promptTokens ?? 0;
   const completion = performance.completionTokens ?? 0;
   if (prompt > 0 || completion > 0) {
-    parts.push(`${prompt.toLocaleString()}/${completion.toLocaleString()} tok`);
+    parts.push(`${formatTokens(prompt)}/${formatTokens(completion)} tok`);
   }
   if (performance.tokensPerSecond) parts.push(`${performance.tokensPerSecond} tok/s`);
   if (parts.length === 0) return null;
@@ -669,6 +678,17 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
   // B-2026-08-23-6: clickable file-result chips open an inline preview dialog
   // (text/code/markdown/office docs parsed server-side, images as data URLs).
   const [previewPath, setPreviewPath] = useState<string | null>(null);
+
+  // B-2026-08-23-12: listen for file-preview requests from code block filenames
+  // and tool step file paths (they dispatch localmind:open-file-preview).
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const path = (e as CustomEvent<string>).detail;
+      if (typeof path === 'string' && path) setPreviewPath(path);
+    };
+    window.addEventListener('localmind:open-file-preview', handler);
+    return () => window.removeEventListener('localmind:open-file-preview', handler);
+  }, []);
 
   // Check if this message has diff data (from edit_file tool results)
   const diffHunks: DiffHunk[] = useMemo(() => {

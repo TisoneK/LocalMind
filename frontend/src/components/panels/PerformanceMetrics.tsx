@@ -1,7 +1,7 @@
 'use client';
 
 import { Activity, Clock, Hash } from 'lucide-react';
-import { formatLatency } from '@/lib/localmind/progress';
+import { formatLatency, formatTokens } from '@/lib/localmind/progress';
 import type { SessionStats } from '@/types';
 
 interface PerformanceMetricsType {
@@ -112,7 +112,7 @@ export function PerformanceMetrics({
           Tokens
         </span>
         <span className="text-[11px] text-brand-green-soft font-mono font-medium whitespace-nowrap">
-          {totalTokens > 0 ? totalTokens.toLocaleString() : '—'}
+          {totalTokens > 0 ? formatTokens(totalTokens) : '—'}
         </span>
       </div>
 
@@ -120,11 +120,11 @@ export function PerformanceMetrics({
         <div className="flex items-center gap-2 shrink-0">
           <div className="flex items-center gap-1">
             <span className="text-[9px] text-brand-green-muted">prompt:</span>
-            <span className="text-[10px] text-brand-green-soft font-mono">{fmtTok(promptTokens)}</span>
+            <span className="text-[10px] text-brand-green-soft font-mono">{formatTokens(promptTokens)}</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="text-[9px] text-brand-green-muted">completion:</span>
-            <span className="text-[10px] text-brand-green-soft font-mono">{fmtTok(completionTokens)}</span>
+            <span className="text-[10px] text-brand-green-soft font-mono">{formatTokens(completionTokens)}</span>
           </div>
         </div>
       )}

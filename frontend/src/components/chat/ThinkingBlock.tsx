@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, Brain, Terminal, Copy, Check } from 'lucide-react';
 import { ThinkingStep } from '@/types';
 import { useEnterMotion } from '@/lib/localmind/motion';
+import { formatLatency } from '@/lib/localmind/progress';
 
 // v0.13: Dispatch steps replace LLM-generated thinking prose. A step line
 // looks like "[Web Search] Search: Nairobi weather" — the label is shown as
@@ -127,7 +128,7 @@ export function ThinkingBlock({ thinking, thinkMs, isStreaming }: ThinkingBlockP
         ) : (
           duration !== undefined && duration > 0 && (
             <span className="ml-auto text-[9px] text-brand-amber">
-              {duration >= 1000 ? `${(duration / 1000).toFixed(1)}s` : `${duration}ms`}
+              {formatLatency(duration)}
             </span>
           )
         )}
