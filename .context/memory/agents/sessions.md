@@ -5433,3 +5433,13 @@ authoritative.
 - **Open items:** backlog unchanged (B-2026-08-23-8 goal-driven agent next, or UI wins -20/-21/-22/-24).
 - **Report:** `.context/memory/reviews/2026-08-23-review.md` (Session 377's file) — Session 378 additions logged in flaws/log.md + this entry.
 - **Notes:** The user's direct question ("Don't you have access to your own artifacts and thoughts?") was honest-model-limitation, not a harness flaw; the HARNESS flaw was the re-listing loop, fixed here.
+---
+## Session 379 — backlog-only: third "Backlog Each Separately" batch (12 items) — 2026-08-23
+
+- **Agent:** Buffy | **Model:** z-ai/glm-5.2 | **Platform:** macOS (local /Users/bao/Code/LocalMind) | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** none (memory-only — user backlog intake)
+- **Task:** Record the user's 12-item "Backlog Each Separately" list (features + fixes) as individual entries in backlog.md.
+- **Commits:** 1 context (pushed).
+- **Outcome:** done — appended "Session 379 addendum" to `.context/memory/tasks/backlog.md` with **B-2026-08-23-25 → -36**, each a separate unchecked entry in the established format (priority, area, user quote, scope notes). Highlights: -25 agent .tmp folder; -26 panel ⋮ overflow; -27 resume-last vs new session; -28 one-click embed-model download + realtime progress; -29 package-manager UI progress; -30 planner workflow/backlog/spec-kit (needs scoping — do not build yet); -31 grep tool; -32 shell-writes-last-resort + diff-for-any-write + stats?; -33 configurable op permissions; -34 Auto/Agent/Direct chat modes; -35 never-rude declines; -36 efficient reads for edit_file. No product code touched. Backlog now 12 open items for 2026-08-23 (8 remaining from batch 1/2: -8 -9 -10 -11 -12 -20 -21 -22 -23 -24) plus this batch.
+- **Open items:** next actionable remain B-2026-08-23-8 (goal-driven agent) and the UI wins; the new batch's highest-priority-looking items: -32 (diff after any write), -33 (permissions), -34 (chat modes) — scope each with the user when picked up, per the under-scoped one-liner rule.
+- **Notes:** none.
