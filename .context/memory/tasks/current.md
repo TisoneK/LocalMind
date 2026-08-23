@@ -1,24 +1,19 @@
 # Current Task
 
-**Status:** IDLE — Session 350 shipped the memory end-to-end fix (B-2026-08-23-1 done; four gaps: fallback timestamp, classifier content/type pass-through, candidate-extraction wiring, recall operation).
+**Status:** IDLE — Session 351 shipped environment awareness for todos (todo-state injection + pipeline fixes, `B-2026-08-23-2` done).
 
-## Session 350 outcome — memory op works end to end (store → gather → summarize → recall)
+## Session 351 outcome — the agent now knows its own todos
 
-- The user's backlog ask: make memory op work end to end — recognize store requests, gather correct info from chat evidence/system talk, save summarized memory.
-- **Four gaps found by pipeline map + simulation (not guesswork), three live-confirmed:**
-  1. **Gap A (breaker):** `memory_op`'s SQLite fallback omitted `timestamp` → `warm_start_facts` computed age=now−0 → every fallback-stored fact looked >30d old → **agent stored facts it could never see again**.
-  2. **Gap B:** deterministic write passed the raw message; `memory_op` re-extracted with a corrupting regex ("note down my project" → stored "down my project") and always tagged `semantic`.
-  3. **Gap C:** `extract_memory_candidates`/`should_store_candidate` (corrections, source knowledge from tool outcomes) were dead code.
-  4. **Gap D (live-found):** `memory_op` had NO recall operation — "recall X" fell through to STORE (persisted junk "recall"); models send `{operation, query}` while schema says `content`, so text_tools dropped the query.
-- **FIXES (all model-agnostic):** `memory_tool.py` fallback writes `timestamp`; `agent_runtime` passes classifier content+memory_type to `memory_op` (which gained optional params); `_memory_mixin` Path 4 runs `extract_memory_candidates` with obs-history tool results before Path 2's early returns; `memory_tool` gained a keyword recall (`_RECALL_PAT`, prefix matching, recent-facts fallback for bare/no-match) and `text_tools._extract_tool_input` accepts `query` as a `content` alias.
-- **LIVE (bankofai, isolated 8765, scratch tracehome + real settings):** T1 "remember that I prefer concise answers" → deterministic, 0 LLM calls, `memory_type=user_preference, importance=0.8, timestamp` in DB. T2 NEW session (no history): "Based on what you remember about me, how should I write my emails?" → agent answered from stored memory ("you prefer concise answers … Short. Direct. No fluff."). Junk-"recall" corruption fixed and re-verified (exactly 1 fact row).
-- **Tests:** 12 new in `tests/core/test_memory_e2e.py`; full backend **2321 passed / 2 skipped / 0 failures**; ruff zero new violations.
+- The user's finding: a "mark the task as complete" follow-up failed because the agent "looked for todos in chat" — todos were persisted in the DB and shown in the UI but NEVER injected into the model context.
+- **FIX:** `agent_runtime` loads the session's persisted todos once and passes them to BOTH the parent loop (`todo_state=`) and the conversational fast-path (`todos=`). The loop renders a `# Current todos` block (`[x]`/`[~]`/`[ ]`/`[!]` + `N/M completed` + todo_write instruction) into the turn context; the fast-path renders the same checklist into its prompt. Two adjacent pipeline bugs found live: (1) the Session 296 lifecycle drain forwarded `todo_created` only as generic `obs_event` — bypassing DB persist + dedicated SSE, so plan todos persisted with empty text (`_bridge_todo_event` now shared by both drains); (2) `_synth_begin` created an empty leftover `syn-*` row for the `todo_write` tool call itself — now skipped.
+- **LIVE before/after (bankofai, isolated 8765):** before — 3 goal items but 1 empty todo row; after — turn 1 seeds `plan-0/1/2` with real text (7 todo events), turn 2 "mark the task as complete" → *"All tasks are marked complete. ✅ 3/3 todos"* with t1/t2/t3 persisted done. No empty rows.
+- **Tests:** 9 new (`test_todo_state_injection.py` + `test_todo_bridge_lifecycle_drain.py`). Backend **2336 passed / 2 skipped / 0 failures**; ruff zero new violations.
 
 ## Next
 
-- **B-2026-08-23-2 (High):** The agent isn't fully aware of its complete environment — it looked for todos "in chat" and didn't mark tasks complete when asked. Investigate environment/todo awareness.
-- Remaining 2026-08-23 items: B-3 (exported chat completeness), B-4 (shell-active awareness + settings UI guide), B-5 (tab auto-switch), B-6 (file rendering docx/pdf/excel), B-7 (filetask summary info), B-8 (goal-driven fastest/safest path + subgoals), B-9 (action pill tooltips), B-10 (concrete planning), B-11 (todo title/content split), B-12 (clickable filenames).
+- **B-2026-08-23-3 (High):** does the exported chat contain full session information or just chat? — check what the export includes (assistant turns, tool runs, files, todos) and decide what's missing.
+- **B-2026-08-23-4 (Medium):** the system should know if shell is active/off BEFORE running the shell tool (fall back to python scripts etc.) + a UI guide for toggling shell in settings.
+- **B-2026-08-23-6 (Medium):** after creating a file, render it in the UI (docx, pdf, excel, ...).
 
-**Feature:** none (single-session memory end-to-end fix)
-**ADR:** none (bug-fix session; no architectural decision)
-**Review:** n/a (live + unit verified per memory contract)
+**Feature:** none (single-session todo/environment-awareness fixes)
+**Session:** 351 (logged in `.context/memory/agents/sessions.md`)
