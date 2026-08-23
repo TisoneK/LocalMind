@@ -2247,8 +2247,13 @@ class AgentLoop:
 
         # S295: the trailing turn-context is re-sent on EVERY loop iteration —
         # drop the redundant tool-list prose (kept in the native param + the
-        # in-prompt list) to save ~279 tokens/iteration.
-        turn_context_parts = [_build_environment_context(include_tool_list=False)]
+        # in-prompt list) to save ~279 tokens/iteration. session_id is passed
+        # so the Session workspace line lands in the per-iteration context too
+        # (Session 382 follow-up: free-tier models need the destination
+        # repeated near the action, not just in the init call).
+        turn_context_parts = [
+            _build_environment_context(include_tool_list=False, session_id=session_id)
+        ]
         if workspace_context:
             turn_context_parts.append(workspace_context)
         # Session 359: inject the session's CURRENT todo list (persisted from

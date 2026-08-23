@@ -301,7 +301,33 @@ def _clean_token(token: str) -> str:
     return (token or "").strip().strip('"\'').rstrip(".,;:!?)")[:160]
 
 
-def derive_goal_items(message: str, max_items: int = _MAX_GOAL_ITEMS) -> list[str]:
+# Absolute-path markers: Unix "/...", drive "C:\\...", or "~/" home.
+_ABS_PATH_RE = re.compile(r"^(?:/|[A-Za-z]:[/\\\\]|~)")
+
+
+def _resolve_against(
+    token: str, base_dir: Optional[str]
+) -> str:
+    """Resolve a bare path token onto `base_dir` when it is not already
+    absolute (drive / root / ~). Leave explicit absolute paths verbatim —
+    the user's explicit destination always wins (B-2026-08-23-17 door).
+    Session 382 follow-up (workspace steering): with a session workspace
+    as base_dir, a message's bare "a.txt" / "path-test" goals become
+    "file exists at <workspace>/path-test/a.txt" — the model sees the
+    EXACT destination in its goal contract, the acceptance gate checks
+    that same absolute path, and the route sub-goals check/write/verify
+    the real location instead of a home-relative guess."""
+    token = (token or "").strip()
+    if not token or not base_dir or _ABS_PATH_RE.match(token):
+        return token
+    return os.path.normpath(os.path.join(base_dir, token))
+
+
+def derive_goal_items(
+    message: str,
+    max_items: int = _MAX_GOAL_ITEMS,
+    base_dir: Optional[str] = None,
+) -> list[str]:
     """Derive a FIXED goal checklist from the user's message.
 
     Deterministic (zero LLM calls), intended for the warm-kernel parent
@@ -343,6 +369,9 @@ def derive_goal_items(message: str, max_items: int = _MAX_GOAL_ITEMS) -> list[st
             token = _clean_token(m.group(1) or m.group(0))
             if not token:
                 continue
+            # Session 382 follow-up: bare names resolve onto the session
+            # workspace so goals/route/gate reference the REAL destination.
+            token = _resolve_against(token, base_dir)
             _add(f"file exists at {token} with content")
             if len(items) >= max_items:
                 break
@@ -362,6 +391,9 @@ def derive_goal_items(message: str, max_items: int = _MAX_GOAL_ITEMS) -> list[st
             # longer name.
             if any(other and name != other and name in other for other in folder_names):
                 continue
+            # Session 382 follow-up: resolve onto the session workspace so
+            # the folder goal names its actual destination.
+            name = _resolve_against(name, base_dir)
             _add(f"folder created at {name}")
             if len(items) >= max_items:
                 break
@@ -398,19 +430,30 @@ class DerivedGoal:
 
 
 def _parent_folder(path: str) -> str:
-    """First path component of a file path ("src/app.tsx" → "src"), or
-    "" for a bare filename — no folder to pre-create."""
-    parts = [p for p in re.split(r"[/\\]", path) if p]
-    return parts[0] if len(parts) > 1 else ""
+    """The containing directory of a file path.
+
+    - "src/utils/helper.py" → "src/utils" (relative)
+    - "/ws/path-test/a.txt" → "/ws/path-test" (keeps the leading root)
+    - "a.txt" / "C:\\a.txt" → "" (no folder to pre-create)
+    """
+    head, tail = os.path.split(path)
+    if not tail:
+        return ""
+    return head
 
 
-def _sub_goals_for_goal(goal: str) -> list[str]:
+def _sub_goals_for_goal(goal: str, base_dir: Optional[str] = None) -> list[str]:
     """Deterministic ordered sub-goals for one derived goal item.
 
     Phrased fastest+safest: check the current state before acting
     (Session 32 check-before-acting), then the minimal write route, then
     verify against the goal itself. Conservative and bounded — never
     inventing deliverables, only the route to the one the user named.
+
+    ``base_dir`` (Session 382 follow-up): when the file's parent IS the
+    workspace root itself, the prep step is skipped — the workspace folder
+    already exists (created by the harness), so "create the folder" would
+    be noise on every bare-file goal.
     """
     if goal.startswith("file exists at "):
         path = goal[len("file exists at ") :].strip()
@@ -418,11 +461,18 @@ def _sub_goals_for_goal(goal: str) -> list[str]:
             path = path[: -len(" with content")].strip()
         steps = [f"check whether {path} already exists (read it if so)"]
         parent = _parent_folder(path)
-        if parent:
+        if parent and os.path.normpath(parent) != os.path.normpath(base_dir or ""):
             steps.append(f"create the folder {parent} first if it is missing")
         steps.append(f"write {path} with the full content")
         steps.append(f"verify {path} exists with the expected content")
         return steps[:_MAX_SUB_GOALS]
+    if goal.startswith("folder created at "):
+        name = goal[len("folder created at ") :].strip()
+        return [
+            f"check whether the folder {name} already exists",
+            f"create the folder {name} only if it is missing",
+            f"verify the folder {name} exists",
+        ][:_MAX_SUB_GOALS]
     if goal.startswith("folder created at "):
         name = goal[len("folder created at ") :].strip()
         return [
@@ -440,7 +490,9 @@ def _sub_goals_for_goal(goal: str) -> list[str]:
 
 
 def derive_goal_tree(
-    message: str, max_items: int = _MAX_GOAL_ITEMS
+    message: str,
+    max_items: int = _MAX_GOAL_ITEMS,
+    base_dir: Optional[str] = None,
 ) -> list[DerivedGoal]:
     """Derive the FIXED goal tree: top-level goals + ordered sub-goals.
 
@@ -450,10 +502,15 @@ def derive_goal_tree(
     the next. Derived once per message — the acceptance gate still
     checks the flat items (unchanged denominator), while the Todos panel
     renders the sub-goals nested under their parent (B-2026-08-23-8).
+
+    ``base_dir`` (Session 382 follow-up): when provided (the session
+    workspace), bare path tokens in the message resolve onto it so the
+    goals/route/gate reference the exact destination instead of a
+    home-relative guess.
     """
     return [
-        DerivedGoal(goal=item, sub_goals=_sub_goals_for_goal(item))
-        for item in derive_goal_items(message, max_items=max_items)
+        DerivedGoal(goal=item, sub_goals=_sub_goals_for_goal(item, base_dir))
+        for item in derive_goal_items(message, max_items=max_items, base_dir=base_dir)
     ]
 
 

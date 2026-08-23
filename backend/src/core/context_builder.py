@@ -201,8 +201,12 @@ def _build_environment_context(
 
             _ws = ensure_workspace(session_id)
             _workspace_line = (
-                f"- Session workspace: {_ws} — write files you create for this "
-                "session here unless the user asked for a specific path."
+                f"- Session workspace: {_ws}"
+                " — this session's folder. ALWAYS write files you create for "
+                "this session here — under it, walk from a SUBFOLDER you "
+                "create (e.g. {_ws}/path-test/a.txt)."
+                " Write to an explicit absolute path ONLY if the user asked "
+                "for that exact path."
             )
         except Exception:
             _workspace_line = ""

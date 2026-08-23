@@ -1331,9 +1331,24 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             derive_goal_tree,
         )
 
-        goal_items = derive_goal_items(message)
-        # B-2026-08-23-8: the goal TREE — each goal plus its ordered
-        # sub-goals (check → prep → write → verify). Derived once with the
+        # Session 382 follow-up (workspace steering): resolve bare path
+        # tokens in the goal derivation onto the session workspace, so the
+        # goals/route/gate/panel all reference the EXACT destination a
+        # free-tier model should write to (not a home-relative guess).
+        # Explicit absolute paths in the message stay verbatim — the user's
+        # explicit destination always wins.
+        _ws_base: str | None = None
+        if session_id:
+            try:
+                from core.session_workspace import ensure_workspace
+
+                _ws_base = str(ensure_workspace(session_id))
+            except Exception:
+                _ws_base = None
+
+        goal_items = derive_goal_items(message, base_dir=_ws_base)
+        # B-2026-08-23-8: the goal tree — each goal plus its ordered
+        # sub-goals (route → prep → write → verify). Derived once with the
         # flat checklist (same immutable denominator); handed to the loop
         # as plain dicts {goal, sub_goals} so the Todos panel can render
         # the route nested under each goal and the model sees the ordered
@@ -1341,7 +1356,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # as `goal_items`.
         goal_tree = [
             {"goal": dg.goal, "sub_goals": dg.sub_goals}
-            for dg in derive_goal_tree(message)
+            for dg in derive_goal_tree(message, base_dir=_ws_base)
         ]
         if goal_items:
             collector.emit(

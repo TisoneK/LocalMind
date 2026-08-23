@@ -50,7 +50,7 @@ def test_goal_tree_nested_path_includes_parent_folder_prep():
     tree = derive_goal_tree("create src/utils/helper.py with a helper function")
     assert tree[0].goal == "file exists at src/utils/helper.py with content"
     # A nested path routes through its parent folder before writing.
-    assert "create the folder src first" in tree[0].sub_goals[1]
+    assert "create the folder src/utils first" in tree[0].sub_goals[1]
 
 
 def test_goal_tree_empty_when_flat_is_empty():
@@ -138,3 +138,63 @@ def test_max_items_bounded():
     items = derive_goal_items(msg)
     assert len(items) <= 6
     assert all(item.startswith("file exists at") for item in items)
+
+
+# ── Session 382 follow-up: workspace-relative goal derivation ───────────────
+
+
+def test_base_dir_resolves_bare_file_onto_workspace():
+    items = derive_goal_items(
+        "create a.txt and b.txt",
+        base_dir="/ws/sess-1",
+    )
+    assert items == [
+        "file exists at /ws/sess-1/a.txt with content",
+        "file exists at /ws/sess-1/b.txt with content",
+    ]
+
+
+def test_base_dir_resolves_folder_onto_workspace():
+    items = derive_goal_items(
+        "create a folder called path-test",
+        base_dir="/ws/sess-1",
+    )
+    assert items == ["folder created at /ws/sess-1/path-test"]
+
+
+def test_base_dir_resolves_nested_relative_onto_workspace():
+    items = derive_goal_items(
+        "create src/utils/helper.py",
+        base_dir="/ws/sess-1",
+    )
+    assert items == ["file exists at /ws/sess-1/src/utils/helper.py with content"]
+
+
+def test_base_dir_leaves_explicit_absolute_path_verbatim():
+    items = derive_goal_items(
+        "update /Users/me/README.md",
+        base_dir="/ws/sess-1",
+    )
+    assert items == ["file exists at /Users/me/README.md with content"]
+
+
+def test_base_dir_none_keeps_legacy_bare_tokens():
+    items = derive_goal_items("create a.txt")
+    assert items == ["file exists at a.txt with content"]
+
+
+def test_goal_tree_route_uses_workspace_resolved_path():
+    tree = derive_goal_tree(
+        "In my workspace, create a folder called path-test. Inside it "
+        "create a.txt.",
+        base_dir="/ws/sess-1",
+    )
+    a_goal = next(g for g in tree if g.goal.startswith("file exists at"))
+    assert a_goal.goal == "file exists at /ws/sess-1/a.txt with content"
+    assert a_goal.sub_goals[0].startswith("check whether /ws/sess-1/a.txt")
+    # The parent IS the workspace root → no redundant "create the folder"
+    # prep step (the harness creates the workspace).
+    assert not any("create the folder" in s for s in a_goal.sub_goals)
+    assert a_goal.sub_goals[1].startswith("write /ws/sess-1/a.txt")
+    folder_goal = next(g for g in tree if g.goal.startswith("folder created at"))
+    assert folder_goal.goal == "folder created at /ws/sess-1/path-test"
