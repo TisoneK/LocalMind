@@ -55,6 +55,7 @@ trace** (a backgrounded server does not survive across separate terminal calls).
 | `scripts/live_test_cybercafe.py` | Quick repro harness — ONE prompt (or a small set). `--label baseline\|fix-N` marks before/after runs; saves `sse-<label>-<name>.sse` + `results-<label>.json`, prints latency/tools/event-type counts/usage/duplicate heuristics. |
 | `scripts/lm_benchmark.py` | The full benchmark suite (52 tests across CAT1/2/6/9/14/15 + LM-* categories; catalog in `.context/memory/system/test-catalog.md`). Per-test PASS/PARTIAL/FAIL scoring, 60s timeout, 15s cooldown, 429 retry with 30s backoff, partial results saved after every test. |
 | `scripts/lm_collision_tests.py` | Multi-guard collision suite (COL-1..10 + MEM-*) — what happens when MULTIPLE pre-init guards match the same prompt. Same harness/score format. |
+| `scripts/lm_conversation_tests.py` | Multi-turn conversation harness (S342) — runs SHORT 2-3 turn conversations on one `session_id` and prints the transcript (turn-by-turn latency/tools/replans/thinking + observation heuristics). Catalog + what-to-look-for: `.context/memory/system/conversation-test-sets.md`. Portable (resolves the repo from the script path — no hardcoded /home/z). |
 | `scripts/run_benchmark_detached.sh` | Fully detached benchmark run (`setsid` + `nohup` + `&`) so a long suite survives agent/terminal disconnect. Poll the log (`scratch/bench-detached.log`), results land in `scratch/`. |
 | `scripts/run_collision_detached.sh` | Same, for the collision suite. |
 | Older one-offs (`live_test_glm_tool_trace*.py`, `live_test_prose_commitment.py`, `live_test_post_loop_synthesis.py`, `live_test_session305.py`, `live_trace_empty_answer.py`, `live_test_compaction.py`, `live_test_extractor.py`, `live_audit_full.py`) | Repro/debug traces from earlier sessions — keep as templates; the harness pattern is identical. |
@@ -217,6 +218,17 @@ instead of hand-rolled traces, and evidence is recorded in dedicated files:
 - **Session 339** — memory-relevance gate + conversation-state awareness +
   tool-abstraction enforcement (commit `b586e75`).
 - **Session 340** — web-acquisition benchmark tests WEB-1/3/5/8 (commit `b18ef32`).
+
+### Session 342 — conversation test sets (multi-turn live testing)
+
+Single-turn prompts (the benchmark) can't observe follow-ups, corrections, or
+constraint carry-over. Added `scripts/lm_conversation_tests.py` + catalog
+`.context/memory/system/conversation-test-sets.md`: 18 short conversations in 9
+behavior sets (context-retention, corrections, clarify, incremental, stated-
+facts, honesty, topic-switch, constraints, elaboration). Multi-turn works by
+reusing the same `session_id` — `chat.py` derives `is_first` server-side from
+persisted session state. Keep conversations SHORT (2-3 turns) so the test is the
+agent's behavior, not context-window endurance.
 
 ### Sessions 332–335 — individual fix evidence (kept for history)
 

@@ -4744,3 +4744,14 @@ program + ADR-22). -->
 - **Key findings:** All committed harnesses already default to `LOCALMIND_ADAPTER=bankofai` (bankofai/deepseek-v4-flash); zai/glm-4.5-flash is the slow-model fallback. The scripts hardcode `REPO=/home/z/my-project/localmind` (Linux dev box) — must be adjusted on other checkouts. Bookkeeping gap found: sessions 332-340 shipped (commits) but were never logged in `agents/sessions.md` (last entry: Session 331) and `tasks/current.md` was last updated at "Session 332 complete" (`d7de7cf`); their evidence lives in `.context/memory/system/test-results-336.md` + `test-catalog.md` + live-testing.md session log.
 - **Outcome:** done — live-testing.md rewritten; bookkeeping gap noted for future sessions.
 - **Report:** none
+
+---
+## 2026-08-22 — Session 342 — multi-turn conversation test sets + harness (B-2026-08-22-1/-2 found live)
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-flash | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — live-test tooling
+- **Task:** Per user: design sets of prompts to start testing with SHORT conversations to see how the agent behaves across turns (single-turn benchmark can't observe follow-ups/corrections/constraint carry-over).
+- **Shipped:** `scripts/lm_conversation_tests.py` (multi-turn harness — boots isolated 8765 + scratch home, runs 2-3 turn conversations on one session_id, prints transcripts + metrics + observation heuristics; portable path resolution, auto-copies ~/LocalMind/settings.json into tracehome) + catalog `.context/memory/system/conversation-test-sets.md` (18 conversations / 9 sets: context-retention, corrections, clarify, incremental, stated-facts, honesty, topic-switch, constraints, elaboration) + live-testing.md updated. Multi-turn works because chat.py derives is_first from persisted session state.
+- **Live-verified (bankofai/deepseek-v4-flash, isolated 8765):** harness runs end-to-end. CONV-01: context retention works (turn 3 picked "idea 2 — tournaments" from turn 1). CONV-11: turn 1 refuses cleanly, turn 2 "just guess" → FABRICATED a fake past conversation (B-2026-08-22-1). CONV-12: turn 1 refuses directly, turn 2 "check your memory" → 8-tool/87.9s filesystem credential hunt, nothing leaked but tool-first reflex in multi-turn form (B-2026-08-22-2). Both backlogged High.
+- **Outcome:** done — 1 tool + 2 docs + 2 backlog items; live findings are the comparison baseline.
+- **Report:** none
