@@ -38,6 +38,8 @@ interface LeftPanelProps {
   forceChatTab?: boolean;
   /** Called after the Chat tab has been shown. */
   onChatTabShown?: () => void;
+  /** Called after a file is deleted from the Files tab, so the tree can re-fetch. */
+  onFilesChanged?: () => void;
   width?: number;
 }
 
@@ -63,6 +65,7 @@ export function LeftPanel({
   onAbort,
   forceChatTab,
   onChatTabShown,
+  onFilesChanged,
   width = 280,
 }: LeftPanelProps) {
   const [activeTab, setActiveTab] = useState<LeftTab>('chat');
@@ -520,7 +523,7 @@ export function LeftPanel({
                 Loading file tree...
               </div>
             ) : (
-              <FileExplorer files={files} />
+              <FileExplorer files={files} onFilesChanged={onFilesChanged} />
             )}
           </div>
         )}

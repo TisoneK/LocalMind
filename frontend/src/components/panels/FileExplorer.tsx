@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -10,12 +10,23 @@ import {
   FileCode,
   FileText,
   FileJson,
+  Search,
+  X,
+  Download,
+  Trash2,
+  Copy,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
-import { FileNode } from '@/types';
+import { FileNode, SessionFileEntry } from '@/types';
+import { localmindClient } from '@/lib/localmind/client';
 
 interface FileExplorerProps {
+  /** Root-level tree nodes (one level deep) to seed the browser. */
   files: FileNode[];
   onFileOpen?: (path: string) => void;
+  /** Called after a delete so the owning view can re-fetch its tree. */
+  onFilesChanged?: () => void;
 }
 
 function getFileIcon(name: string) {
@@ -27,69 +38,384 @@ function getFileIcon(name: string) {
   return <File className="h-3.5 w-3.5 text-brand-green-muted" />;
 }
 
-function FileTreeNode({ node, depth = 0, onFileOpen }: { node: FileNode; depth?: number; onFileOpen?: (path: string) => void }) {
-  const [expanded, setExpanded] = useState(node.expanded ?? false);
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
-  if (node.type === 'file') {
+interface TreeNodeState {
+  children: FileNode[] | null; // null = not loaded yet
+  loading: boolean;
+}
+
+interface FileTreeNodeProps {
+  node: FileNode;
+  depth: number;
+  /** Shared per-path child state, owned by the top-level FileExplorer. */
+  nodes: Record<string, TreeNodeState>;
+  onToggle: (node: FileNode) => void;
+  onOpen: (path: string) => void;
+  onAction: (action: 'open' | 'download' | 'delete' | 'copy', path: string) => void;
+}
+
+function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTreeNodeProps) {
+  const [expanded, setExpanded] = useState(node.expanded ?? false);
+  const [copied, setCopied] = useState(false);
+  const isFolder = node.type === 'folder';
+  const state = nodes[node.path] ?? { children: null, loading: false };
+  const children = state.children;
+
+  const toggle = () => {
+    setExpanded((e) => !e);
+    if (!expanded && children === null && !state.loading) onToggle(node);
+  };
+
+  const copyPath = async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      onAction('copy', path);
+    }
+  };
+
+  const rowStyle = { paddingLeft: `${depth * 12 + 8}px` };
+
+  if (isFolder) {
     return (
-      <div
-        className="flex items-center gap-1.5 px-2 py-0.5 hover:bg-brand-border/50 cursor-pointer rounded transition-colors group"
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
-        onClick={() => onFileOpen?.(node.path)}
-        title={node.path}
-      >
-        {getFileIcon(node.name)}
-        <span className="text-[11px] text-brand-green-soft truncate group-hover:text-brand-green transition-colors">
-          {node.name}
-        </span>
+      <div>
+        <div
+          className="flex items-center gap-1 px-2 py-1 hover:bg-brand-border/50 cursor-pointer rounded transition-colors group"
+          style={rowStyle}
+          onClick={toggle}
+        >
+          {state.loading ? (
+            <Loader2 className="h-3 w-3 text-brand-green-muted animate-spin shrink-0" />
+          ) : expanded ? (
+            <ChevronDown className="h-3 w-3 text-brand-green-muted shrink-0" />
+          ) : (
+            <ChevronRight className="h-3 w-3 text-brand-green-muted shrink-0" />
+          )}
+          {expanded ? (
+            <FolderOpen className="h-3.5 w-3.5 text-brand-amber shrink-0" />
+          ) : (
+            <Folder className="h-3.5 w-3.5 text-brand-amber shrink-0" />
+          )}
+          <span className="text-[11px] text-brand-green-soft truncate font-medium group-hover:text-brand-green transition-colors flex-1 min-w-0" title={node.path}>
+            {node.name}
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 text-brand-green-muted hover:text-brand-green transition-all"
+            onClick={(e) => { e.stopPropagation(); copyPath(node.path); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); copyPath(node.path); } }}
+            title="Copy path"
+            data-testid={`copy-${node.name}`}
+          >
+            <Copy className="h-2.5 w-2.5" />
+          </span>
+        </div>
+        {expanded && (
+          <div data-testid={`folder-children-${node.name}`}>
+            {state.loading ? (
+              <div className="text-[10px] text-brand-green-faint italic px-2 py-0.5" style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}>
+                Loading…
+              </div>
+            ) : children !== null && children.length === 0 ? (
+              <div className="text-[10px] text-brand-green-faint italic px-2 py-0.5" style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}>
+                Empty
+              </div>
+            ) : children !== null ? (
+              children.map((child) => (
+                <FileTreeNode
+                  key={child.path}
+                  node={child}
+                  depth={depth + 1}
+                  nodes={nodes}
+                  onToggle={onToggle}
+                  onOpen={onOpen}
+                  onAction={onAction}
+                />
+              ))
+            ) : null}
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div>
-      <div
-        className="flex items-center gap-1 px-2 py-0.5 hover:bg-brand-border/50 cursor-pointer rounded transition-colors group"
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
-        onClick={() => setExpanded(!expanded)}
-      >
-        {expanded ? (
-          <ChevronDown className="h-3 w-3 text-brand-green-muted shrink-0" />
-        ) : (
-          <ChevronRight className="h-3 w-3 text-brand-green-muted shrink-0" />
-        )}
-        {expanded ? (
-          <FolderOpen className="h-3.5 w-3.5 text-brand-amber shrink-0" />
-        ) : (
-          <Folder className="h-3.5 w-3.5 text-brand-amber shrink-0" />
-        )}
-        <span className="text-[11px] text-brand-green-soft truncate font-medium group-hover:text-brand-green transition-colors">
-          {node.name}
+    <div
+      className="flex items-center gap-1 px-2 py-1 hover:bg-brand-border/50 rounded transition-colors group"
+      style={rowStyle}
+      onClick={() => onOpen(node.path)}
+      title={node.path}
+      data-testid={`file-row-${node.name}`}
+    >
+      {getFileIcon(node.name)}
+      <span className="text-[11px] text-brand-green-soft truncate group-hover:text-brand-green transition-colors flex-1 min-w-0">
+        {node.name}
+      </span>
+      {/* Per-file actions — visible on hover (B-2026-08-23) */}
+      <span className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 text-brand-green-muted transition-all">
+        <span
+          role="button"
+          tabIndex={0}
+          className="p-0.5 rounded hover:text-brand-green hover:bg-brand-border/60"
+          onClick={(e) => { e.stopPropagation(); onAction('open', node.path); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAction('open', node.path); } }}
+          title="Preview"
+          data-testid={`preview-${node.name}`}
+        >
+          <ExternalLink className="h-2.5 w-2.5" />
         </span>
-      </div>
-      {expanded && (
-        node.children && node.children.length > 0 ? (
-          <div>
-            {node.children.map((child) => (
-              <FileTreeNode key={child.path} node={child} depth={depth + 1} onFileOpen={onFileOpen} />
-            ))}
-          </div>
-        ) : (
-          <div className="text-[10px] text-brand-green-faint italic px-2 py-0.5" style={{ paddingLeft: `${(depth + 1) * 12 + 8}px` }}>
-            Empty
-          </div>
-        )
-      )}
+        <span
+          role="button"
+          tabIndex={0}
+          className="p-0.5 rounded hover:text-brand-green hover:bg-brand-border/60"
+          onClick={(e) => { e.stopPropagation(); onAction('download', node.path); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAction('download', node.path); } }}
+          title="Download"
+          data-testid={`download-${node.name}`}
+        >
+          <Download className="h-2.5 w-2.5" />
+        </span>
+        <span
+          role="button"
+          tabIndex={0}
+          className="p-0.5 rounded hover:text-brand-green hover:bg-brand-border/60"
+          onClick={(e) => { e.stopPropagation(); copyPath(node.path); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); copyPath(node.path); } }}
+          title="Copy path"
+          data-testid={`copy-${node.name}`}
+        >
+          {copied ? <X className="h-2.5 w-2.5 text-brand-green" /> : <Copy className="h-2.5 w-2.5" />}
+        </span>
+        <span
+          role="button"
+          tabIndex={0}
+          className="p-0.5 rounded hover:text-brand-red hover:bg-brand-red/10"
+          onClick={(e) => { e.stopPropagation(); onAction('delete', node.path); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAction('delete', node.path); } }}
+          title="Delete"
+          data-testid={`delete-${node.name}`}
+        >
+          <Trash2 className="h-2.5 w-2.5" />
+        </span>
+      </span>
     </div>
   );
 }
 
-export function FileExplorer({ files, onFileOpen }: FileExplorerProps) {
+export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorerProps) {
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<SessionFileEntry[] | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [nodes, setNodes] = useState<Record<string, TreeNodeState>>({});
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The browser is seeded with the home directory's children (useFileTree()
+  // with no path); derive the searchable root from the first entry's parent.
+  const root = files.length > 0 ? files[0].path.split(/[\\/]/).slice(0, -1).join('/') || '/' : '';
+
+  const loadChildren = useCallback(async (node: FileNode) => {
+    setNodes((prev) => ({ ...prev, [node.path]: { children: prev[node.path]?.children ?? null, loading: true } }));
+    try {
+      const children = await localmindClient.getFileTree(node.path);
+      setNodes((prev) => ({ ...prev, [node.path]: { children, loading: false } }));
+    } catch {
+      setNodes((prev) => ({ ...prev, [node.path]: { children: [], loading: false } }));
+    }
+  }, []);
+
+  // Debounced recursive search across the browser's root.
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    const q = query.trim();
+    if (!q) {
+      setSearchResults(null);
+      setSearchError(null);
+      return;
+    }
+    setSearching(true);
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const results = await localmindClient.searchFiles(root, q);
+        setSearchResults(results);
+        setSearchError(null);
+      } catch {
+        setSearchResults([]);
+        setSearchError('Search failed');
+      } finally {
+        setSearching(false);
+      }
+    }, 250);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [query, root]);
+
+  const handleAction = (action: 'open' | 'download' | 'delete' | 'copy', path: string) => {
+    if (action === 'open') {
+      onFileOpen?.(path);
+      return;
+    }
+    if (action === 'download') {
+      localmindClient.downloadFile(path);
+      return;
+    }
+    if (action === 'delete') {
+      setConfirmDelete(path);
+      return;
+    }
+    // copy handled per-row for its own feedback; this branch is a fallback.
+    void path;
+  };
+
+  const confirmDeleteFile = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      await localmindClient.deleteFile(confirmDelete);
+      setNotice('Deleted');
+      setTimeout(() => setNotice(null), 1500);
+      setConfirmDelete(null);
+      // Ask the owning view to re-fetch so the tree reflects the deletion.
+      onFilesChanged?.();
+    } catch {
+      setNotice('Delete failed');
+      setTimeout(() => setNotice(null), 2000);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
-    <div className="space-y-0.5">
-      {files.map((node) => (
-        <FileTreeNode key={node.path} node={node} onFileOpen={onFileOpen} />
-      ))}
+    <div className="flex flex-col gap-1">
+      {/* Search box */}
+      <div className="relative">
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-brand-green-muted" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search files…"
+          className="w-full pl-7 pr-6 py-1 rounded-md border border-brand-border bg-brand-bg-panel text-[11px] text-brand-green-soft placeholder:text-brand-green-faint focus:outline-none focus:border-brand-green/40"
+          data-testid="file-search"
+        />
+        {query && (
+          <button
+            onClick={() => setQuery('')}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-brand-green-muted hover:text-brand-green"
+            title="Clear search"
+            data-testid="file-search-clear"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+
+      {searching && (
+        <div className="flex items-center gap-1.5 px-1 py-1 text-[10px] text-brand-green-muted">
+          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+          Searching…
+        </div>
+      )}
+
+      {searchError && (
+        <div className="px-1 py-1 text-[10px] text-brand-red">{searchError}</div>
+      )}
+
+      {searchResults !== null && !searching ? (
+        searchResults.length === 0 ? (
+          <div className="px-1 py-2 text-[10px] text-brand-green-faint italic">
+            No matches for “{query.trim()}”
+          </div>
+        ) : (
+          <div className="space-y-0.5" data-testid="search-results">
+            {searchResults.map((entry) =>
+              entry.type === 'folder' ? (
+                <div key={entry.relPath} className="flex items-center gap-1.5 px-2 py-1 rounded">
+                  <Folder className="h-3.5 w-3.5 text-brand-amber shrink-0" />
+                  <span className="text-[11px] text-brand-green-soft truncate">{entry.name}</span>
+                </div>
+              ) : (
+                <div
+                  key={entry.relPath}
+                  className="flex items-center gap-1.5 px-2 py-1 hover:bg-brand-border/50 rounded transition-colors cursor-pointer group"
+                  onClick={() => onFileOpen?.(entry.path)}
+                  title={entry.path}
+                  data-testid={`search-result-${entry.name}`}
+                >
+                  {getFileIcon(entry.name)}
+                  <span className="text-[11px] text-brand-green-soft truncate flex-1 min-w-0 group-hover:text-brand-green transition-colors">
+                    {entry.name}
+                  </span>
+                  <span className="text-[9px] text-brand-green-faint shrink-0">{formatSize(entry.size)}</span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:text-brand-green hover:bg-brand-border/60 transition-all"
+                    onClick={(e) => { e.stopPropagation(); localmindClient.downloadFile(entry.path); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); localmindClient.downloadFile(entry.path); } }}
+                    title="Download"
+                    data-testid={`search-download-${entry.name}`}
+                  >
+                    <Download className="h-2.5 w-2.5" />
+                  </span>
+                </div>
+              ),
+            )}
+          </div>
+        )
+      ) : (
+        <div className="space-y-0.5" data-testid="file-tree">
+          {files.map((node) => (
+            <FileTreeNode
+              key={node.path}
+              node={node}
+              depth={0}
+              nodes={nodes}
+              onToggle={loadChildren}
+              onOpen={(path) => onFileOpen?.(path)}
+              onAction={handleAction}
+            />
+          ))}
+        </div>
+      )}
+
+      {notice && <div className="px-1 py-1 text-[10px] text-brand-green">{notice}</div>}
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div className="mt-1 p-2 rounded bg-brand-border border border-brand-red/30" data-testid="delete-confirm">
+          <div className="text-[10px] text-brand-green-soft mb-2 break-all">
+            Delete <span className="font-mono">{confirmDelete.split(/[\\/]/).pop()}</span>?
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setConfirmDelete(null)}
+              className="px-2 py-1 text-[10px] rounded hover:bg-brand-border text-brand-green-muted hover:text-brand-green-soft"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDeleteFile}
+              disabled={deleting}
+              className="px-2 py-1 text-[10px] rounded bg-brand-red/10 text-brand-red hover:bg-brand-red/20 disabled:opacity-50"
+              data-testid="delete-confirm-yes"
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

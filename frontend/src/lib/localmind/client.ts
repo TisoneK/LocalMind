@@ -658,6 +658,39 @@ class LocalMindClient {
     }
   }
 
+  async searchFiles(path: string, query: string): Promise<SessionFileEntry[]> {
+    try {
+      const data = await this.request<{ results: any[] }>(
+        `/api/files/search?path=${encodeURIComponent(path)}&q=${encodeURIComponent(query)}`
+      );
+      return (data.results || []).map((f) => ({
+        name: f.name || '',
+        type: f.type === 'folder' ? 'folder' : 'file',
+        path: f.path || '',
+        relPath: f.relPath || f.name || '',
+        size: f.size || 0,
+        modified: f.modified || '',
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async deleteFile(path: string): Promise<void> {
+    await this.request(`/api/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
+  }
+
+  /** Trigger a browser download of a file's raw bytes (B-2026-08-23). */
+  downloadFile(path: string): void {
+    const url = `${this.baseUrl}/api/files/download?path=${encodeURIComponent(path)}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = path.split(/[\\/]/).pop() || 'file';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   // ── Todos ───────────────────────────────────────────────────────────
 
   async getTodos(sessionId: string): Promise<TodoItem[]> {

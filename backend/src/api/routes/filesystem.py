@@ -166,6 +166,142 @@ async def list_files(path: str = ""):
         raise HTTPException(status_code=500, detail=f"Failed to list directory: {e}")
 
 
+@router.get("/files/search")
+async def search_files(path: str = "", q: str = ""):
+    """Recursively search for files/folders by name under the given path.
+
+    Case-insensitive substring match on the entry name (not the full path),
+    capped at 200 results so a huge tree can't flood the UI. Read-only.
+    """
+    try:
+        if not path or path == ".":
+            path = os.path.expanduser("~")
+        root = Path(path).resolve()
+        query = (q or "").strip().lower()
+        if not query:
+            return {"results": []}
+        if not settings.is_path_allowed(root):
+            raise HTTPException(status_code=403, detail="Path is outside allowed folders")
+        if not root.exists() or not root.is_dir():
+            raise HTTPException(status_code=404, detail="Path not found")
+
+        import datetime
+
+        results = []
+        try:
+            walker = os.walk(root)
+            for dirpath, dirnames, filenames in walker:
+                dirnames.sort()
+                # Cap traversal: stop descending once we have enough results
+                # (os.walk can't be pruned mid-iteration cheaply, but we can
+                # avoid scanning further subtrees by checking the cap).
+                for name in sorted(filenames):
+                    if query in name.lower():
+                        full = os.path.join(dirpath, name)
+                        try:
+                            st = os.stat(full)
+                        except OSError:
+                            continue
+                        results.append(
+                            {
+                                "name": name,
+                                "type": "file",
+                                "path": full,
+                                "relPath": os.path.relpath(full, root),
+                                "size": st.st_size,
+                                "modified": datetime.datetime.fromtimestamp(st.st_mtime).isoformat(),
+                            }
+                        )
+                        if len(results) >= 200:
+                            break
+                if len(results) >= 200:
+                    break
+                for name in dirnames:
+                    if query in name.lower():
+                        full = os.path.join(dirpath, name)
+                        try:
+                            st = os.stat(full)
+                        except OSError:
+                            continue
+                        results.append(
+                            {
+                                "name": name,
+                                "type": "folder",
+                                "path": full,
+                                "relPath": os.path.relpath(full, root),
+                                "size": 0,
+                                "modified": datetime.datetime.fromtimestamp(st.st_mtime).isoformat(),
+                            }
+                        )
+                        if len(results) >= 200:
+                            break
+                if len(results) >= 200:
+                    break
+        except PermissionError:
+            pass
+        results.sort(key=lambda e: (e["type"] != "folder", e["relPath"].lower()))
+        return {"results": results}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to search: {e}")
+
+
+@router.delete("/files")
+async def delete_file(path: str):
+    """Delete a file (or empty folder) the user explicitly chooses.
+
+    Gated by the same allowed-folder check as listing: the path must resolve
+    inside an allowed user folder. Folders are only removed when empty (a
+    non-empty recursive delete is too destructive for a browser action).
+    """
+    try:
+        if not path:
+            raise HTTPException(status_code=400, detail="Path is required")
+        target = Path(path).resolve()
+        if not settings.is_path_allowed(target):
+            raise HTTPException(status_code=403, detail="Path is outside allowed folders")
+        if not target.exists():
+            raise HTTPException(status_code=404, detail="Path not found")
+        if target.is_dir():
+            try:
+                next(target.iterdir())
+                raise HTTPException(status_code=400, detail="Folder is not empty")
+            except StopIteration:
+                target.rmdir()
+        else:
+            target.unlink()
+        return {"deleted": str(target)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete: {e}")
+
+
+@router.get("/files/download")
+async def download_file(path: str):
+    """Stream a file's raw bytes as an attachment download."""
+    try:
+        if not path:
+            raise HTTPException(status_code=400, detail="Path is required")
+        target = Path(path).resolve()
+        if not settings.is_path_allowed(target):
+            raise HTTPException(status_code=403, detail="Path is outside allowed folders")
+        if not target.exists() or target.is_dir():
+            raise HTTPException(status_code=404, detail="Path not found")
+        from fastapi.responses import FileResponse
+
+        return FileResponse(
+            target,
+            filename=target.name,
+            media_type="application/octet-stream",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download: {e}")
+
+
 @router.get("/files/meta")
 async def get_file_meta(path: str):
     """Get detailed metadata for a single file or directory."""

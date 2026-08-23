@@ -119,7 +119,7 @@ export function WorkspaceLayout() {
   const { messages, isStreaming, activeToolCalls, agentRuns, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
-  const { files } = useFileTree();
+  const { files, refresh: refreshFiles } = useFileTree();
   const { todos, toggleTodo, addTodo } = useTodos(currentSessionId);
   // ADR-34 B-11: useObjectives keeps running for backend sync, but the
   // sidebar no longer renders the ObjectivesPanel. The create/pause/resume/
@@ -383,6 +383,7 @@ export function WorkspaceLayout() {
           onAbort={abort}
           forceChatTab={forceChatTab}
           onChatTabShown={() => setForceChatTab(false)}
+          onFilesChanged={refreshFiles}
           width={leftPanelWidth}
         />
         {/* Left resize handle */}
