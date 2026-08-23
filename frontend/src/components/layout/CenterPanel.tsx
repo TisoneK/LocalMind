@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import {
   Cpu,
   Brain,
@@ -8,10 +8,12 @@ import {
   WifiOff,
   Shield,
   Loader2,
+  X,
 } from 'lucide-react';
 import { ChatMessage as ChatMessageType, ModelOption } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { localmindClient } from '@/lib/localmind/client';
 
 // ADR-34 B-10: the intent badge and INTENT_LABELS map are retired.
 // Intent classification is no longer a product-facing surface — the
@@ -77,6 +79,30 @@ export function CenterPanel({
   contextTokens,
 }: CenterPanelProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  // B-2026-08-23-14: guide the user in chat when the configured embed model
+  // isn't pulled in Ollama but an alternative is — memory stores would
+  // otherwise silently fail. Dismissed per session (sessionStorage) so it
+  // doesn't nag after the user has seen it once.
+  const [embedGuide, setEmbedGuide] = useState<{ configured: string; suggested: string } | null>(null);
+
+  useEffect(() => {
+    if (sessionStorage.getItem('localmind:embed-guide-dismissed') === '1') return;
+    let mounted = true;
+    localmindClient.getEmbeddingModels().then((info) => {
+      if (!mounted) return;
+      // Only guide when the configured model is genuinely missing and there's
+      // a real pulled alternative to offer.
+      if (info.configured_available === false && info.current && info.suggested) {
+        setEmbedGuide({ configured: info.current, suggested: info.suggested });
+      }
+    }).catch(() => { /* non-fatal: Ollama may be off */ });
+    return () => { mounted = false; };
+  }, []);
+
+  const dismissEmbedGuide = () => {
+    setEmbedGuide(null);
+    sessionStorage.setItem('localmind:embed-guide-dismissed', '1');
+  };
 
   // Scroll only the transcript container on new messages. Calling
   // scrollIntoView() on a nested marker can also scroll outer ancestors,
@@ -196,6 +222,37 @@ export function CenterPanel({
         </div>
       </div>
 
+      {/* B-2026-08-23-14: embed-model guide — shown when the configured
+          embedding model isn't installed but an alternative is pulled. */}
+      {embedGuide && (
+        <div
+          className="mx-4 mt-2 flex flex-wrap items-center gap-2 rounded-md border border-brand-amber/30 bg-brand-amber/10 px-2.5 py-1.5 text-[11px] text-brand-amber"
+          data-testid="embed-guide"
+        >
+          <span className="flex-1 min-w-0">
+            💡 Your embedding model <span className="font-mono">{embedGuide.configured}</span> isn't installed in Ollama — memory can't be saved. Set it to{' '}
+            <span className="font-mono">{embedGuide.suggested}</span> in Settings → Embedding model.
+          </span>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event('localmind:open-settings'))}
+            className="rounded border border-brand-amber/40 bg-brand-amber/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-amber hover:bg-brand-amber/20 transition-colors"
+            data-testid="embed-guide-open-settings"
+          >
+            Open Settings
+          </button>
+          <button
+            type="button"
+            onClick={dismissEmbedGuide}
+            className="p-0.5 rounded text-brand-amber/60 hover:text-brand-amber transition-colors"
+            title="Dismiss"
+            data-testid="embed-guide-dismiss"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+
       {/* Messages area */}
       <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar min-w-0">
         {messages.length === 0 && (
@@ -240,7 +297,6 @@ export function CenterPanel({
         {isStreaming && (() => {
           const lastMsg = messages[messages.length - 1];
           const hasContent = lastMsg && lastMsg.role === 'assistant' && lastMsg.content && lastMsg.content.trim().length > 0;
-          const hasToolCalls = lastMsg && lastMsg.role === 'assistant' && lastMsg.toolCalls && lastMsg.toolCalls.length > 0;
           const hasThinking = lastMsg && lastMsg.role === 'assistant' && lastMsg.thinking && lastMsg.thinking.trim().length > 0;
           // Session 352: only hide the status indicator when the FINAL ANSWER
           // (content) is being streamed — not when thinking text is visible.

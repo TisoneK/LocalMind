@@ -1068,9 +1068,13 @@ class LocalMindClient {
   }
 
   // List locally-pulled Ollama models usable as embedding models (memory/RAG).
+  // configured_available is false when the configured embed model isn't pulled
+  // (memory stores would silently fail); suggested is the alternative to offer.
   async getEmbeddingModels(): Promise<{
     models: { id: string; name: string; provider: string }[];
     current: string;
+    configured_available?: boolean;
+    suggested?: string | null;
   }> {
     return this.request('/api/models/embeddings');
   }

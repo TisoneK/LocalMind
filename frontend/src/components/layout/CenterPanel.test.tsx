@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { findRetryPrompt, CenterPanel } from './CenterPanel';
 import { ChatMessage as ChatMessageType, ModelOption } from '@/types';
+import { localmindClient as client } from '@/lib/localmind/client';
 
 function msg(role: 'user' | 'assistant', content: string, id: string): ChatMessageType {
   return { id, role, content, timestamp: '12:00' } as ChatMessageType;
@@ -109,5 +110,78 @@ describe('CenterPanel parent-degraded indicator (ADR-52 phase 2 / B-2026-08-20-4
     const container = indicator.closest('div[title]') as HTMLElement;
     // The tooltip should still render with the generic degraded message.
     expect(container?.title).toContain('Parent kernel degraded');
+  });
+});
+
+describe('CenterPanel embed-model guide (B-2026-08-23-14)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+  });
+
+  it('shows the guide when the configured embed model is missing and an alternative exists', async () => {
+    vi.spyOn(client, 'getEmbeddingModels').mockResolvedValue({
+      models: [{ id: 'nomic-embed-text', name: 'nomic-embed-text', provider: 'ollama' }],
+      current: 'nomic-embed-text',
+      configured_available: false,
+      suggested: 'mxbai-embed-large',
+    });
+    render(<CenterPanel {...baseProps} health={{ status: 'online' }} />);
+    const guide = await screen.findByTestId('embed-guide');
+    expect(guide.textContent).toContain('nomic-embed-text');
+    expect(guide.textContent).toContain('mxbai-embed-large');
+  });
+
+  it('does not show the guide when the configured model is available', async () => {
+    vi.spyOn(client, 'getEmbeddingModels').mockResolvedValue({
+      models: [{ id: 'mxbai-embed-large', name: 'mxbai-embed-large', provider: 'ollama' }],
+      current: 'mxbai-embed-large',
+      configured_available: true,
+      suggested: null,
+    });
+    render(<CenterPanel {...baseProps} health={{ status: 'online' }} />);
+    await waitFor(() => expect(client.getEmbeddingModels).toHaveBeenCalled());
+    expect(screen.queryByTestId('embed-guide')).not.toBeInTheDocument();
+  });
+
+  it('does not show the guide when there is no alternative to suggest', async () => {
+    vi.spyOn(client, 'getEmbeddingModels').mockResolvedValue({
+      models: [],
+      current: 'nomic-embed-text',
+      configured_available: false,
+      suggested: null,
+    });
+    render(<CenterPanel {...baseProps} health={{ status: 'online' }} />);
+    await waitFor(() => expect(client.getEmbeddingModels).toHaveBeenCalled());
+    expect(screen.queryByTestId('embed-guide')).not.toBeInTheDocument();
+  });
+
+  it('Open Settings dispatches the settings event', async () => {
+    vi.spyOn(client, 'getEmbeddingModels').mockResolvedValue({
+      models: [],
+      current: 'nomic-embed-text',
+      configured_available: false,
+      suggested: 'mxbai-embed-large',
+    });
+    const dispatched: string[] = [];
+    const listener = (e: Event) => dispatched.push((e as Event).type);
+    window.addEventListener('localmind:open-settings', listener);
+    render(<CenterPanel {...baseProps} health={{ status: 'online' }} />);
+    fireEvent.click(await screen.findByTestId('embed-guide-open-settings'));
+    expect(dispatched).toContain('localmind:open-settings');
+    window.removeEventListener('localmind:open-settings', listener);
+  });
+
+  it('dismiss hides the guide and remembers for the session', async () => {
+    vi.spyOn(client, 'getEmbeddingModels').mockResolvedValue({
+      models: [],
+      current: 'nomic-embed-text',
+      configured_available: false,
+      suggested: 'mxbai-embed-large',
+    });
+    render(<CenterPanel {...baseProps} health={{ status: 'online' }} />);
+    fireEvent.click(await screen.findByTestId('embed-guide-dismiss'));
+    expect(screen.queryByTestId('embed-guide')).not.toBeInTheDocument();
+    expect(sessionStorage.getItem('localmind:embed-guide-dismissed')).toBe('1');
   });
 });

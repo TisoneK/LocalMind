@@ -332,9 +332,30 @@ async def list_embedding_models():
     if current and current not in embed_models:
         embed_models.insert(0, current)
 
+    # B-2026-08-23-14 guide: tell the UI whether the CONFIGURED embed model is
+    # actually pulled, and which pulled alternative to suggest. Without this,
+    # the force-insert above hides the mismatch and memory stores silently fail
+    # (embedding requests 404 from Ollama). configured_available is True only
+    # when the configured model is genuinely among Ollama's pulled models.
+    # Ollama names pulled models "name:tag" (e.g. mxbai-embed-large:latest)
+    # while settings usually hold the bare name — compare tag-insensitively.
+    def _matches_pulled(candidate: str) -> bool:
+        base = candidate.split(":", 1)[0].lower()
+        return candidate in names or any(n.split(":", 1)[0].lower() == base for n in names)
+
+    configured_available = bool(current) and _matches_pulled(current)
+    # Suggest the first pulled embed-capable model that differs from the
+    # configured one (and is actually available), so the user has a real option.
+    suggested = next(
+        (m for m in embed_models if m.split(":", 1)[0] != current.split(":", 1)[0] and m in names),
+        None,
+    )
+
     return {
         "models": [{"id": n, "name": n, "provider": "ollama"} for n in embed_models],
         "current": current,
+        "configured_available": configured_available,
+        "suggested": suggested,
     }
 
 
