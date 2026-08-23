@@ -129,6 +129,52 @@ def test_count_tokens_basic():
     assert _count_tokens("") == 0
 
 
+# ── B-2026-08-23-4: shell-tool enabled state ───────────────────────────────
+
+
+def test_shell_state_reported_enabled_by_default():
+    """When the shell tool is enabled the env context says so and advertises
+    SHELL as an option."""
+    from unittest.mock import patch
+
+    with patch("core.context_builder.settings") as mock_settings:
+        mock_settings.localmind_shell_enabled = True
+        ctx = _build_environment_context(include_tool_list=True)
+    assert "tool ENABLED" in ctx
+    assert "The SHELL tool is ENABLED" in ctx
+    assert "- shell: Run system commands" in ctx
+
+
+def test_shell_state_reported_disabled_with_fallback_guidance():
+    """When the shell tool is DISABLED the model must know BEFORE tool
+    selection: no SHELL advertisement, explicit "do not call SHELL" guidance,
+    and the code_exec/file-tool fallback routes."""
+    from unittest.mock import patch
+
+    with patch("core.context_builder.settings") as mock_settings:
+        mock_settings.localmind_shell_enabled = False
+        ctx = _build_environment_context(include_tool_list=True)
+        compact = _build_environment_context(compact=True)
+    assert "tool DISABLED" in ctx
+    assert "do not call SHELL" in ctx
+    assert "CODE_EXEC" in ctx  # fallback route named
+    assert "FILE_TASK" in ctx
+    assert "- shell: Run system commands" not in ctx  # not advertised
+    # The compact classify/init block must carry the same state so even the
+    # routing decision knows shell is off.
+    assert "tool DISABLED" in compact
+
+
+def test_shell_state_defaults_enabled_on_config_error():
+    """A config read failure must never hide the shell tool — defaults to
+    enabled (Session 31 semantics)."""
+    from unittest.mock import patch
+
+    with patch("core.context_builder.settings", side_effect=Exception("boom")):
+        ctx = _build_environment_context(include_tool_list=True)
+    assert "tool ENABLED" in ctx
+
+
 def test_compact_env_context_is_smaller_and_drops_tool_prose():
     """Session 289: the classify/init call uses a compact env — it must keep
     the essentials (date, OS, working dir) but drop the redundant tool prose

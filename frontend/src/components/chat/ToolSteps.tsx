@@ -432,7 +432,40 @@ function ActionTimeline({ toolCalls, isStreaming }: { toolCalls: ToolCall[]; isS
   );
 }
 
+// B-2026-08-23-4: detect a blocked shell call (the shell tool's own guard
+// returns "Shell tool is disabled…" when LOCALMIND_SHELL_ENABLED=false).
+function isShellBlocked(tc: ToolCall): boolean {
+  if (tc.name !== 'shell' || tc.status !== 'failed') return false;
+  const hay = `${tc.output || ''} ${tc.error || ''}`.toLowerCase();
+  return hay.includes('shell tool is disabled') || hay.includes('shell tool disabled');
+}
+
+/**
+ * B-2026-08-23-4: when a shell call was blocked, show the user WHY and how to
+ * fix it — a one-line guide with an "Open Settings" button. The user asked for
+ * a UI guide that helps them open settings and toggle Shell on/off; this
+ * surfaces exactly when it's relevant (a shell call was just rejected).
+ */
+function ShellDisabledTip() {
+  return (
+    <div
+      className="mt-1.5 flex flex-wrap items-center gap-2 rounded-md border border-brand-amber/30 bg-brand-amber/10 px-2.5 py-1.5 text-[11px] text-brand-amber"
+      data-testid="shell-disabled-tip"
+    >
+      <span>💡 The Shell tool is off. Open Settings → Shell tool → toggle it on to run system commands.</span>
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new Event('localmind:open-settings'))}
+        className="rounded border border-brand-amber/40 bg-brand-amber/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-amber hover:bg-brand-amber/20 transition-colors"
+      >
+        Open Settings
+      </button>
+    </div>
+  );
+}
+
 export function ToolSteps({ toolCalls, compact, isStreaming }: ToolStepsProps) {
+  const blocked = toolCalls?.some(isShellBlocked);
   // v0.7: Compact mode — minimal inline chips showing tool status
   if (compact) {
     return (
@@ -452,11 +485,17 @@ export function ToolSteps({ toolCalls, compact, isStreaming }: ToolStepsProps) {
             </div>
           );
         })}
+        {blocked && <ShellDisabledTip />}
       </div>
     );
   }
 
   if (!toolCalls || toolCalls.length === 0) return null;
 
-  return <ActionTimeline toolCalls={toolCalls} isStreaming={isStreaming} />;
+  return (
+    <>
+      <ActionTimeline toolCalls={toolCalls} isStreaming={isStreaming} />
+      {blocked && <ShellDisabledTip />}
+    </>
+  );
 }

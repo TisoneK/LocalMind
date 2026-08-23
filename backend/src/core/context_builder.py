@@ -153,6 +153,31 @@ def _build_environment_context(
         common_cmds = "Unix commands: `ls`, `cat`, `cp`, `mv`, `mkdir -p`, `rm`, `chmod`, `grep`, `find`"
         shell_name = "bash"
 
+    # ── Shell-tool enabled state (B-2026-08-23-4) ──
+    # The model must know BEFORE tool selection whether the shell tool is on.
+    # When disabled, it should take alternative routes (code_exec / python,
+    # file tools) instead of calling a tool that will reject it. Read the
+    # live setting each call — it can change via the Settings UI mid-session.
+    try:
+        _shell_on = bool(getattr(settings, "localmind_shell_enabled", False))
+    except Exception:
+        _shell_on = True  # default-on; never hide the tool on a config error
+    if _shell_on:
+        shell_state_line = f"- Shell: {shell_name} (tool ENABLED)"
+        shell_guidance = (
+            f"- The SHELL tool is ENABLED. You may run {shell_name} commands for "
+            "file listing, git, package installs, and system tasks."
+        )
+    else:
+        shell_state_line = f"- Shell: {shell_name} (tool DISABLED — do not call SHELL)"
+        shell_guidance = (
+            "- The SHELL tool is DISABLED by the user. Do NOT call SHELL — it will "
+            "reject you. Instead use CODE_EXEC (Python) for file/command work, "
+            "FILE_TASK for reading, FILE_WRITE for creating files. If the task "
+            "genuinely needs a shell command, tell the user to enable the Shell "
+            "tool in Settings."
+        )
+
     # ── Hardware (lightweight — no psutil dependency) ──
     cpu_count = os.cpu_count() or "unknown"
     processor = platform.processor() or "unknown"
@@ -176,12 +201,13 @@ def _build_environment_context(
 - Current time: {time_str}{tz_str}
 - Working directory: {cwd}
 - Home: {home}
-- Shell: {shell_name}
+- {shell_state_line}
 
 ## What You Know
 - Today is {date_str}. Use this to ground time-sensitive requests.
 - You are running on {system} {release}. The user's home is {home}; default
-  file operations are relative to there."""
+  file operations are relative to there.
+- {shell_guidance}"""
 
     # ── Memory facts count (if available) ──
     # Boot-path efficiency (bootup-telemetry session): the count is only
@@ -212,6 +238,13 @@ def _build_environment_context(
 
     # The "## Available Tools" prose duplicates the native tools param + the
     # in-prompt tool list; drop it when the caller says so (execute path).
+    # B-2026-08-23-4: when shell is DISABLED, do not advertise it here — the
+    # model must not even consider SHELL as an option.
+    _shell_ad = (
+        "- shell: Run system commands (list files, check disk, run scripts)\n"
+        if _shell_on
+        else ""
+    )
     tools_section = "" if not include_tool_list else f"""
 
 ## Available Tools
@@ -219,8 +252,7 @@ You have access to these tools: {tool_summary}
 - web_search: Search the internet for current information
 - web_fetch: Fetch and read a specific URL
 - browse: Open a real browser, click buttons, fill forms, take screenshots
-- shell: Run system commands (list files, check disk, run scripts)
-- code_exec: Execute Python code and show the output
+{_shell_ad}- code_exec: Execute Python code and show the output
 - file_task: Read file contents (PDF, DOCX, CSV, code, images)
 - file_write: Create or overwrite files on disk
 - edit_file: Edit existing files with search/replace/insert operations
@@ -236,7 +268,7 @@ You have access to these tools: {tool_summary}
 - Current time: {time_str}{tz_str}
 - Working directory: {cwd}
 - Home: {home}
-- Shell: {shell_name}
+- {shell_state_line}
 - CPU: {processor} ({cpu_count} cores)
 - Python: {py_version}
 - {os_guidance}
@@ -246,6 +278,7 @@ You have access to these tools: {tool_summary}
 - Today is {date_str}. Use this to ground all time-sensitive queries.
 - You are running on {system} {release}. Use {shell_name}-compatible commands ONLY. If Windows, NEVER use mkdir -p, ls, cat, grep — use PowerShell equivalents.
 - The user's home directory is {home}. Default file operations should be relative to here.
+- {shell_guidance}
 - You have {memory_count} facts in memory about this user."""
 
     return context

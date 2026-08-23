@@ -50,6 +50,73 @@ describe('ToolSteps — Actions timeline', () => {
     expect(screen.getByText('Done')).toBeInTheDocument();
   });
 
+  it('shows the shell-off settings guide when a shell call was blocked', () => {
+    render(
+      <ToolSteps
+        toolCalls={[
+          call({
+            id: 's1',
+            name: 'shell',
+            status: 'failed',
+            output: 'Shell tool is disabled. Set LOCALMIND_SHELL_ENABLED=true to enable.',
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByTestId('shell-disabled-tip')).toBeInTheDocument();
+    expect(screen.getByText(/Shell tool is off/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Settings' })).toBeInTheDocument();
+  });
+
+  it('does not show the shell-off guide for a successful shell call', () => {
+    render(<ToolSteps toolCalls={[call({ id: 's1', name: 'shell', status: 'done' })]} />);
+    expect(screen.queryByTestId('shell-disabled-tip')).not.toBeInTheDocument();
+  });
+
+  it('shows the shell-off guide in compact mode too', () => {
+    render(
+      <ToolSteps
+        compact
+        toolCalls={[
+          call({
+            id: 's1',
+            name: 'shell',
+            status: 'failed',
+            error: 'Shell tool disabled via LOCALMIND_SHELL_ENABLED.',
+          }),
+        ]}
+      />,
+    );
+    expect(screen.getByTestId('shell-disabled-tip')).toBeInTheDocument();
+  });
+
+  it('dispatches a window event when Open Settings is clicked', () => {
+    const dispatched: string[] = [];
+    const original = window.dispatchEvent;
+    window.dispatchEvent = (e: Event) => {
+      dispatched.push(e.type);
+      return true;
+    };
+    try {
+      render(
+        <ToolSteps
+          toolCalls={[
+            call({
+              id: 's1',
+              name: 'shell',
+              status: 'failed',
+              output: 'Shell tool is disabled.',
+            }),
+          ]}
+        />,
+      );
+      screen.getByRole('button', { name: 'Open Settings' }).click();
+      expect(dispatched).toContain('localmind:open-settings');
+    } finally {
+      window.dispatchEvent = original;
+    }
+  });
+
   it('shows a "Done with errors" terminal row when a call failed', () => {
     render(
       <ToolSteps

@@ -336,6 +336,21 @@ def _thinker_user_summary(analysis) -> str:
     return "\n".join(parts)
 
 
+def _shell_tool_enabled() -> bool:
+    """Whether the shell tool is currently enabled (B-2026-08-23-4).
+
+    Reads the live settings each call — the user can toggle it in the
+    Settings UI mid-session and the very next turn must respect it. Defaults
+    to enabled (Session 31: shell on by default) on any config error so the
+    tool surface is never silently shrunk by a misread."""
+    try:
+        from core.config import settings as _s
+
+        return bool(getattr(_s, "localmind_shell_enabled", True))
+    except Exception:
+        return True
+
+
 def _filtered_tool_defs(allowed_tools: Optional[frozenset[str]] = None) -> list[dict]:
     """Return TOOL_DEFINITIONS filtered to the allowed tool set.
 
@@ -1295,6 +1310,16 @@ class AgentLoop:
         if effective_allowed is None:
             intent_scope = INTENT_TOOL_SCOPES.get(intent, AGENT_ALLOWED_TOOLS)
             scoped_tools = frozenset(scoped_tools or AGENT_ALLOWED_TOOLS).intersection(intent_scope)
+        # B-2026-08-23-4: when the shell tool is DISABLED (Settings UI toggle /
+        # LOCALMIND_SHELL_ENABLED=false), remove it from the model's tool
+        # surface entirely. The model must not see a callable shell schema —
+        # it should route through code_exec (python), file_task, file_write
+        # instead. The environment context (context_builder) already tells it
+        # shell is off + the fallback guidance; this makes the schema vanish
+        # so a disabled shell call is impossible (the shell tool's own guard
+        # remains as a second line of defense).
+        if scoped_tools is not None and not _shell_tool_enabled():
+            scoped_tools = frozenset(scoped_tools - {"shell"})
         filtered_tools = _filtered_tool_defs(scoped_tools)
 
         # Phase 1 warm-kernel parent turns enter the native loop directly.

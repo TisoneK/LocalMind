@@ -86,6 +86,15 @@ export function RightPanel({
   // ADR-34 B-10: default to the Agents tab — it is the canonical live surface.
   const [activeTab, setActiveTab] = useState<RightTab>('agents');
   const [showSettings, setShowSettings] = useState(false);
+
+  // B-2026-08-23-4: the chat tool timeline's "Open Settings" guide button
+  // dispatches a window event (ToolSteps is deep in the chat tree, outside
+  // this panel) — open the Settings modal here when it fires.
+  useEffect(() => {
+    const open = () => setShowSettings(true);
+    window.addEventListener('localmind:open-settings', open);
+    return () => window.removeEventListener('localmind:open-settings', open);
+  }, []);
   // Use the parent's refresh function instead of calling useModels() again.
   // Previously this created a SECOND useModels instance whose state was
   // independent from the one in WorkspaceLayout — so saving settings only
