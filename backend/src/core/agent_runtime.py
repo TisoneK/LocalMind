@@ -710,7 +710,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # When the user says "Remember this", call memory_op directly —
         # no LLM planning, no describe_tool, no replanning, no fake
         # confirmation. Only confirm after successful persistence.
-        from core.memory_intent import classify_memory_intent, MemoryOperation
+        from core.memory_intent import classify_memory_intent
 
         _memory_intent = classify_memory_intent(message)
 
@@ -1495,6 +1495,28 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         except Exception:
             logger.debug("[agent-runtime] reflection skipped", exc_info=True)
         total_ms = round((time.monotonic() - started) * 1000)
+
+        # B-2026-08-23-7: deterministic file-task summary appended to the final
+        # answer. Derived from the ACTUAL tool timeline (file_write → created,
+        # edit_file → modified) so the facts survive even when the model forgets
+        # to mention its writes — same evidence philosophy as the goal-checklist
+        # gate. Streamed as a normal text chunk so the live UI shows it, and
+        # persisted as part of response_text so reload/export carry it too.
+        # Deliberately placed AFTER reflection/fact-extraction so those services
+        # analyze the model's own answer, not this appended block.
+        try:
+            from core.agent.file_summary import build_file_task_summary
+
+            _file_summary = build_file_task_summary(_collect_tool_calls(collector))
+        except Exception:
+            logger.debug("[agent-runtime] file summary build skipped", exc_info=True)
+            _file_summary = ""
+        # Keep `response_text` as the pure model answer (the parent-session
+        # guard below and turn metrics compare against the streamed chunks);
+        # `final_text` is what gets persisted and shown.
+        final_text = response_text + _file_summary if _file_summary else response_text
+        if _file_summary:
+            yield StreamChunk(text=_file_summary, done=False)
         # Session 266: persist the turn's artifacts (thinking, tool-call pills,
         # per-turn metrics) with the assistant message so a reload restores the
         # thinking block, step cards, and the cumulative context counter.
@@ -1503,7 +1525,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         agent_runs, agent_phases = build_workspace_artifacts(collector, task=message)
         self._persist_assistant(
             session_id,
-            response_text,
+            final_text,
             thinking="".join(thinking_parts) or None,
             acknowledgement=self._collect_acknowledgement(collector),
             tool_calls=_collect_tool_calls(collector) or None,
@@ -1525,7 +1547,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 tool_summary = _summarize_tool_actions(collector)
                 parent_session.update_with_turn(
                     user_message=message,
-                    assistant_message=response_text,
+                    assistant_message=final_text,
                     tool_summary=tool_summary,
                 )
                 self._store.save_parent_session(
@@ -1578,7 +1600,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # the text stream IS the rendering — no blocks needed.
         _response_blocks = []
         try:
-            from core.presentation import classify_presentation, PresentationType
+            from core.presentation import PresentationType, classify_presentation
 
             _pres_type = classify_presentation(message, response_text)
             if _pres_type != PresentationType.TEXT:
