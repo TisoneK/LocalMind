@@ -5394,3 +5394,19 @@ authoritative.
 **Live:** crash fix proven live (failed edit_file calls now surface + model retries instead of killing the turn); the free-tier model's own edit_file attempts had wrong arg schemas (content-only, then `old_pattern`/`new_string` instead of `pattern`/`replace`) — a model-schema-compat note for a possible future tool-schema aliasing pass.
 
 **Commits:** product + context (pushed).
+## Session 376 — edit_file free-tier model aliases + obs diff serialization fix — 2026-08-23
+
+**Task (user follow-up to Session 375):** make edit_file accept common model aliases (old_pattern/new_string, content-only) so free-tier models succeed first try instead of bouncing validation errors.
+
+**Alias normalization (`tools/edit_file.py` `_normalize_edit_payload`, called by prepare_edit AND the EditFileContract's pre-validation):**
+- `file_path` → `path`; `old_pattern`/`regex`/`regex_pattern` → `pattern`; `new_string`/`replacement`/`new_text` → `replace`; `old_string`/`old_text`/`search_text`/`find` → `search`; `text` → `insert_text`.
+- **Action inference when omitted:** content-only → `rewrite` (full-file replace); search present → `replace`; pattern present → `regex_replace`; `overwrite` → canonical `rewrite`. New `rewrite` action added to `_apply_edit`-adjacent path in prepare_edit, the contract's valid_actions, and the model-facing schema (`content` property added, description updated). Canonical fields win over aliases.
+- 16 unit tests (tests/tools/test_edit_file_aliases.py) incl. Claude old_string/new_string end-to-end.
+
+**Second real bug found live:** the diff SSE event's `hunks` arrived as a Python-repr STRING (first element `"["`, len 484 for a 1-hunk diff) — `ObsCollector.emit` did `str(v)` on every non-scalar, so the frontend's `Array.isArray(hunks)` check silently dropped EVERY diff (Session 375's Diff mode never filled). Fixed: lists/dicts stay JSON-native in emit (scalars unchanged; audit confirmed the only list-valued obs data is diff_hunks). Regression tests in test_observation.py (native containers, None-skip). 2 pre-existing E501s untouched.
+
+**Live (isolated 8765, bankofai/deepseek-v4-flash, allowed-folders scoped to temp home):** the model's NATURAL call — `{path, old_string, new_string}` with no action (the Session 375 failure) — now succeeds FIRST TRY: edit_file done, file edited on disk, `diff` SSE event with real structured hunks (`hunks=1 lines=4 +1/-1`), realpath-matched filePath. Also saw the model try `file_path` (now aliased) and `old_pattern`/`new_string` (now aliased). The e2e test's "malformed" case was updated: content-only is now a VALID rewrite by design; the no-crash test uses an unknown action instead.
+
+**Verification:** 2465 backend / 340 frontend, ruff + tsc + eslint clean.
+
+**Commits:** product + context (pushed).

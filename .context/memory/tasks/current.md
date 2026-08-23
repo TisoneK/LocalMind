@@ -1,11 +1,11 @@
 # Current Task
 
-**Status:** IDLE — Session 375 shipped Preview/Edit/Diff modes for the file preview dialog (B-2026-08-23-18 done) and fixed a real edit_file crash the live check exposed.
+**Status:** IDLE — Session 376 shipped edit_file alias normalization (free-tier models succeed first try) and fixed the obs diff serialization bug that silently dropped every diff event.
 
-## Session 375 outcome — preview dialog modes + edit_file crash fix
+## Session 376 outcome — edit_file aliases + obs serialization fix
 
-- **Feature (frontend):** FilePreviewDialog now has a Preview/Edit/Diff switcher. Diff mode renders DiffBlock with the edit_file hunks captured this turn. The hook now handles the previously-dropped `diff` SSE events → session `fileDiffs` map (per path) + `message.diffData` (revives the dead inline chat DiffBlock). Wired WorkspaceLayout → LeftPanel/CenterPanel → ChatMessage.
-- **Backend bug found live:** every native `edit_file` call crashed with `UnboundLocalError: tool_result` — `Intent("edit_file")` raises (tool name ≠ Intent value `file_edit`), the outer except marked the tool failed, then the failed-branch emit referenced the unbound var. Fixed: `_intent_for_tool()` mapping at both dispatch sites + `tool_result = None` bound up front + broad `except Exception` in the file_write/edit_file contract branches. The diff SSE path was completely blocked by this.
-- **Verification:** 2447 backend / 340 frontend; 3 new loop e2e tests (edit_file edits + emits file_diff obs with hunks/path; malformed payload → clean failure; intent mapping) with revert-check; 4 dialog + 1 hook frontend tests. Live: crash fix proven (failed edit_file → graceful + retry, no turn death).
-- **Note:** the free-tier model's edit_file arg schemas are unreliable (content-only, then `old_pattern`/`new_string` instead of `pattern`/`replace`) — candidate for a tool-schema aliasing pass later.
+- **Aliases (`_normalize_edit_payload`):** `file_path`→path, Claude-style `old_string`/`new_string`/`old_pattern`, `replacement`/`new_text`/`text`→insert_text, etc. **Action inference when omitted:** content-only → `rewrite` (new full-file action), search → replace, pattern → regex_replace. Applied in prepare_edit AND the EditFileContract pre-validation; schema updated (rewrite enum + content property).
+- **Second live-found bug:** `ObsCollector.emit` str()'d every non-scalar → the diff SSE `hunks` was a Python-repr STRING → frontend `Array.isArray` dropped every diff (Session 375's Diff mode never filled). Now lists/dicts stay JSON-native.
+- **Live proof (bankofai):** the model's natural `{path, old_string, new_string}` call — the exact Session 375 failure — succeeded FIRST TRY: file edited, diff SSE with real hunks (`hunks=1 lines=4 +1/-1`).
+- **Verification:** 2465 backend / 340 frontend; 16 alias unit tests + 2 obs tests + updated e2e; ruff/tsc/eslint clean.
 - **Next:** next open backlog item (B-2026-08-23-19 custom theme UI, etc.).
