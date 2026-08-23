@@ -5334,3 +5334,20 @@ authoritative.
 **Live** (isolated 8765, bankofai, embed_model=mxbai-embed-large): 3 distinct facts stored (no collapse) → recall "what theme does the user like" returns all 3 ranked by relevance (dark-mode facts ≈0.81-0.82 > FastAPI 0.72), full shape, sane [0,1] scores.
 
 **Commits:** product + context (pushed).
+
+## Session 372 — Auto-switch Terminal/Agents/Memory tabs on activity (B-2026-08-23-15) — 2026-08-23
+
+**Task:** auto-switch the right panel to the relevant tab on activity — shell/code_exec → Terminal, parent turn → Agents, memory_op → Memory — WITHOUT fighting the user's manual tab choice.
+
+**State found:** Terminal (FIX 4, activeToolCalls shell/code_exec) and Agents (ADR-34 B-9, parent-run rising edge) switches existed, but both used the GUARDED consume (`activeTab !== target`) that LeftPanel's forceChatTab fix (B-2026-08-23-5) had already proven buggy: the flag stays set when the user is already on the target, so a LATER event re-fires it and yanks the panel away. Memory had no switch at all.
+
+**Changes (frontend only — backend already emits the events):**
+- `WorkspaceLayout.tsx` — new `forceMemoryTab` state: set when an activeToolCall is `memory_op` (the agent's explicit memory tool; auto-uncollapses the panel like the others). Wired `forceMemoryTab`/`onMemoryTabShown` into RightPanel.
+- `RightPanel.tsx` — all THREE force flags (terminal/agents/memory) converted to the unconditional-consume pattern: consume even when already on the target tab (consumed ref per flag, reset when the flag clears), so the flag is gone before any later signal can race it. This is the "must not fight the user's manual tab choice" fix.
+- No backend change needed: memory_op already emits tool_call SSE events.
+
+**Tests:** new `RightPanel.test.tsx` (5: switch to each tab on its flag, consume-when-already-there regression proving a later terminal event wins and nothing yanks back, no-flag default) + 2 WorkspaceLayout wiring tests (memory_op → forceMemoryTab; non-memory tools don't). 329 frontend total, tsc + eslint clean (backend untouched).
+
+**Live** (isolated 8765, bankofai): one turn "Use the memory tool to save that I prefer dark mode" → SSE stream emitted `memory_op` tool_call events (the forceMemoryTab signal) alongside `terminal_event`/`tool_call`/`todo_created` — all the signals the UI keys on were present in the real stream. (Free-tier model replied in prose on the first prompt; the explicit "use the memory tool" wording triggered the tool.)
+
+**Commits:** product + context (pushed).
