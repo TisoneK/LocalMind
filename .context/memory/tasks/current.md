@@ -1,11 +1,11 @@
 # Current Task
 
-**Status:** IDLE — Session 377 shipped three things: (1) fixed the Windows `pip install -e .[dev]` blocker (hatchling rejected readme/license paths outside the package dir → added `backend/README.md` + `backend/LICENSE`, verified in a fresh venv), (2) finished Session 376's uncommitted `file_write` free-tier alias work, (3) closed B-2026-08-23-19 (Custom theme + tone in Settings → Appearance, persisted to settings.json).
+**Status:** IDLE — Session 378 root-caused and fixed the repeated-listing flaw from the Windows "analyze the dev folder" transcript (the loop re-ran near-identical `Get-ChildItem` listings 5× because exact-match dedup missed cosmetic reformulations).
 
-## Session 377 outcome
+## Session 378 outcome
 
-- **Build fix (`d3e6d31`):** `backend/pyproject.toml` now points `readme = "README.md"` / `license = { file = "LICENSE" }` at package-local files; `pip install -e '.[dev]'` metadata + wheel build verified in a clean venv.
-- **file_write aliases (`1e62069`):** `_normalize_write_payload` maps `file_path`/`filepath`/`full_path` → `path` and `text`/`body`/`file_content`/`contents`/`code`/`data` → `content` (canonical wins, idempotent), applied in FileWriteContract + the loop's file_write guard. 16 new alias tests + loop-level guard test.
-- **B-2026-08-23-19 custom theme + tone (`13106fb`):** POST /api/settings/appearance persists theme/mode/custom_theme/tone to settings.json (GET returns them); useTheme gains a `custom` palette (inline CSS vars on `<html>`, derived tokens via color-mix in globals.css) + `tone` (0.5–1.5 `--ui-tone` brightness); SettingsModal adds the palette editor + tone slider; startup restore + no-flash pre-paint script.
-- **Verification:** 2475 backend / 346 frontend; ruff/tsc/eslint clean.
+- **Repeated-listings dedup (`79716fa`):** structural inspection fingerprint (`_inspection_fingerprint`) folds same-target + same-flags read-only calls (shell listing/read prefixes, browse, git read ops, file_task, find_path) onto the per-turn cached observation. Flags that change the result set (`-Force`, `-type f`, `-maxdepth 1`) stay distinct; short bundles normalize (`-la` ≡ `-a -l`); presentation (`-AutoSize`, column lists) is dropped from the key. ANY possibly-mutating call (file_write/edit/code_exec, non-read git ops, compound/unknown shell) clears the cache, so a listing after a write always runs fresh — dedup never serves stale output.
+- **Prompt rule 10 (`TOOL OUTPUT IS RETAINED`):** a `[...TRUNCATED DUE TO LENGTH...]` marker drops only the MIDDLE (head+tail survive) — never re-run a read just to change formatting/columns.
+- **Budgets:** `test_prompt_size_budget.py` bumped +300–400 chars per execute intent for rule 10 (per the guardrail's justify-contract).
+- **Verification:** 2488 backend passed / 2 skipped (13 new tests: fingerprint collapse/distinctness, mutation invalidation with 2 real runs, loop-level 1-run dedup); ruff clean (2 pre-existing loop.py E501s + budget-test I001 left untouched).
 - **Next:** next open backlog item — B-2026-08-23-8 (goal-driven agent, High/architecture) or the UI-adjacent ones (-20 code-block preview rewrite, -21 time formatting, -22 token short-form, -24 no hardcoded CSS). Pre-existing untracked trace residue at `backend/Dev/` + `backend/scratch/` left untouched.
