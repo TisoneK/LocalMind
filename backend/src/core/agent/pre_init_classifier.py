@@ -241,6 +241,50 @@ def _detect_impossible_constraint(message: str) -> Optional[str]:
     return None
 
 
+# ── Session 344 (B-2026-08-22-5): Cluster F — vague imperative → clarify ──
+
+# CAT2-2 "Improve the system." was live-caught asking the RIGHT clarifying
+# question only after burning 10 tools / 164s exploring the workspace first
+# (the S336 Cluster A tool-first reflex, still firing for vague imperatives
+# while the rest of CAT2 runs 0 tools). A request like "Fix my project." /
+# "Improve the system." has NO concrete target — the correct first move is
+# to ASK, not to explore. This cluster fires deterministically (like
+# Cluster D) for the clearly-vague class: a short message (< 11 words) that
+# opens with a bare imperative (fix/improve/build/make/add/update/change/
+# refactor/optimize/set up/implement/use/continue), states a vague problem
+# ("the login is not working" / "the results are wrong"), or wants
+# something "like X" — AND contains NO concrete artifact (file extension,
+# path, number, tech stack, tool cue, "?" — e.g. "fix the login form in my
+# React app returns a 500" and "create a folder … facts.txt" must NOT fire).
+
+_VAGUE_IMPERATIVE_OPEN_RE = re.compile(
+    # NOTE: "continue" is deliberately NOT here — in a fresh session the
+    # model already clarifies (CAT2-10), but after an iteration-cap stop the
+    # recovery flow sends "continue" WITH history and must resume, not ask.
+    r"^(?:please\s+)?(?:can\s+you\s+|could\s+you\s+)?"
+    r"(?:fix|improve|build|make|add|update|change|refactor|optimize|set\s+up|setup|implement|use)\b",
+    re.IGNORECASE,
+)
+_VAGUE_PROBLEM_RE = re.compile(
+    r"^(?:the\s+)?[a-z][a-z\s]{0,40}\b(?:is|are)\s+"
+    r"(?:not\s+working|broken|wrong|too\s+\w+|failing|slow)\b",
+    re.IGNORECASE,
+)
+_VAGUE_WANT_RE = re.compile(r"^i\s+want\s+something\s+like\b", re.IGNORECASE)
+
+# Any of these makes the request CONCRETE (or already a question) — the
+# vague-imperative clarify must NOT fire. Nouns are plural-tolerant
+# ("files", "tests") and tool/terminal cues suppress ("shell tool").
+_VAGUE_EXCLUSION_RE = re.compile(
+    r"(?:\.(?:[a-z0-9]{2,5})\b|[/\\]|\d|\?"
+    r"|\b(?:files?|folders?|directories?|paths?|scripts?|code|functions?|classes?|apis?|databases?|dbs?|servers?|"
+    r"frontend|backend|ui|react|python|javascript|typescript|node|django|flask|express|json|yaml|configs?|tests?|"
+    r"git|url|http|install|packages?|weather|news|search|bugs?|errors?|crashes?|exceptions?|"
+    r"shell|tool|terminal|command|workspace)\b)",
+    re.IGNORECASE,
+)
+
+
 # ── Session 343 (B-2026-08-22-1/-2): pressured re-ask of a refused
 # ── unanswerable (multi-turn fabrication / credential hunt) ────────────────
 
@@ -312,6 +356,24 @@ _REFUSAL_PHRASES = [
 _REFUSAL_RE = re.compile("|".join(_REFUSAL_PHRASES), re.IGNORECASE)
 
 
+def _detect_vague_imperative(message: str) -> bool:
+    """True for the clearly-vague class ("Fix my project.", "Improve the
+    system.", "The login is not working.", "I want something like Uber but
+    different") with no concrete target — the right first move is to ASK.
+    Conservative: short messages only, and any concrete artifact (file,
+    path, number, tech stack, tool cue, "?") suppresses it."""
+    if not message or len(message.split()) > 10:
+        return False
+    vague_shape = bool(
+        _VAGUE_IMPERATIVE_OPEN_RE.match(message)
+        or _VAGUE_PROBLEM_RE.match(message)
+        or _VAGUE_WANT_RE.match(message)
+    )
+    if not vague_shape:
+        return False
+    return not bool(_VAGUE_EXCLUSION_RE.search(message))
+
+
 def _detect_pressured_reask(message: str, history) -> bool:
     """True when the current message pressures the agent to re-answer
     something it already refused, with no fresh topic introduced."""
@@ -360,6 +422,23 @@ def classify_pre_init(message: str, history: Optional[list[dict]] = None) -> Pre
         override.acknowledgement = "I see a conflict in your request."
         override.objective = "Resolve contradictory constraints before proceeding."
         override.title = "Resolve Constraints"
+        return override
+
+    # Cluster F (Session 344): vague imperative → deterministic clarify. The
+    # tool-first reflex wasted 10 tools on CAT2-2 before it asked; this
+    # returns the clarifying question BEFORE any tool runs. Same mode path
+    # as Cluster D.
+    if _detect_vague_imperative(message):
+        override.mode = "clarify"
+        override.clarifying_question = (
+            "Could you clarify what you'd like me to do? Which project, "
+            "system, or feature are you referring to, and what outcome are "
+            "you after?"
+        )
+        override.acknowledgement = "I want to make sure I work on the right thing."
+        override.objective = "Clarify the vague request before doing anything."
+        override.title = "Clarify Request"
+        override.skip_workspace_state = True
         return override
 
     # Session 343: pressured re-ask of an already-refused unanswerable →

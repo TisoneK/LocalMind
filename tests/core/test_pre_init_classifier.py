@@ -349,3 +349,81 @@ class TestPressuredReask:
         ]
         o = classify_pre_init("What do you recommend for dinner?", history=history)
         assert o.mode is None
+
+
+# ── Session 344 (B-2026-08-22-5): Cluster F — vague imperative → clarify ──
+
+
+class TestClusterFVagueImperative:
+    """Deterministic clarify for the clearly-vague class ("Fix my project.",
+    "Improve the system."). The tool-first reflex used to burn 10 tools /
+    164s on CAT2-2 before asking; this returns the question BEFORE any tool
+    runs, and skips workspace-state injection so no scan ever starts."""
+
+    VAGUE_FIRES = [
+        "Fix my project.",
+        "Improve the system.",
+        "Build the dashboard.",
+        "The login is not working.",
+        "Make it faster.",
+        "Add the feature we discussed.",
+        "Use the previous approach.",
+        "I want something like Uber, but different.",
+        "The results are wrong.",
+        "Fix the authentication problem.",
+        "Please fix my project",
+    ]
+
+    CONCRETE_NO_FIRE = [
+        # continuation cues — recovery flow must RESUME, not ask (a fresh
+        # session's "Continue." stays model-driven; CAT2-10 relies on that)
+        "Continue.",
+        "continue",
+        "Continue from where we stopped.",
+        "Please continue working on the project.",
+        # concrete artifacts / stacks / tools / numbers suppress the cluster
+        "create a folder and two files facts.txt",
+        "fix the login form in my React app returns a 500",
+        "Add a notes.txt file",
+        "Fix the bug in src/agent.py",
+        "Make the button green in index.html",
+        "Build a todo app with Python and SQLite",
+        "Use the shell tool to list the files",
+        "Improve the system?",
+        "Can you improve the system?",
+        "Can you fix my project?",
+        # questions / non-imperatives / long messages never fire
+        "What is the capital of Kenya?",
+        "Write a four-sentence paragraph about a train.",
+        "Explain how a car engine works in simple terms.",
+        "Calculate: 27 × 14 − 83. Show the calculation.",
+        "What is the password stored in my configuration?",
+        "I want to add persistent memory to LocalMind. Do not implement "
+        "anything yet. Analyze what needs to be considered first.",
+        "Give me three ideas for improving a cyber café business.",
+        "John has three apples. He gives two away. How many does Mary have?",
+    ]
+
+    def test_vague_imperatives_fire_clarify(self):
+        for msg in self.VAGUE_FIRES:
+            o = classify_pre_init(msg)
+            assert o.mode == "clarify", f"expected clarify for {msg!r} (got {o.mode!r})"
+            assert o.clarifying_question, f"missing question for {msg!r}"
+            assert o.skip_workspace_state is True, f"must skip workspace state for {msg!r}"
+
+    def test_concrete_and_continuation_do_not_fire(self):
+        for msg in self.CONCRETE_NO_FIRE:
+            o = classify_pre_init(msg)
+            # The point is Cluster F must NOT fire; other clusters (e.g. A's
+            # direct refusal for password questions) may still legitimately.
+            assert o.mode != "clarify", f"expected no clarify for {msg!r} (got {o.mode!r})"
+
+    def test_vague_imperative_with_history_still_fires(self):
+        """Cluster F is message-scoped (unlike the pressured re-ask) — a vague
+        directive mid-conversation still asks before acting."""
+        history = [
+            {"role": "user", "content": "I'm working on a CLI tool."},
+            {"role": "assistant", "content": "Got it."},
+        ]
+        o = classify_pre_init("Improve the system.", history=history)
+        assert o.mode == "clarify"

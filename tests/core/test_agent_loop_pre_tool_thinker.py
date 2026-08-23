@@ -3,10 +3,16 @@
 Root cause fixed: the Thinker ran only (a) on the conversational fast-path
 (agent_runtime, S354) and (b) in the loop AFTER a tool produced an
 observation. A parent-agent turn with zero tools and no fast-path match
-("Fix my project.", "Improve the system.") therefore had NO structured
-understanding pass — the model free-associated "I'll start by exploring…"
-(narration-without-action, CONV-05/06) or fabricated under "just guess"
-pressure (CONV-11).
+therefore had NO structured understanding pass — the model free-associated
+"I'll start by exploring…" (narration-without-action, CONV-05/06) or
+fabricated under "just guess" pressure (CONV-11).
+
+NOTE (Session 344): the original motivating messages ("Fix my project.",
+"Improve the system.") are since handled DETERMINISTICALLY by Cluster F in
+pre_init_classifier (vague imperative → clarify, zero model calls), so the
+Thinker tests below use a concrete-but-zero-tool task to exercise the
+consult; the short-circuit itself is covered by
+`test_vague_imperative_short_circuits_before_thinker`.
 
 Contract under test:
   1. On a zero-tool parent turn, the pre-tool Thinker consults ONCE before
@@ -100,7 +106,7 @@ async def test_pre_tool_thinker_injects_analysis_before_first_model_call():
          patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), \
          patch("core.agent.thinker.Thinker", _AnalysisThinker):
         async for chunk in loop.run(
-            messages=[{"role": "user", "content": "fix my project"}],
+            messages=[{"role": "user", "content": "add a notes.txt file"}],
             intent=Intent.ANALYZE,
             initial_tool_result=None,
             available_tools=[],
@@ -183,7 +189,7 @@ async def test_pre_tool_thinker_skipped_when_thinking_disabled():
          patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), \
          patch("core.agent.thinker.Thinker", _AnalysisThinker):
         async for _chunk in loop.run(
-            messages=[{"role": "user", "content": "fix my project"}],
+            messages=[{"role": "user", "content": "add a notes.txt file"}],
             intent=Intent.ANALYZE,
             initial_tool_result=None,
             available_tools=[],
@@ -231,7 +237,7 @@ async def test_pre_tool_consult_failure_never_breaks_turn():
          patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), \
          patch("core.agent.thinker.Thinker", _RaisingThinker):
         async for chunk in loop.run(
-            messages=[{"role": "user", "content": "fix my project"}],
+            messages=[{"role": "user", "content": "add a notes.txt file"}],
             intent=Intent.ANALYZE,
             initial_tool_result=None,
             available_tools=[],
@@ -307,3 +313,57 @@ async def test_pressured_reask_returns_direct_refusal_without_model_call():
     assert not any(e.type == "agent_thinker_start" for e in obs.history())
     # And no tools ran (no credential hunt).
     assert not any(e.type == "tool_call" for e in obs.history())
+
+
+# ── Session 344 (B-2026-08-22-5): Cluster F loop wiring ──
+
+
+@pytest.mark.asyncio
+async def test_vague_imperative_short_circuits_before_thinker():
+    """B-2026-08-22-5: 'Fix my project.' now returns the deterministic
+    clarifying question with ZERO model calls — the tool-first reflex (CAT2-2
+    burned 10 tools / 164s before asking) never gets a chance to start."""
+    from agents.base_agent import AgentConfig
+    from core.agent.constants import AGENT_ALLOWED_TOOLS
+
+    loop = AgentLoop(adapter=MagicMock())
+    model_calls = 0
+
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        nonlocal model_calls
+        model_calls += 1
+        return _clarify_stream()
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat_with_tools = chat_with_tools
+    mock_adapter.chat = lambda *a, **k: iter(())
+    mock_adapter.thinking_enabled = True
+    obs = ObsCollector()
+
+    agent_config = AgentConfig(
+        name="parent",
+        max_iterations=20,
+        allowed_tools=AGENT_ALLOWED_TOOLS,
+    )
+
+    chunks = []
+    with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+         patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), \
+         patch("core.agent.thinker.Thinker", _AnalysisThinker):
+        async for chunk in loop.run(
+            messages=[{"role": "user", "content": "fix my project"}],
+            intent=Intent.ANALYZE,
+            initial_tool_result=None,
+            available_tools=[],
+            adapter=mock_adapter,
+            obs=obs,
+            agent_config=agent_config,
+            skip_planning=True,
+        ):
+            chunks.append(chunk)
+
+    assert model_calls == 0, "deterministic clarify must not call the model"
+    # No Thinker consult either — the clarify is decided before any reasoning.
+    assert not any(e.type == "agent_thinker_start" for e in obs.history())
+    user_text = "".join(c.text for c in chunks)
+    assert "clarify" in user_text.lower() or "could you" in user_text.lower(), user_text
