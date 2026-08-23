@@ -1,12 +1,11 @@
 # Current Task
 
-**Status:** IDLE — Session 346 shipped Cluster F (vague imperative → deterministic clarify, B-2026-08-22-5 done).
+**Status:** IDLE — Session 347 closed B-2026-08-22-4 (verification-only: the CONV-06 "empty text" was a bankofai 429 error card, not a silent drop).
 
-## Session 346 outcome
+## Session 347 outcome
 
-- **Cluster F — vague imperative → deterministic clarify (B-2026-08-22-5 DONE):** `pre_init_classifier.py` now returns mode="clarify" BEFORE any model pass for the clearly-vague class ("Fix my project.", "Improve the system.", "The login is not working.", "I want something like Uber, but different.") — short message, bare imperative / vague problem / "like X", and NO concrete artifact (file ext, path, number, "?", stack, tool cue). `skip_workspace_state=True` so no workspace scan starts. "continue" deliberately excluded: fresh-session "Continue." stays model-driven (CAT2-10 still passes) and the post-iteration-cap "continue" recovery resumes instead of asking. Loop needed no change (Cluster D's clarify return path).
-- **LIVE (bankofai, isolated 8765):** CAT2 **10/10 PASS** (was 9 PASS / 1 PARTIAL). CAT2-2 "Improve the system." went from 10 tools / 164s / 12k thinking → **0.1s / 0 tools / 0 thinking**. CAT2-1 "Fix my project." PARTIAL → PASS. CONV-05/06 T1 both verbatim deterministic clarify (0.2s, 0 tools); CONV-05 T2 (concrete 500 detail) still explores with real tools (Cluster F correctly silent); CONV-06 T2 conversational wording holds clarify, asks where the code is. 9/9 clarify-class tests instant 0 tools; CAT2-10 model-driven 7.5s (recovery protected).
-- **Tests:** 4 new (TestClusterFVagueImperative ×3 + loop short-circuit ×1: zero model calls, zero Thinker, zero tools). The S342 pre-tool Thinker test's "fix my project" was superseded (Cluster F now short-circuits before the Thinker) — updated to a concrete zero-tool task. Full suite **2304 pass / 0 fail / 2 skip** (1 known pre-existing async flake in test_trivial_input, unrelated, 3/3 isolated). Ruff clean.
-- **Backlog:** B-2026-08-22-5 DONE. Remaining: B-2026-08-22-4 (verify/downgrade the CONV-06 empty-text finding — traces suggest `agent_loop_error`), 332-340 sessions.md bookkeeping gap.
+- **B-2026-08-22-4 CLOSED (downgrade):** the finding's own trace (`scratch/conversations-1787458720.json`, latency 11.3s matches) shows CONV-06 T2 with final_text="" AND `errors=[bankofai rate_limit 429]` AND `agent_loop_error=1` — the error was in the saved JSON all along. Full chain verified in code: 429 (quota-exhaustion class → terminal) → `TerminalProviderError` → `agent_runtime` emits `agent_loop_error` + persists the turn with the error + yields `StreamChunk(text="", error=…)` → `chat.py` emits SSE `{"type":"error",…}` → frontend `case 'error'` → `ErrorMessage` card. `text=""` on errors is intentional (ADR-20). Two later live runs show CONV-06 with full text — no recurrence. Not the S31 silent-failure class (that's empty streams with NO error).
+- **B-2026-08-20-11 DONE (cross-referenced):** the same evidence resolves the engine/API/UI side of "429 → empty bubble" (open since Aug 20): current code renders a friendly rate-limit card end-to-end; the old symptom predates the error-event architecture.
+- **No code changes this session** — verification only. Remaining backlog: B-2026-08-20-20 (deepseek 500-chunk reasoning-then-empty → empty-reasoning recovery; a DIFFERENT class, empty stream no error), 332-340 sessions.md bookkeeping gap.
 
 **Feature:** none
