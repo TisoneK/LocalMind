@@ -590,7 +590,10 @@ class VectorStore:
         self._write_buf_last_flush = time.monotonic()
         try:
             conn = self._connect()
-            conn.execute("BEGIN")
+            # BEGIN IMMEDIATE for the same reason as _persist: a deferred BEGIN
+            # that upgraded to a write after a stale read snapshot would fail
+            # with SQLITE_BUSY under concurrent writers.
+            conn.execute("BEGIN IMMEDIATE")
             conn.executemany("INSERT OR IGNORE INTO embed_cache(key, vec) VALUES (?, ?)", batch)
             conn.execute("COMMIT")
             _stats.record_db_write((time.monotonic() - self._write_buf_last_flush) * 1000)
@@ -769,7 +772,13 @@ class VectorStore:
             if self._dim is None:
                 self._set_dim(conn, len(pairs[0][1]))
 
-            conn.execute("BEGIN")
+            # BEGIN IMMEDIATE, not plain BEGIN: the dedup SELECT below takes a
+            # WAL read snapshot, and a deferred BEGIN's upgrade to a write lock
+            # FAILS INSTANTLY with "database is locked" (SQLITE_BUSY) if any
+            # other connection commits in between — busy_timeout does not apply
+            # to snapshot-upgrade. Taking the write lock up front makes the
+            # transaction immune to the race (WAL still allows concurrent reads).
+            conn.execute("BEGIN IMMEDIATE")
             for fact, vec in pairs:
                 blob = _pack(vec)
                 target_id = self._fact_id(fact)
@@ -872,13 +881,18 @@ class VectorStore:
         return await self.forget_by_id(self._fact_id(fact))
 
     async def forget_by_id(self, fact_id: str) -> bool:
+        """Delete a fact by id. Returns True only if a row was actually
+        removed — a missing id returns False so callers (the DELETE route's
+        404, the agent's "couldn't find that fact") report truthfully instead
+        of a silent success on nothing."""
         try:
             conn = self._connect()
             row = conn.execute("SELECT rowid FROM vector_facts WHERE id = ?", (fact_id,)).fetchone()
-            if row:
-                conn.execute("DELETE FROM vector_embeddings WHERE rowid = ?", (row["rowid"],))
-                conn.execute("DELETE FROM vector_facts WHERE id = ?", (fact_id,))
-                conn.commit()
+            if not row:
+                return False
+            conn.execute("DELETE FROM vector_embeddings WHERE rowid = ?", (row["rowid"],))
+            conn.execute("DELETE FROM vector_facts WHERE id = ?", (fact_id,))
+            conn.commit()
             return True
         except Exception as exc:
             logger.error("forget_by_id failed: %s", exc)

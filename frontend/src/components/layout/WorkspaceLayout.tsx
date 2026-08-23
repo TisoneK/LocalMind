@@ -130,7 +130,7 @@ export function WorkspaceLayout() {
   // only rendered in the Observe tab, which is now removed.
   const { metrics: polledMetrics } = useMetrics(isStreaming);
   const { models, current: currentModelId, provider: modelProvider, selectModel, refresh: refreshModels } = useModels();
-  const { facts: memoryFacts, deleteFact } = useMemory();
+  const { facts: memoryFacts, deleteFact, storeFact, refresh: refreshMemory } = useMemory();
 
   // Sync selectedModel from the backend's /api/models "current" field.
   // This runs whenever the models list refreshes (on mount, after model
@@ -440,6 +440,8 @@ export function WorkspaceLayout() {
           onTerminalSessionChange={terminal.changeSession}
           memoryFacts={memoryFacts}
           onMemoryDelete={deleteFact}
+          onMemoryStore={storeFact}
+          onMemoryRefresh={refreshMemory}
           metrics={metrics}
           lastMetrics={lastMetrics}
           elapsedMs={elapsedMs}

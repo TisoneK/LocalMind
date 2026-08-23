@@ -21,6 +21,10 @@ interface RightPanelProps {
   onTerminalSessionChange?: (sessionId: string) => void;
   memoryFacts: MemoryFact[];
   onMemoryDelete?: (id: string) => void;
+  /** Persist a manually entered fact via the memory API (B-2026-08-23-14). */
+  onMemoryStore?: (content: string, source: string) => Promise<void>;
+  /** Re-fetch memory facts (tab polls while visible). */
+  onMemoryRefresh?: () => Promise<void>;
   metrics: PerformanceMetricsType;
   /** SSE-driven lastMetrics for instant token display */
   lastMetrics?: PerformanceMetricsType | null;
@@ -67,6 +71,8 @@ export function RightPanel({
   onTerminalSessionChange,
   memoryFacts,
   onMemoryDelete,
+  onMemoryStore,
+  onMemoryRefresh,
   metrics,
   lastMetrics,
   elapsedMs,
@@ -228,7 +234,14 @@ export function RightPanel({
           />
         )}
         {activeTab === 'agents' && <AgentWorkspace runs={agentRuns} isStreaming={agentStreaming} />}
-        {activeTab === 'memory' && <MemoryTab facts={memoryFacts} onDelete={onMemoryDelete} />}
+        {activeTab === 'memory' && (
+          <MemoryTab
+            facts={memoryFacts}
+            onDelete={onMemoryDelete}
+            onStore={onMemoryStore}
+            onRefresh={onMemoryRefresh}
+          />
+        )}
       </div>
 
       {/* Performance metrics — session cumulative (stats split) */}

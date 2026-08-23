@@ -51,8 +51,11 @@ async def list_memory():
         else:
             relevance = 0.8  # default when no score available
 
-        # FIX: Timestamp guard — ensure valid numeric timestamp for formatDate()
-        raw_ts = fact.get("created_at", 0)
+        # FIX: Timestamp guard — ensure valid numeric timestamp for formatDate().
+        # The metadata written by _persist carries the fact's "timestamp" field
+        # (the vector_facts.created_at COLUMN is a DB-side row timestamp, not in
+        # the metadata dict — reading "created_at" here always yielded 0).
+        raw_ts = fact.get("timestamp", 0) or fact.get("created_at", 0)
         try:
             timestamp = float(raw_ts) if raw_ts else 0
         except (ValueError, TypeError):
