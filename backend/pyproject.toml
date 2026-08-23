@@ -6,8 +6,13 @@ build-backend = "hatchling.build"
 name = "localmind"
 version = "0.5.16"
 description = "Make local AI work like Claude — file reading, web search, memory, and tool use on top of Ollama"
-readme = "../README.md"
-license = { file = "../LICENSE" }
+# Session 377: hatchling rejects readme/license paths outside the project
+# directory ("Readme path must be within the project directory"), which broke
+# `pip install -e .[dev]` from backend/ on Windows. backend/README.md and
+# backend/LICENSE are the package-local copies (the full project docs stay at
+# the repo root; the license is the standard MIT text).
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [
     { name = "Tisone Kironget", email = "tisone@skytechsolutions.dev" }
