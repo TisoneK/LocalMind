@@ -17,6 +17,9 @@ import {
   Copy,
   ExternalLink,
   Loader2,
+  RefreshCw,
+  Clock,
+  MonitorUp,
 } from 'lucide-react';
 import { FileNode, SessionFileEntry } from '@/types';
 import { localmindClient } from '@/lib/localmind/client';
@@ -44,10 +47,24 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatModified(iso: string | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const diff = Date.now() - d.getTime();
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 interface TreeNodeState {
   children: FileNode[] | null; // null = not loaded yet
   loading: boolean;
 }
+
+type FileAction = 'open' | 'download' | 'delete' | 'copy' | 'os';
 
 interface FileTreeNodeProps {
   node: FileNode;
@@ -56,7 +73,7 @@ interface FileTreeNodeProps {
   nodes: Record<string, TreeNodeState>;
   onToggle: (node: FileNode) => void;
   onOpen: (path: string) => void;
-  onAction: (action: 'open' | 'download' | 'delete' | 'copy', path: string) => void;
+  onAction: (action: FileAction, path: string, isFolder: boolean) => void;
 }
 
 function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTreeNodeProps) {
@@ -77,7 +94,7 @@ function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTr
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     } catch {
-      onAction('copy', path);
+      onAction('copy', path, isFolder);
     }
   };
 
@@ -105,6 +122,17 @@ function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTr
           )}
           <span className="text-[11px] text-brand-green-soft truncate font-medium group-hover:text-brand-green transition-colors flex-1 min-w-0" title={node.path}>
             {node.name}
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 text-brand-green-muted hover:text-brand-green transition-all"
+            onClick={(e) => { e.stopPropagation(); onAction('os', node.path, true); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAction('os', node.path, true); } }}
+            title="Open in OS"
+            data-testid={`os-folder-${node.name}`}
+          >
+            <MonitorUp className="h-2.5 w-2.5" />
           </span>
           <span
             role="button"
@@ -159,14 +187,22 @@ function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTr
       <span className="text-[11px] text-brand-green-soft truncate group-hover:text-brand-green transition-colors flex-1 min-w-0">
         {node.name}
       </span>
+      {node.size !== undefined && (
+        <span className="text-[9px] text-brand-green-faint shrink-0">{formatSize(node.size)}</span>
+      )}
+      {node.modified && (
+        <span className="text-[9px] text-brand-green-faint shrink-0" title={node.modified}>
+          {formatModified(node.modified)}
+        </span>
+      )}
       {/* Per-file actions — visible on hover (B-2026-08-23) */}
       <span className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 text-brand-green-muted transition-all">
         <span
           role="button"
           tabIndex={0}
           className="p-0.5 rounded hover:text-brand-green hover:bg-brand-border/60"
-          onClick={(e) => { e.stopPropagation(); onAction('open', node.path); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAction('open', node.path); } }}
+          onClick={(e) => { e.stopPropagation(); onAction('open', node.path, false); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAction('open', node.path, false); } }}
           title="Preview"
           data-testid={`preview-${node.name}`}
         >
@@ -176,8 +212,19 @@ function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTr
           role="button"
           tabIndex={0}
           className="p-0.5 rounded hover:text-brand-green hover:bg-brand-border/60"
-          onClick={(e) => { e.stopPropagation(); onAction('download', node.path); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAction('download', node.path); } }}
+          onClick={(e) => { e.stopPropagation(); onAction('os', node.path, false); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAction('os', node.path, false); } }}
+          title="Open in OS"
+          data-testid={`os-${node.name}`}
+        >
+          <MonitorUp className="h-2.5 w-2.5" />
+        </span>
+        <span
+          role="button"
+          tabIndex={0}
+          className="p-0.5 rounded hover:text-brand-green hover:bg-brand-border/60"
+          onClick={(e) => { e.stopPropagation(); onAction('download', node.path, false); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAction('download', node.path, false); } }}
           title="Download"
           data-testid={`download-${node.name}`}
         >
@@ -198,8 +245,8 @@ function FileTreeNode({ node, depth, nodes, onToggle, onOpen, onAction }: FileTr
           role="button"
           tabIndex={0}
           className="p-0.5 rounded hover:text-brand-red hover:bg-brand-red/10"
-          onClick={(e) => { e.stopPropagation(); onAction('delete', node.path); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAction('delete', node.path); } }}
+          onClick={(e) => { e.stopPropagation(); onAction('delete', node.path, false); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onAction('delete', node.path, false); } }}
           title="Delete"
           data-testid={`delete-${node.name}`}
         >
@@ -219,11 +266,28 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [recent, setRecent] = useState<SessionFileEntry[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // The browser is seeded with the home directory's children (useFileTree()
   // with no path); derive the searchable root from the first entry's parent.
   const root = files.length > 0 ? files[0].path.split(/[\\/]/).slice(0, -1).join('/') || '/' : '';
+
+  const loadRecent = useCallback(async () => {
+    const items = await localmindClient.getRecentFiles(root, 8);
+    setRecent(items);
+  }, [root]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // getRecentFiles swallows errors internally and returns [] on failure.
+    localmindClient.getRecentFiles(root, 8).then((items) => {
+      if (!cancelled) setRecent(items);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [root]);
 
   const loadChildren = useCallback(async (node: FileNode) => {
     setNodes((prev) => ({ ...prev, [node.path]: { children: prev[node.path]?.children ?? null, loading: true } }));
@@ -262,9 +326,17 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
     };
   }, [query, root]);
 
-  const handleAction = (action: 'open' | 'download' | 'delete' | 'copy', path: string) => {
+  const handleAction = (action: FileAction, path: string, isFolder: boolean) => {
     if (action === 'open') {
       onFileOpen?.(path);
+      return;
+    }
+    if (action === 'os') {
+      // Open with the OS default app (files) or in the file manager (folders).
+      void (isFolder ? localmindClient.openFolder(path) : localmindClient.openFile(path)).catch(() => {
+        setNotice('Open failed');
+        setTimeout(() => setNotice(null), 2000);
+      });
       return;
     }
     if (action === 'download') {
@@ -279,6 +351,11 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
     void path;
   };
 
+  const handleRefresh = () => {
+    void loadRecent();
+    onFilesChanged?.();
+  };
+
   const confirmDeleteFile = async () => {
     if (!confirmDelete) return;
     setDeleting(true);
@@ -289,6 +366,7 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
       setConfirmDelete(null);
       // Ask the owning view to re-fetch so the tree reflects the deletion.
       onFilesChanged?.();
+      void loadRecent();
     } catch {
       setNotice('Delete failed');
       setTimeout(() => setNotice(null), 2000);
@@ -299,27 +377,69 @@ export function FileExplorer({ files, onFileOpen, onFilesChanged }: FileExplorer
 
   return (
     <div className="flex flex-col gap-1">
-      {/* Search box */}
-      <div className="relative">
-        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-brand-green-muted" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search files…"
-          className="w-full pl-7 pr-6 py-1 rounded-md border border-brand-border bg-brand-bg-panel text-[11px] text-brand-green-soft placeholder:text-brand-green-faint focus:outline-none focus:border-brand-green/40"
-          data-testid="file-search"
-        />
-        {query && (
-          <button
-            onClick={() => setQuery('')}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-brand-green-muted hover:text-brand-green"
-            title="Clear search"
-            data-testid="file-search-clear"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        )}
+      {/* Search box + refresh */}
+      <div className="flex items-center gap-1">
+        <div className="relative flex-1">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-brand-green-muted" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search files…"
+            className="w-full pl-7 pr-6 py-1 rounded-md border border-brand-border bg-brand-bg-panel text-[11px] text-brand-green-soft placeholder:text-brand-green-faint focus:outline-none focus:border-brand-green/40"
+            data-testid="file-search"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-brand-green-muted hover:text-brand-green"
+              title="Clear search"
+              data-testid="file-search-clear"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+        <button
+          onClick={handleRefresh}
+          className="p-1 rounded text-brand-green-muted hover:text-brand-green hover:bg-brand-border/60 transition-colors"
+          title="Refresh"
+          data-testid="file-refresh"
+        >
+          <RefreshCw className="h-3 w-3" />
+        </button>
       </div>
+
+      {/* Recent files (B-2026-08-23-16) */}
+      {recent.length > 0 && (
+        <div className="pt-0.5">
+          <div className="flex items-center gap-1 px-1 py-0.5">
+            <Clock className="h-2.5 w-2.5 text-brand-green-muted" />
+            <span className="text-[9px] uppercase tracking-wider text-brand-green-faint font-medium">Recent</span>
+          </div>
+          <div className="space-y-0.5" data-testid="recent-files">
+            {recent.map((entry) =>
+              entry.type === 'folder' ? null : (
+                <div
+                  key={entry.path}
+                  className="flex items-center gap-1.5 px-2 py-1 hover:bg-brand-border/50 rounded transition-colors cursor-pointer group"
+                  onClick={() => onFileOpen?.(entry.path)}
+                  title={entry.path}
+                  data-testid={`recent-${entry.name}`}
+                >
+                  {getFileIcon(entry.name)}
+                  <span className="text-[11px] text-brand-green-soft truncate flex-1 min-w-0 group-hover:text-brand-green transition-colors">
+                    {entry.name}
+                  </span>
+                  <span className="text-[9px] text-brand-green-faint shrink-0">{formatSize(entry.size)}</span>
+                  <span className="text-[9px] text-brand-green-faint shrink-0" title={entry.modified}>
+                    {formatModified(entry.modified)}
+                  </span>
+                </div>
+              ),
+            )}
+          </div>
+        </div>
+      )}
 
       {searching && (
         <div className="flex items-center gap-1.5 px-1 py-1 text-[10px] text-brand-green-muted">

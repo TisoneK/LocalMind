@@ -103,4 +103,58 @@ describe('FileExplorer browser', () => {
     fireEvent.click(screen.getByTestId('download-notes.txt'));
     expect(download).toHaveBeenCalledWith('/tmp/home/notes.txt');
   });
+
+  it('shows the Recent section with size + mtime metadata', async () => {
+    vi.spyOn(client, 'getRecentFiles').mockResolvedValue([
+      { name: 'recent.md', type: 'file', path: '/tmp/home/recent.md', relPath: 'recent.md', size: 2048, modified: new Date(Date.now() - 10_000).toISOString() },
+    ]);
+    renderExplorer();
+    expect(await screen.findByTestId('recent-recent.md')).toBeInTheDocument();
+    expect(screen.getByText('2.0 KB')).toBeInTheDocument();
+    expect(screen.getByText('just now')).toBeInTheDocument();
+  });
+
+  it('recent file row opens the preview on click', async () => {
+    const onFileOpen = vi.fn();
+    vi.spyOn(client, 'getRecentFiles').mockResolvedValue([
+      { name: 'recent.md', type: 'file', path: '/tmp/home/recent.md', relPath: 'recent.md', size: 12, modified: '' },
+    ]);
+    renderExplorer({ onFileOpen });
+    fireEvent.click(await screen.findByTestId('recent-recent.md'));
+    expect(onFileOpen).toHaveBeenCalledWith('/tmp/home/recent.md');
+  });
+
+  it('open-in-OS action opens a file with the default app', async () => {
+    const openFile = vi.spyOn(client, 'openFile').mockResolvedValue({ opened: 'ok' });
+    renderExplorer();
+    fireEvent.click(screen.getByTestId('os-notes.txt'));
+    expect(openFile).toHaveBeenCalledWith('/tmp/home/notes.txt');
+  });
+
+  it('open-in-OS action on a folder opens it in the file manager', async () => {
+    const openFolder = vi.spyOn(client, 'openFolder').mockResolvedValue({ opened: 'ok' });
+    renderExplorer();
+    fireEvent.click(screen.getByTestId('os-folder-docs'));
+    expect(openFolder).toHaveBeenCalledWith('/tmp/home/docs');
+  });
+
+  it('refresh re-fetches the tree and recent files', async () => {
+    const onFilesChanged = vi.fn();
+    vi.spyOn(client, 'getRecentFiles').mockResolvedValue([]);
+    renderExplorer({ onFilesChanged });
+    fireEvent.click(screen.getByTestId('file-refresh'));
+    expect(onFilesChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows size + mtime metadata on tree file rows', () => {
+    renderExplorer({
+      files: [
+        { name: 'meta.txt', type: 'file', path: '/tmp/home/meta.txt', size: 512, modified: new Date(Date.now() - 2 * 3_600_000).toISOString() },
+        { name: 'notes.txt', type: 'file', path: '/tmp/home/notes.txt' },
+        { name: 'docs', type: 'folder', path: '/tmp/home/docs' },
+      ],
+    });
+    expect(screen.getByText('512 B')).toBeInTheDocument();
+    expect(screen.getByText('2h ago')).toBeInTheDocument();
+  });
 });

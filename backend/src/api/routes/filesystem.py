@@ -166,6 +166,75 @@ async def list_files(path: str = ""):
         raise HTTPException(status_code=500, detail=f"Failed to list directory: {e}")
 
 
+@router.get("/files/recent")
+async def recent_files(path: str = "", limit: int = 10):
+    """Most-recently-modified files under the given root (B-2026-08-23-16).
+
+    Bounded recursive walk (skips hidden dirs and caps the scan), returning
+    the `limit` newest files with size/modified metadata — powers the Files
+    tab's "Recent files" section. Read-only.
+    """
+    import datetime
+
+    try:
+        if not path or path == ".":
+            path = os.path.expanduser("~")
+        root = Path(path).resolve()
+        if not settings.is_path_allowed(root):
+            raise HTTPException(status_code=403, detail="Path is outside allowed folders")
+        if not root.exists() or not root.is_dir():
+            raise HTTPException(status_code=404, detail="Path not found")
+
+        limit = max(1, min(int(limit or 10), 100))
+        # Bounded scan: never descend into hidden dirs (node_modules, .git, …)
+        # and stop after visiting SCAN_CAP entries so a huge tree can't hang.
+        _SCAN_CAP = 20_000
+        _MAX_DEPTH = 8
+        found: list[dict] = []
+        visited = 0
+
+        def _walk(d: Path, depth: int) -> None:
+            nonlocal visited
+            if depth > _MAX_DEPTH:
+                return
+            try:
+                entries = sorted(os.scandir(d), key=lambda e: e.name.lower())
+            except OSError:
+                return
+            for entry in entries:
+                if visited >= _SCAN_CAP:
+                    return
+                visited += 1
+                name = entry.name
+                if name.startswith("."):
+                    continue
+                try:
+                    if entry.is_dir():
+                        _walk(Path(entry.path), depth + 1)
+                    elif entry.is_file():
+                        st = entry.stat()
+                        found.append(
+                            {
+                                "name": name,
+                                "type": "file",
+                                "path": entry.path,
+                                "relPath": os.path.relpath(entry.path, root),
+                                "size": st.st_size,
+                                "modified": datetime.datetime.fromtimestamp(st.st_mtime).isoformat(),
+                            }
+                        )
+                except OSError:
+                    continue
+
+        _walk(root, 0)
+        found.sort(key=lambda f: f["modified"], reverse=True)
+        return {"files": found[:limit]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list recent files: {e}")
+
+
 @router.get("/files/search")
 async def search_files(path: str = "", q: str = ""):
     """Recursively search for files/folders by name under the given path.

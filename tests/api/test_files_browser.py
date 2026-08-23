@@ -150,3 +150,83 @@ class TestDownloadFile:
             assert "not found" in str(exc.value).lower()
         finally:
             patcher.stop()
+
+
+class TestRecentFiles:
+    def test_returns_newest_files_with_metadata(self, tmp_path):
+        from api.routes.filesystem import recent_files
+
+        (tmp_path / "docs").mkdir()
+        older = tmp_path / "docs" / "old.md"
+        older.write_text("x", encoding="utf-8")
+        newer = tmp_path / "fresh.txt"
+        newer.write_text("y", encoding="utf-8")
+        # Make the mtimes deterministic: fresh.txt strictly newer.
+        newer_stat = newer.stat()
+        import os
+
+        os.utime(older, (newer_stat.st_atime, newer_stat.st_mtime - 1000))
+
+        patcher = _allow(tmp_path)
+        try:
+            result = _run(recent_files(str(tmp_path), 10))
+        finally:
+            patcher.stop()
+
+        assert len(result["files"]) == 2
+        first = result["files"][0]
+        assert first["name"] == "fresh.txt"
+        assert first["type"] == "file"
+        assert first["path"] == str(newer)
+        assert first["relPath"] == "fresh.txt"
+        assert first["size"] == 1
+        assert "modified" in first
+        # Newest first.
+        assert result["files"][1]["name"] == "old.md"
+
+    def test_limit_respected(self, tmp_path):
+        from api.routes.filesystem import recent_files
+
+        for i in range(5):
+            (tmp_path / f"f{i}.txt").write_text("x", encoding="utf-8")
+        patcher = _allow(tmp_path)
+        try:
+            result = _run(recent_files(str(tmp_path), 2))
+        finally:
+            patcher.stop()
+        assert len(result["files"]) == 2
+
+    def test_skips_hidden_directories(self, tmp_path):
+        from api.routes.filesystem import recent_files
+
+        (tmp_path / ".git").mkdir()
+        (tmp_path / "visible.txt").write_text("x", encoding="utf-8")
+        hidden = tmp_path / ".git" / "config"
+        hidden.write_text("hidden", encoding="utf-8")
+        # Make the hidden file look newest.
+        import os
+
+        visible_stat = (tmp_path / "visible.txt").stat()
+        os.utime(hidden, (visible_stat.st_atime, visible_stat.st_mtime + 1000))
+
+        patcher = _allow(tmp_path)
+        try:
+            result = _run(recent_files(str(tmp_path), 10))
+        finally:
+            patcher.stop()
+        names = [f["name"] for f in result["files"]]
+        assert "visible.txt" in names
+        assert "config" not in names
+
+    def test_outside_allowed_root_rejected(self, tmp_path):
+        from api.routes.filesystem import recent_files
+
+        outside = tmp_path.parent / "recent_outside"
+        outside.mkdir()
+        patcher = _allow(tmp_path)
+        try:
+            with pytest.raises(Exception) as exc:
+                _run(recent_files(str(outside), 10))
+            assert "outside allowed folders" in str(exc.value).lower()
+        finally:
+            patcher.stop()

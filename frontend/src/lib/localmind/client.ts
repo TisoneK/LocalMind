@@ -641,6 +641,8 @@ class LocalMindClient {
         type: c.type,
         path: c.path,
         children: c.children,
+        size: c.size,
+        modified: c.modified,
       }));
     } catch {
       return [];
@@ -689,6 +691,42 @@ class LocalMindClient {
     document.body.appendChild(a);
     a.click();
     a.remove();
+  }
+
+  /** Open a file with the OS default application (B-2026-08-23-16). */
+  async openFile(path: string): Promise<{ opened: string }> {
+    return this.request<{ opened: string }>('/api/open-file', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    });
+  }
+
+  /** Open a folder in the OS file manager (B-2026-08-23-16). */
+  async openFolder(path: string): Promise<{ opened: string }> {
+    return this.request<{ opened: string }>('/api/open-folder', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    });
+  }
+
+  /** Most-recently-modified files under a root (Files tab "Recent" section). */
+  async getRecentFiles(path?: string, limit = 10): Promise<SessionFileEntry[]> {
+    try {
+      const queryPath = path || '';
+      const data = await this.request<{ files: any[] }>(
+        `/api/files/recent?path=${encodeURIComponent(queryPath)}&limit=${limit}`
+      );
+      return (data.files || []).map((f) => ({
+        name: f.name || '',
+        type: f.type === 'folder' ? 'folder' : 'file',
+        path: f.path || '',
+        relPath: f.relPath || f.name || '',
+        size: f.size || 0,
+        modified: f.modified || '',
+      }));
+    } catch {
+      return [];
+    }
   }
 
   // ── Todos ───────────────────────────────────────────────────────────

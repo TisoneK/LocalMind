@@ -357,6 +357,8 @@ export interface FileNode {
   path: string;
   children?: FileNode[];
   expanded?: boolean;
+  size?: number;
+  modified?: string;
 }
 
 /** One entry in a session's workspace artifact listing (B-2026-08-23). */
