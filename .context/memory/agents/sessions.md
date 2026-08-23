@@ -5284,3 +5284,15 @@ authoritative.
 **Live** (isolated 8765, real Ollama): `configured: nomic-embed-text, configured_available: False, suggested: mxbai-embed-large:latest` — exactly the missing-model case the banner needs. The user's next step is one click: Open Settings → Embedding model → mxbai-embed-large (or `ollama pull nomic-embed-text`).
 
 **Commits:** product + context (pushed).
+
+## Session 369 — One-click embed-model fix in the chat guide (follow-up to Session 368) — 2026-08-23
+
+**User request:** make the chat guide auto-fix the embed model with one click instead of opening Settings.
+
+**Changes (frontend only — the settings endpoint already existed):**
+- `CenterPanel.tsx` — the banner's primary button is now **"Use <suggested>"** (data-testid `embed-guide-fix`): calls `setLocalSettings({ embedModel: suggested })` (POST /api/settings/local — the exact endpoint the Settings modal uses), shows a spinner while switching, flips to a green "✓ Embedding model switched to X — memory can be saved now" confirmation, marks the session dismissed, and collapses after 1.5s. On failure it shows an inline error and keeps the banner ("Open Settings to set it manually" hint in the error text). The dismiss X remains.
+- Tests: replaced the Open-Settings-dispatch test with two new ones — fix applies the suggested model + confirms + marks session; fix failure shows error and keeps the banner. 316 frontend total.
+
+**Live** (isolated 8765): before `nomic-embed-text` available=False suggested=`mxbai-embed-large:latest` → POST /api/settings/local applies it → endpoint reports available=True → persisted to settings.json. The one-click path is verified end to end; the user's real fix is a single click on the banner.
+
+**Commits:** product + context (pushed).

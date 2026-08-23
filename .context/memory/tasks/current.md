@@ -1,11 +1,10 @@
 # Current Task
 
-**Status:** IDLE — Session 368 shipped the embed-model missing guide in chat (follow-up to B-2026-08-23-14).
+**Status:** IDLE — Session 369 shipped the one-click embed-model fix in the chat guide.
 
-## Session 368 outcome — chat guide when the default embed model isn't available
+## Session 369 outcome — one-click auto-fix (no Settings detour)
 
-- **User request:** if the default embed model isn't in Ollama but another is, guide the user in chat to set it — Settings already has the field, just needs a guide pointing there.
-- **Changes:** `GET /api/models/embeddings` now returns `configured_available` (tag-insensitive match against pulled models) + `suggested` (first pulled embed-capable alternative); CenterPanel shows a dismissible amber banner when the configured model is missing but an alternative exists — "Set it to Y in Settings → Embedding model" with an Open Settings button (reuses `localmind:open-settings` event) and a session-persistent dismiss. Removed a pre-existing unused `hasToolCalls` var in CenterPanel.
-- **Verification:** 3 backend + 5 frontend new tests; 2429 backend / 315 frontend; ruff/tsc/eslint clean. Live (isolated 8765, real Ollama): `configured: nomic-embed-text, configured_available: False, suggested: mxbai-embed-large:latest` — exactly the missing-model case.
-- **User's one-click next step:** Open Settings → Embedding model → mxbai-embed-large (or `ollama pull nomic-embed-text`).
+- **User request:** make the chat guide auto-fix the embed model with one click instead of opening Settings.
+- **Change (frontend only):** CenterPanel's banner primary button is now **"Use <suggested>"** → `setLocalSettings({ embedModel })` (the exact endpoint the Settings modal uses) → spinner → green confirmation "✓ Embedding model switched to X — memory can be saved now" → session-dismissed → collapses after 1.5s. Failure shows an inline error and keeps the banner. Dismiss X remains.
+- **Verification:** 2 new CenterPanel tests (fix applies + confirms + marks session; failure keeps banner). 316 frontend, tsc/eslint clean, backend untouched (2429 pass from Session 368). Live (isolated 8765): `nomic-embed-text` available=False → one-click POST applies `mxbai-embed-large:latest` → available=True → persisted to settings.json.
 - **Next:** B-2026-08-23-15 (auto-switch between Terminal/Agents/Memory tabs) or B-2026-08-23-16 (deeper Files browser) — both open in backlog.
