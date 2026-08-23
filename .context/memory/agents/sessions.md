@@ -5315,3 +5315,22 @@ authoritative.
 **Live** (isolated 8765, bankofai, sandboxed home, embed_model=mxbai-embed-large): stored "User prefers dark mode" → PATCH to "…with warm accents" → list shows the correction with a NEW id, source=user and the original timestamp preserved → PATCH of a missing fact → 404. Verified end to end.
 
 **Commits:** product + context (pushed).
+
+## Session 371 — Memory recall search + memory-collapse root cause (B-2026-08-23-14 follow-up) — 2026-08-23
+
+**User request:** add a recall/search box in the Memory tab showing the top-k most relevant facts for a query.
+
+**Feature:**
+- `GET /api/memory/search?q=&top_k=` — semantic recall via `recall_with_scores` (embedding similarity, NOT substring); returns the frontend MemoryFact shape with relevance = 1 - distance (higher = more similar), clamped [1,50] top_k, empty query → [].
+- MemoryTab gained a **Recall** box (sparkles icon): type a question → top-5 most relevant facts with relevance bars (reuses FactCard, so edit/delete work on results too), a Clear button, and a no-results state. Client `searchMemory(query, topK)`.
+
+**THE BIG ONE — memory-collapse root cause found live:**
+- The live check stored 3 distinct facts and found only ONE in the DB — the store had been silently collapsing almost everything into a single row.
+- Root cause: sqlite-vec's vec0 returns **Euclidean L2 distance** (0 = identical, sqrt(2) = orthogonal), but the dedup + recall code fed it into `_cosine_to_score` which treats its input as a **dot product in [-1,1]**. The dedup threshold `< 0.15` then clamped almost any pair's L2 (which is ≥ 0.7 for even 30%-similar facts) to score ~0 → dedup fired → distinct facts merged into one row, the last one winning. Recall scores were garbage too (same misread). This means the agent's memory had effectively been ONE fact — a long-standing silent bug (repro: stored 3 facts → 1 survived; after fix → 3 survived).
+- Fix: `_l2_to_score(distance) = min(1.0, distance²/4)` (for unit vectors, l2² = 2 - 2·cos → score = (1-cos)/2 = l2²/4). Used in both the dedup threshold and recall scores. Verified by reverting the call sites: the new regression test fails on old code, passes on the fix.
+
+**Tests:** +1 VectorStore regression (`test_distinct_facts_are_not_deduped` — proves distinct facts survive; fails on old code), +3 route tests (recall top-k + relevance, empty query, top_k clamp), +3 MemoryTab tests (recall shows top-k, no-results state, clear restores list). 2437 backend / 322 frontend, ruff/tsc/eslint clean.
+
+**Live** (isolated 8765, bankofai, embed_model=mxbai-embed-large): 3 distinct facts stored (no collapse) → recall "what theme does the user like" returns all 3 ranked by relevance (dark-mode facts ≈0.81-0.82 > FastAPI 0.72), full shape, sane [0,1] scores.
+
+**Commits:** product + context (pushed).
