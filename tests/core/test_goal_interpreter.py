@@ -267,6 +267,7 @@ _EXCLUDED_INTENTS = {
     Intent.DESCRIBE_TOOL,  # ADR-40 option C: meta-tool (loads a schema; no checkable contract)
     Intent.TODO_WRITE,  # ADR-43: UI-checklist tool (updates the panel; no checkable goal contract)
     Intent.WEB_RESEARCH,  # Session 340: adaptive web acquisition (search+fetch+browser; no checkable contract)
+    Intent.GREP_SEARCH,  # B-2026-08-23-31: grep search — file content search, no checkable goal contract
     # MEMORY_OP gets a generic "completed without error" — it's in the map.
 }
 

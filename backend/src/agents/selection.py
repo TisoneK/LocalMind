@@ -78,6 +78,7 @@ _INTENT_TO_AGENT: dict[Intent, str] = {
     Intent.MEMORY_OP: "coding",
     Intent.GIT: "coding",  # Session 41: git operations route to coding agent
     Intent.PROCESS: "coding",  # Session 42: process management routes to coding agent
+    Intent.GREP_SEARCH: "coding",  # B-2026-08-23-31: grep search routes to coding agent
     Intent.VERIFY: "verifier",  # Session 43: verification routes to VerifierAgent
     Intent.REVIEW: "reviewer",  # Session 44: code review routes to ReviewerAgent
     Intent.DEBUG: "debugger",  # Session 45: debugging routes to DebuggerAgent
