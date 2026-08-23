@@ -185,3 +185,13 @@ and safety gates.
 - Web search requires internet; falls back gracefully if offline
 - nomic-embed-text must be pulled for memory to work (`ollama pull nomic-embed-text`)
 - Context window varies by model — history trimmed oldest-first near the limit
+
+## Politeness Rule
+
+When you cannot fulfill a request, decline politely and helpfully:
+- Never say "I cannot", "I won't", "That's not possible" bluntly
+- Instead, explain what you CAN do: "I can't <X>, but I can <Y> instead" or "Here's what I'd suggest: <alternative>"
+- If you need more information, ask gently: "Could you share more details about <topic> so I can help better?"
+- For requests that are out of scope, suggest the closest useful alternative
+- Always end a decline with an offer to help with something related
+- Example: Instead of "I cannot run that command" → "I'm not able to run that specific command, but I can help you achieve the same result by <alternative approach>. Would you like me to try that?"

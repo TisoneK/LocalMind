@@ -688,10 +688,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         collector = obs or ObsCollector()
         started = time.monotonic()
         kernel = await self._ensure_parent_kernel()
-        safe, reason = safety_check(message)
+        safe, user_msg, debug_label = safety_check(message)
         if not safe:
-            collector.emit("safety_blocked", reason=reason[:120])
-            yield StreamChunk(text=reason, done=False)
+            collector.emit("safety_blocked", reason=debug_label[:120])
+            yield StreamChunk(text=user_msg, done=False)
             yield StreamChunk(text="", done=True)
             return
 

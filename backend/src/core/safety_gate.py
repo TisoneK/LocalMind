@@ -30,25 +30,32 @@ _HARD_BLOCKS: list[tuple[str, str]] = [
 ]
 
 
-def check(message: str) -> Tuple[bool, str]:
+_POLITE_BLOCK = (
+    "I'm sorry, I'm not able to help with that request. "
+    "If there's something else I can assist you with, I'd be happy to help."
+)
+
+
+def check(message: str) -> Tuple[bool, str, str]:
     """
     Hard-block check for incoming messages.
 
     Returns:
-        (is_safe, reason) -- True if safe, False with reason if blocked.
+        (is_safe, user_message, debug_label) -- True if safe, False with a
+        polite user-facing message and a debug label for observability.
 
     Only blocks content that is harmful in every conceivable context.
     Rely on the LLM's own safety training for everything else.
     """
     if not message or not message.strip():
-        return False, "Empty message"
+        return False, _POLITE_BLOCK, "Empty message"
 
     message_lower = message.lower()
     for pattern, label in _HARD_BLOCKS:
         if re.search(pattern, message_lower, re.IGNORECASE):
-            return False, f"Content blocked: {label}"
+            return False, _POLITE_BLOCK, label
 
-    return True, ""
+    return True, "", ""
 
 
 # ── Layer 2: Destructive operation detection ─────────────────────────────────
