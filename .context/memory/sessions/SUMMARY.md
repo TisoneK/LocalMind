@@ -150,3 +150,7 @@
 ## Session 378 (2026-08-23) — Buffy/GLM-5.2 — repeated-listing dedup
 
 Root-caused the Windows dev-folder transcript: the loop re-ran near-identical `Get-ChildItem` listings 5× because exact-match dedup missed cosmetic reformulations; the `[...TRUNCATED...]` marker misled the model into thinking data was lost. Fix: structural inspection fingerprint (target + flags; presentation stripped; short bundles normalize; mutating calls invalidate per-turn) + prompt rule 10 ("tool output retained; never re-run a read just to reformat") + justified budget bumps. 13 new tests; full suite 2488 passed. `79716fa`; review: flaws/log.md + sessions entry.
+
+## Session 380 (2026-08-23) — Buffy/GLM-5.2 — B-2026-08-23-32 file diffs for any write
+
+User picked B-2026-08-23-32. The frontend DiffBlock only ever filled for edit_file; file_write/script rewrites showed no diff. Loop now snapshots pre-write content and emits the same file_diff obs event after a successful file_write (single-tool + batch paths); new files diff all-added, overwrites exact-changed, unchanged → no event. Prompt steering added (shell file-writes are last resort; prefer write tools) with justified budget bumps. Part 3 "store stats?" left OPEN. Backend 2490/2, frontend diff suites green. `008995c`.
