@@ -5087,3 +5087,29 @@ authoritative.
   eslint 0 errors. Live (isolated 8765): book.xlsx → [Sales, Notes] with header +
   rows; data.csv → [Sheet 1] — both served structured over HTTP.
 - **Commits:** product `5204c30` + context (below).
+
+## Session 358 — editable spreadsheet cells saved through the confirm-write gate
+
+- **Shipped:** CSV/XLSX cells in the FilePreviewDialog are now editable in place
+  and save back through the SAME `POST /api/confirm-write` gate as text writes.
+  - Backend: `ConfirmWriteRequest` gained optional `sheets` (path + content stay
+    for text). Route branches: `sheets` present → `write_spreadsheet` (new in
+    file_writer.py); xlsx rebuilt via openpyxl preserving real types
+    (`_infer_cell`: ''→None/cleared, True/False→bool, int/float regex→numbers,
+    else text), csv regenerated via csv.writer. **Data-loss guard:** the preview
+    caps sheets (200×50), so write_spreadsheet compares the incoming grid against
+    the file on disk and refuses (400) when any sheet has FEWER rows — a truncated
+    preview can never silently overwrite the full file.
+  - Frontend: `confirmWrite(path, content, sheets?)`; dialog edit mode for
+    spreadsheets — cells become `<input>`s (aria-label Cell r,c), typed edits
+    update a draft copy per sheet, Save sends the structured sheets payload,
+    Cancel restores; Edit button hidden when any sheet is truncated.
+- **Verification:** 3 new backend tests (xlsx round trip via confirm-write with
+  int type preserved on disk, csv round trip, truncated-grid → 400 untouched
+  file), 3 new frontend tests (cell edit → confirmWrite sheets payload, no Edit
+  when truncated, Cancel restores). **2363 backend passed / 2 skipped**,
+  **291 frontend passed**, tsc/ruff clean, eslint 0 new (changed test beforeEach
+  to resetAllMocks — a failed test's queued mockResolvedValueOnce leaked into the
+  next test under clearAllMocks). Live (isolated 8765): apple qty 3→42 int, price
+  1.5→2.75 float persisted on disk; 1-row grid vs 3-row file → 400.
+- **Commits:** product `4559d0a` + context (below).

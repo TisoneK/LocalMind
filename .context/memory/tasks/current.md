@@ -1,32 +1,35 @@
 # Current Task
 
-**Status:** IDLE — Session 357 shipped spreadsheet tables with sheet tabs (B-2026-08-23-6 follow-up).
+**Status:** IDLE — Session 358 shipped editable spreadsheet cells (B-2026-08-23-6 follow-up).
 
-## Session 357 outcome — CSV/XLSX preview as real tables with sheet tabs
+## Session 358 outcome — edit CSV/XLSX cells in the preview, saved through the confirm-write gate
 
-- User follow-up: "Extend the preview to render CSV/XLSX as a real table with
-  sheet tabs instead of flat text."
-- **FIX:** backend `tools.file_reader.parse_spreadsheet()` — xlsx read with
-  `pd.read_excel(sheet_name=None)` (every worksheet becomes a tab), csv presented
-  as a single "Sheet 1" tab; rows/cols capped (MAX_SHEET_ROWS=200,
-  MAX_SHEET_COLS=50) with a `truncated` flag; cells normalized to JSON-safe
-  strings (NaN→'', 1.0→"1", bools→True/False). `GET /api/files/content` branches
-  csv/xlsx into a structured `sheets` payload (keeps a flat `text` fallback for
-  any other consumer; `editable` stays False so spreadsheets are view-only).
-  Frontend: tab bar with active highlight + ellipsis marker on truncated sheets,
-  sticky-header table with a row-number column, truncated cells with title
-  tooltips, both-axis scroll, and a "rows/columns truncated" note.
-- **Decision:** structured `sheets` payload on the existing content endpoint
-  (frontend renders tabs) rather than a separate spreadsheet endpoint — one fetch,
-  one gate, matches the FileContent type. The flat `parse_file` text remains the
-  source of truth for the agent; the structured flavor is preview-only.
-- **LIVE (isolated 8765):** book.xlsx (Sales + Notes sheets, header + data rows,
-  floats normalized "1.5") and data.csv (single Sheet 1) both served structured
-  over HTTP.
-- **Tests:** 3 new backend (openpyxl 2-sheet fixture, csv, 250-row cap → 201 rows
-  + truncated), 3 new frontend (tabs + active data, tab switching, truncation
-  note). **2360 backend passed / 2 skipped**, **288 frontend passed**, tsc/ruff
-  clean, eslint 0 errors.
+- User follow-up: "Make spreadsheet cells editable in the preview and save back
+  through the confirm-write gate."
+- **FIX:** `POST /api/confirm-write` now accepts an optional `sheets` payload
+  alongside `path`/`content`. When present, the route calls the new
+  `write_spreadsheet()` (file_writer.py) instead of the text `_do_write` —
+  xlsx rebuilt via openpyxl with real type preservation (`_infer_cell`: empty→
+  cleared cell, True/False→bool, int/float strings→numbers, else text), csv
+  regenerated via csv.writer. **Data-loss guard:** because the preview caps
+  sheets at 200×50, write_spreadsheet compares the incoming grid to the file on
+  disk and returns 400 when any sheet has FEWER rows — a truncated preview can
+  never silently overwrite the full file. Frontend: `confirmWrite(path, content,
+  sheets?)`; spreadsheet edit mode in the dialog (cells become `<input>`s with
+  aria-labels, draft copy per sheet, Save sends sheets, Cancel restores); the
+  Edit button is hidden when any sheet is truncated.
+- **Decision:** keep the ONE gate endpoint (sheet payload is just another body
+  shape) rather than a new write route — same 403 path check, same tooling.
+- **LIVE (isolated 8765):** apple qty 3→42 (int) and price 1.5→2.75 (float)
+  persisted on disk with types intact; a 1-row grid against the 3-row file →
+  400 with a clear message. Full round trip.
+- **Tests:** 3 new backend (xlsx round trip + int type on disk, csv round trip,
+  truncated-grid refused + file untouched), 3 new frontend (cell edit →
+  confirmWrite sheets payload, no Edit when truncated, Cancel restores).
+  **2363 backend passed / 2 skipped**, **291 frontend passed**, tsc/ruff clean,
+  eslint 0 new. Note: switched the test `beforeEach` to `resetAllMocks` — a
+  failed test's queued `mockResolvedValueOnce` leaked into the next test under
+  `clearAllMocks` (once-queue survives clear).
 - **Next:** B-2026-08-23-7 — file-task summary in the final output after the
   agent finishes creating/editing files.
 
