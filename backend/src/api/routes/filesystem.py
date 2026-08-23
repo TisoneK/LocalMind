@@ -1,14 +1,18 @@
 """
 File system utility routes.
 
-GET  /api/files       — list files in a directory (read-only, no side effects)
-POST /api/open-file   — open a file with the OS default application
-POST /api/open-folder — open a folder in the OS file manager (explicit action only)
-POST /api/confirm-write — confirm a pending permission-gated file write
+GET  /api/files            — list files in a directory (read-only, no side effects)
+GET  /api/files/content    — read a file's text content for UI preview (docx/pdf/xlsx
+                             parsed via tools.file_reader; images returned as a data URL)
+GET  /api/files/meta       — metadata for a single file
+POST /api/open-file        — open a file with the OS default application
+POST /api/open-folder      — open a folder in the OS file manager (explicit action only)
+POST /api/confirm-write    — confirm a pending permission-gated file write
 """
 
 from __future__ import annotations
 
+import base64
 import os
 import subprocess
 import sys
@@ -17,9 +21,22 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from core.agent.constants import FILE_READ_MAX_BYTES
 from core.config import settings
 
 router = APIRouter()
+
+# Binary formats the file_reader tool parses into plain text for preview.
+_OFFICE_EXTS = {".pdf", ".docx", ".xlsx", ".csv"}
+# Image formats returned as inline data URLs so the browser renders them directly.
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff"}
+# Plain-text / code extensions shown verbatim (everything else falls back to
+# UTF-8 decode with the same cap the engine uses).
+_TEXT_EXTS = {
+    ".txt", ".md", ".markdown", ".py", ".js", ".ts", ".tsx", ".jsx", ".json", ".yaml",
+    ".yml", ".toml", ".ini", ".cfg", ".env", ".sh", ".bash", ".rs", ".go", ".java",
+    ".c", ".h", ".cpp", ".hpp", ".html", ".xml", ".css", ".sql", ".log",
+}
 
 
 class OpenFileRequest(BaseModel):
@@ -175,6 +192,91 @@ async def get_file_meta(path: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get file metadata: {e}")
+
+
+@router.get("/files/content")
+async def get_file_content(path: str):
+    """Read a file's text content for UI preview (read-only, no side effects).
+
+    Text/code files are read verbatim (capped at FILE_READ_MAX_BYTES);
+    docx/pdf/xlsx/csv are parsed into text via tools.file_reader.parse_file;
+    images are returned as an inline data URL so the browser can render them
+    directly without a binary-download round trip.
+    """
+    try:
+        file_path = Path(path).resolve()
+
+        if not settings.is_path_allowed(file_path):
+            raise HTTPException(status_code=403, detail="Path is outside allowed folders")
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {path}")
+        if not file_path.is_file():
+            raise HTTPException(status_code=400, detail="Path is not a file")
+
+        ext = file_path.suffix.lower()
+        size = file_path.stat().st_size
+        truncated = size > FILE_READ_MAX_BYTES
+
+        # Images → inline data URL (no OCR — the browser is the renderer).
+        if ext in _IMAGE_EXTS:
+            data = file_path.read_bytes()[: FILE_READ_MAX_BYTES]
+            mime = {
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".gif": "image/gif",
+                ".bmp": "image/bmp",
+                ".webp": "image/webp",
+                ".tiff": "image/tiff",
+            }.get(ext, "image/png")
+            return {
+                "path": str(file_path),
+                "name": file_path.name,
+                "extension": ext.lstrip("."),
+                "size": size,
+                "truncated": truncated,
+                "image_data_url": f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}",
+            }
+
+        # Office/binary formats → reuse the engine's own parser so the preview
+        # matches exactly what the agent sees.
+        if ext in _OFFICE_EXTS or ext not in _TEXT_EXTS:
+            from tools.file_reader import parse_file
+
+            data = file_path.read_bytes()[: FILE_READ_MAX_BYTES]
+            attachment = await parse_file(
+                data,
+                file_path.name,
+                "application/octet-stream",
+                chunk_size=FILE_READ_MAX_BYTES,  # no chunking for preview
+            )
+            return {
+                "path": str(file_path),
+                "name": file_path.name,
+                "extension": ext.lstrip("."),
+                "size": size,
+                "truncated": truncated,
+                "text": "\n\n".join(attachment.chunks),
+            }
+
+        # Plain text / code → verbatim UTF-8 with the same cap.
+        raw = file_path.read_bytes()[: FILE_READ_MAX_BYTES]
+        try:
+            text = raw.decode("utf-8", errors="replace")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to decode file: {e}")
+        return {
+            "path": str(file_path),
+            "name": file_path.name,
+            "extension": ext.lstrip("."),
+            "size": size,
+            "truncated": truncated,
+            "text": text,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read file: {e}")
 
 
 def _human_size(n: int) -> str:

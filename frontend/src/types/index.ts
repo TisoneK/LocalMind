@@ -258,6 +258,18 @@ export interface FileResult {
   type?: string;
 }
 
+export interface FileContent {
+  path: string;
+  name: string;
+  extension: string;
+  size: number;
+  truncated: boolean;
+  /** Text preview for text/code/office files (docx/pdf/xlsx parsed server-side). */
+  text?: string;
+  /** Inline data URL for image files. */
+  image_data_url?: string;
+}
+
 export interface Session {
   id: string;
   title: string;

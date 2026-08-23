@@ -57,6 +57,7 @@ import { ToolSteps } from './ToolSteps';
 import { AgentPhases } from './AgentPhases';
 import { ErrorMessage } from './ErrorMessage';
 import { DiffBlock, type DiffHunk } from '@/components/shared/DiffBlock';
+import { FilePreviewDialog } from './FilePreviewDialog';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -67,7 +68,13 @@ interface ChatMessageProps {
   onRetry?: () => void;
 }
 
-function FileResultChip({ result }: { result: FileResult }) {
+function FileResultChip({
+  result,
+  onPreview,
+}: {
+  result: FileResult;
+  onPreview: (path: string) => void;
+}) {
   const statusConfig = {
     created: { icon: <FilePlus className="h-3 w-3" />, color: 'text-brand-green border-brand-green/30 bg-brand-green/5' },
     modified: { icon: <FileEdit className="h-3 w-3" />, color: 'text-brand-amber border-brand-amber/30 bg-brand-amber/5' },
@@ -78,13 +85,18 @@ function FileResultChip({ result }: { result: FileResult }) {
   const config = statusConfig[result.status as keyof typeof statusConfig] ?? statusConfig.created;
 
   return (
-    <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[10px] font-mono ${config.color}`}>
+    <button
+      type="button"
+      onClick={() => onPreview(result.path)}
+      title={`Click to preview ${result.path}`}
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[10px] font-mono cursor-pointer hover:brightness-125 active:brightness-110 transition-all ${config.color}`}
+    >
       {config.icon}
-      <span>{result.path}</span>
+      <span className="underline decoration-dotted underline-offset-2">{result.path}</span>
       {result.lines && (
         <span className="text-[9px] opacity-60">+{result.lines}L</span>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -652,6 +664,10 @@ function MessageActions({
 export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
+  // B-2026-08-23-6: clickable file-result chips open an inline preview dialog
+  // (text/code/markdown/office docs parsed server-side, images as data URLs).
+  const [previewPath, setPreviewPath] = useState<string | null>(null);
+
   // Check if this message has diff data (from edit_file tool results)
   const diffHunks: DiffHunk[] = useMemo(() => {
     if (message.diffData?.hunks) {
@@ -771,7 +787,7 @@ export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps)
           {message.fileResults && message.fileResults.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {message.fileResults.map((fr) => (
-                <FileResultChip key={fr.id} result={fr} />
+                <FileResultChip key={fr.id} result={fr} onPreview={setPreviewPath} />
               ))}
             </div>
           )}
@@ -790,6 +806,9 @@ export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps)
           )}
         </div>
       </div>
+
+      {/* File preview dialog — opened by clicking a file-result chip */}
+      <FilePreviewDialog path={previewPath} onClose={() => setPreviewPath(null)} />
     </div>
   );
 }

@@ -19,6 +19,7 @@ import type {
   ActionItem,
   TodoItem,
   FileNode,
+  FileContent,
   MemoryFact,
   PerformanceMetrics,
   ObservationData,
@@ -629,6 +630,17 @@ class LocalMindClient {
       }));
     } catch {
       return [];
+    }
+  }
+
+  async getFileContent(path: string): Promise<FileContent | null> {
+    try {
+      const data = await this.request<FileContent>(
+        `/api/files/content?path=${encodeURIComponent(path)}`
+      );
+      return data;
+    } catch {
+      return null;
     }
   }
 
