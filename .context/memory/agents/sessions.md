@@ -5377,3 +5377,20 @@ authoritative.
 **Verification:** new `tests/e2e/test_tool_talk_intent_gate.py` (3): CHAT greeting mentioning tools → exactly 1 model call, text streamed, no correction; WEB_SEARCH tool-talk → still recovers (corrective message present in a retry); plain CHAT → untouched. Revert-check: pre-fix the CHAT test fails with the exact `tool-talk detected (recovery 1/2)` log + no retry-assert; post-fix green. **2444 backend / 335 frontend**, ruff clean (2 pre-existing E501s untouched).
 
 **Commits:** product + context (pushed).
+## Session 375 — File preview dialog Preview/Edit/Diff modes (B-2026-08-23-18) — 2026-08-23
+
+**Task:** extend the FilePreviewDialog (B-2026-08-23-6) into a mode switcher: Preview / Edit / Diff — Diff shows the before/after when the file was edited this turn, reusing the edit_file diff data / DiffBlock.
+
+**Frontend (the feature):**
+- **Hook** (`useLocalMind.ts`) — new `case 'diff'` SSE handler: the backend already bridged `file_diff` obs events to a `diff` SSE event (hunks/language/filePath), but the frontend DROPPED it — `message.diffData` was never assigned anywhere and the inline DiffBlock in chat was dead code. Now each diff event populates a session-level `fileDiffs` map (keyed by path, latest wins, Windows-normalized) AND attaches to the current assistant message as `diffData` (reviving the inline chat DiffBlock). Cleared on session switch/new chat.
+- **FilePreviewDialog** — segmented Preview/Edit/Diff switcher (Eye/Pencil/GitPullRequest). Preview = existing renderers; Edit tab = existing text/spreadsheet edit flow; Diff tab renders `DiffBlock` (`showActions={false}`) with the captured hunks for the path. Tabs shown only when applicable (Edit when editable, Diff when hunks exist). `diffs` prop threaded WorkspaceLayout → LeftPanel + CenterPanel → ChatMessage.
+- Tests: 4 dialog (diff tab shows + renders hunks/stats, hidden without hunks, back to preview, edit/cancel interplay) + 1 hook (diff SSE → fileDiffs + message.diffData). 340 frontend, tsc + eslint clean.
+
+**Backend (live check exposed a REAL crash blocking the diff path):**
+- Live trace (isolated 8765, bankofai/deepseek-v4-flash): every native `edit_file` call died with `UnboundLocalError: cannot access local variable 'tool_result'` → the whole turn errored and NO diff event could ever fire. Root cause: the native tool-call path ran `Intent(tool_name)` but the tool is named `edit_file` while the Intent value is `file_edit` → ValueError → outer dispatch except marked the tool failed → the failed-branch emit referenced the never-assigned `tool_result`.
+- **Fix:** `_intent_for_tool()` (edit_file → FILE_EDIT, identity otherwise, unknown → SHELL) used at BOTH dispatch sites (native + MiniMax), plus `tool_result = None` bound up front so any pre-assignment exception can never leave it unbound. Also hardened the file_write/edit_file contract branches with `except Exception` → failed ToolResult (was `except KeyError` only).
+- Regression tests (`tests/e2e/test_file_diff_emission.py`, 3): `_intent_for_tool` mapping; a correct native edit_file call edits the file AND emits a `file_diff` obs event with hunks + absolute path (the Diff-mode data source); a malformed payload (content-only, no action) surfaces as a failed tool call without crashing. Revert-check: pre-fix the happy-path test fails. 2447 backend, ruff clean (2 pre-existing E501s).
+
+**Live:** crash fix proven live (failed edit_file calls now surface + model retries instead of killing the turn); the free-tier model's own edit_file attempts had wrong arg schemas (content-only, then `old_pattern`/`new_string` instead of `pattern`/`replace`) — a model-schema-compat note for a possible future tool-schema aliasing pass.
+
+**Commits:** product + context (pushed).
