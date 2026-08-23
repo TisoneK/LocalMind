@@ -5363,3 +5363,17 @@ authoritative.
 **Verification:** 4 new backend tests (newest-first order + metadata, limit honored, hidden-dir skip, traversal 403) + 6 new frontend tests (recent renders w/ size+mtime, recent row opens preview, open-in-OS file/folder, refresh, row metadata). **2441 backend / 335 frontend**, ruff + tsc + eslint clean (fixed a new set-state-in-effect warning; the search-effect warning is pre-existing). **Live** (isolated 8765, LOCALMIND_ALLOWED_FOLDERS scoped to a temp root): recent returned `[b.txt, c.md, a.txt]` newest-first with size/modified, hidden `.git/config` (made newest via utime) skipped, limit=2 honored, open-file returned the opened path, parent-dir traversal → 403.
 
 **Commits:** product + context (pushed).
+## Session 374 — "Garbled Approach on 'Hi'": tool-talk recovery was NOT intent-gated (user bug report) — 2026-08-23
+
+**User report:** on a plain "Hi" (deepseek-v4-flash), the chat streamed a garbled "Approach" (ThinkingBlock) in which the model's reasoning wrestled with "You described wanting to use a tool but did not call it. You MUST use the tool-calling API directly…" — a message the user never sent. Question: is the thinker or the system prompt corrupted?
+
+**Diagnosis (evidence-backed, neither thinker nor prompts corrupted):**
+- The "Approach" block is by design — ThinkingBlock (Session 211) renders the model's streamed `reasoning_content`; "Approach" label since Session 332-E.
+- The weird reasoning content is the model reacting to a **loop-injected corrective message** (`loop.py` tool-talk recovery, ~line 4389). The greeting happened to mention tools ("I'm ready to help — file work, research, coding…"), tripping `_is_tool_talk`. The recovery was NOT gated by intent (unlike the fabrication/forced-tool checks), so it fired on a CHAT turn where no tool is required: it suppressed the greeting and injected the accusation. The small model then spiraled reconciling "Hi needs no tool" with "you MUST call a tool" — that confusion IS the garbled Approach.
+- Root enabler: `INTENT_TOOL_SCOPES` has no CHAT entry → CHAT falls back to the full tool allowlist, so greetings that mention tools trip the detector.
+
+**Fix:** gate the tool-talk recovery on `intent in AGENT_INTENTS` — same gate the fabrication (iter-0 text-without-tool) and forced-tool checks already use. Conversational turns never get the correction; agent-intent behavior unchanged. One block edit in `loop.py` + comment documenting the live trace.
+
+**Verification:** new `tests/e2e/test_tool_talk_intent_gate.py` (3): CHAT greeting mentioning tools → exactly 1 model call, text streamed, no correction; WEB_SEARCH tool-talk → still recovers (corrective message present in a retry); plain CHAT → untouched. Revert-check: pre-fix the CHAT test fails with the exact `tool-talk detected (recovery 1/2)` log + no retry-assert; post-fix green. **2444 backend / 335 frontend**, ruff clean (2 pre-existing E501s untouched).
+
+**Commits:** product + context (pushed).
