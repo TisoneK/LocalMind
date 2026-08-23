@@ -336,6 +336,28 @@ describe('WorkspaceLayout', () => {
     expect(right.terminalLines).toEqual([]);
   });
 
+  it('auto-switches the right panel to the Memory tab when a memory_op tool runs (B-2026-08-23-15)', () => {
+    setup({
+      activeToolCalls: [
+        { id: 'call_m1', name: 'memory_op', status: 'running', input: 'store', label: '', duration: undefined },
+      ],
+    });
+    const right = mockPanelProps.right;
+    expect(right.forceMemoryTab).toBe(true);
+    expect(right.onMemoryTabShown).toBeTypeOf('function');
+  });
+
+  it('does not force the Memory tab for non-memory tools (B-2026-08-23-15)', () => {
+    setup({
+      activeToolCalls: [
+        { id: 'call_s', name: 'shell', status: 'running', input: 'ls', label: '', duration: undefined },
+      ],
+    });
+    const right = mockPanelProps.right;
+    expect(right.forceMemoryTab).toBe(false);
+    expect(right.forceTerminalTab).toBe(true); // shell still switches Terminal
+  });
+
   it('auto-activates the Agents tab when a parent turn starts (ADR-34 B-9)', () => {
     setup({
       isStreaming: true,

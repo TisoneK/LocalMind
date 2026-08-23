@@ -240,6 +240,11 @@ export function WorkspaceLayout() {
   // events (ack, understanding, plan, tool evidence, synthesis) arrive
   // in real-time, not be hidden behind the Observe tab.
   const [forceAgentsTab, setForceAgentsTab] = useState(false);
+  // B-2026-08-23-15: Auto-switch right panel to Memory tab when the agent
+  // runs a memory_op tool (store/recall/forget) so the user sees the fact
+  // land in memory immediately. Flag consumed by RightPanel exactly like
+  // forceTerminalTab/forceAgentsTab (unconditional consume).
+  const [forceMemoryTab, setForceMemoryTab] = useState(false);
   // "New Chat" returns the left sidebar to the Chat tab (it may be stuck on
   // Actions/Files from the previous session's tool activity).
   const [forceChatTab, setForceChatTab] = useState(false);
@@ -259,6 +264,18 @@ export function WorkspaceLayout() {
     }
     prevParentRunning.current = parentRunning;
   }, [agentRuns, rightPanelCollapsed]);
+
+  // B-2026-08-23-15: memory_op tool activity → Memory tab (like the shell →
+  // Terminal switch above). memory_op is the agent's explicit memory tool
+  // (store/recall/forget/list) — a real signal the user should see.
+  useEffect(() => {
+    if (activeToolCalls.some(tc => tc.name === 'memory_op' && isActiveToolStatus(tc.status))) {
+      setForceMemoryTab(true);
+      if (rightPanelCollapsed) {
+        setRightPanelCollapsed(false);
+      }
+    }
+  }, [activeToolCalls, rightPanelCollapsed]);
 
   // Handle new chat
   const handleNewChat = useCallback(() => {
@@ -456,6 +473,8 @@ export function WorkspaceLayout() {
           onTerminalTabShown={() => setForceTerminalTab(false)}
           forceAgentsTab={forceAgentsTab}
           onAgentsTabShown={() => setForceAgentsTab(false)}
+          forceMemoryTab={forceMemoryTab}
+          onMemoryTabShown={() => setForceMemoryTab(false)}
           width={rightPanelWidth}
           onModelsRefresh={refreshModels}
         />

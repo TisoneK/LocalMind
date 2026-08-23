@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Terminal, Brain, PanelRightClose, PanelRight, Settings } from 'lucide-react';
 import { TerminalLine, MemoryFact, PerformanceMetrics as PerformanceMetricsType, CompletionSuggestion, SessionStats, AgentRun } from '@/types';
 import { TerminalPanel } from '@/components/panels/TerminalPanel';
@@ -52,6 +52,10 @@ interface RightPanelProps {
   forceAgentsTab?: boolean;
   /** Called after the Agents tab has been shown */
   onAgentsTabShown?: () => void;
+  /** B-2026-08-23-15: Force the Memory tab when a memory_op tool runs. */
+  forceMemoryTab?: boolean;
+  /** Called after the Memory tab has been shown */
+  onMemoryTabShown?: () => void;
   width?: number;
   /** Called when settings change so the parent can refresh its model list */
   onModelsRefresh?: () => Promise<void>;
@@ -89,6 +93,8 @@ export function RightPanel({
   onTerminalTabShown,
   forceAgentsTab,
   onAgentsTabShown,
+  forceMemoryTab,
+  onMemoryTabShown,
   width = 320,
   onModelsRefresh,
 }: RightPanelProps) {
@@ -111,25 +117,49 @@ export function RightPanel({
   const refreshModels = onModelsRefresh || (() => Promise.resolve());
   const isCompact = width < 250;
 
-  // FIX 4: When the parent signals to force the terminal tab, switch to it
+  // B-2026-08-23-15: consume the force flags UNCONDITIONALLY (the forceChatTab
+  // fix). The old guarded consume (`activeTab !== target`) left the flag set
+  // when the user was already on the target tab, so a LATER event (another
+  // force flag, a tool event) could re-fire it and yank the panel away from
+  // the user's current tab. Consuming always — even when already on the target
+  // — means the flag is gone before any later signal can race it. Each flag
+  // fires at most once per activation (a consumed ref, since the setActiveTab
+  // below re-runs this effect via the activeTab dep).
+  const terminalConsumed = useRef(false);
   useEffect(() => {
-    if (forceTerminalTab && activeTab !== 'terminal') {
-      setActiveTab('terminal');
-      onTerminalTabShown?.();
+    if (!forceTerminalTab) {
+      terminalConsumed.current = false;
+      return;
     }
+    if (terminalConsumed.current) return;
+    terminalConsumed.current = true;
+    if (activeTab !== 'terminal') setActiveTab('terminal');
+    onTerminalTabShown?.();
   }, [forceTerminalTab, activeTab, onTerminalTabShown]);
 
-  // ADR-34 B-9: When a parent turn starts (initialization begins), auto-activate
-  // the Agents tab so the user sees the canonical live workspace immediately.
-  // This does NOT fight forceTerminalTab — forceTerminalTab fires later (when a
-  // shell/code_exec tool starts) and takes priority because it's a more specific
-  // signal. forceAgentsTab fires once at turn start and is cleared by the parent.
+  const agentsConsumed = useRef(false);
   useEffect(() => {
-    if (forceAgentsTab && activeTab !== 'agents') {
-      setActiveTab('agents');
-      onAgentsTabShown?.();
+    if (!forceAgentsTab) {
+      agentsConsumed.current = false;
+      return;
     }
+    if (agentsConsumed.current) return;
+    agentsConsumed.current = true;
+    if (activeTab !== 'agents') setActiveTab('agents');
+    onAgentsTabShown?.();
   }, [forceAgentsTab, activeTab, onAgentsTabShown]);
+
+  const memoryConsumed = useRef(false);
+  useEffect(() => {
+    if (!forceMemoryTab) {
+      memoryConsumed.current = false;
+      return;
+    }
+    if (memoryConsumed.current) return;
+    memoryConsumed.current = true;
+    if (activeTab !== 'memory') setActiveTab('memory');
+    onMemoryTabShown?.();
+  }, [forceMemoryTab, activeTab, onMemoryTabShown]);
 
   // Listen for 'localmind:activate-terminal' from code block Run buttons
   useEffect(() => {
