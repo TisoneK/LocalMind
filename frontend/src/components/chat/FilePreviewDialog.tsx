@@ -37,10 +37,12 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
   const [content, setContent] = useState<FileContent | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Edit mode (B-2026-08-23-6 follow-up): only for text/code files, saved back
-  // through the same POST /api/confirm-write permission gate the agent uses.
+  // Edit mode (B-2026-08-23-6 follow-up): text/code files AND spreadsheet
+  // cells, saved back through the same POST /api/confirm-write gate the agent
+  // uses (text via `content`, spreadsheets via the structured `sheets` payload).
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [draftSheets, setDraftSheets] = useState<{ name: string; rows: string[][]; truncated?: boolean }[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -61,6 +63,7 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
     setSaveError(null);
     setSavedFlash(false);
     setActiveSheet(0);
+    setDraftSheets([]);
     localmindClient.getFileContent(path).then((data) => {
       if (cancelled) return;
       setLoading(false);
@@ -80,24 +83,72 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
   const isMarkdown = content?.extension === 'md' || content?.extension === 'markdown';
   const isCode = !isMarkdown && !!content?.extension && _CODE_EXTS.has(content.extension);
   const bodyText = content?.text ?? '';
-  const canEdit = !!content && content.editable === true && !isImage;
   const sheets = content?.sheets ?? [];
-  const activeRows = sheets[activeSheet]?.rows ?? [];
+  // Spreadsheet cells are editable only when NO sheet was truncated — saving a
+  // capped grid would silently delete the rows the preview didn't load.
+  const canEditSpreadsheet = sheets.length > 0 && !sheets.some((s) => s.truncated);
+  const canEditText = !!content && content.editable === true && !isImage && sheets.length === 0;
+  const canEdit = canEditText || canEditSpreadsheet;
+  const isSpreadsheet = sheets.length > 0;
+  // In edit mode cells are edited in the draft copy; otherwise show the server rows.
+  const viewSheets = isEditing && draftSheets.length > 0 ? draftSheets : sheets;
+  const activeRows = viewSheets[activeSheet]?.rows ?? [];
+
+  const startEdit = () => {
+    setSaveError(null);
+    if (isSpreadsheet) {
+      setDraftSheets(sheets.map((s) => ({ name: s.name, rows: s.rows.map((r) => [...r]) })));
+    } else {
+      setDraft(content?.text ?? '');
+    }
+    setIsEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setSaveError(null);
+    setDraft(content?.text ?? '');
+    setDraftSheets([]);
+  };
+
+  const setCell = (rowIdx: number, colIdx: number, value: string) => {
+    setDraftSheets((prev) =>
+      prev.map((s, si) =>
+        si === activeSheet
+          ? {
+              ...s,
+              rows: s.rows.map((r, ri) =>
+                ri === rowIdx ? r.map((c, ci) => (ci === colIdx ? value : c)) : r
+              ),
+            }
+          : s
+      )
+    );
+  };
 
   const handleSave = async () => {
     if (!path || saving) return;
     setSaving(true);
     setSaveError(null);
     try {
-      await localmindClient.confirmWrite(path, draft);
+      if (isSpreadsheet) {
+        await localmindClient.confirmWrite(
+          path,
+          '',
+          draftSheets.map((s) => ({ name: s.name, rows: s.rows }))
+        );
+      } else {
+        await localmindClient.confirmWrite(path, draft);
+      }
       setSaving(false);
       setIsEditing(false);
       setSavedFlash(true);
-      // Refresh size + text from disk so the preview matches the saved file.
+      // Refresh size + content from disk so the preview matches the saved file.
       const fresh = await localmindClient.getFileContent(path);
       if (fresh) {
         setContent(fresh);
         setDraft(fresh.text ?? '');
+        setDraftSheets([]);
       }
       setTimeout(() => setSavedFlash(false), 2500);
     } catch {
@@ -139,11 +190,7 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
             )}
             {canEdit && !isEditing && (
               <button
-                onClick={() => {
-                  setDraft(content?.text ?? '');
-                  setSaveError(null);
-                  setIsEditing(true);
-                }}
+                onClick={startEdit}
                 className="flex items-center gap-1 px-2 py-1 rounded text-[10px] border border-brand-border text-brand-green-muted hover:text-brand-green hover:border-brand-green/40 transition-colors"
               >
                 <Pencil className="h-3 w-3" />
@@ -153,11 +200,7 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
             {canEdit && isEditing && (
               <>
                 <button
-                  onClick={() => {
-                    setIsEditing(false);
-                    setDraft(content?.text ?? '');
-                    setSaveError(null);
-                  }}
+                  onClick={cancelEdit}
                   className="flex items-center gap-1 px-2 py-1 rounded text-[10px] border border-brand-border text-brand-green-muted hover:text-brand-green transition-colors"
                 >
                   <RotateCcw className="h-3 w-3" />
@@ -241,10 +284,24 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
                         {row.map((cell, ci) => (
                           <td
                             key={ci}
-                            title={cell}
-                            className="px-2 py-1 text-xs text-brand-green-soft border-b border-brand-border/40 max-w-[320px] truncate"
+                            className="px-0.5 py-0 text-xs text-brand-green-soft border-b border-brand-border/40 max-w-[320px]"
                           >
-                            {cell || '\u00A0'}
+                            {isEditing ? (
+                              <input
+                                value={cell}
+                                onChange={(e) => setCell(ri + 1, ci, e.target.value)}
+                                spellCheck={false}
+                                aria-label={`Cell ${ri + 1},${ci + 1}`}
+                                className="w-full min-w-[80px] bg-transparent px-1.5 py-1 text-xs text-brand-green-soft outline-none focus:bg-brand-green/5 focus:ring-1 focus:ring-brand-green/40 rounded truncate"
+                              />
+                            ) : (
+                              <span
+                                title={cell}
+                                className="block px-1.5 py-1 truncate"
+                              >
+                                {cell || '\u00A0'}
+                              </span>
+                            )}
                           </td>
                         ))}
                       </tr>
@@ -255,7 +312,7 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
                   <div className="px-4 py-6 text-brand-green-muted text-xs">(empty sheet)</div>
                 )}
               </div>
-              {sheets[activeSheet]?.truncated && (
+              {viewSheets[activeSheet]?.truncated && (
                 <div className="px-3 py-1.5 text-[10px] text-brand-amber border-t border-brand-border/60 shrink-0">
                   Rows/columns truncated for preview — open the file to see everything.
                 </div>
@@ -277,7 +334,7 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
               <ReactMarkdown>{bodyText}</ReactMarkdown>
             </div>
           )}
-          {!loading && !error && !isImage && !isMarkdown && !isEditing && (
+          {!loading && !error && !isImage && !isMarkdown && !isEditing && !isSpreadsheet && (
             <pre
               className={`px-4 py-3 text-xs leading-relaxed whitespace-pre-wrap break-words ${
                 isCode
@@ -288,7 +345,7 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
               {bodyText || '(empty file)'}
             </pre>
           )}
-          {!loading && !error && !isImage && isEditing && (
+          {!loading && !error && !isImage && isEditing && !isSpreadsheet && (
             <div className="flex flex-col h-full">
               <textarea
                 value={draft}

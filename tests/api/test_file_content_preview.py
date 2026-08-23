@@ -159,6 +159,90 @@ class TestFileContentPreview:
         # Header + cap rows.
         assert len(sheet["rows"]) == 201
 
+    def test_xlsx_edit_round_trip_via_confirm_write(self, tmp_path):
+        from openpyxl import Workbook, load_workbook
+
+        from api.routes.filesystem import ConfirmWriteRequest, confirm_write
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sales"
+        ws.append(["item", "qty"])
+        ws.append(["apple", 3])
+        ws.append(["pear", 2])
+        f = tmp_path / "book.xlsx"
+        wb.save(f)
+
+        patcher = _allow(tmp_path)
+        try:
+            before = _run(get_file_content(str(f)))
+            # Edit qty of apple: 3 -> 9; keep everything else identical.
+            sheets = before["sheets"]
+            sheets[0]["rows"][1][1] = "9"
+            resp = _run(
+                confirm_write(ConfirmWriteRequest(path=str(f), content="", sheets=sheets))
+            )
+            assert resp["mode"] == "spreadsheet"
+            after = _run(get_file_content(str(f)))
+        finally:
+            patcher.stop()
+
+        assert after["sheets"][0]["rows"][1] == ["apple", "9"]
+        # Type inference: the edited value was written as a real number.
+        saved = load_workbook(f, data_only=True)
+        assert saved["Sales"]["B2"].value == 9
+        assert isinstance(saved["Sales"]["B2"].value, int)
+
+    def test_csv_edit_round_trip_via_confirm_write(self, tmp_path):
+        from api.routes.filesystem import ConfirmWriteRequest, confirm_write
+
+        f = tmp_path / "data.csv"
+        f.write_text("name,score\nalice,10\nbob,20\n", encoding="utf-8")
+        patcher = _allow(tmp_path)
+        try:
+            before = _run(get_file_content(str(f)))
+            before["sheets"][0]["rows"][2] = ["bob", "99"]
+            _run(confirm_write(ConfirmWriteRequest(path=str(f), content="", sheets=before["sheets"])))
+            after = _run(get_file_content(str(f)))
+        finally:
+            patcher.stop()
+
+        assert after["sheets"][0]["rows"][2] == ["bob", "99"]
+        assert "bob,99" in f.read_text(encoding="utf-8")
+
+    def test_spreadsheet_write_refuses_truncated_grid(self, tmp_path):
+        from openpyxl import Workbook
+
+        from api.routes.filesystem import ConfirmWriteRequest, confirm_write
+
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["n"])
+        for i in range(250):
+            ws.append([i])
+        f = tmp_path / "big.xlsx"
+        wb.save(f)
+
+        patcher = _allow(tmp_path)
+        try:
+            # A capped preview grid (3 rows) must never overwrite the 251-row file.
+            with pytest.raises(Exception) as exc:
+                _run(
+                    confirm_write(
+                        ConfirmWriteRequest(
+                            path=str(f),
+                            content="",
+                            sheets=[{"name": "Sheet", "rows": [["n"], ["0"], ["1"]]}],
+                        )
+                    )
+                )
+            assert exc.value.status_code == 400
+        finally:
+            patcher.stop()
+
+        # The original file is untouched.
+        assert len(wb.sheetnames) == 1
+
     def test_path_outside_allowed_folders_403(self, tmp_path):
         f = tmp_path / "secret.txt"
         f.write_text("nope", encoding="utf-8")

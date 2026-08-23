@@ -47,7 +47,10 @@ class OpenFileRequest(BaseModel):
 
 class ConfirmWriteRequest(BaseModel):
     path: str
-    content: str
+    content: str = ""
+    # Structured per-sheet rows for spreadsheet writes (xlsx/csv). When present,
+    # the write goes through write_spreadsheet instead of the plain-text _do_write.
+    sheets: list[dict] | None = None
 
 
 class FileListRequest(BaseModel):
@@ -318,18 +321,38 @@ def _human_size(n: int) -> str:
 
 @router.post("/confirm-write")
 async def confirm_write(req: ConfirmWriteRequest):
-    """Execute a previously permission-gated file write."""
-    from tools.file_writer import _do_write
+    """Execute a previously permission-gated file write.
+
+    Plain text/code files go through _do_write with `content`. Spreadsheet
+    files (xlsx/csv) go through write_spreadsheet with the structured `sheets`
+    payload the preview editor sends — writing a text blob over an xlsx would
+    corrupt it.
+    """
+    from tools.file_writer import _do_write, write_spreadsheet
 
     path = Path(req.path).resolve()
 
     if not settings.is_path_allowed(path):
         raise HTTPException(status_code=403, detail="Path is outside allowed folders")
 
+    if req.sheets is not None:
+        try:
+            result = await write_spreadsheet(path, req.sheets)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {
+            "path": result.metadata.get("path", ""),
+            "filename": result.metadata.get("filename", ""),
+            "bytes": result.metadata.get("bytes", 0),
+            "mode": "spreadsheet",
+            "content": result.content,
+        }
+
     result = await _do_write(path, req.content)
     return {
         "path": result.metadata.get("path", ""),
         "filename": result.metadata.get("filename", ""),
         "bytes": result.metadata.get("bytes", 0),
+        "mode": "text",
         "content": result.content,
     }

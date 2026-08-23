@@ -31,7 +31,10 @@ function textContent(overrides: Record<string, unknown> = {}) {
 
 describe('FilePreviewDialog', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // resetAllMocks (not clearAllMocks): a failed test can leave queued
+    // mockResolvedValueOnce values that would otherwise bleed into the next
+    // test's renders (clearAllMocks keeps the once-queue).
+    vi.resetAllMocks();
   });
 
   it('renders nothing when no path is given', () => {
@@ -148,6 +151,86 @@ describe('FilePreviewDialog', () => {
       expect(
         await screen.findByText(/rows.*columns truncated for preview/i)
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('spreadsheet edit mode', () => {
+    it('edits cells and saves the structured sheets through confirmWrite', async () => {
+      mockClient.getFileContent
+        .mockResolvedValueOnce(
+          textContent({
+            extension: 'xlsx',
+            editable: false,
+            sheets: [
+              { name: 'Sales', rows: [['item', 'qty'], ['apple', '3'], ['pear', '2']] },
+            ],
+          })
+        )
+        .mockResolvedValueOnce(
+          textContent({
+            extension: 'xlsx',
+            editable: false,
+            sheets: [
+              { name: 'Sales', rows: [['item', 'qty'], ['apple', '9'], ['pear', '2']] },
+            ],
+          })
+        );
+      mockClient.confirmWrite.mockResolvedValue({ path: '/tmp/book.xlsx', filename: 'book.xlsx' });
+      render(<FilePreviewDialog path="/tmp/book.xlsx" onClose={() => {}} />);
+
+      await screen.findByRole('cell', { name: /apple/i });
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }));
+
+      // Cells become inputs — edit qty from 3 to 9 (first data row, 2nd column).
+      const qtyInput = screen.getByLabelText('Cell 1,2') as HTMLInputElement;
+      expect(qtyInput.value).toBe('3');
+      await userEvent.clear(qtyInput);
+      await userEvent.type(qtyInput, '9');
+      await userEvent.click(screen.getByRole('button', { name: /save/i }));
+
+      expect(mockClient.confirmWrite).toHaveBeenCalledWith(
+        '/tmp/book.xlsx',
+        '',
+        [{ name: 'Sales', rows: [['item', 'qty'], ['apple', '9'], ['pear', '2']] }]
+      );
+      // Re-fetched preview shows the saved value.
+      expect(await screen.findByRole('cell', { name: /9/i })).toBeInTheDocument();
+    });
+
+    it('hides the Edit button when a sheet was truncated (would lose rows)', async () => {
+      mockClient.getFileContent.mockResolvedValue(
+        textContent({
+          extension: 'xlsx',
+          editable: false,
+          sheets: [{ name: 'Big', rows: [['n'], ['1']], truncated: true }],
+        })
+      );
+      render(<FilePreviewDialog path="/tmp/big.xlsx" onClose={() => {}} />);
+
+      // The truncation note confirms the sheet loaded (and Edit must stay hidden).
+      await screen.findByText(/rows.*columns truncated for preview/i);
+      expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument();
+    });
+
+    it('Cancel restores the original cell values', async () => {
+      mockClient.getFileContent.mockResolvedValue(
+        textContent({
+          extension: 'csv',
+          editable: false,
+          sheets: [{ name: 'Sheet 1', rows: [['name'], ['alice']] }],
+        })
+      );
+      render(<FilePreviewDialog path="/tmp/data.csv" onClose={() => {}} />);
+
+      await screen.findByRole('cell', { name: /alice/i });
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }));
+      const input = screen.getByLabelText('Cell 1,1');
+      await userEvent.clear(input);
+      await userEvent.type(input, 'zed');
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+      expect(screen.queryByLabelText('Cell 1,1')).not.toBeInTheDocument();
+      expect(screen.getByRole('cell', { name: /alice/i })).toBeInTheDocument();
     });
   });
 

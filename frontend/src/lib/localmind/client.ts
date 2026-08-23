@@ -1082,10 +1082,14 @@ class LocalMindClient {
 
   // ── File Write Confirmation ─────────────────────────────────────────
 
-  async confirmWrite(path: string, content: string): Promise<{ path: string; filename: string }> {
+async confirmWrite(
+    path: string,
+    content: string,
+    sheets?: { name: string; rows: string[][]; truncated?: boolean }[]
+  ): Promise<{ path: string; filename: string }> {
     return this.request('/api/confirm-write', {
       method: 'POST',
-      body: JSON.stringify({ path, content }),
+      body: JSON.stringify({ path, content, sheets: sheets ?? undefined }),
     });
   }
 

@@ -622,6 +622,122 @@ async def _do_write(
         )
 
 
+def _infer_cell(value: str):
+    """Best-effort string → typed cell value for spreadsheet writes.
+
+    Empty string becomes None (clears the cell); True/False become booleans;
+    integer and decimal strings become numbers; everything else stays text.
+    This is deliberately conservative — date/time cells come back as text.
+    """
+    if value == "":
+        return None
+    lowered = value.strip().lower()
+    if lowered in ("true", "false"):
+        return lowered == "true"
+    if re.fullmatch(r"-?\d+", value):
+        return int(value)
+    if re.fullmatch(r"-?\d+\.\d+", value):
+        return float(value)
+    return value
+
+
+async def write_spreadsheet(filepath: Path, sheets: list[dict]) -> ToolResult:
+    """Write structured per-sheet rows back to an .xlsx or .csv file.
+
+    Used by the preview edit flow (POST /api/confirm-write with a `sheets`
+    payload) — the same permission gate as text writes, but for binary
+    spreadsheet formats that _do_write (plain text) would corrupt.
+
+    Data-loss guard: the preview caps sheets at MAX_SHEET_ROWS/MAX_SHEET_COLS,
+    so a truncated grid must never be written over the full file. Before
+    writing we compare the incoming grid against the existing file and refuse
+    when any sheet has FEWER rows than what's on disk.
+    """
+    import asyncio
+    import csv
+    import io
+
+    ext = filepath.suffix.lower()
+    if ext not in (".xlsx", ".csv"):
+        raise ValueError(f"Unsupported spreadsheet extension: {ext}")
+
+    def _build_xlsx() -> bytes:
+        from openpyxl import Workbook, load_workbook
+
+        wb = Workbook()
+        wb.remove(wb.active)
+        if filepath.exists():
+            existing = load_workbook(filepath, read_only=True)
+            for sheet in sheets:
+                name = sheet.get("name", "")
+                if name in existing.sheetnames:
+                    incoming_rows = len(sheet.get("rows", []))
+                    if incoming_rows < existing[name].max_row:
+                        raise ValueError(
+                            f"Sheet '{name}' has fewer rows than the file on disk "
+                            f"({incoming_rows} vs {existing[name].max_row}) — the preview "
+                            "caps large sheets, so row-removing edits are refused here; "
+                            "open the file in a spreadsheet app to edit it fully."
+                        )
+            existing.close()
+        for sheet in sheets:
+            name = sheet.get("name", "Sheet 1")
+            ws = wb.create_sheet(title=name)
+            for row in sheet.get("rows", []):
+                ws.append([_infer_cell(str(c)) for c in row])
+        buf = io.BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
+    def _build_csv() -> bytes:
+        if not sheets:
+            raise ValueError("No sheets provided")
+        rows = sheets[0].get("rows", [])
+        if filepath.exists():
+            with open(filepath, "r", encoding="utf-8", errors="replace") as fh:
+                existing_lines = sum(1 for _ in fh)
+            if len(rows) < existing_lines:
+                raise ValueError(
+                    f"File has fewer rows than on disk ({len(rows)} vs "
+                    f"{existing_lines}) — the preview caps large files, so "
+                    "row-removing edits are refused here; open the file in a "
+                    "spreadsheet app to edit it fully."
+                )
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        for row in rows:
+            writer.writerow(["" if c is None else str(c) for c in row])
+        return buf.getvalue().encode("utf-8")
+
+    def _do_write() -> ToolResult:
+        _cleanup_cache()
+        if ext == ".xlsx":
+            data = _build_xlsx()
+        else:
+            data = _build_csv()
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        filepath.write_bytes(data)
+        size = len(data)
+        logger.info("[file_writer] wrote spreadsheet %dB → %s", size, filepath)
+        return ToolResult(
+            content=f"Wrote {size} bytes to {filepath}.",
+            risk=RiskLevel.LOW,
+            source="file_writer",
+            metadata={
+                "path": str(filepath),
+                "filename": filepath.name,
+                "bytes": size,
+                "sheets": len(sheets),
+            },
+        )
+
+    try:
+        return await asyncio.to_thread(_do_write)
+    except ValueError as e:
+        logger.warning("[file_writer] spreadsheet write refused: %s", e)
+        raise
+
+
 async def write_file(message: str) -> ToolResult:
     from core.config import settings
 
