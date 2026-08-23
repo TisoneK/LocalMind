@@ -4831,3 +4831,92 @@ program + ADR-22). -->
 - **Mechanism (read the code, not assumptions):** init call → 429 → `is_terminal_pre_generation_error` (True only for quota-exhaustion class 429s; burst 429s stay retryable) → `TerminalProviderError` → `agent_runtime._process_unlocked` (line 1368) emits `agent_loop_error` + persists the turn with the error + yields `StreamChunk(text="", done=True, error=raw)` → `chat.py` line 653-666 turns `chunk.error` into SSE `{"type":"error","error":normalize_error(…)}` → frontend `useLocalMind.ts` `case 'error'` (line 1419) stores the canonical error object on the message → `ChatMessage` renders `ErrorMessage` (has a dedicated 429 test). `text=""` on errors is intentional per the ADR-20 comment.
 - **Verdict: NOT a silent drop — downgrade + close.** The empty text was a bankofai 429 surfaced as a designed error card. Two subsequent live re-runs (Thinker-fix session, Session 346) show CONV-06 with full text on every turn. The S31 silent-failure contract covers empty streams WITH NO error; this has an explicit error event.
 - **Bonus:** this same evidence resolves B-2026-08-20-11 ("429 → empty bubble", open since Aug 20): the current end-to-end path renders a friendly rate-limit card, so the old symptom can't occur on current code; marked done by cross-reference. B-2026-08-20-20 (deepseek reasoning-capped → empty-reasoning recovery) is a different class (empty stream, no error) and stays open.
+
+---
+
+## RECONSTRUCTION — Sessions 332–340 (2026-08-21/22, mainline work by Tisone)
+
+NOTE: Sessions 332–340 shipped real work on the mainline (Linux dev box) but were
+NEVER logged in this file — the gap was found in Session 341 (`agents/sessions.md`
+stopped at 331). Reconstructed on 2026-08-22 (Session 348) from git history
+(commits `32c56a4..a084c9f`, all authored by Tisone) plus the evidence docs that
+WERE kept: `.context/memory/system/live-testing.md` (332–335 tables) and
+`.context/memory/system/test-results-336.md` + `test-catalog.md` (336–340).
+Per the append-only rule these entries are appended here, not inserted
+chronologically. Where a number came from a commit body vs a doc, the doc is
+authoritative.
+
+## 2026-08-21 — Session 332 — cyber-café duplicate-answer bug fixed (four fixes: 332-B/C/D/E)
+
+- **Task:** user live trace — the cyber-café prompt produced TWO complete competing answers in one chat bubble (baseline SSE: 2 token events, 516 words).
+- **332-B (`32c56a4`)** — root cause: `loop.py` streamed `chunk.text` live BEFORE `_acceptance_gate_at_final_answer` ran; when the gate failed (ANALYZE intent + zero tools → no evidence), the loop `continue`d and iteration 2 streamed MORE text into the same bubble (frontend `useLocalMind.ts:690-726` accumulates token events with no boundary awareness). Fix: buffer per-iteration text (Path 1 + Path 2), yield ONLY after the gate confirms `is_final`; on gate failure discard the doomed iteration's text + emit `agent_loop_iteration_discarded`. LIVE: 2 token events/516 words → 1/295.
+- **332-C (`8bdeb8c`)** — wire `is_trivial_input` + `is_conversational_question` into `agent_runtime._process_unlocked` (fast-path BEFORE the parent pipeline, mirroring persistence + observability epilog); extend `_CONVERSATIONAL_OPENERS` with brainstorming imperatives (give me / suggest / propose / recommend / brainstorm). LIVE: cyber-café 13.4s→8.6s, 2→340 streamed tokens, thinking 392→0; "Hello" 0.0s canned (zero LLM); "capital of France" 1.6s.
+- **332-D (`7086fbd`)** — scope the action-narration detector to tool-implying prompts only (new `message_implies_tool_action` in `trivial_input.py`, lazy-imported to dodge the circular import). The UNNECESSARY replan was the true root cause of the duplicate (332-B patched the emission symptom). LIVE: "Ideas for improving a cyber café business." → 1 token event, 148 words, NO replan/duplicate; "Find files in /tmp" → detector still fires (correct).
+- **332-E (`dbc49fa`)** — UI: rename 'Thought process' → 'Approach' (thinking still expandable). Frontend 262/262, TS build clean, backend 2098/2098.
+- **Logs:** `13fcb1f`, `7400d5b`, `d7de7cf`. Evidence tables in `live-testing.md`.
+
+## 2026-08-21 — Session 333 — cleared all 10 pre-existing test failures
+
+- **Task:** baseline had 10 failing tests (on top of 332's cyber-café fix); clear them root-cause style.
+- **Fixes (`ea8ed80`):** (1) stage_timing — 332-C's fast-path emitted `status='fast_path'` instead of `'skipped'` + missed the `generate` emit → now skipped/done with real latency; (2) `UnboundLocalError` — a redundant local import of `parse_initialization` inside the fast-path if-block shadowed the module import for the whole function (parent path at line 1192); (3) shell error-recovery directive missing the 'honestly' wording in both OS branches (test contract requires it for ALL unknown error types); (4) init prompt budget 3000→3500 (S331's clarify-exception + ACT-not-ask refinements grew it to 3453); (5) `tests/` wasn't a package → added `__init__.py` everywhere + repo root to pythonpath.
+- **Result:** full backend 2108 pass / 0 fail / 2 skip (was 2098 + 10 fail); frontend 262/0. LIVE: cyber-café 5.3s, 1 token event, 213 words; hello 0.0s.
+- **Logs:** `1a2bd51` → live-testing.md.
+
+## 2026-08-21 — Session 334 — stopped system-prompt pollution from workspace context
+
+- **Task:** user's branch-count question ("We have three branches… one closed… opened two new… how many now?") was polluted by the git workspace context injected every parent-loop iteration — 5.7s, 2,146 prompt tokens, model wasted tokens wondering if 'branches' meant git.
+- **Fixes (`e200baf`):** (1) conversational fast-path now also accepts short complete thoughts ending in '?' (≥5 words, no opener required — previously required what/who/how at start); caps bumped 140ch/20w → 200ch/25w; (2) `workspace_state` injection gated by `message_implies_tool_action` — git subprocesses don't even run on conversational turns (~100ms saved + prompt tokens).
+- **LIVE table:** branch-count 5.7s/2146 ptoks → 1.4s/~150; "10 apples - 3 = ?" 2.8s fast-path; cyber-café 4.3s (from 8.6s S332); hello 0.0s; capital of France 1.3s. All 0 tools, 0 thinking, correct ("You currently have 4 branches.").
+- **Tests:** 5 new in test_trivial_input.py; backend 2113 pass / 0 fail / 2 skip. Log `7f24643`.
+
+## 2026-08-21 — Session 335 — knowledge imperatives bypass the blocked-keyword guard
+
+- **Task:** "Summarize the difference between RAM and storage." leaked system-prompt text (the model's Approach block quoted 'The instruction says: "For ordinary conversation, answer directly…"'). Root cause: 'RAM' is a sysinfo blocked keyword, 'Summarize' wasn't an opener → fell into the parent pipeline → 2 iterations, 13.0s, 2,086 prompt tokens, thinking stream leaked reasoning + quoted instructions.
+- **Fixes (`9efaea1`):** (1) knowledge-imperative openers join the fast-path: summarize, compare, contrast, outline, list, name; (2) `_CONVERSATIONAL_BLOCKED_RE` bypassed when the message starts with a knowledge imperative (RAM is the TOPIC, not a sysinfo request); (3) debugging keywords (error, bug, exception, crash, traceback, failed, failure) stay HARD-blocked even under knowledge imperatives ("Explain this error message" needs tools); (4) `message_implies_tool_action` returns False for knowledge imperatives.
+- **LIVE:** RAM/storage 13.0s/2086 ptoks/2 iter/leak → 2.2s/~150/1 iter/0 leak; Compare TCP/UDP 5.6s fast-path (238-word table). 0 tools, 0 thinking leak, 0 workspace pollution.
+- **Tests:** 7 new; backend 2120 pass / 0 fail / 2 skip. Log `ec7b969`.
+
+## 2026-08-21 — Session 336 — 52-test benchmark suite + 4 root-cause clusters diagnosed
+
+- **Built (`98d5c46`):** `scripts/lm_benchmark.py` — per-test 60s timeout, 15s cooldown (bankofai rate-limit safe), 429 detection inside SSE + 30s backoff + single retry, partial-results save after every test, KeyboardInterrupt-safe. Documented the full catalog in `.context/memory/system/test-catalog.md` (24 categories + 7 sub-suites).
+- **Ran 52 tests on bankofai/deepseek-v4-flash:** **41 PASS / 5 PARTIAL / 6 FAIL** (50 unique + 2 re-runs).
+- **Diagnosed 4 ROOT-CAUSE CLUSTERS (not symptoms):** A. tool-first reflex (5 FAIL + 4 PARTIAL — parent agent explores the workspace even for hallucination/planning/clarify prompts; CAT14-1/5, CAT6-1/2, CAT9-2, LM-AG-002, CAT2-2/6); B. workspace pollution on planning prompts (2 PARTIAL — CAT6-1/2 still get workspace_state despite S334 because 'build'/'plugin' imply tools); C. pressure-induced fabrication (1 FAIL — CAT14-5); D. contradiction recognition (1 FAIL — LM-RL-003).
+- **Strengths (100%, post-332-335):** CAT1 6/6, LM-CP 4/4, LM-CF 4/4, LM-CS 3/3, LM-MATH 4/4, CAT15 2/2.
+- **Recommended next:** 337-A..D root-cause patches. Evidence: `test-results-336.md`.
+
+## 2026-08-21 — Session 337 — 4-cluster pre-init guards (hallucination/planning/pressure/contradiction)
+
+- **New module (`8e5a206`):** `backend/src/core/agent/pre_init_classifier.py` — Cluster A: hallucination-class prompts ("What did John tell me?" / password / private repo) → direct refusal, no tools; Cluster B: analyze-only ("do not write code yet" / "first analyze") → skip workspace_state injection + skip action-narration detector; Cluster C: pressure + sensitive topic → refusal-strengthening system reminder; Cluster D: impossible constraints ("do not use numbers" + "number each") → clarify the conflict.
+- **Wiring:** `agent_runtime._process_unlocked` classifies BEFORE the fast-path (mode set → skip fast-path); `agent_loop.run()` classifies at the top, before `_parent_initialization` (fires even with `skip_planning=True` — the production path), and returns the direct/clarify response immediately when mode is set + parent agent (no LLM init, no tools, no replan); workspace_state + action-narration gated by `should_skip_workspace_state`.
+- **LIVE (5 previously-failing tests):** CAT14-1 40s/10 tools PARTIAL → 0.0s/0 tools PASS; CAT14-5 38s/8 tools FAIL (fabricated) → 0.0s/0 tools PASS (refused); LM-RL-003 5.2s FAIL → 0.0s/0 tools PASS (clarified conflict); CAT6-1 54.5s/10 tools PARTIAL → 16.7s/0 tools PASS; CAT6-2 24.6s/4 tools PARTIAL → 37.2s/6 tools PASS.
+- **Tests:** 24 new in test_pre_init_classifier.py; backend 2144 pass / 0 fail / 2 skip; frontend 262. Log `aaa7f9e`.
+
+## 2026-08-22 — Session 338 — guard-collision hardening
+
+- **Task:** S337's 4 clusters passed individually; 10 multi-guard collision tests found 2 gaps (`92d7300`).
+- **COL-3** "analyze the architecture of what John told me" — Cluster A's regex required 'what did X tell me'; prompt says 'what X told me' (no 'did') → fell to Cluster B and still called memory_op twice. Fix: `_HALLUCINATION_CUES` extended to 'what X told/said' (no 'did'), 'what X told me about Y', 'about what X told/said'. → PASS 0.1s, 0 tools.
+- **COL-6** "Do not inspect any files yet. First analyze…" — Cluster B required 'do not write code'/'do not implement yet'; 'do not inspect any files yet' missed → workspace_state injected + describe_tool/web_search ran. Fix: `_ANALYZE_ONLY_CUES` extended ('do not/don't inspect any files yet', 'ask me before accessing it', 'first analyze' broadened). → PASS 12.7s, 0 tools.
+- **Result:** collision suite 10/10 PASS (was 8/10 + 2 PARTIAL); COL-1..10 all listed in the commit body with the winning cluster per test. 3 new tests; backend 2144 + 3 = 2147 pass. Log `4388dfa`.
+
+## 2026-08-22 — Session 339 — memory-relevance gate + conversation-state awareness + tool-abstraction enforcement
+
+- **User's diagnosis:** "Memory should enrich the current conversation, not choose its topic. The current user message determines the topic. Memory can only contribute if it passes a relevance threshold. A new conversation should start with an open beginning by default."
+- **Shipped (`b586e75`):** (1) NEW `backend/src/core/conversation_state.py` — `ConversationMode: OPEN / ESTABLISHED / CONTINUATION`; casual openers → OPEN (no memory), substantive topics → ESTABLISHED (memory can support), explicit continuation + pending work → CONTINUATION; tool-abstraction reminder "NEVER ask the user which tool to use" injected when the outcome needs a tool. (2) Memory-relevance gate in `agent_runtime._load_facts_and_attach` — `should_retrieve_memory` gates `_memory_facts()` (fixes the EPL-hijack: "How's it going?" no longer retrieves old EPL memories). (3) Tool-abstraction enforcement in pre_init_classifier — outcome-needing-tool requests get the tool-selection reminder (user specifies WHAT; agent selects HOW).
+- **LIVE (5 new tests):** MEM-OPEN-001 'Hi' PASS 0.0s/0; MEM-OPEN-002 'How's it going?' (EPL-hijack case) PASS 0.0s/0; MEM-CONT-001 'Continue from where we left off' PASS 21.8s/6; TOOL-UX-001 'Give me the current EPL standings' PASS 6.2s/0; TOOL-UX-002 'Find the latest info about AI regulation' PASS 25.1s/4.
+- **User's 6 invariants enforced** (listed in the commit body); 29 new tests in test_conversation_state.py; backend 2173 pass / 0 fail / 2 skip. Log `984e061`.
+
+## 2026-08-22 — Session 340 — adaptive web acquisition system with progressive escalation
+
+- **User's diagnosis:** "The solution is not 'add a browser tool.' The solution is to make web access an adaptive acquisition system where static fetch, JavaScript rendering, structured network data, and source fallback are strategies behind one capability."
+- **Shipped (`c560d04`):** NEW `backend/src/core/web_acquisition.py` — `WebResult` (status/source/method/content/structured_data/freshness/confidence/attempted_strategies), `AcquisitionStatus` (SUCCESS/PARTIAL/FAILED/ESCALATED), `AcquisitionMethod` (STATIC_FETCH/BROWSER_READ/BROWSER_OPEN/SEARCH_ONLY); `acquire_web_content(url, query)` progressive-escalation router (static fetch → browser read → future browser open, validating boilerplate + query-match at each step); `web_research(query, max_sources)` high-level op (search → fetch → escalate → validate → best content); content validation (boilerplate detection, freshness, keyword-overlap confidence). NEW tool `backend/src/tools/web_research.py` wrapping the router — the agent specifies WHAT; the subsystem decides HOW; the user never sees web_search/web_fetch/browser mechanics.
+- **Design principles (user's 7):** search = discovery not answer; fetch = multi-strategy acquisition; browser = first-class; WebResearchTask = high-level op; validation = did we get the data?; failure = automatic escalation; tool abstraction.
+- **Tests:** 27 new in test_web_acquisition.py (boilerplate 4, freshness 4, scoring 4, URL extraction 3, static fetch 3, browser read 2, formatting 3, end-to-end 4); backend 2200 pass / 0 fail / 2 skip.
+- **WEB-1/3/5/8 live (`b18ef32`):** WEB-1 Python docs PASS 19.5s/4 tools; WEB-3 EPL standings PASS 3.9s/0 (pre-init override); WEB-5 AI regulation news PASS 23.9s/4; WEB-8 Nairobi weather PASS 25.0s/2 — no tool-name leaks, no "which tool?" questions, no internal mechanics exposed. Log `a084c9f`.
+
+## 2026-08-22 — Session 348 — reconstructed the missing Session 332–340 entries (bookkeeping gap CLOSED)
+
+- **Task:** fill the sessions.md bookkeeping gap (332–340 were shipped by the mainline but never logged — flagged since Session 341).
+- **Reconstruction source:** git history only — commits `32c56a4..a084c9f` (22 commits, all authored by Tisone, 2026-08-21/22) with full commit bodies as the primary record, cross-referenced against the kept evidence docs (`live-testing.md` 332–335 tables, `test-results-336.md` + `test-catalog.md` 336–340). No product code read or changed.
+- **Placement:** appended at the bottom under a RECONSTRUCTION banner (the append-only rule forbids inserting mid-file); the banner notes the gap, the source, and that docs are authoritative where numbers diverge.
+- **Contents:** Session 332 (cyber-café duplicate-answer, fixes B/C/D/E), 333 (10 pre-existing test failures cleared), 334 (workspace-context pollution), 335 (knowledge-imperative fast-path), 336 (52-test benchmark + 4 root-cause clusters), 337 (4-cluster pre-init guards), 338 (guard-collision hardening), 339 (memory-relevance gate + conversation state), 340 (adaptive web acquisition).
+- **Backlog:** bookkeeping gap now CLOSED. Remaining: B-2026-08-20-20 (deepseek reasoning-capped empty-stream recovery). The other-machine session numbering continues past 340 in the pull (its 341–358 = web capability selection, presentation intelligence, thinker pre-tool, etc.) — those were logged upstream in the same commits, so no reconstruction needed there; note that session numbers now collide between machines (this machine's 341–347 vs the mainline's 341–358) — worth a disambiguation note in a future session.

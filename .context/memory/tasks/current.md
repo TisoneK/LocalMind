@@ -1,11 +1,11 @@
 # Current Task
 
-**Status:** IDLE — Session 347 closed B-2026-08-22-4 (verification-only: the CONV-06 "empty text" was a bankofai 429 error card, not a silent drop).
+**Status:** IDLE — Session 348 reconstructed the missing Session 332–340 entries in agents/sessions.md (bookkeeping gap closed).
 
-## Session 347 outcome
+## Session 348 outcome
 
-- **B-2026-08-22-4 CLOSED (downgrade):** the finding's own trace (`scratch/conversations-1787458720.json`, latency 11.3s matches) shows CONV-06 T2 with final_text="" AND `errors=[bankofai rate_limit 429]` AND `agent_loop_error=1` — the error was in the saved JSON all along. Full chain verified in code: 429 (quota-exhaustion class → terminal) → `TerminalProviderError` → `agent_runtime` emits `agent_loop_error` + persists the turn with the error + yields `StreamChunk(text="", error=…)` → `chat.py` emits SSE `{"type":"error",…}` → frontend `case 'error'` → `ErrorMessage` card. `text=""` on errors is intentional (ADR-20). Two later live runs show CONV-06 with full text — no recurrence. Not the S31 silent-failure class (that's empty streams with NO error).
-- **B-2026-08-20-11 DONE (cross-referenced):** the same evidence resolves the engine/API/UI side of "429 → empty bubble" (open since Aug 20): current code renders a friendly rate-limit card end-to-end; the old symptom predates the error-event architecture.
-- **No code changes this session** — verification only. Remaining backlog: B-2026-08-20-20 (deepseek 500-chunk reasoning-then-empty → empty-reasoning recovery; a DIFFERENT class, empty stream no error), 332-340 sessions.md bookkeeping gap.
+- **332–340 sessions.md gap CLOSED:** reconstructed all 9 missing sessions from git history (commits `32c56a4..a084c9f`, 22 commits by Tisone, 2026-08-21/22) + the kept evidence docs (live-testing.md 332–335, test-results-336.md + test-catalog.md 336–340). Appended at the bottom under a RECONSTRUCTION banner per the append-only rule (not inserted chronologically). Coverage: 332 cyber-café duplicate (B/C/D/E), 333 test-failure cleanup, 334 workspace pollution, 335 knowledge imperatives, 336 52-test benchmark + 4 clusters, 337 4-cluster pre-init guards, 338 collision hardening, 339 memory-relevance gate, 340 web acquisition. Session 348 log entry appended too.
+- **Flagged for a future session:** session numbers now collide between machines — this machine's 341–347 vs the mainline's 341–358 (web capability selection, presentation intelligence, Thinker pre-tool, etc. — all logged upstream in the same pulled commits, no reconstruction needed there).
+- **Backlog:** only B-2026-08-20-20 remains open (deepseek 500-chunk reasoning-then-empty → empty-reasoning recovery instead of the generic provider-error message).
 
 **Feature:** none
