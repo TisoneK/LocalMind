@@ -1,11 +1,11 @@
 # Current Task
 
-**Status:** IDLE — Session 376 shipped edit_file alias normalization (free-tier models succeed first try) and fixed the obs diff serialization bug that silently dropped every diff event.
+**Status:** IDLE — Session 377 shipped three things: (1) fixed the Windows `pip install -e .[dev]` blocker (hatchling rejected readme/license paths outside the package dir → added `backend/README.md` + `backend/LICENSE`, verified in a fresh venv), (2) finished Session 376's uncommitted `file_write` free-tier alias work, (3) closed B-2026-08-23-19 (Custom theme + tone in Settings → Appearance, persisted to settings.json).
 
-## Session 376 outcome — edit_file aliases + obs serialization fix
+## Session 377 outcome
 
-- **Aliases (`_normalize_edit_payload`):** `file_path`→path, Claude-style `old_string`/`new_string`/`old_pattern`, `replacement`/`new_text`/`text`→insert_text, etc. **Action inference when omitted:** content-only → `rewrite` (new full-file action), search → replace, pattern → regex_replace. Applied in prepare_edit AND the EditFileContract pre-validation; schema updated (rewrite enum + content property).
-- **Second live-found bug:** `ObsCollector.emit` str()'d every non-scalar → the diff SSE `hunks` was a Python-repr STRING → frontend `Array.isArray` dropped every diff (Session 375's Diff mode never filled). Now lists/dicts stay JSON-native.
-- **Live proof (bankofai):** the model's natural `{path, old_string, new_string}` call — the exact Session 375 failure — succeeded FIRST TRY: file edited, diff SSE with real hunks (`hunks=1 lines=4 +1/-1`).
-- **Verification:** 2465 backend / 340 frontend; 16 alias unit tests + 2 obs tests + updated e2e; ruff/tsc/eslint clean.
-- **Next:** next open backlog item (B-2026-08-23-19 custom theme UI, etc.).
+- **Build fix (`d3e6d31`):** `backend/pyproject.toml` now points `readme = "README.md"` / `license = { file = "LICENSE" }` at package-local files; `pip install -e '.[dev]'` metadata + wheel build verified in a clean venv.
+- **file_write aliases (`1e62069`):** `_normalize_write_payload` maps `file_path`/`filepath`/`full_path` → `path` and `text`/`body`/`file_content`/`contents`/`code`/`data` → `content` (canonical wins, idempotent), applied in FileWriteContract + the loop's file_write guard. 16 new alias tests + loop-level guard test.
+- **B-2026-08-23-19 custom theme + tone (`13106fb`):** POST /api/settings/appearance persists theme/mode/custom_theme/tone to settings.json (GET returns them); useTheme gains a `custom` palette (inline CSS vars on `<html>`, derived tokens via color-mix in globals.css) + `tone` (0.5–1.5 `--ui-tone` brightness); SettingsModal adds the palette editor + tone slider; startup restore + no-flash pre-paint script.
+- **Verification:** 2475 backend / 346 frontend; ruff/tsc/eslint clean.
+- **Next:** next open backlog item — B-2026-08-23-8 (goal-driven agent, High/architecture) or the UI-adjacent ones (-20 code-block preview rewrite, -21 time formatting, -22 token short-form, -24 no hardcoded CSS). Pre-existing untracked trace residue at `backend/Dev/` + `backend/scratch/` left untouched.

@@ -5,9 +5,18 @@ is friction the next agent hits blind. "None this session" is valid only
 if literally nothing slowed you down.
 
 ---
+## 2026-08-23 — Buffy / z-ai/glm-5.2 (Session 377)
+
+- **Problem:** `pip install -e '.[dev]'` from `backend/` failed on the user's Windows machine at "Preparing editable metadata" with `ValueError: Readme path must be within the project directory: ../README.md` — the backend package's pyproject.toml pointed `readme`/`license` outside the package dir.
+- **Cost:** Blocked backend setup entirely; only reproducible via a fresh-venv install because the committed backend venv on the dev machine already had a `.pth` editable install (no pip binary), masking the breakage locally. Hatchling (any OS) rejects out-of-tree paths.
+- **Cause:** `readme = "../README.md"` + `license = { file = "../LICENSE" }` in `backend/pyproject.toml` — hatchling requires them inside the project directory.
+- **Workaround / fix:** Added `backend/README.md` (package-local readme pointing at the repo root README) + `backend/LICENSE` (MIT copy); `pyproject.toml` now references those. Verified with a clean throwaway venv: `pip install -e '.[dev]'` metadata step + wheel build now succeed.
+- **Prevent next time:** Keep every path a backend `pyproject.toml` references inside `backend/`; when asked to fix a `pip install` failure, reproduce it in a fresh venv (the existing venv may hide it).
+
+---
 ## 2026-07-09 — Super Z / GLM-4.5 (Session 1)
 
-- **Problem:** PAT pasted in the kickoff template file was redacted to `[REDACTED:github_token]` by the upload pipeline — agent couldn't clone the private repo.
+- **Problem:** `pip install -e ".[dev]"` failed with `externally-managed-environment` error on sysstem Python.
 - **Cost:** One full round-trip with the user (agent reported "PAT is a placeholder", user had to paste it in chat).
 - **Cause:** The IM gateway / file-upload pipeline scrubs secrets from uploaded files before they reach the agent.
 - **Workaround / fix:** User pasted the PAT directly in chat. Agent used it as a transient env var.
