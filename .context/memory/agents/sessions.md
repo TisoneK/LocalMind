@@ -5113,3 +5113,28 @@ authoritative.
   next test under clearAllMocks). Live (isolated 8765): apple qty 3→42 int, price
   1.5→2.75 float persisted on disk; 1-row grid vs 3-row file → 400.
 - **Commits:** product `4559d0a` + context (below).
+
+## Session 359 — B-2026-08-23-7: file-task summary in the final answer
+
+- **Shipped:** the final answer now ends with a deterministic `📁 Files:` block
+  listing every file the agent actually wrote — path, status (created/modified),
+  and byte size for creates — derived from the ACTUAL tool timeline, never from
+  what the model claims (same evidence philosophy as the Session 330 gate).
+  - New `core/agent/file_summary.py` → `build_file_task_summary(tool_calls)`:
+    file_write → created (+ bytes from the content body), edit_file/
+    propose_write_file → modified; order-preserving dedupe (first occurrence
+    wins); empty string when no file tools ran. Same path extraction rules as
+    sessions.py `_agent_written_paths` so summary and history agree.
+  - `agent_runtime.py` parent path: after reflection/fact-extraction (so those
+    services analyze the model's own answer, not the block), appends the summary
+    to a `final_text` (keeps `response_text` pure for the parent-session guard +
+    metrics), yields it as a normal text chunk (live UI shows it) and persists it
+    (reload/export carry it). Guard `response_text == "".join(chunks)` was
+    preserved by NOT mutating response_text.
+- **Verification:** 7 new unit tests (created+bytes, modified, mixed dedupe,
+  `_collect_tool_calls` shape, malformed rows, Windows path, empty). **2370
+  backend passed / 2 skipped**, ruff clean, no frontend change. Live (bankofai,
+  isolated 8765): "create sum.txt + hello.md" → streamed answer ends with
+  `📁 Files:\n- /Users/bao/sum.txt (created, 5 B)\n- /Users/bao/hello.md (created, 39 B)`;
+  persisted history for a note.txt turn shows the same block (`created, 16 B`).
+- **Commits:** product `17d0562` + context (below).

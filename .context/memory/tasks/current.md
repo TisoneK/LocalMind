@@ -1,37 +1,33 @@
 # Current Task
 
-**Status:** IDLE — Session 358 shipped editable spreadsheet cells (B-2026-08-23-6 follow-up).
+**Status:** IDLE — Session 359 shipped the file-task summary in the final answer (B-2026-08-23-7 done).
 
-## Session 358 outcome — edit CSV/XLSX cells in the preview, saved through the confirm-write gate
+## Session 359 outcome — deterministic file-task summary in the final output
 
-- User follow-up: "Make spreadsheet cells editable in the preview and save back
-  through the confirm-write gate."
-- **FIX:** `POST /api/confirm-write` now accepts an optional `sheets` payload
-  alongside `path`/`content`. When present, the route calls the new
-  `write_spreadsheet()` (file_writer.py) instead of the text `_do_write` —
-  xlsx rebuilt via openpyxl with real type preservation (`_infer_cell`: empty→
-  cleared cell, True/False→bool, int/float strings→numbers, else text), csv
-  regenerated via csv.writer. **Data-loss guard:** because the preview caps
-  sheets at 200×50, write_spreadsheet compares the incoming grid to the file on
-  disk and returns 400 when any sheet has FEWER rows — a truncated preview can
-  never silently overwrite the full file. Frontend: `confirmWrite(path, content,
-  sheets?)`; spreadsheet edit mode in the dialog (cells become `<input>`s with
-  aria-labels, draft copy per sheet, Save sends sheets, Cancel restores); the
-  Edit button is hidden when any sheet is truncated.
-- **Decision:** keep the ONE gate endpoint (sheet payload is just another body
-  shape) rather than a new write route — same 403 path check, same tooling.
-- **LIVE (isolated 8765):** apple qty 3→42 (int) and price 1.5→2.75 (float)
-  persisted on disk with types intact; a 1-row grid against the 3-row file →
-  400 with a clear message. Full round trip.
-- **Tests:** 3 new backend (xlsx round trip + int type on disk, csv round trip,
-  truncated-grid refused + file untouched), 3 new frontend (cell edit →
-  confirmWrite sheets payload, no Edit when truncated, Cancel restores).
-  **2363 backend passed / 2 skipped**, **291 frontend passed**, tsc/ruff clean,
-  eslint 0 new. Note: switched the test `beforeEach` to `resetAllMocks` — a
-  failed test's queued `mockResolvedValueOnce` leaked into the next test under
-  `clearAllMocks` (once-queue survives clear).
-- **Next:** B-2026-08-23-7 — file-task summary in the final output after the
-  agent finishes creating/editing files.
+- Backlog item: the user wants to SEE the file-task result (paths, bytes,
+  created/edited) in the summary alongside the final output, not just in the
+  Actions panel.
+- **FIX:** the parent-agent final answer now ends with a `📁 Files:` block
+  derived from the ACTUAL tool timeline (never the model's claims — same
+  evidence philosophy as the Session 330 goal-checklist gate):
+  - New `core/agent/file_summary.py`: `build_file_task_summary(tool_calls)` —
+    file_write → `- path (created, N B)`, edit_file/propose_write_file →
+    `- path (modified)`; order-preserving dedupe; `""` when no file tools ran.
+    Same path rules as `sessions._agent_written_paths` so the summary and the
+    history endpoint agree.
+  - `agent_runtime.py`: computed AFTER reflection/fact-extraction (so those
+    services analyze the model's own answer), appended to a `final_text` (pure
+    `response_text` preserved so the parent-session guard and metrics still
+    work), yielded as a normal token chunk (live UI) and persisted (reload +
+    export carry it).
+- **LIVE (bankofai, isolated 8765):** "create sum.txt + hello.md" → streamed
+  answer ends `📁 Files:\n- /Users/bao/sum.txt (created, 5 B)\n- /Users/bao/hello.md (created, 39 B)`;
+  a note.txt turn's persisted history shows the same block (`created, 16 B`).
+- **Tests:** 7 new unit tests (file_summary.py). **2370 backend passed / 2
+  skipped**, ruff clean, no frontend change needed (summary streams as content).
+- **Next:** backlog is now: B-2026-08-20-20 (deepseek 500-chunk reasoning-then-
+  empty → empty-reasoning recovery), B-2026-08-20-10 (MiniMax XML interception
+  vs prose-commitment detector), B-2026-08-20-11 (429 on iter=1 → empty bubble).
 
-**Feature:** none (single-session UI follow-up)
+**Feature:** none (single-session fix)
 **Review:** n/a
