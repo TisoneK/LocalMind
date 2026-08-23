@@ -814,6 +814,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             yield StreamChunk(text="", done=True)
             return
 
+        # Session 359: load the session's CURRENT persisted todo list ONCE
+        # so BOTH the conversational fast-path ("what todos are left?") and
+        # the parent-agent loop ("mark the task as complete") can see the
+        # real checklist instead of hunting in chat history.
+        try:
+            current_todos = await asyncio.to_thread(self._store.list_todos, session_id)
+        except Exception:
+            logger.debug("[agent-runtime] todo state load skipped", exc_info=True)
+            current_todos = []
+
         # Session 332-C: fast-path for trivial inputs (greetings/thanks/
         # farewells — zero LLM call) and obviously-conversational questions
         # ("What can you do?", "Give me three ideas for ...") — one direct
@@ -841,6 +851,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
             async def _conversational_response_with_context(msg, adptr, hist, thinker_ctx):
                 """Session 354: conversational response with Thinker context injected."""
+                todo_block = ""
+                if current_todos:
+                    from core.trivial_input import _render_conversational_todos
+
+                    todo_block = _render_conversational_todos(current_todos)
                 sys_prompt = (
                     "You are LocalMind, a local AI assistant. Answer the user's "
                     "latest message naturally and briefly using the recent conversation "
@@ -848,7 +863,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     "do not repeat a previous answer when the user asks for more detail. "
                     "Give concrete examples when examples are requested. Do not output "
                     "your reasoning process — just give the response directly.\n\n"
-                    f"Context from reasoning: {thinker_ctx}"
+                    f"Context from reasoning: {thinker_ctx}\n{todo_block}"
                 )
                 async for chunk in _direct_chat_response(msg, adptr, hist, sys_prompt):
                     yield chunk
@@ -949,7 +964,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                             message, _adapter, _hist_dicts, _thinker_context
                         )
                     else:
-                        _stream = conversational_response(message, _adapter, _hist_dicts)
+                        _stream = conversational_response(
+                            message, _adapter, _hist_dicts, todo_state=current_todos
+                        )
                 async for _chunk in _stream:
                     if _chunk.usage:
                         _fast_usage.update(_chunk.usage)
@@ -1329,6 +1346,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # criteria-verified stop would end the turn with a bare
                 # "✓ n/n" summary before the model writes its synthesis.
                 skip_head_gate=bool(goal_items),
+                # Session 359: the persisted todos from previous turns — the
+                # model must know its own checklist to act on it.
+                todo_state=current_todos,
             ):
                 if chunk.usage:
                     usage.update(chunk.usage)

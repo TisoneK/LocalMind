@@ -450,6 +450,45 @@ def _synthetic_todo_text(tool_name: str, tool_input: str) -> str:
     return label[:120]
 
 
+def _render_todo_state(todo_state: Optional[list[dict]]) -> str:
+    """Render the session's persisted todo list as a context block.
+
+    Session 359: the agent must be aware of its own environment — a follow-up
+    like "mark the task as complete" needs to know WHICH todos exist and their
+    status. The todos table rows carry id/content/completed/status; render
+    them with the same markers the UI uses so the model can act on them.
+    Returns "" when there is nothing to show.
+    """
+    if not todo_state:
+        return ""
+    lines = ["# Current todos"]
+    for t in todo_state:
+        text = str(t.get("content") or t.get("text") or "").strip()
+        if not text:
+            continue
+        status = str(t.get("status") or "").lower()
+        if status not in ("pending", "in_progress", "completed", "blocked", "done"):
+            status = "completed" if t.get("completed") else "pending"
+        marker = {
+            "completed": "[x]",
+            "done": "[x]",
+            "in_progress": "[~]",
+            "blocked": "[!]",
+            "pending": "[ ]",
+        }.get(status, "[ ]")
+        lines.append(f"- {marker} {text}")
+    if len(lines) == 1:
+        return ""
+    done = sum(
+        1 for t in todo_state if t.get("completed") or str(t.get("status") or "").lower() == "done"
+    )
+    lines.append(
+        f"({done}/{len(todo_state)} completed — update a todo by calling "
+        "todo_write with the full list.)"
+    )
+    return "\n".join(lines)
+
+
 def _tool_provider(tool_result) -> Optional[str]:
     """Surface which backend engine a tool used, for the Actions-card badge.
 
@@ -1079,6 +1118,12 @@ class AgentLoop:
         # is_done_fn — an early criteria-verified stop would end the turn
         # with a bare "✓ n/n" summary before the model writes its answer.
         skip_head_gate: bool = False,
+        # Session 359: the session's CURRENT persisted todo list (from the
+        # todos table, via the SSE bridge). Injected into the turn context so
+        # a follow-up like "mark the task as complete" is actionable — the
+        # model sees what todos exist and their status instead of hunting in
+        # chat history. None = no persisted todos (first turn / no checklist).
+        todo_state: Optional[list[dict]] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -1806,6 +1851,12 @@ class AgentLoop:
                 return None
             if len(_synthetic_todos) >= _SYNTH_TODO_MAX:
                 return None
+            # Session 359: todo_write IS the checklist manager — synthesizing
+            # a todo for it and then completing it after the tool clears +
+            # re-creates the list would upsert an EMPTY leftover row
+            # (todo_completed with no text after todo_cleared). Skip it.
+            if tool_name == "todo_write":
+                return None
             todo_id = f"syn-{len(_synthetic_todos)}"
             label = _synthetic_todo_text(tool_name, tool_input)
             _synthetic_todos.append(label)
@@ -1912,6 +1963,13 @@ class AgentLoop:
         turn_context_parts = [_build_environment_context(include_tool_list=False)]
         if workspace_context:
             turn_context_parts.append(workspace_context)
+        # Session 359: inject the session's CURRENT todo list (persisted from
+        # previous turns). This is the "agent is aware of its own environment"
+        # fix — a follow-up like "mark the task as complete" must see what
+        # todos exist and their status instead of looking for them in chat.
+        _todo_state_prompt = _render_todo_state(todo_state)
+        if _todo_state_prompt:
+            turn_context_parts.append(_todo_state_prompt)
         _task_state_prompt = task_state.to_prompt()
         if _task_state_prompt:
             turn_context_parts.append(_task_state_prompt)

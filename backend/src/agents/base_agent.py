@@ -244,6 +244,10 @@ class BaseAgent(ABC):
         # criteria-verified stop would end the turn with a bare "✓ n/n"
         # summary before the model writes its synthesis.
         skip_head_gate: bool = False,
+        # Session 359: the session's current persisted todo list. Forwarded
+        # to AgentLoop.run() so the model sees its own environment (what
+        # todos exist + status) instead of hunting in chat history.
+        todo_state: Optional[list[dict]] = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run this agent through the parent-owned AgentLoop:
@@ -383,6 +387,7 @@ class BaseAgent(ABC):
             orchestrator=orchestrator,  # Session 178
             reformulated_message=reformulated_message,  # Session 178
             skip_head_gate=skip_head_gate,  # Session 330
+            todo_state=todo_state,  # Session 359
         ):
             yield chunk
 

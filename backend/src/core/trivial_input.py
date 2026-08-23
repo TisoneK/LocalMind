@@ -580,6 +580,37 @@ def message_implies_tool_action(message: str) -> bool:
 # ── Direct chat response helper ──────────────────────────────────────────────
 
 
+def _render_conversational_todos(todo_state: Optional[list[dict]]) -> str:
+    """Render the session's persisted todos for the conversational fast-path.
+
+    Session 359: "what todos are left?" routes to the conversational fast-path
+    (no tool keywords, question opener). Without the real checklist the model
+    would invent one — inject the persisted state so the answer is grounded.
+    Returns "" when there are no todos.
+    """
+    if not todo_state:
+        return ""
+    lines = ["\nThe user's current task checklist:"]
+    for t in todo_state:
+        text = str(t.get("content") or t.get("text") or "").strip()
+        if not text:
+            continue
+        status = str(t.get("status") or "").lower()
+        if status not in ("pending", "in_progress", "completed", "blocked", "done"):
+            status = "completed" if t.get("completed") else "pending"
+        marker = {
+            "completed": "[x]",
+            "done": "[x]",
+            "in_progress": "[~]",
+            "blocked": "[!]",
+            "pending": "[ ]",
+        }.get(status, "[ ]")
+        lines.append(f"  - {marker} {text}")
+    if len(lines) == 1:
+        return ""
+    return "\n".join(lines)
+
+
 async def _direct_chat_response(
     message: str,
     adapter,
@@ -804,6 +835,7 @@ async def conversational_response(
     message: str,
     adapter,
     history: Optional[list[dict]] = None,
+    todo_state: Optional[list[dict]] = None,
 ) -> AsyncIterator[StreamChunk]:
     """
     Stream a direct chat response for a conversational question.
@@ -817,10 +849,14 @@ async def conversational_response(
         message: the user's conversational question.
         adapter: the model adapter (already configured with the right model).
         history: optional chat history for context.
+        todo_state: Session 359 — the session's current persisted todo list,
+            rendered into the prompt so questions like "what todos are left?"
+            are answered from the real checklist, not made up.
 
     Yields:
         StreamChunk — the model's direct answer, streamed token by token.
     """
+    todo_block = _render_conversational_todos(todo_state)
     async for chunk in _direct_chat_response(
         message,
         adapter,
@@ -834,7 +870,8 @@ async def conversational_response(
             "not 'switch workspace now.' Only take action when the user gives a "
             "DIRECTIVE ('switch to the dev folder', 'create a file called X').\n"
             "Use the recent conversation history as context. Resolve short follow-ups "
-            "against what was just said. Be concise, warm, and direct."
+            "against what was just said. Be concise, warm, and direct.\n"
+            f"{todo_block}"
         ),
     ):
         yield chunk

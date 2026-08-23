@@ -164,7 +164,80 @@ async def _drain_live_tool_events(obs: ObsCollector, session_id: str):
             )
 
 
-def _drain_live_lifecycle_events(obs: ObsCollector):
+def _bridge_todo_event(evt, session_id) -> list[str]:
+    """Persist + emit the DEDICATED todo SSE for a todo obs event.
+
+    Session 359: the S296 lifecycle drain forwards EVERY non-tool obs event as
+    a generic obs_event — including todo_created/todo_completed — so the
+    dedicated todo SSE (which drives the frontend Todos panel) and the DB
+    persist never ran, and the end-of-turn todo_completed upserted plan-0 with
+    empty text. This shared helper gives both drains the same dedicated
+    bridging the main text-chunk handler uses.
+    """
+    if evt.type == "todo_created":
+        try:
+            _engine._store.upsert_todo(
+                session_id,
+                evt.data.get("id", ""),
+                text=evt.data.get("text", ""),
+                completed=bool(evt.data.get("completed", False)),
+            )
+        except Exception as _exc:
+            logger.warning(f"[todos] persist failed: {_exc}")
+        return [
+            _sse(
+                {
+                    "type": "todo_created",
+                    "todo": {
+                        "id": evt.data.get("id", ""),
+                        "text": evt.data.get("text", ""),
+                        "completed": evt.data.get("completed", False),
+                        # Status lets the Todos panel show in_progress (amber
+                        # spinner) for agent-driven todo_write checklists.
+                        "status": evt.data.get("status", "pending"),
+                    },
+                }
+            )
+        ]
+    if evt.type == "todo_completed":
+        try:
+            _engine._store.upsert_todo(
+                session_id,
+                evt.data.get("id", ""),
+                completed=bool(evt.data.get("completed", True)),
+            )
+        except Exception as _exc:
+            logger.warning(f"[todos] persist failed: {_exc}")
+        return [
+            _sse(
+                {
+                    "type": "todo_completed",
+                    "todo": {
+                        "id": evt.data.get("id", ""),
+                        "completed": evt.data.get("completed", True),
+                    },
+                }
+            )
+        ]
+    # Session 27 legacy trio — same treatment (persist + dedicated SSE).
+    if evt.type in ("todo_added", "todo_updated", "todo_cleared"):
+        try:
+            if evt.type == "todo_cleared":
+                _engine._store.clear_todos(session_id)
+            elif evt.type == "todo_added":
+                _engine._store.upsert_todo(
+                    session_id,
+                    evt.data.get("id", ""),
+                    text=evt.data.get("text") or evt.data.get("content"),
+                    completed=bool(evt.data.get("completed", False)),
+                )
+        except Exception as _exc:
+            logger.warning(f"[todos] record failed: {_exc}")
+        return [_sse({"type": evt.type, "todo": evt.data})]
+    return []
+
+
+def _drain_live_lifecycle_events(obs: ObsCollector, session_id: str = ""):
     """S296: stream the NON-tool obs events LIVE during pending waits.
 
     Previously only tool events (`_drain_live_tool_events`) drained here; every
@@ -175,9 +248,15 @@ def _drain_live_lifecycle_events(obs: ObsCollector):
     only updated AFTER the turn finished. Draining the remainder here makes them
     real-time. `_drain_live_tool_events` runs first and removes the tool events,
     so `drain()` returns exactly the lifecycle remainder — the same events, and
-    the same obs_event SSE shape, the main text-chunk handler would emit."""
+    the same obs_event SSE shape, the main text-chunk handler would emit.
+
+    Session 359: todo events ALSO get their dedicated SSE here (not just the
+    generic obs_event) — otherwise they never reach the Todos panel or DB when
+    the turn produces no intermediate text chunks."""
     for evt in obs.drain():
         yield _sse(evt.to_sse_dict())
+        for extra in _bridge_todo_event(evt, session_id):
+            yield extra
         if evt.type == "intent_classified":
             yield _sse(
                 {
@@ -372,7 +451,7 @@ async def _event_stream(
                 # S296: also stream the lifecycle/phase/Observe events live, so
                 # the Agents tab + Observe panel update DURING the turn instead
                 # of all at once after the final answer.
-                for live_event in _drain_live_lifecycle_events(obs):
+                for live_event in _drain_live_lifecycle_events(obs, session_id):
                     yield live_event
                     _last_sent_time = time.monotonic()
                 yield _sse({
@@ -500,29 +579,10 @@ async def _event_stream(
                         }
                     )
 
-                # Session 27: Bridge todo events to SSE so the frontend's
-                # TodoList panel can display the plan + progress.
-                # Session 120: also persist them — todos are now the persistent
-                # high-level checklist, actions hang off them via todo_id.
-                if evt.type in ("todo_added", "todo_updated", "todo_cleared"):
-                    try:
-                        if evt.type == "todo_cleared":
-                            _engine._store.clear_todos(session_id)
-                        elif evt.type == "todo_added":
-                            _engine._store.upsert_todo(
-                                session_id,
-                                evt.data.get("id", ""),
-                                text=evt.data.get("text") or evt.data.get("content"),
-                                completed=bool(evt.data.get("completed", False)),
-                            )
-                    except Exception as _exc:
-                        logger.warning(f"[todos] record failed: {_exc}")
-                    yield _sse(
-                        {
-                            "type": evt.type,
-                            "todo": evt.data,
-                        }
-                    )
+                # Session 27 legacy trio — shared todo bridging (also used by
+                # the S296 lifecycle drain so these survive no-text turns too).
+                for extra in _bridge_todo_event(evt, session_id):
+                    yield extra
 
                 # Bridge thinking_start/thinking_done obs events to proper SSE
                 # thinking_start/thinking_end events. The frontend handles these
@@ -534,53 +594,10 @@ async def _event_stream(
                 if evt.type == "thinking_done":
                     yield _sse({"type": "thinking_end"})
 
-                # Bridge todo_created obs events to SSE so the frontend's
-                # Todos panel shows the agent's execution plan in real-time.
-                # The agent loop emits these after parsing the plan steps.
-                if evt.type == "todo_created":
-                    try:
-                        _engine._store.upsert_todo(
-                            session_id,
-                            evt.data.get("id", ""),
-                            text=evt.data.get("text", ""),
-                            completed=bool(evt.data.get("completed", False)),
-                        )
-                    except Exception as _exc:
-                        logger.warning(f"[todos] persist failed: {_exc}")
-                    yield _sse(
-                        {
-                            "type": "todo_created",
-                            "todo": {
-                                "id": evt.data.get("id", ""),
-                                "text": evt.data.get("text", ""),
-                                "completed": evt.data.get("completed", False),
-                                # Status lets the Todos panel show in_progress (amber
-                                # spinner) for agent-driven todo_write checklists.
-                                "status": evt.data.get("status", "pending"),
-                            },
-                        }
-                    )
-
-                # Bridge todo_completed obs events — when a tool finishes,
-                # the corresponding plan todo is marked complete.
-                if evt.type == "todo_completed":
-                    try:
-                        _engine._store.upsert_todo(
-                            session_id,
-                            evt.data.get("id", ""),
-                            completed=bool(evt.data.get("completed", True)),
-                        )
-                    except Exception as _exc:
-                        logger.warning(f"[todos] persist failed: {_exc}")
-                    yield _sse(
-                        {
-                            "type": "todo_completed",
-                            "todo": {
-                                "id": evt.data.get("id", ""),
-                                "completed": evt.data.get("completed", True),
-                            },
-                        }
-                    )
+                # Session 359: shared todo bridging — persist + emit the
+                # dedicated todo SSE (also used by the S296 lifecycle drain).
+                for extra in _bridge_todo_event(evt, session_id):
+                    yield extra
 
                 # Bridge terminal_output obs events to SSE terminal_event.
                 # When the agent loop executes a shell or code_exec tool,
