@@ -48,6 +48,42 @@ class TestResolveDefaultScratch:
         assert p == home / "notes.txt"
 
 
+class TestExplicitBareFilenames:
+    """B-2026-08-23-17 follow-up: the agent's EXPLICIT bare-filename writes
+    (not just the internal scratch copy) default into the session workspace —
+    including the model's legacy habits (dot-prefixed ./name and the old
+    ~/LocalMind scratch name). User-named directories still escape.
+    """
+
+    WS = staticmethod(lambda: workspace_path("sess-write-1"))
+
+    @pytest.mark.parametrize(
+        "path",
+        ["notes.txt", "./notes.txt", "LocalMind/notes.txt", "~/LocalMind/notes.txt"],
+    )
+    def test_bare_filename_redirects_to_workspace(self, home, bound_session, path):
+        p = resolve_write_path(path, fallback_filename="notes.txt")
+        assert p == workspace_path("sess-write-1") / "notes.txt", path
+
+    @pytest.mark.parametrize(
+        "path",
+        ["sub/notes.txt", "Documents/notes.txt", "~/Desktop/notes.txt"],
+    )
+    def test_user_named_directory_keeps_destination(self, home, bound_session, path):
+        p = resolve_write_path(path, fallback_filename="notes.txt")
+        # Never lands in the session workspace — the user named a directory.
+        assert workspace_path("sess-write-1") not in p.parents, path
+        assert p.name == "notes.txt"
+
+    @pytest.mark.parametrize(
+        "path",
+        ["notes.txt", "./notes.txt", "LocalMind/notes.txt", "~/LocalMind/notes.txt"],
+    )
+    def test_without_session_keeps_legacy_behavior(self, home, path):
+        p = resolve_write_path(path, fallback_filename="notes.txt")
+        assert workspace_path("sess-write-1") not in p.parents, path
+
+
 class TestWriteFileScratch:
     @pytest.mark.asyncio
     async def test_default_write_lands_in_workspace(self, home, bound_session):

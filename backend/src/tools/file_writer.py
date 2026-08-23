@@ -414,6 +414,16 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
     # ── 1. Named-folder shorthand: bare name like "Documents" ─────────────────
     if len(dir_parts) == 1 and dir_parts[0].lower() in _NAMED_FOLDER_COMPONENTS:
         canonical = _NAMED_FOLDERS.get(dir_parts[0].lower(), dir_parts[0])
+        # B-2026-08-23-17: "LocalMind" is the APP's own legacy scratch dir,
+        # not a user-named destination — when a session is active, route it
+        # to the session workspace (the model habitually writes "LocalMind/"
+        # because the old tool description advertised ~/LocalMind).
+        if canonical.lower() == "localmind" and _session_active():
+            logger.info(
+                "[file_writer] legacy LocalMind scratch → session workspace: %s",
+                _default_scratch(home, filename),
+            )
+            return _default_scratch(home, filename)
         target_dir = Path.home() / canonical
         logger.info("[file_writer] named-folder shorthand: %s", target_dir)
         return target_dir / filename
@@ -421,6 +431,16 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
     # ── 2. Home-relative (starts with ~) ─────────────────────────────────────
     if raw.startswith("~"):
         candidate = Path(raw).expanduser()
+        # B-2026-08-23-17: ~/LocalMind is the app's legacy scratch dir (the
+        # old tool description advertised it). With a session active, route
+        # it into the session workspace instead of the user's real home.
+        # Other ~/ paths are explicit user destinations — keep verbatim.
+        if _session_active() and _is_legacy_scratch_path(raw):
+            logger.info(
+                "[file_writer] legacy ~/LocalMind scratch → session workspace: %s",
+                _default_scratch(home, filename),
+            )
+            return _default_scratch(home, filename)
         if has_filename:
             # raw already includes the filename
             logger.info("[file_writer] home-relative with filename: %s", candidate)
@@ -438,6 +458,15 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
             # Use _NAMED_FOLDERS for canonical casing (e.g. "LocalMind" not "Localmind",
             # "docs" not "Docs").  Fall back to the raw part if somehow not in the map.
             canonical = _NAMED_FOLDERS.get(part.lower(), part)
+            # B-2026-08-23-17: a LocalMind component anywhere in the path is
+            # the app's legacy scratch dir (e.g. "foo/LocalMind/notes.txt")
+            # — with a session active, route into the workspace.
+            if canonical.lower() == "localmind" and _session_active():
+                logger.info(
+                    "[file_writer] legacy LocalMind anchor → session workspace: %s",
+                    _default_scratch(home, filename),
+                )
+                return _default_scratch(home, filename)
             allowed_base = Path.home() / canonical
             sub_parts = dir_parts[i + 1 :]
             target_dir = (allowed_base / Path(*sub_parts)) if sub_parts else allowed_base
@@ -457,18 +486,44 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
     # against the user's home directory and auto-create the parent directory.
     # This matches user expectations: "Code/hello.py" → ~/Code/hello.py.
     if dir_parts:
-        target_dir = Path.home().joinpath(*dir_parts)
+        # B-2026-08-23-17: strip "." noise — "./notes.txt" is a bare
+        # filename, not a named directory. When every remaining component is
+        # noise, fall through to the default scratch (session workspace).
+        meaningful = [p for p in dir_parts if p not in (".", "")]
+        if meaningful:
+            target_dir = Path.home().joinpath(*meaningful)
+            logger.info(
+                "[file_writer] relative path (no named-folder anchor) resolved against home: %s / %s",
+                target_dir,
+                filename,
+            )
+            return target_dir / filename
         logger.info(
-            "[file_writer] relative path (no named-folder anchor) resolved against home: %s / %s",
-            target_dir,
-            filename,
+            "[file_writer] dot-only relative path — falling back to scratch: %s",
+            _default_scratch(home, filename),
         )
-        return target_dir / filename
 
     # ── 6. Default fallback — session workspace, else ~/LocalMind/<filename> ─
     # No path components at all — write to scratch space.
     logger.info("[file_writer] no path components — falling back to scratch: %s", _default_scratch(home, filename))
     return _default_scratch(home, filename)
+
+
+def _session_active() -> bool:
+    """True when a session workspace is bound for the current turn (contextvar)."""
+    from core.session_workspace import current_session_id
+
+    return bool(current_session_id())
+
+
+def _is_legacy_scratch_path(raw: str) -> bool:
+    """True when a home-relative path targets the app's own legacy scratch dir
+    (~/LocalMind — the LocalMind home root itself), i.e. NOT a user-named
+    destination like ~/Desktop or ~/Documents. String-based (not expanduser,
+    which reads the real HOME env) so it works under patched homes in tests.
+    """
+    m = re.match(r"^~[/\\]?([^/\\]*)", raw.strip())
+    return bool(m and m.group(1).lower() == "localmind")
 
 
 def _default_scratch(home: Path, filename: str) -> Path:
@@ -860,7 +915,7 @@ async def write_file(message: str) -> ToolResult:
 register_tool(
     Intent.FILE_WRITE,
     write_file,
-    description="Write literal text or code to a file. The caller supplies the exact content — do not use shell/code_exec to generate content first. Saves to ~/LocalMind/ by default. Confirms before writing.",  # noqa: E501
+    description="Write literal text or code to a file. The caller supplies the exact content — do not use shell/code_exec to generate content first. A bare filename (no directory) saves into the current session's workspace folder by default; name a directory (e.g. Documents/ or ~/Desktop/) to save elsewhere. Confirms before writing.",  # noqa: E501
     cost=0.01,
     latency_ms=100,
     parallelizable=False,
