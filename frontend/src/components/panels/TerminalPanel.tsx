@@ -12,6 +12,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
+import { PackageInstaller } from './PackageInstaller';
 
 // ─── Color Map ─────────────────────────────────────────────────────────
 
@@ -535,6 +536,11 @@ export function TerminalPanel({
           </div>
         )}
       </div>
+
+      {/* ── Package Installer ── */}
+      {onExecute && (
+        <PackageInstaller onExecute={(cmd) => onExecute(cmd, cwd)} isRunning={isRunning} />
+      )}
 
       {/* ── Terminal Output ── */}
       <div
