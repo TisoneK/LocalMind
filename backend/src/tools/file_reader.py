@@ -35,6 +35,20 @@ from tools import register_tool
 
 logger = logging.getLogger(__name__)
 
+# ── Line-numbered output constants ──────────────────────────────────────────
+# For the file_task tool, plain-text files whose formatted (line-numbered)
+# output fits under this byte budget are returned in full.  Larger files are
+# truncated at a clean line boundary with a precise line-count notice so the
+# model knows exactly how much is missing.
+_FULL_CONTENT_MAX_BYTES: int = 100 * 1024  # 100 KB
+
+# Extensions handled by special parsers in parse_file() — these bypass the
+# line-numbered plain-text path and use the existing chunked pipeline.
+_SPECIAL_FORMAT_EXTS: frozenset[str] = frozenset({
+    ".pdf", ".docx", ".xlsx", ".csv",
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff",
+})
+
 SUPPORTED_EXTS = {
     ".pdf",
     ".docx",
@@ -84,6 +98,53 @@ def _chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
         chunks.append(" ".join(words[i:end]))
         i += step
     return chunks
+
+
+def _format_with_line_numbers(text: str, max_bytes: int) -> tuple[str, int, bool, int]:
+    """Format text with ``cat -n`` style line numbers.
+
+    Returns ``(formatted_text, total_lines, was_truncated, shown_lines)``.
+
+    * For files whose formatted output fits under *max_bytes*, every line
+      is shown.
+    * For larger files, lines are included until the output size reaches
+      *max_bytes*, then a truncation notice is appended so the model knows
+      exactly how much content is missing.
+    """
+    lines = text.splitlines(keepends=True)
+    total_lines = len(lines)
+
+    output_parts: list[str] = []
+    output_size = 0
+    shown = 0
+
+    for i, line in enumerate(lines, 1):
+        line_entry = f"{i:>6}\t{line}"
+        output_size += len(line_entry.encode("utf-8"))
+        if output_size > max_bytes and i > 1:
+            break
+        output_parts.append(line_entry)
+        shown = i
+
+    truncated = shown < total_lines
+    if truncated:
+        output_parts.append(
+            f"\n[truncated at line {shown} of {total_lines} total lines]"
+        )
+
+    return "".join(output_parts), total_lines, truncated, shown
+
+
+def _detect_line_ending(data: bytes) -> str:
+    """Detect the dominant line ending from raw file bytes.
+
+    Scans the first 8 KB and returns ``'\\r\\n'`` if CRLF dominates,
+    otherwise ``'\\n'``.
+    """
+    sample = data[:8192]
+    crlf_count = sample.count(b"\r\n")
+    lf_only = sample.count(b"\n") - crlf_count
+    return "\r\n" if crlf_count > lf_only else "\n"
 
 
 async def _parse_pdf(data: bytes) -> str:
@@ -323,21 +384,36 @@ async def parse_file(
         elif ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff"):
             text = await _parse_image(data, filename)
         else:
-            # Plain text / code - decode as UTF-8 with a hard size cap to prevent
-            # context overflow. Files larger than FILE_READ_MAX_BYTES are truncated
-            # with a notice so the model knows content was cut.
+            # Plain text / code — decode as UTF-8.  Truncation is
+            # line-aware (never splits a multi-byte character mid-
+            # sequence) and reports the exact line count so the model
+            # can reason about the file's true size.
             try:
-                raw = data[:FILE_READ_MAX_BYTES]
-                text = raw.decode("utf-8", errors="replace")
+                text = data.decode("utf-8", errors="replace")
                 if len(data) > FILE_READ_MAX_BYTES:
+                    lines = text.splitlines(keepends=True)
+                    truncated_lines: list[str] = []
+                    byte_count = 0
+                    for line in lines:
+                        line_bytes = len(line.encode("utf-8"))
+                        if byte_count + line_bytes > FILE_READ_MAX_BYTES:
+                            break
+                        truncated_lines.append(line)
+                        byte_count += line_bytes
+                    shown = len(truncated_lines)
+                    total = len(lines)
+                    text = "".join(truncated_lines)
                     truncated_kb = FILE_READ_MAX_BYTES // 1024
                     original_kb = len(data) // 1024
                     text += (
-                        f"\n\n[... file truncated: showing first {truncated_kb} KB "
-                        f"of {original_kb} KB total. Use shell tool to inspect specific lines ...]"
+                        f"\n\n[... file truncated: showing first {shown} lines "
+                        f"({truncated_kb} KB) of {total} lines "
+                        f"({original_kb} KB) total. "
+                        f"Use shell tool to inspect specific lines ...]"
                     )
                     logger.warning(
-                        f"[file_reader] {filename}: truncated {original_kb} KB -> {truncated_kb} KB"
+                        f"[file_reader] {filename}: truncated {original_kb} KB -> {truncated_kb} KB "
+                        f"({shown}/{total} lines)"
                     )
             except Exception as e:
                 text = f"[Could not read file: {e}]"
@@ -452,6 +528,48 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                 )
             try:
                 data = p.read_bytes()
+                ext = p.suffix.lower()
+
+                # ── Plain text / code files: line-numbered output ────────
+                # Bypass the chunked parse_file() pipeline so the model
+                # sees exact content, line numbers, and original formatting
+                # that edit_file's search/replace can rely on.
+                if ext not in _SPECIAL_FORMAT_EXTS:
+                    try:
+                        raw_text = data.decode("utf-8")
+                    except UnicodeDecodeError:
+                        # Fall back to lossy decode rather than failing.
+                        raw_text = data.decode("utf-8", errors="replace")
+
+                    line_ending = _detect_line_ending(data)
+                    formatted, total_lines, truncated, shown_lines = (
+                        _format_with_line_numbers(raw_text, _FULL_CONTENT_MAX_BYTES)
+                    )
+
+                    header = f"File: {p}\nSize: {len(data):,} bytes\nLines: {total_lines}"
+                    if line_ending == "\r\n":
+                        header += "\nLine endings: CRLF (\\r\\n)"
+
+                    logger.info(
+                        "[file_task] read text file: %s (%d bytes, %d lines, truncated=%s)",
+                        p, len(data), total_lines, truncated,
+                    )
+                    return ToolResult(
+                        content=header + "\n\n" + formatted,
+                        risk=RiskLevel.LOW,
+                        source="file_reader",
+                        metadata={
+                            "path": str(p),
+                            "filename": p.name,
+                            "size_bytes": len(data),
+                            "total_lines": total_lines,
+                            "shown_lines": shown_lines,
+                            "truncated": truncated,
+                            "line_ending": "\\r\\n" if line_ending == "\r\n" else "\\n",
+                        },
+                    )
+
+                # ── Special formats (PDF, DOCX, XLSX, images): chunked pipeline ──
                 attachment = await parse_file(
                     data=data,
                     filename=p.name,

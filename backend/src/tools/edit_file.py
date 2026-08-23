@@ -39,6 +39,27 @@ _MAX_FILE_SIZE = 2 * 1024 * 1024  # 2 MB — refuse to edit files larger than th
 _MAX_DIFF_LINES = 50  # maximum lines to show in the diff summary
 
 
+# ── Line-ending detection ─────────────────────────────────────────────────────
+
+
+def _detect_line_ending(filepath: Path) -> str:
+    """Detect the dominant line ending used in a file.
+
+    Reads up to 8 KB of raw bytes and counts ``\\r\\n`` vs bare ``\\n``
+    occurrences.  Returns ``'\\r\\n'`` if CRLF dominates, otherwise ``'\\n'``.
+    """
+    try:
+        sample_size = min(8192, filepath.stat().st_size)
+        sample = filepath.read_bytes()[:sample_size]
+        crlf_count = sample.count(b"\r\n")
+        lf_only = sample.count(b"\n") - crlf_count
+        if crlf_count > lf_only:
+            return "\r\n"
+    except OSError:
+        pass
+    return "\n"
+
+
 # ── Path resolution ───────────────────────────────────────────────────────────
 
 
@@ -368,16 +389,26 @@ class PreparedEdit:
 
     Attributes:
         filepath: Resolved absolute Path of the file.
-        original: The file's current content.
+        original: The file's current content (normalised to ``\\n`` line endings).
         modified: The content after applying the requested edit action.
+        line_ending: The dominant line ending detected in the original file
+                     (``'\\n'`` or ``'\\r\\n'``).  Used by the caller to restore
+                     the original convention before writing.
     """
 
-    __slots__ = ("filepath", "original", "modified")
+    __slots__ = ("filepath", "original", "modified", "line_ending")
 
-    def __init__(self, filepath: Path, original: str, modified: str) -> None:
+    def __init__(
+        self,
+        filepath: Path,
+        original: str,
+        modified: str,
+        line_ending: str = "\n",
+    ) -> None:
         self.filepath = filepath
         self.original = original
         self.modified = modified
+        self.line_ending = line_ending
 
 
 # ── Free-tier model payload aliases (Session 376) ────────────────────────────
@@ -572,7 +603,9 @@ def prepare_edit(
             None,
         )
 
-    # Read original content
+    # Read original content (newline=None normalises \r\n → \n so all edit
+    # operations work with a single convention; the original line ending is
+    # detected separately and restored before writing).
     try:
         original = filepath.read_text(encoding="utf-8")
     except UnicodeDecodeError:
@@ -602,6 +635,9 @@ def prepare_edit(
             ),
             None,
         )
+
+    # Detect the file's original line ending so we can preserve it on write.
+    line_ending = _detect_line_ending(filepath)
 
     # Apply the edit (compute only — no disk write)
     try:
@@ -636,7 +672,9 @@ def prepare_edit(
             None,
         )
 
-    return None, PreparedEdit(filepath=filepath, original=original, modified=modified)
+    return None, PreparedEdit(
+        filepath=filepath, original=original, modified=modified, line_ending=line_ending,
+    )
 
 
 # ── Public entry point (legacy dispatch) ───────────────────────────────────────
@@ -710,9 +748,18 @@ async def _edit_from_payload(payload: Dict[str, Any]) -> ToolResult:
             success=True,
         )
 
-    # Write the modified content
+    # Restore original line endings before writing.
+    # read_text() normalises \r\n → \n; if the original file used CRLF we
+    # convert back so the edit doesn't silently change line endings.
+    write_content = prepared.modified
+    if prepared.line_ending == "\r\n":
+        # Normalise any stray \r\n first (from the model's replacement text),
+        # then convert all \n back to \r\n.
+        write_content = write_content.replace("\r\n", "\n").replace("\n", "\r\n")
+
+    # Write with newline='' to prevent Python from translating line endings.
     try:
-        filepath.write_text(modified, encoding="utf-8")
+        filepath.write_text(write_content, encoding="utf-8", newline="")
     except Exception as exc:
         # Attempt to restore from backup
         try:
