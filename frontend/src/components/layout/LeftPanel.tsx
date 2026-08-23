@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks, ChevronRight, ChevronDown, File as FileIcon, Folder as FolderIcon } from 'lucide-react';
+import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks, ChevronRight, ChevronDown, File as FileIcon, Folder as FolderIcon, MoreVertical, Settings, LayoutDashboard } from 'lucide-react';
 import { Session, ActionItem, FileNode, SessionFileEntry, TodoItem, ModelOption, ToolCall, DiffData } from '@/types';
 import type { ExportFormat } from '@/lib/localmind/exportChats';
 import { ActionHistory } from '@/components/panels/ActionHistory';
@@ -13,6 +13,13 @@ import { TodoList } from '@/components/panels/TodoList';
 import { isActiveToolStatus } from '@/lib/localmind/progress';
 import { ModelSelector } from '@/components/shared/ModelSelector';
 import { FilePreviewDialog } from '@/components/chat/FilePreviewDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface LeftPanelProps {
   sessions: Session[];
@@ -252,7 +259,7 @@ export function LeftPanel({
       </div>
 
       {/* Tab switcher */}
-      <div className={`flex justify-center px-1 gap-2 border-b border-brand-border`}>
+      <div className={`flex justify-center px-1 gap-2 border-b border-brand-border items-center`}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -268,6 +275,49 @@ export function LeftPanel({
             {!isCompact && tab.label}
           </button>
         ))}
+        {/* B-2026-08-23-26: three-dot overflow menu for additional panels */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="p-2 text-brand-green-muted hover:text-brand-green-soft transition-colors"
+              title="More panels"
+              data-testid="left-panel-more-menu"
+            >
+              <MoreVertical className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="end" className="min-w-[140px]">
+            <DropdownMenuItem
+              onClick={() => window.dispatchEvent(new Event('localmind:focus-terminal'))}
+              className="text-[11px] gap-2 text-brand-green-soft focus:text-brand-green"
+            >
+              <Terminal className="h-3.5 w-3.5" />
+              Terminal
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => window.dispatchEvent(new Event('localmind:focus-agents'))}
+              className="text-[11px] gap-2 text-brand-green-soft focus:text-brand-green"
+            >
+              <LayoutDashboard className="h-3.5 w-3.5" />
+              Agents
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => window.dispatchEvent(new Event('localmind:focus-memory'))}
+              className="text-[11px] gap-2 text-brand-green-soft focus:text-brand-green"
+            >
+              <Brain className="h-3.5 w-3.5" />
+              Memory
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-brand-border" />
+            <DropdownMenuItem
+              onClick={() => window.dispatchEvent(new Event('localmind:open-settings'))}
+              className="text-[11px] gap-2 text-brand-green-soft focus:text-brand-green"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Settings
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Tab content */}

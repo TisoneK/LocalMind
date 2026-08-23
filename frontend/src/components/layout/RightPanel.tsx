@@ -162,15 +162,39 @@ export function RightPanel({
   }, [forceMemoryTab, activeTab, onMemoryTabShown]);
 
   // Listen for 'localmind:activate-terminal' from code block Run buttons
+  // and 'localmind:focus-terminal' from the left panel's ⋮ overflow menu.
   useEffect(() => {
     const handler = () => {
-      if (activeTab !== 'terminal') {
-        setActiveTab('terminal');
-      }
+      if (collapsed) onToggleCollapse();
+      if (activeTab !== 'terminal') setActiveTab('terminal');
     };
     window.addEventListener('localmind:activate-terminal', handler);
-    return () => window.removeEventListener('localmind:activate-terminal', handler);
-  }, [activeTab]);
+    window.addEventListener('localmind:focus-terminal', handler);
+    return () => {
+      window.removeEventListener('localmind:activate-terminal', handler);
+      window.removeEventListener('localmind:focus-terminal', handler);
+    };
+  }, [activeTab, collapsed, onToggleCollapse]);
+
+  // B-2026-08-23-26: left panel ⋮ menu → focus Agents tab.
+  useEffect(() => {
+    const handler = () => {
+      if (collapsed) onToggleCollapse();
+      if (activeTab !== 'agents') setActiveTab('agents');
+    };
+    window.addEventListener('localmind:focus-agents', handler);
+    return () => window.removeEventListener('localmind:focus-agents', handler);
+  }, [activeTab, collapsed, onToggleCollapse]);
+
+  // B-2026-08-23-26: left panel ⋮ menu → focus Memory tab.
+  useEffect(() => {
+    const handler = () => {
+      if (collapsed) onToggleCollapse();
+      if (activeTab !== 'memory') setActiveTab('memory');
+    };
+    window.addEventListener('localmind:focus-memory', handler);
+    return () => window.removeEventListener('localmind:focus-memory', handler);
+  }, [activeTab, collapsed, onToggleCollapse]);
 
   const iconSize = 'h-3 w-3';
   const tabs: { id: RightTab; label: string; icon: React.ReactNode }[] = [
