@@ -53,6 +53,17 @@ class FakeStore:
             return True
         return False
 
+    async def update_content(self, fact_id, new_content):
+        import hashlib
+
+        if fact_id not in self.facts:
+            return None
+        old = self.facts[fact_id]
+        new_id = hashlib.sha256(new_content.encode()).hexdigest()[:16]
+        del self.facts[fact_id]
+        self.facts[new_id] = {**old, "id": new_id, "fact": new_content}
+        return new_id
+
 
 @pytest.fixture()
 def fake_store(monkeypatch):
@@ -105,4 +116,35 @@ class TestMemoryDelete:
 
         with pytest.raises(HTTPException) as exc:
             _run(delete_memory("does-not-exist"))
+        assert exc.value.status_code == 404
+
+
+class TestMemoryUpdate:
+    def test_update_existing_fact_returns_new_id(self, fake_store):
+        from api.routes.memory import update_memory
+
+        _run(store_memory(type("R", (), {"fact": "User likes dark mode", "session_id": "s1",
+                                          "memory_type": "semantic", "importance": 0.5,
+                                          "source": "user"})()))
+        old_id = list(fake_store.facts)[0]
+
+        resp = _run(update_memory(old_id, type("R", (), {"content": "User likes dark mode with warm accents"})()))
+        assert resp.updated is True
+        assert resp.fact_id != old_id  # id is content-derived, so it changes
+        assert resp.content == "User likes dark mode with warm accents"
+
+        # Old id gone, corrected content present, metadata preserved.
+        assert old_id not in fake_store.facts
+        facts = _run(list_memory())["facts"]
+        assert len(facts) == 1
+        assert facts[0]["content"] == "User likes dark mode with warm accents"
+        assert facts[0]["source"] == "user"
+
+    def test_update_missing_fact_404(self, fake_store):
+        from fastapi import HTTPException
+
+        from api.routes.memory import update_memory
+
+        with pytest.raises(HTTPException) as exc:
+            _run(update_memory("does-not-exist", type("R", (), {"content": "x"})()))
         assert exc.value.status_code == 404

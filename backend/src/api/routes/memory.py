@@ -2,8 +2,9 @@
 Memory API routes — F4
 
 GET    /api/memory              — list all stored facts with metadata
-DELETE /api/memory/{fact_id}   — delete a specific fact by ID
 POST   /api/memory              — manually store a new fact
+PATCH  /api/memory/{fact_id}   — correct an existing fact's content
+DELETE /api/memory/{fact_id}   — delete a specific fact by ID
 """
 
 from __future__ import annotations
@@ -72,6 +73,33 @@ async def list_memory():
         )
 
     return {"facts": memory_facts}
+
+
+# ── PATCH /api/memory/{fact_id} ─────────────────────────────────────────────
+
+
+class UpdateMemoryRequest(BaseModel):
+    content: str
+
+
+class UpdateMemoryResponse(BaseModel):
+    updated: bool
+    fact_id: str
+    content: str
+
+
+@router.patch("/memory/{fact_id}", response_model=UpdateMemoryResponse)
+async def update_memory(fact_id: str, req: UpdateMemoryRequest):
+    """Correct an existing fact's content (B-2026-08-23-14 follow-up).
+
+    Re-embeds the corrected text and preserves the fact's original metadata.
+    The fact id is derived from the content hash, so it changes — the response
+    carries the NEW id and the UI must refresh its list.
+    """
+    new_id = await _store.update_content(fact_id, req.content)
+    if not new_id:
+        raise HTTPException(status_code=404, detail=f"Fact '{fact_id}' not found or could not be updated.")
+    return UpdateMemoryResponse(updated=True, fact_id=new_id, content=req.content)
 
 
 # ── DELETE /api/memory/{fact_id} ──────────────────────────────────────────

@@ -898,6 +898,72 @@ class VectorStore:
             logger.error("forget_by_id failed: %s", exc)
             return False
 
+    async def update_content(self, fact_id: str, new_content: str) -> str | None:
+        """Correct an existing fact's content (B-2026-08-23-14 follow-up).
+
+        The fact id is derived from the content hash, so an edit re-embeds the
+        corrected text and migrates the row to a NEW id while preserving the
+        original metadata (source, timestamp, memory_type, importance). Returns
+        the new fact id on success, None when the fact id doesn't exist, the
+        content is empty, or the re-embed fails.
+        """
+        new_content = (new_content or "").strip()
+        if not new_content:
+            return None
+        try:
+            conn = self._connect()
+            row = conn.execute(
+                "SELECT metadata FROM vector_facts WHERE id = ?", (fact_id,)
+            ).fetchone()
+            if not row:
+                return None
+            try:
+                meta = json.loads(row["metadata"]) or {}
+            except (ValueError, TypeError):
+                meta = {}
+
+            vec = await self._embed(new_content)
+            if vec is None:
+                logger.warning("[memory] edit re-embed failed — fact not updated")
+                return None
+            if not _is_normalised(vec):
+                vec = _normalise(vec)
+            blob = _pack(vec)
+            new_id = self._fact_id(new_content)
+
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                old_row = conn.execute(
+                    "SELECT rowid FROM vector_facts WHERE id = ?", (fact_id,)
+                ).fetchone()
+                if old_row:
+                    conn.execute("DELETE FROM vector_embeddings WHERE rowid = ?", (old_row["rowid"],))
+                    conn.execute("DELETE FROM vector_facts WHERE id = ?", (fact_id,))
+
+                conn.execute(
+                    "INSERT OR REPLACE INTO vector_facts(id, content, metadata) VALUES (?, ?, ?)",
+                    (new_id, new_content, json.dumps(meta)),
+                )
+                rowid = conn.execute(
+                    "SELECT rowid FROM vector_facts WHERE id = ?", (new_id,)
+                ).fetchone()["rowid"]
+                conn.execute("DELETE FROM vector_embeddings WHERE rowid = ?", (rowid,))
+                conn.execute(
+                    "INSERT INTO vector_embeddings(rowid, embedding) VALUES (?, ?)",
+                    (rowid, blob),
+                )
+                conn.execute("COMMIT")
+            except Exception:
+                try:
+                    conn.execute("ROLLBACK")
+                except Exception:
+                    pass
+                raise
+            return new_id
+        except Exception as exc:
+            logger.error("update_content failed: %s", exc)
+            return None
+
     async def list_all(self) -> list[str]:
         try:
             rows = (

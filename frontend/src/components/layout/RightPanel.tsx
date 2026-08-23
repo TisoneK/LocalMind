@@ -23,6 +23,8 @@ interface RightPanelProps {
   onMemoryDelete?: (id: string) => void;
   /** Persist a manually entered fact via the memory API (B-2026-08-23-14). */
   onMemoryStore?: (content: string, source: string) => Promise<void>;
+  /** Correct a stored fact's content (B-2026-08-23-14 follow-up). */
+  onMemoryEdit?: (id: string, content: string) => Promise<void>;
   /** Re-fetch memory facts (tab polls while visible). */
   onMemoryRefresh?: () => Promise<void>;
   metrics: PerformanceMetricsType;
@@ -72,6 +74,7 @@ export function RightPanel({
   memoryFacts,
   onMemoryDelete,
   onMemoryStore,
+  onMemoryEdit,
   onMemoryRefresh,
   metrics,
   lastMetrics,
@@ -239,6 +242,7 @@ export function RightPanel({
             facts={memoryFacts}
             onDelete={onMemoryDelete}
             onStore={onMemoryStore}
+            onEdit={onMemoryEdit}
             onRefresh={onMemoryRefresh}
           />
         )}

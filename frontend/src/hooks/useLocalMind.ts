@@ -2797,5 +2797,15 @@ export function useMemory() {
     } catch { /* keep */ }
   }, []);
 
-  return { facts, loading, refresh, storeFact, deleteFact };
+  // B-2026-08-23-14 follow-up: correct a stored fact. The id changes (it is
+  // derived from the content hash), so re-fetch the whole list on success.
+  const editFact = useCallback(async (id: string, content: string) => {
+    try {
+      await localmindClient.updateMemory(id, content);
+      const data = await localmindClient.getMemory();
+      setFacts(data);
+    } catch { /* keep */ }
+  }, []);
+
+  return { facts, loading, refresh, storeFact, deleteFact, editFact };
 }

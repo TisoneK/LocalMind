@@ -92,3 +92,42 @@ describe('MemoryTab', () => {
     expect(onDelete).toHaveBeenCalledWith('f1');
   });
 });
+
+describe('MemoryTab fact editing (B-2026-08-23-14 follow-up)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('edits a fact through onEdit and exits edit mode', async () => {
+    const onEdit = vi.fn().mockResolvedValue(undefined);
+    renderTab({ onEdit });
+    fireEvent.click(screen.getByTestId('fact-edit-btn-f1'));
+    const input = screen.getByTestId('fact-edit-input-f1');
+    expect(input).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: 'User prefers dark mode with warm light' } });
+    fireEvent.click(screen.getByTestId('fact-edit-save-f1'));
+    await waitFor(() => expect(onEdit).toHaveBeenCalledWith('f1', 'User prefers dark mode with warm light'));
+    // Back to the read view (edit mode exited).
+    expect(screen.queryByTestId('fact-edit-input-f1')).not.toBeInTheDocument();
+    expect(screen.getByText('User prefers dark mode')).toBeInTheDocument();
+  });
+
+  it('cancel discards the edit without calling onEdit', () => {
+    const onEdit = vi.fn();
+    renderTab({ onEdit });
+    fireEvent.click(screen.getByTestId('fact-edit-btn-f1'));
+    fireEvent.change(screen.getByTestId('fact-edit-input-f1'), { target: { value: 'changed text' } });
+    fireEvent.click(screen.getByTestId('fact-edit-cancel-f1'));
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('fact-edit-input-f1')).not.toBeInTheDocument();
+  });
+
+  it('shows an error when saving the edit fails', async () => {
+    const onEdit = vi.fn().mockRejectedValue(new Error('boom'));
+    renderTab({ onEdit });
+    fireEvent.click(screen.getByTestId('fact-edit-btn-f1'));
+    fireEvent.change(screen.getByTestId('fact-edit-input-f1'), { target: { value: 'new text' } });
+    fireEvent.click(screen.getByTestId('fact-edit-save-f1'));
+    expect(await screen.findByText('Failed to save the correction')).toBeInTheDocument();
+  });
+});

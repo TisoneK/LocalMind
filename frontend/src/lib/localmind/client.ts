@@ -1014,6 +1014,14 @@ class LocalMindClient {
     });
   }
 
+  /** Correct an existing fact's content (B-2026-08-23-14 follow-up). */
+  async updateMemory(factId: string, content: string): Promise<{ updated: boolean; fact_id: string }> {
+    return this.request(`/api/memory/${encodeURIComponent(factId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content }),
+    });
+  }
+
   // ── Settings / Adapter ──────────────────────────────────────────────
 
   async getSettings(): Promise<{

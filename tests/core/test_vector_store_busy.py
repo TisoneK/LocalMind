@@ -38,6 +38,52 @@ def _make_store(db_path: str):
     return VectorStore(db_path=str(db_path))
 
 
+class TestUpdateContent:
+    def test_update_content_rembeds_and_preserves_metadata(self, tmp_path, monkeypatch):
+        """Editing a fact replaces its content, migrates the row to the new
+        content-derived id, and keeps the original source/timestamp metadata."""
+        monkeypatch.setattr(settings, "localmind_db_path", str(tmp_path / "localmind.db"))
+        monkeypatch.setattr(settings, "ollama_embed_model", "test-embed")
+        store = _make_store(str(tmp_path / "localmind.db"))
+
+        import storage.vector as vector_mod
+
+        async def _fake_embed(text):
+            # Distinct embeddings per text so ids differ and recall works.
+            seed = sum(ord(c) for c in text)
+            return vector_mod._normalise([0.1 * ((seed + i) % 7 + 1) for i in range(8)])
+
+        monkeypatch.setattr(store, "_embed", _fake_embed)
+
+        import asyncio
+
+        assert asyncio.run(store.store("User likes dark mode", "manual", source="user")) is True
+        facts = asyncio.run(store.list_all_with_metadata())
+        assert len(facts) == 1
+        old_id = facts[0]["id"]
+        assert facts[0]["source"] == "user"
+        old_ts = facts[0].get("timestamp")
+
+        new_id = asyncio.run(store.update_content(old_id, "User likes dark mode with warm accents"))
+        assert new_id and new_id != old_id
+
+        facts = asyncio.run(store.list_all_with_metadata())
+        assert len(facts) == 1
+        assert facts[0]["id"] == new_id
+        assert facts[0]["fact"] == "User likes dark mode with warm accents"
+        assert facts[0]["source"] == "user"
+        assert facts[0].get("timestamp") == old_ts, "edit must preserve the original timestamp"
+
+    def test_update_content_missing_fact_returns_none(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(settings, "localmind_db_path", str(tmp_path / "localmind.db"))
+        monkeypatch.setattr(settings, "ollama_embed_model", "test-embed")
+        store = _make_store(str(tmp_path / "localmind.db"))
+
+        import asyncio
+
+        assert asyncio.run(store.update_content("nope", "anything")) is None
+
+
 class TestPersistBusyRace:
     def test_plain_begin_fails_snapshot_upgrade(self, tmp_path):
         """Documents the bug: a deferred BEGIN that reads then writes dies

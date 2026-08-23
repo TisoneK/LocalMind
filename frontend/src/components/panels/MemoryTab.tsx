@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Database, TrendingUp, Clock, Trash2, Plus, Search, X, Loader2 } from 'lucide-react';
+import { Database, TrendingUp, Clock, Trash2, Plus, Search, X, Loader2, Pencil, Check } from 'lucide-react';
 import { MemoryFact } from '@/types';
 
 interface MemoryTabProps {
@@ -9,6 +9,8 @@ interface MemoryTabProps {
   onDelete?: (id: string) => void;
   /** Persist a manually entered fact via the memory API (POST /api/memory). */
   onStore?: (content: string, source: string) => Promise<void>;
+  /** Correct a stored fact's content (B-2026-08-23-14 follow-up). */
+  onEdit?: (id: string, content: string) => Promise<void>;
   /** Re-fetch facts (used by the tab's polling while it is visible). */
   onRefresh?: () => Promise<void>;
 }
@@ -58,7 +60,124 @@ function formatMemoryTimestamp(ts: string): string {
   return ts;
 }
 
-export function MemoryTab({ facts, onDelete, onStore, onRefresh }: MemoryTabProps) {
+function FactCard({
+  fact,
+  onDelete,
+  onEdit,
+}: {
+  fact: MemoryFact;
+  onDelete?: (id: string) => void;
+  onEdit?: (id: string, content: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(fact.content);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const startEdit = () => {
+    setDraft(fact.content);
+    setError(null);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setError(null);
+  };
+
+  const saveEdit = async () => {
+    const content = draft.trim();
+    if (!content || !onEdit) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onEdit(fact.id, content);
+      setEditing(false);
+    } catch {
+      setError('Failed to save the correction');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-brand-bg-code border border-brand-border rounded-md px-2.5 py-2 hover:border-brand-border transition-colors">
+      {editing ? (
+        <div data-testid={`fact-edit-${fact.id}`}>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={2}
+            className="w-full p-1.5 rounded border border-brand-border bg-brand-bg-base text-[11px] text-brand-green-soft focus:outline-none focus:border-brand-green/40 resize-none"
+            data-testid={`fact-edit-input-${fact.id}`}
+          />
+          {error && <div className="mt-1 text-[10px] text-brand-red">{error}</div>}
+          <div className="flex justify-end gap-2 mt-1.5">
+            <button
+              onClick={cancelEdit}
+              className="px-2 py-0.5 text-[10px] rounded hover:bg-brand-border text-brand-green-muted hover:text-brand-green-soft transition-colors"
+              data-testid={`fact-edit-cancel-${fact.id}`}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveEdit}
+              disabled={saving || !draft.trim()}
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] rounded bg-brand-green/10 text-brand-green hover:bg-brand-green/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              data-testid={`fact-edit-save-${fact.id}`}
+            >
+              {saving ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Check className="h-2.5 w-2.5" />}
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="text-[11px] text-brand-green-soft leading-relaxed mb-1.5">
+            {fact.content}
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] px-1 py-0.5 rounded bg-brand-border text-brand-green-muted">
+                {fact.source}
+              </span>
+              <span className="text-[9px] text-brand-green-muted flex items-center gap-0.5">
+                <Clock className="h-2.5 w-2.5" />
+                {formatMemoryTimestamp(fact.timestamp)}
+              </span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              {onEdit && (
+                <button
+                  onClick={startEdit}
+                  className="p-0.5 rounded text-brand-green-muted hover:text-brand-green hover:bg-brand-border transition-colors"
+                  title="Edit fact"
+                  data-testid={`fact-edit-btn-${fact.id}`}
+                >
+                  <Pencil className="h-2.5 w-2.5" />
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={() => onDelete(fact.id)}
+                  className="p-0.5 rounded text-brand-green-muted hover:text-brand-red hover:bg-brand-border transition-colors"
+                  title="Delete fact"
+                >
+                  <Trash2 className="h-2.5 w-2.5" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="mt-1.5">
+            <RelevanceBar value={fact.relevance} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function MemoryTab({ facts, onDelete, onStore, onEdit, onRefresh }: MemoryTabProps) {
   const safeFacts = facts ?? [];
   const [query, setQuery] = useState('');
   // Manual store affordance (B-2026-08-23-14).
@@ -201,37 +320,7 @@ export function MemoryTab({ facts, onDelete, onStore, onRefresh }: MemoryTabProp
             </div>
           ) : (
             filtered.map((fact) => (
-              <div
-                key={fact.id}
-                className="bg-brand-bg-code border border-brand-border rounded-md px-2.5 py-2 hover:border-brand-border transition-colors"
-              >
-                <div className="text-[11px] text-brand-green-soft leading-relaxed mb-1.5">
-                  {fact.content}
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] px-1 py-0.5 rounded bg-brand-border text-brand-green-muted">
-                      {fact.source}
-                    </span>
-                    <span className="text-[9px] text-brand-green-muted flex items-center gap-0.5">
-                      <Clock className="h-2.5 w-2.5" />
-                      {formatMemoryTimestamp(fact.timestamp)}
-                    </span>
-                  </div>
-                  {onDelete && (
-                    <button
-                      onClick={() => onDelete(fact.id)}
-                      className="p-0.5 rounded text-brand-green-muted hover:text-brand-red hover:bg-brand-border transition-colors"
-                      title="Delete fact"
-                    >
-                      <Trash2 className="h-2.5 w-2.5" />
-                    </button>
-                  )}
-                </div>
-                <div className="mt-1.5">
-                  <RelevanceBar value={fact.relevance} />
-                </div>
-              </div>
+              <FactCard key={fact.id} fact={fact} onDelete={onDelete} onEdit={onEdit} />
             ))
           )}
         </div>
