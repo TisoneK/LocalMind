@@ -1841,22 +1841,31 @@ class AgentLoop:
                         completed=False,
                         status="pending",
                     )
-                # B-2026-08-23-8: seed the sub-goal rows (plan-{i}-sub-{j})
-                # right after their parent goal. They are part of the SAME
-                # immutable denominator (Session 330) — informational,
-                # never advanced by the plan cursor, finalized with the
-                # parent at turn end.
+                # B-2026-08-23-8/11: seed the sub-goal rows
+                # (plan-{i}-sub-{j}) right after their parent goal. They
+                # are part of the SAME immutable denominator (Session
+                # 330) — informational, never advanced by the plan
+                # cursor, finalized with the parent at turn end. The UI
+                # shows the short title; `content` keeps the full route
+                # text (paths/commands) for the agent context.
                 for i, tree_entry in enumerate(goal_tree or []):
                     if not isinstance(tree_entry, dict):
                         continue
                     sub_goals = tree_entry.get("sub_goals") or []
+                    sub_titles = tree_entry.get("sub_goal_titles") or []
                     for j, sub in enumerate(sub_goals):
                         if not str(sub).strip():
                             continue
+                        ttl = ""
+                        if isinstance(sub_titles, list) and j < len(sub_titles):
+                            _st = sub_titles[j]
+                            if isinstance(_st, dict):
+                                ttl = str(_st.get("title") or "").strip()
                         _obs.emit(
                             "todo_created",
                             id=f"plan-{i}-sub-{j}",
-                            text=str(sub).strip(),
+                            text=ttl or str(sub).strip()[:60],
+                            content=str(sub).strip(),
                             completed=False,
                             status="pending",
                         )
@@ -1943,27 +1952,49 @@ class AgentLoop:
             # execution_plan is being reused (injected via
             # orchestrator_context). Seed the todo list from those steps so
             # the Todos panel shows the plan and the cursor can advance as
-            # the model narrates each step.
+            # the model narrates each step. B-2026-08-23-11: the UI text is
+            # the goal's short title (when the goal tree supplied one);
+            # `content` keeps the full checkable goal string.
             _plan_steps = list(plan_steps)
             if _obs:
                 for i, step in enumerate(_plan_steps):
-                    _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
-                # B-2026-08-23-8: seed the sub-goal rows (plan-{i}-sub-{j})
-                # right after their parent goal — the warm-kernel parent
-                # path (runtime passes skip_planning + goal_tree) rides this
-                # branch. Same immutable denominator as the flat items;
-                # informational rows, never advanced by the plan cursor.
+                    _ttl = ""
+                    if isinstance(goal_tree, list) and i < len(goal_tree):
+                        _te = goal_tree[i]
+                        if isinstance(_te, dict):
+                            _ttl = str(_te.get("title") or "").strip()
+                    _obs.emit(
+                        "todo_created",
+                        id=f"plan-{i}",
+                        text=_ttl or str(step)[:120],
+                        content=str(step),
+                        completed=False,
+                    )
+                # B-2026-08-23-8/11: seed the sub-goal rows
+                # (plan-{i}-sub-{j}) right after their parent goal — the
+                # warm-kernel parent path (runtime passes skip_planning +
+                # goal_tree) rides this branch. Same fixed denominator as
+                # the flat items; informational rows, never advanced by
+                # the plan cursor. UI shows the short title; `content`
+                # carries the full route text.
                 for i, tree_entry in enumerate(goal_tree or []):
                     if not isinstance(tree_entry, dict):
                         continue
                     sub_goals = tree_entry.get("sub_goals") or []
+                    sub_titles = tree_entry.get("sub_goal_titles") or []
                     for j, sub in enumerate(sub_goals):
                         if not str(sub).strip():
                             continue
+                        ttl = ""
+                        if isinstance(sub_titles, list) and j < len(sub_titles):
+                            _st = sub_titles[j]
+                            if isinstance(_st, dict):
+                                ttl = str(_st.get("title") or "").strip()
                         _obs.emit(
                             "todo_created",
                             id=f"plan-{i}-sub-{j}",
-                            text=str(sub).strip(),
+                            text=ttl or str(sub).strip()[:60],
+                            content=str(sub).strip(),
                             completed=False,
                             status="pending",
                         )

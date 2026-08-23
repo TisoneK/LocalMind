@@ -9,6 +9,8 @@ export interface RawTodoEvent {
   order?: number;
   sessionId?: string;
   session_id?: string;
+  /** B-2026-08-23-11: short user-facing label, preferred over content. */
+  title?: string;
 }
 
 /** Statuses that mean a tool is still executing and should remain active in UI. */
@@ -18,13 +20,19 @@ export function isActiveToolStatus(status: ToolStatus | string | undefined): boo
 
 /** Normalize backend todo fields into the UI's canonical shape. */
 export function normalizeTodoEvent(raw: RawTodoEvent): TodoItem | null {
-  const text = raw.text || raw.content || '';
+  // B-2026-08-23-11: the visible label prefers the short title; the full
+  // content stays available for the agent + tooltips.
+  const content = raw.content || raw.text || '';
+  const title = raw.title || raw.text || '';
+  const text = title || content;
   if (!text && !raw.id) return null;
 
   return {
     id: raw.id || `todo-${Date.now()}`,
     text,
     completed: raw.completed === true || raw.status === 'done',
+    ...(raw.title ? { title: raw.title } : {}),
+    ...(raw.content && raw.content !== text ? { content: raw.content } : {}),
     ...(raw.status ? { status: raw.status } : {}),
     ...(raw.order !== undefined ? { order: raw.order } : {}),
     ...(raw.sessionId || raw.session_id

@@ -1327,6 +1327,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # items, not on tool-call success). Conversational/abstract turns
         # derive [] → None → no contract, legacy behavior unchanged.
         from core.agent.goal_interpreter import (
+            _sub_goals_with_title,
             derive_goal_items,
             derive_goal_tree,
         )
@@ -1354,8 +1355,17 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # the route nested under each goal and the model sees the ordered
         # path. Empty when nothing concrete was derived — same condition
         # as `goal_items`.
+        # B-2026-08-23-11: each goal carries a user-facing `title` and
+        # each sub-goal a {content, title} pair — the Todos panel shows
+        # the short titles, the agent context/persistence keeps the full
+        # content (paths, commands).
         goal_tree = [
-            {"goal": dg.goal, "sub_goals": dg.sub_goals}
+            {
+                "goal": dg.goal,
+                "sub_goals": dg.sub_goals,
+                "title": dg.title,
+                "sub_goal_titles": _sub_goals_with_title(dg.sub_goals),
+            }
             for dg in derive_goal_tree(message, base_dir=_ws_base)
         ]
         if goal_items:

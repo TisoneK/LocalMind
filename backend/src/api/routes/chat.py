@@ -175,12 +175,19 @@ def _bridge_todo_event(evt, session_id) -> list[str]:
     bridging the main text-chunk handler uses.
     """
     if evt.type == "todo_created":
+        # B-2026-08-23-11: persist the FULL content (paths/commands the
+        # agent needs) while the UI text stays short. The loop emits
+        # `text` (user-facing title) + `content` (full); when only `text`
+        # exists (legacy callers) it fills both.
+        _full = evt.data.get("content") or evt.data.get("text") or ""
+        _title = evt.data.get("text") or ""
         try:
             _engine._store.upsert_todo(
                 session_id,
                 evt.data.get("id", ""),
-                text=evt.data.get("text", ""),
+                text=_full,
                 completed=bool(evt.data.get("completed", False)),
+                title=_title,
             )
         except Exception as _exc:
             logger.warning(f"[todos] persist failed: {_exc}")
@@ -190,7 +197,8 @@ def _bridge_todo_event(evt, session_id) -> list[str]:
                     "type": "todo_created",
                     "todo": {
                         "id": evt.data.get("id", ""),
-                        "text": evt.data.get("text", ""),
+                        "text": _title or _full[:120],
+                        "content": _full,
                         "completed": evt.data.get("completed", False),
                         # Status lets the Todos panel show in_progress (amber
                         # spinner) for agent-driven todo_write checklists.

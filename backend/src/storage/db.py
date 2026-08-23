@@ -510,18 +510,25 @@ class SessionStore:
         todo_id: str,
         text: Optional[str] = None,
         completed: Optional[bool] = None,
+        title: Optional[str] = None,
     ) -> None:
         """Create or update a plan todo (migration 006 schema). Only non-None
         fields are written, so a todo_completed event (id + completed only)
-        never wipes the todo's text."""
+        never wipes the todo's text.
+
+        B-2026-08-23-11: `text` is the FULL content (the TodoItem API calls
+        it `content`); `title` is the short user-facing label. When a title
+        is supplied on create, it's stored; on update (todo_completed) no
+        title is passed, so an existing title survives.
+        """
         with self._conn() as conn:
             now = time.time()
             row = conn.execute("SELECT id FROM todos WHERE id = ?", (todo_id,)).fetchone()
             if row is None:
                 conn.execute(
                     'INSERT INTO todos (id, session_id, content, completed, status, '
-                    'priority, "order", created_at, updated_at) VALUES (?, ?, ?, ?, ?, '
-                    "'medium', 0, ?, ?)",
+                    'priority, "order", created_at, updated_at, title) VALUES (?, ?, ?, ?, ?, '
+                    "'medium', 0, ?, ?, ?)",
                     (
                         todo_id,
                         session_id,
@@ -530,12 +537,18 @@ class SessionStore:
                         "done" if completed else "pending",
                         now,
                         now,
+                        title,
                     ),
                 )
             else:
                 updates: dict[str, object] = {"updated_at": now}
                 if text is not None:
                     updates["content"] = text
+                # B-2026-08-23-11: only set/overwrite the title when one is
+                # supplied (never wipe an existing title on a status-only
+                # update).
+                if title is not None:
+                    updates["title"] = title
                 if completed is not None:
                     updates["completed"] = 1 if completed else 0
                     updates["status"] = "done" if completed else "pending"
@@ -554,7 +567,12 @@ class SessionStore:
                 'FROM todos WHERE session_id = ? ORDER BY "order", created_at',
                 (session_id,),
             ).fetchall()
-        return [dict(zip(cols, r)) for r in rows]
+        out = []
+        for r in rows:
+            d = dict(zip(cols, r))
+            d.setdefault("title", None)
+            out.append(d)
+        return out
 
     def clear_todos(self, session_id: str) -> None:
         """Delete all plan todos for a session (new request / new chat)."""

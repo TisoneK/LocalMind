@@ -13,7 +13,12 @@ message commits to writing it; conversational/abstract requests derive []
 
 from __future__ import annotations
 
-from core.agent.goal_interpreter import derive_goal_items, derive_goal_tree
+from core.agent.goal_interpreter import (
+    _title_for_goal,
+    _title_for_sub_goal,
+    derive_goal_items,
+    derive_goal_tree,
+)
 
 
 def test_goal_tree_matches_flat_checklist_and_adds_ordered_subgoals():
@@ -181,6 +186,33 @@ def test_base_dir_leaves_explicit_absolute_path_verbatim():
 def test_base_dir_none_keeps_legacy_bare_tokens():
     items = derive_goal_items("create a.txt")
     assert items == ["file exists at a.txt with content"]
+
+
+def test_title_for_goal_is_short_and_verb_led():
+    # B-2026-08-23-11: user sees a short label, not the full path.
+    assert _title_for_goal("file exists at /ws/sess-1/path-test/a.txt with content") == "Create a.txt"
+    assert _title_for_goal("file exists at a.txt with content") == "Create a.txt"
+    assert _title_for_goal("folder created at /ws/sess-1/path-test") == "Create the folder path-test"
+    assert _title_for_goal("garbage nonsense") == "garbage nonsense"
+
+
+def test_title_for_sub_goal_is_short():
+    long_check = (
+        "check whether /ws/path-test/a.txt already exists (read it if so)"
+    )
+    assert _title_for_sub_goal(long_check) == "Check current state"
+    assert _title_for_sub_goal("write /ws/path-test/a.txt with the full content") == "Write the file"
+    assert _title_for_sub_goal("verify /ws/path-test/a.txt exists with the expected content") == "Verify the result"
+    assert _title_for_sub_goal("create the folder /ws/path-test first if it is missing") == "Create path-test"
+
+
+def test_goal_tree_sets_titles():
+    tree = derive_goal_tree(
+        "create a folder called path-test and a file a.txt in it",
+        base_dir="/ws/sess-1",
+    )
+    assert any(g.title == "Create the folder path-test" for g in tree)
+    assert any(g.title == "Create a.txt" for g in tree)
 
 
 def test_goal_tree_route_uses_workspace_resolved_path():

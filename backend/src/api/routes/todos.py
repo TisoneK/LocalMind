@@ -42,6 +42,7 @@ class TodoItem(BaseModel):
     priority: str = "medium"
     order: int = 0
     timestamp: float
+    title: Optional[str] = None  # B-2026-08-23-11: short user-facing label
 
 
 class CreateTodoRequest(BaseModel):
@@ -49,6 +50,7 @@ class CreateTodoRequest(BaseModel):
     content: str
     priority: str = "medium"
     status: str = "pending"
+    title: Optional[str] = None  # B-2026-08-23-11
 
 
 class UpdateTodoRequest(BaseModel):
@@ -56,6 +58,7 @@ class UpdateTodoRequest(BaseModel):
     completed: Optional[bool] = None
     status: Optional[str] = None
     priority: Optional[str] = None
+    title: Optional[str] = None  # B-2026-08-23-11
 
 
 class CreateTodoBatchRequest(BaseModel):
@@ -91,6 +94,7 @@ async def get_todos(session_id: Optional[str] = Query(None)):
                 priority=r["priority"],
                 order=r["order"],
                 timestamp=r["created_at"],
+                title=r["title"] if "title" in r.keys() else None,
             )
             for r in rows
         ]
@@ -112,9 +116,11 @@ async def create_todo(request: CreateTodoRequest):
         (request.session_id,),
     ).fetchone()["next_order"]
     conn.execute(
-        '''INSERT INTO todos (id, session_id, content, completed, status, priority, "order", created_at, updated_at)
-           VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?)''',
-        (todo_id, request.session_id, request.content, request.status, request.priority, max_order, now, now),
+        '''INSERT INTO todos (id, session_id, content, completed, status, priority,
+           "order", created_at, updated_at, title)
+           VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?)''',
+        (todo_id, request.session_id, request.content, request.status,
+         request.priority, max_order, now, now, request.title),
     )
     conn.commit()
     conn.close()
@@ -127,6 +133,7 @@ async def create_todo(request: CreateTodoRequest):
         priority=request.priority,
         order=max_order,
         timestamp=now,
+        title=request.title,
     )
 
 
@@ -157,6 +164,7 @@ async def create_todos_batch(request: CreateTodoBatchRequest):
                 priority="medium",
                 order=i,
                 timestamp=now,
+                title=None,
             )
         )
     conn.commit()
@@ -176,6 +184,8 @@ async def update_todo(todo_id: str, request: UpdateTodoRequest):
     updates = {}
     if request.content is not None:
         updates["content"] = request.content
+    if request.title is not None:
+        updates["title"] = request.title
     if request.completed is not None:
         updates["completed"] = 1 if request.completed else 0
         updates["status"] = "done" if request.completed else "pending"
@@ -203,6 +213,7 @@ async def update_todo(todo_id: str, request: UpdateTodoRequest):
         priority=row["priority"],
         order=row["order"],
         timestamp=row["created_at"],
+        title=row["title"] if "title" in row.keys() else None,
     )
 
 

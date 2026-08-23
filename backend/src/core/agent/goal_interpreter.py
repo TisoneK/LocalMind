@@ -423,10 +423,84 @@ class DerivedGoal:
     the acceptance gate). `sub_goals` spell the fastest+safest ordered
     route to it — each feeds the next, and both together are derived
     once and never mutated (the Session 330 fixed-denominator contract).
+
+    B-2026-08-23-11: `title` is the user-facing short label (no commands,
+    no absolute paths — just "Create path-test folder"), defaulting to a
+    human-friendly derivation when not supplied.
     """
 
     goal: str
     sub_goals: list[str]
+    title: str = ""
+
+
+# ── User-facing title derivation (B-2026-08-23-11) ──────────────────────────
+# The Todos panel shows short titles; the agent + acceptance gate use the
+# full goal/route strings. Defensive against weird tokens — never raises.
+
+
+def _short_name(path: str) -> str:
+    """Last path component, quotes/punctuation stripped, bounded."""
+    name = (path or "").strip().strip('"\'').rstrip(".")
+    # Last component after any separators (keeps "my stuff" whole).
+    name = name.split("/")[-1].split("\\")[-1]
+    return name[:60]
+
+
+def _title_for_goal(goal: str) -> str:
+    """User-facing title for a derived goal item.
+
+    "file exists at /ws/path-test/a.txt with content" → "Write a.txt"
+    "folder created at /ws/path-test" → "Create the folder path-test"
+    Consistently verb-led, no absolute paths (the user doesn't need
+    them; the agent's content carries the full path).
+    """
+    try:
+        if goal.startswith("file exists at "):
+            path = goal[len("file exists at ") :].strip()
+            if path.endswith(" with content"):
+                path = path[: -len(" with content")].strip()
+            name = _short_name(path)
+            return f"Create {name}" if name else "Create the file"
+        if goal.startswith("folder created at "):
+            name = _short_name(goal[len("folder created at ") :].strip())
+            return f"Create the folder {name}" if name else "Create the folder"
+    except Exception:
+        pass
+    return (goal or "")[:120]
+
+
+def _title_for_sub_goal(sub: str) -> str:
+    """User-facing title for a sub-goal row."""
+    try:
+        s = (sub or "").strip()
+        if s.startswith("check whether "):
+            return "Check current state"
+        if s.startswith("check the target's current state"):
+            return "Check current state"
+        if s.startswith("write "):
+            return "Write the file"
+        if s.startswith("verify "):
+            return "Verify the result"
+        if s.startswith("create the folder "):
+            return f"Create {_short_name(s[len('create the folder '):].split(' first')[0])}"
+        if s.startswith("complete the goal"):
+            return "Complete the goal"
+    except Exception:
+        pass
+    return (sub or "")[:120]
+
+
+def _sub_goals_with_title(sub_goals: list[str]) -> list[dict]:
+    """Zip sub-goal labels into {content, title} dicts for the Todos panel.
+
+    B-2026-08-23-11: the UI shows titles; the agent's context/persistence
+    keeps the full content."""
+    return [
+        {"content": str(s).strip(), "title": _title_for_sub_goal(s)}
+        for s in (sub_goals or [])
+        if str(s).strip()
+    ]
 
 
 def _parent_folder(path: str) -> str:
@@ -509,7 +583,11 @@ def derive_goal_tree(
     home-relative guess.
     """
     return [
-        DerivedGoal(goal=item, sub_goals=_sub_goals_for_goal(item, base_dir))
+        DerivedGoal(
+            goal=item,
+            sub_goals=_sub_goals_for_goal(item, base_dir),
+            title=_title_for_goal(item),
+        )
         for item in derive_goal_items(message, max_items=max_items, base_dir=base_dir)
     ]
 

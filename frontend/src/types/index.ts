@@ -328,6 +328,12 @@ export interface TodoItem {
   order?: number;
   sessionId?: string;
   subtasks?: TodoItem[];
+  /** B-2026-08-23-11: short user-facing title ("Create a.txt") — shown
+   *  instead of the full content when present. */
+  title?: string;
+  /** B-2026-08-23-11: the full agent-facing content (paths/commands),
+   *  kept for tooltips + re-persistence even when a title is shown. */
+  content?: string;
 }
 
 export type ObjectiveStatus = 'queued' | 'running' | 'paused' | 'blocked' | 'completed' | 'failed' | 'canceled';

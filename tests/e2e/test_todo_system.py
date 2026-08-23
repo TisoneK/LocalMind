@@ -35,7 +35,8 @@ def app_client(tmp_path, monkeypatch):
             priority    TEXT DEFAULT 'medium',
             "order"     INTEGER DEFAULT 0,
             created_at  REAL NOT NULL,
-            updated_at  REAL NOT NULL
+            updated_at  REAL NOT NULL,
+            title       TEXT
         )"""
     )
     conn.commit()

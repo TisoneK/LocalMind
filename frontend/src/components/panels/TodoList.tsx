@@ -28,6 +28,10 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
   const parentRows = todos.filter((t) => !isSubRow(t.id));
   const completed = parentRows.filter((t) => t.completed).length;
   const total = parentRows.length;
+  // B-2026-08-23-11: the visible label is the short title when present.
+  // The full content (paths/commands) is preserved for the tooltip and
+  // the agent context (todos are persisted with it).
+  const displayText = (t: TodoItem) => t.title || t.text;
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   // Per-todo action counts: how many actions each plan step owns, and how
@@ -185,8 +189,17 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
                         : 'text-brand-green-soft'
                   }`}
                 >
-                  {todo.text}
+                <span
+                  className="truncate"
+                  title={
+                    todo.content && todo.content !== displayText(todo)
+                      ? todo.content
+                      : undefined
+                  }
+                >
+                  {displayText(todo)}
                 </span>
+              </span>
                 {counts && counts.total > 0 && (
                   <span
                     className={`text-[9px] px-1.5 py-0.5 rounded-full font-mono shrink-0 ${
@@ -225,7 +238,7 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
                         : 'text-brand-green-muted/80'
                     }`}
                   >
-                    {sub.text}
+                    {displayText(sub)}
                   </span>
                 </div>
               ))}

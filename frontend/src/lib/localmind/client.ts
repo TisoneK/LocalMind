@@ -741,7 +741,8 @@ class LocalMindClient {
       return Array.isArray(data)
         ? data.map((todo) => ({
             ...todo,
-            text: todo.text || todo.content || '',
+            // B-2026-08-23-11: prefer the short title for display.
+            text: todo.title || todo.text || todo.content || '',
             sessionId: todo.sessionId || todo.session_id,
           }))
         : [];
