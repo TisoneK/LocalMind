@@ -21,11 +21,38 @@ import hashlib
 import logging
 import re
 import shutil
+from contextvars import ContextVar
 from pathlib import Path
 
 from core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# ── Current-session context (B-2026-08-23-17 follow-up) ─────────────────
+# The engine sets this once per turn (agent_runtime.process); tools read it
+# to default their artifact writes into the session's workspace folder
+# instead of the shared ~/LocalMind scratch. Async-safe: contextvars
+# propagate through awaits within the same asyncio task, and tool path
+# resolution happens in async context (write_file/resolve_write_path).
+_current_session_id: ContextVar[str | None] = ContextVar(
+    "localmind_current_session_id",
+    default=None,
+)
+
+
+def set_current_session(session_id: str | None):
+    """Bind the current turn's session id for tool execution; returns a token."""
+    return _current_session_id.set(session_id)
+
+
+def reset_current_session(token) -> None:
+    """Restore the previous binding (call in a finally block)."""
+    _current_session_id.reset(token)
+
+
+def current_session_id() -> str | None:
+    """The session id of the turn currently executing tools, if any."""
+    return _current_session_id.get()
 
 _INVALID_CHARS = re.compile(r"[^A-Za-z0-9._-]")
 

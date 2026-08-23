@@ -85,3 +85,33 @@ class TestWorkspaceLifecycle:
             _s.localmind_home = str(tmp_path)
             up = workspace_uploads_dir("sess-2")
             assert str(up).startswith(str(tmp_path / "sessions"))
+
+
+class TestCurrentSessionContextVar:
+    def test_set_reset_get(self):
+        from core.session_workspace import (
+            current_session_id,
+            reset_current_session,
+            set_current_session,
+        )
+
+        assert current_session_id() is None
+        token = set_current_session("sess-ctx-1")
+        assert current_session_id() == "sess-ctx-1"
+        reset_current_session(token)
+        assert current_session_id() is None
+
+    def test_nested_set_restores_previous(self):
+        from core.session_workspace import (
+            current_session_id,
+            reset_current_session,
+            set_current_session,
+        )
+
+        outer = set_current_session("outer")
+        inner = set_current_session("inner")
+        assert current_session_id() == "inner"
+        reset_current_session(inner)
+        assert current_session_id() == "outer"
+        reset_current_session(outer)
+        assert current_session_id() is None

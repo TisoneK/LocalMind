@@ -247,10 +247,14 @@ class FileWriteContract(_LegacyBridgeContract):
         is_scratch_only = not raw_path or raw_path.startswith("~/LocalMind")
 
         if is_scratch_only:
-            # No user destination — write to scratch and stay there
+            # No user destination — write to scratch and stay there.
+            # B-2026-08-23-17 follow-up: default scratch = session workspace
+            # when a session is active (mirrors tools/file_writer.py).
             filename = Path(raw_path).name if raw_path else f"output_{int(_time.time())}.txt"
             home = Path(os.path.expandvars(settings.localmind_home)).expanduser().resolve()
-            scratch_path = home / filename
+            from tools.file_writer import _default_scratch
+
+            scratch_path = _default_scratch(home, filename)
             if settings.localmind_require_write_permission:
                 return ToolResult(
                     content=(
@@ -326,10 +330,16 @@ class FileWriteContract(_LegacyBridgeContract):
             final_dest.parent.mkdir(parents=True, exist_ok=True)
             logger.info("[contracts] resolved unresolvable path to: %s", final_dest)
 
-        # Always write to ~/LocalMind/ first (scratch space), then copy back.
+        # Always write to scratch first, then copy back. B-2026-08-23-17
+        # follow-up: the scratch write lands in the session's workspace folder
+        # when a session is active (artifacts stay with the session and are
+        # deleted with it); without a session the historic ~/LocalMind/
+        # scratch is used. This mirrors tools/file_writer.py's write_file.
+        from tools.file_writer import _default_scratch
+
         filename = final_dest.name
         home = Path(os.path.expandvars(settings.localmind_home)).expanduser().resolve()
-        scratch_path = home / filename
+        scratch_path = _default_scratch(home, filename)
 
         # user_named: planner supplied a full filename that differs from a
         # timestamped variant — treat as explicit override, skip rename.

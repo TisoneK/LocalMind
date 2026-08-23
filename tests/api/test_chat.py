@@ -229,6 +229,58 @@ class TestChat:
         assert await anext(pending) is None
         await pending.aclose()
 
+    @pytest.mark.asyncio
+    async def test_session_contextvar_survives_keepalive_child_tasks(self):
+        """The session id bound at the TRANSPORT boundary must reach tools on
+        LATER generator advances (B-2026-08-23-17 follow-up).
+
+        Regression: _with_keepalives advances the engine generator through a
+        FRESH create_task(iterator.__anext__()) per chunk. Each child task
+        copies the context of the task that created it — the stable transport
+        task. A bind inside the engine generator body (agent_runtime.process)
+        would only live in the FIRST advance's child task and be lost by the
+        time tools dispatch on a later advance; its finally-reset would also
+        raise ValueError (token created in a different Context). The transport
+        (chat.py _event_stream) now binds the session id itself, and process()
+        skips its own bind when the transport already bound it.
+
+        This test drives a fake engine through _with_keepalives exactly like
+        _event_stream does: the session is bound in the test task (the
+        transport's stable task) BEFORE iterating, and a tool dispatched on
+        the second advance must still see it.
+        """
+        from api.routes.chat import _with_keepalives
+        from core.models import StreamChunk
+        from core.session_workspace import (
+            current_session_id,
+            reset_current_session,
+            set_current_session,
+        )
+
+        async def engine_with_tool():
+            yield StreamChunk(text="first", done=False)
+            # Simulates a tool dispatch on a LATER advance (e.g. file_write
+            # resolving its default scratch against the session workspace).
+            seen = current_session_id()
+            yield StreamChunk(text=f"tool-saw-{seen}", done=True)
+
+        # The transport's stable task binds the session id (chat.py does this
+        # at the top of _event_stream). The keepalive child tasks copy this
+        # task's context, so the tool on the second advance must see it.
+        token = set_current_session("keepalive-sess-1")
+        try:
+            stream = _with_keepalives(engine_with_tool(), interval_s=0.05)
+            chunks = [c async for c in stream]
+        finally:
+            reset_current_session(token)
+        texts = [c.text for c in chunks]
+        assert texts[0] == "first"
+        # The second advance (a different child task than the first) still saw
+        # the session id — the bug made this None/"UNSET".
+        assert texts[1] == "tool-saw-keepalive-sess-1"
+        # And the bind was scoped to the transport task: after reset, gone.
+        assert current_session_id() is None
+
     def test_live_tool_result_is_visible_but_delegated_output_stays_hidden(self, client):
         """Tool results must reach the user while child raw output remains private."""
         async def _process(self, message, session_id, file=None, filename=None,

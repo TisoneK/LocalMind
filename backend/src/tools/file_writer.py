@@ -12,6 +12,7 @@ Rules:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -374,12 +375,13 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
     raw = raw_path.strip() if raw_path else ""
 
     if not raw:
-        # No path at all — fall back to ~/LocalMind/<filename>
-        return (home / fallback_filename).resolve()
+        # No path at all — fall back to the session workspace when one is
+        # active (B-2026-08-23-17), else ~/LocalMind/<filename>.
+        return _default_scratch(home, fallback_filename)
 
     parts = _cross_os_parts(raw)
     if not parts:
-        return (home / fallback_filename).resolve()
+        return _default_scratch(home, fallback_filename)
 
     # Detect whether the last part is a filename (has a known extension).
     last = parts[-1]
@@ -463,9 +465,28 @@ def resolve_write_path(raw_path: str, fallback_filename: str = "") -> Path:
         )
         return target_dir / filename
 
-    # ── 6. Default fallback — ~/LocalMind/<filename> ────────────────────────
+    # ── 6. Default fallback — session workspace, else ~/LocalMind/<filename> ─
     # No path components at all — write to scratch space.
-    logger.info("[file_writer] no path components — falling back to scratch: %s", home / filename)
+    logger.info("[file_writer] no path components — falling back to scratch: %s", _default_scratch(home, filename))
+    return _default_scratch(home, filename)
+
+
+def _default_scratch(home: Path, filename: str) -> Path:
+    """Default scratch destination for a file with no user-specified path.
+
+    B-2026-08-23-17 follow-up: when a session is active (its id is bound via
+    the session-workspace contextvar), the default write lands in the session's
+    workspace folder — artifacts stay with the session and are deleted with it.
+    Without a session (CLI/tests/legacy callers), the historic
+    ~/LocalMind/<filename> scratch is used unchanged.
+    """
+    from core.session_workspace import current_session_id, ensure_workspace
+
+    sid = current_session_id()
+    if sid:
+        ws = ensure_workspace(sid) / filename
+        logger.info("[file_writer] session workspace default scratch: %s", ws)
+        return ws.resolve()
     return (home / filename).resolve()
 
 
@@ -587,8 +608,15 @@ async def _do_write(
 
             dest_path = final_dest.parent / out_name
             dest_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(filepath, dest_path)
-            logger.info("[file_writer] copied to final dest → %s", dest_path)
+            # Same-file guard: when the session-workspace redirect makes the
+            # default scratch equal the final destination (bare filename,
+            # no user path), the copy-back is a no-op — shutil.copy2 onto
+            # itself raises "are the same file". Skip it.
+            if dest_path.resolve() != filepath.resolve():
+                shutil.copy2(filepath, dest_path)
+                logger.info("[file_writer] copied to final dest → %s", dest_path)
+            else:
+                logger.info("[file_writer] final dest == scratch (%s) — no copy-back", dest_path)
 
         # The result reports the FACTS of the write (path + byte/line counts).
         # It deliberately does NOT tell the agent whether to verify/read the file
@@ -653,7 +681,6 @@ async def write_spreadsheet(filepath: Path, sheets: list[dict]) -> ToolResult:
     writing we compare the incoming grid against the existing file and refuse
     when any sheet has FEWER rows than what's on disk.
     """
-    import asyncio
     import csv
     import io
 
@@ -788,9 +815,12 @@ async def write_file(message: str) -> ToolResult:
                 final_dest = Path.home() / filename
             final_dest.parent.mkdir(parents=True, exist_ok=True)
 
-    # Always write to ~/LocalMind/ first (scratch space).
+    # Always write to scratch first, then copy to the final destination.
+    # B-2026-08-23-17 follow-up: scratch = the session's workspace folder when
+    # a session is active (artifacts stay with the session and are deleted with
+    # it); without a session the historic ~/LocalMind/<filename> is used.
     home = Path(os.path.expandvars(settings.localmind_home)).expanduser().resolve()
-    scratch_path = home / filename
+    scratch_path = _default_scratch(home, filename)
 
     # Detect whether the user explicitly named the output file
     # (i.e. they gave a full path ending in a filename, not just a directory).

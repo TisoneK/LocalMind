@@ -630,22 +630,47 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         allowed_tool_names: Optional[set[str]] = None,
     ) -> AsyncIterator[StreamChunk]:
         """Run one user turn through the LocalMind parent agent."""
-        async with self._lock_for(session_id):
-            self._steering_queues[session_id] = asyncio.Queue(maxsize=STEERING_QUEUE_MAX)
-            self._abort_events[session_id] = asyncio.Event()
-            async for chunk in self._process_unlocked(
-                message=message,
-                session_id=session_id,
-                file=file,
-                filename=filename,
-                content_type=content_type,
-                obs=obs,
-                original_path=original_path,
-                client_intent=client_intent,
-                client_confidence=client_confidence,
-                allowed_tool_names=allowed_tool_names,
-            ):
-                yield chunk
+        # B-2026-08-23-17 follow-up: bind the session id for the WHOLE turn so
+        # every tool the agent calls defaults its artifact writes into the
+        # session's workspace folder (cleared in finally, even on GeneratorExit).
+        #
+        # Idempotent bind: when the HTTP transport already bound the session
+        # (chat.py _event_stream — the only caller that drives this generator
+        # through _with_keepalives' per-__anext__ child tasks), skip the local
+        # set/reset entirely. A set inside THIS generator body would run in the
+        # first advance's child task but the finally-reset would run in a LATER
+        # advance's child task → ValueError ("Token was created in a different
+        # Context"). The transport's bind lives in one stable task, so every
+        # child task copies it and tools see the session id on every advance.
+        from core.session_workspace import (
+            current_session_id,
+            reset_current_session,
+            set_current_session,
+        )
+
+        _ws_token = None
+        if current_session_id() != session_id:
+            _ws_token = set_current_session(session_id)
+        try:
+            async with self._lock_for(session_id):
+                self._steering_queues[session_id] = asyncio.Queue(maxsize=STEERING_QUEUE_MAX)
+                self._abort_events[session_id] = asyncio.Event()
+                async for chunk in self._process_unlocked(
+                    message=message,
+                    session_id=session_id,
+                    file=file,
+                    filename=filename,
+                    content_type=content_type,
+                    obs=obs,
+                    original_path=original_path,
+                    client_intent=client_intent,
+                    client_confidence=client_confidence,
+                    allowed_tool_names=allowed_tool_names,
+                ):
+                    yield chunk
+        finally:
+            if _ws_token is not None:
+                reset_current_session(_ws_token)
 
     async def _process_unlocked(
         self,

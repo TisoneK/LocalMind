@@ -393,6 +393,24 @@ async def _event_stream(
     # stop so the unmet goal items stay pending (no false 100%).
     _honest_stop = False
 
+    # B-2026-08-23-17 follow-up: bind the session id at the TRANSPORT boundary.
+    # _with_keepalives below advances the engine generator via a FRESH child
+    # task per __anext__ (create_task(iterator.__anext__())), and each child
+    # task copies the context of the task that created it — the task running
+    # this generator body. Binding HERE (in the one stable task) means every
+    # tool the agent dispatches sees the session id, even on later advances.
+    # A bind inside agent_runtime.process() would be lost after its first
+    # yield (each later advance runs in a new child task that copies the
+    # unset outer context) and its finally-reset would raise ValueError
+    # (token created in a different Context). process() now skips its own
+    # bind when this transport already bound the same session (idempotent).
+    from core.session_workspace import (
+        reset_current_session,
+        set_current_session,
+    )
+
+    _ws_token = set_current_session(session_id)
+
     # ── SSE keepalive state ──────────────────────────────────────────────
     # Track the last time we sent ANY SSE data. If more than KEEPALIVE_INTERVAL_S
     # passes without data, send a comment line to prevent the client/proxy
@@ -828,6 +846,13 @@ async def _event_stream(
         yield _sse({"type": "done"})
 
     finally:
+        # B-2026-08-23-17 follow-up: unbind the transport-level session
+        # contextvar (paired with the set at the top of this generator).
+        # Must run in this stable task's context — the token was created here.
+        try:
+            reset_current_session(_ws_token)
+        except Exception:
+            pass  # Never let cleanup crash the SSE stream
         # GUARANTEE: If the generator was interrupted (client disconnect,
         # exception, etc.) before engine.process() could persist the
         # assistant message, save whatever response text we accumulated.
