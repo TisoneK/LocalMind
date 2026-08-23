@@ -5065,3 +5065,25 @@ authoritative.
   burned ~10 tool calls chasing a red herring. Lesson: use `/i` or exact-case
   strings when the mock text has mixed case.
 - **Commits:** product `cc3c657` + context (below).
+
+## Session 357 — spreadsheet preview: real tables with sheet tabs (B-2026-08-23-6 follow-up)
+
+- **Shipped:** CSV/XLSX previews in FilePreviewDialog now render as real tables
+  with sheet tabs instead of flat text.
+  - Backend: new `tools.file_reader.parse_spreadsheet()` — xlsx via
+    `pd.read_excel(sheet_name=None)` (every sheet becomes a tab), csv as a single
+    "Sheet 1" tab; per-sheet rows capped at MAX_SHEET_ROWS=200 / MAX_SHEET_COLS=50
+    with a `truncated` flag; cells normalized to JSON-safe strings (NaN→'', ints
+    drop float noise 1.0→"1", bools→True/False). `GET /api/files/content` now
+    branches csv/xlsx into a structured `sheets` payload (keeps a flat `text`
+    fallback; `editable` stays False).
+  - Frontend: tab bar (active highlight, ellipsis marker on truncated sheets) +
+    sticky-header table with a row-number column, truncated cells (title tooltip),
+    horizontal+vertical scroll, "rows/columns truncated" note.
+- **Verification:** 3 new backend tests (xlsx 2-sheet structure via real openpyxl
+  fixture, csv single sheet, 250-row cap → 201 rows + truncated flag), 3 new
+  frontend tests (tabs render + active data, tab click switches, truncation note).
+  **2360 backend passed / 2 skipped**, **288 frontend passed**, tsc/ruff clean,
+  eslint 0 errors. Live (isolated 8765): book.xlsx → [Sales, Notes] with header +
+  rows; data.csv → [Sheet 1] — both served structured over HTTP.
+- **Commits:** product `5204c30` + context (below).
