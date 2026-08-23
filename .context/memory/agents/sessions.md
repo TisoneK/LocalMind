@@ -5022,3 +5022,24 @@ authoritative.
 - **LIVE (bankofai, isolated 8765):** SSE capture confirmed the first action's dedicated `tool_call` event IS `status="started"` and reaches the frontend — the backend never needed a change; the race was purely client-side.
 
 **Backlog now:** B-2026-08-23-5 done. Remaining: -6 (file rendering docx/pdf/excel), -7 (filetask summary info), -8 (goal-driven fastest/safest path + subgoals), -9 (action pill tooltips), -10 (concrete planning), -11 (todo title/content split), -12 (clickable filenames).
+
+## Session 355 — B-2026-08-23-6: render created files in the UI (docx/pdf/xlsx preview)
+
+- **Shipped:** clickable file-result chips open an inline `FilePreviewDialog` (shadcn Dialog).
+  - Backend `GET /api/files/content?path=` (filesystem.py): text/code verbatim (FILE_READ_MAX_BYTES
+    cap), office docs (docx/pdf/xlsx/csv) parsed via the engine's own `tools.file_reader.parse_file`
+    so the preview matches what the agent sees, images as inline base64 data URLs. Path gate =
+    `settings.is_path_allowed` (403/404/400).
+  - Frontend: `FileContent` type + `localmindClient.getFileContent()`; `FilePreviewDialog` renders
+    markdown (ReactMarkdown), code (mono), prose text, and `<img>` for images; `FileResultChip`
+    became a `<button>` with dotted-underline filename → opens the dialog.
+- **Verification:** 7 new backend tests (text/md-code/image data-url/office-parse via mocked
+  parse_file/403/404/400), 6 new frontend tests. **2357 backend passed / 2 skipped**, **280
+  frontend passed**, tsc clean, ruff clean, eslint 0 new (1 pre-existing-class set-state-in-effect
+  warning). Live (bankofai, isolated 8765): agent created preview-demo.txt (apple/banana/cherry)
+  + notes.md (# Hello) via shell at ~/Dev/path-test/preview-out; content endpoint served both
+  verbatim over HTTP. Note: the model wrote to `~/Dev/...` (expanded home) not cwd-relative Dev/
+  — expected, matches Session 264 path behavior.
+- **Decision:** reuse `parse_file` (same text the model sees) rather than adding frontend doc
+  renderers (mammoth/xlsx/pdfjs) — zero new deps, and binary files never hit the browser raw.
+- **Commits:** product `e903bcc` + context (below).
