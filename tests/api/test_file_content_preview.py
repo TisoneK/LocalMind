@@ -44,6 +44,7 @@ class TestFileContentPreview:
         assert result["name"] == "notes.txt"
         assert result["text"] == "hello world"
         assert result["truncated"] is False
+        assert result["editable"] is True
 
     def test_markdown_and_code_verbatim(self, tmp_path):
         f = tmp_path / "app.py"
@@ -55,6 +56,7 @@ class TestFileContentPreview:
             patcher.stop()
         assert result["extension"] == "py"
         assert "def main()" in result["text"]
+        assert result["editable"] is True
 
     def test_image_returns_data_url(self, tmp_path):
         f = tmp_path / "pic.png"
@@ -68,6 +70,8 @@ class TestFileContentPreview:
         # Round-trip: the decoded payload matches the file bytes.
         encoded = result["image_data_url"].split(",", 1)[1]
         assert base64.b64decode(encoded) == f.read_bytes()
+        # Images are view-only — never editable.
+        assert result["editable"] is False
 
     def test_office_doc_parsed_via_file_reader(self, tmp_path):
         f = tmp_path / "report.docx"
@@ -85,6 +89,9 @@ class TestFileContentPreview:
         assert mocked.called
         assert result["extension"] == "docx"
         assert "Heading\n\nBody paragraph" in result["text"]
+        # Parsed office text is lossy — writing it back would destroy the
+        # document, so it must never be marked editable.
+        assert result["editable"] is False
 
     def test_path_outside_allowed_folders_403(self, tmp_path):
         f = tmp_path / "secret.txt"

@@ -7,11 +7,13 @@ import { localmindClient } from '@/lib/localmind/client';
 vi.mock('@/lib/localmind/client', () => ({
   localmindClient: {
     getFileContent: vi.fn(),
+    confirmWrite: vi.fn(),
   },
 }));
 
 const mockClient = localmindClient as unknown as {
   getFileContent: ReturnType<typeof vi.fn>;
+  confirmWrite: ReturnType<typeof vi.fn>;
 };
 
 function textContent(overrides: Record<string, unknown> = {}) {
@@ -21,6 +23,7 @@ function textContent(overrides: Record<string, unknown> = {}) {
     extension: 'txt',
     size: 12,
     truncated: false,
+    editable: true,
     text: 'first line\nsecond line',
     ...overrides,
   };
@@ -88,5 +91,81 @@ describe('FilePreviewDialog', () => {
     await screen.findByText(/first line/);
     await userEvent.click(screen.getByLabelText('Close preview'));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  describe('edit mode (B-2026-08-23-6 follow-up)', () => {
+    it('shows an Edit button for text files and edits the draft in a textarea', async () => {
+      mockClient.getFileContent.mockResolvedValue(textContent());
+      render(<FilePreviewDialog path="/tmp/demo/a.txt" onClose={() => {}} />);
+
+      await screen.findByText(/first line/);
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }));
+
+      const textarea = screen.getByLabelText('Edit file content') as HTMLTextAreaElement;
+      expect(textarea.value).toBe('first line\nsecond line');
+      await userEvent.clear(textarea);
+      await userEvent.type(textarea, 'edited content');
+      expect(textarea.value).toBe('edited content');
+    });
+
+    it('saves through confirmWrite and refreshes the preview on success', async () => {
+      mockClient.getFileContent.mockResolvedValueOnce(textContent()).mockResolvedValueOnce(
+        textContent({ text: 'edited content', size: 15 })
+      );
+      mockClient.confirmWrite.mockResolvedValue({ path: '/tmp/demo/a.txt', filename: 'a.txt' });
+      render(<FilePreviewDialog path="/tmp/demo/a.txt" onClose={() => {}} />);
+
+      await screen.findByText(/first line/);
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }));
+      const textarea = screen.getByLabelText('Edit file content');
+      await userEvent.clear(textarea);
+      await userEvent.type(textarea, 'edited content');
+      await userEvent.click(screen.getByRole('button', { name: /save/i }));
+
+      expect(mockClient.confirmWrite).toHaveBeenCalledWith('/tmp/demo/a.txt', 'edited content');
+      expect(await screen.findByText(/edited content/)).toBeInTheDocument();
+      expect(screen.getByText('Saved')).toBeInTheDocument();
+      // Edit mode exits back to read-only view.
+      expect(screen.queryByLabelText('Edit file content')).not.toBeInTheDocument();
+    });
+
+    it('keeps the editor open and shows an error when the save fails', async () => {
+      mockClient.getFileContent.mockResolvedValue(textContent());
+      mockClient.confirmWrite.mockRejectedValue(new Error('boom'));
+      render(<FilePreviewDialog path="/tmp/demo/a.txt" onClose={() => {}} />);
+
+      await screen.findByText(/first line/);
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }));
+      await userEvent.click(screen.getByRole('button', { name: /save/i }));
+
+      expect(await screen.findByText(/save failed/i)).toBeInTheDocument();
+      expect(screen.getByLabelText('Edit file content')).toBeInTheDocument();
+    });
+
+    it('hides the Edit button for office docs (parsed text is not the file)', async () => {
+      mockClient.getFileContent.mockResolvedValue(
+        textContent({ extension: 'docx', editable: false, text: 'Parsed doc text' })
+      );
+      render(<FilePreviewDialog path="/tmp/report.docx" onClose={() => {}} />);
+
+      await screen.findByText(/parsed doc text/i);
+      expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument();
+    });
+
+    it('hides the Edit button for images', async () => {
+      mockClient.getFileContent.mockResolvedValue({
+        path: '/tmp/pic.png',
+        name: 'pic.png',
+        extension: 'png',
+        size: 40,
+        truncated: false,
+        editable: false,
+        image_data_url: 'data:image/png;base64,QUJD',
+      });
+      render(<FilePreviewDialog path="/tmp/pic.png" onClose={() => {}} />);
+
+      await screen.findByRole('img', { name: 'pic.png' });
+      expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument();
+    });
   });
 });

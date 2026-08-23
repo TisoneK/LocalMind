@@ -235,6 +235,7 @@ async def get_file_content(path: str):
                 "extension": ext.lstrip("."),
                 "size": size,
                 "truncated": truncated,
+                "editable": False,
                 "image_data_url": f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}",
             }
 
@@ -256,6 +257,9 @@ async def get_file_content(path: str):
                 "extension": ext.lstrip("."),
                 "size": size,
                 "truncated": truncated,
+                # Parsed text is a lossy flattening of the binary format —
+                # writing it back would destroy the document, so never editable.
+                "editable": False,
                 "text": "\n\n".join(attachment.chunks),
             }
 
@@ -271,6 +275,7 @@ async def get_file_content(path: str):
             "extension": ext.lstrip("."),
             "size": size,
             "truncated": truncated,
+            "editable": True,
             "text": text,
         }
     except HTTPException:

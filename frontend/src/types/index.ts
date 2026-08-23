@@ -268,6 +268,9 @@ export interface FileContent {
   text?: string;
   /** Inline data URL for image files. */
   image_data_url?: string;
+  /** Whether the file is a plain text/code file safe to edit in place (office
+   *  docs are parsed text only and must not be written back). */
+  editable?: boolean;
 }
 
 export interface Session {
