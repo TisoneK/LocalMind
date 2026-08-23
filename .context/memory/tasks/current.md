@@ -1,29 +1,34 @@
 # Current Task
 
-**Status:** IDLE — Session 355 shipped clickable file previews (B-2026-08-23-6 done).
+**Status:** IDLE — Session 356 shipped the preview edit mode (B-2026-08-23-6 follow-up).
 
-## Session 355 outcome — render created files in the UI (docx/pdf/xlsx)
+## Session 356 outcome — edit files from the preview, saved through the confirm-write gate
 
-- The user's backlog item: after the agent creates a file, the UI should render it —
-  with support for docx, pdf, excel, etc. (the same backlog also asked for clickable
-  filenames, which this satisfies).
-- **FIX:** backend `GET /api/files/content?path=` (filesystem.py) — text/code verbatim
-  (FILE_READ_MAX_BYTES cap), office docs (docx/pdf/xlsx/csv) parsed via the engine's own
-  `tools.file_reader.parse_file` so the preview matches what the agent sees, images as
-  inline base64 data URLs; gated by `settings.is_path_allowed`. Frontend: `FileContent`
-  type + `localmindClient.getFileContent()`; new `FilePreviewDialog` (shadcn Dialog)
-  renders markdown (ReactMarkdown), code (mono), prose, and `<img>`; `FileResultChip`
-  became a clickable button (dotted-underline path) that opens the dialog.
-- **Decision:** reuse `parse_file` instead of adding frontend doc renderers
-  (mammoth/xlsx/pdfjs) — zero new deps; binary files never hit the browser raw.
-- **LIVE before/after (bankofai, isolated 8765):** agent created preview-demo.txt
-  (apple/banana/cherry) + notes.md (# Hello) via shell at ~/Dev/path-test/preview-out;
-  the content endpoint served both verbatim over HTTP.
-- **Tests:** 7 new backend (text/md-code/image data-url/office-parse mocked/403/404/400),
-  6 new frontend. Backend 2357 / 2 skipped; frontend 280; tsc clean; ruff clean; eslint
-  0 new (1 pre-existing-class set-state-in-effect warning).
+- User follow-up to B-2026-08-23-6: "Add an in-preview edit mode so users can tweak
+  a file's content and save it back through the confirm-write gate."
+- **FIX:** `GET /api/files/content` now returns `editable` (True only for the
+  plain-text/code branch — office docs stay view-only because the parsed text is a
+  lossy flattening that would destroy the document if written back; images too).
+  The dialog gained an Edit button + mono `<textarea>` (Ctrl/Cmd+Enter saves),
+  Cancel restores server text, Save calls the existing
+  `localmindClient.confirmWrite(path, content)` → `POST /api/confirm-write` (the
+  same permission gate: is_path_allowed + `_do_write`), re-fetches on success,
+  shows a "Saved" flash, and keeps the editor open with an inline error on failure.
+- **Decision:** reuse the existing confirm-write endpoint (already the agent's write
+  gate) instead of adding a new write route — the gate and its 403 path check apply
+  unchanged to user edits.
+- **LIVE (bankofai, isolated 8765):** agent created edit-me.txt (apple/banana/cherry)
+  → GET content `editable=True` → POST confirm-write with apple/banana/PEAR/done →
+  file on disk AND the content endpoint both show the edit. Full round trip.
+- **Tests:** 2357 backend / 2 skipped (editable assertions added), 285 frontend
+  (5 new edit-mode tests: edit button opens textarea, save→confirmWrite→refresh,
+  save error keeps editor open, no Edit for docx, no Edit for images). tsc clean,
+  ruff clean, eslint 0 errors.
+- **Debug note (logged to sessions.md):** a case-sensitive regex in the test
+  (`/parsed doc text/` vs "Parsed doc text") masqueraded as a component bug and
+  burned ~10 tool calls — the component was fine.
 - **Next:** B-2026-08-23-7 — file-task summary in the final output after the agent
   finishes creating/editing files.
 
-**Feature:** none (single-session UI feature)
-**Review:** n/a (no review record this session)
+**Feature:** none (single-session UI follow-up)
+**Review:** n/a

@@ -5043,3 +5043,25 @@ authoritative.
 - **Decision:** reuse `parse_file` (same text the model sees) rather than adding frontend doc
   renderers (mammoth/xlsx/pdfjs) — zero new deps, and binary files never hit the browser raw.
 - **Commits:** product `e903bcc` + context (below).
+
+## Session 356 — preview edit mode (B-2026-08-23-6 follow-up)
+
+- **Shipped:** users can edit text/code files inside the FilePreviewDialog and save
+  back through the existing permission gate (`POST /api/confirm-write`, which does
+  the is_path_allowed check + `_do_write`). Backend `GET /api/files/content` now
+  returns `editable` (True only for the plain-text branch — office docs stay
+  view-only because parsed text is a lossy flattening; images too). Frontend:
+  Edit button in the dialog header, mono `<textarea>` (Ctrl/Cmd+Enter saves),
+  Cancel restores the server text, Save calls `localmindClient.confirmWrite`,
+  re-fetches on success, shows "Saved" flash, inline error keeps the editor open.
+- **Verification:** backend 7 tests extended with `editable` assertions; frontend 5
+  new edit-mode tests. **2357 backend passed / 2 skipped**, **285 frontend passed**,
+  tsc clean, ruff clean, eslint 0 errors. Live (bankofai, isolated 8765): agent
+  created edit-me.txt (apple/banana/cherry) → GET content editable=True →
+  POST confirm-write with apple/banana/PEAR/done → file on disk + endpoint both
+  show the edited text.
+- **Debug note:** the "docx hides Edit" test failure was a case-sensitive regex in
+  the test (`/parsed doc text/` vs text "Parsed doc text"), NOT a component bug —
+  burned ~10 tool calls chasing a red herring. Lesson: use `/i` or exact-case
+  strings when the mock text has mixed case.
+- **Commits:** product `cc3c657` + context (below).
