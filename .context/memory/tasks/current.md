@@ -1,20 +1,11 @@
 # Current Task
 
-**Status:** IDLE — Session 365 shipped the per-session Files sidebar view.
+**Status:** IDLE — Session 366 shipped the Files-tab browser (tree + search + per-file actions; B-2026-08-23-18 done).
 
-## Session 365 outcome — per-session Files view in the sidebar
+## Session 366 outcome — Files tab browser
 
-- **Task:** each chat in the sidebar lists its workspace artifacts.
-- **Backend:** `GET /api/sessions/{id}/files` — recursive flat listing of the session workspace (relPath/size/modified; folders included even when empty; refuses paths outside the workspace root).
-- **Frontend:** "Files" chevron per session row in the Chat tab → fetches once (cached), renders compact indented list, click opens FilePreviewDialog. Empty state: "No files yet".
-- **Verified:** 4 backend + 2 frontend tests; 2408 backend / 293 frontend, tsc/ruff/eslint clean; live (bankofai, isolated 8765) — agent-created report.txt appeared in the session files listing.
-
-## Next
-
-- **B-2026-08-23-14 (Medium):** Connect the Memory tab UI to the memory backend.
-- **B-2026-08-23-16 (Medium):** Develop the Files tab.
-- **B-2026-08-23-18 (Medium):** File preview dialog multi-mode (Preview / Edit / Diff).
-
-**Feature:** none (single-session feature)
-**ADR:** none
-**Review:** pending
+- **Task:** develop the Files tab into a fuller browser — directory tree with lazy loading, search, per-file actions (open/download/delete/copy path).
+- **Root cause found:** the previous FileExplorer recursion bridge (`childChildrenState`) was a stub returning a fresh `{children: null, loading: false}` per render — nested folders could never load children.
+- **Changes:** backend `GET /api/files/search` + `DELETE /api/files` + `GET /api/files/download` (all gated by `is_path_allowed`; delete only for files / EMPTY folders); client `searchFiles`/`deleteFile`/`downloadFile`; FileExplorer rewritten with a shared per-path node-state map threaded through recursion, debounced search, hover per-file actions, delete confirmation, `onFilesChanged` refresh; LeftPanel/WorkspaceLayout thread `refreshFiles` so the tree re-fetches after delete.
+- **Verification:** 10 backend + 9 frontend new tests; 2418 backend / 302 frontend pass; tsc/ruff/eslint clean (warnings pre-existing). Live (bankofai, isolated 8765): tree, lazy children, case-insensitive search, download bytes, file delete, non-empty-folder delete refused (400), empty-folder delete — all verified. Note: `/api/files` with empty path defaults to the REAL home by design; the UI passes its seeded root.
+- **Next:** B-2026-08-23-14 (Memory tab wiring) or B-2026-08-23-16 (deeper Files browser) — both still open in backlog.

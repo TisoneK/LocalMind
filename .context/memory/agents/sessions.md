@@ -5229,3 +5229,21 @@ authoritative.
 **Frontend:** each session row in the Chat tab got a "Files" chevron button (stopPropagation so it doesn't switch chats). Toggle fetches once via `localmindClient.getSessionFiles` (cached), renders a compact indented list (folders + files with sizes); clicking a file opens the existing FilePreviewDialog. Empty state: "No files yet".
 
 **Verified:** 4 new backend tests (nested listing, empty workspace, hostile id never escapes, missing workspace), 2 new frontend tests (expand → files render, click → preview; empty state). 2408 backend / 293 frontend, tsc/ruff/eslint clean. Live (bankofai, isolated 8765): pre-seeded workspace served correctly; full agent turn created report.txt → appeared in the session files listing. (One e2e attempt had the free-tier model use shell instead of file_write — model nondeterminism, re-run with explicit "use the file write tool" wording succeeded.)
+
+## Session 366 — Files tab browser (B-2026-08-23-18) — 2026-08-23
+
+**Task:** develop the Files tab into a fuller browser — directory tree with lazy loading, search, per-file actions (open/download/delete/copy path).
+
+**Root cause found:** the previous FileExplorer recursion bridge (`childChildrenState`) was a stub that returned a fresh `{children: null, loading: false}` per render, so nested folders could never load children — only the root level worked.
+
+**Changes:**
+- `backend/src/api/routes/filesystem.py` — added `GET /api/files/search` (recursive case-insensitive name search, 200 cap), `DELETE /api/files` (file or EMPTY folder only; non-empty refused; traversal outside allowed folders refused), `GET /api/files/download` (FileResponse attachment). All gated by `is_path_allowed`.
+- `frontend/src/lib/localmind/client.ts` — `searchFiles`, `deleteFile`, `downloadFile` methods.
+- `frontend/src/components/panels/FileExplorer.tsx` — rewritten: shared per-path node-state map threaded through recursion (nested folders now lazily load via `getFileTree`), debounced search box with results list, hover per-file actions (preview / download / copy path / delete), delete confirmation, `onFilesChanged` refresh callback.
+- `frontend/src/components/layout/LeftPanel.tsx` + `WorkspaceLayout.tsx` — thread `onFilesChanged={refreshFiles}` from `useFileTree().refresh` so the tree re-fetches after a delete.
+
+**Tests:** `tests/api/test_files_browser.py` (10: search recursion/case/cap, delete file/empty folder/non-empty refused/missing/traversal, download attachment/dir refused) + `frontend/src/components/panels/FileExplorer.test.tsx` (9: tree render, lazy children, empty folder, search, no-matches, clear-search, delete-confirm+refresh, cancel, download). 2418 backend / 302 frontend, tsc + ruff + eslint clean (warnings pre-existing).
+
+**Live** (bankofai, isolated 8765, sandboxed LOCALMIND_HOME): tree listing of sandboxed home, lazy children of a folder, case-insensitive recursive search, download returns exact bytes with attachment disposition, file delete removes from listing, non-empty folder delete refused (400), empty folder delete succeeds. Note: `/api/files` with empty path defaults to the REAL home (by design) — the UI passes the root it seeds from, which live-check reproduced explicitly.
+
+**Commits:** product + context (pushed).
