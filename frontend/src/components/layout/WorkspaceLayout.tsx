@@ -91,6 +91,10 @@ export function WorkspaceLayout() {
   // Terminal hook — created first so we can reference addToolOutput in useChat
   const terminal = useTerminal();
 
+  // B-2026-08-23-27: ref to avoid re-running the resume logic on every
+  // sessions update — only fire once on the first non-empty session load.
+  const hasAutoSelectedRef = useRef(false);
+
   // FIX 8: Restore persisted adapter on mount
   useEffect(() => {
     localmindClient.restorePersistedAdapter();
@@ -115,7 +119,24 @@ export function WorkspaceLayout() {
 
   // Hook data — useChat receives the terminal event callback
   const health = useHealth();
-  const { sessions, refresh: refreshSessions, deleteSession, deleteSessions } = useSessions();
+  const { sessions, loading: sessionsLoading, refresh: refreshSessions, deleteSession, deleteSessions } = useSessions();
+
+  // B-2026-08-23-27: Auto-resume the most recent session on startup when
+  // the user has configured startup_session = "resume". Sessions are sorted
+  // by last_active descending from the backend, so sessions[0] is the most
+  // recent. Fires only once (guarded by hasAutoSelectedRef) and only when
+  // the session list first populates.
+  useEffect(() => {
+    if (hasAutoSelectedRef.current || sessionsLoading || sessions.length === 0) return;
+    hasAutoSelectedRef.current = true;
+    localmindClient.getSettings().then((settings) => {
+      if (settings.startup_session === 'resume' && sessions[0]?.id) {
+        setCurrentSessionId(sessions[0].id);
+      }
+    }).catch(() => {
+      // Non-fatal — default to new chat.
+    });
+  }, [sessions, sessionsLoading]);
   const { messages, fileDiffs, isStreaming, activeToolCalls, agentRuns, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);

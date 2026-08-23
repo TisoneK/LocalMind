@@ -39,6 +39,8 @@ class SettingsResponse(BaseModel):
     mode: str = "dark"
     custom_theme: Optional[dict] = None
     tone: float = 1.0
+    # B-2026-08-23-27: startup session behavior — "resume" or "new".
+    startup_session: str = "new"
 
 
 class AdapterConfig(BaseModel):
@@ -64,6 +66,30 @@ class ProviderKeyRequest(BaseModel):
     provider: str
     api_key: str
     model: Optional[str] = None
+
+
+class StartupSessionRequest(BaseModel):
+    """Body for POST /api/settings/startup-session (B-2026-08-23-27)."""
+    startup_session: str  # "resume" | "new"
+
+
+@router.post("/settings/startup-session")
+async def set_startup_session(req: StartupSessionRequest):
+    """Persist the startup session behavior (B-2026-08-23-27).
+
+    "resume" = auto-open the most recent session on launch.
+    "new" = start with a blank chat every time.
+    """
+    val = req.startup_session.strip().lower()
+    if val not in ("resume", "new"):
+        raise HTTPException(status_code=400, detail="startup_session must be 'resume' or 'new'")
+    settings.localmind_startup_session = val
+    # Persist to settings.json (write explicitly so False/empty don't get lost).
+    _path = settings._runtime_settings_path()
+    _data = settings._load_json_file(_path)
+    _data["startup_session"] = val
+    settings._secure_write_json(_path, _data)
+    return {"startup_session": val, "message": f"Startup behavior set to {val}"}
 
 
 class AppearanceRequest(BaseModel):
@@ -221,6 +247,8 @@ async def get_settings():
         mode=appearance.get("mode", "dark"),
         custom_theme=appearance.get("custom_theme"),
         tone=float(appearance.get("tone", 1.0) or 1.0),
+        # B-2026-08-23-27: startup session behavior
+        startup_session=getattr(settings, "localmind_startup_session", "new"),
     )
 
 

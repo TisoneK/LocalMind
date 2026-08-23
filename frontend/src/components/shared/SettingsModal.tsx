@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database } from 'lucide-react';
+import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
 import { useTheme, THEMES, type CustomTheme, type ModePref } from '@/hooks/useTheme';
 
@@ -140,6 +140,8 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const [modelWindow, setModelWindow] = useState<number | null>(null);
   // Shell-tool enable toggle (Bug B — was env-only, now a UI switch).
   const [shellEnabled, setShellEnabled] = useState(false);
+  // B-2026-08-23-27: startup session behavior ("resume" | "new").
+  const [startupSession, setStartupSession] = useState<'new' | 'resume'>('new');
 
   // Load current settings on mount
   useEffect(() => {
@@ -173,6 +175,8 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         // '' = auto (0); a real override shows as its number.
         setNumCtx(settings.num_ctx && settings.num_ctx > 0 ? String(settings.num_ctx) : '');
         setShellEnabled(settings.shell_enabled ?? false);
+        // B-2026-08-23-27: startup session behavior.
+        setStartupSession(settings.startup_session === 'resume' ? 'resume' : 'new');
         // Bug A: the essential settings are loaded — reveal the modal NOW and
         // let the model/embedding lists (which prime Ollama /api/show and can
         // take a few seconds) populate in the background instead of blocking
@@ -367,6 +371,16 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       setMessage(err instanceof Error ? err.message : 'Failed to save local settings');
     }
   }, [embedModel, numCtx, shellEnabled, onSave]);
+
+  // B-2026-08-23-27: persist startup session behavior immediately on toggle.
+  const handleChangeStartupSession = useCallback(async (mode: 'new' | 'resume') => {
+    setStartupSession(mode);
+    try {
+      await localmindClient.setStartupSession(mode);
+    } catch {
+      // Non-fatal: the local state is already correct.
+    }
+  }, []);
 
   const handleSaveKey = useCallback(async () => {
     if (!newKeyProvider || !newKeyValue.trim()) {
@@ -896,6 +910,39 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                 Save local settings
               </button>
             </div>
+          </section>
+
+          {/* ── B-2026-08-23-27: Startup Session ── */}
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <RotateCcw className="h-4 w-4 text-brand-green" />
+              On Startup
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              Choose what happens when you open LocalMind.
+            </p>
+            <div className="inline-flex rounded-lg border border-brand-border p-0.5">
+              {([['new', 'New chat', MessageSquarePlus], ['resume', 'Resume last', RotateCcw]] as const).map(([id, label, Icon]) => (
+                <button
+                  key={id}
+                  onClick={() => handleChangeStartupSession(id)}
+                  aria-pressed={startupSession === id}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    startupSession === id
+                      ? 'bg-brand-green/15 text-brand-green'
+                      : 'text-brand-green-muted hover:text-brand-green-soft'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11px] text-brand-green-muted">
+              {startupSession === 'resume'
+                ? 'Resumes the most recent chat when you launch LocalMind.'
+                : 'Always opens a fresh chat on launch.'}
+            </p>
           </section>
 
           {/* ── Reasoning (ADR-41) ── */}

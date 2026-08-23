@@ -1094,8 +1094,18 @@ class LocalMindClient {
     mode?: string;
     custom_theme?: { name?: string; accent?: string; background?: string; surface?: string; text?: string } | null;
     tone?: number;
+    // B-2026-08-23-27: startup session behavior ("resume" | "new").
+    startup_session?: string;
   }> {
     return this.request('/api/settings');
+  }
+
+  /** B-2026-08-23-27: Persist startup session behavior ("resume" | "new"). */
+  async setStartupSession(mode: 'resume' | 'new'): Promise<{ startup_session: string; message: string }> {
+    return this.request('/api/settings/startup-session', {
+      method: 'POST',
+      body: JSON.stringify({ startup_session: mode }),
+    });
   }
 
   /** Persist UI appearance (theme/mode/custom palette/tone) to settings.json. */

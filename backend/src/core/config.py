@@ -257,6 +257,10 @@ class Settings(BaseSettings):
     # LOCALMIND_REASONING_EFFORT / Settings UI.
     localmind_reasoning_effort: str = ""
 
+    # B-2026-08-23-27: startup session behavior — "resume" auto-opens the
+    # most recent session on launch; "new" starts with a blank chat.
+    localmind_startup_session: str = "new"
+
     # Permission gates — require user confirmation before write/delete
     localmind_require_write_permission: bool = False
 
@@ -386,6 +390,14 @@ class Settings(BaseSettings):
                 self.localmind_reasoning_max_wall_clock_secs = float(data["reasoning_max_wall_clock"])
             if "reasoning_effort" in data:
                 self.localmind_reasoning_effort = str(data["reasoning_effort"])
+            # B-2026-08-23-27: startup session behavior ("resume" | "new").
+            if "startup_session" in data:
+                val = str(data["startup_session"]).strip().lower()
+                if val in ("resume", "new"):
+                    self.localmind_startup_session = val
+                    logger.info(f"[config] Set startup_session to {val}")
+                else:
+                    logger.warning(f"[config] Ignoring invalid startup_session: {data['startup_session']!r}")
             # Load API keys from runtime settings
             if "api_keys" in data:
                 self._runtime_api_keys = data["api_keys"]
