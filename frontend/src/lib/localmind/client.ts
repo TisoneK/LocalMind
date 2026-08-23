@@ -392,6 +392,7 @@ class LocalMindClient {
       formattedDate: s.formattedDate,
       messageCount: s.messageCount ?? s.message_count ?? 0,
       active: false,
+      workspacePath: s.workspacePath || s.workspace_path || '',
     }));
   }
 

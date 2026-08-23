@@ -309,9 +309,14 @@ class TestChat:
         """
         from core.config import settings
 
-        uploads_path = tmp_path / "not-a-directory"
-        uploads_path.write_text("occupied")
-        with patch.object(settings, "localmind_uploads_path", str(uploads_path)):
+        # B-2026-08-23-17: uploads land in the session's workspace folder
+        # (<home>/sessions/<id>/uploads). Point the home at tmp and sabotage
+        # THAT path (a file where the dir should be) so mkdir fails and the
+        # typed error event fires.
+        with patch.object(settings, "localmind_home", str(tmp_path)):
+            uploads_path = tmp_path / "sessions" / "upload-error" / "uploads"
+            uploads_path.parent.mkdir(parents=True, exist_ok=True)
+            uploads_path.write_text("occupied")
             r = client.post(
                 "/api/chat",
                 data={"message": "read this", "session_id": "upload-error"},

@@ -289,6 +289,8 @@ export interface Session {
   timestamp: string;
   messageCount: number;
   active: boolean;
+  /** B-2026-08-23-17: this session's artifact folder (files deleted with the chat). */
+  workspacePath?: string;
   /** Human-readable date from the backend (e.g. "14:30" or "Jan 05") */
   formattedDate?: string;
 }

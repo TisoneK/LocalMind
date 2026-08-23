@@ -87,6 +87,7 @@ def _build_environment_context(
     session_cwd: str | None = None,
     compact: bool = False,
     include_tool_list: bool = True,
+    session_id: str | None = None,
 ) -> str:
     """Build environment context for the agent — system info, date/time, hardware, tools.
 
@@ -104,6 +105,11 @@ def _build_environment_context(
     carry it), costing ~279 tokens on every loop iteration. The OS/shell hints
     it sits next to ARE useful for code-gen, so — unlike ``compact`` — this
     keeps them.
+
+    ``session_id`` (B-2026-08-23-17): when provided, appends the session's
+    workspace folder line so the agent KNOWS where this session's artifact
+    files live and defaults its writes there (unless the user asked for a
+    specific path).
     """
     import datetime
     import os
@@ -185,6 +191,22 @@ def _build_environment_context(
     # ── Python version ──
     py_version = sys.version.split()[0]
 
+    # ── Session workspace (B-2026-08-23-17) ──
+    # The agent must know where THIS session's artifact files live so its
+    # default writes land there and stay with the session (deleted with it).
+    _workspace_line = ""
+    if session_id:
+        try:
+            from core.session_workspace import ensure_workspace
+
+            _ws = ensure_workspace(session_id)
+            _workspace_line = (
+                f"- Session workspace: {_ws} — write files you create for this "
+                "session here unless the user asked for a specific path."
+            )
+        except Exception:
+            _workspace_line = ""
+
     # ── Available tools summary ──
     # List the tools the model has access to so it doesn't need to guess
     from tools import available_tools
@@ -202,6 +224,7 @@ def _build_environment_context(
 - Working directory: {cwd}
 - Home: {home}
 - {shell_state_line}
+{_workspace_line}
 
 ## What You Know
 - Today is {date_str}. Use this to ground time-sensitive requests.
@@ -269,6 +292,7 @@ You have access to these tools: {tool_summary}
 - Working directory: {cwd}
 - Home: {home}
 - {shell_state_line}
+{_workspace_line}
 - CPU: {processor} ({cpu_count} cores)
 - Python: {py_version}
 - {os_guidance}

@@ -253,3 +253,21 @@ def test_include_tool_list_false_drops_tools_prose_keeps_os_hints():
     assert "## Environment" in lean and "## What You Know" in lean
     assert "Working directory:" in lean
     assert len(lean) < len(full)
+
+
+def test_session_workspace_line_injected_when_session_id_given(tmp_path, monkeypatch):
+    """B-2026-08-23-17: the env context tells the agent where THIS session's
+    artifacts live (and creates the folder). Absent without a session id."""
+    monkeypatch.setenv("LOCALMIND_HOME", str(tmp_path))
+    from core.config import settings as _s
+
+    _s.localmind_home = str(tmp_path)
+
+    with_ws = _build_environment_context(session_id="sess-ws-test")
+    without_ws = _build_environment_context()
+
+    assert "Session workspace:" in with_ws
+    assert "sess-ws-test" in with_ws
+    assert "Session workspace:" not in without_ws
+    # The workspace folder was actually created.
+    assert (tmp_path / "sessions" / "sess-ws-test").is_dir()

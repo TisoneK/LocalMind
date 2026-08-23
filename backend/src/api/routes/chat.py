@@ -969,7 +969,13 @@ async def chat(
                     status_code=413,
                     detail=f"File too large. Maximum {settings.localmind_max_file_size_mb} MB.",
                 )
-            uploads_dir = Path(settings.localmind_uploads_path)
+            # B-2026-08-23-17: uploads live in the session's workspace folder
+            # (<localmind_home>/sessions/<id>/uploads) so they're deleted with
+            # the chat and never collide across sessions. The shared
+            # ~/LocalMind/uploads dir is no longer used.
+            from core.session_workspace import workspace_uploads_dir
+
+            uploads_dir = workspace_uploads_dir(sid)
             uploads_dir.mkdir(parents=True, exist_ok=True)
             # SECURITY: Sanitize the filename to prevent path traversal.
             # A malicious filename like "../../etc/cron.d/evil" or

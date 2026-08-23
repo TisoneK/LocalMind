@@ -102,6 +102,15 @@ async def list_sessions():
             except (ValueError, OSError):
                 formatted_date = ""
 
+        # B-2026-08-23-17: expose the session's artifact folder so the UI
+        # (Files tab, previews) can point at where this session's files live.
+        try:
+            from core.session_workspace import workspace_path
+
+            workspace = str(workspace_path(session["id"]))
+        except Exception:
+            workspace = ""
+
         frontend_sessions.append(
             {
                 "id": session["id"],
@@ -110,6 +119,7 @@ async def list_sessions():
                 "formattedDate": formatted_date,
                 "messageCount": session.get("message_count", 0),
                 "last_message": (session.get("last_message") or "")[:120],
+                "workspacePath": workspace,
             }
         )
 
@@ -234,6 +244,20 @@ async def delete_session(session_id: str):
     deleted = _store.delete_session(session_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    # B-2026-08-23-17: deleting a chat deletes its artifacts — the session's
+    # workspace folder under <localmind_home>/sessions/<id> (uploads + agent
+    # files) goes with the DB row. Non-fatal: the DB deletion already happened.
+    try:
+        from core.session_workspace import delete_workspace
+
+        delete_workspace(session_id)
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "[sessions] workspace cleanup failed for %s: %s", session_id[:8], e
+        )
 
     # Session 26: clean up engine per-session state dicts
     try:

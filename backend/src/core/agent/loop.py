@@ -1139,6 +1139,9 @@ class AgentLoop:
         # model sees what todos exist and their status instead of hunting in
         # chat history. None = no persisted todos (first turn / no checklist).
         todo_state: Optional[list[dict]] = None,
+        # B-2026-08-23-17: session id → the env context injects the session's
+        # workspace folder so the agent writes artifacts where they belong.
+        session_id: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run the agent loop with the Plan→Execute→Verify workflow.
@@ -1491,7 +1494,7 @@ class AgentLoop:
             # Session 289: the classify/init call gets a COMPACT env (no tool
             # prose, no hardware lines) — ~half the tokens of the full block,
             # which matters most on the slow local models this app targets.
-            init_env_context = _build_environment_context(compact=True)
+            init_env_context = _build_environment_context(compact=True, session_id=session_id)
             # Session 337 (Cluster C): inject the refusal-strengthening reminder
             # into the init prompt (prepended to the env_context) when the
             # pre-init classifier detected pressure on a sensitive topic.
@@ -1670,7 +1673,9 @@ class AgentLoop:
             # S295: drop the redundant "## Available Tools" prose (the native
             # tools param + in-prompt list already carry it) — saves ~279
             # tokens on every loop iteration; keeps the OS/shell hints.
-            env_context = _build_environment_context(include_tool_list=False)
+            env_context = _build_environment_context(
+                include_tool_list=False, session_id=session_id
+            )
 
             # Collect the plan internally while it streams from the provider.
             plan_chunks: list[str] = []

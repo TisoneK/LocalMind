@@ -364,6 +364,17 @@ class SessionStore:
                 "INSERT OR IGNORE INTO sessions(id) VALUES(?)",
                 (session_id,),
             )
+        # B-2026-08-23-17: a session row and its workspace folder are born
+        # together — the first touch on a session creates its artifact folder
+        # under <localmind_home>/sessions/<id> (idempotent, non-fatal).
+        try:
+            from core.session_workspace import ensure_workspace
+
+            ensure_workspace(session_id)
+        except Exception:
+            logging.getLogger(__name__).debug(
+                "[db] workspace ensure skipped for %s", session_id[:8], exc_info=True
+            )
 
     def append(self, session_id: str, message: Message) -> None:
         self.ensure_session(session_id)

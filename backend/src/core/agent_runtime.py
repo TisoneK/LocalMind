@@ -1349,6 +1349,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # Session 359: the persisted todos from previous turns — the
                 # model must know its own checklist to act on it.
                 todo_state=current_todos,
+                session_id=session_id,
             ):
                 if chunk.usage:
                     usage.update(chunk.usage)

@@ -248,6 +248,9 @@ class BaseAgent(ABC):
         # to AgentLoop.run() so the model sees its own environment (what
         # todos exist + status) instead of hunting in chat history.
         todo_state: Optional[list[dict]] = None,
+        # B-2026-08-23-17: session id, forwarded to AgentLoop.run() so the env
+        # context can inject the session's workspace folder.
+        session_id: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """
         Run this agent through the parent-owned AgentLoop:
@@ -388,6 +391,7 @@ class BaseAgent(ABC):
             reformulated_message=reformulated_message,  # Session 178
             skip_head_gate=skip_head_gate,  # Session 330
             todo_state=todo_state,  # Session 359
+            session_id=session_id,  # B-2026-08-23-17
         ):
             yield chunk
 
