@@ -252,7 +252,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "edit_file",
-            "description": "Edit an existing file in-place: replace, regex_replace, insert, delete, append, prepend. Prefer over file_write for existing files. ALWAYS read the file with file_task before editing.",  # noqa: E501
+            "description": "Edit an existing file in-place: rewrite (full content), replace, regex_replace, insert, delete, append, prepend. Prefer over file_write for existing files. ALWAYS read the file with file_task before editing.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -260,6 +260,7 @@ TOOL_DEFINITIONS: list[dict] = [
                     "action": {
                         "type": "string",
                         "enum": [
+                            "rewrite",
                             "replace",
                             "regex_replace",
                             "insert",
@@ -268,6 +269,7 @@ TOOL_DEFINITIONS: list[dict] = [
                             "prepend",
                         ],
                     },
+                    "content": {"type": "string", "description": "For rewrite: the new full file content (omit action and pass only path + content for a full rewrite)"},
                     "search": {"type": "string", "description": "For replace/regex_replace/delete actions"},
                     "replace": {"type": "string", "description": "For replace/regex_replace actions"},
                     "insert_text": {"type": "string", "description": "For insert/append/prepend actions"},

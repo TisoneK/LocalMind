@@ -404,9 +404,17 @@ class EditFileContract(ToolContract):
         all the heavy lifting: path resolution, backup creation, edit
         application, diff generation, and error handling.
         """
+        # Session 376: normalize free-tier model aliases (old_pattern/new_string,
+        # content-only → rewrite) BEFORE the action validation below — a
+        # content-only payload would otherwise be rejected here without ever
+        # reaching prepare_edit's normalizer.
+        from tools.edit_file import _edit_from_payload, _normalize_edit_payload
+
+        payload = _normalize_edit_payload(payload)
+
         # Validate action value
         action = payload.get("action", "")
-        valid_actions = {"replace", "regex_replace", "insert", "delete", "append", "prepend"}
+        valid_actions = {"replace", "regex_replace", "insert", "delete", "append", "prepend", "rewrite"}
         if action not in valid_actions:
             return ToolResult(
                 content=f"Invalid action '{action}'. Valid: {', '.join(sorted(valid_actions))}",
@@ -418,8 +426,6 @@ class EditFileContract(ToolContract):
             )
 
         # Delegate to the edit_file module's payload handler
-        from tools.edit_file import _edit_from_payload
-
         return await _edit_from_payload(payload)
 
 

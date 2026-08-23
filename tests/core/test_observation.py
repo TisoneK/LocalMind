@@ -7,6 +7,39 @@ from core.observation import ObservationSnapshot
 from core.workspace_state import WorkspaceSnapshot
 
 
+def test_emit_keeps_json_containers_native_not_stringified():
+    """Session 376: ObsCollector.emit must NOT str() lists/dicts.
+
+    The old `str(v)` turned the edit_file diff_hunks list into a Python-repr
+    STRING, so the diff SSE event's `hunks` field was a string and the
+    frontend's Array.isArray check silently dropped every diff (the preview
+    Diff mode and inline chat DiffBlock never filled). JSON containers pass
+    through to json.dumps natively; scalars are unchanged.
+    """
+    collector = ObsCollector()
+    hunks = [{"type": "added", "content": "x", "newLine": 1}]
+    collector.emit("file_diff", diff_hunks=hunks, path="/tmp/a.txt")
+    collector.emit("stage_timing", latency_ms=0, status="skipped")
+
+    drained = collector.drain()
+    diff = next(e for e in drained if e.type == "file_diff")
+    timing = next(e for e in drained if e.type == "stage_timing")
+    assert diff.data["diff_hunks"] == hunks, "list must stay a list"
+    assert diff.data["diff_hunks"][0]["type"] == "added"
+    assert diff.data["path"] == "/tmp/a.txt"
+    # Scalars still pass through natively (JSON handles them).
+    assert timing.data["latency_ms"] == 0
+    assert timing.data["status"] == "skipped"
+
+
+def test_emit_skips_none_values():
+    collector = ObsCollector()
+    collector.emit("tool_call", tool="shell", output=None, label="Run")
+    data = collector.drain()[0].data
+    assert "output" not in data
+    assert data["label"] == "Run"
+
+
 def test_observation_snapshot_defaults_to_empty_workspace_and_events():
     """The contract can be created without runtime state."""
     observation = ObservationSnapshot()

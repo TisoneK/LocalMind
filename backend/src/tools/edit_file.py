@@ -380,6 +380,63 @@ class PreparedEdit:
         self.modified = modified
 
 
+# ── Free-tier model payload aliases (Session 376) ────────────────────────────
+# Free-tier models (DeepSeek, Claude-style) frequently use alternate field
+# names for the same edit — the Session 375 live trace showed
+# `old_pattern`/`new_string` instead of `pattern`/`replace`, and content-only
+# calls (no action) meaning "rewrite the whole file". Normalizing here makes
+# the first attempt succeed instead of bouncing a validation error back to
+# the model for another iteration.
+_EDIT_FIELD_ALIASES: dict[str, str] = {
+    # path: models commonly call it file_path
+    "file_path": "path",
+    # regex_replace: Claude-style / shorthand source + replacement names
+    "old_pattern": "pattern",
+    "regex": "pattern",
+    "regex_pattern": "pattern",
+    "new_string": "replace",
+    "replacement": "replace",
+    "new_text": "replace",
+    # replace: Claude-style / shorthand search + replacement names
+    "old_string": "search",  # Claude/Anthropic replace format (no action)
+    "old_text": "search",
+    "search_text": "search",
+    "find": "search",
+    # insert/append/prepend: generic content field
+    "text": "insert_text",
+}
+
+
+#: Actions that replace the ENTIRE file content (no search required).
+_REWRITE_ACTIONS = {"rewrite", "overwrite"}
+
+
+def _normalize_edit_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Map common model field aliases onto the canonical edit_file schema.
+
+    Idempotent: canonical fields win when both are present; a content-only
+    call (no ``action``) becomes a full-file rewrite. Called by both the
+    typed contract (before its action validation) and prepare_edit (the
+    shared validation single-source), so every entry path normalizes.
+    """
+    normalized = dict(payload)
+    for alias, canonical in _EDIT_FIELD_ALIASES.items():
+        if alias in normalized and canonical not in normalized:
+            normalized[canonical] = normalized[alias]
+    action = str(normalized.get("action") or "").strip().lower()
+    if not action and normalized.get("content"):
+        # Content-only call = rewrite the whole file.
+        normalized["action"] = "rewrite"
+    elif not action and (normalized.get("search") or normalized.get("pattern")):
+        # Claude-style replace with no explicit action — infer it from which
+        # field is present (pattern → regex_replace, else plain replace).
+        normalized["action"] = "regex_replace" if normalized.get("pattern") else "replace"
+    elif action in _REWRITE_ACTIONS:
+        # Canonicalize rewrite/overwrite → "rewrite".
+        normalized["action"] = "rewrite"
+    return normalized
+
+
 def prepare_edit(
     payload: Dict[str, Any],
     source: str = "edit_file",
@@ -405,6 +462,7 @@ def prepare_edit(
         (error_result, None) on any validation/read/apply failure — the
         returned ToolResult can be returned to the user as-is.
     """
+    payload = _normalize_edit_payload(payload)
     raw_path = payload.get("path", "")
     action = payload.get("action", "")
 
@@ -434,7 +492,7 @@ def prepare_edit(
             None,
         )
 
-    valid_actions = {"replace", "regex_replace", "insert", "delete", "append", "prepend"}
+    valid_actions = {"replace", "regex_replace", "insert", "delete", "append", "prepend", "rewrite"}
     if action not in valid_actions:
         return (
             ToolResult(
@@ -547,18 +605,24 @@ def prepare_edit(
 
     # Apply the edit (compute only — no disk write)
     try:
-        modified = _apply_edit(
-            content=original,
-            action=action,
-            search=payload.get("search", ""),
-            replace=payload.get("replace", ""),
-            insert_text=payload.get("insert_text", ""),
-            line=int(payload.get("line", 0)),
-            start_line=int(payload.get("start_line", 0)),
-            end_line=int(payload.get("end_line", 0)),
-            pattern=payload.get("pattern", ""),
-            replace_all=bool(payload.get("all", False)),
-        )
+        if action == "rewrite":
+            # Full-file rewrite: the new content IS the payload's `content`.
+            modified = payload.get("content", "")
+            if not modified.strip():
+                raise ValueError("'content' is required for the rewrite action")
+        else:
+            modified = _apply_edit(
+                content=original,
+                action=action,
+                search=payload.get("search", ""),
+                replace=payload.get("replace", ""),
+                insert_text=payload.get("insert_text", ""),
+                line=int(payload.get("line", 0)),
+                start_line=int(payload.get("start_line", 0)),
+                end_line=int(payload.get("end_line", 0)),
+                pattern=payload.get("pattern", ""),
+                replace_all=bool(payload.get("all", False)),
+            )
     except ValueError as exc:
         return (
             ToolResult(

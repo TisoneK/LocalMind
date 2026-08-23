@@ -125,15 +125,16 @@ async def test_native_edit_file_edits_file_and_emits_file_diff(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_malformed_edit_file_surfaces_failure_not_crash(tmp_path):
-    """A content-only payload (no action) is a validation failure — it must
-    surface as a failed tool call, never crash the loop with an unbound
-    `tool_result` (the pre-fix live bug)."""
+async def test_invalid_edit_file_surfaces_failure_not_crash(tmp_path):
+    """An unknown-action payload is a validation failure — it must surface as
+    a failed tool call, never crash the loop with an unbound `tool_result`
+    (the Session 375 live bug). Note: a content-only payload is NO LONGER
+    malformed — it means a full-file rewrite (Session 376 aliases)."""
     target = tmp_path / "notes.txt"
     target.write_text("hello\n", encoding="utf-8")
     obs_collector = ObsCollector()
     loop = AgentLoop(adapter=MagicMock())
-    adapter = _adapter_that_calls("edit_file", {"path": str(target), "content": "nope"})
+    adapter = _adapter_that_calls("edit_file", {"action": "nonsense", "path": str(target)})
     patcher = _allow(tmp_path)
     try:
         await _run_edit(loop, adapter, tmp_path, target, obs_collector)

@@ -40,13 +40,20 @@ class ObsCollector:
         # FIX: Use JSON-safe serialization instead of str() to avoid
         # str(None) -> "None" which breaks Number("None") -> NaN in the frontend.
         # Skip None values entirely, and convert everything else to a string
-        # only if it isn't already a number or bool (which JSON handles natively).
+        # only if it isn't already JSON-native.
+        #
+        # Session 376: lists/dicts must stay native too — `str(v)` on the
+        # edit_file diff_hunks list produced a Python-repr STRING, so the diff
+        # SSE event carried a string "hunks" field and the frontend's
+        # Array.isArray check silently dropped every diff (Diff mode never
+        # filled, and the inline chat DiffBlock stayed dead). Scalar consumers
+        # are unaffected; JSON containers pass through to json.dumps natively.
         safe_data = {}
         for k, v in data.items():
             if v is None:
                 continue  # Skip None values entirely
-            if isinstance(v, (int, float, bool)):
-                safe_data[k] = v  # Keep numbers/bools as-is for JSON
+            if isinstance(v, (int, float, bool, list, dict)):
+                safe_data[k] = v  # Keep JSON-native values as-is
             else:
                 safe_data[k] = str(v)
         event = ObsEvent(type=event_type, data=safe_data)
