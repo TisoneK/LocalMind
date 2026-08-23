@@ -1326,9 +1326,23 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # gate's success criteria (completion gated on evidence against these
         # items, not on tool-call success). Conversational/abstract turns
         # derive [] → None → no contract, legacy behavior unchanged.
-        from core.agent.goal_interpreter import derive_goal_items
+        from core.agent.goal_interpreter import (
+            derive_goal_items,
+            derive_goal_tree,
+        )
 
         goal_items = derive_goal_items(message)
+        # B-2026-08-23-8: the goal TREE — each goal plus its ordered
+        # sub-goals (check → prep → write → verify). Derived once with the
+        # flat checklist (same immutable denominator); handed to the loop
+        # as plain dicts {goal, sub_goals} so the Todos panel can render
+        # the route nested under each goal and the model sees the ordered
+        # path. Empty when nothing concrete was derived — same condition
+        # as `goal_items`.
+        goal_tree = [
+            {"goal": dg.goal, "sub_goals": dg.sub_goals}
+            for dg in derive_goal_tree(message)
+        ]
         if goal_items:
             collector.emit(
                 "agent_goal_checklist",
@@ -1364,6 +1378,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # success criteria (completion gated on evidence against
                 # these items). None when nothing concrete was derived.
                 plan_steps=goal_items or None,
+                # B-2026-08-23-8: the same goals decomposed into an ordered
+                # sub-goal route, rendered nested in the Todos panel and
+                # injected into the model context so the agent follows the
+                # fastest+safest ordered path.
+                goal_tree=goal_tree or None,
                 success_criteria=goal_items or None,
                 # The criteria must gate at the FINAL-ANSWER point (the
                 # model says done → gate verifies → replan or honest

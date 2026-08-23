@@ -369,6 +369,94 @@ def derive_goal_items(message: str, max_items: int = _MAX_GOAL_ITEMS) -> list[st
     return items[:_MAX_GOAL_ITEMS]
 
 
+# ── Hierarchical goal tree (B-2026-08-23-8) ─────────────────────────────────
+# Each derived goal gets an ordered sub-goal route phrasing the
+# fastest+safest path to the deliverable (check → prep → write → verify),
+# each feeding the next. The tree is derived ONCE with the flat checklist
+# — it is part of the SAME immutable denominator (Session 330 contract):
+# never mutated, never re-derived mid-turn. The acceptance gate still
+# checks the flat goal items; the sub-goals are ordered guidance for the
+# model and are rendered as nested rows under their parent in the Todos
+# panel.
+
+# How many ordered sub-goals a single goal may carry (bounds the panel).
+_MAX_SUB_GOALS = 4
+
+
+@dataclass
+class DerivedGoal:
+    """A fixed top-level goal plus its fixed, ordered sub-goals.
+
+    `goal` is exactly one item from `derive_goal_items()` (checkable by
+    the acceptance gate). `sub_goals` spell the fastest+safest ordered
+    route to it — each feeds the next, and both together are derived
+    once and never mutated (the Session 330 fixed-denominator contract).
+    """
+
+    goal: str
+    sub_goals: list[str]
+
+
+def _parent_folder(path: str) -> str:
+    """First path component of a file path ("src/app.tsx" → "src"), or
+    "" for a bare filename — no folder to pre-create."""
+    parts = [p for p in re.split(r"[/\\]", path) if p]
+    return parts[0] if len(parts) > 1 else ""
+
+
+def _sub_goals_for_goal(goal: str) -> list[str]:
+    """Deterministic ordered sub-goals for one derived goal item.
+
+    Phrased fastest+safest: check the current state before acting
+    (Session 32 check-before-acting), then the minimal write route, then
+    verify against the goal itself. Conservative and bounded — never
+    inventing deliverables, only the route to the one the user named.
+    """
+    if goal.startswith("file exists at "):
+        path = goal[len("file exists at ") :].strip()
+        if path.endswith(" with content"):
+            path = path[: -len(" with content")].strip()
+        steps = [f"check whether {path} already exists (read it if so)"]
+        parent = _parent_folder(path)
+        if parent:
+            steps.append(f"create the folder {parent} first if it is missing")
+        steps.append(f"write {path} with the full content")
+        steps.append(f"verify {path} exists with the expected content")
+        return steps[:_MAX_SUB_GOALS]
+    if goal.startswith("folder created at "):
+        name = goal[len("folder created at ") :].strip()
+        return [
+            f"check whether the folder {name} already exists",
+            f"create the folder {name} only if it is missing",
+            f"verify the folder {name} exists",
+        ][:_MAX_SUB_GOALS]
+    # Unknown shape (defensive — derive_goal_items only emits the two
+    # forms above): a generic check → act → verify route.
+    return [
+        "check the target's current state first",
+        "complete the goal",
+        "verify the result matches the goal",
+    ][:_MAX_SUB_GOALS]
+
+
+def derive_goal_tree(
+    message: str, max_items: int = _MAX_GOAL_ITEMS
+) -> list[DerivedGoal]:
+    """Derive the FIXED goal tree: top-level goals + ordered sub-goals.
+
+    Deterministic wrapper over `derive_goal_items`: every flat checklist
+    item becomes a `DerivedGoal` whose `sub_goals` spell the fastest+
+    safest ordered route (check → prep → write → verify), each feeding
+    the next. Derived once per message — the acceptance gate still
+    checks the flat items (unchanged denominator), while the Todos panel
+    renders the sub-goals nested under their parent (B-2026-08-23-8).
+    """
+    return [
+        DerivedGoal(goal=item, sub_goals=_sub_goals_for_goal(item))
+        for item in derive_goal_items(message, max_items=max_items)
+    ]
+
+
 # ── Public API ───────────────────────────────────────────────────────────────
 
 

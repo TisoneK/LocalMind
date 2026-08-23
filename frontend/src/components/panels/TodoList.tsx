@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Check, Plus, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActionItem, TodoItem } from '@/types';
@@ -21,8 +21,13 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
   const [newTodoText, setNewTodoText] = useState('');
   const [showInput, setShowInput] = useState(false);
 
-  const completed = todos.filter((t) => t.completed).length;
-  const total = todos.length;
+  // B-2026-08-23-8: sub-goal rows (plan-{i}-sub-{j}) are ordered guidance
+  // nested under their parent goal — rendered indented, never counted in
+  // the denominator (the parent plan rows own the n/n contract).
+  const isSubRow = (id: string) => /^plan-\d+-sub-\d+$/.test(id);
+  const parentRows = todos.filter((t) => !isSubRow(t.id));
+  const completed = parentRows.filter((t) => t.completed).length;
+  const total = parentRows.length;
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   // Per-todo action counts: how many actions each plan step owns, and how
@@ -125,6 +130,9 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
         )}
         <AnimatePresence initial={false}>
           {todos.map((todo) => {
+            // B-2026-08-23-8: skip sub-goal rows here — they render
+            // nested right under their parent below.
+            if (isSubRow(todo.id)) return null;
             const counts = countByTodo.get(todo.id);
             const isActive =
               !todo.completed &&
@@ -132,7 +140,11 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
                 todo.status === 'started' ||
                 todo.status === 'in_progress' ||
                 (counts?.running ?? 0) > 0);
+            const subRows = todos.filter(
+              (t) => isSubRow(t.id) && t.id.startsWith(`${todo.id}-`)
+            );
             return (
+              <Fragment key={todo.id}>
               <motion.div
                 key={todo.id}
                 layout={!reduceMotion}
@@ -188,6 +200,36 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
                   </span>
                 )}
               </motion.div>
+              {/* B-2026-08-23-8: sub-goal route rows — ordered guidance
+                  nested under the parent goal, informational only (no
+                  checkbox, no action badge), never counted in n/n. */}
+              {subRows.map((sub) => (
+                <div
+                  key={sub.id}
+                  data-testid="todo-subrow"
+                  data-completed={sub.completed || undefined}
+                  className="flex items-center gap-1.5 pl-5 ml-1.5 py-0.5 border-l border-brand-border/60"
+                  title="Sub-goal — part of the goal route"
+                >
+                  <span
+                    className={`text-[9px] shrink-0 ${
+                      sub.completed ? 'text-brand-green' : 'text-brand-green-faint'
+                    }`}
+                  >
+                    {sub.completed ? '✓' : '↳'}
+                  </span>
+                  <span
+                    className={`text-[10px] leading-tight ${
+                      sub.completed
+                        ? 'text-brand-green-muted line-through'
+                        : 'text-brand-green-muted/80'
+                    }`}
+                  >
+                    {sub.text}
+                  </span>
+                </div>
+              ))}
+              </Fragment>
             );
           })}
         </AnimatePresence>

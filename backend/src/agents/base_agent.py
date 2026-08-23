@@ -245,9 +245,15 @@ class BaseAgent(ABC):
         # summary before the model writes its synthesis.
         skip_head_gate: bool = False,
         # Session 359: the session's current persisted todo list. Forwarded
-        # to AgentLoop.run() so the model sees its own environment (what
+        # to AgentLoop.run() so the agent can see its own environment (what
         # todos exist + status) instead of hunting in chat history.
         todo_state: Optional[list[dict]] = None,
+        # B-2026-08-23-8: the derived goal tree — each plan step plus its
+        # ordered sub-goals (check → prep → write → verify). Forwarded to
+        # AgentLoop.run() so the Todos panel renders the route nested under
+        # each goal and the model sees the ordered path. None = flat plan
+        # only (legacy behavior).
+        goal_tree: Optional[list[dict]] = None,
         # B-2026-08-23-17: session id, forwarded to AgentLoop.run() so the env
         # context can inject the session's workspace folder.
         session_id: str | None = None,
@@ -391,6 +397,7 @@ class BaseAgent(ABC):
             reformulated_message=reformulated_message,  # Session 178
             skip_head_gate=skip_head_gate,  # Session 330
             todo_state=todo_state,  # Session 359
+            goal_tree=goal_tree,  # B-2026-08-23-8
             session_id=session_id,  # B-2026-08-23-17
         ):
             yield chunk

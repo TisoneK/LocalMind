@@ -82,4 +82,44 @@ describe('TodoList', () => {
     fireEvent.click(screen.getByText('Toggle me'));
     expect(toggled).toEqual([['p0', true]]);
   });
+
+  it('renders sub-goal rows nested under their parent without counting them', () => {
+    // B-2026-08-23-8: plan-{i}-sub-{j} rows are ordered guidance under the
+    // parent goal — indented, informational, never part of the n/n
+    // denominator (the parent plan rows own the fixed count).
+    render(
+      <TodoList
+        todos={[
+          todo({ id: 'plan-0', text: 'file exists at a.txt with content' }),
+          todo({ id: 'plan-0-sub-0', text: 'check whether a.txt already exists' }),
+          todo({ id: 'plan-0-sub-1', text: 'write a.txt with the full content' }),
+          todo({ id: 'plan-0-sub-2', text: 'verify a.txt exists with the expected content' }),
+          todo({ id: 'plan-1', text: 'folder created at path-test' }),
+        ]}
+      />,
+    );
+    // Parents render as rows; sub-goals render as sub-rows.
+    expect(screen.getAllByTestId('todo-row')).toHaveLength(2);
+    expect(screen.getAllByTestId('todo-subrow')).toHaveLength(3);
+    expect(screen.getByText('write a.txt with the full content')).toBeInTheDocument();
+    // The denominator stays 0/2 (sub-goals don't count).
+    expect(screen.getByText('0/2')).toBeInTheDocument();
+  });
+
+  it('marks sub-goal rows complete with their parent and keeps 1/2', () => {
+    render(
+      <TodoList
+        todos={[
+          todo({ id: 'plan-0', text: 'file exists at a.txt with content', completed: true }),
+          todo({ id: 'plan-0-sub-0', text: 'check whether a.txt already exists', completed: true }),
+          todo({ id: 'plan-0-sub-1', text: 'write a.txt with the full content', completed: true }),
+          todo({ id: 'plan-1', text: 'folder created at path-test' }),
+        ]}
+      />,
+    );
+    const subrows = screen.getAllByTestId('todo-subrow');
+    expect(subrows).toHaveLength(2);
+    expect(subrows.every((r) => r.getAttribute('data-completed') !== undefined)).toBe(true);
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+  });
 });

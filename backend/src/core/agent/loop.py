@@ -646,6 +646,35 @@ def _render_todo_state(todo_state: Optional[list[dict]]) -> str:
     return "\n".join(lines)
 
 
+def _render_goal_route(goal_tree: Optional[list[dict]]) -> str:
+    """Render the derived goal tree as an ordered route for the model.
+
+    B-2026-08-23-8: each top-level goal item plus its sub-goals phrased
+    check → prep → write → verify, so the agent follows the fastest+safest
+    ordered path (each step feeds the next). Rendered once per turn — the
+    same immutable denominator the Todos panel shows. Returns "" when
+    nothing was derived.
+    """
+    if not goal_tree:
+        return ""
+    lines = ["# Goal route (follow in order; each step feeds the next)"]
+    for i, entry in enumerate(goal_tree):
+        if not isinstance(entry, dict):
+            continue
+        goal = str(entry.get("goal") or "").strip()
+        if not goal:
+            continue
+        lines.append(f"Goal {i + 1}: {goal}")
+        sub_goals = entry.get("sub_goals") or []
+        for j, sub in enumerate(sub_goals):
+            sub_text = str(sub).strip()
+            if sub_text:
+                lines.append(f"   {j + 1}. {sub_text}")
+    if len(lines) == 1:
+        return ""
+    return "\n".join(lines)
+
+
 def _intent_for_tool(tool_name: str) -> Intent:
     """Map a tool name to its Intent.
 
@@ -1298,6 +1327,14 @@ class AgentLoop:
         # model sees what todos exist and their status instead of hunting in
         # chat history. None = no persisted todos (first turn / no checklist).
         todo_state: Optional[list[dict]] = None,
+        # B-2026-08-23-8: the derived goal tree — each plan step plus its
+        # ordered sub-goals (check → prep → write → verify), as plain dicts
+        # [{goal, sub_goals}]. When present alongside plan_steps, the loop
+        # seeds the sub-goals as nested Todos rows (plan-{i}-sub-{j}) and
+        # injects the ordered route into the model context. None = flat plan
+        # (legacy behavior). Never mutated — same fixed denominator as the
+        # flat plan items (Session 330 contract).
+        goal_tree: Optional[list[dict]] = None,
         # B-2026-08-23-17: session id → the env context injects the session's
         # workspace folder so the agent writes artifacts where they belong.
         session_id: str | None = None,
@@ -1804,6 +1841,25 @@ class AgentLoop:
                         completed=False,
                         status="pending",
                     )
+                # B-2026-08-23-8: seed the sub-goal rows (plan-{i}-sub-{j})
+                # right after their parent goal. They are part of the SAME
+                # immutable denominator (Session 330) — informational,
+                # never advanced by the plan cursor, finalized with the
+                # parent at turn end.
+                for i, tree_entry in enumerate(goal_tree or []):
+                    if not isinstance(tree_entry, dict):
+                        continue
+                    sub_goals = tree_entry.get("sub_goals") or []
+                    for j, sub in enumerate(sub_goals):
+                        if not str(sub).strip():
+                            continue
+                        _obs.emit(
+                            "todo_created",
+                            id=f"plan-{i}-sub-{j}",
+                            text=str(sub).strip(),
+                            completed=False,
+                            status="pending",
+                        )
             if _obs:
                 _obs.emit(
                     "agent_planning_done",
@@ -1892,6 +1948,25 @@ class AgentLoop:
             if _obs:
                 for i, step in enumerate(_plan_steps):
                     _obs.emit("todo_created", id=f"plan-{i}", text=step, completed=False)
+                # B-2026-08-23-8: seed the sub-goal rows (plan-{i}-sub-{j})
+                # right after their parent goal — the warm-kernel parent
+                # path (runtime passes skip_planning + goal_tree) rides this
+                # branch. Same immutable denominator as the flat items;
+                # informational rows, never advanced by the plan cursor.
+                for i, tree_entry in enumerate(goal_tree or []):
+                    if not isinstance(tree_entry, dict):
+                        continue
+                    sub_goals = tree_entry.get("sub_goals") or []
+                    for j, sub in enumerate(sub_goals):
+                        if not str(sub).strip():
+                            continue
+                        _obs.emit(
+                            "todo_created",
+                            id=f"plan-{i}-sub-{j}",
+                            text=str(sub).strip(),
+                            completed=False,
+                            status="pending",
+                        )
         else:
             _plan_steps = []
 
@@ -1976,6 +2051,28 @@ class AgentLoop:
         # The previous per-tool advance split one logical step's actions
         # across consecutive todos. Remaining todos are finalized as done
         # when the turn ends (see the SSE bridge's _finalize_plan_todos).
+        def _complete_sub_goals(parent_idx: int) -> None:
+            """Complete the sub-goal rows of a finished plan step.
+
+            B-2026-08-23-8: the sub-goals (plan-{i}-sub-{j}) are guidance
+            rows seeded with the parent; when the parent completes, its
+            route is done too, so the nested rows flip together. The rows
+            stay part of the fixed denominator — no new ids are ever
+            created here.
+            """
+            if not _obs or not goal_tree:
+                return
+            for tree_entry in goal_tree:
+                if not isinstance(tree_entry, dict):
+                    continue
+                sub_goals = tree_entry.get("sub_goals") or []
+                for j in range(len(sub_goals)):
+                    _obs.emit(
+                        "todo_completed",
+                        id=f"plan-{parent_idx}-sub-{j}",
+                        completed=True,
+                    )
+
         def _advance_plan_on_narration() -> None:
             nonlocal _plan_step_cursor
             if (
@@ -1985,6 +2082,7 @@ class AgentLoop:
                 and _obs
             ):
                 _obs.emit("todo_completed", id=f"plan-{_plan_step_cursor}", completed=True)
+                _complete_sub_goals(_plan_step_cursor)
                 _plan_step_cursor += 1
 
         # Session 142: the 'why' for any tool call under the active plan
@@ -2015,6 +2113,7 @@ class AgentLoop:
                     id=f"plan-{_plan_step_cursor}",
                     completed=True,
                 )
+                _complete_sub_goals(_plan_step_cursor)
 
         # B-2026-08-20-23: synthesized harness-owned checklist. The warm-kernel
         # runtime (agent_runtime passes skip_planning=True) gates out ALL plan→
@@ -2159,6 +2258,12 @@ class AgentLoop:
         _todo_state_prompt = _render_todo_state(todo_state)
         if _todo_state_prompt:
             turn_context_parts.append(_todo_state_prompt)
+        # B-2026-08-23-8: the derived goal route — the ordered sub-goal path
+        # (check → prep → write → verify) per top-level goal, so the model
+        # follows the fastest+safest sequence rather than guessing.
+        _goal_route_prompt = _render_goal_route(goal_tree)
+        if _goal_route_prompt:
+            turn_context_parts.append(_goal_route_prompt)
         _task_state_prompt = task_state.to_prompt()
         if _task_state_prompt:
             turn_context_parts.append(_task_state_prompt)
