@@ -299,6 +299,40 @@ _NAMED_FOLDER_COMPONENTS = frozenset(
 )
 
 
+# ── Free-tier model payload aliases (Session 376) ────────────────────────────
+# Models (DeepSeek, Claude-style) frequently name the path/content fields
+# differently for file_write. Normalize so the first attempt succeeds instead
+# of writing a wrong file or bouncing a validation error.
+_WRITE_FIELD_ALIASES: dict[str, str] = {
+    # path
+    "file_path": "path",
+    "filepath": "path",
+    "full_path": "path",
+    # content
+    "text": "content",
+    "body": "content",
+    "file_content": "content",
+    "contents": "content",
+    "code": "content",
+    "data": "content",
+}
+
+
+def _normalize_write_payload(payload: dict) -> dict:
+    """Map common model field aliases onto the canonical file_write schema.
+
+    Idempotent: canonical fields win when both are present. Called by both
+    the FileWriteContract and the agent loop's file_write branch (before its
+    content-length guard, so an aliased `text`/`code` payload is not wrongly
+    rejected as "content too short").
+    """
+    normalized = dict(payload)
+    for alias, canonical in _WRITE_FIELD_ALIASES.items():
+        if alias in normalized and canonical not in normalized:
+            normalized[canonical] = normalized[alias]
+    return normalized
+
+
 def _cross_os_parts(raw: str) -> list[str]:
     """Split a path string on both / and \\ so Windows paths work on Linux."""
     return [p for p in re.split(r"[/\\]", raw) if p]

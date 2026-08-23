@@ -3006,6 +3006,13 @@ class AgentLoop:
                 # error message so it can self-correct instead of dispatching
                 # a doomed tool call that wastes an iteration.
                 if tool_name == "file_write":
+                    # Session 376: normalize free-tier aliases (file_path → path,
+                    # text/body/code → content) BEFORE every arg check below —
+                    # the required-args gate, the content-length guard, and the
+                    # contract payload all see canonical fields.
+                    from tools.file_writer import _normalize_write_payload
+
+                    tool_args = _normalize_write_payload(tool_args)
                     _fw_path = tool_args.get("path", "").strip()
                     _fw_content = tool_args.get("content", "").strip()
                     if not _fw_path or not _fw_content:
@@ -3307,6 +3314,13 @@ class AgentLoop:
                     # caused "not_found" errors when the file didn't exist yet
                     # (the user wanted to CREATE it, not READ it).
                     if tool_name == "file_write":
+                        # Session 376: normalize aliases (file_path → path,
+                        # text/body/code → content) BEFORE the content-length
+                        # guard so a `{file_path, text}` payload is not wrongly
+                        # rejected — the contract re-normalizes (idempotent).
+                        from tools.file_writer import _normalize_write_payload
+
+                        tool_args = _normalize_write_payload(tool_args)
                         _content = tool_args.get("content", "")
                         _path = tool_args.get("path", "")
                         if not _content or len(_content.strip()) < 5:

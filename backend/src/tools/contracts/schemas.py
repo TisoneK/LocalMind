@@ -234,10 +234,15 @@ class FileWriteContract(_LegacyBridgeContract):
             PathUnresolvableError,
             _do_write,
             _is_document,
+            _normalize_write_payload,
             _timestamped_name,
             resolve_write_path,
         )
         # RiskLevel imported at module level — no inner re-import
+
+        # Session 376: normalize free-tier aliases (file_path → path,
+        # text/body/code → content) before reading the fields below.
+        payload = _normalize_write_payload(payload)
 
         # ── Path resolution ───────────────────────────────────────────────────
         raw_path: str = payload.get("path", "").strip()
