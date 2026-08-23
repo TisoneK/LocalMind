@@ -5219,3 +5219,13 @@ authoritative.
 - The "edited file is copied to replace the original" is the intended copy-back design: user-specified real paths (~/Desktop/x.txt, C:\...) get the edited file copied OVER the original at that path; bare filenames stay inside the session workspace.
 
 **Action (user chose):** deleted the 4 stale root files. Root now holds only localmind.db* + settings.json (by design). No code change needed — verified current behavior is already session-scoped.
+
+## Session 365 — per-session Files view in the sidebar (B-2026-08-23)
+
+**Task:** show a per-session 'Files' view in the sidebar so each chat lists its workspace artifacts.
+
+**Backend:** new `GET /api/sessions/{id}/files` — flat listing of the session's workspace folder (recursive, with relPath/size/modified, folders included even when empty). Defensive: refuses paths resolving outside the workspace root (same guard as delete_workspace); hostile ids are sanitized by workspace_path, so traversal ids resolve inside the root (test asserts never-escape).
+
+**Frontend:** each session row in the Chat tab got a "Files" chevron button (stopPropagation so it doesn't switch chats). Toggle fetches once via `localmindClient.getSessionFiles` (cached), renders a compact indented list (folders + files with sizes); clicking a file opens the existing FilePreviewDialog. Empty state: "No files yet".
+
+**Verified:** 4 new backend tests (nested listing, empty workspace, hostile id never escapes, missing workspace), 2 new frontend tests (expand → files render, click → preview; empty state). 2408 backend / 293 frontend, tsc/ruff/eslint clean. Live (bankofai, isolated 8765): pre-seeded workspace served correctly; full agent turn created report.txt → appeared in the session files listing. (One e2e attempt had the free-tier model use shell instead of file_write — model nondeterminism, re-run with explicit "use the file write tool" wording succeeded.)
