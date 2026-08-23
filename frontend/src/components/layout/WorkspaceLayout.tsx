@@ -116,7 +116,7 @@ export function WorkspaceLayout() {
   // Hook data — useChat receives the terminal event callback
   const health = useHealth();
   const { sessions, refresh: refreshSessions, deleteSession, deleteSessions } = useSessions();
-  const { messages, isStreaming, activeToolCalls, agentRuns, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession } =
+  const { messages, fileDiffs, isStreaming, activeToolCalls, agentRuns, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files, refresh: refreshFiles } = useFileTree();
@@ -402,6 +402,7 @@ export function WorkspaceLayout() {
           onChatTabShown={() => setForceChatTab(false)}
           onFilesChanged={refreshFiles}
           width={leftPanelWidth}
+          fileDiffs={fileDiffs}
         />
         {/* Left resize handle */}
         <div
@@ -428,6 +429,7 @@ export function WorkspaceLayout() {
           // across the conversation / the adapter's max window.
           contextWindowSize={currentModel?.contextWindow}
           contextTokens={cumulativeContextTokens}
+          fileDiffs={fileDiffs}
         />
       </div>
 

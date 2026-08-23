@@ -48,7 +48,7 @@ SyntaxHighlighter.registerLanguage('html', html);
 SyntaxHighlighter.registerLanguage('xml', html);
 SyntaxHighlighter.registerLanguage('shell', shell);
 SyntaxHighlighter.registerLanguage('shell-session', shell);
-import { ChatMessage as ChatMessageType, FileResult, PendingWrite } from '@/types';
+import { ChatMessage as ChatMessageType, FileResult, PendingWrite, DiffData } from '@/types';
 import { formatLatency } from '@/lib/localmind/progress';
 import { repairMarkdown } from '@/lib/markdownRepair';
 import { ThinkingBlock } from './ThinkingBlock';
@@ -66,6 +66,8 @@ interface ChatMessageProps {
   /** Re-send the user prompt that produced this assistant reply (regenerate).
    *  Only provided for assistant messages that have a preceding user prompt. */
   onRetry?: () => void;
+  /** B-2026-08-23-18: per-path diff hunks captured this turn (preview Diff mode). */
+  fileDiffs?: Record<string, DiffData>;
 }
 
 function FileResultChip({
@@ -661,7 +663,7 @@ function MessageActions({
   );
 }
 
-export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps) {
+export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   // B-2026-08-23-6: clickable file-result chips open an inline preview dialog
@@ -808,7 +810,7 @@ export function ChatMessage({ message, isStreaming, onRetry }: ChatMessageProps)
       </div>
 
       {/* File preview dialog — opened by clicking a file-result chip */}
-      <FilePreviewDialog path={previewPath} onClose={() => setPreviewPath(null)} />
+      <FilePreviewDialog path={previewPath} onClose={() => setPreviewPath(null)} diffs={fileDiffs} />
     </div>
   );
 }

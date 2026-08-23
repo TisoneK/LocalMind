@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FileText, Loader2, AlertTriangle, X, Pencil, Check, RotateCcw, Table as TableIcon } from 'lucide-react';
+import { FileText, Loader2, AlertTriangle, X, Pencil, Check, RotateCcw, Table as TableIcon, Eye, GitPullRequest } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import {
   Dialog,
@@ -11,12 +11,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { localmindClient } from '@/lib/localmind/client';
-import type { FileContent } from '@/types';
+import { DiffBlock } from '@/components/shared/DiffBlock';
+import type { DiffData, FileContent } from '@/types';
+
+type PreviewMode = 'preview' | 'edit' | 'diff';
 
 interface FilePreviewDialogProps {
   /** Absolute path of the file to preview; null/empty closes the dialog. */
   path: string | null;
   onClose: () => void;
+  /** B-2026-08-23-18: diff hunks captured from edit_file results this turn,
+   *  keyed by absolute path — powers the Diff mode (before/after). */
+  diffs?: Record<string, DiffData>;
 }
 
 // Code-like extensions get monospace rendering; everything else is prose text
@@ -33,14 +39,17 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
+export function FilePreviewDialog({ path, onClose, diffs }: FilePreviewDialogProps) {
   const [content, setContent] = useState<FileContent | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Edit mode (B-2026-08-23-6 follow-up): text/code files AND spreadsheet
-  // cells, saved back through the same POST /api/confirm-write gate the agent
-  // uses (text via `content`, spreadsheets via the structured `sheets` payload).
-  const [isEditing, setIsEditing] = useState(false);
+  // B-2026-08-23-18: Preview / Edit / Diff mode switcher. Edit mode
+  // (B-2026-08-23-6 follow-up): text/code files AND spreadsheet cells, saved
+  // back through the same POST /api/confirm-write gate the agent uses (text
+  // via `content`, spreadsheets via the structured `sheets` payload). Diff
+  // shows the edit_file hunks captured this turn (DiffBlock).
+  const [mode, setMode] = useState<PreviewMode>('preview');
+  const isEditing = mode === 'edit';
   const [draft, setDraft] = useState('');
   const [draftSheets, setDraftSheets] = useState<{ name: string; rows: string[][]; truncated?: boolean }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -59,7 +68,7 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
     setLoading(true);
     setError(null);
     setContent(null);
-    setIsEditing(false);
+    setMode('preview');
     setSaveError(null);
     setSavedFlash(false);
     setActiveSheet(0);
@@ -90,6 +99,11 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
   const canEditText = !!content && content.editable === true && !isImage && sheets.length === 0;
   const canEdit = canEditText || canEditSpreadsheet;
   const isSpreadsheet = sheets.length > 0;
+  // B-2026-08-23-18: the diff for THIS file, captured from edit_file results
+  // this turn (latest wins). Diff mode is offered only when hunks exist.
+  // Windows-tolerance: the hook normalizes keys to forward slashes.
+  const fileDiff = path ? diffs?.[path] ?? diffs?.[path.split('\\').join('/')] : undefined;
+  const hasDiff = !!fileDiff && fileDiff.hunks.length > 0;
   // In edit mode cells are edited in the draft copy; otherwise show the server rows.
   const viewSheets = isEditing && draftSheets.length > 0 ? draftSheets : sheets;
   const activeRows = viewSheets[activeSheet]?.rows ?? [];
@@ -101,11 +115,11 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
     } else {
       setDraft(content?.text ?? '');
     }
-    setIsEditing(true);
+    setMode('edit');
   };
 
   const cancelEdit = () => {
-    setIsEditing(false);
+    setMode('preview');
     setSaveError(null);
     setDraft(content?.text ?? '');
     setDraftSheets([]);
@@ -141,7 +155,7 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
         await localmindClient.confirmWrite(path, draft);
       }
       setSaving(false);
-      setIsEditing(false);
+      setMode('preview');
       setSavedFlash(true);
       // Refresh size + content from disk so the preview matches the saved file.
       const fresh = await localmindClient.getFileContent(path);
@@ -188,15 +202,6 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
                 Saved
               </span>
             )}
-            {canEdit && !isEditing && (
-              <button
-                onClick={startEdit}
-                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] border border-brand-border text-brand-green-muted hover:text-brand-green hover:border-brand-green/40 transition-colors"
-              >
-                <Pencil className="h-3 w-3" />
-                Edit
-              </button>
-            )}
             {canEdit && isEditing && (
               <>
                 <button
@@ -226,6 +231,52 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
           </div>
         </DialogHeader>
 
+        {/* B-2026-08-23-18: Preview / Edit / Diff mode switcher */}
+        {(canEdit || hasDiff) && (
+          <div className="flex items-center gap-0.5 px-2 pt-1.5 pb-0 border-b border-brand-border/60 shrink-0">
+            <button
+              onClick={() => setMode('preview')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[10px] transition-colors ${
+                mode === 'preview'
+                  ? 'bg-brand-green/10 text-brand-green'
+                  : 'text-brand-green-muted hover:text-brand-green'
+              }`}
+              data-testid="preview-mode-preview"
+            >
+              <Eye className="h-3 w-3" />
+              Preview
+            </button>
+            {canEdit && (
+              <button
+                onClick={() => (isEditing ? cancelEdit() : startEdit())}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[10px] transition-colors ${
+                  isEditing
+                    ? 'bg-brand-green/10 text-brand-green'
+                    : 'text-brand-green-muted hover:text-brand-green'
+                }`}
+                data-testid="preview-mode-edit"
+              >
+                <Pencil className="h-3 w-3" />
+                Edit
+              </button>
+            )}
+            {hasDiff && (
+              <button
+                onClick={() => { if (isEditing) cancelEdit(); setMode('diff'); }}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[10px] transition-colors ${
+                  mode === 'diff'
+                    ? 'bg-brand-green/10 text-brand-green'
+                    : 'text-brand-green-muted hover:text-brand-green'
+                }`}
+                data-testid="preview-mode-diff"
+              >
+                <GitPullRequest className="h-3 w-3" />
+                Diff
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="flex-1 overflow-auto min-h-0 border-t border-brand-border/60">
           {loading && (
             <div className="flex items-center justify-center gap-2 py-12 text-brand-green-muted text-sm">
@@ -239,7 +290,7 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
               {error}
             </div>
           )}
-          {!loading && !error && sheets.length > 0 && (
+          {!loading && !error && mode !== 'diff' && sheets.length > 0 && (
             <div className="flex flex-col h-full">
               {/* Sheet tabs */}
               <div className="flex items-center gap-0.5 px-2 pt-2 overflow-x-auto border-b border-brand-border/60 shrink-0">
@@ -319,7 +370,7 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
               )}
             </div>
           )}
-          {!loading && !error && isImage && content?.image_data_url && (
+          {!loading && !error && mode === 'preview' && isImage && content?.image_data_url && (
             <div className="flex justify-center p-4">
               {/* The browser is the renderer for these inline data URLs. */}
               <img
@@ -329,12 +380,12 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
               />
             </div>
           )}
-          {!loading && !error && !isImage && isMarkdown && !isEditing && (
+          {!loading && !error && mode === 'preview' && !isImage && isMarkdown && (
             <div className="px-4 py-3 text-xs text-brand-green-soft leading-relaxed overflow-hidden max-w-full break-words">
               <ReactMarkdown>{bodyText}</ReactMarkdown>
             </div>
           )}
-          {!loading && !error && !isImage && !isMarkdown && !isEditing && !isSpreadsheet && (
+          {!loading && !error && mode === 'preview' && !isImage && !isMarkdown && !isSpreadsheet && (
             <pre
               className={`px-4 py-3 text-xs leading-relaxed whitespace-pre-wrap break-words ${
                 isCode
@@ -344,6 +395,20 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
             >
               {bodyText || '(empty file)'}
             </pre>
+          )}
+          {!loading && !error && mode === 'diff' && hasDiff && (
+            <div className="p-2" data-testid="preview-diff-pane">
+              <DiffBlock
+                hunks={fileDiff!.hunks}
+                language={fileDiff!.language}
+                showActions={false}
+              />
+            </div>
+          )}
+          {!loading && !error && mode === 'diff' && !hasDiff && (
+            <div className="px-4 py-6 text-xs text-brand-green-muted">
+              No edits recorded for this file this turn.
+            </div>
           )}
           {!loading && !error && !isImage && isEditing && !isSpreadsheet && (
             <div className="flex flex-col h-full">

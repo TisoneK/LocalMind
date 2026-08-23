@@ -10,7 +10,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
-import { ChatMessage as ChatMessageType, ModelOption } from '@/types';
+import { ChatMessage as ChatMessageType, ModelOption, DiffData } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { localmindClient } from '@/lib/localmind/client';
@@ -63,6 +63,8 @@ interface CenterPanelProps {
   contextWindowSize?: number;
   /** Current window occupancy in tokens (this turn's real prompt size). */
   contextTokens?: number;
+  /** B-2026-08-23-18: per-path diff hunks captured this turn (preview Diff mode). */
+  fileDiffs?: Record<string, DiffData>;
 }
 
 export function CenterPanel({
@@ -77,6 +79,7 @@ export function CenterPanel({
   sessionId,
   contextWindowSize,
   contextTokens,
+  fileDiffs,
 }: CenterPanelProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   // B-2026-08-23-14: guide the user in chat when the configured embed model
@@ -323,6 +326,7 @@ export function CenterPanel({
                 message={msg}
                 isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'}
                 onRetry={prompt ? () => onSend(prompt) : undefined}
+                fileDiffs={fileDiffs}
               />
             );
           })}

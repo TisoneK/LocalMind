@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks, ChevronRight, ChevronDown, File as FileIcon, Folder as FolderIcon } from 'lucide-react';
-import { Session, ActionItem, FileNode, SessionFileEntry, TodoItem, ModelOption, ToolCall } from '@/types';
+import { Session, ActionItem, FileNode, SessionFileEntry, TodoItem, ModelOption, ToolCall, DiffData } from '@/types';
 import type { ExportFormat } from '@/lib/localmind/exportChats';
 import { ActionHistory } from '@/components/panels/ActionHistory';
 import { FileExplorer } from '@/components/panels/FileExplorer';
@@ -41,6 +41,8 @@ interface LeftPanelProps {
   /** Called after a file is deleted from the Files tab, so the tree can re-fetch. */
   onFilesChanged?: () => void;
   width?: number;
+  /** B-2026-08-23-18: per-path diff hunks captured this turn (preview Diff mode). */
+  fileDiffs?: Record<string, DiffData>;
 }
 
 type LeftTab = 'chat' | 'actions' | 'files';
@@ -67,6 +69,7 @@ export function LeftPanel({
   onChatTabShown,
   onFilesChanged,
   width = 280,
+  fileDiffs,
 }: LeftPanelProps) {
   const [activeTab, setActiveTab] = useState<LeftTab>('chat');
   // Per-session workspace artifact listings (B-2026-08-23): expanded session
@@ -600,7 +603,7 @@ export function LeftPanel({
       )}
 
       {/* File preview dialog — opened by clicking a session artifact (B-2026-08-23) */}
-      <FilePreviewDialog path={previewPath} onClose={() => setPreviewPath(null)} />
+      <FilePreviewDialog path={previewPath} onClose={() => setPreviewPath(null)} diffs={fileDiffs} />
     </div>
   );
 }

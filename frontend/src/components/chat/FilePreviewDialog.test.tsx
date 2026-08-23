@@ -234,6 +234,88 @@ describe('FilePreviewDialog', () => {
     });
   });
 
+  describe('diff mode (B-2026-08-23-18)', () => {
+    const sampleHunks = [
+      {
+        filePath: '/tmp/demo/a.txt',
+        oldStart: 1, oldLines: 3, newStart: 1, newLines: 3,
+        lines: [
+          { type: 'hunk_header' as const, content: '@@ -1,3 +1,3 @@', oldLine: 1, newLine: 1 },
+          { type: 'removed' as const, content: 'first line', oldLine: 1 },
+          { type: 'added' as const, content: 'first line edited', newLine: 1 },
+          { type: 'context' as const, content: 'second line', oldLine: 2, newLine: 2 },
+        ],
+      },
+    ];
+
+    it('shows the Diff tab when hunks exist and renders the DiffBlock', async () => {
+      mockClient.getFileContent.mockResolvedValue(textContent());
+      render(
+        <FilePreviewDialog
+          path="/tmp/demo/a.txt"
+          onClose={() => {}}
+          diffs={{ '/tmp/demo/a.txt': { hunks: sampleHunks, language: 'txt', filePath: '/tmp/demo/a.txt', additions: 1, deletions: 1 } }}
+        />
+      );
+
+      await screen.findByText(/first line/);
+      await userEvent.click(screen.getByTestId('preview-mode-diff'));
+
+      // DiffBlock renders the before/after lines + stats.
+      expect(await screen.findByText(/first line edited/)).toBeInTheDocument();
+      expect(screen.getByText('first line')).toBeInTheDocument();
+      // Stats appear in both the header and footer bars — at least one each.
+      expect(screen.getAllByText('+1').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('-1').length).toBeGreaterThan(0);
+    });
+
+    it('hides the Diff tab when no hunks exist for the file', async () => {
+      mockClient.getFileContent.mockResolvedValue(textContent());
+      render(<FilePreviewDialog path="/tmp/demo/a.txt" onClose={() => {}} />);
+
+      await screen.findByText(/first line/);
+      expect(screen.queryByTestId('preview-mode-diff')).not.toBeInTheDocument();
+    });
+
+    it('switches back to Preview from Diff', async () => {
+      mockClient.getFileContent.mockResolvedValue(textContent());
+      render(
+        <FilePreviewDialog
+          path="/tmp/demo/a.txt"
+          onClose={() => {}}
+          diffs={{ '/tmp/demo/a.txt': { hunks: sampleHunks, language: 'txt', filePath: '/tmp/demo/a.txt' } }}
+        />
+      );
+
+      await screen.findByText(/first line/);
+      await userEvent.click(screen.getByTestId('preview-mode-diff'));
+      expect(await screen.findByText(/first line edited/)).toBeInTheDocument();
+
+      await userEvent.click(screen.getByTestId('preview-mode-preview'));
+      // Preview content returns; diff lines gone.
+      expect(screen.getByText(/second line/)).toBeInTheDocument();
+      expect(screen.queryByText(/first line edited/)).not.toBeInTheDocument();
+    });
+
+    it('Edit tab starts edit mode and Cancel returns to Preview', async () => {
+      mockClient.getFileContent.mockResolvedValue(textContent());
+      render(
+        <FilePreviewDialog
+          path="/tmp/demo/a.txt"
+          onClose={() => {}}
+          diffs={{ '/tmp/demo/a.txt': { hunks: sampleHunks, language: 'txt', filePath: '/tmp/demo/a.txt' } }}
+        />
+      );
+
+      await screen.findByText(/first line/);
+      await userEvent.click(screen.getByTestId('preview-mode-edit'));
+      expect(screen.getByLabelText('Edit file content')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+      expect(screen.queryByLabelText('Edit file content')).not.toBeInTheDocument();
+      expect(screen.getByTestId('preview-mode-preview')).toBeInTheDocument();
+    });
+  });
+
   describe('edit mode (B-2026-08-23-6 follow-up)', () => {
     it('shows an Edit button for text files and edits the draft in a textarea', async () => {
       mockClient.getFileContent.mockResolvedValue(textContent());

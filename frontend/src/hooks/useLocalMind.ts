@@ -39,6 +39,7 @@ import type {
   AgentPhase,
   AgentRun,
   AgentRunStatus,
+  DiffData,
 } from '@/types';
 
 // S296: cap the accumulated per-turn run groups in the Agent Workspace so a
@@ -223,6 +224,10 @@ interface TerminalEventData {
 
 interface ChatState {
   messages: ChatMessage[];
+  /** B-2026-08-23-18: file diffs captured from edit_file `diff` SSE events,
+   *  keyed by absolute path (latest wins) — powers the preview dialog's Diff
+   *  mode and the inline DiffBlock in chat. */
+  fileDiffs: Record<string, DiffData>;
   isStreaming: boolean;
   currentIntent?: string;
   currentConfidence?: number;
@@ -274,6 +279,10 @@ export function useChat(
   onTerminalEvent?: (event: TerminalEventData) => void
 ): ChatState {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // B-2026-08-23-18: file diffs captured from edit_file `diff` SSE events,
+  // keyed by absolute path (latest wins). Powers the preview dialog's Diff
+  // mode and the inline DiffBlock in chat (message.diffData).
+  const [fileDiffs, setFileDiffs] = useState<Record<string, DiffData>>({});
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentIntent, setCurrentIntent] = useState<string | undefined>();
   const [currentConfidence, setCurrentConfidence] = useState<number | undefined>();
@@ -487,6 +496,7 @@ export function useChat(
       if (!sessionId) {
         if (mounted) {
           setMessages([]);
+          setFileDiffs({});
           setLiveObservation(null);
           setCurrentIntent(undefined);
           setCurrentConfidence(undefined);
@@ -506,6 +516,7 @@ export function useChat(
       // Observe/Actions panels don't show the old session's data while
       // the new history loads.
       if (prevSessionIdRef.current !== sessionId) {
+        setFileDiffs({});
         setLiveObservation(null);
         setCurrentIntent(undefined);
         setCurrentConfidence(undefined);
@@ -952,6 +963,39 @@ export function useChat(
                       stageTimings: prev?.stageTimings,
                       anomalies: [anomaly as AnomalyData, ...rest].slice(0, 5),
                     };
+                  });
+                }
+                break;
+              }
+
+              // B-2026-08-23-18: edit_file diff events. The backend bridges
+              // file_diff obs events to a top-level `diff` SSE event with
+              // hunks/language/filePath. Previously unhandled — the events
+              // were dropped and message.diffData (and the inline DiffBlock in
+              // chat) were dead code. Store per-path (latest wins) for the
+              // preview dialog's Diff mode AND attach to the current assistant
+              // message so the inline DiffBlock renders.
+              case 'diff': {
+                const d = parsed.diff;
+                if (d && typeof d.filePath === 'string' && Array.isArray(d.hunks)) {
+                  const entry: DiffData = {
+                    hunks: d.hunks,
+                    language: typeof d.language === 'string' ? d.language : '',
+                    filePath: d.filePath,
+                    additions: typeof d.additions === 'number' ? d.additions : undefined,
+                    deletions: typeof d.deletions === 'number' ? d.deletions : undefined,
+                  };
+                  // Windows-tolerance: normalize the key so the preview's
+                  // path lookup matches regardless of backslash/forward slash.
+                  const key = d.filePath.split('\\').join('/');
+                  setFileDiffs((prev) => ({ ...prev, [key]: entry }));
+                  setMessages((prev) => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last && last.role === 'assistant') {
+                      updated[updated.length - 1] = { ...last, diffData: entry };
+                    }
+                    return updated;
                   });
                 }
                 break;
@@ -1789,12 +1833,13 @@ export function useChat(
     setCurrentConfidence(undefined);
     setActiveToolCalls([]);
     setAgentRuns([]);
+    setFileDiffs({});
     applySessionStats({ ..._EMPTY_SESSION_STATS });
     lastTurnContributionRef.current = null;
     sessionStatsSeededForRef.current = null;
   }, [applySessionStats]);
 
-  return { messages, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession, onTerminalEvent };
+  return { messages, fileDiffs, isStreaming, currentIntent, currentConfidence, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession, onTerminalEvent };
 }
 
 // ─── Prompt leak detection (FIX 1) ────────────────────────────────────

@@ -504,6 +504,23 @@ def _render_todo_state(todo_state: Optional[list[dict]]) -> str:
     return "\n".join(lines)
 
 
+def _intent_for_tool(tool_name: str) -> Intent:
+    """Map a tool name to its Intent.
+
+    Most tools share their intent value, but a few differ: the tool module is
+    ``edit_file`` while its Intent value is ``file_edit``. Session 375 live
+    trace: `Intent(tool_name)` with "edit_file" raises ValueError, the outer
+    dispatch except marks the tool failed, and the failed-branch emit then
+    crashed on the unbound `tool_result` — every native edit_file call died.
+    """
+    _TOOL_NAME_TO_INTENT = {"edit_file": Intent.FILE_EDIT}
+    try:
+        return _TOOL_NAME_TO_INTENT.get(tool_name) or Intent(tool_name)
+    except ValueError:
+        # Unknown tool name — fall back to a neutral intent rather than crash.
+        return Intent.SHELL
+
+
 def _tool_provider(tool_result) -> Optional[str]:
     """Surface which backend engine a tool used, for the Actions-card badge.
 
@@ -3274,9 +3291,13 @@ class AgentLoop:
                 tool_failed = False
                 retry_count = 0
                 observation = ""
+                # Session 375: bind up front — a pre-assignment exception in
+                # the dispatch try (e.g. `Intent(tool_name)` raising) must not
+                # leave `tool_result` unbound for the failed-branch emit below.
+                tool_result: Optional[ToolResult] = None
 
                 try:
-                    tool_intent = Intent(tool_name)
+                    tool_intent = _intent_for_tool(tool_name)
 
                     # ── file_write: validate and use typed contract ──────────
                     # Guard: if the model calls file_write without a meaningful
@@ -3362,6 +3383,22 @@ class AgentLoop:
                                 tool_input,
                                 allowed_tool_names=effective_allowed,
                             )
+                        except Exception as exc:
+                            # Session 375: a contract execution error (bad args,
+                            # IO, transient provider error) must not crash the
+                            # loop with an unbound `tool_result` — surface it as
+                            # a failed tool result so the normal recovery path
+                            # runs. Never silently re-execute.
+                            logger.warning(f"[agent.loop] file_write contract failed: {exc}")
+                            tool_result = ToolResult(
+                                content=f"file_write failed: {exc}",
+                                source="file_write",
+                                success=False,
+                                error_type="contract_error",
+                                error_message=str(exc),
+                            )
+                            tool_failed = True
+                            retry_count = 0
 
                     elif tool_name == "edit_file":
                         # edit_file: use typed contract path (like file_write)
@@ -3381,10 +3418,27 @@ class AgentLoop:
                                 tool_input,
                                 allowed_tool_names=effective_allowed,
                             )
+                        except Exception as exc:
+                            # Session 375: same unbound-`tool_result` guard as
+                            # file_write — a contract exception must become a
+                            # failed tool result, never a loop crash (which
+                            # also swallowed the diff SSE event).
+                            logger.warning(f"[agent.loop] edit_file contract failed: {exc}")
+                            tool_result = ToolResult(
+                                content=f"edit_file failed: {exc}",
+                                source="edit_file",
+                                success=False,
+                                error_type="contract_error",
+                                error_message=str(exc),
+                            )
+                            tool_failed = True
+                            retry_count = 0
 
                         # Bridge diff metadata from edit_file tool results.
                         # Emit a file_diff obs event so the frontend DiffBlock can
                         # render green/red highlighted diffs — like Cursor/Claude.
+                        # (metadata is {} on the failure result above, so a
+                        # failed contract never emits a bogus diff.)
                         if tool_result and tool_result.metadata and tool_result.source == "edit_file":
                             diff_hunks = tool_result.metadata.get("diff_hunks", [])
                             if diff_hunks and _obs:
@@ -3988,8 +4042,9 @@ class AgentLoop:
                         # Dispatch the tool
                         t_tool = time.monotonic()
                         tool_failed = False
+                        tool_result: Optional[ToolResult] = None
                         try:
-                            tool_intent = Intent(tc_name)
+                            tool_intent = _intent_for_tool(tc_name)
                             tool_result, tool_failed, retry_count = await dispatch_with_retry(
                                 tool_intent,
                                 tool_input,

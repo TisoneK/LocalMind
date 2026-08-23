@@ -98,6 +98,41 @@ describe('useChat SSE obs_event routing', () => {
     unmount();
   });
 
+  it('captures diff SSE events into fileDiffs and the assistant message (B-2026-08-23-18)', () => {
+    const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+    act(() => {
+      onChunk()(JSON.stringify({
+        type: 'diff',
+        diff: {
+          filePath: '/tmp/demo/a.txt',
+          language: 'txt',
+          hunks: [
+            {
+              filePath: '/tmp/demo/a.txt',
+              oldStart: 1, oldLines: 1, newStart: 1, newLines: 1,
+              lines: [{ type: 'removed', content: 'old line', oldLine: 1 }],
+            },
+          ],
+          additions: 0,
+          deletions: 1,
+        },
+      }));
+    });
+
+    // Per-path map populated for the preview dialog's Diff mode.
+    expect(result.current.fileDiffs['/tmp/demo/a.txt']).toBeDefined();
+    expect(result.current.fileDiffs['/tmp/demo/a.txt'].hunks.length).toBe(1);
+    expect(result.current.fileDiffs['/tmp/demo/a.txt'].language).toBe('txt');
+    // Also attached to the current assistant message so the inline DiffBlock renders.
+    const last = result.current.messages[result.current.messages.length - 1];
+    expect(last.role).toBe('assistant');
+    expect(last.diffData?.filePath).toBe('/tmp/demo/a.txt');
+
+    act(() => onDone());
+    unmount();
+  });
+
   it('does not leak completion tokens as context tokens when the prompt count is absent', () => {
     const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
 
