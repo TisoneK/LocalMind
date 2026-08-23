@@ -84,3 +84,6 @@ htmlcov/
 *.log
 logs/
 *.bak
+
+# Isolated live-test scratch (contains copied settings with API keys — never commit)
+/scratch/
