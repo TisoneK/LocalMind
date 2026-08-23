@@ -5487,3 +5487,11 @@ authoritative.
 - **Live proof (deepseek-v4-flash):** goals streamed workspace-absolute (`file exists at …/sessions/lm-gs-ws1/a.txt …`); the model's actual mkdir was `mkdir -p /Users/bao/LocalMind/sessions/lm-gs-ws1/path-test` — the EXACT contract path — and no stray folder appeared anywhere else (vs /Users/bao/path-test before). Turn hit bankofai rate_limit at iter 6 before the writes (env, recurring today).
 - **Verification:** backend 2504 passed / 2 skipped (incl. 6 new base_dir tests + workspace test suite); ruff clean (pre-existing E501s only); frontend untouched.
 - **Open:** user-named relative dirs still escape (documented contract). -11 todo title/content split will later give users short titles instead of the long absolute goal strings.
+## Session 383 — B-2026-08-23-11: todo title/content split — 2026-08-23
+
+- **Feature:** B-2026-08-23-11.
+- **Task:** Split todos into a short user-facing title ("Create a.txt") + the full agent-facing content (paths/commands) — UI shows the title, agent context/gate keep the content.
+- **Commits:** 1 product (`358ea38`) + 1 context (pushed).
+- **Outcome:** done — derivation (`_title_for_goal`/`_title_for_sub_goal`, `DerivedGoal.title`, titled goal-tree dicts), loop seeding (text=title + content), SSE bridge persist (chat.py), migration 010 (`todos.title`), db upsert/list + API models/GET/POST/PATCH, frontend types/normalization/client/TodoList (title-first render + full-content hover tooltip, legacy fallback). Legacy text-only callers and NULL-title rows fall back to content.
+- **Verification:** backend 2507 passed / 2 skipped (incl. 4 new title tests, todo API suites with the new column); frontend 348 passed; tsc/ruff clean (pre-existing E501s only).
+- **Open items:** next candidates -33 op permissions, -34 chat modes, -35 never-rude, -37 write stats, -26 panel overflow, -9 tooltips.

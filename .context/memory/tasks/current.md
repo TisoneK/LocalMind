@@ -1,12 +1,16 @@
 # Current Task
 
-**Status:** IDLE — Session 382 closed **B-2026-08-23-8** (goal-driven agent, part 1): deterministic goal tree with ordered sub-goals.
+**Status:** IDLE — Session 383 closed **B-2026-08-23-11** (todo title/content split).
 
-## Session 382 outcome
+## Session 383 outcome
 
-- **Goal tree (`9a8a421`):** `derive_goal_tree()` now extends the Session 330 fixed checklist — every derived goal (file/folder deliverable) carries ordered sub-goals phrased fastest+safest (check → prep parent folder → write → verify), each feeding the next. Derived ONCE with the flat items = same immutable denominator; no mutable state, no new tools, Parent-only (ADR-53).
-- **Threaded end-to-end:** `agent_runtime` derives the tree as plain dicts → `BaseAgent.run` → `AgentLoop.run` (`goal_tree=`), seeded as `plan-{i}-sub-{j}` todos right after their parent, rendered nested (indented, connector, no checkbox) in the Todos panel — NEVER counted in the n/n denominator, completed together with the parent (narration-advance AND end-of-loop), finalized with the parent at turn end. Injected into the model context as an ordered `# Goal route (follow in order; each step feeds the next)` so the agent takes the fastest+safest path instead of guessing.
-- **Frontend:** `TodoList` groups sub-rows (`/^plan-\d+-sub-\d+$/`) under their parent with a `↳`/`✓` marker; denominator stays parent-only.
-- **Scoped out (orthogonal):** the "efficient planner" half (no redundant recon) — that's B-2026-08-23-10 (concrete planning) territory.
-- **Verification:** backend 2498 passed / 2 skipped (incl. 8 new tests: 5 derive-tree + 3 loop-level incl. prompt-injection assert); frontend 348 passed (2 new TodoList nested-render tests); ruff/tsc/eslint clean (2 loop.py E501s pre-existing at HEAD).
-- **Next:** continue the backlog one item at a time. Top candidates: **B-2026-08-23-33** (op permissions), **-34** (chat modes), **-35** (never-rude declines), **-37** (write-stats table), or quick UI wins (-21 time formatting, -22 token short-form, -26 ⋮ panel overflow). Pre-existing untracked trace residue at `backend/Dev/` + `backend/scratch/` left untouched.
+- **`358ea38`:** Todos now carry a short user-facing `title` alongside the full `content`:
+  - **Derivation:** `_title_for_goal` ("Create a.txt" / "Create the folder path-test") + `_title_for_sub_goal` ("Check current state" / "Write the file" / "Verify the result") in goal_interpreter; `derive_goal_tree` sets `DerivedGoal.title`; the runtime emits `{goal, sub_goals, title, sub_goal_titles}`.
+  - **Loop seeding**: `todo_created` emits `text=title` (UI label) + `content=full goal/route` (agent context + gate).
+  - **Bridge**: `chat.py _bridge_todo_event` persists content + title (falls back when only text).
+  - **DB**: migration `010_todo_title.sql` adds `todos.title`; `upsert_todo(title=...)` writes it on create, never wipes on status updates; `list_todos` includes it.
+  - **API**: TodoItem/CreateTodoRequest/UpdateTodoRequest + GET/POST/PATCH thread `title` (`r["title"]` guarded via `in r.keys()`).
+  - **Frontend**: `TodoItem.title?/content?` types; `normalizeTodoEvent` prefers title → text; `getTodos` maps title-first; `TodoList` renders `displayText(t)` (title||text) with a tooltip showing full content when different, `sent truncated` for long titles; sub-rows too.
+- **Fallbacks**: legacy callers (text only) → content fills both; DB rows with NULL title → content shows.
+- **Verification**: backend **2507 passed** / 2 skipped (23 goal-derive tests incl. 4 new title tests; todo API suite updated for the column); frontend **348 passed** + tsc clean; ruff clean (pre-existing E501s only).
+- **Next:** continue the backlog one item at a time. Top candidates: **B-2026-08-23-33** (op permissions), **-34** (chat modes), **-35** (never-rude declines), **-37** (write-stats table), or quick UI wins (-26 ⋮ panel overflow, -9 action-pill tooltips). Pre-existing untracked trace residue at `backend/Dev/` + `backend/scratch/` left untouched.
