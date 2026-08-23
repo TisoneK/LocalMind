@@ -264,6 +264,10 @@ class Settings(BaseSettings):
     # Permission gates — require user confirmation before write/delete
     localmind_require_write_permission: bool = False
 
+    # B-2026-08-23-34: Chat mode — “auto” (classifier decides), “agent”
+    # (always full agent loop), “direct” (no tools, lightweight chat).
+    localmind_chat_mode: str = "auto"
+
     def is_ollama_configured(self) -> bool:
         """Return True only when Ollama has been explicitly confirmed working
         AND the adapter is ollama. Cloud adapters should never trigger Ollama
@@ -398,6 +402,14 @@ class Settings(BaseSettings):
                     logger.info(f"[config] Set startup_session to {val}")
                 else:
                     logger.warning(f"[config] Ignoring invalid startup_session: {data['startup_session']!r}")
+            # B-2026-08-23-34: chat mode ("auto" | "agent" | "direct").
+            if "chat_mode" in data:
+                val = str(data["chat_mode"]).strip().lower()
+                if val in ("auto", "agent", "direct"):
+                    self.localmind_chat_mode = val
+                    logger.info(f"[config] Set chat_mode to {val}")
+                else:
+                    logger.warning(f"[config] Ignoring invalid chat_mode: {data['chat_mode']!r}")
             # Load API keys from runtime settings
             if "api_keys" in data:
                 self._runtime_api_keys = data["api_keys"]

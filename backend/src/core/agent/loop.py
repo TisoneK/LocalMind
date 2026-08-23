@@ -1590,6 +1590,45 @@ class AgentLoop:
             and not skip_planning
         )
 
+        # B-2026-08-23-34: Chat mode — read from settings singleton.
+        # "auto" = current behavior (classifier decides).
+        # "agent" = skip classifier, force full execute path.
+        # "direct" = skip classifier, answer with no tools.
+        from core.config import settings as _cfg
+        _chat_mode = getattr(_cfg, 'localmind_chat_mode', 'auto')
+
+        if _chat_mode == 'direct' and getattr(agent_config, "name", "") == "parent":
+            # Direct mode: lightweight chat, no tools, no init, no planning.
+            if _obs:
+                _obs.emit("agent_loop_done", intent=intent.value, direct=True)
+            _direct_msgs = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are LocalMind, a helpful local AI assistant. "
+                        "Answer the user's question directly and concisely. "
+                        "Do not attempt to use any tools."
+                    ),
+                },
+                *messages,
+            ]
+            try:
+                async for _c in active_adapter.chat(
+                    _direct_msgs, temperature=0.4, intent="chat"
+                ):
+                    if getattr(_c, "error", None):
+                        break
+                    _t = _filter_system_leaks(_c.text or "")
+                    if _t:
+                        yield StreamChunk(text=_t, done=False)
+            except Exception as _exc:
+                logger.warning("[agent.loop] direct mode chat failed: %s", _exc)
+                yield StreamChunk(
+                    text=f"Direct mode error: {_exc}", done=False, error=True
+                )
+            yield StreamChunk(text="", done=True)
+            return
+
         # Session 337 — pre-init deterministic guards (4 root-cause clusters):
         #   A. hallucination-class prompts → direct refusal (no tools)
         #   B. analyze-only prompts → skip workspace_state + skip action-narration
@@ -1621,7 +1660,7 @@ class AgentLoop:
             bool(_pre_init_override.extra_system_reminder),
         )
 
-        if _pre_init_override.mode and getattr(agent_config, "name", "") == "parent":
+        if _pre_init_override.mode and _chat_mode != 'agent' and getattr(agent_config, "name", "") == "parent":
             # Deterministic decision — skip the LLM init call entirely.
             initialization = InitializationDecision(
                 mode=_pre_init_override.mode,

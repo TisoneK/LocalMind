@@ -65,6 +65,10 @@ interface CenterPanelProps {
   contextTokens?: number;
   /** B-2026-08-23-18: per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
+  /** B-2026-08-23-34: Current chat mode. */
+  chatMode?: string;
+  /** B-2026-08-23-34: Callback to change chat mode. */
+  onChatModeChange?: (mode: 'auto' | 'agent' | 'direct') => void;
 }
 
 export function CenterPanel({
@@ -80,6 +84,8 @@ export function CenterPanel({
   contextWindowSize,
   contextTokens,
   fileDiffs,
+  chatMode,
+  onChatModeChange,
 }: CenterPanelProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   // B-2026-08-23-14: guide the user in chat when the configured embed model
@@ -385,6 +391,8 @@ export function CenterPanel({
         modelName={selectedModel.name}
         modelProvider={selectedModel.provider}
         sessionId={sessionId}
+        chatMode={chatMode}
+        onChatModeChange={onChatModeChange}
       />
     </div>
   );

@@ -25,6 +25,8 @@ import { exportSessions, type ExportFormat } from '@/lib/localmind/exportChats';
 
 export function WorkspaceLayout() {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  // B-2026-08-23-34: Chat mode state ("auto" | "agent" | "direct").
+  const [chatMode, setChatMode] = useState<string>('auto');
   const [leftPanelWidth, setLeftPanelWidth] = useState(280);
   const [rightPanelWidth, setRightPanelWidth] = useState(320);
   const [isResizingLeft, setIsResizingLeft] = useState(false);
@@ -103,6 +105,10 @@ export function WorkspaceLayout() {
     if (saved?.model) {
       setSelectedModel(saved.model);
     }
+    // B-2026-08-23-34: Load persisted chat mode from backend settings.
+    localmindClient.getSettings().then((s) => {
+      if (s.chat_mode) setChatMode(s.chat_mode);
+    }).catch(() => {});
   }, []);
 
   // Terminal event callback — bridges AI tool output to the terminal panel.
@@ -377,6 +383,19 @@ export function WorkspaceLayout() {
     [selectModel]
   );
 
+  // B-2026-08-23-34: Handle chat mode change — persist to backend.
+  const handleChatModeChange = useCallback(
+    async (mode: 'auto' | 'agent' | 'direct') => {
+      setChatMode(mode);
+      try {
+        await localmindClient.setChatMode(mode);
+      } catch {
+        // Non-fatal — the UI still reflects the change immediately.
+      }
+    },
+    []
+  );
+
   // Handle chat send
   const handleSend = useCallback(
     (message: string, tool?: string) => {
@@ -444,6 +463,8 @@ export function WorkspaceLayout() {
           onSteer={steer}
           memoryCount={memoryFacts.length}
           sessionId={currentSessionId || undefined}
+          chatMode={chatMode}
+          onChatModeChange={handleChatModeChange}
           // Context-window occupancy meter: the freed top-bar slot that used
           // to show the redundant confidence badge now shows how full the
           // model's input window is — cumulative prompt tokens consumed

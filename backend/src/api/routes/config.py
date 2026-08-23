@@ -44,6 +44,8 @@ class SettingsResponse(BaseModel):
     tone: float = 1.0
     # B-2026-08-23-27: startup session behavior — "resume" or "new".
     startup_session: str = "new"
+    # B-2026-08-23-34: Chat mode — "auto" | "agent" | "direct".
+    chat_mode: str = "auto"
 
 
 class AdapterConfig(BaseModel):
@@ -93,6 +95,31 @@ async def set_startup_session(req: StartupSessionRequest):
     _data["startup_session"] = val
     settings._secure_write_json(_path, _data)
     return {"startup_session": val, "message": f"Startup behavior set to {val}"}
+
+
+class ChatModeRequest(BaseModel):
+    """Body for POST /api/settings/chat-mode (B-2026-08-23-34)."""
+    chat_mode: str  # "auto" | "agent" | "direct"
+
+
+@router.post("/settings/chat-mode")
+async def set_chat_mode(req: ChatModeRequest):
+    """Persist the chat mode (B-2026-08-23-34).
+
+    "auto" = classifier decides (default).
+    "agent" = always full agent loop.
+    "direct" = no tools, lightweight chat.
+    """
+    val = req.chat_mode.strip().lower()
+    if val not in ("auto", "agent", "direct"):
+        raise HTTPException(status_code=400, detail="chat_mode must be 'auto', 'agent', or 'direct'")
+    settings.localmind_chat_mode = val
+    # Persist to settings.json (write explicitly so the value survives restart).
+    _path = settings._runtime_settings_path()
+    _data = settings._load_json_file(_path)
+    _data["chat_mode"] = val
+    settings._secure_write_json(_path, _data)
+    return {"chat_mode": val, "message": f"Chat mode set to {val}"}
 
 
 class AppearanceRequest(BaseModel):
@@ -252,6 +279,8 @@ async def get_settings():
         tone=float(appearance.get("tone", 1.0) or 1.0),
         # B-2026-08-23-27: startup session behavior
         startup_session=getattr(settings, "localmind_startup_session", "new"),
+        # B-2026-08-23-34: chat mode
+        chat_mode=getattr(settings, "localmind_chat_mode", "auto"),
     )
 
 

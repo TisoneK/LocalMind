@@ -9,6 +9,8 @@ import {
   Command,
   Square,
   Navigation,
+  MessageSquare,
+  Bot,
 } from 'lucide-react';
 
 const toolOptions = [
@@ -20,6 +22,13 @@ const toolOptions = [
   { id: 'memory', label: 'Memory', icon: <Command className="h-3 w-3" /> },
 ];
 
+// B-2026-08-23-34: Chat mode options.
+const chatModeOptions = [
+  { id: 'auto' as const, label: 'Auto', icon: <Zap className="h-3 w-3" />, tooltip: 'Classifier decides (default)' },
+  { id: 'agent' as const, label: 'Agent', icon: <Bot className="h-3 w-3" />, tooltip: 'Always full agent loop' },
+  { id: 'direct' as const, label: 'Chat', icon: <MessageSquare className="h-3 w-3" />, tooltip: 'Lightweight chat, no tools' },
+];
+
 interface ChatInputProps {
   onSend: (message: string, tool?: string) => void;
   onAbort: () => void;
@@ -28,20 +37,29 @@ interface ChatInputProps {
   modelName?: string;
   modelProvider?: string;
   sessionId?: string;
+  /** B-2026-08-23-34: Current chat mode. */
+  chatMode?: string;
+  /** B-2026-08-23-34: Callback to change chat mode. */
+  onChatModeChange?: (mode: 'auto' | 'agent' | 'direct') => void;
 }
 
-export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, modelProvider, sessionId }: ChatInputProps) {
+export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, modelProvider, sessionId, chatMode, onChatModeChange }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [steerInput, setSteerInput] = useState('');
   const [selectedTool, setSelectedTool] = useState('auto');
   const [toolMenuOpen, setToolMenuOpen] = useState(false);
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const toolMenuRef = useRef<HTMLDivElement>(null);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (toolMenuRef.current && !toolMenuRef.current.contains(e.target as Node)) {
         setToolMenuOpen(false);
+      }
+      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) {
+        setModeMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -67,6 +85,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
   }, [input]);
 
   const currentTool = toolOptions.find((t) => t.id === selectedTool) ?? toolOptions[0];
+  const currentModeOption = chatModeOptions.find((m) => m.id === (chatMode || 'auto')) ?? chatModeOptions[0];
 
   const handleSend = () => {
     const msg = input.trim();
@@ -133,7 +152,7 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask LocalMind to build, debug, or explain..."
+            placeholder={chatMode === 'direct' ? 'Ask LocalMind anything (Chat mode — no tools)...' : 'Ask LocalMind to build, debug, or explain...'}
             className="flex-1 bg-transparent text-[12px] text-brand-green-soft placeholder:text-brand-green-muted resize-none outline-none min-h-[20px] max-h-[120px] font-mono leading-relaxed"
             rows={1}
             disabled={isStreaming}
@@ -147,6 +166,56 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
 
           {/* Action buttons */}
           <div className="flex items-center gap-1 shrink-0 pb-0.5">
+            {/* B-2026-08-23-34: Chat mode picker */}
+            {onChatModeChange && (
+              <div className="relative" ref={modeMenuRef}>
+                <button
+                  onClick={() => setModeMenuOpen(!modeMenuOpen)}
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] transition-colors disabled:opacity-40 ${
+                    chatMode === 'direct'
+                      ? 'text-brand-amber hover:text-brand-amber/80 hover:bg-brand-border'
+                      : chatMode === 'agent'
+                        ? 'text-blue-400 hover:text-blue-300 hover:bg-brand-border'
+                        : 'text-brand-green-muted hover:text-brand-green-soft hover:bg-brand-border'
+                  }`}
+                  disabled={isStreaming}
+                  title={`Chat mode: ${currentModeOption.tooltip}`}
+                >
+                  {currentModeOption.icon}
+                  <span>{currentModeOption.label}</span>
+                  <ChevronDown className="h-2.5 w-2.5" />
+                </button>
+                {modeMenuOpen && (
+                  <div className="absolute bottom-full right-0 mb-1 w-44 bg-brand-bg-rail border border-brand-border rounded-md shadow-xl z-50 overflow-hidden">
+                    <div className="p-1">
+                      {chatModeOptions.map((mode) => (
+                        <button
+                          key={mode.id}
+                          onClick={() => {
+                            onChatModeChange(mode.id);
+                            setModeMenuOpen(false);
+                          }}
+                          className={`flex items-center gap-2 w-full px-2 py-1 rounded text-[10px] hover:bg-brand-border transition-colors ${
+                            mode.id === (chatMode || 'auto')
+                              ? 'text-brand-green'
+                              : 'text-brand-green-soft'
+                          }`}
+                          title={mode.tooltip}
+                        >
+                          {mode.icon}
+                          <span>{mode.label}</span>
+                          <span className="ml-auto text-[9px] text-brand-green-muted">{mode.tooltip}</span>
+                          {mode.id === (chatMode || 'auto') && (
+                            <span className="text-brand-green">✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Tool selector */}
             <div className="relative" ref={toolMenuRef}>
               <button

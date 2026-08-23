@@ -1096,8 +1096,18 @@ class LocalMindClient {
     tone?: number;
     // B-2026-08-23-27: startup session behavior ("resume" | "new").
     startup_session?: string;
+    // B-2026-08-23-34: Chat mode ("auto" | "agent" | "direct").
+    chat_mode?: string;
   }> {
     return this.request('/api/settings');
+  }
+
+  /** B-2026-08-23-34: Set chat mode ("auto" | "agent" | "direct"). */
+  async setChatMode(chatMode: 'auto' | 'agent' | 'direct'): Promise<{ chat_mode: string; message: string }> {
+    return this.request('/api/settings/chat-mode', {
+      method: 'POST',
+      body: JSON.stringify({ chat_mode: chatMode }),
+    });
   }
 
   /** B-2026-08-23-27: Persist startup session behavior ("resume" | "new"). */
