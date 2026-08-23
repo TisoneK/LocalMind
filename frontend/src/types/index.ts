@@ -359,6 +359,16 @@ export interface FileNode {
   expanded?: boolean;
 }
 
+/** One entry in a session's workspace artifact listing (B-2026-08-23). */
+export interface SessionFileEntry {
+  name: string;
+  type: 'file' | 'folder';
+  path: string;
+  relPath: string;
+  size: number;
+  modified: string;
+}
+
 // ─── Terminal Types ────────────────────────────────────────────────────
 
 export type TerminalLineType = 'command' | 'output' | 'error' | 'info' | 'system' | 'success';

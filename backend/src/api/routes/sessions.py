@@ -233,6 +233,88 @@ async def get_history(session_id: str):
     return {"history": history}
 
 
+@router.get("/sessions/{session_id}/files")
+async def list_session_files(session_id: str):
+    """List the session's workspace artifacts recursively (B-2026-08-23).
+
+    Returns a flat list of files + folders inside the session's workspace
+    folder (<localmind_home>/sessions/<id>), so the sidebar can render each
+    chat's artifacts. Refuses anything resolving outside the workspace root
+    (same defensive guard as delete_workspace).
+    """
+    try:
+        from core.session_workspace import workspace_path, workspace_root
+
+        ws = workspace_path(session_id)
+        root = workspace_root().resolve()
+        try:
+            ws_resolved = ws.resolve()
+            ws_resolved.relative_to(root)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid session id")
+
+        if not ws_resolved.exists() or not ws_resolved.is_dir():
+            return {"files": [], "workspacePath": str(ws)}
+
+        import datetime
+        import os
+
+        entries = []
+        file_rel_paths: set[str] = set()
+        for dirpath, dirnames, filenames in os.walk(ws_resolved):
+            dirnames.sort()
+            for name in sorted(filenames):
+                full = os.path.join(dirpath, name)
+                try:
+                    st = os.stat(full)
+                except OSError:
+                    continue
+                rel = os.path.relpath(full, ws_resolved)
+                file_rel_paths.add(rel)
+                entries.append(
+                    {
+                        "name": name,
+                        "type": "file",
+                        "path": full,
+                        "relPath": rel,
+                        "size": st.st_size,
+                        "modified": datetime.datetime.fromtimestamp(st.st_mtime).isoformat(),
+                    }
+                )
+        # Include every folder — inferred from file relPaths, plus empty dirs
+        # on disk — so the tree reflects the workspace layout.
+        dir_rel_paths: set[str] = set()
+        for rel in file_rel_paths:
+            parts = rel.split(os.sep)
+            for i in range(1, len(parts)):
+                dir_rel_paths.add(os.sep.join(parts[:i]))
+        for dirpath, dirnames, _filenames in os.walk(ws_resolved):
+            for name in sorted(dirnames):
+                dir_rel_paths.add(os.path.relpath(os.path.join(dirpath, name), ws_resolved))
+        for rel in sorted(dir_rel_paths):
+            full = os.path.join(ws_resolved, *rel.split(os.sep))
+            try:
+                st = os.stat(full)
+            except OSError:
+                continue
+            entries.append(
+                {
+                    "name": os.path.basename(rel),
+                    "type": "folder",
+                    "path": full,
+                    "relPath": rel,
+                    "size": 0,
+                    "modified": datetime.datetime.fromtimestamp(st.st_mtime).isoformat(),
+                }
+            )
+        entries.sort(key=lambda e: (e["type"] != "folder", e["relPath"].lower()))
+        return {"files": entries, "workspacePath": str(ws)}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to list session files: {exc}")
+
+
 @router.delete("/sessions/{session_id}")
 async def delete_session(session_id: str):
     """Delete a session and all its messages.

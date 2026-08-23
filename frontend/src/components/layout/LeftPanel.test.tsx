@@ -5,6 +5,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { LeftPanel } from './LeftPanel';
+import { localmindClient as client } from '@/lib/localmind/client';
 import type { Session } from '@/types';
 
 const sessions: Session[] = [
@@ -194,5 +195,29 @@ describe('LeftPanel multi-select', () => {
     // the old pill path showed the raw tool name ('Shell') instead.
     expect(screen.getByText('Run command')).toBeInTheDocument();
     expect(screen.getByText('1 step')).toBeInTheDocument();
+  });
+
+  it('B-2026-08-23: expands a chat to list its workspace artifacts', async () => {
+    const entries = [
+      { name: 'notes.txt', type: 'file' as const, path: '/tmp/ws/notes.txt', relPath: 'notes.txt', size: 42, modified: '' },
+      { name: 'sub', type: 'folder' as const, path: '/tmp/ws/sub', relPath: 'sub', size: 0, modified: '' },
+    ];
+    vi.spyOn(client, 'getSessionFiles').mockResolvedValue(entries);
+    renderPanel();
+    fireEvent.click(screen.getByTestId('session-files-toggle-a'));
+    // Files appear after the async fetch resolves.
+    expect(await screen.findByText('notes.txt')).toBeInTheDocument();
+    expect(screen.getByText('sub')).toBeInTheDocument();
+    expect(screen.getByTestId('session-files-a')).toBeInTheDocument();
+    // Clicking a file opens the preview dialog.
+    fireEvent.click(screen.getByText('notes.txt'));
+    expect(await screen.findByText(/Preview/i)).toBeInTheDocument();
+  });
+
+  it('B-2026-08-23: shows the empty state when a chat has no artifacts', async () => {
+    vi.spyOn(client, 'getSessionFiles').mockResolvedValue([]);
+    renderPanel();
+    fireEvent.click(screen.getByTestId('session-files-toggle-a'));
+    expect(await screen.findByText(/No files yet/i)).toBeInTheDocument();
   });
 });

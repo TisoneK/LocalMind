@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from core.session_workspace import (
     delete_workspace,
     ensure_workspace,
@@ -115,3 +117,73 @@ class TestCurrentSessionContextVar:
         assert current_session_id() == "outer"
         reset_current_session(outer)
         assert current_session_id() is None
+
+
+class TestListSessionFiles:
+    """GET /api/sessions/{id}/files — the sidebar's per-chat artifact list."""
+
+    @pytest.mark.asyncio
+    async def test_lists_files_and_folders(self, tmp_path):
+        from core.config import settings
+        from core.session_workspace import ensure_workspace
+
+        settings.localmind_home = str(tmp_path)
+        ws = ensure_workspace("sess-files-1")
+        (ws / "alpha.txt").write_text("hello")
+        (ws / "sub").mkdir()
+        (ws / "sub" / "beta.md").write_text("# beta")
+
+        from api.routes.sessions import list_session_files
+
+        result = await list_session_files("sess-files-1")
+        assert result["workspacePath"] == str(ws)
+        rels = {f["relPath"]: f for f in result["files"]}
+        assert rels["alpha.txt"]["type"] == "file"
+        assert rels["alpha.txt"]["size"] == 5
+        assert rels["sub/beta.md"]["type"] == "file"
+        # Folders are included (even empty ones) so the tree renders the layout.
+        assert "sub" in rels and rels["sub"]["type"] == "folder"
+
+    @pytest.mark.asyncio
+    async def test_empty_workspace_returns_empty(self, tmp_path):
+        from core.config import settings
+        from core.session_workspace import ensure_workspace
+
+        settings.localmind_home = str(tmp_path)
+        ensure_workspace("sess-files-empty")
+
+        from api.routes.sessions import list_session_files
+
+        result = await list_session_files("sess-files-empty")
+        assert result["files"] == []
+
+    @pytest.mark.asyncio
+    async def test_hostile_id_never_escapes_root(self, tmp_path):
+        from core.config import settings
+        from core.session_workspace import workspace_root
+
+        settings.localmind_home = str(tmp_path)
+
+        from api.routes.sessions import list_session_files
+
+        # Path traversal in the id must resolve INSIDE the workspace root —
+        # either to the sanitized folder or to a 400, never outside it.
+        result = await list_session_files("../../etc")
+        ws_root = workspace_root().resolve()
+        for f in result["files"]:
+            try:
+                Path(f["path"]).resolve().relative_to(ws_root)
+            except ValueError:
+                assert False, f"path escaped workspace root: {f['path']}"
+
+    @pytest.mark.asyncio
+    async def test_missing_workspace_returns_empty(self, tmp_path):
+        from core.config import settings
+
+        settings.localmind_home = str(tmp_path)
+
+        from api.routes.sessions import list_session_files
+
+        result = await list_session_files("sess-files-missing")
+        assert result["files"] == []
+        assert result["workspacePath"].endswith("sessions/sess-files-missing")

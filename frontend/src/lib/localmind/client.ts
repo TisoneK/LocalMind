@@ -29,6 +29,7 @@ import type {
   CapabilitiesData,
   ModelOption,
   CompletionSuggestion,
+  SessionFileEntry,
 } from '@/types';
 import { createSSEParser } from './sse';
 import type { CapabilitiesResponseWire } from './capabilities-response';
@@ -393,6 +394,18 @@ class LocalMindClient {
       messageCount: s.messageCount ?? s.message_count ?? 0,
       active: false,
       workspacePath: s.workspacePath || s.workspace_path || '',
+    }));
+  }
+
+  async getSessionFiles(sessionId: string): Promise<SessionFileEntry[]> {
+    const data = await this.request<{ files: any[] }>(`/api/sessions/${encodeURIComponent(sessionId)}/files`);
+    return (data.files || []).map((f) => ({
+      name: f.name || '',
+      type: f.type === 'folder' ? 'folder' : 'file',
+      path: f.path || '',
+      relPath: f.relPath || f.name || '',
+      size: f.size || 0,
+      modified: f.modified || '',
     }));
   }
 

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks } from 'lucide-react';
-import { Session, ActionItem, FileNode, TodoItem, ModelOption, ToolCall } from '@/types';
+import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks, ChevronRight, ChevronDown, File as FileIcon, Folder as FolderIcon } from 'lucide-react';
+import { Session, ActionItem, FileNode, SessionFileEntry, TodoItem, ModelOption, ToolCall } from '@/types';
 import type { ExportFormat } from '@/lib/localmind/exportChats';
 import { ActionHistory } from '@/components/panels/ActionHistory';
 import { FileExplorer } from '@/components/panels/FileExplorer';
@@ -12,6 +12,7 @@ import { TodoList } from '@/components/panels/TodoList';
 // for potential re-mount behind a flag.
 import { isActiveToolStatus } from '@/lib/localmind/progress';
 import { ModelSelector } from '@/components/shared/ModelSelector';
+import { FilePreviewDialog } from '@/components/chat/FilePreviewDialog';
 
 interface LeftPanelProps {
   sessions: Session[];
@@ -65,6 +66,11 @@ export function LeftPanel({
   width = 280,
 }: LeftPanelProps) {
   const [activeTab, setActiveTab] = useState<LeftTab>('chat');
+  // Per-session workspace artifact listings (B-2026-08-23): expanded session
+  // ids → their file entries, plus a loading/error flag per id.
+  const [expandedSessionFiles, setExpandedSessionFiles] = useState<Record<string, SessionFileEntry[]>>({});
+  const [loadingSessionFiles, setLoadingSessionFiles] = useState<Record<string, boolean>>({});
+  const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   // Multi-select chat management (mark → bulk delete / export).
   const [selectionMode, setSelectionMode] = useState(false);
@@ -109,6 +115,30 @@ export function LeftPanel({
     if (selectedCount === 0) return;
     onExportSessions(Array.from(selectedIds), format);
     setExportMenuOpen(false);
+  };
+
+  // B-2026-08-23: toggle a session's workspace-artifact listing. Files are
+  // fetched once on first expand and cached; the toggle collapses back.
+  const toggleSessionFiles = async (sessionId: string) => {
+    if (expandedSessionFiles[sessionId]) {
+      setExpandedSessionFiles((prev) => {
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
+      });
+      return;
+    }
+    setLoadingSessionFiles((prev) => ({ ...prev, [sessionId]: true }));
+    try {
+      const { localmindClient } = await import('@/lib/localmind/client');
+      const entries = await localmindClient.getSessionFiles(sessionId);
+      setExpandedSessionFiles((prev) => ({ ...prev, [sessionId]: entries }));
+    } catch {
+      // Best-effort: a failed fetch leaves the section collapsed; the user
+      // can retry by clicking the toggle again.
+    } finally {
+      setLoadingSessionFiles((prev) => ({ ...prev, [sessionId]: false }));
+    }
   };
 
   // Tool progress belongs in Actions, not in the chat transcript. The chat
@@ -423,9 +453,43 @@ export function LeftPanel({
                   </span>
                   <span className="text-[9px] text-brand-green-muted shrink-0">{formatTimestamp(session.timestamp, session.formattedDate)}</span>
                 </div>
-                <div className="pl-5 mt-0.5">
+                <div className="pl-5 mt-0.5 flex items-center gap-1">
                   <span className="text-[9px] text-brand-green-muted">{session.messageCount} msgs</span>
+                  {!selectionMode && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSessionFiles(session.id);
+                      }}
+                      className="ml-auto flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] text-brand-green-muted hover:text-brand-green hover:bg-brand-border/50 transition-colors"
+                      title="Show this chat's files"
+                      data-testid={`session-files-toggle-${session.id}`}
+                    >
+                      {expandedSessionFiles[session.id] ? (
+                        <ChevronDown className="h-2.5 w-2.5" />
+                      ) : (
+                        <ChevronRight className="h-2.5 w-2.5" />
+                      )}
+                      <FolderTree className="h-2.5 w-2.5" />
+                      Files
+                    </button>
+                  )}
                 </div>
+                {!selectionMode && expandedSessionFiles[session.id] && (
+                  <div className="mt-1 pl-5" data-testid={`session-files-${session.id}`}>
+                    {loadingSessionFiles[session.id] ? (
+                      <div className="flex items-center gap-1.5 px-1 py-1 text-[10px] text-brand-green-muted">
+                        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                        Loading files…
+                      </div>
+                    ) : (
+                      <SessionFileList
+                        entries={expandedSessionFiles[session.id]}
+                        onOpen={(path) => setPreviewPath(path)}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
               );
             })}
@@ -531,6 +595,65 @@ export function LeftPanel({
           <TodoList todos={todos} actions={actions} onToggle={onToggleTodo} onAdd={onAddTodo} />
         </div>
       )}
+
+      {/* File preview dialog — opened by clicking a session artifact (B-2026-08-23) */}
+      <FilePreviewDialog path={previewPath} onClose={() => setPreviewPath(null)} />
+    </div>
+  );
+}
+
+function _formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** B-2026-08-23: compact per-session artifact list (flat entries, folder depth indent). */
+function SessionFileList({ entries, onOpen }: { entries: SessionFileEntry[]; onOpen: (path: string) => void }) {
+  if (!entries || entries.length === 0) {
+    return (
+      <div className="px-1 py-1 text-[10px] text-brand-green-faint italic">
+        No files yet — artifacts will appear here.
+      </div>
+    );
+  }
+  const sorted = [...entries].sort((a, b) => {
+    if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+    return a.relPath.localeCompare(b.relPath);
+  });
+  return (
+    <div className="space-y-0.5">
+      {sorted.map((entry) => {
+        const depth = entry.relPath.split(/[\\/]/).length - 1;
+        if (entry.type === 'folder') {
+          return (
+            <div
+              key={entry.relPath}
+              className="flex items-center gap-1.5 px-1.5 py-0.5 rounded text-brand-amber"
+              style={{ paddingLeft: `${depth * 10 + 6}px` }}
+              title={entry.relPath}
+            >
+              <FolderIcon className="h-3 w-3 shrink-0" />
+              <span className="text-[10px] text-brand-green-soft truncate">{entry.name}</span>
+            </div>
+          );
+        }
+        return (
+          <button
+            key={entry.relPath}
+            onClick={() => onOpen(entry.path)}
+            className="flex items-center gap-1.5 w-full text-left px-1.5 py-0.5 rounded hover:bg-brand-border/50 transition-colors group"
+            style={{ paddingLeft: `${depth * 10 + 6}px` }}
+            title={entry.path}
+          >
+            <FileIcon className="h-3 w-3 shrink-0 text-brand-green-muted" />
+            <span className="text-[10px] text-brand-green-soft truncate flex-1 min-w-0 group-hover:text-brand-green transition-colors">
+              {entry.name}
+            </span>
+            <span className="text-[9px] text-brand-green-faint shrink-0">{_formatFileSize(entry.size)}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
