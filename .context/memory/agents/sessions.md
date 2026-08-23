@@ -5351,3 +5351,15 @@ authoritative.
 **Live** (isolated 8765, bankofai): one turn "Use the memory tool to save that I prefer dark mode" → SSE stream emitted `memory_op` tool_call events (the forceMemoryTab signal) alongside `terminal_event`/`tool_call`/`todo_created` — all the signals the UI keys on were present in the real stream. (Free-tier model replied in prose on the first prompt; the explicit "use the memory tool" wording triggered the tool.)
 
 **Commits:** product + context (pushed).
+## Session 373 — Files tab browser round 2: recent files, open-in-OS, refresh, metadata (B-2026-08-23-16) — 2026-08-23
+
+**Task:** close the remaining B-2026-08-23-16 scope (Session 366 shipped tree + search + actions): **recent files, open-in-OS, refresh, better metadata**.
+
+**Changes:**
+- **Backend** — new `GET /api/files/recent?path=&limit=` in `api/routes/filesystem.py`: bounded recursive walk (skips hidden dirs, SCAN_CAP 20k, MAX_DEPTH 8) returning the `limit` newest files with name/type/path/relPath/size/modified, sorted by mtime desc. Same allowed-folder gate as the rest of the filesystem API (403 on traversal). `POST /api/open-file` and `/api/open-folder` already existed for the OS-open action.
+- **Frontend client/types** — `openFile`/`openFolder`/`getRecentFiles` on localmindClient (getRecentFiles swallows errors → []); `FileNode` gains `size`/`modified`.
+- **FileExplorer** — new **Recent** section (Clock header, top-8 files with size + relative mtime, click → preview); **Open-in-OS** action on file rows (default app) and folder rows (file manager) with inline "Open failed" notice; **Refresh** button beside search (re-fetches tree via onFilesChanged + reloads recent); file rows now show size + mtime (title = full ISO); recent reloads after a delete.
+
+**Verification:** 4 new backend tests (newest-first order + metadata, limit honored, hidden-dir skip, traversal 403) + 6 new frontend tests (recent renders w/ size+mtime, recent row opens preview, open-in-OS file/folder, refresh, row metadata). **2441 backend / 335 frontend**, ruff + tsc + eslint clean (fixed a new set-state-in-effect warning; the search-effect warning is pre-existing). **Live** (isolated 8765, LOCALMIND_ALLOWED_FOLDERS scoped to a temp root): recent returned `[b.txt, c.md, a.txt]` newest-first with size/modified, hidden `.git/config` (made newest via utime) skipped, limit=2 honored, open-file returned the opened path, parent-dir traversal → 403.
+
+**Commits:** product + context (pushed).
