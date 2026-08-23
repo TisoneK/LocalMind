@@ -4733,3 +4733,14 @@ program + ADR-22). -->
 - **Outcome:** in progress — 2 commits pushed, 12 prompts traced, harness fixed, 2 root causes addressed. Remaining: re-run full suite for accurate counts, reduce describe_tool double-call waste, resolve conflicting prompt instructions.
 - **Report:** pending
 - **Inefficiencies:** multiple rounds wasted on instruction drift (using zai after being told not to, not following kickoff.md bookkeeping protocol). Tool timeout on full 12-trace batch (600s limit hit); switched to individual traces with 20s cooldown.
+
+---
+## 2026-08-22 — Session 341 — update live-testing docs (bankofai primary, scripts workflow, root-cause method)
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-flash | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — docs/memory update
+- **Task:** Update `.context/memory/system/live-testing.md` per user: bankofai (fast + free) is the primary live-test provider; zai/glm-4.5-flash is the slower/weaker model. Document the scripts/ workflow (live_test_cybercafe.py repro harness, lm_benchmark.py 52-test suite, lm_collision_tests.py multi-guard, run_*_detached.sh) and the root-cause-first debugging rule (cluster failures into root causes — Session 336's 4 clusters; misdiagnosis worse than no diagnosis; fix the mechanism, not the symptom).
+- **Commits:** 1 memory (`chore(context): update live-testing docs`)
+- **Key findings:** All committed harnesses already default to `LOCALMIND_ADAPTER=bankofai` (bankofai/deepseek-v4-flash); zai/glm-4.5-flash is the slow-model fallback. The scripts hardcode `REPO=/home/z/my-project/localmind` (Linux dev box) — must be adjusted on other checkouts. Bookkeeping gap found: sessions 332-340 shipped (commits) but were never logged in `agents/sessions.md` (last entry: Session 331) and `tasks/current.md` was last updated at "Session 332 complete" (`d7de7cf`); their evidence lives in `.context/memory/system/test-results-336.md` + `test-catalog.md` + live-testing.md session log.
+- **Outcome:** done — live-testing.md rewritten; bookkeeping gap noted for future sessions.
+- **Report:** none

@@ -1,47 +1,11 @@
 # Current Task
 
-**Status:** COMPLETE — Session 332: cyber-café duplicate-answer bug fixed (4 fixes pushed to main).
+**Status:** IDLE — Session 341 updated the live-testing docs.
 
-## Session 332 — completed 2026-08-22
+## Session 341 outcome — live-testing doc rewritten (bankofai primary, scripts workflow, root-cause method)
 
-- **Task:** Reproduce the user's observed run (deepseek-v4-flash, "Give me three ideas for improving a cyber café business."), fix four issues identified in user review.
-- **Provider:** bankofai / deepseek-v4-flash (higher model, free tier).
-- **Result:** All 4 fixes live-verified, committed, and pushed to `main` (commits 32c56a4 → 7400d5b).
+- **Task:** Update `.context/memory/system/live-testing.md` per user: **bankofai** (fast + free) is the primary live-test provider; **zai/glm-4.5-flash** is the slower/weaker model. Documented the `scripts/` harnesses — `live_test_cybercafe.py` (repro), `lm_benchmark.py` (52-test suite), `lm_collision_tests.py` (multi-guard), `run_*_detached.sh` — and the root-cause-first debugging rule (cluster failures into root causes, misdiagnosis worse than no diagnosis, fix the mechanism not the symptom).
+- **Bookkeeping gap found:** Sessions 332-340 shipped (commits) but were never logged in `agents/sessions.md` (last entry: Session 331); `tasks/current.md` was last updated at "Session 332 complete" (`d7de7cf`). Their evidence lives in `.context/memory/system/test-results-336.md` + `test-catalog.md` + the live-testing.md session log. Note: back-filling is not done — flagged for future sessions per append-only rules.
+- **Next:** standing backlog in `tasks/backlog.md`.
 
-### Live-verified results (bankofai/deepseek-v4-flash, isolated port 8765)
-
-| Metric | Original (user's report) | After all 4 fixes |
-|--------|-------------------------|-------------------|
-| Latency | 57.7s | **8.6s** (-85%) |
-| Token events | 2 (duplicate!) | 1 (no duplicate) |
-| Prompt tokens | 2,101 | ~150 (fast-path, single chat call) |
-| Iterations | 2 | 1 |
-| Thinking exposure | 392 chars raw | 0 chars (fast-path) |
-| "Thought process" label | Yes (exposed) | "Approach" (or hidden) |
-| Replan events | 1 (unnecessary) | 0 |
-| Tools | 0 | 0 |
-
-### Commits pushed (5)
-
-- `32c56a4` — fix(loop): buffer per-iteration text, emit only after acceptance gate passes (332-B)
-- `8bdeb8c` — feat(runtime): wire trivial+conversational fast-path (332-C)
-- `7086fbd` — fix(loop): scope action-narration detector to tool-implying prompts (332-D)
-- `dbc49fa` — fix(ui): rename "Thought process" label to "Approach" (332-E)
-- `13fcb1f`, `7400d5b` — chore(context): live-test logs + push summary
-
-### Regression check
-
-- Full backend suite: **2098 pass / 10 fail (all pre-existing)** — verified by stashing all 4 fixes and confirming the same 10 failures exist on baseline. My changes introduced ZERO new test failures.
-- Full frontend suite: **262 pass / 0 fail** — including updated ThinkingBlock tests.
-
-### Next backlog items
-
-- **(pre-existing)** test_parent_recovery_cap::test_non_parent_path_still_capped_at_two — `ModuleNotFoundError: No module named 'tests'` (test-isolation issue)
-- **(pre-existing)** test_prose_commitment_detector::test_gate_does_not_trigger_on_legitimate_prose_answer — gate fails a legitimate prose answer; needs investigation
-- **(pre-existing)** test_stage_timing (2 tests) — fast-path stage_timing assertion drift
-- **(pre-existing)** test_prompt_budget::test_init_prompt_is_under_budget — prompt size drift
-- **(pre-existing)** test_abort_signal, test_steering, test_tool_error_recovery (6 tests) — likely related to the parent-agent loop changes; verify they were failing before Session 332
-
-**Feature:** none (loop hardening)
-**ADR:** none
-**Review:** pending
+**Feature:** none
