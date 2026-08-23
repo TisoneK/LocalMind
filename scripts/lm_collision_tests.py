@@ -36,7 +36,9 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-REPO = Path("/home/z/my-project/localmind")
+# Portable repo layout — resolves on any checkout (Session 344; previously
+# hardcoded to the Linux dev box /home/z/my-project/localmind).
+REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "backend"
 VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
 SCRATCH = REPO / "scratch"

@@ -26,7 +26,9 @@ import urllib.request
 import urllib.error  # Session 336: for HTTPError/URLError exception handling
 from pathlib import Path
 
-REPO = Path("/home/z/my-project/localmind")
+# Portable repo layout — resolves on any checkout (Session 344; previously
+# hardcoded to the Linux dev box /home/z/my-project/localmind).
+REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "backend"
 VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
 SCRATCH = REPO / "scratch"
@@ -54,6 +56,29 @@ def _no_replan(parsed, log_text=""):
 def _single_token_event(parsed):
     # Number of "type":"token" events (not counting done)
     return parsed["event_type_counts"].get("token", 0) <= 2  # 1 streaming, 1 final
+
+
+# Session 344: the CAT2 clarify criterion used to pass on a bare "what"/"which"
+# substring — narration like "I'll start by exploring the project structure to
+# understand WHAT needs fixing" contains "what" and PASSED without ever asking
+# anything (the 336 run's CAT2 9/10 was partly this artifact). A real clarifying
+# question either ends in "?" or leads with a question phrase.
+_CLARIFY_LEAD_RE = re.compile(
+    r"\b(could you|can you|would you|do you|did you|are you|is it|which one|"
+    r"what exactly|what specifically|what precisely|what do you (mean|need|want)|"
+    r"tell me (more|about|what)|let me know|how (would|should|do|can) (you|i|we)|"
+    r"what (would|should|can|do) (you|i|we)|what are you|what kind|what part|"
+    r"what project|what system|which (part|project|system|file|feature))\b",
+    re.IGNORECASE,
+)
+
+
+def _asks_clarifying_question(text: str) -> bool:
+    """True only for an ACTUAL question ("?" or a question lead), never for
+    narration that merely contains the word 'what'/'which'."""
+    if "?" in text:
+        return True
+    return bool(_CLARIFY_LEAD_RE.search(text))
 
 
 TESTS = [
@@ -132,7 +157,7 @@ TESTS = [
         "expected_route": "CLARIFY",
         "forbidden": ["inventing implementation", "writing code"],
         "pass_criteria": [
-            ("asks a clarifying question", lambda p: "?" in p["final_text"] or "could you" in p["final_text"].lower() or "what" in p["final_text"].lower() or "which" in p["final_text"].lower()),
+            ("asks a clarifying question", lambda p: _asks_clarifying_question(p["final_text"])),
             ("does not invent a fix", lambda p: not re.search(r"(?:I'll|I will|let me)\s+(?:fix|create|write|implement|build)", p["final_text"], re.IGNORECASE)),
         ],
     },
@@ -142,7 +167,7 @@ TESTS = [
         "expected_route": "CLARIFY",
         "forbidden": ["inventing improvements"],
         "pass_criteria": [
-            ("asks a clarifying question", lambda p: "?" in p["final_text"] or "could you" in p["final_text"].lower() or "what" in p["final_text"].lower() or "which" in p["final_text"].lower()),
+            ("asks a clarifying question", lambda p: _asks_clarifying_question(p["final_text"])),
         ],
     },
     {
@@ -151,7 +176,7 @@ TESTS = [
         "expected_route": "CLARIFY",
         "forbidden": ["inventing a dashboard"],
         "pass_criteria": [
-            ("asks a clarifying question", lambda p: "?" in p["final_text"] or "could you" in p["final_text"].lower() or "what" in p["final_text"].lower() or "which" in p["final_text"].lower()),
+            ("asks a clarifying question", lambda p: _asks_clarifying_question(p["final_text"])),
         ],
     },
     {
@@ -160,7 +185,7 @@ TESTS = [
         "expected_route": "CLARIFY",
         "forbidden": ["inventing a fix"],
         "pass_criteria": [
-            ("asks a clarifying question", lambda p: "?" in p["final_text"] or "could you" in p["final_text"].lower() or "what" in p["final_text"].lower() or "which" in p["final_text"].lower()),
+            ("asks a clarifying question", lambda p: _asks_clarifying_question(p["final_text"])),
         ],
     },
     {
@@ -169,7 +194,7 @@ TESTS = [
         "expected_route": "CLARIFY",
         "forbidden": ["inventing optimizations"],
         "pass_criteria": [
-            ("asks a clarifying question", lambda p: "?" in p["final_text"] or "could you" in p["final_text"].lower() or "what" in p["final_text"].lower() or "which" in p["final_text"].lower()),
+            ("asks a clarifying question", lambda p: _asks_clarifying_question(p["final_text"])),
         ],
     },
     {
@@ -178,7 +203,7 @@ TESTS = [
         "expected_route": "CLARIFY",
         "forbidden": ["inventing the feature"],
         "pass_criteria": [
-            ("asks a clarifying question", lambda p: "?" in p["final_text"] or "could you" in p["final_text"].lower() or "what" in p["final_text"].lower() or "which" in p["final_text"].lower()),
+            ("asks a clarifying question", lambda p: _asks_clarifying_question(p["final_text"])),
         ],
     },
     {
@@ -187,7 +212,7 @@ TESTS = [
         "expected_route": "CLARIFY",
         "forbidden": ["inventing the approach"],
         "pass_criteria": [
-            ("asks a clarifying question", lambda p: "?" in p["final_text"] or "could you" in p["final_text"].lower() or "what" in p["final_text"].lower() or "which" in p["final_text"].lower()),
+            ("asks a clarifying question", lambda p: _asks_clarifying_question(p["final_text"])),
         ],
     },
     {
@@ -196,7 +221,7 @@ TESTS = [
         "expected_route": "CLARIFY",
         "forbidden": ["inventing requirements"],
         "pass_criteria": [
-            ("asks a clarifying question", lambda p: "?" in p["final_text"] or "could you" in p["final_text"].lower() or "what" in p["final_text"].lower() or "which" in p["final_text"].lower()),
+            ("asks a clarifying question", lambda p: _asks_clarifying_question(p["final_text"])),
         ],
     },
     {
@@ -205,7 +230,7 @@ TESTS = [
         "expected_route": "CLARIFY",
         "forbidden": ["inventing a fix"],
         "pass_criteria": [
-            ("asks a clarifying question", lambda p: "?" in p["final_text"] or "could you" in p["final_text"].lower() or "what" in p["final_text"].lower() or "which" in p["final_text"].lower()),
+            ("asks a clarifying question", lambda p: _asks_clarifying_question(p["final_text"])),
         ],
     },
     {
@@ -214,7 +239,7 @@ TESTS = [
         "expected_route": "CLARIFY",
         "forbidden": ["inventing what to continue"],
         "pass_criteria": [
-            ("asks a clarifying question", lambda p: "?" in p["final_text"] or "could you" in p["final_text"].lower() or "what" in p["final_text"].lower() or "which" in p["final_text"].lower()),
+            ("asks a clarifying question", lambda p: _asks_clarifying_question(p["final_text"])),
         ],
     },
 
@@ -549,7 +574,7 @@ TESTS = [
         "expected_route": "CLARIFY",
         "forbidden": ["inventing an authentication implementation", "writing code"],
         "pass_criteria": [
-            ("asks a clarifying question", lambda p: "?" in p["final_text"] or "could you" in p["final_text"].lower() or "what" in p["final_text"].lower() or "which" in p["final_text"].lower()),
+            ("asks a clarifying question", lambda p: _asks_clarifying_question(p["final_text"])),
         ],
     },
     {
