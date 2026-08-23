@@ -1,13 +1,13 @@
 # Current Task
 
-**Status:** IDLE — Session 363 shipped the extended workspace write redirect.
+**Status:** IDLE — Session 364 audited and cleaned the real-home root.
 
-## Session 363 outcome — explicit bare-filename writes redirect to the session workspace
+## Session 364 outcome — real-home root audit (no code change)
 
-- **Task:** extend B-2026-08-23-17 — explicit bare-filename writes (not just the internal scratch) default into the session workspace; user-named directories still escape.
-- **Gap (probed with a bound session):** plain `""` / `"notes.txt"` already landed in the workspace, but the model's legacy habits escaped: `./notes.txt` (dot noise) and `LocalMind/notes.txt` / `~/LocalMind/notes.txt` (old description advertised "Saves to ~/LocalMind/ by default").
-- **Fix (file_writer.py):** `./`-only relative paths → `_default_scratch`; a `LocalMind` component anywhere routes to the workspace when a session is active (string-based `_is_legacy_scratch_path` — expanduser reads real HOME). User-named dirs (`sub/`, `Documents/`, `~/Desktop/`, absolute) unchanged. Tool description updated.
-- **Verified:** 11 new parametrized tests; 2404 backend / 2 skipped, ruff clean; live (bankofai, isolated 8765) — alpha.txt + beta.txt both in `sessions/ws-extend-1/`, zero escaped root files.
+- **User report:** files in `~/LocalMind` root, expected `~/LocalMind/<session-id>/`; also asked about "edited file copied to replace the original".
+- **Evidence:** all 4 root files predate the workspace feature (shipped 03:36 today); `find -newermt` on the root → zero files. Current writes are session-scoped (verified live Sessions 362/363).
+- **Edit copy-back** is intended: user-specified real paths get the edited file copied over the original; bare filenames stay in the session workspace.
+- **Action (user chose):** deleted the 4 stale root files (hello.py, create_news.py, generate_news.py, dinner_recipe.txt). Root now holds only localmind.db* + settings.json.
 
 ## Next
 
@@ -15,6 +15,6 @@
 - **B-2026-08-23-16 (Medium):** Develop the Files tab.
 - **B-2026-08-23-18 (Medium):** File preview dialog multi-mode (Preview / Edit / Diff).
 
-**Feature:** none (single-session fix)
+**Feature:** none (audit + cleanup)
 **ADR:** none
 **Review:** pending

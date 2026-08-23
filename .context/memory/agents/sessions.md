@@ -5209,3 +5209,13 @@ authoritative.
 **Fix (all in file_writer.py):** `./`-only relative paths fall through to `_default_scratch`; a `LocalMind` component anywhere (named-folder shorthand, home-relative, or mid-path anchor) routes to the workspace when a session is active (`_session_active()` + `_is_legacy_scratch_path` string check — expanduser reads the real HOME env, so the check is string-based). User-named dirs (`sub/`, `Documents/`, `~/Desktop/`, absolute) unchanged. Tool description updated to say a bare filename saves into the session workspace.
 
 **Verified:** 11 new parametrized tests (bare/dot/LocalMind/~/LocalMind → workspace; sub/Documents/~/Desktop → escape; no-session legacy kept). 2404 backend / 2 skipped, ruff clean. Live (bankofai, isolated 8765): two turns creating alpha.txt + beta.txt with bare filenames → both in `sessions/ws-extend-1/`, zero escaped root files, no error events. (One prompt was initially eaten by the deterministic memory-write classifier — "save ... into" phrasing — reworded to "create a file named"; not a redirect bug.)
+
+## Session 364 — real-home root-file audit + cleanup (2026-08-23)
+
+**User report:** "You wrote in ~/LocalMind's root yet i thought files and session data would land in ~/LocalMind/<session-id>/... and the edited file is copied to replace the original one in the PC where specified".
+
+**Audit findings (evidence, not assumptions):**
+- All 4 root files (dinner_recipe.txt Aug 16, generate_news.py/create_news.py Aug 22, hello.py Aug 23 02:47) predate the per-session workspace feature (b9a279e, shipped 03:36 today). `find -newermt "2026-08-23 03:36"` on the root returned ZERO files — nothing writes to the root anymore.
+- The "edited file is copied to replace the original" is the intended copy-back design: user-specified real paths (~/Desktop/x.txt, C:\...) get the edited file copied OVER the original at that path; bare filenames stay inside the session workspace.
+
+**Action (user chose):** deleted the 4 stale root files. Root now holds only localmind.db* + settings.json (by design). No code change needed — verified current behavior is already session-scoped.
