@@ -94,6 +94,26 @@ def workspace_uploads_dir(session_id: str | None) -> Path:
     return workspace_path(session_id) / "uploads"
 
 
+def workspace_tmp_dir(session_id: str | None) -> Path:
+    """Per-session .tmp folder for intermediate/scratch agent work.
+
+    The agent uses this for throwaway artifacts: cached search results,
+    temporary reminders, intermediate processing files. The folder is
+    created automatically on first use and deleted with the session.
+    """
+    return workspace_path(session_id) / ".tmp"
+
+
+def ensure_tmp_dir(session_id: str | None) -> Path:
+    """Create the session's .tmp folder (idempotent) and return its path."""
+    path = workspace_tmp_dir(session_id)
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        logger.warning("[workspace] failed to create .tmp dir %s", path, exc_info=True)
+    return path
+
+
 def ensure_workspace(session_id: str | None) -> Path:
     """Create the session's workspace folder (idempotent) and return its path."""
     path = workspace_path(session_id)

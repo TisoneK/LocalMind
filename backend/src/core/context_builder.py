@@ -204,7 +204,9 @@ def _build_environment_context(
                 f"- Session workspace: {_ws}"
                 " — this session's folder. ALWAYS write files you create for "
                 "this session here — under it, walk from a SUBFOLDER you "
-                "create (e.g. {_ws}/path-test/a.txt)."
+                f"create (e.g. {_ws}/path-test/a.txt). "
+                f"Use {_ws}/.tmp/ for intermediate/scratch work "
+                "(cached results, temp files, reminders)."
                 " Write to an explicit absolute path ONLY if the user asked "
                 "for that exact path."
             )

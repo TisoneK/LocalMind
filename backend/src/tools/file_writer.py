@@ -569,13 +569,14 @@ def _default_scratch(home: Path, filename: str) -> Path:
     Without a session (CLI/tests/legacy callers), the historic
     ~/LocalMind/<filename> scratch is used unchanged.
     """
-    from core.session_workspace import current_session_id, ensure_workspace
+    from core.session_workspace import current_session_id, ensure_tmp_dir
 
     sid = current_session_id()
     if sid:
-        ws = ensure_workspace(sid) / filename
-        logger.info("[file_writer] session workspace default scratch: %s", ws)
-        return ws.resolve()
+        # B-2026-08-23-25: intermediate scratch files go to .tmp/
+        tmp = ensure_tmp_dir(sid) / filename
+        logger.info("[file_writer] session .tmp scratch: %s", tmp)
+        return tmp.resolve()
     return (home / filename).resolve()
 
 

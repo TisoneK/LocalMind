@@ -14,6 +14,7 @@ from core.session_workspace import (
     reset_current_session,
     set_current_session,
     workspace_path,
+    workspace_tmp_dir,
 )
 from tools.file_writer import resolve_write_path, write_file
 
@@ -40,7 +41,8 @@ def test_contextvar_default_is_none():
 class TestResolveDefaultScratch:
     def test_with_session_lands_in_workspace(self, home, bound_session):
         p = resolve_write_path("", "notes.txt")
-        assert p == workspace_path("sess-write-1") / "notes.txt"
+        # B-2026-08-23-25: default scratch now lands in .tmp/
+        assert p == workspace_tmp_dir("sess-write-1") / "notes.txt"
         assert p.is_absolute()
 
     def test_without_session_keeps_legacy_home_scratch(self, home):
@@ -63,7 +65,8 @@ class TestExplicitBareFilenames:
     )
     def test_bare_filename_redirects_to_workspace(self, home, bound_session, path):
         p = resolve_write_path(path, fallback_filename="notes.txt")
-        assert p == workspace_path("sess-write-1") / "notes.txt", path
+        # B-2026-08-23-25: default scratch now lands in .tmp/
+        assert p == workspace_tmp_dir("sess-write-1") / "notes.txt", path
 
     @pytest.mark.parametrize(
         "path",
@@ -89,8 +92,8 @@ class TestWriteFileScratch:
     async def test_default_write_lands_in_workspace(self, home, bound_session):
         result = await write_file("notes.txt:\n\nhello artifact")
         dest = Path(result.metadata["path"])
-        # The visible write is the workspace copy.
-        assert dest == workspace_path("sess-write-1") / "notes.txt"
+        # The visible write is the workspace .tmp copy.
+        assert dest == workspace_tmp_dir("sess-write-1") / "notes.txt"
         assert dest.exists()
         assert dest.read_text() == "hello artifact"
 
@@ -103,8 +106,8 @@ class TestWriteFileScratch:
         dest = Path(result.metadata["path"])
         assert dest == home / "project" / "notes.txt"
         assert dest.exists()
-        # The session workspace still holds the artifact copy.
-        assert (workspace_path("sess-write-1") / "notes.txt").exists()
+        # The session workspace .tmp still holds the artifact copy.
+        assert (workspace_tmp_dir("sess-write-1") / "notes.txt").exists()
 
     @pytest.mark.asyncio
     async def test_no_session_uses_legacy_scratch(self, home):
@@ -129,7 +132,8 @@ class TestFileWriteContractScratch:
             {"path": "notes.txt", "content": "contract artifact"}
         )
         dest = Path(result.metadata["path"])
-        assert dest == workspace_path("sess-write-1") / "notes.txt"
+        # B-2026-08-23-25: default scratch now lands in .tmp/
+        assert dest == workspace_tmp_dir("sess-write-1") / "notes.txt"
         assert dest.exists()
         assert dest.read_text() == "contract artifact"
         # No stray copy at the legacy LocalMind root.
