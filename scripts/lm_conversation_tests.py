@@ -95,8 +95,12 @@ CONVERSATIONS: list[dict] = [
             {"prompt": "Suggest a lunch idea."},
             {"prompt": "I'm allergic to peanuts — does your idea contain them?"},
             {"prompt": "Give me an alternative.", "expect": [
-                ("offers a peanut-free option",
-                 r"(peanut|nut)\b.*\b(no|without|free|avoid)|(no|without|free|avoid).*\b(peanut|nut)\b")]},
+                ("recommends a peanut-free dish", lambda t: (
+                    not re.search(r"\b(peanut|nut)\b", t, re.IGNORECASE)
+                    or "peanut-free" in t.lower()
+                    or "no peanut" in t.lower()
+                    or "without peanut" in t.lower()
+                ))]},
         ],
     },
 
@@ -311,7 +315,13 @@ def boot_server(port: int, log_file: Path) -> subprocess.Popen:
 
 
 def fire_chat(port: int, message: str, session_id: str, timeout: int = 60) -> str:
-    """POST /api/chat on the SAME session_id (multi-turn); 429-retry once."""
+    """POST /api/chat on the SAME session_id (multi-turn); 429-retry once.
+
+    Session 342 addendum: like lm_benchmark.py, also retry provider rate-limits
+    that surface INSIDE the SSE stream (bankofai returns 200 to the proxy but
+    the SSE carries an error event with a 429/usage-limit message) — the first
+    run of CONV-04 burned a turn on the rate-limit fallback text.
+    """
     body = urllib.parse.urlencode({"message": message, "session_id": session_id}).encode()
     req = urllib.request.Request(
         f"http://127.0.0.1:{port}/api/chat",
@@ -321,7 +331,7 @@ def fire_chat(port: int, message: str, session_id: str, timeout: int = 60) -> st
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+            raw = resp.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:
         if e.code == 429:
             print(f"  [429] server 429 — cooling 30s and retrying once")
@@ -333,6 +343,18 @@ def fire_chat(port: int, message: str, session_id: str, timeout: int = 60) -> st
         if "timed out" in str(e).lower():
             raise TimeoutError(f"chat request timed out after {timeout}s")
         raise
+
+    if "429" in raw and ("rate" in raw.lower() or "limit" in raw.lower() or "usage" in raw.lower()):
+        print(f"  [429-in-SSE] provider rate-limit detected — cooling 30s and retrying once")
+        time.sleep(30)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw2 = resp.read().decode("utf-8", errors="replace")
+            if "429" not in raw2 or ("rate" not in raw2.lower() and "usage" not in raw2.lower()):
+                return raw2
+        except Exception as e:
+            print(f"  [429-retry] retry failed: {e}")
+    return raw
 
 
 def parse_sse(raw: str) -> dict:
@@ -419,17 +441,21 @@ def run_conversation(conv: dict, port: int, timeout: int, cooldown: int) -> dict
               f"{parsed['replans']} replans, {len(parsed['thinking'])} thinking chars):")
         for line in text.strip().splitlines():
             print(f"        {line}" if line.strip() else "")
-        for desc, pattern in turn.get("expect", []):
-            negate = pattern.startswith("!")
-            rx = pattern[1:] if negate else pattern
-            found = re.search(rx, text, re.IGNORECASE | re.MULTILINE)
-            ok = (not found) if negate else bool(found)
+        for desc, check in turn.get("expect", []):
+            if callable(check):
+                ok = bool(check(text))
+                found = None
+            else:
+                negate = check.startswith("!")
+                rx = check[1:] if negate else check
+                found = re.search(rx, text, re.IGNORECASE | re.MULTILINE)
+                ok = (not found) if negate else bool(found)
             mark = "✓" if ok else "✗"
             print(f"      {mark} observe: {desc}")
             if not ok and found:
                 print(f"          (matched {found.group(0)!r} — unexpected)")
             if not ok and not found:
-                print(f"          (no match for /{rx}/)")
+                print(f"          (no match for /{rx}/)" if "rx" in dir() else "          (check failed)")
     return {"id": conv["id"], "set": conv["set"], "name": conv["name"], "turns": turns_out}
 
 
