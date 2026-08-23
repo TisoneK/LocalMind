@@ -473,3 +473,12 @@ Flaws from Session 7 are now **fixed**:
 - **Root cause:** The README is clear ("Friction caused by the .context/ system or the protocol itself"), but the agent didn't filter its self-assessment through that scope. The real protocol flaws were the Step 3 failure and the permission-asking — both observable, actionable, and specific to this session.
 - **Suggested fix:** No protocol change needed — the README's scope is already clear. This is an agent execution failure. Adding a pitfall might help: "Only log flaws that a future agent could concretely fix. 'I'm a language model with no true understanding' is not actionable. 'Step 3 didn't prevent me from skipping the read' is."
 - **Status:** open
+
+## 2026-08-23 — Session 378 — repeated near-identical listings burn the whole turn
+
+- **Symptom (user transcript, Windows):** the model re-ran essentially the same `Get-ChildItem C:\Users\tison\dev` FIVE times with only cosmetic differences (SELECT column order, quoting, `Format-Table`, `ForEach-Object` wrapper, `-Directory`/`-File` split). The user then had to say "You already had evidence" and the model still couldn't produce the analysis.
+- **Root cause 1 — dedup too strict:** `call_fingerprint = (tool_name, tool_input.lower().strip())` is an EXACT match. Every reformulation produced a different string, so the per-turn `_call_cache` never hit and each retry went to the real tool. Damage: 3 wasted model calls + 4 wasted iterations on a 5-8 cap — enough to never reach the actual work.
+- **Root cause 2 — truncation marker misread:** the bounded-output buffer retains head+tail and marks the middle; the model read the marker as "listing lost" and re-ran instead of analyzing the retained data.
+- **Fix (`79716fa`):** structural inspection fingerprint (same target + same flags → same key; presentation stripped; mutating calls clear the cache) + system-prompt rule 10 explaining the marker semantics.
+- **Lesson:** read-only reconnaissance is the most repeated tool family; dedup must be structural (target + filters), not literal. Never let a "re-ask the same question in new formatting" path exist next to unbounded retries.
+- **Regression risk if removed:** re-introduces the 5-listing loop; the mutation-invalidation tests in `tests/core/test_inspection_dedup.py` pin both directions.
