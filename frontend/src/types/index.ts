@@ -247,10 +247,15 @@ export interface CodeBlock {
 
 export interface FileResult {
   id: string;
+  /** Live SSE shape: the file's base name. */
   filename: string;
   path: string;
   status: 'created' | 'modified' | 'deleted';
   lines?: number;
+  /** Restored-history shape (backend GET /history sends name/size/type). */
+  name?: string;
+  size?: number;
+  type?: string;
 }
 
 export interface Session {

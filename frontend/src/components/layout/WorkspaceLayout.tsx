@@ -323,6 +323,8 @@ export function WorkspaceLayout() {
         sessionIds,
         format,
         (id) => localmindClient.getSessionHistory(id),
+        // B-2026-08-23-3: include each session's todo checklist in the export.
+        (id) => localmindClient.getTodos(id),
       );
     },
     [sessions]

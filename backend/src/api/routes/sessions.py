@@ -27,6 +27,46 @@ class SessionListItem(BaseModel):
     title: str | None
 
 
+def _agent_written_paths(tool_calls) -> list[str]:
+    """Recover file paths the agent wrote from the persisted tool timeline.
+
+    B-2026-08-23-3: the live `done` SSE carries the last written path but the
+    stored message only kept user-attached files. The tool-call timeline is
+    the durable record — file_write tool_args are "path:\n\ncontent" and
+    edit_file/propose_write_file tool_args are JSON with a "path" key. Dedupes
+    while preserving order."""
+    import json as _json
+
+    paths: list[str] = []
+    if not tool_calls:
+        return paths
+    for tc in tool_calls:
+        if not isinstance(tc, dict):
+            continue
+        name = str(tc.get("name") or tc.get("tool") or "")
+        if name not in ("file_write", "edit_file", "propose_write_file"):
+            continue
+        raw_args = tc.get("tool_args") or tc.get("input") or ""
+        if not isinstance(raw_args, str) or not raw_args.strip():
+            continue
+        path = None
+        if name == "file_write":
+            # tool_args are "path:\n\ncontent" — drop the trailing colon.
+            head = raw_args.split("\n\n", 1)[0].strip()
+            if head:
+                path = head.rstrip(":").strip()
+        else:
+            try:
+                parsed = _json.loads(raw_args)
+                if isinstance(parsed, dict) and parsed.get("path"):
+                    path = str(parsed["path"]).strip()
+            except Exception:
+                path = None
+        if path and path not in paths:
+            paths.append(path)
+    return paths
+
+
 def resolve_title(session: dict) -> str:
     """Generate fallback title if session has no title."""
     if session.get("title"):
@@ -148,9 +188,15 @@ async def get_history(session_id: str):
                 }
             ]
 
-        # Add file results if present
+        # Add file results if present — both the user's attached files AND
+        # (B-2026-08-23-3) the files the agent wrote during the turn. The
+        # agent-written paths are recovered from the persisted tool-call
+        # timeline: file_write tool_args are "path:\n\ncontent" and edit_file
+        # tool_args are JSON with a "path" key. This keeps the export (and a
+        # reload) able to show which files the session created.
+        file_results = []
         if m.file_path:
-            message["fileResults"] = [
+            file_results.append(
                 {
                     "id": f"file-{m.timestamp}-{idx}",
                     "path": m.file_path,
@@ -158,7 +204,19 @@ async def get_history(session_id: str):
                     "size": m.file_size or 0,
                     "type": m.file_type or "unknown",
                 }
-            ]
+            )
+        written_paths = _agent_written_paths(m.tool_calls)
+        for _wp in written_paths:
+            file_results.append(
+                {
+                    "id": f"file-written-{m.timestamp}-{_wp.replace('/', '_')}",
+                    "path": _wp,
+                    "name": _wp.split("/")[-1],
+                    "type": "written",
+                }
+            )
+        if file_results:
+            message["fileResults"] = file_results
 
         history.append(message)
 
