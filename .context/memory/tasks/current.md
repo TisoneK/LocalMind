@@ -1,19 +1,20 @@
 # Current Task
 
-**Status:** IDLE — Session 352 shipped full-session chat export (`B-2026-08-23-3` done).
+**Status:** IDLE — Session 353 shipped shell-state awareness (`B-2026-08-23-4` done).
 
-## Session 352 outcome — the export answers "just chat?" with: now the full session
+## Session 353 outcome — the agent knows shell is off BEFORE it picks tools
 
-- **Audit answer:** before this session, the export was *just chat* — role/content/timestamp + bare tool names (JSON: `{name, status}`). Thinking, tool args/outputs, files, todos, metrics, phases were all dropped; todos weren't even fetched.
-- **User scope decision (asked via UI):** full session in both formats — Markdown = readable transcript, JSON = complete record.
-- **FIX:** `exportChats.ts` renders todo checklists + per-message thinking/acknowledgement/tool steps (args/output/error/reasoning/provider/duration)/files/metrics/phases in Markdown; JSON bumps to `version: 2` with every persisted field + todos. `exportSessions` gained a `fetchTodos` fetcher (wired in `WorkspaceLayout` via `client.getTodos`). Backend gap found live: agent-written files only reached the live `done` SSE, never the stored message — `sessions.py` now derives `fileResults` from the persisted tool timeline (`_agent_written_paths`: file_write `path:\n\ncontent`, edit_file JSON `path`).
-- **VERIFIED:** backend **2342 passed / 2 skipped**; frontend **269 passed**; `tsc -b` clean; ruff/eslint zero new. Live (bankofai 8765): history returns the derived written paths (`/tmp/export-write-a.txt`, `-b.txt`) + todos + full toolCalls.
+- The user's finding: "The system should be aware if shell is active or off before even running shell tool… take alternative routes like using python scripts instead… also a ui guide that helps the user to open settings and toggle shell on/off."
+- **Root cause:** shell was gated ONLY at execute time — the model saw the shell schema and advertised list even when disabled, called it, and got rejected (wasted iterations + blocked-tool card).
+- **FIX:** `_build_environment_context` (compact init + full execute) reports the live shell state + fallback guidance ("use CODE_EXEC / FILE_TASK / FILE_WRITE; if it genuinely needs a shell command, tell the user to enable Shell in Settings") and drops the `- shell:` line from the Available Tools prose when off. `loop.py` removes `shell` from the model's tool surface when disabled (`_shell_tool_enabled()`, defaults on). Frontend: a blocked shell call now shows a `ShellDisabledTip` with an **Open Settings** button (window event → RightPanel opens the existing SettingsModal with the Session 292 toggle).
+- **LIVE (bankofai, isolated 8765, shell off):** "List the files in /tmp using shell commands" → tools run `['code_exec', 'code_exec']` (Python), zero shell calls, formatted /tmp table. The schema wasn't there to call.
+- **Tests:** 8 backend + 4 frontend new. Backend **2350 passed / 2 skipped**; frontend **273 passed**; tsc clean; zero new lint.
 
 ## Next
 
-- **B-2026-08-23-4 (Medium):** the system should know if shell is active/off BEFORE running the shell tool (fall back to python scripts etc.) + a UI guide for toggling shell in settings.
 - **B-2026-08-23-5 (Medium):** the first action almost never switches the chat tab to the actions tab automatically until the second action kicks in.
 - **B-2026-08-23-6 (Medium):** after creating a file, render it in the UI (docx, pdf, excel, ...).
+- **B-2026-08-23-7 (Medium):** filetask information in the summary after the agent finishes creating/editing a file.
 
-**Feature:** none (single-session export audit + fix)
-**Session:** 352 (logged in `.context/memory/agents/sessions.md`)
+**Feature:** none (single-session shell-awareness fix)
+**Session:** 353 (logged in `.context/memory/agents/sessions.md`)
