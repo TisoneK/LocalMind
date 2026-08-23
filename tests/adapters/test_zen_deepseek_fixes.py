@@ -495,6 +495,133 @@ def test_phase2b_streams_full_tail_after_phase1_break(monkeypatch):
     assert any(getattr(c, "done", False) for c in chunks)
 
 
+def test_phase1_reasoning_cap_ends_stream_cleanly_not_tail(monkeypatch):
+    """B-2026-08-20-20 (Session 323 live trace 3): when Phase 1 breaks at the
+    500-chunk reasoning cap (reasoning-only, no content, no tool_calls — the
+    model is stuck in a thinking loop), Phase 2b must NOT resume the unbounded
+    tail. The old code resumed the same still-open stream and kept streaming
+    reasoning until the httpx read timeout errored the turn into the generic
+    provider-error fallback (the trace: 210-char provider-error message, no
+    files). Now the cap break yields the buffered reasoning + a CLEAN done
+    (no error), so the agent loop's empty-reasoning recovery gets the turn.
+
+    This test feeds 500 reasoning chunks then MORE reasoning in the tail. If
+    Phase 2b resumed the tail, the extra reasoning chunk would surface as a
+    streamed thinking chunk; with the fix, the stream ends right after the
+    buffered reasoning with done=True and NO error.
+    """
+    monkeypatch.setenv("ZEN_API_KEY", "sk-fake-test-key")
+    adapter = OpenAICompatAdapter(provider="zen", model_override="deepseek-v4-flash-free")
+
+    lines = []
+    for i in range(500):
+        lines.append(f'data: {{"choices":[{{"delta":{{"reasoning_content":"think {i} "}}}}]}}')
+    # Tail keeps streaming reasoning (stuck model) — the cap must stop reading.
+    lines.append('data: {"choices":[{"delta":{"reasoning_content":"tail reasoning that must NOT be read "}}]}')
+    lines.append('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}')
+    lines.append("data: [DONE]")
+
+    # One-shot semantics: a second aiter_lines() raises StreamConsumed. If
+    # Phase 2b resumed the tail, it would have to iterate the SAME generator
+    # past the cap break — the fake below proves the fix doesn't touch it.
+    resp = _OneShotResponse(lines)
+
+    async def fake_send_streaming(url, payload, headers=None, timeout=None):
+        return resp
+
+    messages = [{"role": "user", "content": "create a project"}]
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "shell",
+                "description": "Run",
+                "parameters": {"type": "object", "properties": {"command": {"type": "string"}}},
+            },
+        },
+    ]
+
+    async def run():
+        with patch.object(adapter, "_send_streaming_with_retry", new=fake_send_streaming):
+            result = await adapter.chat_with_tools(
+                messages=messages, tools=tools, temperature=0.3, intent="analyze"
+            )
+        chunks = []
+        async for chunk in result:
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(run())
+    text = "".join(c.text for c in chunks if c.text)
+    thinking = "".join(c.thinking for c in chunks if c.thinking)
+    errors = [c.error for c in chunks if c.error]
+
+    # The 500 buffered reasoning chunks still stream through as thinking.
+    assert "think 0" in thinking
+    assert "think 499" in thinking
+    # The cap break must NOT resume the tail — no post-cap reasoning surfaces.
+    assert "tail reasoning" not in thinking, (
+        "Phase 2b resumed the unbounded tail after the 500-chunk reasoning "
+        "cap — a stuck model would stream reasoning until a timeout errors "
+        "the turn into the provider-error path (B-2026-08-20-20)"
+    )
+    # Clean end: done=True and NO error — the loop's empty-reasoning recovery
+    # requires a clean stream (an error chunk would take the provider-error path).
+    assert not errors, f"cap break must end cleanly, got errors: {errors}"
+    assert any(getattr(c, "done", False) for c in chunks)
+    assert not text.strip()
+
+
+def test_phase1_reasoning_cap_still_streams_content_when_present(monkeypatch):
+    """B-2026-08-20-20 guard: the 500-chunk cap is ONLY for the reasoning-only
+    stuck case. A legitimate response that streams reasoning then CONTENT must
+    still break via the content heuristic (chunks_read >= 15) and stream the
+    full tail — the cap flag must never suppress a real text answer.
+    """
+    monkeypatch.setenv("ZEN_API_KEY", "sk-fake-test-key")
+    adapter = OpenAICompatAdapter(provider="zen", model_override="deepseek-v4-flash-free")
+
+    lines = []
+    for i in range(80):
+        lines.append(f'data: {{"choices":[{{"delta":{{"reasoning_content":"think {i} "}}}}]}}')
+    for i in range(30):
+        lines.append(f'data: {{"choices":[{{"delta":{{"content":"word{i} "}}}}]}}')
+    lines.append('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}')
+    lines.append("data: [DONE]")
+    resp = _OneShotResponse(lines)
+
+    async def fake_send_streaming(url, payload, headers=None, timeout=None):
+        return resp
+
+    messages = [{"role": "user", "content": "Tell me a story"}]
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "shell",
+                "description": "Run",
+                "parameters": {"type": "object", "properties": {"command": {"type": "string"}}},
+            },
+        },
+    ]
+
+    async def run():
+        with patch.object(adapter, "_send_streaming_with_retry", new=fake_send_streaming):
+            result = await adapter.chat_with_tools(
+                messages=messages, tools=tools, temperature=0.3, intent="chat"
+            )
+        chunks = []
+        async for chunk in result:
+            chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(run())
+    text = "".join(c.text for c in chunks if c.text)
+    assert "word0" in text
+    assert "word29" in text, f"Answer tail dropped — truncated at: {text!r}"
+    assert text.count("word") == 30
+
+
 # ── API-key live resolution (Session 112) ─────────────────────────────────
 # ProviderConfig.api_key is a BAKED DEFAULT only — the env value is resolved
 # at CONSTRUCTION time via key_env. The old import-time freeze made the

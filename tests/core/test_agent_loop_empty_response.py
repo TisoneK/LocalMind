@@ -23,6 +23,7 @@ import pytest
 
 from core.agent.loop import AgentLoop, TerminalProviderError
 from core.models import Intent, StreamChunk
+from core.obs import ObsCollector
 
 
 class TestEmptyResponseFastFail:
@@ -654,3 +655,97 @@ class TestFileWriteVerificationReadbackDirective:
         assert "VERIFICATION" in joined, f"verification line missing: {joined!r}"
         assert "do NOT read it back" not in joined, f"prohibition leaked: {joined!r}"
         assert "read it back" not in joined.lower(), f"read-back directive leaked: {joined!r}"
+
+
+class TestReasoningCapEmptyStreamRoutesToRecovery:
+    """B-2026-08-20-20 (Session 323 trace 3): the adapter's 500-chunk reasoning
+    cap now ends the stream CLEANLY (thinking-only, done=True, no error). The
+    loop must route that shape into the empty-reasoning recovery (nudge with
+    the ORIGINAL question, thinking forced OFF) — NOT the generic
+    provider-error fallback. An error chunk after the cap break used to take
+    the has_error path (the trace: 210-char provider-error message, no files).
+    """
+
+    @pytest.mark.asyncio
+    async def test_thinking_only_stream_nudges_with_original_question(self):
+        loop = AgentLoop(adapter=MagicMock())
+        seen = {"calls": 0, "last_messages": None}
+
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+            seen["calls"] += 1
+            seen["last_messages"] = list(messages)
+
+            async def _stream():
+                # Adapter post-500-cap shape: thinking only, then clean done.
+                yield StreamChunk(text="", thinking="reasoning...", done=False)
+                yield StreamChunk(text="", done=True)
+
+            return _stream()
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_with_tools = chat_with_tools
+        mock_adapter.chat = lambda *args, **kwargs: iter(())
+        mock_adapter.thinking_enabled = True
+
+        obs = ObsCollector()
+        chunks = []
+        with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+             patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x):
+            async for chunk in loop.run(
+                messages=[{"role": "user", "content": "create a project in my workspace"}],
+                intent=Intent.ANALYZE,
+                initial_tool_result=None,
+                available_tools=[],
+                adapter=mock_adapter,
+                obs=obs,
+                skip_planning=True,
+            ):
+                chunks.append(chunk)
+
+        # The recovery must fire — and the nudge must carry the ORIGINAL question.
+        recovery_events = [e for e in obs.history() if e.type == "empty_reasoning_recovery"]
+        assert recovery_events, f"empty-reasoning recovery never fired; events: {[e.type for e in obs.history()]}"
+        joined = " ".join(str(m.get("content", "")) for m in (seen["last_messages"] or []))
+        assert "create a project in my workspace" in joined, (
+            f"recovery nudge must restate the user's original question: {joined!r}"
+        )
+        # No provider-error path: no error chunks, no "ran into an issue".
+        errors = [c.error for c in chunks if c.error]
+        assert not errors, f"cap-break stream must not hit the error path: {errors}"
+        assert not any("ran into an issue" in (c.text or "") for c in chunks)
+
+    @pytest.mark.asyncio
+    async def test_error_after_reasoning_still_hits_provider_error_path(self):
+        """Guard: if the adapter DOES surface a real error chunk after the cap
+        break (e.g. a genuine provider failure, not a stuck model), the loop
+        must STILL take the provider-error path — the clean-shape routing must
+        not swallow real errors."""
+        loop = AgentLoop(adapter=MagicMock())
+
+        async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+            async def _stream():
+                yield StreamChunk(text="", thinking="reasoning...", done=False)
+                yield StreamChunk(text="", done=True, error="zen returned 500: upstream failed")
+
+            return _stream()
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_with_tools = chat_with_tools
+        mock_adapter.chat = lambda *args, **kwargs: iter(())
+        mock_adapter.thinking_enabled = True
+
+        chunks = []
+        with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+             patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x):
+            async for chunk in loop.run(
+                messages=[{"role": "user", "content": "create a project"}],
+                intent=Intent.ANALYZE,
+                initial_tool_result=None,
+                available_tools=[],
+                adapter=mock_adapter,
+                skip_planning=True,
+            ):
+                chunks.append(chunk)
+
+        errors = [c.error for c in chunks if c.error]
+        assert errors, "a real provider error after reasoning must still surface as an error"

@@ -1373,6 +1373,15 @@ class OpenAICompatAdapter(BaseAdapter):
             _DETECTION_CHUNK_LIMIT = 10
             chunks_read = 0
             _safety_error = None  # set if Gemini/other provider blocks via safety filter
+            # B-2026-08-20-20: set when Phase 1 breaks at the 500-chunk
+            # reasoning cap (reasoning-only, no content, no tool_calls). The
+            # cap means the model is STUCK in a thinking loop — Phase 2b must
+            # NOT resume the unbounded tail (it would keep streaming reasoning
+            # until the httpx read timeout errors the turn into the generic
+            # provider-error path). Instead, end the stream cleanly after the
+            # buffered reasoning so the agent loop's empty-reasoning recovery
+            # (nudge with the original question) gets the turn.
+            _reasoning_cap_hit = False
 
             # B-2026-08-16-13 (Session 282, found via live trace on
             # z.ai/glm-4.5-flash): Phase 1 and Phase 2b MUST share ONE line
@@ -1526,10 +1535,15 @@ class OpenAICompatAdapter(BaseAdapter):
                     elif not _full_text_so_far and chunks_read >= 500:
                         # Reasoning-only for 500 chunks with no content or
                         # tool_calls — model is stuck thinking. Break to avoid
-                        # infinite loop; Phase 2b will stream whatever comes.
+                        # infinite loop. B-2026-08-20-20: flag the break so
+                        # Phase 2b does NOT resume the unbounded tail (see the
+                        # flag's doc above) — the loop's empty-reasoning
+                        # recovery handles the reasoning-then-empty shape.
+                        _reasoning_cap_hit = True
                         logger.warning(
                             "[adapter] Phase 1 read 500 chunks of reasoning with no "
-                            "content or tool_calls — breaking to avoid infinite loop"
+                            "content or tool_calls — breaking to avoid infinite loop "
+                            "(B-2026-08-20-20: ending stream cleanly for empty-reasoning recovery)"
                         )
                         break
                     # else: keep reading — either chunks_read < 15, or we've
@@ -1717,6 +1731,7 @@ class OpenAICompatAdapter(BaseAdapter):
             # the stream to [DONE] — only then is there nothing left to read.
             _lines_tail = _lines
             _phase1_exhausted = _phase1_exhausted
+            _reasoning_cap_hit = _reasoning_cap_hit
 
             async def _stream_from_http() -> AsyncIterator[StreamChunk]:
                 """Yield text chunks directly from the live HTTP stream.
@@ -1783,7 +1798,13 @@ class OpenAICompatAdapter(BaseAdapter):
                     # aiter_lines() would raise StreamConsumed (one-shot), so
                     # we resume the shared generator instead; `_phase1_exhausted`
                     # is the only reliable "the stream really ended" signal.
-                    if not _phase1_exhausted:
+                    # B-2026-08-20-20: after the 500-chunk reasoning cap fired
+                    # (`_reasoning_cap_hit`), do NOT resume the tail — the
+                    # model is stuck thinking; reading on just streams more
+                    # reasoning until a timeout errors the turn. Ending here
+                    # yields the buffered reasoning + a clean done, which the
+                    # agent loop routes to its empty-reasoning recovery.
+                    if not _phase1_exhausted and not _reasoning_cap_hit:
                         async for line in _lines_tail:
                             if not line or not line.startswith("data: "):
                                 # Empty lines or non-data lines are SSE
