@@ -5157,3 +5157,33 @@ authoritative.
   route components through theme variables (prereq for -19).
 - **Status:** backlog only, no code changes. Next: pick the highest-value open
   item (suggested: -17 session workspaces or -14 memory tab wiring).
+
+## Session 361 — B-2026-08-23-17: session workspaces (per-session artifact folders, deleted with the chat)
+
+- **Shipped:** each session now owns `<localmind_home>/sessions/<sanitized_id>/` —
+  created on first session touch, holds the session's artifacts (uploads today;
+  agent default writes land there via the injected context line), and is deleted
+  with the chat. The DB links by sessions.id so the folder name mirrors the key.
+  - New `core/session_workspace.py`: `workspace_root/path/uploads_dir`,
+    `sanitize_session_id` (path traversal / drive prefix / null bytes neutralized,
+    sha1 fallback), `ensure_workspace` (idempotent), `delete_workspace` (refuses
+    anything outside the workspace root — never an arbitrary rmtree).
+  - Wiring: `db.ensure_session` creates the folder (session row + folder born
+    together); chat.py uploads now write to `<workspace>/uploads/` instead of the
+    shared ~/LocalMind/uploads dir; DELETE /api/sessions/{id} removes the folder
+    after the DB row; sessions list exposes `workspacePath`; the env context
+    (`_build_environment_context(session_id=...)`) injects a "Session workspace:"
+    line (compact + full) so the agent writes artifacts where they belong —
+    threaded through AgentLoop.run → BaseAgent.run → agent_runtime.
+- **Verification:** 11 new unit tests (sanitize traversal/drive/null, lifecycle,
+  delete-never-escapes-root) + 1 context test; updated test_chat upload-failure
+  test to sabotage the per-session dir. **2382 backend passed / 2 skipped**,
+  **291 frontend passed**, tsc clean, ruff clean (2 E501s in test_chat.py are
+  pre-existing). Live (bankofai, isolated 8765): chat → workspace dir created;
+  upload → landed in sessions/<id>/uploads/note.txt; sessions list shows
+  workspacePath; DELETE → folder gone.
+- **Scope note:** agent `_do_write` default destinations (final_dest, cwd, ~)
+  are NOT force-redirected — the workspace is the artifact home via context +
+  uploads + deletion scope. A follow-up can point `_do_write`'s default scratch
+  at the workspace if desired.
+- **Commits:** product `b9a279e` + context (below).

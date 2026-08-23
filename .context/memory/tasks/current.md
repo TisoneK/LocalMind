@@ -1,33 +1,35 @@
 # Current Task
 
-**Status:** IDLE — Session 359 shipped the file-task summary in the final answer (B-2026-08-23-7 done).
+**Status:** IDLE — Session 361 shipped session workspaces (B-2026-08-23-17 done).
 
-## Session 359 outcome — deterministic file-task summary in the final output
+## Session 361 outcome — per-session artifact folders, deleted with the chat
 
-- Backlog item: the user wants to SEE the file-task result (paths, bytes,
-  created/edited) in the summary alongside the final output, not just in the
-  Actions panel.
-- **FIX:** the parent-agent final answer now ends with a `📁 Files:` block
-  derived from the ACTUAL tool timeline (never the model's claims — same
-  evidence philosophy as the Session 330 goal-checklist gate):
-  - New `core/agent/file_summary.py`: `build_file_task_summary(tool_calls)` —
-    file_write → `- path (created, N B)`, edit_file/propose_write_file →
-    `- path (modified)`; order-preserving dedupe; `""` when no file tools ran.
-    Same path rules as `sessions._agent_written_paths` so the summary and the
-    history endpoint agree.
-  - `agent_runtime.py`: computed AFTER reflection/fact-extraction (so those
-    services analyze the model's own answer), appended to a `final_text` (pure
-    `response_text` preserved so the parent-session guard and metrics still
-    work), yielded as a normal token chunk (live UI) and persisted (reload +
-    export carry it).
-- **LIVE (bankofai, isolated 8765):** "create sum.txt + hello.md" → streamed
-  answer ends `📁 Files:\n- /Users/bao/sum.txt (created, 5 B)\n- /Users/bao/hello.md (created, 39 B)`;
-  a note.txt turn's persisted history shows the same block (`created, 16 B`).
-- **Tests:** 7 new unit tests (file_summary.py). **2370 backend passed / 2
-  skipped**, ruff clean, no frontend change needed (summary streams as content).
-- **Next:** backlog is now: B-2026-08-20-20 (deepseek 500-chunk reasoning-then-
-  empty → empty-reasoning recovery), B-2026-08-20-10 (MiniMax XML interception
-  vs prose-commitment detector), B-2026-08-20-11 (429 on iter=1 → empty bubble).
+- User picked up B-2026-08-23-17: sessions tied to workspaces; artifacts stored
+  per session; deleting a chat deletes its artifacts; folders under the LocalMind
+  home keyed by session id.
+- **FIX:** new `core/session_workspace.py` — `<home>/sessions/<sanitized_id>/`
+  lifecycle. Sanitization neutralizes path traversal / drive prefixes / null
+  bytes (sha1 fallback); `delete_workspace` refuses anything outside the
+  workspace root (never an arbitrary rmtree). Wiring: `db.ensure_session`
+  creates the folder on first touch; chat.py uploads go to
+  `<workspace>/uploads/` (replacing the shared ~/LocalMind/uploads dir);
+  DELETE /api/sessions/{id} removes the folder after the DB row; sessions list
+  exposes `workspacePath`; `_build_environment_context(session_id=...)` injects
+  a "Session workspace:" line (compact + full) so the agent knows where to put
+  artifacts — threaded AgentLoop.run → BaseAgent.run → agent_runtime.
+- **Decision:** agent `_do_write` default destinations are NOT force-redirected
+  (risky; would break "write to ~/Desktop" cases) — the workspace is the
+  artifact home via context + uploads + deletion scope. Documented follow-up:
+  point `_do_write`'s default scratch at the workspace.
+- **LIVE (bankofai, isolated 8765):** chat turn → `sessions/ws-live-1/` created;
+  upload → landed in `sessions/ws-live-1/uploads/note.txt`; sessions list shows
+  workspacePath; DELETE → folder gone. Full lifecycle.
+- **Tests:** 11 new unit (sanitize traversal/drive/null, lifecycle,
+  delete-never-escapes-root) + 1 context; updated test_chat upload-failure to
+  sabotage the per-session dir. **2382 backend passed / 2 skipped**,
+  **291 frontend passed**, tsc clean, ruff clean (2 E501s pre-existing).
+- **Next:** backlog remains open (e.g. -14 memory tab UI, -19 custom theme,
+  -20 code block rewrite, -15 tab auto-switch).
 
-**Feature:** none (single-session fix)
+**Feature:** B-2026-08-23-17 (session workspaces)
 **Review:** n/a
