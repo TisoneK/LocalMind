@@ -593,6 +593,43 @@ def _consume_prewrite_snapshot(path: str) -> str | None:
     return _PREWRITE_SNAPSHOTS.pop(abs_path, None)
 
 
+# ── B-2026-08-23-37: durable write-stats logging ────────────────────────
+
+_WRITE_TOOLS = frozenset({"file_write", "edit_file", "apply_proposed_edit"})
+
+
+def _log_session_write(
+    session_id: str | None,
+    *,
+    path: str,
+    tool: str,
+    bytes: int = 0,
+    lines: int = 0,
+    kind: str = "created",
+) -> None:
+    """Best-effort write-stats logging — must never break the turn."""
+    if not session_id or not path:
+        return
+    try:
+        from storage.db import get_shared_store
+        from core.config import settings
+
+        get_shared_store(settings.localmind_db_path).log_write(
+            session_id, path=path, tool=tool,
+            bytes=bytes, lines=lines, kind=kind,
+        )
+    except Exception:
+        pass
+
+
+def _write_kind_from_snapshot(pre: str | None) -> str:
+    """Return 'created' when the pre-write snapshot is empty (new file),
+    'overwritten' otherwise."""
+    if pre is None:
+        return "created"
+    return "created" if pre == "" else "overwritten"
+
+
 def _synthetic_todo_text(tool_name: str, tool_input: str) -> str:
     """One terse imperative step label per real tool execution.
 
@@ -3076,6 +3113,16 @@ class AgentLoop:
                                     diff_additions=tc_result.metadata.get("diff_additions", 0),
                                     diff_deletions=tc_result.metadata.get("diff_deletions", 0),
                                 )
+                        # B-2026-08-23-37: log write stat for edit_file in batch
+                        if tc_result and tc_result.success and tc_result.metadata and tc_result.source == "edit_file":
+                            _log_session_write(
+                                session_id,
+                                path=tc_result.metadata.get("path", ""),
+                                tool="edit_file",
+                                bytes=0,
+                                lines=tc_result.metadata.get("modified_lines", 0),
+                                kind="overwritten",
+                            )
                         # B-2026-08-23-32: compute + emit a diff for file_write
                         # in a batch (same shape as the single-tool path).
                         if tc_name == "file_write" and tc_result and tc_result.success:
@@ -3091,6 +3138,27 @@ class AgentLoop:
                                     _emit_file_diff(
                                         _obs, path=str(_dest), content_before=_pre, content_after=_after
                                     )
+                            # B-2026-08-23-37: log write stat
+                            _log_session_write(
+                                session_id,
+                                path=(tc_result.metadata or {}).get("path", ""),
+                                tool="file_write",
+                                bytes=(tc_result.metadata or {}).get("bytes", 0),
+                                lines=(tc_result.metadata or {}).get("lines", 0),
+                                kind=_write_kind_from_snapshot(_pre),
+                            )
+                        # B-2026-08-23-37: log write stat for apply_proposed_edit in batch
+                        if tc_name == "apply_proposed_edit" and tc_result and tc_result.success and tc_result.metadata:
+                            _applied = tc_result.metadata.get("applied", False)
+                            if _applied:
+                                _log_session_write(
+                                    session_id,
+                                    path=tc_result.metadata.get("path", ""),
+                                    tool="apply_proposed_edit",
+                                    bytes=tc_result.metadata.get("bytes", 0),
+                                    lines=tc_result.metadata.get("lines", 0),
+                                    kind="overwritten",
+                                )
                     except Exception as e:
                         tc_obs = f"[Tool {tc_name} error: {e}]"
                         tc_failed = True
@@ -3950,6 +4018,38 @@ class AgentLoop:
                                 _emit_file_diff(
                                     _obs, path=str(_dest), content_before=_pre, content_after=_after
                                 )
+                        # B-2026-08-23-37: log write stat
+                        _log_session_write(
+                            session_id,
+                            path=(tool_result.metadata or {}).get("path", ""),
+                            tool="file_write",
+                            bytes=(tool_result.metadata or {}).get("bytes", 0),
+                            lines=(tool_result.metadata or {}).get("lines", 0),
+                            kind=_write_kind_from_snapshot(_pre),
+                        )
+
+                    # B-2026-08-23-37: log write stat for edit_file (single-tool path)
+                    if tool_name == "edit_file" and tool_result and tool_result.success and tool_result.metadata:
+                        _log_session_write(
+                            session_id,
+                            path=tool_result.metadata.get("path", ""),
+                            tool="edit_file",
+                            bytes=0,
+                            lines=tool_result.metadata.get("modified_lines", 0),
+                            kind="overwritten",
+                        )
+
+                    # B-2026-08-23-37: log write stat for apply_proposed_edit (single-tool path)
+                    if tool_name == "apply_proposed_edit" and tool_result and tool_result.success and tool_result.metadata:
+                        if tool_result.metadata.get("applied", False):
+                            _log_session_write(
+                                session_id,
+                                path=tool_result.metadata.get("path", ""),
+                                tool="apply_proposed_edit",
+                                bytes=tool_result.metadata.get("bytes", 0),
+                                lines=tool_result.metadata.get("lines", 0),
+                                kind="overwritten",
+                            )
 
                     # ADR-40 option C: a describe_tool call loads the named
                     # long-tail tool into this run's native tools param.

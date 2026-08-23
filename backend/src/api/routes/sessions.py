@@ -356,3 +356,9 @@ async def delete_session(session_id: str):
         )
 
     return {"deleted": session_id}
+
+
+@router.get("/sessions/{session_id}/writes")
+async def get_session_writes(session_id: str):
+    """Return write-stats rows for a session (B-2026-08-23-37)."""
+    return _store.get_session_writes(session_id)

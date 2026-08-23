@@ -726,6 +726,7 @@ class SessionStore:
 
     def delete_session(self, session_id: str) -> bool:
         with self._conn() as conn:
+            conn.execute("DELETE FROM session_writes WHERE session_id = ?", (session_id,))
             result = conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
         return result.rowcount > 0
 
@@ -735,7 +736,67 @@ class SessionStore:
             conn.execute("DELETE FROM messages")
             conn.execute("DELETE FROM actions")
             conn.execute("DELETE FROM observations")
+            conn.execute("DELETE FROM session_writes")
             conn.execute("DELETE FROM sessions")
+
+    # ── B-2026-08-23-37: Durable lightweight write stats ─────────────────
+
+    _WRITE_STATS_CAP = 500
+
+    def log_write(
+        self,
+        session_id: str,
+        path: str,
+        tool: str = "file_write",
+        bytes: int = 0,
+        lines: int = 0,
+        kind: str = "created",
+    ) -> None:
+        """Log a successful file write. Prunes oldest rows when the
+        per-session cap is exceeded. Best-effort — must never break the turn."""
+        try:
+            with self._conn() as conn:
+                conn.execute(
+                    "INSERT INTO session_writes(session_id, path, tool, bytes, lines, kind) "
+                    "VALUES(?, ?, ?, ?, ?, ?)",
+                    (session_id, (path or "")[:500], (tool or "")[:50],
+                     int(bytes), int(lines), (kind or "created")[:20]),
+                )
+                # Prune oldest rows when cap is exceeded
+                conn.execute(
+                    "DELETE FROM session_writes WHERE session_id = ? AND id NOT IN ("
+                    "  SELECT id FROM session_writes WHERE session_id = ? "
+                    "  ORDER BY id DESC LIMIT ?"
+                    ")",
+                    (session_id, session_id, self._WRITE_STATS_CAP),
+                )
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.debug("[db] log_write skipped: %s", exc)
+
+    def get_session_writes(self, session_id: str) -> list[dict]:
+        """Return all write-stat rows for a session, newest first."""
+        try:
+            with self._conn() as conn:
+                rows = conn.execute(
+                    "SELECT id, path, tool, bytes, lines, kind, created_at "
+                    "FROM session_writes WHERE session_id = ? "
+                    "ORDER BY created_at DESC",
+                    (session_id,),
+                ).fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
+
+    def delete_session_writes(self, session_id: str) -> None:
+        """Delete all write-stats rows for a session (called by delete_session)."""
+        try:
+            with self._conn() as conn:
+                conn.execute(
+                    "DELETE FROM session_writes WHERE session_id = ?",
+                    (session_id,),
+                )
+        except Exception:
+            pass
 
     # ── Session 267: per-session observation persistence ──────────────────
     # The Observe panel used to read an in-memory engine dict that died on
