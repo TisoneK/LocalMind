@@ -156,20 +156,37 @@ describe('CenterPanel embed-model guide (B-2026-08-23-14)', () => {
     expect(screen.queryByTestId('embed-guide')).not.toBeInTheDocument();
   });
 
-  it('Open Settings dispatches the settings event', async () => {
+  it('one-click fix applies the suggested model via setLocalSettings and confirms', async () => {
     vi.spyOn(client, 'getEmbeddingModels').mockResolvedValue({
       models: [],
       current: 'nomic-embed-text',
       configured_available: false,
       suggested: 'mxbai-embed-large',
     });
-    const dispatched: string[] = [];
-    const listener = (e: Event) => dispatched.push((e as Event).type);
-    window.addEventListener('localmind:open-settings', listener);
+    const setLocal = vi.spyOn(client, 'setLocalSettings').mockResolvedValue({
+      embed_model: 'mxbai-embed-large', num_ctx: 0, updated: ['embed_model'], message: 'ok',
+    });
     render(<CenterPanel {...baseProps} health={{ status: 'online' }} />);
-    fireEvent.click(await screen.findByTestId('embed-guide-open-settings'));
-    expect(dispatched).toContain('localmind:open-settings');
-    window.removeEventListener('localmind:open-settings', listener);
+    fireEvent.click(await screen.findByTestId('embed-guide-fix'));
+    await waitFor(() => expect(setLocal).toHaveBeenCalledWith({ embedModel: 'mxbai-embed-large' }));
+    // Confirmation text appears and the session is marked fixed.
+    await screen.findByText(/Embedding model switched to/);
+    expect(sessionStorage.getItem('localmind:embed-guide-dismissed')).toBe('1');
+  });
+
+  it('one-click fix shows an error and keeps the banner when it fails', async () => {
+    vi.spyOn(client, 'getEmbeddingModels').mockResolvedValue({
+      models: [],
+      current: 'nomic-embed-text',
+      configured_available: false,
+      suggested: 'mxbai-embed-large',
+    });
+    vi.spyOn(client, 'setLocalSettings').mockRejectedValue(new Error('boom'));
+    render(<CenterPanel {...baseProps} health={{ status: 'online' }} />);
+    fireEvent.click(await screen.findByTestId('embed-guide-fix'));
+    expect(await screen.findByText(/Failed to update the embedding model/)).toBeInTheDocument();
+    expect(screen.getByTestId('embed-guide')).toBeInTheDocument();
+    expect(sessionStorage.getItem('localmind:embed-guide-dismissed')).not.toBe('1');
   });
 
   it('dismiss hides the guide and remembers for the session', async () => {

@@ -84,6 +84,11 @@ export function CenterPanel({
   // otherwise silently fail. Dismissed per session (sessionStorage) so it
   // doesn't nag after the user has seen it once.
   const [embedGuide, setEmbedGuide] = useState<{ configured: string; suggested: string } | null>(null);
+  // One-click auto-fix (B-2026-08-23-14 follow-up): switching the embed model
+  // right from the banner instead of sending the user to Settings.
+  const [embedFixing, setEmbedFixing] = useState(false);
+  const [embedFixed, setEmbedFixed] = useState(false);
+  const [embedFixError, setEmbedFixError] = useState<string | null>(null);
 
   useEffect(() => {
     if (sessionStorage.getItem('localmind:embed-guide-dismissed') === '1') return;
@@ -102,6 +107,26 @@ export function CenterPanel({
   const dismissEmbedGuide = () => {
     setEmbedGuide(null);
     sessionStorage.setItem('localmind:embed-guide-dismissed', '1');
+  };
+
+  // Apply the suggested embed model via POST /api/settings/local — the same
+  // endpoint the Settings modal uses — so the fix is one click. On success the
+  // banner flips to a confirmation and then dismisses itself for the session.
+  const applyEmbedFix = async () => {
+    if (!embedGuide || embedFixing) return;
+    setEmbedFixing(true);
+    setEmbedFixError(null);
+    try {
+      await localmindClient.setLocalSettings({ embedModel: embedGuide.suggested });
+      setEmbedFixed(true);
+      sessionStorage.setItem('localmind:embed-guide-dismissed', '1');
+      // Let the confirmation read before collapsing.
+      window.setTimeout(() => setEmbedGuide(null), 1500);
+    } catch {
+      setEmbedFixError('Failed to update the embedding model. Open Settings to set it manually.');
+    } finally {
+      setEmbedFixing(false);
+    }
   };
 
   // Scroll only the transcript container on new messages. Calling
@@ -223,24 +248,39 @@ export function CenterPanel({
       </div>
 
       {/* B-2026-08-23-14: embed-model guide — shown when the configured
-          embedding model isn't installed but an alternative is pulled. */}
+          embedding model isn't installed but an alternative is pulled.
+          One-click fix: the primary button applies the suggested model via
+          the same settings endpoint the Settings modal uses. */}
       {embedGuide && (
         <div
           className="mx-4 mt-2 flex flex-wrap items-center gap-2 rounded-md border border-brand-amber/30 bg-brand-amber/10 px-2.5 py-1.5 text-[11px] text-brand-amber"
           data-testid="embed-guide"
         >
-          <span className="flex-1 min-w-0">
-            💡 Your embedding model <span className="font-mono">{embedGuide.configured}</span> isn't installed in Ollama — memory can't be saved. Set it to{' '}
-            <span className="font-mono">{embedGuide.suggested}</span> in Settings → Embedding model.
-          </span>
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new Event('localmind:open-settings'))}
-            className="rounded border border-brand-amber/40 bg-brand-amber/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-amber hover:bg-brand-amber/20 transition-colors"
-            data-testid="embed-guide-open-settings"
-          >
-            Open Settings
-          </button>
+          {embedFixed ? (
+            <span className="flex-1 min-w-0 text-brand-green">
+              ✓ Embedding model switched to <span className="font-mono">{embedGuide.suggested}</span> — memory can be saved now.
+            </span>
+          ) : (
+            <>
+              <span className="flex-1 min-w-0">
+                💡 Your embedding model <span className="font-mono">{embedGuide.configured}</span> isn't installed in Ollama — memory can't be saved.
+              </span>
+              <button
+                type="button"
+                onClick={applyEmbedFix}
+                disabled={embedFixing}
+                className="rounded border border-brand-amber/40 bg-brand-amber/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-amber hover:bg-brand-amber/20 disabled:opacity-50 transition-colors"
+                data-testid="embed-guide-fix"
+              >
+                {embedFixing ? (
+                  <span className="flex items-center gap-1"><Loader2 className="h-2.5 w-2.5 animate-spin" /> Switching…</span>
+                ) : (
+                  <>Use {embedGuide.suggested}</>
+                )}
+              </button>
+              {embedFixError && <span className="w-full text-brand-red text-[10px]">{embedFixError}</span>}
+            </>
+          )}
           <button
             type="button"
             onClick={dismissEmbedGuide}
