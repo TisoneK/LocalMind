@@ -114,15 +114,68 @@ describe('LeftPanel multi-select', () => {
       onToggleTodo: vi.fn(),
       onAddTodo: vi.fn(),
     };
+    // Production wiring: onChatTabShown clears the forceChatTab flag in the
+    // parent (WorkspaceLayout: `onChatTabShown={() => setForceChatTab(false)}`).
+    // Mirror that with a re-render so the effect consumes the flag exactly once.
     const { rerender } = render(<LeftPanel {...baseProps} />);
     // Leave the Chat tab first so the switch is observable.
     fireEvent.click(screen.getByText('Actions'));
     expect(screen.getByText('Actions will appear here during execution.')).toBeInTheDocument();
 
     const onChatTabShown = vi.fn();
-    rerender(<LeftPanel {...baseProps} forceChatTab onChatTabShown={onChatTabShown} />);
+    const show = (f: boolean) =>
+      rerender(<LeftPanel {...baseProps} forceChatTab={f} onChatTabShown={onChatTabShown} />);
+    show(true); // New Chat sets the flag
+    expect(onChatTabShown).toHaveBeenCalledTimes(1);
+    show(false); // parent clears the flag (as onChatTabShown does)
 
     expect(screen.getAllByTestId('session-row')).toHaveLength(3);
+    expect(onChatTabShown).toHaveBeenCalledTimes(1);
+  });
+
+  it('B-2026-08-23-5: consuming forceChatTab on Chat does not fight the first tool event', () => {
+    // The reported bug: New Chat while ALREADY on the Chat tab left
+    // forceChatTab=true (the old guard `activeTab !== 'chat'` never fired).
+    // The FIRST tool event then switched to Actions, and the still-set flag
+    // yanked the tab straight back — only the SECOND action stuck.
+    const baseProps = {
+      sessions,
+      actions: [],
+      files: [],
+      todos: [],
+      activeToolCalls: [],
+      models: [],
+      selectedModel: 'm',
+      onModelChange: vi.fn(),
+      currentSessionId: null,
+      onSelectSession: vi.fn(),
+      onNewChat: vi.fn(),
+      onDeleteSession: vi.fn(),
+      onDeleteSessions: vi.fn(),
+      onExportSessions: vi.fn(),
+      onToggleTodo: vi.fn(),
+      onAddTodo: vi.fn(),
+    };
+    // Production wiring: shown → flag cleared.
+    let forceChatTab = true;
+    const onChatTabShown = vi.fn(() => {
+      forceChatTab = false;
+    });
+    const { rerender } = render(<LeftPanel {...baseProps} />);
+    // User is on the Chat tab (default).
+    expect(screen.getByText('Chat')).toBeInTheDocument();
+
+    // New Chat sets forceChatTab while on Chat.
+    rerender(<LeftPanel {...baseProps} forceChatTab onChatTabShown={onChatTabShown} />);
+    // The flag must be consumed even though no switch was needed.
+    expect(onChatTabShown).toHaveBeenCalledTimes(1);
+
+    // First tool event → switch to Actions.
+    rerender(<LeftPanel {...baseProps} forceChatTab={forceChatTab} onChatTabShown={onChatTabShown} />);
+    fireEvent.click(screen.getByText('Actions'));
+    // Simulate the tab being yanked back: with the flag consumed, no.
+    expect(screen.getByText('Actions will appear here during execution.')).toBeInTheDocument();
+    // onChatTabShown was NOT called again — the flag is gone, no fight.
     expect(onChatTabShown).toHaveBeenCalledTimes(1);
   });
 

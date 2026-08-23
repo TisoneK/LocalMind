@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks } from 'lucide-react';
 import { Session, ActionItem, FileNode, TodoItem, ModelOption, ToolCall } from '@/types';
 import type { ExportFormat } from '@/lib/localmind/exportChats';
@@ -122,11 +122,27 @@ export function LeftPanel({
   // "New Chat" returns the sidebar to the Chat tab so the fresh conversation
   // (and its session list) is immediately visible instead of leaving the user
   // stranded on Actions/Files from the previous chat.
+  // B-2026-08-23-5: ALWAYS consume the flag — even when already on Chat. The
+  // old guard `activeTab !== 'chat'` left forceChatTab=true after a New Chat
+  // while on Chat, so the FIRST tool event switched to Actions and this
+  // effect (activeTab is a dep) yanked it straight back; only the second
+  // action stuck. Consuming unconditionally means the flag is gone before
+  // the first tool event can race it.
+  const forceChatConsumed = useRef(false);
   useEffect(() => {
-    if (forceChatTab && activeTab !== 'chat') {
-      setActiveTab('chat');
-      onChatTabShown?.();
+    if (!forceChatTab) {
+      forceChatConsumed.current = false;
+      return;
     }
+    // Fire at most once per flag activation: setActiveTab('chat') below
+    // re-runs this effect (activeTab is a dep) before the parent's
+    // onChatTabShown re-render lands, which would double-call otherwise.
+    if (forceChatConsumed.current) return;
+    forceChatConsumed.current = true;
+    if (activeTab !== 'chat') {
+      setActiveTab('chat');
+    }
+    onChatTabShown?.();
   }, [forceChatTab, activeTab, onChatTabShown]);
 
   // ADR-20 (Session 167): the error card's "Switch model" action dispatches
