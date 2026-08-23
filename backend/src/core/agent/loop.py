@@ -4357,7 +4357,24 @@ class AgentLoop:
                     return
 
                 # Detect tool-talk in the initial buffer
-                if _is_tool_talk(initial_buffer) and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES:
+                #
+                # Session 374: this recovery must be intent-gated like the
+                # fabrication/forced-tool checks above. Live bug on a plain
+                # "Hi" (CHAT intent, deepseek-v4-flash): the greeting mentioned
+                # tools ("I'm ready to help — file work, research, coding…")
+                # and tripped _is_tool_talk, so the loop suppressed the greeting
+                # and injected "You described wanting to use a tool but did not
+                # call it. You MUST use the tool-calling API directly…". The
+                # small model then spiraled in its reasoning trying to reconcile
+                # "Hi needs no tool" with the injected demand — visible to the
+                # user as a garbled "Approach" thinking block. Tool-talk is only
+                # a failure when the turn is SUPPOSED to use tools (agent
+                # intents); a conversational turn must never get the correction.
+                if (
+                    intent in AGENT_INTENTS
+                    and _is_tool_talk(initial_buffer)
+                    and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES
+                ):
                     trace.tool_talk_recoveries += 1
                     logger.warning(
                         f"[agent.loop] iter={iteration + 1} — tool-talk detected "
