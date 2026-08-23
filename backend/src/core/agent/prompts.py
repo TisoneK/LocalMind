@@ -930,6 +930,7 @@ CRITICAL RULES:
 7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. When a shell command fails, FIX THE COMMAND (wrong OS syntax?) rather than retrying the same thing. Use the RIGHT tool per step: find_path to locate, file_task to read, file_write to create.
 8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
 9. describe_tool is ONLY for on-demand tools (browse, delegate, csv, etc.). Core tools already have full schemas — NEVER call describe_tool for them.
+10. TOOL OUTPUT IS RETAINED (Session 378): results stay available all turn; `[...TRUNCATED DUE TO LENGTH...]` means only the MIDDLE was dropped (head + tail survive). Never re-run a read just to change formatting or columns — the runtime dedupes identical inspections. Re-run only after a write/edit/exec or to get different data.
 
 VERIFY (after EVERY tool result — skipping this is the same as fabricating):
 - file_write: the runtime auto-verifies it and appends a `[VERIFICATION]: file_write confirmed — N bytes on disk` line. On verification FAILURE/WARNING, rewrite the file — never claim success.

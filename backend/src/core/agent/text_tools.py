@@ -555,3 +555,263 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
     else:
         # Fallback: join all values
         return " ".join(str(v) for v in tool_args.values() if v)
+
+
+# ── Inspection dedup (Session 378) ────────────────────────────────────────────
+# The user's "analyze the dev folder" session exposed the loop re-running
+# near-identical `Get-ChildItem` listings five times: the exact-match
+# fingerprint (tool_input.lower().strip()) missed every repeat because each
+# retry differed cosmetically (SELECT list column order, Format-Table,
+# ForEach-Object wrappers, quoting). Each retry burned an iteration and a
+# model call — while the bounded-output buffer already retained head+tail of
+# the prior listing.
+#
+# These helpers produce a STRUCTURAL fingerprint of an inspection tool call
+# (shell/browse/git/file_task/find_path): the command name (first token),
+# the target (first path/literal), and the requested columns/flags — with
+# cosmetic variation (quoting, column order, table formats, object wrappers)
+# stripped. Reads that inspect the SAME target with the SAME intent are
+# deduped against the cached result. The fingerprint is invalidated by any
+# tool call that may have mutated state (writes, edits, shell exec, git
+# write ops, process signals), so a listing that follows a mutation still
+# runs fresh.
+
+# Shell built-ins / compound statements whose args are NOT just the target
+# path and would change what the command inspects.
+_INSPECTION_MODIFYING_PREFIXES = frozenset(
+    {
+        "rm", "mv", "cp", "mkdir", "rmdir", "touch", "truncate",
+        "chmod", "chown", "ln", "mktemp", "install", "tee", "dd",
+        "curl", "wget", "scp", "rsync", "zip", "unzip", "tar", "gzip",
+        "gunzip", "xz", "bzip2", "sort", "uniq", "awk", "sed",
+        "python", "python3", "node", "npm", "pip", "pip3", "npx",
+        "git", "psql", "sqlite3", "docker", "make", "cmake", "cargo",
+        "go", "java", "dotnet", "ruby", "perl", "php", "powershell",
+        "pwsh", "set", "pushd", "popd",
+    }
+)
+
+
+_READONLY_SHELL_PREFIXES = frozenset(
+    {
+        "ls", "ll", "dir", "find", "locate", "which", "where", "where.exe",
+        "cat", "type", "less", "more", "head", "tail", "grep", "rg",
+        "test", "stat", "file", "wc", "df", "du", "pwd", "echo",
+        "date", "env", "printenv", "history", "ps", "tree",
+        "get-childitem", "gci", "get-location", "pwd.exe", "select-string",
+        "format-list", "format-table", "where-object", "sort-object",
+        "measure-object", "select-object", "get-item", "gci", "gci.exe",
+        "cmd", "cmd.exe",
+    }
+)
+
+# Paths / literals that must be preserved in the fingerprint (otherwise two
+# different targets would dedupe onto each other).
+_INSPECTION_TARGET_KEYWORDS = frozenset(
+    {
+        "c:\\", "\\", "/", "..", ".", "~", "$env:", "$pwd", "$home",
+        "userprofile", "appdata", "temp", "tmp",
+    }
+)
+
+
+def _inspection_target(raw: str) -> str:
+    """Best-effort single-target extraction for a browsing/listing call.
+
+    For ``browse``: the URL is the target. For git: the operation word (e.g.
+    status/log/diff) plus the first path-like arg is the target. For
+    file_task/find_path: the path arg. For shell: the first path-like token
+    after the command verb (or the entire command if it's a compound
+    statement like ``if (...)``). Returns a low-entropy target string.
+    """
+    if not raw:
+        return ""
+    if " " not in raw:
+        return raw
+    head, _, rest = raw.partition(" ")
+    head_l = head.lower()
+    if head_l in ("if", "for", "while", "powershell", "pwsh", "cmd", "cmd.exe",
+                  "get-content", "get-content.exe", "gc"):
+        # Compound / wrapper: fingerprint the whole normalized command.
+        return raw
+    # Option flags start with '-' in POSIX and most cross-platform tools
+    # (PowerShell uses -Name too), so ONLY '-' marks a flag. Windows-style
+    # '/a' switches are rare in these listings and a '/' DOES mark a path
+    # token — skipping it would drop the target entirely (the repeated-
+    # listings bug returned head/pipe instead of the directory).
+    toks = rest.split()
+    for tok in toks:
+        if not tok or tok.startswith("-") or tok in ("|", ";", "&", "&&", "||"):
+            continue
+        if "=" in tok:
+            continue
+        # A quote-wrapped path / literal — strip quotes and return it.
+        cand = tok.strip("'\"")
+        if any(k.lower() in cand.lower() for k in _INSPECTION_TARGET_KEYWORDS):
+            return cand.lower()
+        # A plausible path (contains / or \\) or a bare word: return it.
+        if "/" in cand or "\\" in cand or "." in cand:
+            return cand.lower()
+    # No path-like token found — return the first non-flag token or the head.
+    for tok in toks:
+        if not tok or tok.startswith("-") or tok in ("|", ";", "&&", "||"):
+            continue
+        return tok.strip("'\"").lower()
+    return head_l
+
+
+def _inspection_fingerprint(tool_name: str, tool_input: str) -> str:
+    """Structural identity for a read-only inspection call.
+
+    Used to dedupe near-identical repeated inspections within a single turn.
+    Cosmetic variation (quoting, column order, table formats, object
+    wrappers) is stripped so "the same listing asked a different way" maps
+    to the cached result instead of burning another iteration.
+
+    Known read-only inspectors (shell listing/reading prefixes, browse,
+    git read ops, file_task, find_path) get the structural fingerprint;
+    everything else falls back to the exact tool_input, so mutating or
+    parameter-sensitive calls are never conflated.
+    """
+    body = tool_input.strip().lower()
+    if tool_name == "browse":
+        # Browse target = the URL (first token, quotes stripped, query/fragment
+        # dropped — ?utm=… and ?ref=… are noise, not a different page).
+        first = body.split()[0].strip("'\"") if body else ""
+        for sep in ("?", "#"):
+            first = first.split(sep)[0]
+        return f"browse|{first}"
+    if tool_name == "file_task":
+        return "file_task|" + body
+    if tool_name == "find_path":
+        return "find_path|" + body
+    if tool_name == "git":
+        # Operation + first path-like arg (quotes stripped, flags dropped).
+        # Write ops (commit/add/checkout/…) never fold: we must not reuse
+        # their output — only known read operations get a structural key.
+        parts = body.split()
+        op = parts[0] if parts else ""
+        if op not in _GIT_READ_OPS:
+            return "git|EXACT|" + body
+        target = _inspection_target(body)
+        return f"git|{op}|{target}"
+    if tool_name == "shell":
+        body = body.replace('"', "").replace("'", "").replace("`", "")
+        body = body.replace("\\", "/")
+        head = body.split()[0] if body.split() else ""
+        # Only read-only-ish prefixes qualify for dedup. Anything else
+        # (writes, execs, compounds) must stay exact-match so they can never
+        # be conflated with a different command.
+        if head in _READONLY_SHELL_PREFIXES:
+            target = _inspection_target(body)
+            return f"shell|{head}|{target}|{_shell_flag_sig(body)}"
+        return "shell|EXACT|" + body
+    return "EXACT|" + body
+
+
+def _shell_flag_sig(body: str) -> str:
+    """Normalize the FLAGS of a read-only command into a stable signature.
+
+    Flags change the RESULT SET (``-Force`` shows hidden files, ``-type f``
+    filters to files, ``-maxdepth 1`` bounds recursion), so they must be
+    part of the dedup key — two ``Get-ChildItem`` calls on the same path
+    with and without ``-Force`` are NOT the same listing. Columns and
+    presentation (Select-Object, Format-Table, column order) are NOT part
+    of the key: the rows are identical, so folding them avoids the
+    repeated-listings flaw without losing information.
+
+    Flag tokens (and their following non-flag values, e.g. ``-type f``
+    or ``-maxdepth 1``) are collected, lowercased, sorted, and joined.
+    """
+    # Flags that take a VALUE (filter flags): the following bare token must
+    # be part of the signature. Everything else is a boolean switch — taking
+    # the next token as its value would glue a path onto `-Force` or
+    # `-AutoSize` and split otherwise-identical listings.
+    _FLAG_TAKES_VALUE = frozenset(
+        {
+            "type", "name", "iname", "path", "ipath", "maxdepth",
+            "mindepth", "depth", "size", "mtime", "atime", "ctime",
+            "newer", "user", "group", "perm", "maxresults", "processtype",
+            "filter", "include", "exclude", "recurse", "erroraction",
+            "tail", "n", "c", "f", "s", "a", "d",
+        }
+    )
+    # Presentation-only flags never enter the signature: they change the
+    # RENDERING, not the rows (Format-Table -AutoSize, -Wrap, …).
+    _PRESENTATION_FLAGS = frozenset({"autosize", "wrap", "nowrap", "compress"})
+    toks = body.split()
+    sig: list[str] = []
+    for i, tok in enumerate(toks):
+        if not tok.startswith("-"):
+            continue
+        flag = tok.lstrip("-").split("=")[0]
+        if flag in _PRESENTATION_FLAGS:
+            continue
+        if flag in _FLAG_TAKES_VALUE and i + 1 < len(toks):
+            val = toks[i + 1].strip("'\"()")
+            if (
+                val
+                and not val.startswith("-")
+                and not val.startswith(("$", "@"))
+                and "/" not in val
+                and "\\" not in val
+                and len(val) <= 64
+            ):
+                sig.append(f"{flag}={val.lower()}")
+                continue
+        if flag and flag.isalpha() and len(flag) <= 2 and flag not in _FLAG_TAKES_VALUE:
+            # Short bundles normalize: `-la` ≡ `-a -l`.
+            sig.extend(ch for ch in flag)
+        else:
+            sig.append(flag.lower())
+    return "|".join(sorted(set(sig)))
+
+
+def _is_inspection(tool_name: str) -> bool:
+    """True when this tool is a candidate for structural dedup."""
+    return tool_name in {"shell", "browse", "git", "file_task", "find_path"}
+
+
+def _inspection_can_be_rerun(tool_name: str, tool_input: str) -> bool:
+    """True when the call is a known read-only inspection safe to dedupe
+    against an earlier result.
+
+    Mutating or unknown-prefix commands are excluded so we never reuse stale
+    output after a state change. ``_inspection_fingerprint`` itself handles
+    the prefix allowlist (non-list commands get ``EXACT`` keys); this
+    function is the loop-level guard that decides whether the fingerprint
+    may be consulted at all.
+    """
+    return _is_inspection(tool_name) and bool((tool_input or "").strip())
+
+
+# Git operations that only read repository state. Everything else
+# (add/commit/checkout/reset/merge/push/fetch …) may mutate and must
+# invalidate the inspection cache.
+_GIT_READ_OPS = frozenset({"status", "log", "diff", "show", "branch", "ls-files"})
+
+
+def _is_readonly_inspection(tool_name: str, tool_input: str) -> bool:
+    """True when the call is a READ-ONLY inspection that must NOT invalidate
+    the structural inspection cache.
+
+    - browse / file_task / find_path: always read-only.
+    - shell: only when the leading command is in the read-only allowlist
+      (ls/dir/find/cat/type/head/tail/grep/stat/…). Everything else — writes,
+      execs, pipes to mutators, compound statements — is treated as
+      potentially mutating so the cache is dropped.
+    - git: only for known read operations (status/log/diff/show/…).
+    """
+    if tool_name in ("browse", "file_task", "find_path"):
+        return True
+    if tool_name == "shell":
+        body = (tool_input or "").strip().lower().replace('"', "").replace("'", "").replace("`", "")
+        head = body.split()[0] if body.split() else ""
+        return head in _READONLY_SHELL_PREFIXES
+    if tool_name == "git":
+        body = (tool_input or "").strip().lower()
+        op = body.split()[0] if body.split() else ""
+        return op in _GIT_READ_OPS
+    return False  # not an inspection tool at all
+
+

@@ -33,20 +33,23 @@ from core.models import Intent
 # (the tool list is measured separately by test_intent_tool_scoping).
 # Measured 2026-08-11 post-Session-144 trim.
 _BUDGETS = {
-    # Session 245 (Lever 1 + 3): env context moved to a trailing turn-context
+    # Session 245 (Lever 1 + 3): env vars moved to a trailing turn-context
     # message and the formatting example trimmed — ~2,270 chars off each
     # execute intent. Budgets tightened to lock the reduction in.
-    Intent.SHELL: 11_600,  # Session 351: +100 (web_research preference in LIVE DATA RULE)
-    Intent.SYSINFO: 10_500,  # 2026-08-21: +500 (describe_tool + completion enforcement)
-    Intent.CODE_EXEC: 11_900,  # Session 351: +100 (web_research preference in LIVE DATA RULE)
-    Intent.FILE_WRITE: 12_000,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
-    Intent.FILE_EDIT: 12_000,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
-    Intent.FILE_TASK: 12_500,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
-    Intent.WEB_SEARCH: 12_500,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
-    Intent.WEB_FETCH: 12_000,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
-    Intent.MEMORY_OP: 11_000,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
-    Intent.BROWSE: 11_500,  # 2026-08-21: +500 (describe_tool core-guard + completion enforcement)
-    Intent.CHAT: 6_000,  # measured 4,730 (unchanged — env not in CHAT branch)
+    # Session 378: +400 each (rule 10 "TOOL OUTPUT IS RETAINED" — the
+    # repeated-listings fix; hard-capped at ~330 chars, this is the once-off
+    # cost of telling models not to re-list what they already have).
+    Intent.SHELL: 12_000,  # Session 351: +100 (web_research preference in LIVE DATA RULE)
+    Intent.SYSINFO: 10_900,  # 2026-08-21: +500; Session 378: +400 (rule 10)
+    Intent.CODE_EXEC: 12_250,  # Session 351: +100; Session 378: +350 (rule 10)
+    Intent.FILE_WRITE: 12_400,  # 2026-08-21: +500; Session 378: +400 (rule 10)
+    Intent.FILE_EDIT: 12_400,  # 2026-08-21: +500; Session 378: +400 (rule 10)
+    Intent.FILE_TASK: 12_900,  # 2026-08-21: +500; Session 378: +400 (rule 10)
+    Intent.WEB_SEARCH: 12_900,  # 2026-08-21: +500; Session 378: +400 (rule 10)
+    Intent.WEB_FETCH: 12_100,  # 2026-08-21: +500; Session 378: +100 (rule 10)
+    Intent.MEMORY_OP: 11_500,  # 2026-08-21: +500; Session 378: +500 (rule 10)
+    Intent.BROWSE: 11_600,  # 2026-08-21: +500; Session 378: +100 (rule 10)
+    Intent.CHAT: 6_000,  # measured 4,730 (unchanged — no CRITICAL RULES in CHAT branch)
 }
 
 # Load-bearing rules that MUST survive future trims — the budget test guards

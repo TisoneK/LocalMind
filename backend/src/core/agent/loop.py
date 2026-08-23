@@ -110,7 +110,10 @@ from core.agent.text_tools import (
     _STANDALONE_PARTIAL_RE,
     _extract_tool_input,
     _has_minimax_tool_call,
+    _inspection_can_be_rerun,
+    _inspection_fingerprint,
     _is_filler_step,  # noqa: F401 — re-exported for backward compat (Session 129)
+    _is_readonly_inspection,
     _is_tool_talk,
     _normalize_dsml,
     _normalize_system_tool_call,
@@ -2168,6 +2171,42 @@ class AgentLoop:
         # Per-turn tool call cache: (tool_name, normalised_input) → observation text.
         _call_cache: dict[tuple[str, str], str] = {}
 
+        # Session 378 (repeated-listings flaw): a STRUCTURAL cache for
+        # read-only inspection calls. Keyed by _inspection_fingerprint —
+        # which strips cosmetic variation (quoting, column order, table
+        # formats, object wrappers) — so "the same listing asked a different
+        # way" maps onto the earlier result instead of burning a model call.
+        # Any tool call that may have MUTATED state invalidates this cache
+        # (see _invalidates_inspection_cache below), so a listing that
+        # follows a write/edit/exec still runs fresh.
+        _inspection_cache: dict[str, str] = {}
+        _inspection_seen: set[str] = set()
+
+        def _maybe_invalidate_inspection_cache(tool_name: str, tool_input: str) -> None:
+            """Drop the structural inspection cache after a possibly-mutating call.
+
+            Read-only inspections (listing, browsing, file reads, git read
+            ops) keep it; anything that could change state on disk or in the
+            environment — writes, edits, code exec, mutating shell commands,
+            git write ops — must not reuse stale inspection output, so the
+            cache is cleared for the rest of the turn (Session 378).
+            """
+            nonlocal _inspection_cache, _inspection_seen
+            always_mutates = tool_name in (
+                "file_write", "edit_file", "propose_edit_file",
+                "best_of_n_edit", "code_exec", "terminal",
+            )
+            maybe_mutates = tool_name in ("shell", "git") and not _is_readonly_inspection(
+                tool_name, tool_input
+            )
+            if (always_mutates or maybe_mutates) and (_inspection_cache or _inspection_seen):
+                logger.info(
+                    "[agent.loop] mutating call %s — clearing inspection cache (%d keys)",
+                    tool_name, len(_inspection_cache),
+                )
+                _inspection_cache.clear()
+                _inspection_seen.clear()
+
         # ── Collected tool results for post-loop synthesis ──────────────
         # Track all ToolResults from this turn so the AnswerSynthesizer
         # can extract and synthesize them into a user-facing answer after
@@ -3117,6 +3156,72 @@ class AgentLoop:
                     )
                     continue
 
+                # ── Session 378: structural dedup for read-only inspections ──
+                # The exact-match fingerprint below misses near-identical
+                # repeat listings — "the same Get-ChildItem asked with
+                # different columns/formatting" re-ran and burned an
+                # iteration each time (user's dev-folder transcript: 5
+                # listings). When the call is a read-only inspection whose
+                # STRUCTURAL fingerprint already produced a result this turn,
+                # reuse it: the inspected state is unchanged (cache is
+                # invalidated by any mutating call), so only the
+                # presentation differed. The marker check ("|EXACT|")
+                # ensures only allow-listed read-only commands are folded.
+                _structural_key: str = ""
+                if _inspection_can_be_rerun(tool_name, tool_input):
+                    _candidate = _inspection_fingerprint(tool_name, tool_input)
+                    if _candidate and "|EXACT|" not in _candidate:
+                        _structural_key = _candidate
+                        if _structural_key in _inspection_cache:
+                            cached_obs = _inspection_cache[_structural_key]
+                            logger.info(
+                                f"[agent.loop] inspection-dedup hit for {tool_name!r} "
+                                f"fp={_structural_key[:60]!r} — returning cached result"
+                            )
+                            observation_log += (
+                                f"\n[Tool: {tool_name} | Input: {tool_input[:60]} | "
+                                f"Status: CACHED (same inspection already run this turn)]\n"
+                                f"{_truncate_observation(cached_obs)}\n"
+                            )
+                            trace.steps.append(
+                                AgentStep(
+                                    iteration=iteration + 1,
+                                    thought=result.raw_content or "",
+                                    tool_name=tool_name,
+                                    tool_input=tool_input,
+                                    observation=f"[inspection-dedup] {cached_obs[:200]}",
+                                    tool_failed=False,
+                                    retry_count=0,
+                                    latency_ms=llm_ms,
+                                )
+                            )
+                            _inspection_seen.add(_structural_key)
+                            call_id = str(uuid.uuid4())
+                            loop_messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": result.raw_content or "",
+                                    "tool_calls": [
+                                        {
+                                            "id": call_id,
+                                            "type": "function",
+                                            "function": {
+                                                "name": tool_name,
+                                                "arguments": json.dumps(tool_args),
+                                            },
+                                        }
+                                    ],
+                                }
+                            )
+                            loop_messages.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": call_id,
+                                    "content": cached_obs,
+                                }
+                            )
+                            continue
+
                 # Deduplication: skip a tool call we've already made this turn
                 call_fingerprint = (tool_name, tool_input.lower().strip())
                 if call_fingerprint in _call_cache:
@@ -3377,6 +3482,13 @@ class AgentLoop:
                             )
                             continue
 
+                    # Session 378: a possibly-mutating call must drop the
+                    # structural inspection cache BEFORE running, so a
+                    # listing that follows a write/edit/exec is never served
+                    # stale output. Read-only inspections (incl. the shell
+                    # call executing right now) keep the cache intact.
+                    _maybe_invalidate_inspection_cache(tool_name, tool_input)
+
                     if tool_name == "file_write":
                         try:
                             from tools.contracts.base import ToolRegistry
@@ -3505,6 +3617,13 @@ class AgentLoop:
                         # from its own evidence loop.
                         observation = safe_obs
                         _call_cache[call_fingerprint] = safe_obs
+
+                        # Session 378: also seed the structural inspection
+                        # cache so a later cosmetic variant of the same
+                        # read-only listing hits the dedup above. Only
+                        # successful, non-mutating inspections are cached.
+                        if _structural_key and tool_result.success and tool_name != "file_write":
+                            _inspection_cache[_structural_key] = safe_obs
 
                         # Bug B fix: track file_write paths for name-level dedup
                         if tool_name == "file_write":
