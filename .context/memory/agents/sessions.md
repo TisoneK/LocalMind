@@ -5009,3 +5009,16 @@ authoritative.
 - **LIVE (bankofai, isolated 8765, LOCALMIND_SHELL_ENABLED=false + settings.json shell_enabled=false):** "List the files in /tmp using shell commands" → settings endpoint confirmed `shell_enabled: False`; **tools actually run: `['code_exec', 'code_exec']`** (Python), `shell tool called: False`, zero `tool_call=shell` lines in the log — the model took the Python route and delivered a formatted /tmp file table. The schema literally wasn't there to call.
 
 **Backlog now:** B-2026-08-23-4 done. Remaining: -5 (tab auto-switch), -6 (file rendering docx/pdf/excel), -7 (filetask summary info), -8 (goal-driven fastest/safest path + subgoals), -9 (action pill tooltips), -10 (concrete planning), -11 (todo title/content split), -12 (clickable filenames).
+## 2026-08-23 — Session 354 — B-2026-08-23-5 CLOSED: first action now switches chat → actions tab (stale forceChatTab race)
+
+**Backlog item:** B-2026-08-23-5 (Medium, frontend) — "The first action almost never switches from chat tab to actions tab automatically until the second action kicks in."
+
+**Root cause (traced live, not guessed):** the backend was fine — a live SSE capture (bankofai, isolated 8765) confirmed the FIRST tool event arrives as a dedicated `tool_call` with `status="started"`, which the frontend dispatches as `localmind:tool-call-started` → LeftPanel `setActiveTab('actions')`. The miss was a **stale-flag race in LeftPanel**: `forceChatTab` (set by New Chat) was only consumed by the effect when `activeTab !== 'chat'`. Clicking New Chat while ALREADY on the Chat tab left `forceChatTab=true` indefinitely. Then: first tool event → switch to Actions → the forceChatTab effect re-runs (activeTab is a dep) → sees `forceChatTab && activeTab !== 'chat'` → **yanks the tab straight back to Chat** (and only then clears the flag) → the SECOND action's event sticks. Exactly the reported "works on the second action".
+
+**FIX (`LeftPanel.tsx`):** the forceChatTab effect now consumes the flag ALWAYS — even when already on Chat (`onChatTabShown()` fires unconditionally; `setActiveTab('chat')` only when needed). A `forceChatConsumed` ref guards the effect so it fires at most ONCE per flag activation (the `setActiveTab('chat')` re-run would otherwise double-call before the parent's re-render lands). Flag is gone before the first tool event can race it.
+
+**VERIFIED:**
+- **Tests:** 1 new regression test in `LeftPanel.test.tsx` reproducing the exact scenario (New Chat while on Chat → flag consumed immediately → first Actions switch is not fought; `onChatTabShown` called exactly once). Updated the pre-existing forceChatTab test to mirror production wiring (parent clears the flag via the callback + re-render). Frontend **274 passed**; `tsc -b` clean; eslint zero new (the one set-state-in-effect warning is pre-existing at HEAD).
+- **LIVE (bankofai, isolated 8765):** SSE capture confirmed the first action's dedicated `tool_call` event IS `status="started"` and reaches the frontend — the backend never needed a change; the race was purely client-side.
+
+**Backlog now:** B-2026-08-23-5 done. Remaining: -6 (file rendering docx/pdf/excel), -7 (filetask summary info), -8 (goal-driven fastest/safest path + subgoals), -9 (action pill tooltips), -10 (concrete planning), -11 (todo title/content split), -12 (clickable filenames).
