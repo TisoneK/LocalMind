@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download } from 'lucide-react';
+import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download, Shield } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
 import { Progress } from '@/components/ui/progress';
 import { useTheme, THEMES, type CustomTheme, type ModePref } from '@/hooks/useTheme';
@@ -143,6 +143,17 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const [shellEnabled, setShellEnabled] = useState(false);
   // B-2026-08-23-27: startup session behavior ("resume" | "new").
   const [startupSession, setStartupSession] = useState<'new' | 'resume'>('new');
+  // B-2026-08-23-33: operation permissions.
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({
+    file_read: true,
+    file_write: true,
+    file_edit: true,
+    shell: true,
+    code_exec: true,
+    web_search: true,
+    web_fetch: true,
+    memory_op: true,
+  });
   // B-2026-08-23-28: embed-model download status + progress.
   const [embedStatus, setEmbedStatus] = useState<{ ollama_available: boolean; model_installed: boolean; model_name: string } | null>(null);
   const [embedDownload, setEmbedDownload] = useState<{ status: string; progress: number | null; detail: string } | null>(null);
@@ -182,6 +193,10 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
         setShellEnabled(settings.shell_enabled ?? false);
         // B-2026-08-23-27: startup session behavior.
         setStartupSession(settings.startup_session === 'resume' ? 'resume' : 'new');
+        // B-2026-08-23-33: operation permissions.
+        if (settings.permissions && typeof settings.permissions === 'object') {
+          setPermissions((prev) => ({ ...prev, ...settings.permissions }));
+        }
         // Bug A: the essential settings are loaded — reveal the modal NOW and
         // let the model/embedding lists (which prime Ollama /api/show and can
         // take a few seconds) populate in the background instead of blocking
@@ -1348,6 +1363,50 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               </div>
             </section>
           )}
+
+          {/* ── B-2026-08-23-33: Operation Permissions ── */}
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-brand-green-soft">
+              <Shield className="h-4 w-4 text-brand-green" />
+              Permissions
+            </h3>
+            <p className="mb-3 text-xs text-brand-green-muted">
+              Control which operations the agent can perform. Disabled tools will return an error when invoked.
+            </p>
+            <div className="space-y-2">
+              {([
+                ['file_read', 'File read'],
+                ['file_write', 'File write'],
+                ['file_edit', 'File edit'],
+                ['shell', 'Shell commands'],
+                ['code_exec', 'Code execution'],
+                ['web_search', 'Web search'],
+                ['web_fetch', 'Web fetch'],
+                ['memory_op', 'Memory operations'],
+              ] as const).map(([key, label]) => (
+                <label key={key} className="flex items-center justify-between rounded-lg border border-brand-border px-3 py-2 cursor-pointer hover:border-brand-green/30 transition-colors">
+                  <span className="text-xs text-brand-green-soft">{label}</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={permissions[key] ?? true}
+                    onClick={() => {
+                      const next = { ...permissions, [key]: !(permissions[key] ?? true) };
+                      setPermissions(next);
+                      localmindClient.setPermissions({ [key]: next[key] }).catch(() => {});
+                    }}
+                    className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green ${
+                      permissions[key] !== false ? 'bg-brand-green' : 'bg-brand-border'
+                    }`}
+                  >
+                    <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-lg ring-0 transition-transform duration-200 ease-in-out ${
+                      permissions[key] !== false ? 'translate-x-4' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </label>
+              ))}
+            </div>
+          </section>
 
           {/* ── Best-of-N Editor (C2 spec step 7) ── */}
           <section>

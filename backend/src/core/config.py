@@ -264,6 +264,20 @@ class Settings(BaseSettings):
     # Permission gates — require user confirmation before write/delete
     localmind_require_write_permission: bool = False
 
+    # B-2026-08-23-33: Configurable operation permissions (global, not per-session).
+    # Maps tool-family keys to allow/deny booleans. Loaded from settings.json
+    # via load_runtime_settings().
+    localmind_permissions: dict = {
+        "file_read": True,
+        "file_write": True,
+        "file_edit": True,
+        "shell": True,
+        "code_exec": True,
+        "web_search": True,
+        "web_fetch": True,
+        "memory_op": True,
+    }
+
     # B-2026-08-23-34: Chat mode — “auto” (classifier decides), “agent”
     # (always full agent loop), “direct” (no tools, lightweight chat).
     localmind_chat_mode: str = "auto"
@@ -410,6 +424,14 @@ class Settings(BaseSettings):
                     logger.info(f"[config] Set chat_mode to {val}")
                 else:
                     logger.warning(f"[config] Ignoring invalid chat_mode: {data['chat_mode']!r}")
+            # B-2026-08-23-33: operation permissions
+            if "permissions" in data:
+                perms = data["permissions"]
+                if isinstance(perms, dict):
+                    for key, val in perms.items():
+                        if key in self.localmind_permissions and isinstance(val, bool):
+                            self.localmind_permissions[key] = val
+                    logger.info(f"[config] Loaded permissions: {self.localmind_permissions}")
             # Load API keys from runtime settings
             if "api_keys" in data:
                 self._runtime_api_keys = data["api_keys"]

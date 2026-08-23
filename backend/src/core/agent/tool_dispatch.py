@@ -18,6 +18,31 @@ from tools import dispatch
 
 logger = logging.getLogger(__name__)
 
+# B-2026-08-23-33: Intent → permission-key mapping. Intents not listed here
+# are always allowed (e.g. CHAT, SYSINFO, OBSERVE).
+_TOOL_PERMISSION_MAP: dict = {
+    Intent.FILE_TASK: "file_read",
+    Intent.FILE_WRITE: "file_write",
+    Intent.FILE_EDIT: "file_edit",
+    Intent.SHELL: "shell",
+    Intent.CODE_EXEC: "code_exec",
+    Intent.WEB_SEARCH: "web_search",
+    Intent.WEB_FETCH: "web_fetch",
+    Intent.MEMORY_OP: "memory_op",
+    Intent.GREP_SEARCH: "file_read",
+}
+
+_PERMISSION_LABEL: dict[str, str] = {
+    "file_read": "File read",
+    "file_write": "File write",
+    "file_edit": "File edit",
+    "shell": "Shell",
+    "code_exec": "Code execution",
+    "web_search": "Web search",
+    "web_fetch": "Web fetch",
+    "memory_op": "Memory operations",
+}
+
 # Task-local safety fence used by autonomous objective runs. It is separate
 # from model-visible tool filtering so malformed/hallucinated calls are also
 # rejected immediately before dispatch.
@@ -113,6 +138,30 @@ async def dispatch_with_retry(
             True,
             0,
         )
+
+    # B-2026-08-23-33: Check configurable operation permissions.
+    perm_key = _TOOL_PERMISSION_MAP.get(tool_intent)
+    if perm_key is not None:
+        try:
+            from core.config import settings as _settings
+            if not _settings.localmind_permissions.get(perm_key, True):
+                label = _PERMISSION_LABEL.get(perm_key, perm_key)
+                logger.info(
+                    f"[agent.dispatch] tool={tool_intent.value} blocked by permission '{perm_key}'"
+                )
+                return (
+                    ToolResult(
+                        content=f"The '{label}' operation is currently disabled in Settings. Enable it to use this tool.",
+                        source=tool_intent.value,
+                        success=False,
+                        error_type="permission",
+                        error_message=f"Permission '{perm_key}' is disabled",
+                    ),
+                    True,
+                    0,
+                )
+        except Exception:
+            pass  # settings unavailable — allow through
 
     # ADR-8 Phase 3: set the current adapter + obs so the delegate tools
     # can access them. The sets are conditional on the args being provided

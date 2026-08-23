@@ -1098,6 +1098,8 @@ class LocalMindClient {
     startup_session?: string;
     // B-2026-08-23-34: Chat mode ("auto" | "agent" | "direct").
     chat_mode?: string;
+    // B-2026-08-23-33: Configurable operation permissions.
+    permissions?: Record<string, boolean>;
   }> {
     return this.request('/api/settings');
   }
@@ -1107,6 +1109,14 @@ class LocalMindClient {
     return this.request('/api/settings/chat-mode', {
       method: 'POST',
       body: JSON.stringify({ chat_mode: chatMode }),
+    });
+  }
+
+  /** B-2026-08-23-33: Update operation permissions. */
+  async setPermissions(perms: Record<string, boolean>): Promise<Record<string, boolean> & { message: string }> {
+    return this.request('/api/settings/permissions', {
+      method: 'POST',
+      body: JSON.stringify(perms),
     });
   }
 

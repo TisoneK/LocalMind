@@ -46,6 +46,17 @@ class SettingsResponse(BaseModel):
     startup_session: str = "new"
     # B-2026-08-23-34: Chat mode — "auto" | "agent" | "direct".
     chat_mode: str = "auto"
+    # B-2026-08-23-33: Configurable operation permissions.
+    permissions: dict = {
+        "file_read": True,
+        "file_write": True,
+        "file_edit": True,
+        "shell": True,
+        "code_exec": True,
+        "web_search": True,
+        "web_fetch": True,
+        "memory_op": True,
+    }
 
 
 class AdapterConfig(BaseModel):
@@ -120,6 +131,40 @@ async def set_chat_mode(req: ChatModeRequest):
     _data["chat_mode"] = val
     settings._secure_write_json(_path, _data)
     return {"chat_mode": val, "message": f"Chat mode set to {val}"}
+
+
+class PermissionsRequest(BaseModel):
+    """Body for POST /api/settings/permissions (B-2026-08-23-33).
+
+    All fields optional so a partial update is safe. Only recognized keys
+    are applied; unknown keys are silently ignored.
+    """
+
+    file_read: Optional[bool] = None
+    file_write: Optional[bool] = None
+    file_edit: Optional[bool] = None
+    shell: Optional[bool] = None
+    code_exec: Optional[bool] = None
+    web_search: Optional[bool] = None
+    web_fetch: Optional[bool] = None
+    memory_op: Optional[bool] = None
+
+
+@router.post("/settings/permissions")
+async def set_permissions(req: PermissionsRequest):
+    """Update operation permissions and persist to settings.json (B-2026-08-23-33)."""
+    payload = {}
+    for key in ("file_read", "file_write", "file_edit", "shell", "code_exec", "web_search", "web_fetch", "memory_op"):
+        val = getattr(req, key, None)
+        if val is not None:
+            settings.localmind_permissions[key] = val
+            payload[key] = val
+    # Persist to settings.json (direct write so boolean False isn't lost).
+    _path = settings._runtime_settings_path()
+    _data = settings._load_json_file(_path)
+    _data["permissions"] = dict(settings.localmind_permissions)
+    settings._secure_write_json(_path, _data)
+    return {**settings.localmind_permissions, "message": "Permissions updated"}
 
 
 class AppearanceRequest(BaseModel):
@@ -281,6 +326,8 @@ async def get_settings():
         startup_session=getattr(settings, "localmind_startup_session", "new"),
         # B-2026-08-23-34: chat mode
         chat_mode=getattr(settings, "localmind_chat_mode", "auto"),
+        # B-2026-08-23-33: operation permissions
+        permissions=dict(getattr(settings, "localmind_permissions", {})),
     )
 
 
