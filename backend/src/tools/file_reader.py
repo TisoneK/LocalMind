@@ -196,6 +196,97 @@ async def _parse_csv_xlsx(data: bytes, filename: str) -> str:
         return f"[CSV/XLSX parse timed out after {FILE_OP_TIMEOUT_SECONDS}s]"
 
 
+# Spreadsheet preview caps — keep the browser payload sane even for huge files.
+MAX_SHEET_ROWS = 200
+MAX_SHEET_COLS = 50
+
+
+def _cell_to_str(value) -> str:
+    """Normalize a spreadsheet cell to a JSON-safe display string."""
+    import math
+
+    if value is None:
+        return ""
+    if isinstance(value, float) and math.isnan(value):
+        return ""
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    if isinstance(value, (int, float)):
+        # 1.0 -> "1", 3.14 -> "3.14" — avoid pandas float noise.
+        if isinstance(value, float) and value.is_integer():
+            return str(int(value))
+        return str(value)
+    return str(value)
+
+
+def _dataframe_to_sheet(df) -> dict:
+    """Convert a DataFrame to a capped {name, rows, truncated} sheet payload."""
+    truncated = False
+    if df.shape[0] > MAX_SHEET_ROWS:
+        df = df.head(MAX_SHEET_ROWS)
+        truncated = True
+    if df.shape[1] > MAX_SHEET_COLS:
+        df = df.iloc[:, :MAX_SHEET_COLS]
+        truncated = True
+    header = [_cell_to_str(c) for c in df.columns.tolist()]
+    rows = [header]
+    for _, row in df.iterrows():
+        rows.append([_cell_to_str(v) for v in row.tolist()])
+    return {"name": "", "rows": rows, "truncated": truncated}
+
+
+async def parse_spreadsheet(data: bytes, filename: str) -> list[dict]:
+    """Parse CSV/XLSX into structured per-sheet row data for the UI table.
+
+    Returns a list of {"name", "rows", "truncated"} — rows[0] is the header,
+    cells are JSON-safe strings, capped at MAX_SHEET_ROWS/MAX_SHEET_COLS. The
+    flat text from parse_file stays the source of truth for the agent; this is
+    the structured preview flavor the FilePreviewDialog renders as tabs.
+    """
+    def _do_parse() -> list[dict]:
+        import io
+
+        import pandas as pd
+
+        if filename.lower().endswith(".xlsx"):
+            frames = pd.read_excel(io.BytesIO(data), engine="openpyxl", sheet_name=None)
+        else:
+            # CSV has no sheet concept — present it as a single tab.
+            try:
+                df = pd.read_csv(io.BytesIO(data))
+            except Exception:
+                # Fall back to a raw text split for weird CSV (no pandas
+                # dtype guessing games for the UI).
+                decoded = data.decode("utf-8", errors="replace")
+                import csv as _csv
+
+                parsed = list(_csv.reader(decoded.splitlines()))
+                return [{"name": "Sheet 1", "rows": parsed[:MAX_SHEET_ROWS], "truncated": len(parsed) > MAX_SHEET_ROWS}]
+            frames = {"Sheet 1": df}
+
+        sheets = []
+        for name, df in frames.items():
+            sheet = _dataframe_to_sheet(df)
+            sheet["name"] = str(name)
+            # Skip genuinely empty sheets (no columns at all).
+            if not sheet["rows"] or (len(sheet["rows"]) == 1 and sheet["rows"][0] == [""]):
+                continue
+            sheets.append(sheet)
+        return sheets or [{"name": "Sheet 1", "rows": [["(empty file)"]], "truncated": False}]
+
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_do_parse),
+            timeout=FILE_OP_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        msg = f"[CSV/XLSX parse timed out after {FILE_OP_TIMEOUT_SECONDS}s]"
+        return [{"name": "Sheet 1", "rows": [["[parse timed out]"], [msg]], "truncated": False}]
+    except Exception as e:
+        logger.error(f"[file_reader] Spreadsheet parse error for {filename}: {e}")
+        return [{"name": "Sheet 1", "rows": [[f"[parse error: {e}]"]], "truncated": False}]
+
+
 async def parse_file(
     data: bytes,
     filename: str,

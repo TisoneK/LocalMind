@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { FileText, Loader2, AlertTriangle, X, Pencil, Check, RotateCcw } from 'lucide-react';
+import { FileText, Loader2, AlertTriangle, X, Pencil, Check, RotateCcw, Table as TableIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import {
   Dialog,
@@ -44,6 +44,8 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
+  // Spreadsheet tab (CSV/XLSX) — reset whenever a different file opens.
+  const [activeSheet, setActiveSheet] = useState(0);
 
   useEffect(() => {
     if (!path) {
@@ -58,6 +60,7 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
     setIsEditing(false);
     setSaveError(null);
     setSavedFlash(false);
+    setActiveSheet(0);
     localmindClient.getFileContent(path).then((data) => {
       if (cancelled) return;
       setLoading(false);
@@ -78,6 +81,8 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
   const isCode = !isMarkdown && !!content?.extension && _CODE_EXTS.has(content.extension);
   const bodyText = content?.text ?? '';
   const canEdit = !!content && content.editable === true && !isImage;
+  const sheets = content?.sheets ?? [];
+  const activeRows = sheets[activeSheet]?.rows ?? [];
 
   const handleSave = async () => {
     if (!path || saving) return;
@@ -189,6 +194,72 @@ export function FilePreviewDialog({ path, onClose }: FilePreviewDialogProps) {
             <div className="flex items-center gap-2 px-4 py-6 text-brand-red text-sm">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               {error}
+            </div>
+          )}
+          {!loading && !error && sheets.length > 0 && (
+            <div className="flex flex-col h-full">
+              {/* Sheet tabs */}
+              <div className="flex items-center gap-0.5 px-2 pt-2 overflow-x-auto border-b border-brand-border/60 shrink-0">
+                {sheets.map((s, i) => (
+                  <button
+                    key={s.name + i}
+                    onClick={() => setActiveSheet(i)}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-t text-[11px] border-b-2 transition-colors shrink-0 ${
+                      i === activeSheet
+                        ? 'text-brand-green border-brand-green bg-brand-green/5'
+                        : 'text-brand-green-muted border-transparent hover:text-brand-green'
+                    }`}
+                  >
+                    <TableIcon className="h-3 w-3" />
+                    {s.name}
+                    {s.truncated && <span className="text-[9px] opacity-60">…</span>}
+                  </button>
+                ))}
+              </div>
+              {/* Data table */}
+              <div className="flex-1 overflow-auto min-h-0">
+                <table className="border-collapse text-xs w-max min-w-full">
+                  <thead className="sticky top-0 z-10">
+                    <tr className="bg-brand-bg-code">
+                      <th className="px-2 py-1.5 text-[10px] text-brand-green-muted font-mono border-b border-brand-border text-left">#</th>
+                      {activeRows[0]?.map((h, i) => (
+                        <th
+                          key={i}
+                          className="px-2 py-1.5 text-[10px] text-brand-green font-mono uppercase border-b border-brand-border text-left whitespace-nowrap"
+                        >
+                          {h || `Col ${i + 1}`}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeRows.slice(1).map((row, ri) => (
+                      <tr key={ri} className="hover:bg-brand-border/30">
+                        <td className="px-2 py-1 text-[10px] text-brand-green-muted font-mono border-b border-brand-border/40 text-right select-none">
+                          {ri + 1}
+                        </td>
+                        {row.map((cell, ci) => (
+                          <td
+                            key={ci}
+                            title={cell}
+                            className="px-2 py-1 text-xs text-brand-green-soft border-b border-brand-border/40 max-w-[320px] truncate"
+                          >
+                            {cell || '\u00A0'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {activeRows.length === 0 && (
+                  <div className="px-4 py-6 text-brand-green-muted text-xs">(empty sheet)</div>
+                )}
+              </div>
+              {sheets[activeSheet]?.truncated && (
+                <div className="px-3 py-1.5 text-[10px] text-brand-amber border-t border-brand-border/60 shrink-0">
+                  Rows/columns truncated for preview — open the file to see everything.
+                </div>
+              )}
             </div>
           )}
           {!loading && !error && isImage && content?.image_data_url && (

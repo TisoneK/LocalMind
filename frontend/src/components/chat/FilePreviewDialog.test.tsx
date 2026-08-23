@@ -93,6 +93,64 @@ describe('FilePreviewDialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  describe('spreadsheet preview (CSV/XLSX)', () => {
+    it('renders sheet tabs and the active sheet table', async () => {
+      mockClient.getFileContent.mockResolvedValue(
+        textContent({
+          extension: 'xlsx',
+          editable: false,
+          sheets: [
+            { name: 'Sales', rows: [['item', 'qty'], ['apple', '3'], ['pear', '2']] },
+            { name: 'Notes', rows: [['note'], ['hello']] },
+          ],
+        })
+      );
+      render(<FilePreviewDialog path="/tmp/book.xlsx" onClose={() => {}} />);
+
+      // Both tabs + headers + first data row of the active sheet.
+      expect(await screen.findByRole('button', { name: /sales/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /notes/i })).toBeInTheDocument();
+      expect(screen.getByRole('columnheader', { name: /item/i })).toBeInTheDocument();
+      expect(screen.getByRole('cell', { name: /apple/i })).toBeInTheDocument();
+      // Notes sheet data is not visible yet.
+      expect(screen.queryByRole('cell', { name: /hello/i })).not.toBeInTheDocument();
+    });
+
+    it('switches sheets when a tab is clicked', async () => {
+      mockClient.getFileContent.mockResolvedValue(
+        textContent({
+          extension: 'xlsx',
+          editable: false,
+          sheets: [
+            { name: 'Sales', rows: [['item'], ['apple']] },
+            { name: 'Notes', rows: [['note'], ['hello']] },
+          ],
+        })
+      );
+      render(<FilePreviewDialog path="/tmp/book.xlsx" onClose={() => {}} />);
+
+      await screen.findByRole('cell', { name: /apple/i });
+      await userEvent.click(screen.getByRole('button', { name: /notes/i }));
+      expect(screen.getByRole('cell', { name: /hello/i })).toBeInTheDocument();
+      expect(screen.queryByRole('cell', { name: /apple/i })).not.toBeInTheDocument();
+    });
+
+    it('shows the truncation note when the sheet was capped', async () => {
+      mockClient.getFileContent.mockResolvedValue(
+        textContent({
+          extension: 'csv',
+          editable: false,
+          sheets: [{ name: 'Sheet 1', rows: [['a']], truncated: true }],
+        })
+      );
+      render(<FilePreviewDialog path="/tmp/big.csv" onClose={() => {}} />);
+
+      expect(
+        await screen.findByText(/rows.*columns truncated for preview/i)
+      ).toBeInTheDocument();
+    });
+  });
+
   describe('edit mode (B-2026-08-23-6 follow-up)', () => {
     it('shows an Edit button for text files and edits the draft in a textarea', async () => {
       mockClient.getFileContent.mockResolvedValue(textContent());

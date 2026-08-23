@@ -271,6 +271,15 @@ export interface FileContent {
   /** Whether the file is a plain text/code file safe to edit in place (office
    *  docs are parsed text only and must not be written back). */
   editable?: boolean;
+  /** Structured per-sheet rows for CSV/XLSX previews (rows[0] is the header). */
+  sheets?: SpreadsheetSheet[];
+}
+
+export interface SpreadsheetSheet {
+  name: string;
+  rows: string[][];
+  /** True when rows/columns were capped server-side. */
+  truncated?: boolean;
 }
 
 export interface Session {

@@ -26,8 +26,10 @@ from core.config import settings
 
 router = APIRouter()
 
+# Spreadsheets get a structured per-sheet table preview (tabs in the UI).
+_SPREADSHEET_EXTS = {".xlsx", ".csv"}
 # Binary formats the file_reader tool parses into plain text for preview.
-_OFFICE_EXTS = {".pdf", ".docx", ".xlsx", ".csv"}
+_OFFICE_EXTS = {".pdf", ".docx"}
 # Image formats returned as inline data URLs so the browser renders them directly.
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff"}
 # Plain-text / code extensions shown verbatim (everything else falls back to
@@ -237,6 +239,28 @@ async def get_file_content(path: str):
                 "truncated": truncated,
                 "editable": False,
                 "image_data_url": f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}",
+            }
+
+        # Spreadsheets → structured per-sheet rows so the UI can render real
+        # tabs + a table instead of flat text.
+        if ext in _SPREADSHEET_EXTS:
+            from tools.file_reader import parse_spreadsheet
+
+            data = file_path.read_bytes()[: FILE_READ_MAX_BYTES]
+            sheets = await parse_spreadsheet(data, file_path.name)
+            flat = "\n\n".join(
+                f"=== {s['name']} ===\n" + "\n".join("\t".join(r) for r in s["rows"])
+                for s in sheets
+            )
+            return {
+                "path": str(file_path),
+                "name": file_path.name,
+                "extension": ext.lstrip("."),
+                "size": size,
+                "truncated": truncated,
+                "editable": False,
+                "sheets": sheets,
+                "text": flat,
             }
 
         # Office/binary formats → reuse the engine's own parser so the preview

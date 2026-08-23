@@ -93,6 +93,72 @@ class TestFileContentPreview:
         # document, so it must never be marked editable.
         assert result["editable"] is False
 
+    def test_xlsx_returns_structured_sheets(self, tmp_path):
+        from openpyxl import Workbook
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sales"
+        ws.append(["item", "qty", "price"])
+        ws.append(["apple", 3, 1.5])
+        ws.append(["pear", 2, 2.0])
+        ws2 = wb.create_sheet("Notes")
+        ws2.append(["note"])
+        ws2.append(["hello"])
+        f = tmp_path / "book.xlsx"
+        wb.save(f)
+
+        patcher = _allow(tmp_path)
+        try:
+            result = _run(get_file_content(str(f)))
+        finally:
+            patcher.stop()
+
+        assert result["editable"] is False
+        sheets = result["sheets"]
+        assert [s["name"] for s in sheets] == ["Sales", "Notes"]
+        assert sheets[0]["rows"][0] == ["item", "qty", "price"]
+        assert sheets[0]["rows"][1] == ["apple", "3", "1.5"]
+        assert sheets[1]["rows"][1] == ["hello"]
+
+    def test_csv_returns_single_sheet(self, tmp_path):
+        f = tmp_path / "data.csv"
+        f.write_text("name,score\nalice,10\nbob,20\n", encoding="utf-8")
+        patcher = _allow(tmp_path)
+        try:
+            result = _run(get_file_content(str(f)))
+        finally:
+            patcher.stop()
+
+        assert result["editable"] is False
+        assert [s["name"] for s in result["sheets"]] == ["Sheet 1"]
+        rows = result["sheets"][0]["rows"]
+        assert rows[0] == ["name", "score"]
+        assert rows[1] == ["alice", "10"]
+        assert rows[2] == ["bob", "20"]
+
+    def test_xlsx_rows_capped_and_flagged(self, tmp_path):
+        from openpyxl import Workbook
+
+        wb = Workbook()
+        ws = wb.active
+        ws.append(["n"])
+        for i in range(250):
+            ws.append([i])
+        f = tmp_path / "big.xlsx"
+        wb.save(f)
+
+        patcher = _allow(tmp_path)
+        try:
+            result = _run(get_file_content(str(f)))
+        finally:
+            patcher.stop()
+
+        sheet = result["sheets"][0]
+        assert sheet["truncated"] is True
+        # Header + cap rows.
+        assert len(sheet["rows"]) == 201
+
     def test_path_outside_allowed_folders_403(self, tmp_path):
         f = tmp_path / "secret.txt"
         f.write_text("nope", encoding="utf-8")
