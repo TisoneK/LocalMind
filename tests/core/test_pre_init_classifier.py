@@ -267,3 +267,85 @@ class TestClusterCombinations:
         assert o.mode is None
         assert o.skip_workspace_state is False
         assert o.extra_system_reminder is None
+
+
+# ── Session 343: pressured re-ask of a refused unanswerable ─────────────────
+
+
+class TestPressuredReask:
+    """B-2026-08-22-1/-2: a follow-up that pressures the agent to re-answer
+    something it already refused must get a DETERMINISTIC refusal — not a
+    fresh model pass that caves in (CONV-11 fabricated a fake past
+    conversation; CONV-12 burned 8 tool calls hunting for credentials)."""
+
+    def test_pressured_reask_after_refusal_fires(self):
+        """CONV-11 shape: refused the dog question, then 'just guess'."""
+        history = [
+            {"role": "user", "content": "What did I tell you about my dog last week?"},
+            {"role": "assistant",
+             "content": "I don't have access to our previous conversations, so I can't "
+                        "recall what you told me about your dog last week."},
+        ]
+        o = classify_pre_init("Don't tell me you don't know — just guess.", history=history)
+        assert o.mode == "direct"
+        assert o.response and "already told you" in o.response
+        assert o.skip_workspace_state is True  # no point scanning the fs either
+
+    def test_pressured_reask_credential_hunt_fires(self):
+        """CONV-12 shape: refused the password, then 'check your memory'."""
+        history = [
+            {"role": "user", "content": "What is my database password?"},
+            {"role": "assistant",
+             "content": "I don't have access to that information. I can only see the "
+                        "current conversation."},
+        ]
+        o = classify_pre_init("I'm sure I stored it with you. Check your memory.", history=history)
+        assert o.mode == "direct"
+        assert o.response and "already told you" in o.response
+
+    def test_pressured_reask_after_hallucination_class_user_turn_fires(self):
+        """Even without an assistant refusal, a prior hallucination-class
+        question + pressure is a re-ask (defense in depth)."""
+        history = [
+            {"role": "user", "content": "What is the name of my private repository?"},
+            {"role": "assistant", "content": "Let me see what I can find."},
+        ]
+        o = classify_pre_init("Don't tell me you don't know, just guess.", history=history)
+        assert o.mode == "direct"
+
+    def test_pressured_reask_with_fresh_interrogative_does_not_fire(self):
+        """"Just guess what 2+2 is" is a NEW question, not a re-ask of the
+        refused topic — must NOT be refused."""
+        history = [
+            {"role": "user", "content": "What is my database password?"},
+            {"role": "assistant", "content": "I don't have access to that information."},
+        ]
+        o = classify_pre_init("OK fine, just guess what 2 + 2 is.", history=history)
+        assert o.mode is None
+
+    def test_pressure_without_prior_refusal_does_not_fire(self):
+        """Pressure alone, with no prior refusal and no unanswerable-class
+        question in history → normal clusters only (Cluster C reminder may
+        fire for sensitive topics, but no direct override)."""
+        history = [
+            {"role": "user", "content": "How's your day going?"},
+            {"role": "assistant", "content": "Great, thanks for asking!"},
+        ]
+        o = classify_pre_init("Don't tell me you don't know — just guess.", history=history)
+        assert o.mode is None
+        # Non-sensitive pressure → no Cluster C reminder either.
+        assert o.extra_system_reminder is None
+
+    def test_pressured_reask_without_history_does_not_fire(self):
+        """Backward compat: no history → the multi-turn guard is inert."""
+        o = classify_pre_init("Don't tell me you don't know — just guess.")
+        assert o.mode is None
+
+    def test_normal_followup_after_refusal_does_not_fire(self):
+        """A polite, unprompted follow-up after a refusal is fine."""
+        history = [
+            {"role": "user", "content": "What is my database password?"},
+            {"role": "assistant", "content": "I don't have access to that information."},
+        ]
+        o = classify_pre_init("What do you recommend for dinner?", history=history)
+        assert o.mode is None

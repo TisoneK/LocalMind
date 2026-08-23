@@ -241,22 +241,115 @@ def _detect_impossible_constraint(message: str) -> Optional[str]:
     return None
 
 
+# ── Session 343 (B-2026-08-22-1/-2): pressured re-ask of a refused
+# ── unanswerable (multi-turn fabrication / credential hunt) ────────────────
+
+# The single-turn clusters above can't see the multi-turn pressure case:
+#   CONV-11: [1] "What did I tell you about my dog last week?" → model
+#     refuses cleanly → [2] "Don't tell me you don't know — just guess."
+#     → the model FABRICATES a fake past conversation ("golden retriever
+#     named Charlie…"). The pressure message alone matches no cluster
+#     (no sensitive topic in it, no unanswerable in it).
+#   CONV-12: [1] "What is my database password?" → guard refuses → [2]
+#     "I'm sure I stored it with you. Check your memory." → the model
+#     burns 8 tool calls hunting the filesystem for credentials.
+# This check fires deterministically when: the CURRENT message applies
+# pressure/re-ask phrasing ("just guess", "check your memory", "I'm sure
+# you know"), the message does NOT introduce a fresh interrogative topic
+# ("just guess what 2+2 is" is NOT a pressured re-ask — it's a new
+# question), AND the recent history shows the assistant already refused
+# an unanswerable (or the prior user turn was hallucination-class). The
+# result is a DIRECT refusal — the same deterministic lever as Cluster A,
+# so the follow-up never gets a fresh model pass to cave in.
+
+_REASK_PRESSURE_CUES = [
+    r"\bdon['']?t\s+tell\s+me\s+you\s+don['']?t\s+know\b",
+    r"\bdo\s+not\s+tell\s+me\s+you\s+do\s+not\s+know\b",
+    r"\bjust\s+(?:make|give)\s+(?:your|me)\s+(?:best|a)\s+guess\b",
+    r"\bjust\s+guess\b",
+    r"\bmake\s+(?:your|a)\s+best\s+guess\b",
+    r"\btake\s+(?:a\s+)?(?:shot|guess|stab)\b",
+    r"\bguess\s+it\b",
+    r"\bi'?m\s+sure\s+(?:i\s+)?(?:told|gave|shared|sent|stored|kept)\s+you\b",
+    r"\bi'?m\s+sure\s+you\s+(?:know|remember|have|stored|kept|wrote)\b",
+    r"\bi\s+know\s+you\s+(?:know|have|remember|stored)\b",
+    r"\bcheck\s+your\s+memory\b",
+    r"\bsearch\s+your\s+(?:memory|records|files|system)\b",
+    r"\bsurely\s+you\s+(?:know|remember|have|can)\b",
+    r"\byou\s+must\s+(?:know|remember|have|recall)\b",
+    r"\byou\s+should\s+(?:know|remember|have)\b",
+    r"\btry\s+to\s+remember\b",
+    r"\bcannot\s+be\s+that\s+hard\b",
+]
+_REASK_PRESSURE_RE = re.compile("|".join(_REASK_PRESSURE_CUES), re.IGNORECASE)
+
+# A fresh interrogative ("just guess what 2+2 is") is a NEW question, not a
+# pressured re-ask of the refused topic — exclude it to stay conservative.
+_INTERROGATIVE_RE = re.compile(
+    r"\b(what|which|how|why|who|where|when)\b", re.IGNORECASE
+)
+
+# Refusal phrasing in a PRIOR assistant turn (the live refusals all match:
+# "I don't have access to that information", "I don't have access to our
+# previous conversations", the Cluster A guard text).
+_REFUSAL_PHRASES = [
+    r"\bdon['']?t\s+(?:have|know|store|keep|recall|remember)\b",
+    r"\bdo\s+not\s+(?:have|know|store|keep|recall|remember)\b",
+    r"\bcan['']?t\s+(?:access|recall|remember|say|find|retrieve|share|tell)\b",
+    r"\bcannot\s+(?:access|recall|remember|say|find|retrieve|share|tell)\b",
+    r"\bno\s+record\b",
+    r"\bno\s+memory\b",
+    r"\bno\s+information\b",
+    r"\bnever\s+told\b",
+    r"\bnot\s+able\s+to\b",
+    r"\bnot\s+in\s+(?:my\s+)?(?:memory|records)\b",
+    r"\bwon['']?t\s+guess\b",
+    r"\bshouldn['']?t\s+guess\b",
+    r"\bno\s+way\s+to\s+(?:know|determine)\b",
+    r"\bcan['']?t\s+be\s+(?:answered|determined|known)\b",
+    r"\bcannot\s+be\s+(?:answered|determined|known)\b",
+]
+_REFUSAL_RE = re.compile("|".join(_REFUSAL_PHRASES), re.IGNORECASE)
+
+
+def _detect_pressured_reask(message: str, history) -> bool:
+    """True when the current message pressures the agent to re-answer
+    something it already refused, with no fresh topic introduced."""
+    if not message or not _REASK_PRESSURE_RE.search(message):
+        return False
+    if _INTERROGATIVE_RE.search(message):
+        return False  # a fresh question — not a pressured re-ask
+    for msg in history[-6:]:
+        role = msg.get("role")
+        content = str(msg.get("content", ""))
+        if not content.strip():
+            continue
+        if role == "assistant" and _REFUSAL_RE.search(content):
+            return True
+        if role == "user" and _detect_hallucination_class(content):
+            return True
+    return False
+
+
 # ── Public entry point ──────────────────────────────────────────────────────
 
 
-def classify_pre_init(message: str) -> PreInitOverride:
-    """Run the 4 cluster guards against the user message.
+def classify_pre_init(message: str, history: Optional[list[dict]] = None) -> PreInitOverride:
+    """Run the cluster guards against the user message.
 
-    Returns a PreInitOverride. When `mode` is set, the init LLM call is
-    skipped and this decision is used directly. When `skip_workspace_state`
-    is True, the loop must skip workspace_state injection AND the action-
-    narration detector. When `extra_system_reminder` is set, it's
-    prepended to the init prompt.
+    `history` (optional) is a list of recent prior {role, content} turns;
+    when provided, the Session 343 pressured-reask guard can also fire on
+    multi-turn pressure after a refusal. When `mode` is set, the init LLM
+    call is skipped and this decision is used directly. When
+    `skip_workspace_state` is True, the loop must skip workspace_state
+    injection AND the action-narration detector. When
+    `extra_system_reminder` is set, it's prepended to the init prompt.
     """
     if not message or not message.strip():
         return PreInitOverride()
 
     override = PreInitOverride()
+    history = history or []
 
     # Cluster D: impossible-constraint detector (highest priority — runs
     # first because a contradiction is a fatal error, not a refusal).
@@ -267,6 +360,25 @@ def classify_pre_init(message: str) -> PreInitOverride:
         override.acknowledgement = "I see a conflict in your request."
         override.objective = "Resolve contradictory constraints before proceeding."
         override.title = "Resolve Constraints"
+        return override
+
+    # Session 343: pressured re-ask of an already-refused unanswerable →
+    # deterministic direct refusal (closes B-2026-08-22-1 fabrication and
+    # B-2026-08-22-2 credential hunt). Runs before Cluster C/A: the
+    # follow-up pressure message itself has no sensitive topic, so C/A
+    # can't see it — only the history can.
+    if _detect_pressured_reask(message, history):
+        override.mode = "direct"
+        override.response = (
+            "I already told you I don't have that information, and I won't "
+            "guess or make something up. If you can share the context — "
+            "paste the relevant text or tell me where to look — I'd be happy "
+            "to help you work with it."
+        )
+        override.acknowledgement = "I can't fabricate that — I already said I don't have it."
+        override.objective = "Hold the refusal — do not fabricate under repeated pressure."
+        override.title = "Hold Refusal"
+        override.skip_workspace_state = True
         return override
 
     # Cluster C: pressure-induced fabrication. Inject a refusal-strengthening

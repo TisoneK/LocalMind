@@ -1333,7 +1333,17 @@ class AgentLoop:
         from core.agent.pre_init_classifier import classify_pre_init
 
         _user_msg_for_pre = reformulated_message or _user_message_text(messages) or ""
-        _pre_init_override = classify_pre_init(_user_msg_for_pre)
+        # Session 343: pass the recent prior turns (EXCLUDING the current
+        # message, which is the tail of `messages`) so the pressured-reask
+        # guard can see that the agent already refused an unanswerable —
+        # "just guess" / "check your memory" follow-ups then get the same
+        # deterministic refusal instead of a fresh model pass to cave in.
+        _pre_history = [
+            {"role": m.get("role"), "content": str(m.get("content", ""))}
+            for m in messages[-7:-1]
+            if m.get("role") in ("user", "assistant") and m.get("content")
+        ]
+        _pre_init_override = classify_pre_init(_user_msg_for_pre, history=_pre_history)
         logger.info(
             "[agent.loop] pre_init_classifier for %r → mode=%s skip_ws=%s reminder=%s",
             _user_msg_for_pre[:80],

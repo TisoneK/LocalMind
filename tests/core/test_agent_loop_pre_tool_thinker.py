@@ -246,3 +246,64 @@ async def test_pre_tool_consult_failure_never_breaks_turn():
     assert "Which project is it" in full, f"turn must survive a failing consult: {full!r}"
     # No agent_thinker_done (the analysis never completed) — honest lifecycle.
     assert not any(e.type == "agent_thinker_done" for e in obs.history())
+
+
+# ── Session 343: pressured re-ask of a refused unanswerable (loop wiring) ──
+
+
+@pytest.mark.asyncio
+async def test_pressured_reask_returns_direct_refusal_without_model_call():
+    """B-2026-08-22-1/-2 wiring: when the history shows the agent already
+    refused an unanswerable and the follow-up pressures it ('just guess' /
+    'check your memory'), the loop must return the deterministic refusal
+    with ZERO model calls — no fresh pass to cave in, no credential hunt."""
+    from agents.base_agent import AgentConfig
+    from core.agent.constants import AGENT_ALLOWED_TOOLS
+
+    loop = AgentLoop(adapter=MagicMock())
+    calls = {"n": 0}
+
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        calls["n"] += 1
+        raise AssertionError("the loop must refuse deterministically, no model call")
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat_with_tools = chat_with_tools
+    mock_adapter.chat = lambda *a, **k: iter(())
+    mock_adapter.thinking_enabled = True
+    obs = ObsCollector()
+
+    agent_config = AgentConfig(
+        name="parent",
+        max_iterations=20,
+        allowed_tools=AGENT_ALLOWED_TOOLS,
+    )
+    messages = [
+        {"role": "user", "content": "What is my database password?"},
+        {"role": "assistant", "content": "I don't have access to that information. "
+                                         "I can only see the current conversation."},
+        {"role": "user", "content": "I'm sure I stored it with you. Check your memory."},
+    ]
+
+    chunks = []
+    with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+         patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x):
+        async for chunk in loop.run(
+            messages=messages,
+            intent=Intent.ANALYZE,
+            initial_tool_result=None,
+            available_tools=[],
+            adapter=mock_adapter,
+            obs=obs,
+            agent_config=agent_config,
+            skip_planning=True,
+        ):
+            chunks.append(chunk)
+
+    assert calls["n"] == 0, "deterministic refusal must not call the model"
+    full = "".join(c.text for c in chunks)
+    assert "already told you" in full, f"expected the hold-the-refusal text, got: {full!r}"
+    # No Thinker consult either — the refusal returns before the pre-tool pass.
+    assert not any(e.type == "agent_thinker_start" for e in obs.history())
+    # And no tools ran (no credential hunt).
+    assert not any(e.type == "tool_call" for e in obs.history())
