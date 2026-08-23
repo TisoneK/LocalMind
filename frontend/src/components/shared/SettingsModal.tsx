@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus } from 'lucide-react';
+import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database, RotateCcw, MessageSquarePlus, Download } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
+import { Progress } from '@/components/ui/progress';
 import { useTheme, THEMES, type CustomTheme, type ModePref } from '@/hooks/useTheme';
 
 // ── Provider definitions ──
@@ -142,6 +143,10 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
   const [shellEnabled, setShellEnabled] = useState(false);
   // B-2026-08-23-27: startup session behavior ("resume" | "new").
   const [startupSession, setStartupSession] = useState<'new' | 'resume'>('new');
+  // B-2026-08-23-28: embed-model download status + progress.
+  const [embedStatus, setEmbedStatus] = useState<{ ollama_available: boolean; model_installed: boolean; model_name: string } | null>(null);
+  const [embedDownload, setEmbedDownload] = useState<{ status: string; progress: number | null; detail: string } | null>(null);
+  const embedPullRef = useRef<{ cancel: () => void } | null>(null);
 
   // Load current settings on mount
   useEffect(() => {
@@ -211,6 +216,13 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
           } catch {
             // Non-fatal: ollama routes may 501 for cloud adapters
           }
+        }
+        // B-2026-08-23-28: check if embed model needs downloading
+        try {
+          const est = await localmindClient.getOllamaEmbedStatus();
+          setEmbedStatus(est);
+        } catch {
+          /* non-fatal */
         }
       } catch (err) {
         setStatus('error');
@@ -371,6 +383,43 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
       setMessage(err instanceof Error ? err.message : 'Failed to save local settings');
     }
   }, [embedModel, numCtx, shellEnabled, onSave]);
+
+  // B-2026-08-23-28: download the configured embed model from Ollama.
+  const refreshEmbedStatus = useCallback(async () => {
+    try {
+      const est = await localmindClient.getOllamaEmbedStatus();
+      setEmbedStatus(est);
+    } catch {
+      /* non-fatal */
+    }
+  }, []);
+
+  const handleDownloadEmbed = useCallback(() => {
+    setEmbedDownload({ status: 'pulling', progress: null, detail: 'Starting download…' });
+    setStatus('saving');
+    setMessage('Downloading embed model…');
+    const { cancel } = localmindClient.pullEmbedModel(
+      (data) => setEmbedDownload(data),
+      async () => {
+        setEmbedDownload(null);
+        setStatus('success');
+        setMessage('Embed model downloaded successfully.');
+        await refreshEmbedStatus();
+        // Also refresh the embedding model list so the dropdown updates.
+        try {
+          const embedList = await localmindClient.getEmbeddingModels();
+          setEmbedModels(embedList.models);
+        } catch { /* non-fatal */ }
+        onSave();
+      },
+      (err) => {
+        setEmbedDownload(null);
+        setStatus('error');
+        setMessage(`Failed to download embed model: ${err}`);
+      },
+    );
+    embedPullRef.current = { cancel };
+  }, [onSave, refreshEmbedStatus]);
 
   // B-2026-08-23-27: persist startup session behavior immediately on toggle.
   const handleChangeStartupSession = useCallback(async (mode: 'new' | 'resume') => {
@@ -850,10 +899,35 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                     data-testid="embed-model-input"
                   />
                 )}
-                {embedModels.length === 0 && (
+                {embedModels.length === 0 && !embedDownload && (
                   <p className="mt-1 text-[11px] text-brand-green-muted">
                     No embedding models detected. Pull one, e.g. `ollama pull nomic-embed-text`.
                   </p>
+                )}
+                {/* B-2026-08-23-28: one-click embed model download */}
+                {embedStatus?.ollama_available && !embedStatus.model_installed && !embedDownload && (
+                  <button
+                    onClick={handleDownloadEmbed}
+                    className="mt-2 flex items-center gap-1.5 rounded-lg border border-brand-green/30 bg-brand-green/10 px-3 py-1.5 text-xs font-medium text-brand-green hover:bg-brand-green/20 transition-colors"
+                    data-testid="download-embed-model"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download {embedStatus.model_name}
+                  </button>
+                )}
+                {embedDownload && (
+                  <div className="mt-2 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-brand-green-soft">{embedDownload.detail || 'Pulling…'}</span>
+                      {embedDownload.progress != null && (
+                        <span className="font-mono text-brand-green-muted">{embedDownload.progress.toFixed(1)}%</span>
+                      )}
+                    </div>
+                    <Progress
+                      value={embedDownload.progress ?? 0}
+                      className="h-1.5 bg-brand-border [&>div]:bg-brand-green"
+                    />
+                  </div>
                 )}
               </div>
               <div>

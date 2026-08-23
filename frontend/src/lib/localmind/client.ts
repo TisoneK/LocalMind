@@ -1226,6 +1226,63 @@ class LocalMindClient {
     await this.request('/api/ollama/url', { method: 'DELETE' });
   }
 
+  // ── B-2026-08-23-28: Embed-model download ───────────────────────────
+
+  async getOllamaEmbedStatus(): Promise<{
+    ollama_available: boolean;
+    model_installed: boolean;
+    model_name: string;
+  }> {
+    return this.request('/api/ollama/embed-status');
+  }
+
+  pullEmbedModel(
+    onProgress: (data: { status: string; progress: number | null; detail: string }) => void,
+    onDone: () => void,
+    onError: (err: string) => void,
+  ): { cancel: () => void } {
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch(`${this.baseUrl}/api/ollama/pull-embed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          // Best-effort error extraction
+          let detail = `HTTP ${res.status}`;
+          try { const body = await res.json(); detail = body.detail || detail; } catch {}
+          onError(detail);
+          return;
+        }
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.status === 'done') { onDone(); return; }
+                if (data.status === 'error') { onError(data.detail); return; }
+                onProgress(data);
+              } catch {}
+            }
+          }
+        }
+      } catch (e: any) {
+        if (e.name !== 'AbortError') onError(String(e));
+      }
+    })();
+    return { cancel: () => controller.abort() };
+  }
+
   // ── File Write Confirmation ─────────────────────────────────────────
 
 async confirmWrite(

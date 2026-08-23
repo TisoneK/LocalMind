@@ -4,10 +4,13 @@ Settings endpoints for adapter and provider configuration.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from adapters import clear_adapter_cache
@@ -561,3 +564,73 @@ async def delete_provider_key(req: DeleteProviderKeyRequest):
         "deleted": removed,
         "message": f"API key removed for {info['name']}" if removed else f"No API key was stored for {info['name']}",
     }
+
+
+# ── B-2026-08-23-28: One-click embed-model download ─────────────────────
+
+OLLAMA_PULL_URL_TEMPLATE = "{base}/api/pull"
+
+
+@router.get("/ollama/embed-status")
+async def get_ollama_embed_status():
+    """Check whether Ollama is reachable and the configured embed model is installed."""
+    base = getattr(settings, "ollama_base_url", "http://localhost:11434")
+    model = getattr(settings, "ollama_embed_model", "nomic-embed-text")
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"{base}/api/tags")
+            resp.raise_for_status()
+            tags = resp.json()
+            models = [m.get("name", "") for m in tags.get("models", [])]
+            # Check both exact name and name:latest (Ollama appends :latest)
+            installed = model in models or f"{model}:latest" in models
+            return {"ollama_available": True, "model_installed": installed, "model_name": model}
+    except Exception:
+        return {"ollama_available": False, "model_installed": False, "model_name": model}
+
+
+@router.post("/ollama/pull-embed")
+async def pull_embed_model():
+    """Stream ollama pull progress for the configured embed model via SSE.
+
+    Events:
+      event: progress  — {status, progress, detail}
+      event: done      — {status: 'done', detail}
+      event: error     — {status: 'error', detail}
+    """
+    base = getattr(settings, "ollama_base_url", "http://localhost:11434")
+    model = getattr(settings, "ollama_embed_model", "nomic-embed-text")
+
+    async def event_stream():
+        try:
+            async with httpx.AsyncClient(timeout=300) as client:
+                async with client.stream(
+                    "POST",
+                    OLLAMA_PULL_URL_TEMPLATE.format(base=base),
+                    json={"name": model, "stream": True},
+                ) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line.strip():
+                            continue
+                        try:
+                            data = json.loads(line)
+                            status = data.get("status", "")
+                            pct = None
+                            if data.get("total") and data.get("completed") is not None:
+                                pct = round(data["completed"] / data["total"] * 100, 1)
+                            if status == "success":
+                                yield f"event: done\ndata: {json.dumps({'status': 'done', 'detail': f'{model} downloaded successfully'})}\n\n"
+                                break
+                            else:
+                                yield f"event: progress\ndata: {json.dumps({'status': 'pulling', 'progress': pct, 'detail': status})}\n\n"
+                        except json.JSONDecodeError:
+                            continue
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'status': 'error', 'detail': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
