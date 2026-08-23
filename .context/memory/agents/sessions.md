@@ -5138,3 +5138,22 @@ authoritative.
   `📁 Files:\n- /Users/bao/sum.txt (created, 5 B)\n- /Users/bao/hello.md (created, 39 B)`;
   persisted history for a note.txt turn shows the same block (`created, 16 B`).
 - **Commits:** product `17d0562` + context (below).
+
+## Session 360 — recorded 12 new backlog items (B-2026-08-23-13 .. -24)
+
+- **Task:** user's second "Backlog Each Separately" batch — 12 one-liners, some
+  features some fixes. Recorded each as its own backlog entry (backlog.md
+  "Session 360 addendum"), continuing the B-2026-08-23 numbering after -12.
+- **Items:** -13 system-info persisted in DB at first boot (idempotent skip);
+  -14 wire Memory tab UI to the memory backend; -15 auto-switch between
+  Terminal/Agents/Memory tabs (same flag-consume discipline as B-2026-08-23-5);
+  -16 develop the Files tab (needs scoping); -17 session workspaces — per-session
+  artifact folders under the LocalMind home keyed by session_id, deleted with the
+  chat (High, architecture); -18 preview dialog multi-mode (Preview/Edit/Diff);
+  -19 Settings→Appearance custom theme via UI + tone/brightness, persisted in
+  settings.json; -20 rewrite the code block preview, discard the old component;
+  -21 time formatting ms/s/m-s/h-m; -22 token counts short form (128000→128K);
+  -23 advanced image viewing/processing (needs scoping); -24 no hardcoded CSS —
+  route components through theme variables (prereq for -19).
+- **Status:** backlog only, no code changes. Next: pick the highest-value open
+  item (suggested: -17 session workspaces or -14 memory tab wiring).
