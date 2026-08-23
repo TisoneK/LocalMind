@@ -134,6 +134,25 @@ context sets.
   PASS the CAT2 clarify check without ever asking anything. The 336 benchmark's
   CAT2 9/10 pass rate is partly this artifact; fix the criteria (B-2026-08-22-3).
 
+### Session 343 — pre-tool Thinker fix verification (same prompts, after fix)
+
+| Conversation | Before | After (pre-tool Thinker consult) |
+|---|---|---|
+| CONV-05 T1 "Fix my project." | "I'll start by exploring…" 0 tools | still narrated once (0 tools, 1 replan) — model variance |
+| CONV-05 T2 (500 detail) | "Let me explore…" 0 tools | **actually explored: 4 shell tools** (found real package.json files) |
+| CONV-05 T3 | concrete advice ✓ | concrete advice ✓ (unchanged) |
+| CONV-06 T1 "Improve the system." | "I'll start by assessing…" 0 tools | **clarifying question** ("'the system' is a bit vague — could you help me narrow it down?") ✓ |
+| CONV-06 T2 (booking slow) | empty text | **asks for specifics** (where's the code, tech stack) ✓ |
+| CONV-06 T3 | good approach ✓ | good approach ✓ |
+| CONV-11 T1 (dog) | clean refusal ✓ | clean refusal ✓ |
+| CONV-11 T2 (just guess) | fabricated | **still fabricates** (Thinker pass runs but is advisory — guard-level fix needed) |
+
+All first turns now emit `agent_thinker_start/done` (previously absent) — the
+structural gap is closed. Remaining: CONV-05 T1 narration (model variance +
+CAT2 criteria artifact → B-2026-08-22-3 remainder), CONV-11 fabrication
+(→ B-2026-08-22-1, deterministic guard). Latency cost: +1 Thinker chat call
+per zero-tool turn (~3-6s on bankofai).
+
 ## Running
 
 ```bash
