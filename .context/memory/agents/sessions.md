@@ -5187,3 +5187,15 @@ authoritative.
   uploads + deletion scope. A follow-up can point `_do_write`'s default scratch
   at the workspace if desired.
 - **Commits:** product `b9a279e` + context (below).
+
+## Session 362 — session-workspace write redirect: transport-bound contextvar fix (2026-08-23)
+
+**Task:** B-2026-08-23-17 follow-up — thread session_id through tool dispatch so the agent's default write scratch lands in the session folder.
+
+**Root cause found live (two bugs):**
+1. `chat.py _with_keepalives` advances the engine generator via a **fresh `create_task(iterator.__anext__())` per chunk**. Each child task copies the OUTER (unset) context — so a session contextvar bound inside `agent_runtime.process()`'s generator body was invisible to tools dispatched on later advances (repro: `second:UNSET`). Worse, `process()`'s `finally` reset then ran in a different child task's context → `ValueError: Token was created in a different Context`.
+2. `FileWriteContract` (schemas.py) computed its scratch as `home / filename` directly, bypassing `_default_scratch` — a stray copy landed at the LocalMind root even though the final dest went to the workspace.
+
+**Fix:** bind the session contextvar at the **transport boundary** — `_event_stream` sets it in its one stable task (every keepalive child task copies that task's context); `process()` now skips its own set/reset when the transport already bound the same session (idempotent, avoids cross-context ValueError). Contract scratch now goes through `_default_scratch` too, and `_do_write` gained a same-file guard (shutil.copy2 onto itself raises).
+
+**Verified:** unit repro of the keepalive context loss + regression test in test_chat.py (`test_session_contextvar_survives_keepalive_child_tasks`), 2 new contract-scratch tests. 2393 backend / 2 skipped, ruff clean (2 E501s pre-existing at HEAD). Live (bankofai, isolated 8765): agent created ws-notes.txt → file landed in `sessions/ws-redirect-1/`, zero stray files at the tracehome root, no error events.
