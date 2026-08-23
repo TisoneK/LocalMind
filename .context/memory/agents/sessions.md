@@ -5247,3 +5247,24 @@ authoritative.
 **Live** (bankofai, isolated 8765, sandboxed LOCALMIND_HOME): tree listing of sandboxed home, lazy children of a folder, case-insensitive recursive search, download returns exact bytes with attachment disposition, file delete removes from listing, non-empty folder delete refused (400), empty folder delete succeeds. Note: `/api/files` with empty path defaults to the REAL home (by design) — the UI passes the root it seeds from, which live-check reproduced explicitly.
 
 **Commits:** product + context (pushed).
+
+## Session 367 — Memory tab wiring + WAL busy race (B-2026-08-23-14) — 2026-08-23
+
+**Task:** connect the Memory tab UI to the real memory backend — show stored facts, filter, delete, store affordance, live refresh.
+
+**State found:** the tab already listed facts + delete (useMemory → GET/DELETE /api/memory), but the backlog's store/filter/live-refresh were missing: `storeFact` was dead code, no filter box, no empty state, and facts stored mid-session never appeared (load once on mount).
+
+**Frontend changes:**
+- `MemoryTab.tsx` — store-fact textarea + button (calls onStore → POST /api/memory), filter box (content/source, case-insensitive), empty state + filter-empty state, 4s polling refresh while visible (stops on unmount).
+- `RightPanel.tsx` / `WorkspaceLayout.tsx` — thread `onMemoryStore={storeFact}` and `onMemoryRefresh={refreshMemory}`.
+
+**Backend bugs found via live verification (real root causes):**
+1. **WAL snapshot-upgrade race (the big one):** `VectorStore._persist` ran deferred `BEGIN` → dedup SELECT (takes a WAL read snapshot) → INSERTs. Any other connection committing between the read and the write makes the upgrade fail INSTANTLY with `database is locked` (SQLITE_BUSY) — busy_timeout does NOT apply to snapshot upgrades. The memory store shares the app's SQLite file (sessions/embed-cache/todos all write to it), so this was intermittent 503s on POST /api/memory AND silent drops of the agent's own fact writes. Fix: `BEGIN IMMEDIATE` in `_persist` + the embed-cache batch flush (write lock taken up front; WAL still allows concurrent readers). Deterministically repro'd: 1/20 concurrent stores failed before, 0/20 after.
+2. **Timestamp always 0:** `_persist` writes `timestamp` in metadata but `list_memory` read `created_at` (a DB column, not in the metadata dict) → UI always showed epoch-0. Route now reads `timestamp` first.
+3. **Delete of missing fact returned True:** `forget_by_id` silently reported success on nothing, so DELETE /api/memory/{id} never 404'd and the agent's memory_op said "removed" for nonexistent facts. Now returns False when no row exists.
+
+**Tests:** `tests/core/test_vector_store_busy.py` (3: plain BEGIN hits the race / BEGIN IMMEDIATE survives / store() under a concurrent writer), `tests/api/test_memory_api.py` (5: list shape + timestamp, store, delete, delete-missing-404), `frontend/src/components/panels/MemoryTab.test.tsx` (8: render+stats, store clears draft, store error, disabled states, filter, filter-empty, empty state, delete). 2426 backend / 310 frontend, ruff + tsc + eslint clean.
+
+**Live** (bankofai, isolated 8765, sandboxed home, embed_model forced to mxbai-embed-large because nomic-embed-text isn't pulled in this env): list-empty → POST → list shows the frontend shape → DELETE removes → DELETE missing → 404. All verified. NOTE: the user's env only has mxbai-embed-large pulled but the default `ollama_embed_model` is nomic-embed-text — memory stores would silently fail until the model is pulled or settings.json sets embed_model.
+
+**Commits:** product + context (pushed).
