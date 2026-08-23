@@ -5199,3 +5199,13 @@ authoritative.
 **Fix:** bind the session contextvar at the **transport boundary** — `_event_stream` sets it in its one stable task (every keepalive child task copies that task's context); `process()` now skips its own set/reset when the transport already bound the same session (idempotent, avoids cross-context ValueError). Contract scratch now goes through `_default_scratch` too, and `_do_write` gained a same-file guard (shutil.copy2 onto itself raises).
 
 **Verified:** unit repro of the keepalive context loss + regression test in test_chat.py (`test_session_contextvar_survives_keepalive_child_tasks`), 2 new contract-scratch tests. 2393 backend / 2 skipped, ruff clean (2 E501s pre-existing at HEAD). Live (bankofai, isolated 8765): agent created ws-notes.txt → file landed in `sessions/ws-redirect-1/`, zero stray files at the tracehome root, no error events.
+
+## Session 363 — extended workspace redirect: explicit bare-filename writes (2026-08-23)
+
+**Task:** extend B-2026-08-23-17 — the agent's EXPLICIT bare-filename writes (not just the internal scratch copy) default into the session workspace; user-named directories still escape.
+
+**Gap found by probing resolve_write_path with a bound session:** plain `""` / `"notes.txt"` already landed in the workspace (step 6 → `_default_scratch`), but the model's legacy habits still escaped: `./notes.txt` (dot noise → step 5 home-anchored) and `LocalMind/notes.txt` / `~/LocalMind/notes.txt` (the OLD tool description advertised "Saves to ~/LocalMind/ by default", so the model emits the app's own scratch dir as an explicit path).
+
+**Fix (all in file_writer.py):** `./`-only relative paths fall through to `_default_scratch`; a `LocalMind` component anywhere (named-folder shorthand, home-relative, or mid-path anchor) routes to the workspace when a session is active (`_session_active()` + `_is_legacy_scratch_path` string check — expanduser reads the real HOME env, so the check is string-based). User-named dirs (`sub/`, `Documents/`, `~/Desktop/`, absolute) unchanged. Tool description updated to say a bare filename saves into the session workspace.
+
+**Verified:** 11 new parametrized tests (bare/dot/LocalMind/~/LocalMind → workspace; sub/Documents/~/Desktop → escape; no-session legacy kept). 2404 backend / 2 skipped, ruff clean. Live (bankofai, isolated 8765): two turns creating alpha.txt + beta.txt with bare filenames → both in `sessions/ws-extend-1/`, zero escaped root files, no error events. (One prompt was initially eaten by the deterministic memory-write classifier — "save ... into" phrasing — reworded to "create a file named"; not a redirect bug.)

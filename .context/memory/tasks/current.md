@@ -1,13 +1,13 @@
 # Current Task
 
-**Status:** IDLE — Session 362 shipped the session-workspace write redirect fix.
+**Status:** IDLE — Session 363 shipped the extended workspace write redirect.
 
-## Session 362 outcome — transport-bound session contextvar (B-2026-08-23-17 follow-up)
+## Session 363 outcome — explicit bare-filename writes redirect to the session workspace
 
-- **Task:** thread session_id through tool dispatch so the agent's default write scratch lands in the session folder.
-- **Root cause (found live, two bugs):** (1) `chat.py _with_keepalives` advances the engine generator via a fresh `create_task(__anext__)` per chunk — each child task copies the OUTER (unset) context, so the session contextvar bound inside `process()`'s generator body was invisible to tools on later advances, and its finally-reset raised `ValueError` (cross-Context token). (2) `FileWriteContract` computed its scratch as `home / filename` directly, bypassing `_default_scratch` — stray copy at the LocalMind root.
-- **Fix:** session contextvar bound at the **transport boundary** (`_event_stream`, one stable task; keepalive child tasks copy it). `process()` skips its own set/reset when the transport already bound the same session (idempotent). Contract scratch → `_default_scratch`; `_do_write` gained a same-file copy-back guard.
-- **Verified:** regression test (`test_session_contextvar_survives_keepalive_child_tasks`) + 2 contract-scratch tests; 2393 backend / 2 skipped, ruff clean; live (bankofai, isolated 8765) — ws-notes.txt landed in `sessions/ws-redirect-1/`, zero stray files, no error events.
+- **Task:** extend B-2026-08-23-17 — explicit bare-filename writes (not just the internal scratch) default into the session workspace; user-named directories still escape.
+- **Gap (probed with a bound session):** plain `""` / `"notes.txt"` already landed in the workspace, but the model's legacy habits escaped: `./notes.txt` (dot noise) and `LocalMind/notes.txt` / `~/LocalMind/notes.txt` (old description advertised "Saves to ~/LocalMind/ by default").
+- **Fix (file_writer.py):** `./`-only relative paths → `_default_scratch`; a `LocalMind` component anywhere routes to the workspace when a session is active (string-based `_is_legacy_scratch_path` — expanduser reads real HOME). User-named dirs (`sub/`, `Documents/`, `~/Desktop/`, absolute) unchanged. Tool description updated.
+- **Verified:** 11 new parametrized tests; 2404 backend / 2 skipped, ruff clean; live (bankofai, isolated 8765) — alpha.txt + beta.txt both in `sessions/ws-extend-1/`, zero escaped root files.
 
 ## Next
 
