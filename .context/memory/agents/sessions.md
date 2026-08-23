@@ -5462,3 +5462,11 @@ authoritative.
 - **Commits:** 1 context (pushed).
 - **Outcome:** done — recommended YES, lightweight, with a concrete shape (one `session_writes` table: session_id/path/tool/bytes/lines/kind/ts; capped ~500 rows/session; deleted with session; filled at the same loop seam as the diff snapshot; `GET /api/sessions/{id}/writes`; a shell-vs-write-tools metric to measure the part-2 steering; NO analytics platform). User chose **"Just log it as a backlog item"** → recorded as **B-2026-08-23-37** in backlog.md; -32's line updated to note the decision. No product code changed.
 - **Open items:** unchanged (next candidates: -8 goal-driven, -33 op permissions, -34 chat modes, -35 never-rude declines).
+## Session 382 — B-2026-08-23-8: goal tree with ordered sub-goals (goal-driven agent part 1) — 2026-08-23
+
+- **Feature:** B-2026-08-23-8 (goal-driven agent).
+- **Task:** Extend the fixed goal checklist with ordered sub-goals — fastest+safest route per goal, each sub-goal feeding the next — Parent-only, no mutable state (Session 330 contract), no new tools.
+- **Commits:** 1 product (`9a8a421`, pushed) + 1 context (pushed).
+- **Outcome:** done — `derive_goal_tree()` in goal_interpreter.py returns `DerivedGoal(goal, sub_goals)`; runtime derives plain dicts and threads `goal_tree=` runtime → `BaseAgent.run` → `AgentLoop.run`; loop seeds `plan-{i}-sub-{j}` todos (both init + plan_steps branches), completes them with the parent (`_complete_sub_goals`), and injects `_render_goal_route` into the system prompt as an ordered "# Goal route". Frontend `TodoList` renders sub-rows nested under their parent (↳ connector, data-testid todo-subrow), excluded from the n/n denominator (parents only). Tests: +5 derive (test_goal_derive.py), +3 loop-level incl. prompt-injection assert (test_goal_tree_loop.py), +2 frontend TodoList. Backend 2498 / 2 skipped, frontend 348, ruff/tsc/eslint clean.
+- **Scoped out:** the "efficient planner" half (no redundant recon, no tool-first detours) is orthogonal — belongs to B-2026-08-23-10 (concrete planning).
+- **Open items:** next candidates -33 op permissions, -34 chat modes, -35 never-rude, -37 write stats, -21/-22 UI wins, -26 panel overflow.
