@@ -20,6 +20,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from core.agent.loop import AgentLoop, TerminalProviderError
 from core.models import Intent, StreamChunk
 
@@ -221,6 +222,12 @@ class TestEmptyResponseFastFail:
         mock_adapter = MagicMock()
         mock_adapter.chat = failing_plan
         mock_adapter.chat_with_tools = final_chat
+        # Session 342: this mock doubles `adapter.chat` as the planning-call
+        # counter. A non-reasoning adapter (thinking_enabled=False) skips the
+        # pre-tool Thinker consult — which is ALSO a plain `adapter.chat` call
+        # and would otherwise inflate the planning count. The gate matches the
+        # fast-path convention: no reasoning, no pre-tool consult.
+        mock_adapter.thinking_enabled = False
 
         with patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x):
             chunks = [

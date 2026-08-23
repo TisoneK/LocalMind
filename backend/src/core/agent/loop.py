@@ -281,7 +281,7 @@ def _user_message_text(messages: list[dict]) -> str:
     for msg in reversed(messages):
         if isinstance(msg, dict) and msg.get("role") == "user":
             content = str(msg.get("content", ""))
-            if "[ACCEPTANCE GATE]" in content:
+            if "[ACCEPTANCE GATE]" in content or "[THINKER ANALYSIS]" in content:
                 continue
             return content[:200]
     return ""
@@ -292,7 +292,18 @@ def _thinker_context_block(analysis) -> str:
     so the model's NEXT action is shaped by the reasoning-on-evidence — facts
     to build on, ambiguities to resolve on their default (ADR-36: proceed, do
     not block), and the suggested next step."""
-    parts = ["[Your analysis of the evidence so far — reason from this, do not repeat it to the user]"]
+    # The standalone [THINKER ANALYSIS] line keeps this block out of
+    # `_user_message_text` (Session 342): recovery nudges and fallbacks read
+    # "the user's ORIGINAL request" from the latest user message — without
+    # the marker, a pre-tool Thinker block (appended BEFORE any tool runs)
+    # would be misread as the user's request on every later nudge in the
+    # turn. Same pattern as the [ACCEPTANCE GATE] skip. The marker must be
+    # an exact standalone token ("[THINKER ANALYSIS]") so the skip check
+    # matches.
+    parts = [
+        "[THINKER ANALYSIS]",
+        "Your analysis of the evidence so far — reason from this, do not repeat it to the user",
+    ]
     if analysis.facts:
         parts.append("Known: " + "; ".join(analysis.facts))
     if analysis.ambiguities:
@@ -1909,6 +1920,76 @@ class AgentLoop:
         # never mutates the cached region.
         if turn_context:
             loop_messages.insert(1, {"role": "system", "content": turn_context})
+
+        # ── ADR-42: pre-tool Thinker consult (Session 342 fix) ──────────
+        # Before this, the Thinker ran ONLY (a) on the conversational
+        # fast-path (agent_runtime, Session 354) and (b) in the loop AFTER a
+        # tool produced an observation. A parent-agent turn with zero tools
+        # and no fast-path match ("Fix my project.", "Improve the system.")
+        # therefore had NO structured understanding pass — the model
+        # free-associated "I'll start by exploring…" (narration-without-
+        # action, CONV-05/06) or fabricated under "just guess" pressure
+        # (CONV-11). This consult runs ONCE per turn, BEFORE any tool call,
+        # on the user's intent + recent conversation history, and injects
+        # the analysis into the FIRST model call so the Thinker's
+        # "respond / act / clarify" guidance reaches the agent. Gates match
+        # the fast-path consult (thinking_enabled) plus: no tool has run
+        # yet, no deterministic pre-init override decided the turn (direct/
+        # clarify already returned above), tool-capable intent.
+        if (
+            not initial_tool_result
+            and not _pre_init_override.mode
+            and intent in AGENT_INTENTS
+            and getattr(active_adapter, "thinking_enabled", False)
+        ):
+            try:
+                from core.agent.thinker import Evidence, Thinker
+
+                _pre_hist_text = "\n".join(
+                    f"{h.get('role', '?')}: {str(h.get('content', ''))[:200]}"
+                    for h in messages[-4:]
+                    if h.get("role") != "system" and h.get("content")
+                )
+                _ev = Evidence(
+                    objective=(initialization.objective if initialization else ""),
+                    user_message=_user_msg,
+                    conversation_history=_pre_hist_text,
+                    observations="",
+                    iteration=0,
+                )
+                if _ev.has_evidence:
+                    if _obs:
+                        _obs.emit("agent_thinker_start", iteration=0)
+                    _pre_thinker = Thinker(
+                        timeout_secs=_reasoning_setting(
+                            "localmind_reasoning_plan_timeout_secs",
+                            REASONING_PLAN_TIMEOUT_SECS,
+                        )
+                    )
+                    # Drain the consult silently — the Thinker yields no
+                    # user-visible chunks by contract; only the parsed
+                    # analysis matters.
+                    async for _tc in _pre_thinker.consult(_ev, active_adapter):
+                        pass
+                    _pre_analysis = _pre_thinker.last_analysis
+                    if _pre_analysis and not _pre_analysis.is_empty:
+                        loop_messages.append(
+                            {
+                                "role": "user",
+                                "content": _thinker_context_block(_pre_analysis),
+                            }
+                        )
+                        trace.thinker_analysis = _thinker_user_summary(_pre_analysis)
+                        if _obs:
+                            _obs.emit(
+                                "agent_thinker_done",
+                                iteration=0,
+                                next_step=_pre_analysis.next_step[:200],
+                                facts=len(_pre_analysis.facts),
+                                ambiguities=len(_pre_analysis.ambiguities),
+                            )
+            except Exception as _thx:  # never let the Thinker break a turn
+                logger.warning("[agent.loop] pre-tool Thinker consult skipped: %s", _thx)
 
         # ── Seed observation log with initial tool result ──────────────
         observation_log = ""
