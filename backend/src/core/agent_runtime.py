@@ -737,7 +737,15 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             _memory_success = False
             try:
                 from tools.memory_tool import memory_op as _mem_op
-                _mem_result = await _mem_op(message)
+                # Session 359: pass the classifier's pre-extracted content and
+                # memory_type through — re-extracting inside memory_op with the
+                # simpler regex corrupts the fact ("note down my project" →
+                # stores "down my project") and always tags it "semantic".
+                _mem_result = await _mem_op(
+                    message,
+                    content=_memory_intent.content or None,
+                    memory_type=_memory_intent.memory_type.value,
+                )
                 _memory_success = _mem_result.success
                 _response_text = _mem_result.content
             except Exception as _mem_exc:

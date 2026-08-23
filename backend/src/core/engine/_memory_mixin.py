@@ -101,6 +101,54 @@ class _MemoryMixin:
                         )
                     break  # one fact per user message max
 
+        # ── Path 4 (Session 359): deterministic candidate extraction from
+        # chat evidence (corrections, stated preferences, source knowledge
+        # from tool outcomes). This is the autonomous "gather correct
+        # information from chat evidence" tier — it runs without any explicit
+        # "remember" cue and without an LLM call. Wired up from
+        # extract_memory_candidates()/should_store_candidate() which were
+        # defined but never called.
+        #
+        # Placed BEFORE Path 2's early returns: corrections ("No, that's not
+        # right") and source knowledge are usually short turns that Path 2
+        # would skip (it requires >= 30 response words + a fact marker).
+        try:
+            from core.memory_intent import extract_memory_candidates, should_store_candidate
+
+            # Tool outcomes from this turn's obs history — the evidence for
+            # source-knowledge candidates ("this site gave useful info").
+            tool_results = []
+            for evt in obs.history():
+                if evt.type == "tool_call" and evt.data.get("output"):
+                    out = str(evt.data.get("output"))
+                    if len(out) > 20 and len(out) < 4000:
+                        tool_results.append(out)
+
+            candidates = extract_memory_candidates(
+                user_message=user_message,
+                assistant_response=response_text,
+                tool_results=tool_results[:3],  # one source per turn max
+            )
+            for cand in candidates:
+                if not should_store_candidate(cand):
+                    continue
+                await self._store_fact_if_valid(
+                    cand.content,
+                    session_id,
+                    obs,
+                    source=cand.source,
+                    message=user_message,
+                )
+                obs.emit(
+                    "memory_candidate_stored",
+                    fact_preview=cand.content[:60],
+                    importance=cand.importance,
+                    memory_type=cand.memory_type.value,
+                    source=cand.source,
+                )
+        except Exception as e:
+            logger.debug("[memory] candidate extraction skipped (non-critical): %s", e)
+
         # ── Path 2: Response-confirmed fact extraction ───────────────────
         # Markers that indicate a confirmed, durable user fact.
         # Expanded to catch more natural response patterns.

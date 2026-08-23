@@ -467,7 +467,11 @@ def _extract_tool_input(tool_name: str, tool_args: dict) -> str:
         return tool_args.get("command", "")
     elif tool_name == "memory_op":
         operation = tool_args.get("operation", "recall")
-        content = tool_args.get("content", "")
+        # Session 359: models often use `query` for recall content (the schema
+        # says `content`). Accept both — otherwise the recall drops its query
+        # and the bare "recall" falls through to memory_op's STORE path,
+        # persisting junk facts.
+        content = tool_args.get("content") or tool_args.get("query") or ""
         return f"{operation} {content}".strip()
     elif tool_name == "sysinfo":
         return tool_args.get("query", "")

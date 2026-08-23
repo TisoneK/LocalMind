@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time as _time
 
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
@@ -27,13 +28,38 @@ _LIST_PAT = re.compile(
     r"\b(what do you (know|remember)|list (all |my )?facts|show (me )?memory|recall all)\b",
     re.IGNORECASE,
 )
+# Session 359: "recall X" / "search memory for X" — a targeted recall of
+# facts matching X. The schema advertises operation=recall; without this the
+# message fell through to the STORE path and stored "recall" as a junk fact.
+_RECALL_PAT = re.compile(
+    r"^\s*(?:please\s+)?(?:recall|search(?:\s+memory)?|find(?:\s+in\s+memory)?)\s+(.+)$",
+    re.IGNORECASE,
+)
 _STORE_PAT = re.compile(
     r"^\s*(remember|note|store|keep in mind|don't forget)\s*(that\s*)?",
     re.IGNORECASE,
 )
 
 
-async def memory_op(message: str) -> ToolResult:
+async def memory_op(
+    message: str,
+    content: str | None = None,
+    memory_type: str | None = None,
+) -> ToolResult:
+    """
+    Store, recall, or delete facts from persistent semantic memory.
+
+    Args:
+        message: the raw user message.
+        content: optional pre-extracted fact (Session 342 classifier output).
+            When provided, it is stored VERBATIM instead of re-extracting
+            with the regex below — the classifier's extraction is more
+            accurate ("note down my project" must not store "down my
+            project").
+        memory_type: optional category tag (user_preference / user_fact /
+            source_knowledge / project_decision / general). Falls back to
+            "semantic" when not provided.
+    """
     from storage.vector import VectorStore
 
     store = VectorStore()
@@ -78,8 +104,72 @@ async def memory_op(message: str) -> ToolResult:
             source="memory",
         )
 
+    # ── Recall a fact (targeted search) ──────────────────────────────────
+    # Session 359: the tool advertises operation=recall. Do a keyword match
+    # over stored facts — this works even when embeddings are unavailable
+    # (the fallback store writes plain text; vector search can't find it).
+    _recall_m = _RECALL_PAT.match(message)
+    # Bare "recall" (no query content) — the model sometimes emits the
+    # operation without a query. Never fall through to STORE for a recall
+    # intent: surface recent facts instead.
+    if message.strip().lower().startswith("recall") and not _recall_m:
+        return await _recall_recent(store)
+    if _recall_m:
+        query = _recall_m.group(1).strip()
+        q_words = set(re.findall(r"\w+", query.lower()))
+        if not q_words:
+            return await _recall_recent(store)
+        facts = await store.list_all_with_metadata()
+        scored = []
+        for f in facts:
+            f_text = str(f.get("fact", "")).lower()
+            f_words = set(re.findall(r"\w+", f_text))
+            if not f_words:
+                continue
+            # Match on exact tokens OR prefix overlap ("prefer" ~
+            # "preferences") so recalls work without embeddings.
+            matched = 0
+            for qw in q_words:
+                if qw in f_words:
+                    matched += 1
+                elif any(qw.startswith(fw) or fw.startswith(qw) for fw in f_words):
+                    matched += 1
+            overlap = matched / max(1, len(q_words))
+            if overlap >= 0.4:  # at least ~half the query words match
+                scored.append((overlap, f["fact"]))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top = [fact for _, fact in scored[:3]]
+        if not top:
+            # Fallback: when nothing matches, surface the most recent facts
+            # rather than an empty miss — better than telling the user
+            # there's nothing when the store has content.
+            recent = [f["fact"] for f in facts[-3:]]
+            if recent:
+                content = (
+                    "I couldn't find a specific match, but here's what I have "
+                    "stored recently:\n"
+                    + "\n".join(f"- {f}" for f in reversed(recent))
+                )
+            else:
+                content = "I couldn't find anything matching that in memory."
+            return ToolResult(
+                content=content,
+                risk=RiskLevel.LOW,
+                source="memory",
+                metadata={"match_count": 0},
+            )
+        content = "**From memory:**\n" + "\n".join(f"- {f}" for f in top)
+        return ToolResult(
+            content=content,
+            risk=RiskLevel.LOW,
+            source="memory",
+            metadata={"match_count": len(top)},
+        )
+
     # ── Store a fact ──────────────────────────────────────────────────────
-    fact = _STORE_PAT.sub("", message).strip()
+    # Use the Session 342 classifier's extraction when provided — it handles
+    # cue prefixes the regex misses ("note down", "keep in mind", etc.).
+    fact = (content or "").strip() if content else _STORE_PAT.sub("", message).strip()
     if not fact:
         return ToolResult(
             content="I didn't catch what you'd like me to remember. Try: 'remember that I prefer Python'",
@@ -102,7 +192,7 @@ async def memory_op(message: str) -> ToolResult:
         session_id=effective_session_id,
         source="user",
         extra_metadata={
-            "memory_type": "semantic",
+            "memory_type": memory_type or "semantic",
             "importance": str(importance),
             "access_count": "0",
         },
@@ -139,10 +229,14 @@ async def memory_op(message: str) -> ToolResult:
             metadata = _json.dumps({
                 "session_id": effective_session_id,
                 "source": "user",
-                "memory_type": "semantic",
+                "memory_type": memory_type or "semantic",
                 "importance": str(importance),
                 "access_count": "0",
                 "fallback": "true",  # stored without embedding
+                # Session 359: the vector path writes a timestamp; the fallback
+                # MUST too, or warm_start_facts treats the fact as ancient and
+                # the agent never sees it (age = now - 0 > 30 days → dropped).
+                "timestamp": str(_time.time()),
             })
             conn.execute(
                 "INSERT INTO vector_facts (id, content, metadata) VALUES (?, ?, ?)",
@@ -167,6 +261,30 @@ async def memory_op(message: str) -> ToolResult:
         risk=RiskLevel.LOW,
         source="memory",
         success=False,
+    )
+
+
+async def _recall_recent(store) -> ToolResult:
+    """Surface the most recent stored facts (bare/no-match recall).
+
+    Session 359: a recall intent must NEVER fall through to the store path
+    (which persisted "recall" as a junk fact). When there's no query or no
+    match, show what's actually stored.
+    """
+    facts = await store.list_all_with_metadata()
+    if not facts:
+        return ToolResult(
+            content="No facts stored in memory yet.",
+            risk=RiskLevel.LOW,
+            source="memory",
+        )
+    recent = [f["fact"] for f in facts[-3:]]
+    content = "**From memory (recent):**\n" + "\n".join(f"- {f}" for f in reversed(recent))
+    return ToolResult(
+        content=content,
+        risk=RiskLevel.LOW,
+        source="memory",
+        metadata={"match_count": len(recent)},
     )
 
 
