@@ -5422,3 +5422,14 @@ authoritative.
 - **Open items:** remaining backlog: B-2026-08-23-8 (goal-driven), -9 (action-pill tooltips), -10 (concrete planning), -11 (todo title/content split), -12 (clickable filenames), -13 (system info in DB), -20 (code-block preview rewrite), -21 (time formatting), -22 (token K/M), -23 (advanced image viewer), -24 (no hardcoded CSS), B-2026-07-31-10 (non-coding roadmap). Pre-existing untracked trace residue at `backend/Dev/` + `backend/scratch/` left untouched.
 - **Report:** `.context/memory/reviews/2026-08-23-review.md`
 - **Notes:** none needed — see report.
+---
+## Session 378 — repeated-listing dedup (root-caused from dev-folder transcript) — 2026-08-23
+
+- **Agent:** Buffy | **Model:** z-ai/glm-5.2 | **Platform:** macOS (local /Users/bao/Code/LocalMind) | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** none (diagnosis + fix of a live-loop flaw reported via transcript)
+- **Task:** The Windows user's "analyze the dev folder" session showed the loop re-running near-identical `Get-ChildItem` listings FIVE times. Root-caused from the transcript: (1) the exact-match dedup (`tool_input.lower().strip()`) missed every retry because only cosmetics changed — column order, quoting, `Format-Table`, `ForEach-Object` wrappers; (2) the `[...TRUNCATED DUE TO LENGTH...]` marker (head+tail retention) misled the model into assuming the listing was lost.
+- **Commits:** 1 product + context (pushed): `79716fa` fix(agent).
+- **Outcome:** done — structural inspection dedup: `_inspection_fingerprint` (shell listing/read prefixes, browse, git read ops, file_task, find_path) folds same-target + same-flags calls onto the cached observation; flags that change the result set (`-Force`, `-type f`, `-maxdepth`) stay distinct; short bundles normalize (`-la` ≡ `-a -l`); presentation (`-AutoSize`, column lists) dropped from the key; ANY possibly-mutating call (file_write/edit/code_exec, non-read git ops, compound/unknown shell) clears the cache per-turn, so a listing after a write always runs fresh (dedup NEVER serves stale output). System prompt rule 10: "TOOL OUTPUT IS RETAINED" (a TRUNCATED marker drops only the middle; never re-run a read just to reformat). Prompt-size budgets bumped +300–400 chars/execute-intent per the budget test's justify-contract. 13 new tests incl. loop-level (1 vs 2 real shell runs; mutation invalidation, 2 real runs). Full backend suite 2488 passed / 2 skipped, ruff clean (2 pre-existing loop.py E501s untouched, I001 in budget test pre-existing).
+- **Open items:** backlog unchanged (B-2026-08-23-8 goal-driven agent next, or UI wins -20/-21/-22/-24).
+- **Report:** `.context/memory/reviews/2026-08-23-review.md` (Session 377's file) — Session 378 additions logged in flaws/log.md + this entry.
+- **Notes:** The user's direct question ("Don't you have access to your own artifacts and thoughts?") was honest-model-limitation, not a harness flaw; the HARNESS flaw was the re-listing loop, fixed here.
