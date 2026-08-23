@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Server, Key, Loader2, CheckCircle2, AlertCircle, Trash2, FileEdit, Palette, Sun, Moon, Monitor, Brain, Cpu, Database } from 'lucide-react';
 import { localmindClient } from '@/lib/localmind/client';
-import { useTheme, THEMES, type ModePref } from '@/hooks/useTheme';
+import { useTheme, THEMES, type CustomTheme, type ModePref } from '@/hooks/useTheme';
 
 // ── Provider definitions ──
 // Only `id` and `name` (display label) are hardcoded here — these are
@@ -72,7 +72,26 @@ const MODE_OPTIONS: { id: ModePref; label: string; icon: typeof Sun }[] = [
 ];
 
 export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
-  const { theme, mode, setTheme, setMode } = useTheme();
+  const { theme, mode, custom, tone, setTheme, setMode, setCustomTheme, setTone } = useTheme();
+  // B-2026-08-23-19: persist appearance to settings.json on every change so
+  // the theme/tone/custom palette survive restarts (mirrors adapter/model).
+  const persistAppearance = useCallback((partial: {
+    theme?: string;
+    mode?: string;
+    custom_theme?: CustomTheme;
+    tone?: number;
+  }) => {
+    localmindClient.setAppearance(partial).catch(() => {
+      // Non-fatal: the change already applied locally; persistence is best-effort.
+    });
+  }, []);
+  // Draft state for the custom palette editor (avoid mutating the applied
+  // palette mid-edit; committed on color/name change).
+  const customDraft = custom ?? { name: 'Custom', accent: '#34d399', background: '#12161d', surface: '#1f2530', text: '#e6edf3' };
+  const commitCustom = (next: CustomTheme) => {
+    setCustomTheme(next);
+    persistAppearance({ theme: 'custom', mode, custom_theme: next, tone });
+  };
   const [adapter, setAdapter] = useState('ollama');
   const [model, setModel] = useState('');
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
@@ -574,7 +593,10 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
               {THEMES.map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => setTheme(t.id)}
+                  onClick={() => {
+                    setTheme(t.id);
+                    persistAppearance({ theme: t.id, mode });
+                  }}
                   aria-pressed={theme === t.id}
                   className={`flex flex-col items-start gap-1.5 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                     theme === t.id
@@ -585,7 +607,7 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                   <span className="flex items-center gap-2">
                     <span
                       className="h-3.5 w-3.5 rounded-full shrink-0"
-                      style={{ backgroundColor: t.swatch }}
+                      style={{ background: t.swatch }}
                     />
                     <span className={`text-sm font-medium ${theme === t.id ? 'text-brand-green' : 'text-brand-green-soft'}`}>
                       {t.label}
@@ -601,7 +623,10 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                 return (
                   <button
                     key={m.id}
-                    onClick={() => setMode(m.id)}
+                    onClick={() => {
+                      setMode(m.id);
+                      persistAppearance({ theme, mode: m.id });
+                    }}
                     aria-pressed={mode === m.id}
                     className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                       mode === m.id
@@ -614,6 +639,82 @@ export function SettingsModal({ onClose, onSave }: SettingsModalProps) {
                   </button>
                 );
               })}
+            </div>
+
+            {/* ── B-2026-08-23-19: Custom palette editor ── */}
+            {theme === 'custom' && (
+              <div className="mt-3 rounded-lg border border-brand-border bg-brand-bg-panel-alt p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-brand-green-soft">Custom palette</span>
+                  <span className="text-[11px] text-brand-green-muted">Saved to settings.json</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="w-24 shrink-0 text-[11px] text-brand-green-muted" htmlFor="custom-theme-name">
+                    Name
+                  </label>
+                  <input
+                    id="custom-theme-name"
+                    value={customDraft.name}
+                    maxLength={32}
+                    onChange={(e) => commitCustom({ ...customDraft, name: e.target.value || 'Custom' })}
+                    className="flex-1 rounded-md border border-brand-border bg-brand-bg-base px-2 py-1.5 text-sm text-brand-green-soft outline-none focus:border-brand-green/50"
+                  />
+                </div>
+                {([
+                  ['Accent', 'accent'],
+                  ['Background', 'background'],
+                  ['Surface', 'surface'],
+                  ['Text', 'text'],
+                ] as const).map(([label, key]) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <label className="w-24 shrink-0 text-[11px] text-brand-green-muted" htmlFor={`custom-theme-${key}`}>
+                      {label}
+                    </label>
+                    <input
+                      id={`custom-theme-${key}`}
+                      type="color"
+                      value={customDraft[key]}
+                      onChange={(e) => commitCustom({ ...customDraft, [key]: e.target.value })}
+                      className="h-8 w-12 shrink-0 cursor-pointer rounded-md border border-brand-border bg-transparent"
+                    />
+                    <code className="flex-1 truncate font-mono text-[11px] text-brand-green-muted">{customDraft[key]}</code>
+                  </div>
+                ))}
+                <button
+                  onClick={() => {
+                    setTheme('graphite');
+                    persistAppearance({ theme: 'graphite', mode });
+                  }}
+                  className="text-[11px] text-brand-green-muted hover:text-brand-green-soft"
+                >
+                  Reset to built-in theme
+                </button>
+              </div>
+            )}
+
+            {/* ── B-2026-08-23-19: UI tone (brightness) ── */}
+            <div className="mt-3 flex items-center gap-3 rounded-lg border border-brand-border px-3 py-2.5">
+              <label className="w-24 shrink-0 text-xs text-brand-green-soft" htmlFor="ui-tone-slider">
+                Tone
+              </label>
+              <input
+                id="ui-tone-slider"
+                type="range"
+                min={0.5}
+                max={1.5}
+                step={0.05}
+                value={tone}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setTone(v);
+                  persistAppearance({ theme, mode, tone: v });
+                }}
+                className="flex-1 accent-brand-green"
+                aria-label="UI tone / brightness"
+              />
+              <span className="w-14 shrink-0 text-right font-mono text-[11px] text-brand-green-muted">
+                {tone.toFixed(2)}×
+              </span>
             </div>
           </section>
 

@@ -213,3 +213,84 @@ def test_cloud_model_still_loads_for_cloud_adapter(tmp_path):
 def test_shell_enabled_persists_both_ways(tmp_path):
     assert _settings_at(tmp_path, {"shell_enabled": True}).localmind_shell_enabled is True
     assert _settings_at(tmp_path, {"shell_enabled": False}).localmind_shell_enabled is False
+
+
+# ── B-2026-08-23-19: UI appearance (POST /api/settings/appearance) ───────────
+
+
+def _fake_settings_for_appearance():
+    """SimpleNamespace fake with the runtime-settings path plumbing set_appearance
+    touches (load + secure-write on the same file)."""
+    import json as _j
+    from pathlib import Path
+
+    calls = {"writes": []}
+
+    class _FakeSettings:
+        def __init__(self):
+            self._path = Path("/tmp/lm-appearance-test.json")
+            self._data = {}
+
+        def _runtime_settings_path(self):
+            return self._path
+
+        def _load_json_file(self, path):
+            return dict(self._data)
+
+        def _secure_write_json(self, path, data):
+            self._data = dict(data)
+            calls["writes"].append(dict(data))
+
+    fake = _FakeSettings()
+    return fake, calls
+
+
+@pytest.mark.asyncio
+async def test_set_appearance_persists_theme_mode_custom_tone(monkeypatch):
+    from api.routes.config import AppearanceRequest, set_appearance
+
+    fake, calls = _fake_settings_for_appearance()
+    monkeypatch.setattr(config_mod, "settings", fake)
+
+    custom = {"name": "Ocean", "accent": "#3b82f6", "background": "#0b1220", "surface": "#16202f", "text": "#e2e8f0"}
+    result = await set_appearance(
+        AppearanceRequest(theme="custom", mode="dark", custom_theme=custom, tone=0.85)
+    )
+
+    assert result["theme"] == "custom"
+    assert result["tone"] == pytest.approx(0.85)
+    assert calls["writes"][-1]["custom_theme"]["name"] == "Ocean"
+
+
+@pytest.mark.asyncio
+async def test_set_appearance_rejects_invalid_theme_tone(monkeypatch):
+    from fastapi import HTTPException
+
+    from api.routes.config import AppearanceRequest, set_appearance
+
+    fake, _ = _fake_settings_for_appearance()
+    monkeypatch.setattr(config_mod, "settings", fake)
+
+    with pytest.raises(HTTPException) as bad_theme:
+        await set_appearance(AppearanceRequest(theme="neon", mode="dark", tone=1.0))
+    assert bad_theme.value.status_code == 400
+
+    with pytest.raises(HTTPException) as bad_tone:
+        await set_appearance(AppearanceRequest(theme="graphite", mode="dark", tone=2.5))
+    assert bad_tone.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_set_appearance_partial_update_keeps_existing_values(monkeypatch):
+    from api.routes.config import AppearanceRequest, set_appearance
+
+    fake, calls = _fake_settings_for_appearance()
+    monkeypatch.setattr(config_mod, "settings", fake)
+
+    # Persist tone first, then only change theme — the file must not drop tone.
+    await set_appearance(AppearanceRequest(theme="warm", mode="dark", tone=1.2))
+    await set_appearance(AppearanceRequest(theme="iris"))
+
+    last = calls["writes"][-1]
+    assert last["theme"] == "iris"
+    assert last["tone"] == pytest.approx(1.2)

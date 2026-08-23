@@ -101,6 +101,10 @@
 :root {
   --radius: 0.625rem;
 
+  /* B-2026-08-23-19: UI tone — brightness multiplier 0.5–1.5 (1 = unchanged),
+     set inline on <html> by useTheme; body applies it as a filter. */
+  --ui-tone: 1;
+
   /* Structural chart/sidebar tokens */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
@@ -241,6 +245,34 @@
   --code-text: #2a2317;
 }
 
+/* ── Custom theme (B-2026-08-23-19) ──────────────────────────────────────── */
+/* The user's palette is applied inline on <html> as the core anchors
+   (--acc, --s-base, --s-1, --s-2, --t-primary). Everything else is derived
+   from those anchors via color-mix, so every component + shadcn/ui token
+   adapts without the user defining a full ramp. Applies for both modes. */
+:root[data-theme="custom"] {
+  --s-deep: color-mix(in oklab, var(--s-base) 82%, black);
+  --s-0: color-mix(in oklab, var(--s-base) 92%, black);
+  --s-3: color-mix(in oklab, var(--s-2) 82%, white);
+  --t-secondary: color-mix(in oklab, var(--t-primary) 64%, var(--s-base));
+  --t-muted: color-mix(in oklab, var(--t-primary) 48%, var(--s-2));
+  --t-faint: color-mix(in oklab, var(--t-primary) 34%, var(--s-2));
+  --line: color-mix(in oklab, var(--t-primary) 16%, var(--s-2));
+  --line-soft: color-mix(in oklab, var(--t-primary) 10%, var(--s-2));
+  --line-strong: color-mix(in oklab, var(--t-primary) 26%, var(--s-2));
+  --acc-bright: color-mix(in oklab, var(--acc) 72%, white);
+  --acc-soft: color-mix(in oklab, var(--acc) 34%, var(--s-base));
+  --acc-strong: color-mix(in oklab, var(--acc) 72%, black);
+  --warn: color-mix(in oklab, var(--acc) 68%, #fbbf24);
+  --warn-bright: color-mix(in oklab, var(--warn) 78%, white);
+  --warn-soft: color-mix(in oklab, var(--warn) 40%, var(--s-base));
+  --danger: color-mix(in oklab, var(--acc) 42%, #f87171);
+  --info: color-mix(in oklab, var(--acc) 55%, #60a5fa);
+  --alt: color-mix(in oklab, var(--acc) 62%, #a78bfa);
+  --alt-soft: color-mix(in oklab, var(--alt) 44%, var(--s-base));
+  --code-text: var(--t-primary);
+}
+
 /* ANSI syntax palette — light (any theme in light mode) */
 :root[data-mode="light"] {
   --brand-gh-blue: #0969da; --brand-gh-red: #cf222e; --brand-gh-amber: #9a6700;
@@ -255,6 +287,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* B-2026-08-23-19: UI tone (brightness) — set var(--ui-tone) on <html>. */
+    filter: brightness(var(--ui-tone));
   }
 }
 

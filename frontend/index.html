@@ -17,13 +17,25 @@
           var el = document.documentElement;
           var raw = localStorage.getItem('localmind-theme');
           var s = raw ? JSON.parse(raw) : null;
-          var theme = s && ['graphite', 'iris', 'warm'].indexOf(s.theme) >= 0 ? s.theme : 'graphite';
+          var theme = s && ['graphite', 'iris', 'warm', 'custom'].indexOf(s.theme) >= 0 ? s.theme : 'graphite';
           var mode = s && ['light', 'dark', 'system'].indexOf(s.mode) >= 0 ? s.mode : 'dark';
           if (mode === 'system') {
             mode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
           }
           el.setAttribute('data-theme', theme);
           el.setAttribute('data-mode', mode);
+          // B-2026-08-23-19: custom palette + tone — apply before first paint
+          // so a saved custom theme doesn't flash the default.
+          if (theme === 'custom' && s.custom && s.custom.accent && s.custom.background && s.custom.surface && s.custom.text) {
+            el.style.setProperty('--acc', s.custom.accent);
+            el.style.setProperty('--s-base', s.custom.background);
+            el.style.setProperty('--s-1', s.custom.surface);
+            el.style.setProperty('--s-2', s.custom.surface);
+            el.style.setProperty('--t-primary', s.custom.text);
+          }
+          if (typeof s.tone === 'number' && s.tone >= 0.5 && s.tone <= 1.5) {
+            el.style.setProperty('--ui-tone', String(s.tone));
+          }
         } catch (e) {
           /* keep the html defaults */
         }

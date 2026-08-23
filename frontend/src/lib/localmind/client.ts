@@ -13,6 +13,8 @@
  * - No external dependencies — uses native fetch + ReadableStream.
  */
 
+import { restoreAppearance } from '@/hooks/useTheme';
+
 import type {
   ChatMessage,
   Session,
@@ -1086,8 +1088,32 @@ class LocalMindClient {
     reasoning_plan_timeout: number;
     reasoning_max_wall_clock: number;
     reasoning_effort: string;
+    // B-2026-08-23-19: UI appearance persisted in settings.json.
+    theme?: string;
+    mode?: string;
+    custom_theme?: { name?: string; accent?: string; background?: string; surface?: string; text?: string } | null;
+    tone?: number;
   }> {
     return this.request('/api/settings');
+  }
+
+  /** Persist UI appearance (theme/mode/custom palette/tone) to settings.json. */
+  async setAppearance(opts: {
+    theme?: string;
+    mode?: string;
+    custom_theme?: { name: string; accent: string; background: string; surface: string; text: string };
+    tone?: number;
+  }): Promise<{
+    theme: string;
+    mode: string;
+    custom_theme: unknown;
+    tone: number;
+    message: string;
+  }> {
+    return this.request('/api/settings/appearance', {
+      method: 'POST',
+      body: JSON.stringify(opts),
+    });
   }
 
   async setThinkingSettings(opts: {
@@ -1248,6 +1274,16 @@ async confirmWrite(
         this.savePersistedSettings({
           adapter: settings.adapter,
           model: settings.model || '',
+        });
+      }
+      // B-2026-08-23-19: restore the persisted theme/mode/custom palette/tone
+      // from settings.json so the UI matches the last saved appearance.
+      if (settings.theme || settings.mode || settings.custom_theme || settings.tone !== undefined) {
+        restoreAppearance({
+          theme: settings.theme,
+          mode: settings.mode,
+          custom_theme: settings.custom_theme ?? undefined,
+          tone: settings.tone,
         });
       }
     } catch {

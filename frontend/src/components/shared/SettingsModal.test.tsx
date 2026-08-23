@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SettingsModal } from './SettingsModal';
 import { localmindClient } from '@/lib/localmind/client';
@@ -19,6 +19,7 @@ vi.mock('@/lib/localmind/client', () => ({
     getEmbeddingModels: vi.fn(),
     setLocalSettings: vi.fn(),
     selectModel: vi.fn(),
+    setAppearance: vi.fn(),
   },
 }));
 
@@ -46,6 +47,45 @@ describe('SettingsModal', () => {
     mockClient.getEmbeddingModels.mockResolvedValue({ models: [], current: '' });
     mockClient.setLocalSettings.mockResolvedValue({ embed_model: '', num_ctx: 0, updated: [], message: 'ok' });
     mockClient.selectModel.mockResolvedValue(undefined);
+    mockClient.setAppearance.mockResolvedValue({ theme: 'custom', mode: 'dark', custom_theme: null, tone: 1, message: 'ok' });
+  });
+
+  it('switching to the Custom theme shows the palette editor and persists', async () => {
+    mockClient.getSettings.mockResolvedValue(settingsPayload());
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+
+    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    await screen.findByRole('heading', { name: 'Settings' });
+
+    // Custom appears as a theme option (from THEMES, which now includes it).
+    await userEvent.click(screen.getByRole('button', { name: /Custom/i }));
+
+    // The editor surfaces with the four color pickers + a name field.
+    expect(screen.getByText('Custom palette')).toBeInTheDocument();
+    expect(screen.getByLabelText('Accent')).toBeInTheDocument();
+    expect(screen.getByLabelText('Background')).toBeInTheDocument();
+    expect(screen.getByLabelText('Surface')).toBeInTheDocument();
+    expect(screen.getByLabelText('Text')).toBeInTheDocument();
+
+    // Every change persists to settings.json via setAppearance.
+    await userEvent.type(screen.getByLabelText('Name'), 'Ocean');
+    expect(mockClient.setAppearance).toHaveBeenCalledWith(
+      expect.objectContaining({ theme: 'custom' })
+    );
+  });
+
+  it('the tone slider persists its value to the backend', async () => {
+    mockClient.getSettings.mockResolvedValue(settingsPayload());
+    mockClient.getOllamaUrl.mockResolvedValue({ url: 'http://localhost:11434' });
+
+    render(<SettingsModal onClose={() => {}} onSave={() => {}} />);
+    await screen.findByRole('heading', { name: 'Settings' });
+
+    const slider = screen.getByRole('slider', { name: /UI tone/i });
+    fireEvent.change(slider, { target: { value: '1.1' } });
+    expect(mockClient.setAppearance).toHaveBeenCalledWith(
+      expect.objectContaining({ tone: 1.1 })
+    );
   });
 
   it('renders provider names from the live settings payload', async () => {

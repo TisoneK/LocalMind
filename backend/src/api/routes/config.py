@@ -33,6 +33,12 @@ class SettingsResponse(BaseModel):
     reasoning_plan_timeout: float = 30.0
     reasoning_max_wall_clock: float = 360.0
     reasoning_effort: str = ""
+    # B-2026-08-23-19: UI appearance (theme/mode/custom palette/tone),
+    # persisted in settings.json by POST /api/settings/appearance.
+    theme: str = "graphite"
+    mode: str = "dark"
+    custom_theme: Optional[dict] = None
+    tone: float = 1.0
 
 
 class AdapterConfig(BaseModel):
@@ -58,6 +64,80 @@ class ProviderKeyRequest(BaseModel):
     provider: str
     api_key: str
     model: Optional[str] = None
+
+
+class AppearanceRequest(BaseModel):
+    """Body for POST /api/settings/appearance (B-2026-08-23-19).
+
+    All fields optional so a partial update is safe. `theme` is one of the
+    built-in palette ids plus "custom" (user-defined palette via the UI);
+    `custom_theme` carries the custom definition {name, accent, background,
+    surface, text}; `tone` is the UI brightness multiplier (1 = unchanged).
+    """
+
+    theme: Optional[str] = None  # graphite | iris | warm | custom
+    mode: Optional[str] = None  # light | dark | system
+    custom_theme: Optional[dict] = None
+    tone: Optional[float] = None  # 0.5–1.5
+
+
+@router.post("/settings/appearance")
+async def set_appearance(req: AppearanceRequest):
+    """Apply and persist the UI appearance (B-2026-08-23-19).
+
+    The user's chosen theme (built-in palette or a custom palette defined in
+    the UI), mode, custom palette definition, and tone/brightness are saved
+    to settings.json so they survive restarts. The frontend reads them back
+    via GET /api/settings on startup and re-applies them, so appearance is
+    durable across launches (mirrors the adapter/model persistence flow).
+    """
+    valid_themes = ("graphite", "iris", "warm", "custom")
+    valid_modes = ("light", "dark", "system")
+
+    path = settings._runtime_settings_path()
+    data = settings._load_json_file(path)
+
+    if req.theme is not None:
+        theme = req.theme.strip().lower()
+        if theme not in valid_themes:
+            raise HTTPException(status_code=400, detail=f"theme must be one of {', '.join(valid_themes)}")
+        data["theme"] = theme
+    if req.mode is not None:
+        mode = req.mode.strip().lower()
+        if mode not in valid_modes:
+            raise HTTPException(status_code=400, detail=f"mode must be one of {', '.join(valid_modes)}")
+        data["mode"] = mode
+    if req.custom_theme is not None:
+        custom = req.custom_theme or {}
+        required = {"name", "accent", "background", "surface", "text"}
+        missing = required - set(custom.keys())
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"custom_theme missing keys: {', '.join(sorted(missing))}",
+            )
+        data["custom_theme"] = {
+            "name": str(custom.get("name", "")).strip() or "Custom",
+            "accent": str(custom.get("accent", "#34d399")),
+            "background": str(custom.get("background", "#12161d")),
+            "surface": str(custom.get("surface", "#1f2530")),
+            "text": str(custom.get("text", "#e6edf3")),
+        }
+    if req.tone is not None:
+        if not (0.5 <= req.tone <= 1.5):
+            raise HTTPException(status_code=400, detail="tone must be between 0.5 and 1.5")
+        data["tone"] = round(float(req.tone), 3)
+
+    settings._secure_write_json(path, data)
+    return {
+        "theme": data.get("theme", "graphite"),
+        "mode": data.get("mode", "dark"),
+        "custom_theme": data.get("custom_theme"),
+        "tone": data.get("tone", 1.0),
+        "message": "Appearance saved",
+    }
+
+
 
 
 # Provider info is derived from the single source of truth in
@@ -92,6 +172,8 @@ async def get_settings():
     Get current adapter and model configuration.
     """
     adapter = settings.localmind_adapter
+    # B-2026-08-23-19: persisted appearance (theme/mode/custom palette/tone).
+    appearance = _read_appearance()
 
     # Derive the model-setting map from ADAPTER_MODEL_FIELDS (single source
     # of truth in PROVIDER_CONFIGS). No hardcoded provider list.
@@ -133,7 +215,27 @@ async def get_settings():
         reasoning_plan_timeout=settings.localmind_reasoning_plan_timeout_secs,
         reasoning_max_wall_clock=settings.localmind_reasoning_max_wall_clock_secs,
         reasoning_effort=settings.localmind_reasoning_effort,
+        # B-2026-08-23-19: appearance from settings.json (theme/mode/custom
+        # palette/tone) so the UI restores the persisted choice on launch.
+        theme=appearance.get("theme", "graphite"),
+        mode=appearance.get("mode", "dark"),
+        custom_theme=appearance.get("custom_theme"),
+        tone=float(appearance.get("tone", 1.0) or 1.0),
     )
+
+
+def _read_appearance():
+    """Read persisted appearance from settings.json (best-effort)."""
+    try:
+        data = settings._load_json_file(settings._runtime_settings_path())
+        return {
+            "theme": data.get("theme", "graphite"),
+            "mode": data.get("mode", "dark"),
+            "custom_theme": data.get("custom_theme"),
+            "tone": float(data.get("tone", 1.0) or 1.0),
+        }
+    except Exception:
+        return {"theme": "graphite", "mode": "dark", "custom_theme": None, "tone": 1.0}
 
 
 @router.post("/settings/thinking")
