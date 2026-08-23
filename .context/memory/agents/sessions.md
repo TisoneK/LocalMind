@@ -5296,3 +5296,22 @@ authoritative.
 **Live** (isolated 8765): before `nomic-embed-text` available=False suggested=`mxbai-embed-large:latest` → POST /api/settings/local applies it → endpoint reports available=True → persisted to settings.json. The one-click path is verified end to end; the user's real fix is a single click on the banner.
 
 **Commits:** product + context (pushed).
+
+## Session 370 — Per-fact edit in the Memory tab (B-2026-08-23-14 follow-up) — 2026-08-23
+
+**User request:** add a per-fact edit action so users can correct stored facts.
+
+**Backend:**
+- `storage/vector.py` — new `VectorStore.update_content(fact_id, new_content) -> str | None`: re-embeds the corrected text (same WAL-safe `BEGIN IMMEDIATE` transaction style), migrates the row to the new content-derived id (ids are sha256 of content, so an edit changes the id), and PRESERVES the original metadata (source, timestamp, memory_type, importance). Returns the new id, or None for a missing fact / empty content / embed failure.
+- `api/routes/memory.py` — `PATCH /api/memory/{fact_id}` with `{content}`; returns the NEW id (the UI refreshes its list); 404 when the fact doesn't exist.
+
+**Frontend:**
+- `client.ts` — `updateMemory(factId, content)` (PATCH).
+- `hooks/useLocalMind.ts` — `editFact(id, content)` re-fetches the list after a successful edit (id changed).
+- `panels/MemoryTab.tsx` — each fact card gains a pencil **Edit** button that swaps the content into a textarea with Save/Cancel (spinner while saving, inline error on failure); Cancel discards without calling the API. Delete button unchanged. Threaded through WorkspaceLayout/RightPanel via `onMemoryEdit`.
+
+**Tests:** 2 VectorStore tests (edit re-embeds + migrates id + preserves source/timestamp; missing fact → None) + 2 route tests (edit returns new id + preserves source; missing → 404) + 3 MemoryTab tests (edit saves + exits edit mode, cancel discards, save failure shows error). 2433 backend / 319 frontend, ruff/tsc/eslint clean.
+
+**Live** (isolated 8765, bankofai, sandboxed home, embed_model=mxbai-embed-large): stored "User prefers dark mode" → PATCH to "…with warm accents" → list shows the correction with a NEW id, source=user and the original timestamp preserved → PATCH of a missing fact → 404. Verified end to end.
+
+**Commits:** product + context (pushed).

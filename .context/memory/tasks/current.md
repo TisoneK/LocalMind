@@ -1,10 +1,11 @@
 # Current Task
 
-**Status:** IDLE — Session 369 shipped the one-click embed-model fix in the chat guide.
+**Status:** IDLE — Session 370 shipped the per-fact edit action in the Memory tab.
 
-## Session 369 outcome — one-click auto-fix (no Settings detour)
+## Session 370 outcome — edit stored facts
 
-- **User request:** make the chat guide auto-fix the embed model with one click instead of opening Settings.
-- **Change (frontend only):** CenterPanel's banner primary button is now **"Use <suggested>"** → `setLocalSettings({ embedModel })` (the exact endpoint the Settings modal uses) → spinner → green confirmation "✓ Embedding model switched to X — memory can be saved now" → session-dismissed → collapses after 1.5s. Failure shows an inline error and keeps the banner. Dismiss X remains.
-- **Verification:** 2 new CenterPanel tests (fix applies + confirms + marks session; failure keeps banner). 316 frontend, tsc/eslint clean, backend untouched (2429 pass from Session 368). Live (isolated 8765): `nomic-embed-text` available=False → one-click POST applies `mxbai-embed-large:latest` → available=True → persisted to settings.json.
+- **User request:** add a per-fact edit action so users can correct stored facts.
+- **Backend:** `VectorStore.update_content` re-embeds the corrected text (WAL-safe BEGIN IMMEDIATE), migrates to the new content-derived id, preserves original metadata (source, timestamp); `PATCH /api/memory/{fact_id}` returns the new id, 404 on missing.
+- **Frontend:** pencil Edit button on each fact card → textarea with Save/Cancel (spinner, inline error); `editFact` re-fetches the list since the id changes; threaded via `onMemoryEdit`.
+- **Verification:** 2 VectorStore + 2 route + 3 MemoryTab tests; 2433 backend / 319 frontend; ruff/tsc/eslint clean. Live (isolated 8765): store → PATCH → list shows correction with new id, source/timestamp preserved; missing-fact PATCH → 404.
 - **Next:** B-2026-08-23-15 (auto-switch between Terminal/Agents/Memory tabs) or B-2026-08-23-16 (deeper Files browser) — both open in backlog.
