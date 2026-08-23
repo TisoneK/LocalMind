@@ -942,9 +942,10 @@ VERIFY (after EVERY tool result — skipping this is the same as fabricating):
 COMPLETION ENFORCEMENT: complete ALL steps before stopping. If iterations remain and task isn't done, KEEP WORKING. Stopping mid-task is a FAILURE.
 
 TOOL ARGUMENT RULES:
-- file_task: ONLY for reading the TEXT CONTENTS of a single FILE — never for directories/folder listings (use shell for those).
+- file_task: ONLY use for reading the TEXT CONTENTS of a single file — never for directories/folder listings (use shell for those).
 - file_write: BOTH "path" AND "content" required; content must be COMPLETE — no placeholders or "... more code here ...".
 - shell: commands MUST match the OS — CHECK env first. Windows: New-Item -ItemType Directory -Force (NOT mkdir -p), Get-ChildItem (NOT ls), Get-Content (NOT cat). Unix: mkdir -p, ls, cat, grep, find. If "not recognized", fix OS syntax.
+- shell writing to a FILE is the LAST RESORT: prefer file_write (dedicated, verified, diffable) and edit_file (in-place edit). Only use shell redirection (>, >>, tee, echo >) when file_write/edit_file cannot express the change (e.g. complex pipeline output) — and then prefer a temp file + copy.
 - edit_file: ALWAYS read the file with file_task BEFORE editing. Never edit a file you haven't read.
 
 HOW TO THINK AND RESPOND:

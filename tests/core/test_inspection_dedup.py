@@ -186,14 +186,21 @@ def _make_adapter(script: list):
     return adapter, calls
 
 
+def _patch_filters():
+    """Context manager entering both filter patches at once."""
+    from contextlib import ExitStack
+
+    stack = ExitStack()
+    stack.enter_context(patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x))
+    stack.enter_context(patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x))
+    return stack
+
+
 async def _run_loop(adapter, obs_collector, intent, message):
     from core.agent.loop import AgentLoop
 
     loop = AgentLoop(adapter=MagicMock())
-    with (
-        patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x),
-        patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x),
-    ):
+    with _patch_filters():
         async for _ in loop.run(
             messages=[{"role": "user", "content": message}],
             intent=intent,
@@ -270,3 +277,76 @@ async def test_loop_inspection_cache_invalidated_after_mutation(tmp_path):
     # The write mutated the folder → the second listing must REALLY run.
     assert _shell_done_count(obs_collector) == 2, "expected 2 real shell runs"
     assert not leftover
+
+
+# ── B-2026-08-23-32: file_write emits a diff (any write, not just edit_file) ──
+
+
+def _diff_events(obs_collector):
+    return obs_collector.drain_matching({"file_diff"})
+
+
+@pytest.mark.asyncio
+async def test_loop_file_write_emits_diff_for_new_file(tmp_path):
+    """file_write creating a NEW file must emit a file_diff event (the
+    frontend DiffBlock then has hunks even though the tool wasn't edit_file)."""
+    from adapters.ollama import ToolCallResult
+    from core.models import Intent
+    from core.obs import ObsCollector
+
+    target = tmp_path / "notes.txt"
+    script = [
+        ToolCallResult(
+            tool_name="file_write",
+            tool_args={"path": str(target), "content": "hello\nworld\n"},
+        ),
+    ]
+    adapter, leftover = _make_adapter(script)
+    obs_collector = ObsCollector()
+
+    patcher = patch.object(config_module, "_allowed_user_folders", return_value=[str(tmp_path)])
+    patcher.start()
+    try:
+        await _run_loop(adapter, obs_collector, Intent.FILE_WRITE, "write notes")
+    finally:
+        patcher.stop()
+
+    diffs = _diff_events(obs_collector)
+    assert diffs, "expected a file_diff event for the new file"
+    data = diffs[0].data
+    assert data["path"].endswith("notes.txt")
+    assert data["diff_hunks"], "must carry structured hunks"
+    # New file → everything added.
+    assert data["diff_additions"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_loop_file_write_emits_diff_for_overwrite(tmp_path):
+    """Overwriting an existing file emits a diff showing the change."""
+    from adapters.ollama import ToolCallResult
+    from core.models import Intent
+    from core.obs import ObsCollector
+
+    target = tmp_path / "notes.txt"
+    target.write_text("old line\n", encoding="utf-8")
+    script = [
+        ToolCallResult(
+            tool_name="file_write",
+            tool_args={"path": str(target), "content": "new line\n"},
+        ),
+    ]
+    adapter, leftover = _make_adapter(script)
+    obs_collector = ObsCollector()
+
+    patcher = patch.object(config_module, "_allowed_user_folders", return_value=[str(tmp_path)])
+    patcher.start()
+    try:
+        await _run_loop(adapter, obs_collector, Intent.FILE_WRITE, "rewrite notes")
+    finally:
+        patcher.stop()
+
+    diffs = _diff_events(obs_collector)
+    assert diffs, "expected a file_diff event for the overwrite"
+    data = diffs[0].data
+    assert data["diff_deletions"] >= 1, "old content must show as removed"
+    assert data["diff_additions"] >= 1, "new content must show as added"

@@ -39,16 +39,16 @@ _BUDGETS = {
     # Session 378: +400 each (rule 10 "TOOL OUTPUT IS RETAINED" — the
     # repeated-listings fix; hard-capped at ~330 chars, this is the once-off
     # cost of telling models not to re-list what they already have).
-    Intent.SHELL: 12_000,  # Session 351: +100 (web_research preference in LIVE DATA RULE)
-    Intent.SYSINFO: 10_900,  # 2026-08-21: +500; Session 378: +400 (rule 10)
-    Intent.CODE_EXEC: 12_250,  # Session 351: +100; Session 378: +350 (rule 10)
-    Intent.FILE_WRITE: 12_400,  # 2026-08-21: +500; Session 378: +400 (rule 10)
-    Intent.FILE_EDIT: 12_400,  # 2026-08-21: +500; Session 378: +400 (rule 10)
-    Intent.FILE_TASK: 12_900,  # 2026-08-21: +500; Session 378: +400 (rule 10)
-    Intent.WEB_SEARCH: 12_900,  # 2026-08-21: +500; Session 378: +400 (rule 10)
-    Intent.WEB_FETCH: 12_100,  # 2026-08-21: +500; Session 378: +100 (rule 10)
-    Intent.MEMORY_OP: 11_500,  # 2026-08-21: +500; Session 378: +500 (rule 10)
-    Intent.BROWSE: 11_600,  # 2026-08-21: +500; Session 378: +100 (rule 10)
+    Intent.SHELL: 12_200,  # Session 351: +100; Session 379: +200 (shell-writes-last-resort)
+    Intent.SYSINFO: 11_200,  # 2026-08-21: +500; S378: +400; S379: +300
+    Intent.CODE_EXEC: 12_500,  # Session 351: +100; S378: +350; S379: +250
+    Intent.FILE_WRITE: 12_600,  # S378: +400; S379: +200
+    Intent.FILE_EDIT: 12_600,  # S378: +400; S379: +200
+    Intent.FILE_TASK: 13_100,  # 2026-08-21: +500; S378: +400; S379: +200
+    Intent.WEB_SEARCH: 13_100,  # 2026-08-21: +500; S378: +400; S379: +200
+    Intent.WEB_FETCH: 12_300,  # S378: +100; S379: +200
+    Intent.MEMORY_OP: 11_700,  # S378: +500; S379: +200
+    Intent.BROWSE: 11_800,  # S378: +100; S379: +200
     Intent.CHAT: 6_000,  # measured 4,730 (unchanged — no CRITICAL RULES in CHAT branch)
 }
 

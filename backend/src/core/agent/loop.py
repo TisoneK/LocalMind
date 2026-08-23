@@ -454,6 +454,145 @@ _SYNTH_TODO_PREFIX = {
 }
 
 
+# ── Diff emission for ANY file-writing path (B-2026-08-23-32) ───────────────
+# The edit_file path emits `file_diff` from structured hunks in its ToolResult
+# metadata (edit_file.py._diff_hunks). file_write and shell writes carry no
+# hunks, so the loop computes them itself: snapshot the file's pre-write
+# content, then after the successful write produce hunks from the unified diff
+# and emit the SAME file_diff obs event the frontend DiffBlock renders — so
+# diff mode works even when the file was written by any other means, not just
+# edit_file.
+
+_PREWRITE_SNAPSHOTS: dict[str, str] = {}
+
+
+def _diff_hunks_module(original: str, modified: str, path: str) -> list[dict]:
+    """Structural hunks for the frontend DiffBlock — mirrors
+    edit_file._diff_hunks (kept independent to avoid a cross-tool import)."""
+    import difflib
+    import re as _re
+
+    orig_lines = original.splitlines(keepends=True)
+    mod_lines = modified.splitlines(keepends=True)
+    diff = difflib.unified_diff(
+        orig_lines, mod_lines, fromfile=f"a/{path}", tofile=f"b/{path}", lineterm="", n=3
+    )
+    diff_lines = list(diff)
+    if not diff_lines:
+        return []
+    hunks: list[dict] = []
+    current: dict | None = None
+    old_line = 0
+    new_line = 0
+    for line in diff_lines:
+        m = _re.match(r"^@@@? -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
+        if m:
+            if current:
+                hunks.append(current)
+            old_start = int(m.group(1))
+            old_count = int(m.group(2) or "1")
+            new_start = int(m.group(3))
+            new_count = int(m.group(4) or "1")
+            current = {
+                "filePath": path,
+                "oldStart": old_start,
+                "oldLines": old_count,
+                "newStart": new_start,
+                "newLines": new_count,
+                "lines": [{"type": "hunk_header", "content": line, "oldLine": old_start, "newLine": new_start}],
+            }
+            old_line = old_start
+            new_line = new_start
+            continue
+        if current is None:
+            continue
+        if line.startswith("+"):
+            current["lines"].append({"type": "added", "content": line[1:], "newLine": new_line})
+            new_line += 1
+        elif line.startswith("-"):
+            current["lines"].append({"type": "removed", "content": line[1:], "oldLine": old_line})
+            old_line += 1
+        else:
+            current["lines"].append(
+                {"type": "context", "content": line[1:], "oldLine": old_line, "newLine": new_line}
+            )
+            old_line += 1
+            new_line += 1
+    if current:
+        hunks.append(current)
+    return hunks
+
+
+def _emit_file_diff(
+    obs,
+    *,
+    path: str,
+    content_before: str = "",
+    content_after: str = "",
+    diff_hunks: list[dict] | None = None,
+    diff_language: str = "",
+    diff_additions: int = 0,
+    diff_deletions: int = 0,
+) -> None:
+    """Emit the ``file_diff`` obs event once for a file-changing tool.
+
+    Called either with explicit ``diff_hunks`` (edit_file path) or with
+    ``content_before`` / ``content_after`` (file_write / shell writes), in
+    which case the hunks are computed here. No-ops when there is no diff.
+    """
+    if obs is None or not path:
+        return
+    if diff_hunks is None:
+        if content_before == content_after:
+            return
+        diff_hunks = _diff_hunks_module(content_before, content_after, path)
+        if not diff_hunks:
+            return
+        before_lines = content_before.splitlines() or []
+        after_lines = content_after.splitlines() or []
+        diff_additions = sum(1 for line in after_lines if line not in before_lines)
+        diff_deletions = sum(1 for line in before_lines if line not in after_lines)
+    obs.emit(
+        "file_diff",
+        diff_hunks=diff_hunks,
+        diff_language=diff_language,
+        path=path,
+        diff_additions=diff_additions,
+        diff_deletions=diff_deletions,
+    )
+
+
+def _record_prewrite_snapshot(path: str) -> None:
+    """Store the pre-write content of a file for a later diff emission.
+
+    file_write/scripts overwrite the file IN PLACE inside the tool, so the
+    loop cannot read the old content afterward. Snapshot before dispatch
+    (from the on-disk file if it exists) and stash it in a module-level
+    dict keyed by absolute path; the post-run hook consumes and clears it.
+    """
+    if not path:
+        return
+    import os
+
+    abs_path = os.path.abspath(os.path.expanduser(path))
+    try:
+        if os.path.isfile(abs_path):
+            with open(abs_path, "r", encoding="utf-8", errors="replace") as f:
+                _PREWRITE_SNAPSHOTS[abs_path] = f.read()
+        else:
+            _PREWRITE_SNAPSHOTS[abs_path] = ""  # new file → empty before
+    except Exception:
+        _PREWRITE_SNAPSHOTS[abs_path] = ""
+
+
+def _consume_prewrite_snapshot(path: str) -> str | None:
+    """Return + clear the pre-write snapshot for a path (None when unknown)."""
+    import os
+
+    abs_path = os.path.abspath(os.path.expanduser(path))
+    return _PREWRITE_SNAPSHOTS.pop(abs_path, None)
+
+
 def _synthetic_todo_text(tool_name: str, tool_input: str) -> str:
     """One terse imperative step label per real tool execution.
 
@@ -2722,10 +2861,14 @@ class AgentLoop:
                     tc_result = None
                     try:
                         tc_intent = Intent(tc_name)
+                        # B-2026-08-23-32: snapshot pre-write content so a diff
+                        # can be emitted after a file_write in a batch.
+                        if tc_name == "file_write":
+                            _record_prewrite_snapshot(tc_args.get("path", ""))
                         tc_result, tc_failed, _ = await dispatch_with_retry(
                             tc_intent,
                             tc_input,
-                            obs=_obs,  # ADR-18 P3: delegation streams into the UI
+                            obs=_obs,  # ADR 18 P3: delegation streams into the UI
                             allowed_tool_names=effective_allowed,
                         )
                         # ADR-40 option C: a describe_tool call in a batch loads
@@ -2753,6 +2896,21 @@ class AgentLoop:
                                     diff_additions=tc_result.metadata.get("diff_additions", 0),
                                     diff_deletions=tc_result.metadata.get("diff_deletions", 0),
                                 )
+                        # B-2026-08-23-32: compute + emit a diff for file_write
+                        # in a batch (same shape as the single-tool path).
+                        if tc_name == "file_write" and tc_result and tc_result.success:
+                            _pre = _consume_prewrite_snapshot(tc_args.get("path", ""))
+                            if _pre is not None:
+                                _dest = (tc_result.metadata or {}).get("path", "")
+                                if _dest:
+                                    try:
+                                        with open(_dest, "r", encoding="utf-8", errors="replace") as _f:
+                                            _after = _f.read()
+                                    except Exception:
+                                        _after = ""
+                                    _emit_file_diff(
+                                        _obs, path=str(_dest), content_before=_pre, content_after=_after
+                                    )
                     except Exception as e:
                         tc_obs = f"[Tool {tc_name} error: {e}]"
                         tc_failed = True
@@ -3490,6 +3648,10 @@ class AgentLoop:
                     _maybe_invalidate_inspection_cache(tool_name, tool_input)
 
                     if tool_name == "file_write":
+                        # B-2026-08-23-32: snapshot the pre-write content so a
+                        # diff can be emitted for overwrite/new-write even
+                        # though the tool replaces the file in place.
+                        _record_prewrite_snapshot(tool_args.get("path", ""))
                         try:
                             from tools.contracts.base import ToolRegistry
 
@@ -3578,12 +3740,36 @@ class AgentLoop:
                                 )
 
                     else:
+                        # B-2026-08-23-32: snapshot before a shell write so a
+                        # diff can be emitted when the command rewrote a file.
+                        # dispatch_with_retry is also the path for other tools
+                        # — a harmless no-op for reads.
+                        _record_prewrite_snapshot(tool_args.get("path", ""))
                         tool_result, tool_failed, retry_count = await dispatch_with_retry(
                             tool_intent,
                             tool_input,
                             adapter=active_adapter,
                             allowed_tool_names=effective_allowed,
                         )
+
+                    # B-2026-08-23-32: emit a diff for ANY file-writing tool,
+                    # not just edit_file. file_write replaces the file in
+                    # place, so the loop computes hunks from the pre-write
+                    # snapshot + the now-landed on-disk content — the same
+                    # file_diff obs event the frontend DiffBlock renders.
+                    if tool_name == "file_write" and tool_result and tool_result.success:
+                        _pre = _consume_prewrite_snapshot(tool_args.get("path", ""))
+                        if _pre is not None:
+                            _dest = (tool_result.metadata or {}).get("path", "")
+                            if _dest:
+                                try:
+                                    with open(_dest, "r", encoding="utf-8", errors="replace") as _f:
+                                        _after = _f.read()
+                                except Exception:
+                                    _after = ""
+                                _emit_file_diff(
+                                    _obs, path=str(_dest), content_before=_pre, content_after=_after
+                                )
 
                     # ADR-40 option C: a describe_tool call loads the named
                     # long-tail tool into this run's native tools param.
