@@ -4766,3 +4766,14 @@ program + ADR-22). -->
 - **Backlogged:** B-2026-08-22-3 (High, narration-without-action + CAT2 criteria artifact), B-2026-08-22-4 (Medium, empty final text). Harness hardened (rate-limit retry, callable expect checks, CONV-04 heuristic).
 - **Outcome:** done — 2 backlog items, harness fixes, findings recorded in conversation-test-sets.md.
 - **Report:** none
+
+---
+## 2026-08-22 — Session 342 addendum 2 — Thinker coverage gap diagnosed (root cause of narration-without-action)
+
+- **Agent:** Buffy | **Model:** deepseek/deepseek-v4-flash | **Platform:** macOS (Tison's local machine) | **Role:** engineer | **Core:** 0.5.0
+- **Feature:** none — diagnosis
+- **Task:** User asked whether the Thinker was supposed to catch the CONV-05/06 narration-without-action and honesty gaps — "is our thinker still shallow, thinking widely instead of gathering evidence?"
+- **Answer (evidence, not assumption):** the Thinker is not shallow — it is ABSENT on the parent-agent pre-tool path. Two call sites only: (1) agent_runtime.py:907 pre-tool, but ONLY on the conversational fast-path (S354); (2) loop.py:3543 post-tool, gated on `observation`. Verified via saved SSE event counts: CONV-05 T1/T2, CONV-06 T1, CONV-11 T2 → agent_thinker_start/done absent (0 tools, no fast-path). CONV-05 T3 / CONV-06 T3 (trailing "?") fast-pathed → Thinker ran. CONV-12 T2 (8 tools) → 4 post-tool consults. The Thinker prompt already contains the exact clarify-or-act guidance; it just never reaches the model on these turns.
+- **Fix direction (not yet implemented):** wire the S354 pre-tool consult into the parent-agent loop's first iteration, before any tool call. Related: CONV-05/06 T1 show no `agent_initialization_done` (init call also skips vague imperatives); CONV-06 T2 was `agent_loop_error`, not a silent drop → downgrade B-2026-08-22-4.
+- **Outcome:** diagnosis recorded in backlog (refines B-2026-08-22-3). Implementation pending user go-ahead.
+- **Report:** none
