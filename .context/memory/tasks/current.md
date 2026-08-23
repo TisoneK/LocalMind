@@ -1,16 +1,25 @@
 # Current Task
 
-**Status:** IDLE — Session 383 closed **B-2026-08-23-11** (todo title/content split).
+**Status:** IDLE — Session 395 closed (bulk backlog sprint: B-25 through B-37).
 
-## Session 383 outcome
+## Session 395 outcome (Sessions 384-395 bulk sprint)
 
-- **`358ea38`:** Todos now carry a short user-facing `title` alongside the full `content`:
-  - **Derivation:** `_title_for_goal` ("Create a.txt" / "Create the folder path-test") + `_title_for_sub_goal` ("Check current state" / "Write the file" / "Verify the result") in goal_interpreter; `derive_goal_tree` sets `DerivedGoal.title`; the runtime emits `{goal, sub_goals, title, sub_goal_titles}`.
-  - **Loop seeding**: `todo_created` emits `text=title` (UI label) + `content=full goal/route` (agent context + gate).
-  - **Bridge**: `chat.py _bridge_todo_event` persists content + title (falls back when only text).
-  - **DB**: migration `010_todo_title.sql` adds `todos.title`; `upsert_todo(title=...)` writes it on create, never wipes on status updates; `list_todos` includes it.
-  - **API**: TodoItem/CreateTodoRequest/UpdateTodoRequest + GET/POST/PATCH thread `title` (`r["title"]` guarded via `in r.keys()`).
-  - **Frontend**: `TodoItem.title?/content?` types; `normalizeTodoEvent` prefers title → text; `getTodos` maps title-first; `TodoList` renders `displayText(t)` (title||text) with a tooltip showing full content when different, `sent truncated` for long titles; sub-rows too.
-- **Fallbacks**: legacy callers (text only) → content fills both; DB rows with NULL title → content shows.
-- **Verification**: backend **2507 passed** / 2 skipped (23 goal-derive tests incl. 4 new title tests; todo API suite updated for the column); frontend **348 passed** + tsc clean; ruff clean (pre-existing E501s only).
-- **Next:** continue the backlog one item at a time. Top candidates: **B-2026-08-23-33** (op permissions), **-34** (chat modes), **-35** (never-rude declines), **-37** (write-stats table), or quick UI wins (-26 ⋮ panel overflow, -9 action-pill tooltips). Pre-existing untracked trace residue at `backend/Dev/` + `backend/scratch/` left untouched.
+Completed 10 backlog items across 12 sessions (384-395):
+
+| Session | Item | Commit | Summary |
+|---------|------|--------|---------|
+| 384 | B-25 Agent `.tmp` folder | `41f2ff3` | Per-session `.tmp/` subfolder for scratch work |
+| 385 | B-26 Three-dot menu | `504db33` | Left panel ⋮ overflow menu (Terminal, Agents, Memory, Settings) |
+| 386 | B-27 Startup session | `cf6a6c2` | Resume-last vs new-chat setting + boot logic |
+| 387 | B-28 Embed download | `0e81e95` | One-click Ollama embed pull with SSE progress |
+| 388 | B-31 grep tool | `f632ca6` | `grep_search` tool for shell-off text search |
+| 389 | B-34 Chat modes | `dcd301a` | Auto / Agent / Direct (no-tools) mode picker |
+| 390 | B-35 Never rude | `00aa6c2` | Politeness rule + softened safety gate |
+| 391 | B-36 Efficient read | `23c2fbd` | Line numbers, line-aware truncation, CRLF preservation |
+| 392 | B-37 Write stats | `2050882` | `session_writes` table + logging + API |
+| 395 | B-33 Op permissions | `d876703` | 8 tool-family permission toggles |
+| 394 | B-29 Package UI | `e904686` | PackageInstaller in Terminal panel (pip/npm/ollama) |
+
+**Test results:** 2425 backend passed (excluding 3 pre-existing failures: sqlite_vec, trivial_input, vector_store_busy); tsc clean; all pushed.
+
+**Remaining unchecked backlog items:** B-30 (advisory/scoping only — do NOT build), B-9 (action-pill tooltips), B-12 (clickable filenames), B-20 (code block rewrite), B-21 (time formatting), B-22 (token K/M format), B-23 (advanced image viewer).
