@@ -5504,3 +5504,15 @@ authoritative.
 - **Outcome:** done — injected SYNTHESIS REMINDER user message in loop.py when successful tool steps exist, no failed/pending tools, iteration >= 1, and no observation log. Nudge tells model to present gathered data rather than plan more actions.
 - **Verification:** pending live-test (requires real model on port 8765).
 - **Open items:** user to live-test, then move to next issue.
+
+## Session 397 (continued) — post-evidence narration gate detector — 2026-08-24
+
+- **Feature:** none (bug fix continuation).
+- **Task:** First push (9f45b68) had only a synthesis nudge in iteration_messages - insufficient because the model can ignore it and the gate accepts narration as final on iteration >= 1. Added a proper acceptance gate detector: narrates_after_evidence() + [POST-EVIDENCE NARRATION] nudge that demands synthesis, not more tool calls.
+- **Commits:** `9f45b68` (synthesis nudge, first attempt), `fc8f98e` (post-evidence narration detector, real fix). Both pushed.
+- **Live-test results:**
+  - bankofai/deepseek-v4-flash: 8 tool calls for /tmp listing + home large files, properly synthesized results with headings and data. No narration bug.
+  - bankofai: shell uname -a + free -h, synthesized table summary. No narration.
+  - zai/glm-4.5-flash: shell ran, synthesis rate-limited by provider, raw evidence preserved and shown. No narration.
+- **Verification:** live-tested on both bankofai and zai. Post-evidence narration gate ready for the original bug pattern when it recurs.
+- **Open items:** user to live-test in the real app, then move to next issue.
