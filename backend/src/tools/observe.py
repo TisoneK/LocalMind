@@ -348,4 +348,7 @@ register_tool(
     cost=0.0,
     latency_ms=150,
     parallelizable=True,
+    # A bare observe() (no query) returns the default overview (active window +
+    # system state + running apps) — never reject it as degenerate input.
+    input_optional=True,
 )

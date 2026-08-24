@@ -34,15 +34,30 @@ def register_tool(
     cost: float = 0.1,
     latency_ms: int = 500,
     parallelizable: bool = True,  # A3: safe to run concurrently by default
+    input_optional: bool = False,  # empty input is a valid, meaningful call
 ):
-    """Register a callable as the handler for an intent, with metadata."""
+    """Register a callable as the handler for an intent, with metadata.
+
+    ``input_optional=True`` marks a tool whose *empty* input is a legitimate,
+    meaningful call (e.g. sysinfo/observe default to a full overview when no
+    query is given). The agent loop's degenerate-input guard exempts these,
+    so a bare ``sysinfo()`` is dispatched instead of being rejected as "too
+    short" — the failure mode that stalled the loop in sessions 399/400.
+    """
     _REGISTRY[intent] = {
         "fn": fn,
         "description": description,
         "cost": cost,
         "latency_ms": latency_ms,
         "parallelizable": parallelizable,
+        "input_optional": input_optional,
     }
+
+
+def input_is_optional(intent: Intent) -> bool:
+    """True if empty input is a valid call for this intent (see register_tool)."""
+    entry = _REGISTRY.get(intent)
+    return bool(entry and entry.get("input_optional", False))
 
 
 def register_validator(intent: Intent, fn: Callable[[str], str | None]) -> None:

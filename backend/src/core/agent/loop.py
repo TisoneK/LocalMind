@@ -729,6 +729,21 @@ def _intent_for_tool(tool_name: str) -> Intent:
         return Intent.SHELL
 
 
+def _tool_allows_empty_input(tool_name: str) -> bool:
+    """True if the tool declares empty input as a valid, meaningful call.
+
+    Tools like sysinfo/observe default to a full overview when called with no
+    query, so a bare call must NOT be rejected by the degenerate-input guard.
+    The tool declares this via ``register_tool(..., input_optional=True)``.
+    """
+    try:
+        from tools import input_is_optional
+
+        return input_is_optional(_intent_for_tool(tool_name))
+    except Exception:
+        return False
+
+
 def _tool_provider(tool_result) -> Optional[str]:
     """Surface which backend engine a tool used, for the Actions-card badge.
 
@@ -3142,7 +3157,9 @@ class AgentLoop:
                     if _name not in AGENT_ALLOWED_TOOLS:
                         logger.warning(f"[agent.loop] parallel: rejected tool {_name!r}")
                         continue
-                    if not _inp or len(_inp.strip("?. \t")) < 3:
+                    if (
+                        not _inp or len(_inp.strip("?. \t")) < 3
+                    ) and not _tool_allows_empty_input(_name):
                         logger.warning(f"[agent.loop] parallel: rejected degenerate input for {_name!r}")
                         continue
                     if _name == "file_write":
@@ -3605,7 +3622,11 @@ class AgentLoop:
                         continue
 
                 # Semantic validation: reject empty or degenerate inputs
-                if not tool_input or len(tool_input.strip("?. \t")) < 3:
+                # — except for tools that declare empty input as valid
+                # (sysinfo/observe default to a full overview when bare).
+                if (
+                    not tool_input or len(tool_input.strip("?. \t")) < 3
+                ) and not _tool_allows_empty_input(tool_name):
                     observation = (
                         f"[Action rejected: input for '{tool_name}' is empty or too short. "
                         f"Provide a specific, meaningful input and try again.]"
@@ -4671,7 +4692,9 @@ class AgentLoop:
                         # Extract tool input from normalized args
                         tool_input = _extract_tool_input(tc_name, _normalized_args)
 
-                        if not tool_input or len(tool_input.strip("?. \t")) < 3:
+                        if (
+                            not tool_input or len(tool_input.strip("?. \t")) < 3
+                        ) and not _tool_allows_empty_input(tc_name):
                             logger.warning(
                                 f"[agent.loop] minimax intercept: degenerate input for {tc_name!r}: {tool_input!r}"
                             )
@@ -5556,7 +5579,9 @@ class AgentLoop:
                             if _tc_name not in AGENT_ALLOWED_TOOLS:
                                 continue
                             _tc_input = _extract_tool_input(_tc_name, _norm_args)
-                            if not _tc_input or len(_tc_input.strip("?. \t")) < 3:
+                            if (
+                                not _tc_input or len(_tc_input.strip("?. \t")) < 3
+                            ) and not _tool_allows_empty_input(_tc_name):
                                 continue
                             _tc_label_parts = {
                                 "web_search": f"Searching: {_norm_args.get('query', '')[:80]}",

@@ -742,4 +742,7 @@ register_tool(
     cost=0.0,
     latency_ms=50,
     parallelizable=True,
+    # A bare sysinfo() (no query) is the natural "show me my system" call and
+    # returns the full default summary — never reject it as degenerate input.
+    input_optional=True,
 )
