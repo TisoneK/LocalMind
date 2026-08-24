@@ -5534,3 +5534,16 @@ authoritative.
 - **Outcome:** done — `register_tool(..., input_optional=True)` + `tools.input_is_optional()` + `loop._tool_allows_empty_input()`; all four guard sites (single-call 3628, parallel 3161, minimax 4697, minimax-inline 5582) exempt input-optional tools. `sysinfo` and `observe` marked input_optional. New regression test `tests/core/test_degenerate_input_guard.py` (5 cases).
 - **Verification:** `tests/tools/` 508 passed; `tests/core/` 1267 passed (deterministic order; one prior run showed a `pytest-randomly` ordering flake in `test_trivial_input`, passes in isolation and at baseline — unrelated). Bare `sysinfo('')` confirmed to return the full summary; `shell` still requires input (no regression).
 - **Open items:** user to live-test the two original prompts in the real app. Downstream narration/fabrication behaviors seen in export 1 were largely triggered by this guard; re-observe after this fix before touching the (fragile) narration-detector heuristics.
+
+## Session 399 (continued) — backlog burn-down + two live-reported fixes — 2026-08-24
+
+- **Feature:** none (agent/UX fixes from user chat exports + live screenshots).
+- **Task:** After the sysinfo guard fix, user backlogged 9 items (B-2026-08-24-1..9) and asked to start one at a time. Then surfaced 3 more live failures via screenshot (tool timeout too narrow; raw thinking leaking as output after failure; sysinfo switching to shell).
+- **Commits (all pushed to main):**
+  - `0827fdf` — **B-2026-08-24-5** label swap: reasoning box "Approach"→"Thinking"; internal analysis phase "Thinking"→"Approach"/"Approach ready" (display labels only; phase-type keys + `agent_thinker_*` events untouched). Frontend 43 + backend 104 tests.
+  - `e827e8b` — **B-2026-08-24-10** shell timeout 45s→120s (config.py + .env.example; configurable) + actionable timeout message. 68 shell tests. (User: "timeout too narrow / not realistic".)
+  - `7552aa0` — **B-2026-08-24-11** declared `psutil>=5.9.0` — it powered sysinfo's disk/RAM/CPU/network sections but was never a dependency, so sysinfo returned only OS/hostname and the agent shelled out for disk. Verified on macOS; tools 508 pass. (User: "sysinfo should have given everything instead of switching back to shell".)
+- **Also logged:** B-2026-08-24-6 augmented with the failure-path manifestation (raw deliberation emitted as output after a tool failure); B-2026-08-24-9 (agent over-discloses its construction); B-2026-08-24-12 (native sysinfo fallbacks when psutil absent — follow-up to -11).
+- **Discovery:** 18 WorkspaceLayout frontend tests fail at baseline (stale mock missing `getSettings` from B-2026-08-23-34) — pre-existing, spawned a task chip.
+- **Verification:** unit/tool tests green as noted. LIVE-TEST PENDING per B-2026-08-24-8 — the user's own app holds dev ports 8000/3000 (not disrupted); Windows-specific paths (shell timeout on a real scan, sysinfo disk after venv rebuild) need the user to verify on their machine.
+- **Open items:** B-2026-08-24-1 (narration flow — CORRECT existing), -2 (failure-aware iteration cap), -3 (remove old mode selector — started, not yet done), -4 (agent-turn titles), -6 (thinking leak, incl. failure path), -7 (gemini bypasses agent), -9 (self-disclosure), -12 (sysinfo native fallbacks).
