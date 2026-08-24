@@ -2902,6 +2902,36 @@ class AgentLoop:
                     context_content += task_state_refresh
                 iteration_messages.append({"role": "user", "content": context_content})
 
+            # B-2026-08-24: synthesis nudge. When tools have succeeded in
+            # earlier iterations but the model is past iteration 1, it should
+            # SYNTHESIZE from the evidence already gathered, not plan more
+            # actions. Without this nudge, weak models keep narrating
+            # ("Let me run...") instead of answering, causing the
+            # action-narration gate to fire repeatedly. Only inject when
+            # real tool evidence exists (successful steps in the trace).
+            _has_successful_tools = any(
+                s.tool_name and not s.tool_failed
+                for s in trace.steps
+            )
+            _no_pending_tool = not any(
+                s.tool_name and s.tool_failed
+                for s in trace.steps
+            )
+            if (
+                _has_successful_tools
+                and _no_pending_tool
+                and iteration >= 1
+                and not observation_log  # no failed tools to retry
+            ):
+                _synth_hint = (
+                    "\nSYNTHESIS REMINDER: You have already gathered tool evidence "
+                    "in this conversation (see the tool results above). "
+                    "Your NEXT response must PRESENT the actual results to the user — "
+                    "report the data you found, do NOT say 'let me run' or 'I'll check'. "
+                    "If you have the data, show it now. Do NOT call another tool.\n"
+                )
+                iteration_messages.append({"role": "user", "content": _synth_hint})
+
             # B-2026-08-02-4 (A4): deterministic tool-result simplification.
             # When the accumulated conversation has more than the newest few
             # tool results, stub the older oversized ones (head + omission
