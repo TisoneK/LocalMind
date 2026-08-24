@@ -851,6 +851,28 @@ def same_tool_failure_streak(trace) -> tuple[int, str]:
     return streak, last_tool
 
 
+# B-2026-08-24-2: the iteration cap is a failsafe for a FAILING loop, not a
+# penalty on a legitimately long task whose tools keep succeeding. Past the base
+# cap we grant up to this many extra iterations, but ONLY while the run is still
+# making successful progress (the most recent tool step succeeded). A failure at
+# the cap stops the loop (also covered by same_tool_failure_streak); a success
+# earns more room, bounded by this ceiling AND the wall-clock cap.
+_PROGRESS_EXTENSION_ITERS = 8
+
+
+def _iteration_budget_extendable(trace) -> bool:
+    """True if the run may continue past the base iteration cap.
+
+    Extend only when the most recent tool-executing step SUCCEEDED — that is
+    "success tool execution" the user asked us not to punish. A failed last
+    tool (or no tool ever run) does not earn an extension.
+    """
+    for step in reversed(getattr(trace, "steps", []) or []):
+        if getattr(step, "tool_name", ""):
+            return not bool(getattr(step, "tool_failed", False))
+    return False
+
+
 # ── Tool-error recovery (spec §17 self-correction, §28 error handling) ────────
 # ROOT FIX (B-2026-08-18-9): when a tool FAILS, the loop used to surface only
 # "[Tool 'X' returned error_type='...']" and leave recovery to the model — which
@@ -1556,6 +1578,11 @@ class AgentLoop:
             _effective_max_iter = agent_config.max_iterations
         else:
             _effective_max_iter = MAX_ITERATIONS
+        # B-2026-08-24-2: hard ceiling for the progress-based extension. The base
+        # cap (_effective_max_iter) is the failsafe for a stuck/failing loop; a
+        # run that keeps succeeding may extend up to this ceiling (still bounded
+        # by the wall-clock cap). Fixed range → the loop can never run away.
+        _iter_hard_cap = _effective_max_iter + _PROGRESS_EXTENSION_ITERS
         if (
             agent_config is not None
             and getattr(agent_config, "max_wall_clock_secs", None)
@@ -2723,8 +2750,23 @@ class AgentLoop:
         # otherwise) instead of the raw MAX_ITERATIONS / MAX_WALL_CLOCK_SECS.
         _repetition_nudged = False  # B-2026-08-18-3: fire the progress nudge once per turn
         _divergent_stop = False  # B-2026-08-21: divergent tool budget broke the loop
-        for iteration in range(_effective_max_iter):
+        for iteration in range(_iter_hard_cap):
             trace.iterations_used = iteration + 1
+
+            # B-2026-08-24-2: past the BASE cap, only continue while the run is
+            # still making successful progress. The iteration cap is a failsafe
+            # for a failing/stuck loop, not a penalty on a legitimately long task
+            # whose tools keep succeeding. A non-progressing run stops here at the
+            # base cap (unchanged behavior); a succeeding run earns up to
+            # _PROGRESS_EXTENSION_ITERS more, still bounded by the wall-clock cap.
+            if iteration >= _effective_max_iter and not _iteration_budget_extendable(trace):
+                logger.info(
+                    "[agent_loop] base iteration cap %d reached and not progressing "
+                    "(iter %d) — stopping",
+                    _effective_max_iter,
+                    iteration + 1,
+                )
+                break
 
             # ADR-5: hard wall-clock cap. The loop terminates on "done,
             # blocked, OR limit" — this is the time-based limit. Prevents
@@ -2763,7 +2805,7 @@ class AgentLoop:
             task_state.iteration = iteration + 1
             task_state.set_budget(
                 iter_used=iteration + 1,
-                iter_max=_effective_max_iter,
+                iter_max=_iter_hard_cap,
                 wall_used=_elapsed,
                 wall_max=_effective_max_wall,
             )
@@ -2969,7 +3011,7 @@ class AgentLoop:
                 trimmed_log = observation_log
                 if len(observation_log) > _OBS_LOG_TOTAL_CAP:
                     trimmed_log = "…[earlier observations truncated]\n" + observation_log[-_OBS_LOG_TOTAL_CAP:]
-                context_content = f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{_effective_max_iter}. "
+                context_content = f"{trimmed_log}{failure_hint}\nIteration {iteration + 1}/{_iter_hard_cap}. "
                 # ADR-18 P0: refresh the task-state progress/budget lines
                 # into the per-iteration context (criteria stay in the
                 # system prompt; only progress changes per iteration).
@@ -5713,7 +5755,7 @@ class AgentLoop:
                     _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
                         trace=trace,
                         iteration=iteration,
-                        effective_max_iter=_effective_max_iter,
+                        effective_max_iter=_iter_hard_cap,
                         loop_messages=loop_messages,
                         observation_log=observation_log,
                         active_adapter=active_adapter,
@@ -5862,7 +5904,7 @@ class AgentLoop:
                 _gate_suffix, _gate_final = await self._acceptance_gate_at_final_answer(
                     trace=trace,
                     iteration=iteration,
-                    effective_max_iter=_effective_max_iter,
+                    effective_max_iter=_iter_hard_cap,
                     loop_messages=loop_messages,
                     observation_log=observation_log,
                     active_adapter=active_adapter,
