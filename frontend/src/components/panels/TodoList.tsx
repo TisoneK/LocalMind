@@ -151,7 +151,6 @@ export function TodoList({ todos, actions = [], onToggle, onAdd }: TodoListProps
               <Fragment key={todo.id}>
               <motion.div
                 key={todo.id}
-                layout={!reduceMotion}
                 {...enter({ x: -6 })}
                 exit={reduceMotion ? undefined : { opacity: 0, x: -6 }}
                 data-testid="todo-row"

@@ -409,7 +409,6 @@ export function ActionHistory({ actions }: ActionHistoryProps) {
                 return (
                   <motion.div
                     key={action.id}
-                    layout={!reduceMotion}
                     {...enter({ x: -6 })}
                     exit={reduceMotion ? undefined : { opacity: 0 }}
                     className="pb-1.5"

@@ -97,7 +97,6 @@ function RunNode({
 
   return (
     <motion.div
-      layout={!reduceMotion}
       {...enter({ x: depth > 0 ? -8 : 0, y: depth > 0 ? 0 : 4, duration: 0.24 })}
       className={depth > 0 ? 'ml-3 border-l border-brand-border pl-2' : ''}
     >
@@ -201,7 +200,6 @@ function RunNode({
                       return (
                         <motion.div
                           key={phase.id}
-                          layout={!reduceMotion}
                           {...enter({ x: -6, duration: 0.2 })}
                           className="relative flex items-start gap-2 min-w-0 pb-1"
                           data-testid={`run-phase-${phase.type}`}
@@ -259,7 +257,6 @@ function RunNode({
                 {run.tools.map((tool) => (
                   <motion.div
                     key={tool.id}
-                    layout={!reduceMotion}
                     {...enter({ x: -6, duration: 0.18 })}
                     className="flex items-center gap-1.5 min-w-0 rounded bg-brand-bg-base px-2 py-1"
                   >

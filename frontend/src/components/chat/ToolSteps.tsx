@@ -243,7 +243,6 @@ function TimelineRow({
 
   return (
     <motion.div
-      layout={!reduceMotion}
       {...enter({ x: -6, duration: 0.22 })}
       className="flex items-stretch gap-2"
     >
