@@ -274,7 +274,7 @@ def build_chat_agent_prompt(
         "web_search": "Search the web for current information (returns URLs + snippets)",
         "web_fetch": "Fetch and read the actual content from a web page URL (use when search snippets are too thin)",
         "memory_op": "Store, recall, or delete persistent facts",
-        "sysinfo": "Get current system info (time, date, hardware)",
+        "sysinfo": "Get system info: time, date, OS, CPU, RAM, disk, network (IP/MAC/interfaces), GPU, top processes, environment, uptime, users, services/ports, installed programs. Offline, instant."
     }
     tool_list = "\n".join(
         f"  - {name}: {desc}"
@@ -376,7 +376,7 @@ def build_orchestrator_prompt(
         "web_search": "Search the web for current information (returns URLs + snippets)",
         "web_fetch": "Fetch and read actual content from a URL (use after web_search when snippets lack detail)",
         "memory_op": "Store, recall, or delete persistent facts",
-        "sysinfo": "Get current system info (time, date, hardware)",
+        "sysinfo": "Get system info: time, date, OS, CPU, RAM, disk, network (IP/MAC/interfaces), GPU, top processes, environment, uptime, users, services/ports, installed programs. Offline, instant."
     }
     tool_list = "\n".join(
         f"  - {name}: {desc}"

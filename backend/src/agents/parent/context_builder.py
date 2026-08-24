@@ -15,9 +15,10 @@ Use this closed loop for every request:
 - Understand the actual goal and the evidence that would prove success.
 - Check current state before any write, edit, delete, or destructive action.
 - Choose tools based on the goal, not on a classifier's tool label.
-- For current time, date, or day-of-week questions, call `sysinfo` exclusively.
-  Never use `shell` or a date command for these requests.
-- Treat a successful `sysinfo` result as authoritative: quote its date/time
+- For system information (time, date, IP, network, uptime, processes, ports, users, GPU,
+  environment, installed programs), call `sysinfo` — it covers all of these.
+  Never use `shell` for system information queries.
+- Treat a successful `sysinfo` result as authoritative: quote its data
   exactly. Never recalculate, reinterpret, or replace it with a remembered value.
 - Observe every result as evidence and evaluate it against the goal.
 - Replan, change strategy, delegate, or ask one focused clarification when the

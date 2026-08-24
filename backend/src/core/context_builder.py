@@ -285,8 +285,9 @@ You have access to these tools: {tool_summary}
 - file_task: Read file contents (PDF, DOCX, CSV, code, images)
 - file_write: Create or overwrite files on disk
 - edit_file: Edit existing files with search/replace/insert operations
-- sysinfo: Get current time/date/day and system specs (CPU, RAM, disk) — instant and offline.
-  Use it exclusively for time/date questions.
+- sysinfo: Get system info — time, date, OS, CPU, RAM, disk, network (IP/MAC/interfaces),
+  GPU, top processes, environment, uptime, users, services/ports, installed programs. Instant, offline.
+  Use it instead of shell for ANY system information query.
 - memory_op: Store and retrieve persistent facts across conversations
 - grep_search: Search file contents for text patterns (works without shell)
 """
@@ -541,18 +542,24 @@ TOOLS — what you have and exactly when to use each one
    Security: runs in the same Python environment as LocalMind — full filesystem/network access.
    Never use for: bash/shell commands (use SHELL), file reading (use FILE_TASK).
 
-6. SHELL  (run system commands, browse folders, check processes)
-   Use when: user wants to list files, open apps, check disk/network, run git/pip commands.
+6. SHELL  (run system commands, browse folders, manage processes)
+   Use when: user wants to list files, open apps, run git/pip/docker, install packages,
+             or run arbitrary OS commands.
+   NOTE: for system information (IP, uptime, ports, disk space, processes, env vars),
+   prefer SYSINFO — it is instant and offline.
    Enabled: yes (LOCALMIND_SHELL_ENABLED=true).
    Timeout: 20 seconds per command.
-   Trigger phrases: "show my files", "list documents", "run git", "how much disk space", "open …".
-   Never use for: running Python code (use CODE_EXEC), writing files (use FILE_WRITE).
+   Trigger phrases: "show my files", "list documents", "run git", "open …".
+   Never use for: running Python code (use CODE_EXEC), writing files (use FILE_WRITE),
+   system information queries (use SYSINFO).
 
-7. SYSINFO  (time, date, hardware specs — instant, no network)
-   Use when: user asks for current time, date, day of week, OS version, CPU/RAM/disk specs,
-             hostname, username, or installed Python packages.
-   Speed: <100 ms, fully offline. Never guess time/date — always call this tool.
-   Trigger phrases: "what time is it", "what's today's date", "how much RAM", "my CPU", "my OS".
+7. SYSINFO  (comprehensive system information — instant, offline)
+   Use when: user asks for time, date, OS, CPU, RAM, disk, network (IP/MAC/interfaces),
+             GPU, top processes, environment variables, uptime/load, users/groups,
+             listening ports, services, or installed programs.
+   Speed: <100 ms, fully offline. Always prefer over shell for system info queries.
+   Trigger phrases: "what time is it", "what's my IP", "how long has the system been up",
+             "show listening ports", "how much RAM", "my CPU", "my GPU", "show processes".
 
 8. MEMORY_OP  (store, recall, or delete persistent facts)
    Use when: user says "remember that …", "forget …", "what do you know about me", "recall …".
@@ -631,7 +638,7 @@ Tools available (the engine routes automatically — do not call tools yourself)
 - FILE_WRITE: create/save files to disk
 - CODE_EXEC: run Python code (must be in ```python``` block)
 - SHELL: run system commands
-- SYSINFO: current time, date, hardware specs (never guess these)
+- SYSINFO: system info — time, date, OS, CPU, RAM, disk, network, GPU, processes, env, uptime, users, ports (never guess these)
 - MEMORY_OP: remember/forget/recall facts ("remember that...")
 
 Rules: never fabricate tool output. Short answers unless detail is needed. \

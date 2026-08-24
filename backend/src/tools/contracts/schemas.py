@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 TOOL_SCHEMAS: Dict[str, Dict[str, type]] = {
     # ── sysinfo ───────────────────────────────────────────────────────────────
-    # goal: what system information to retrieve (RAM, CPU, OS, battery, etc.)
+    # goal: what system information to retrieve (time, OS, CPU, RAM, disk, network,
     "sysinfo": {
         "goal": str,
     },
