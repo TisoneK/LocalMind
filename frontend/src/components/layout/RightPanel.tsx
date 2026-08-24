@@ -205,7 +205,7 @@ export function RightPanel({
 
   if (collapsed) {
     return (
-      <div className="h-full bg-brand-bg-base border-l border-brand-border flex flex-col items-center py-3 gap-3">
+      <div className="h-full bg-brand-bg-panel border-l border-brand-border flex flex-col items-center py-3 gap-3">
         <button
           onClick={() => setShowSettings(true)}
           className="p-1.5 rounded hover:bg-brand-border text-brand-green-muted hover:text-brand-green-soft transition-colors"
@@ -239,7 +239,7 @@ export function RightPanel({
   }
 
   return (
-    <div className="h-full flex flex-col bg-brand-bg-base border-l border-brand-border">
+    <div className="h-full flex flex-col bg-brand-bg-panel border-l border-brand-border">
       {/* Header */}
       <div className="flex items-center justify-center gap-2 px-2 py-2 border-b border-brand-border">
         {tabs.map((tab) => (

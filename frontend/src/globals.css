@@ -365,7 +365,9 @@
 /* Prevent body scroll */
 html, body {
   overflow: hidden;
-  background: var(--brand-bg-base);
+  /* B-2026-08-24-13: app ground matches the Settings surface tone (panel),
+     so the shell reads as the same elevated surface as the Settings page. */
+  background: var(--brand-bg-panel);
 }
 
 /* Fix: Long words/URLs pushing containers wider */

@@ -227,7 +227,7 @@ export function LeftPanel({
   ];
 
   return (
-    <div className="h-full flex flex-col bg-brand-bg-base border-r border-brand-border">
+    <div className="h-full flex flex-col bg-brand-bg-panel border-r border-brand-border">
       {/* Header */}
       <div className="px-3 py-3 border-b border-brand-border">
         <div className="flex items-center gap-2 mb-2">

@@ -183,9 +183,9 @@ export function CenterPanel({
     : 'Connecting…';
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-brand-bg-base">
+    <div className="h-full min-h-0 flex flex-col bg-brand-bg-panel">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-brand-border bg-brand-bg-base">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-brand-border bg-brand-bg-panel">
         <div className="flex items-center gap-3">
           <h1 className="text-[12px] font-medium text-brand-green-soft">
             LocalMind Assistant

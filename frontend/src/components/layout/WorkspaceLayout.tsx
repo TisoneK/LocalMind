@@ -413,7 +413,7 @@ export function WorkspaceLayout() {
   );
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-brand-bg-base">
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-brand-bg-panel">
       {/* ADR-34 B-11: deliberate LocalMind title-bar chrome */}
       <TitleBar version="v0.5.16" />
       {/* Three-panel workspace */}

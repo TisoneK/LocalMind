@@ -55,7 +55,7 @@ export function TitleBar({ version }: TitleBarProps) {
     <div
       data-testid="title-bar"
       data-platform={api?.platform ?? 'browser'}
-      className={`flex items-center justify-between h-8 px-3 ${isMac ? 'pl-[84px]' : ''} overflow-hidden bg-brand-bg-base border-b border-brand-border select-none`}
+      className={`flex items-center justify-between h-8 px-3 ${isMac ? 'pl-[84px]' : ''} overflow-hidden bg-brand-bg-panel border-b border-brand-border select-none`}
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       onDoubleClick={showCustomControls ? handleMaximize : undefined}
       title={showCustomControls ? 'Double-click to maximize/restore' : undefined}
