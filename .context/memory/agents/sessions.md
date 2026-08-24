@@ -5516,3 +5516,12 @@ authoritative.
   - zai/glm-4.5-flash: shell ran, synthesis rate-limited by provider, raw evidence preserved and shown. No narration.
 - **Verification:** live-tested on both bankofai and zai. Post-evidence narration gate ready for the original bug pattern when it recurs.
 - **Open items:** user to live-test in the real app, then move to next issue.
+
+## Session 398 — sysinfo comprehensive expansion — 2026-08-24
+
+- **Feature:** none (tool expansion, reduces shell fallback triggers).
+- **Task:** Expand sysinfo tool to cover all platforms (Windows, Linux, macOS). Previously only covered: time, OS, CPU, RAM, disk (home), installed programs. Agent had to shell out for IP, uptime, ports, env vars, etc. — which triggered post-evidence narration bug.
+- **Commits:** 1 product (`4778dc8`) pushed to main.
+- **Outcome:** done — 8 new sections added: network (interfaces/IP/MAC/status via psutil), GPU (nvidia-smi/system_profiler/WMI), processes (top N by memory/CPU), environment (shell/PATH/cwd/env count), all disks (mounted filesystems with usage bars, container fallback), uptime (boot time/duration/load average), user (username/home/groups), services/ports (listening ports + Docker). Default summary expanded to include uptime, user, and brief network. Keyword router directs specific queries to relevant sections only. Updated tool_schemas.py description.
+- **Verification:** tested all 10 sections + 12 keyword routing queries on Linux container. Fixed environment keyword matching ("PATH" at end of query) and empty disk_partitions fallback for containers.
+- **Open items:** user to specify next issue.
