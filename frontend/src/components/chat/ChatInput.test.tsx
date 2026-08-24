@@ -18,7 +18,9 @@ describe('ChatInput', () => {
     await userEvent.type(textarea, 'hello world{enter}');
 
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(onSend).toHaveBeenCalledWith('hello world', undefined);
+    // B-2026-08-24-3: the per-message tool selector was removed — send just
+    // the message (the Chat/Agent/Auto mode picker replaces the intent hint).
+    expect(onSend).toHaveBeenCalledWith('hello world');
     // Input is cleared after send.
     expect(screen.getByPlaceholderText(/Ask LocalMind to build, debug, or explain/i)).toHaveValue('');
   });
@@ -38,25 +40,6 @@ describe('ChatInput', () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it('sends the explicitly selected tool as a hint', async () => {
-    const onSend = vi.fn();
-    render(
-      <ChatInput
-        onSend={onSend}
-        onAbort={() => {}}
-        isStreaming={false}
-      />,
-    );
-
-    // Open the tool menu and pick Shell.
-    await userEvent.click(screen.getByRole('button', { name: /Auto/i }));
-    await userEvent.click(screen.getByRole('button', { name: /Shell/i }));
-
-    const textarea = screen.getByPlaceholderText(/Ask LocalMind to build, debug, or explain/i);
-    await userEvent.type(textarea, 'run tests{enter}');
-
-    expect(onSend).toHaveBeenCalledWith('run tests', 'shell');
-  });
 
   it('aborts instead of sending while streaming', async () => {
     const onSend = vi.fn();

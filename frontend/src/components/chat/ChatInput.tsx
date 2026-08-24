@@ -4,23 +4,12 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Send,
   ChevronDown,
-  Wrench,
   Zap,
-  Command,
   Square,
   Navigation,
   MessageSquare,
   Bot,
 } from 'lucide-react';
-
-const toolOptions = [
-  { id: 'auto', label: 'Auto', icon: <Zap className="h-3 w-3" /> },
-  { id: 'file_write', label: 'File Write', icon: <Wrench className="h-3 w-3" /> },
-  { id: 'code_exec', label: 'Code Exec', icon: <Command className="h-3 w-3" /> },
-  { id: 'grep', label: 'Grep', icon: <Command className="h-3 w-3" /> },
-  { id: 'shell', label: 'Shell', icon: <Command className="h-3 w-3" /> },
-  { id: 'memory', label: 'Memory', icon: <Command className="h-3 w-3" /> },
-];
 
 // B-2026-08-23-34: Chat mode options.
 const chatModeOptions = [
@@ -36,6 +25,8 @@ interface ChatInputProps {
   isStreaming: boolean;
   modelName?: string;
   modelProvider?: string;
+  /** Retained for the call site; no longer used since the per-message tool
+   *  selector was removed (B-2026-08-24-3). */
   sessionId?: string;
   /** B-2026-08-23-34: Current chat mode. */
   chatMode?: string;
@@ -43,21 +34,15 @@ interface ChatInputProps {
   onChatModeChange?: (mode: 'auto' | 'agent' | 'direct') => void;
 }
 
-export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, modelProvider, sessionId, chatMode, onChatModeChange }: ChatInputProps) {
+export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, modelProvider, chatMode, onChatModeChange }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [steerInput, setSteerInput] = useState('');
-  const [selectedTool, setSelectedTool] = useState('auto');
-  const [toolMenuOpen, setToolMenuOpen] = useState(false);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const toolMenuRef = useRef<HTMLDivElement>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (toolMenuRef.current && !toolMenuRef.current.contains(e.target as Node)) {
-        setToolMenuOpen(false);
-      }
       if (modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) {
         setModeMenuOpen(false);
       }
@@ -65,16 +50,6 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Session 25: reset selectedTool to 'auto' when the session changes.
-  // Previously, the tool selection persisted across sessions — if the user
-  // selected "sysinfo" in one chat and then clicked "New Chat", the next
-  // message still sent tool='sysinfo' as a hint, causing the backend to
-  // skip intent classification and use the wrong tool. This is the
-  // "sysinfo was for the first chat it just didnt reset" bug.
-  useEffect(() => {
-    setSelectedTool('auto');
-  }, [sessionId]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -84,15 +59,14 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
     }
   }, [input]);
 
-  const currentTool = toolOptions.find((t) => t.id === selectedTool) ?? toolOptions[0];
   const currentModeOption = chatModeOptions.find((m) => m.id === (chatMode || 'auto')) ?? chatModeOptions[0];
 
   const handleSend = () => {
     const msg = input.trim();
     if (!msg || isStreaming) return;
-    // Pass the selected tool to onSend so the backend can use it as an
-    // intent hint. 'auto' means let the dispatcher decide.
-    onSend(msg, selectedTool === 'auto' ? undefined : selectedTool);
+    // B-2026-08-23-34 + B-2026-08-24-3: the chat-mode picker (Auto/Agent/Chat)
+    // replaced the old per-message tool/intent hint — send just the message.
+    onSend(msg);
     setInput('');
     // Reset textarea height
     if (textareaRef.current) {
@@ -215,41 +189,6 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
                 )}
               </div>
             )}
-
-            {/* Tool selector */}
-            <div className="relative" ref={toolMenuRef}>
-              <button
-                onClick={() => setToolMenuOpen(!toolMenuOpen)}
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-brand-green-muted hover:text-brand-green-soft hover:bg-brand-border transition-colors"
-                disabled={isStreaming}
-              >
-                {currentTool.icon}
-                <span>{currentTool.label}</span>
-                <ChevronDown className="h-2.5 w-2.5" />
-              </button>
-              {toolMenuOpen && (
-                <div className="absolute bottom-full right-0 mb-1 w-36 bg-brand-bg-rail border border-brand-border rounded-md shadow-xl z-50 overflow-hidden">
-                  <div className="p-1">
-                    {toolOptions.map((tool) => (
-                      <button
-                        key={tool.id}
-                        onClick={() => {
-                          setSelectedTool(tool.id);
-                          setToolMenuOpen(false);
-                        }}
-                        className="flex items-center gap-2 w-full px-2 py-1 rounded text-[10px] hover:bg-brand-border transition-colors text-brand-green-soft"
-                      >
-                        {tool.icon}
-                        <span>{tool.label}</span>
-                        {tool.id === selectedTool && (
-                          <span className="ml-auto text-brand-green">✓</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
 
             {/* Send / Abort */}
             {isStreaming ? (
