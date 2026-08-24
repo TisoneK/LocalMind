@@ -55,7 +55,7 @@ CODING_TOOLS: frozenset[str] = frozenset(
         "edit_file",
         "code_exec",
         "git",
-        "find_path",  # Session 125: name-match search — locate before listing
+        "system_search",  # Session 400: unified local search — single front door (find_path retired from model surface)
         "observe",  # B-2026-07-31-9: desktop awareness — window/clipboard/apps/state/recent files
         "calculator",  # B-2026-07-31-10: safe arithmetic — offline, bounded
         "csv",  # B-2026-07-31-10: bounded CSV parsing — offline, bounded

@@ -57,7 +57,7 @@ _BUDGETS = {
 # good if it still carries the rules past sessions fought for).
 _LOAD_BEARING_MARKERS = {
     Intent.SHELL: [
-        "find_path",  # Session 125: locate-by-name, never dir-dump
+        "system_search",  # Session 400: unified search front door, never dir-dump
         "file_task",  # directory listings vs file contents split
     ],
     Intent.CODE_EXEC: ["file_task"],  # read-before-write

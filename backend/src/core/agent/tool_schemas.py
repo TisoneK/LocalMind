@@ -79,7 +79,12 @@ CORE_TOOL_NAMES: frozenset[str] = frozenset(
         "file_task",
         "file_write",
         "edit_file",
-        "find_path",
+        # Session 400: find_path retired from the always-present surface —
+        # system_search (operation=files) is the single search front door
+        # (weak models split traffic between two name-search tools; zai trace
+        # picked find_path by name-affinity 4/4). find_path's schema stays in
+        # TOOL_DEFINITIONS (registry + internal file-ops dispatch intact).
+        "system_search",
         "web_search",
         "web_fetch",
         "web_research",  # Session 340: adaptive web acquisition — always loaded
@@ -97,6 +102,7 @@ CORE_TOOL_NAMES: frozenset[str] = frozenset(
 LONG_TAIL_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "browse",
+        "find_path",  # Session 400: retired from the always-present surface (system_search is the front door) — kept on-demand for compatibility
         "delegate",
         "delegate_parallel",
         "delegate_inline",
@@ -119,6 +125,32 @@ LONG_TAIL_TOOL_NAMES: frozenset[str] = frozenset(
 # ── Tool Definitions (OpenAI function-calling format) ────────────────────────
 
 TOOL_DEFINITIONS: list[dict] = [
+    # Session 400: system_search FIRST — weak models have position
+    # bias toward the first tools in the native param + prompt list; the
+    # search front door leads the catalog.
+
+    {
+        "type": "function",
+        "function": {
+            "name": "system_search",
+            "description": "Unified LOCAL SEARCH over this computer — use FIRST for any find/locate/discover question: files by name, recent files, largest files, duplicate copies, installed apps (+PATH executables), or which program opens a file type. Returns a small ranked page. Do NOT hunt with ls/dir/du/find in shell for these.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {"type": "string", "enum": ["files", "recent", "largest", "duplicates", "apps", "open_with"], "description": "files=name search; recent=modified last N days; largest=size-ranked; duplicates=same name+size; apps=installed programs; open_with=which app opens an ext"},  # noqa: E501
+                    "query": {"type": "string", "description": "Name pattern / app name (required for files+apps)"},  # noqa: E501
+                    "root": {"type": "string"},
+                    "ext": {"type": "string"},
+                    "kind": {"type": "string", "enum": ["file", "dir"]},
+                    "days": {"type": "integer"},
+                    "limit": {"type": "integer"},
+                    "offset": {"type": "integer"},
+                    "path": {"type": "string", "description": "File path for open_with"},
+                },
+                "required": ["operation"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {
@@ -313,12 +345,11 @@ TOOL_DEFINITIONS: list[dict] = [
                 "required": ["name"],
             },
         },
-    },
-    {
+    },    {
         "type": "function",
         "function": {
             "name": "shell",
-            "description": "Run a system command. Use for folder listings, finding files, git, disk checks, OS commands. To READ file contents use file_task — NOT shell. To CREATE a file use file_write. Commands MUST match the current OS (Windows=PowerShell: Get-ChildItem, New-Item -ItemType Directory -Force; Unix=bash: ls, mkdir -p, cat, grep, find). NEVER use Unix syntax on Windows.",  # noqa: E501
+            "description": "Run a system command — but for FINDING things (files, folders, recent work, largest files, duplicates, installed programs) ALWAYS use system_search instead; never find/ls/du/dir hunts. Shell is for: folder listings, git, disk checks, OS commands. To READ file contents use file_task — NOT shell. To CREATE a file use file_write. Commands MUST match the current OS (Windows=PowerShell: Get-ChildItem, New-Item -ItemType Directory -Force; Unix=bash: ls, mkdir -p, cat, grep, find). NEVER use Unix syntax on Windows.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -350,7 +381,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "sysinfo",
-            "description": "Get system info: time, date, OS, CPU, RAM, disk, network (IP/MAC/interfaces), GPU, top processes, environment, uptime, users, services/ports, installed programs. Offline, instant.",
+            "description": "Get system info: time, date, OS, CPU, RAM, disk, network (IP/MAC/interfaces), GPU, top processes, environment, uptime, users, services/ports. Offline, instant. For INSTALLED PROGRAMS / 'do I have X installed?' / 'where is python?' use system_search (operation=apps) instead.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {"query": {"type": "string"}},

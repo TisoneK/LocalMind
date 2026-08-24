@@ -51,9 +51,11 @@ def test_shell_scope_excludes_web_and_browse_tools():
     assert "browse" not in scope
     assert "shell" in scope
     assert "git" in scope
-    # Session 125: find_path is the locate-before-listing tool — always in
-    # the local-execution scope.
-    assert "find_path" in scope
+    # Session 400: system_search is the locate-before-listing front door —
+    # always in the local-execution scope (find_path retired from the
+    # model-facing surface; internal dispatch keeps Intent.FIND_PATH).
+    assert "system_search" in scope
+    assert "find_path" not in scope
 
 
 def test_shell_scope_excludes_proposal_and_subgoal_scratchpad():

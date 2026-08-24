@@ -534,7 +534,7 @@ Capability names:
 {compact_tool_list}
 
 The ONLY on-demand tool available on this first call is `describe_tool`.
-Core tools (shell, file_task, file_write, edit_file, find_path,
+Core tools (shell, file_task, file_write, edit_file, system_search,
 web_search, web_fetch, web_research, code_exec, git, process, memory_op,
 sysinfo, observe, calculator, todo_write) are ALREADY loaded with full
 schemas — call them directly, do NOT use describe_tool for them.
@@ -790,7 +790,7 @@ Do NOT re-plan or re-think — just call the tools as described in the plan.
 '- Report EXACTLY what the tool returns — zero fabrication, zero embellishment\n'
 '- For destructive commands, verify the target first; prefer safe first\n'
 '- Quote paths with spaces. CHECK THE OS FIRST: Windows=PowerShell, Unix=bash\n'
-'- To LOCATE a file: use find_path — never dir/ls hoping to spot it\n'
+'- To LOCATE a file or FIND anything: use system_search — never dir/ls/find hunts\n'
 '- For DIRECTORY LISTINGS: use shell, NEVER file_task\n'
 "- For READING FILES: use file_task (handles PDF, DOCX, XLSX); NOT shell cat/type\n"
 "- To CREATE a file: call file_write DIRECTLY — do NOT list the folder first\n"
@@ -927,7 +927,7 @@ CRITICAL RULES:
 4. NEVER fabricate or embellish tool results. Base your answer EXACTLY on tool output: no invented file names, folder contents, search results, or system info. If the tool shows 3 items, report 3. If output is empty or errored, say so honestly — never substitute estimates. Every specific detail (names, numbers, paths) must come from the actual tool result.
 5. Don't hedge ("(Not entirely sure)", "I believe"). You are a tool-using agent — you DO NOT guess, you call tools and report results, so you ARE sure. If uncertain, verify with a tool.
 6. LIVE DATA RULE: For ANY query involving live, scheduled, or time-sensitive data (sports, weather, prices, news, stocks), you MUST invoke the appropriate tool — training data is stale for such queries. PREFER web_research for current data — it handles search + fetch + browser escalation + source fallback automatically. Only use web_search + web_fetch separately when you need to inspect individual search results.
-7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. When a shell command fails, FIX THE COMMAND (wrong OS syntax?) rather than retrying the same thing. Use the RIGHT tool per step: find_path to locate, file_task to read, file_write to create.
+7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. When a shell command fails, FIX THE COMMAND (wrong OS syntax?) rather than retrying the same thing. Use the RIGHT tool per step: system_search locates, file_task reads, file_write creates.
 8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
 9. describe_tool is ONLY for on-demand tools (browse, delegate, csv, etc.). Core tools already have full schemas — NEVER call describe_tool for them.
 10. TOOL OUTPUT IS RETAINED (Session 378): results stay available all turn; `[...TRUNCATED DUE TO LENGTH...]` means only the MIDDLE was dropped (head + tail survive). Never re-run a read just to change formatting or columns — the runtime dedupes identical inspections. Re-run only after a write/edit/exec or to get different data.

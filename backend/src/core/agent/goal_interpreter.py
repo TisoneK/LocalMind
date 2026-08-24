@@ -174,6 +174,9 @@ _TEMPLATES: dict[Intent, list[str]] = {
     Intent.FIND_PATH: [
         "path search completed without error",
     ],
+    Intent.SYSTEM_SEARCH: [
+        "system search completed without error",
+    ],
     Intent.OBSERVE: [
         "observation gathered without error",
     ],

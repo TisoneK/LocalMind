@@ -199,6 +199,7 @@ from tools import (
     sql_tool,  # noqa: E402, F401 -- B-2026-07-31-10: SQL (read-only SQLite queries)
     subgoal,  # noqa: E402, F401 -- B-2026-08-02-8: subgoal scratchpad tools
     sysinfo,  # noqa: E402, F401 -- registers SYSINFO (offline: time, OS, CPU, RAM, disk, network, GPU, processes, env, uptime, users, services, installed programs)
+    system_search,  # noqa: E402, F401 -- Session 400: SYSTEM_SEARCH (unified local search: files/recent/largest/duplicates/apps/open_with)
     todo_write,  # noqa: E402, F401 -- ADR-43: agent-driven live UI todo checklist
     web_fetch,  # noqa: E402, F401 -- registers WEB_FETCH (follow-up URL fetching)
     web_search,  # noqa: E402, F401 -- registers WEB_SEARCH

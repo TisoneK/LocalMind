@@ -35,7 +35,7 @@ def test_coding_agent_config():
     assert cfg.allowed_tools == CODING_TOOLS
     assert cfg.allowed_tools == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
-         "git", "process", "find_path", "observe", "calculator", "csv", "json", "sql",
+         "git", "process", "system_search", "observe", "calculator", "csv", "json", "sql",
          "delegate", "delegate_parallel", "diagnostics", "propose_str_replace",
          "propose_write_file", "apply_proposed_edit", "add_subgoal",
          "update_subgoal", "create_plan", "skill", "best_of_n_edit"}
@@ -109,7 +109,7 @@ def test_coding_agent_scoped_tools_filters_non_coding():
         {"intent": "code_exec", "description": "code exec"},
         {"intent": "git", "description": "git"},
         {"intent": "process", "description": "process"},
-        {"intent": "find_path", "description": "find by name"},
+        {"intent": "system_search", "description": "unified local search"},  # Session 400
         {"intent": "diagnostics", "description": "diagnostics"},
         {"intent": "web_search", "description": "web search"},
         {"intent": "web_fetch", "description": "web fetch"},
@@ -194,7 +194,7 @@ def test_coding_tools_has_ten_tools():
     assert len(CODING_TOOLS) == 24
     assert CODING_TOOLS == frozenset(
         {"shell", "file_task", "file_write", "edit_file", "code_exec",
-         "git", "process", "find_path", "observe", "calculator", "csv", "json", "sql",
+         "git", "process", "system_search", "observe", "calculator", "csv", "json", "sql",
          "delegate", "delegate_parallel", "diagnostics", "propose_str_replace",
          "propose_write_file", "apply_proposed_edit", "add_subgoal",
          "update_subgoal", "create_plan", "skill", "best_of_n_edit"}

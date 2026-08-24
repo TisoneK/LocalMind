@@ -411,6 +411,23 @@ _CONVERSATIONAL_BLOCKED_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Session 400 (system-search-tool): first-person LOCAL-DISCOVERY questions
+# ("where is my LocalMind project?", "where did I save that CV?", "do I
+# have multiple copies…", "what's on my computer?") are search questions —
+# they need system_search, not exposition. First-person phrasing (my/I/we)
+# is the discriminator: "where is the Eiffel Tower?" stays conversational.
+_LOCAL_DISCOVERY_RE = re.compile(
+    r"\bwhere\s+(?:is|are)\s+(?:my|our)\b"
+    r"|\bwhere\s+(?:did|do|have)\s+i\b"
+    r"|\b(?:find|locate|search\s+for)\s+(?:my|our)\b"
+    r"|\blocate\s+(?:my|our|the|a|an)\s+\S"
+    r"|\bmultiple\s+copies\b"
+    r"|\bduplicate(?:s|d)?\s+(?:files?|copies|documents?)\b"
+    r"|\b(?:my|this)\s+(?:computer|pc|laptop|machine)\b"
+    r"|\bon\s+(?:my|this)\s+(?:computer|pc|laptop|machine)\b",
+    re.IGNORECASE,
+)
+
 # File-extension / URL signals that must always route to tools.
 _CONVERSATIONAL_FILE_EXT_RE = re.compile(
     r"\b\w+\.(?:py|js|ts|tsx|jsx|md|json|txt|pdf|docx?|xlsx?|csv|html?|css|sh|sql)\b",
@@ -533,6 +550,11 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
         return False
     if _CONVERSATIONAL_URL_RE.search(cleaned):
         return False
+    # Session 400: local-discovery questions are search questions — hard
+    # block even under knowledge imperatives ("describe where my CV is"
+    # still needs a filesystem search, not exposition).
+    if _LOCAL_DISCOVERY_RE.search(cleaned):
+        return False
 
     return True
 
@@ -587,6 +609,9 @@ def message_implies_tool_action(message: str) -> bool:
     if _CONVERSATIONAL_FILE_EXT_RE.search(message):
         return True
     if _CONVERSATIONAL_URL_RE.search(message):
+        return True
+    # Session 400: local-discovery phrasing implies a search tool action.
+    if _LOCAL_DISCOVERY_RE.search(message):
         return True
     return False
 

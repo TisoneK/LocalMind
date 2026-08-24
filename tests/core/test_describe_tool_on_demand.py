@@ -45,15 +45,15 @@ def test_tier_split_covers_catalog_exactly() -> None:
     catalog = {td["function"]["name"] for td in TOOL_DEFINITIONS}
     assert CORE_TOOL_NAMES | LONG_TAIL_TOOL_NAMES == catalog
     assert CORE_TOOL_NAMES.isdisjoint(LONG_TAIL_TOOL_NAMES)
-    assert len(CORE_TOOL_NAMES) == 16  # +todo_write (ADR-43, always-available)
-    assert len(LONG_TAIL_TOOL_NAMES) == 16
+    assert len(CORE_TOOL_NAMES) == 16  # Session 400: +system_search, -find_path (retired to long-tail) — net zero
+    assert len(LONG_TAIL_TOOL_NAMES) == 17  # Session 400: +find_path (retired from core to on-demand)
     # the ADR's named long tail is all present
     for name in ("browse", "delegate", "sql", "csv", "json", "best_of_n_edit",
                  "propose_str_replace", "propose_write_file", "apply_proposed_edit",
                  "add_subgoal", "update_subgoal", "create_plan", "skill", "diagnostics"):
         assert name in LONG_TAIL_TOOL_NAMES
     # the always-present core set from the task spec
-    for name in ("shell", "file_task", "file_write", "edit_file", "find_path",
+    for name in ("shell", "file_task", "file_write", "edit_file", "system_search",
                  "web_search", "web_fetch", "code_exec", "git"):
         assert name in CORE_TOOL_NAMES
 
