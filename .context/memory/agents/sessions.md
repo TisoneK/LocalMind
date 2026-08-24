@@ -5525,3 +5525,12 @@ authoritative.
 - **Outcome:** done — 8 new sections added: network (interfaces/IP/MAC/status via psutil), GPU (nvidia-smi/system_profiler/WMI), processes (top N by memory/CPU), environment (shell/PATH/cwd/env count), all disks (mounted filesystems with usage bars, container fallback), uptime (boot time/duration/load average), user (username/home/groups), services/ports (listening ports + Docker). Default summary expanded to include uptime, user, and brief network. Keyword router directs specific queries to relevant sections only. Updated tool_schemas.py description.
 - **Verification:** tested all 10 sections + 12 keyword routing queries on Linux container. Fixed environment keyword matching ("PATH" at end of query) and empty disk_partitions fallback for containers.
 - **Open items:** user to specify next issue.
+
+## Session 399 — sysinfo/observe bare-call guard exemption — 2026-08-24
+
+- **Feature:** none (agent bug fix; makes the Session 398 sysinfo expansion reachable).
+- **Task:** Two user chat exports (Windows + Mac) show the model calling `sysinfo` with no query for "show me my system"/"Show me my storage", the loop rejecting it as "input is empty or too short", then spiralling — 3× rejections, narration with zero tool calls, or iteration-limit + raw "Worker report" leak. Root cause: the degenerate-input guard was applied uniformly, but `sysinfo("")`/`observe("")` are valid full-overview calls.
+- **Commits:** 1 product (`5678a05`) + 1 context (this commit), pushed to main.
+- **Outcome:** done — `register_tool(..., input_optional=True)` + `tools.input_is_optional()` + `loop._tool_allows_empty_input()`; all four guard sites (single-call 3628, parallel 3161, minimax 4697, minimax-inline 5582) exempt input-optional tools. `sysinfo` and `observe` marked input_optional. New regression test `tests/core/test_degenerate_input_guard.py` (5 cases).
+- **Verification:** `tests/tools/` 508 passed; `tests/core/` 1267 passed (deterministic order; one prior run showed a `pytest-randomly` ordering flake in `test_trivial_input`, passes in isolation and at baseline — unrelated). Bare `sysinfo('')` confirmed to return the full summary; `shell` still requires input (no regression).
+- **Open items:** user to live-test the two original prompts in the real app. Downstream narration/fabrication behaviors seen in export 1 were largely triggered by this guard; re-observe after this fix before touching the (fragile) narration-detector heuristics.
