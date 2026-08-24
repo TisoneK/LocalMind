@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.agent.loop import _PROGRESS_EXTENSION_ITERS, _iteration_budget_extendable
+from core.agent.loop import _ITER_ABSOLUTE_CEILING, _iteration_budget_extendable
 
 
 @dataclass
@@ -53,6 +53,7 @@ def test_recent_failure_after_earlier_success_does_not_extend() -> None:
     assert _iteration_budget_extendable(trace) is False
 
 
-def test_extension_budget_is_positive_and_bounded() -> None:
-    # Sanity: the ceiling is a real, finite grant (fixed range → no runaway).
-    assert 0 < _PROGRESS_EXTENSION_ITERS <= 32
+def test_absolute_ceiling_is_a_high_finite_runaway_guard() -> None:
+    # A fixed, high ceiling: high enough that wall-clock binds first for a long
+    # succeeding task, finite so the loop can never truly run away.
+    assert 32 <= _ITER_ABSOLUTE_CEILING <= 1000

@@ -853,11 +853,13 @@ def same_tool_failure_streak(trace) -> tuple[int, str]:
 
 # B-2026-08-24-2: the iteration cap is a failsafe for a FAILING loop, not a
 # penalty on a legitimately long task whose tools keep succeeding. Past the base
-# cap we grant up to this many extra iterations, but ONLY while the run is still
-# making successful progress (the most recent tool step succeeded). A failure at
-# the cap stops the loop (also covered by same_tool_failure_streak); a success
-# earns more room, bounded by this ceiling AND the wall-clock cap.
-_PROGRESS_EXTENSION_ITERS = 8
+# cap the loop continues as long as it keeps making successful progress — so a
+# genuinely long, succeeding task is bounded by the WALL-CLOCK cap and by
+# failure detection, NOT by an iteration count (the user's rule: cap failure,
+# never success). This absolute ceiling is a pure runaway guard for the
+# pathological case where progress somehow never stops and wall-clock never
+# fires; set high enough that wall-clock always binds first in practice.
+_ITER_ABSOLUTE_CEILING = 100
 
 
 def _iteration_budget_extendable(trace) -> bool:
@@ -1578,11 +1580,12 @@ class AgentLoop:
             _effective_max_iter = agent_config.max_iterations
         else:
             _effective_max_iter = MAX_ITERATIONS
-        # B-2026-08-24-2: hard ceiling for the progress-based extension. The base
-        # cap (_effective_max_iter) is the failsafe for a stuck/failing loop; a
-        # run that keeps succeeding may extend up to this ceiling (still bounded
-        # by the wall-clock cap). Fixed range → the loop can never run away.
-        _iter_hard_cap = _effective_max_iter + _PROGRESS_EXTENSION_ITERS
+        # B-2026-08-24-2: absolute iteration ceiling. The base cap
+        # (_effective_max_iter) is the failsafe for a stuck/failing loop; a run
+        # that keeps succeeding continues past it, bounded by the WALL-CLOCK cap
+        # and failure detection rather than an iteration count. This ceiling is a
+        # fixed runaway guard (never hit in practice — wall-clock binds first).
+        _iter_hard_cap = max(_effective_max_iter, _ITER_ABSOLUTE_CEILING)
         if (
             agent_config is not None
             and getattr(agent_config, "max_wall_clock_secs", None)
