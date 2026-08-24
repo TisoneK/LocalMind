@@ -314,10 +314,20 @@ def _run(cmd: str | list, timeout: int = 20, cwd: str | None = None) -> dict:
         )
         output, timed_out = _capture_process_output(proc, timeout)
         if timed_out:
-            return _err(f"Command timed out after {timeout}s")
+            return _err(
+                f"Command timed out after {timeout}s. Narrow the scope "
+                "(scan one folder, add -Depth, or filter) — re-running the "
+                "same broad command will time out again; for long-running "
+                "work use the process tool."
+            )
         return _ok(output) if proc.returncode == 0 else _err(output or "Command failed (no output)")
     except subprocess.TimeoutExpired:
-        return _err(f"Command timed out after {timeout}s")
+        return _err(
+            f"Command timed out after {timeout}s. Narrow the scope "
+            "(scan one folder, add -Depth, or filter) — re-running the "
+            "same broad command will time out again; for long-running "
+            "work use the process tool."
+        )
     except FileNotFoundError as exc:
         return _err(f"Command not found: {exc}")
     except Exception as exc:
@@ -545,13 +555,14 @@ def _guard_nl_command(command: str) -> None:
 
 def _shell_timeout() -> int:
     """Per-command shell timeout (configurable; sane floor). A legitimate scan
-    needs headroom, and a real hang is bounded by the recovery layer."""
+    (recursive disk sizing over a large tree) routinely needs 1-2 minutes, so the
+    default is 120s; a real hang is bounded here and by the recovery layer."""
     from core.config import settings
 
     try:
-        t = int(getattr(settings, "localmind_shell_timeout", 45) or 45)
+        t = int(getattr(settings, "localmind_shell_timeout", 120) or 120)
     except (TypeError, ValueError):
-        t = 45
+        t = 120
     return max(5, t)
 
 

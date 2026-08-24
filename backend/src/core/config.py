@@ -187,11 +187,14 @@ class Settings(BaseSettings):
     # app where the user explicitly wants to run commands. Disabling shell by
     # default made every shell request silently fail with a misleading error.
     localmind_shell_enabled: bool = True
-    # Per-command shell timeout (seconds). 20s was too aggressive — a legitimate
-    # disk-sizing scan (du / Get-ChildItem -Recurse of a large tree) needs more
-    # headroom, and a real hang is now handled by the recovery layer (a timeout
-    # surfaces as error_type=timeout → retry-smaller directive → honest stop).
-    localmind_shell_timeout: int = 45
+    # Per-command shell timeout (seconds). 20s then 45s were both too aggressive —
+    # a legitimate disk-sizing scan (du / Get-ChildItem -Recurse of a large tree,
+    # e.g. a Windows user profile with a deep AppData) routinely needs 1-2 minutes,
+    # and 45s killed it twice in a real session. 120s is a realistic default for a
+    # one-shot heavy command; a true hang is still bounded here and handled by the
+    # recovery layer (timeout → error_type=timeout → retry-smaller directive →
+    # honest stop). Configurable via LOCALMIND_SHELL_TIMEOUT for longer scans.
+    localmind_shell_timeout: int = 120
 
     # Context window management
     localmind_response_reserve_tokens: int = 2048
