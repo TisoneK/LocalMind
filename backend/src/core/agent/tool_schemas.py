@@ -350,7 +350,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "sysinfo",
-            "description": "Get current system info: time, date, hardware specs, installed programs",
+            "description": "Get system info: time, date, OS, CPU, RAM, disk, network (IP/MAC/interfaces), GPU, top processes, environment, uptime, users, services/ports, installed programs. Offline, instant.",
             "parameters": {
                 "type": "object",
                 "properties": {"query": {"type": "string"}},
