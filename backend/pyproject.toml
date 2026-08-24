@@ -63,6 +63,12 @@ dependencies = [
     "platformdirs>=4.0",        # Platform-specific directories
     "aiofiles>=23.2.0",
     "tiktoken>=0.7.0",          # Token counting
+
+    # System info — powers sysinfo's disk/RAM/CPU/network/process/uptime
+    # sections cross-platform. Was never declared, so it was absent on every
+    # install and sysinfo degraded to a bare summary, forcing the agent to
+    # shell out for basic hardware info (B-2026-08-24-11).
+    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
