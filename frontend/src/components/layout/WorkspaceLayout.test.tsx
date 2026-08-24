@@ -34,12 +34,19 @@ const mockPanelProps = vi.hoisted(() => ({
 const mockClient = vi.hoisted(() => ({
   restorePersistedAdapter: vi.fn(),
   getPersistedSettings: vi.fn(() => ({})),
+  // B-2026-08-23-34: WorkspaceLayout loads the persisted chat mode via
+  // localmindClient.getSettings() on mount. The mock omitted it, so every
+  // test threw "getSettings is not a function" in the effect.
+  getSettings: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock('@/hooks/useLocalMind', () => mockHooks);
 
 vi.mock('@/lib/localmind/client', () => ({
-  localmindClient: { restorePersistedAdapter: mockClient.restorePersistedAdapter },
+  localmindClient: {
+    restorePersistedAdapter: mockClient.restorePersistedAdapter,
+    getSettings: mockClient.getSettings,
+  },
   getPersistedSettings: mockClient.getPersistedSettings,
 }));
 
