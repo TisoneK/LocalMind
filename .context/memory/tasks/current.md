@@ -2,9 +2,13 @@
 
 **Status:** ACTIVE — Session 399 burning down the B-2026-08-24 backlog one item at a time.
 
-**Done this session:** guard exemption (5678a05), B-24-5 label swap (0827fdf), B-24-10 shell timeout 45→120s (e827e8b), B-24-11 psutil dependency (7552aa0), B-24-3 remove old tool selector (8447d22). All pushed. LIVE-TEST PENDING on Windows (user's machine).
+**Done this session:** guard exemption (5678a05), B-24-5 label swap (0827fdf), B-24-10 shell timeout 45→120s (e827e8b), B-24-11 psutil dependency (7552aa0), B-24-3 remove old tool selector (8447d22), B-24-4 agent-turn titles (9e374e1). All pushed.
 
-**Next candidates:** B-24-2 (failure-aware iteration cap), B-24-4 (agent-turn titles), then the narration/thinking cluster B-24-1 + B-24-6 (incl. failure-path leak) + B-24-7 (gemini), B-24-9 (self-disclosure), B-24-12 (sysinfo native fallbacks).
+**New items logged from user (2026-08-24):** B-24-13 (app-wide Settings-page texture/feel), B-24-14 (flaky real-time UI in Agent Workspace / action cards).
+
+**Next candidates:** B-24-2 (failure-aware iteration cap), then the narration/thinking cluster B-24-1 + B-24-6 (incl. failure-path leak) + B-24-7 (gemini), B-24-9 (self-disclosure), B-24-12 (sysinfo native fallbacks), B-24-13/-14.
+
+**LIVE-TEST:** user directive — do a live-test pass AFTER the backlog is worked through (not per-item). Read `.context/memory/system/live-testing.md` first. Live-testing will surface more backlog items. Ports 8000/3000 are the user's running app — coordinate before disrupting.
 
 ---
 
