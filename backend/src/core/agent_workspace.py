@@ -199,7 +199,7 @@ def _lifecycle_phase(evt_type: str, d: dict, next_id) -> Optional[dict]:
         return {
             "id": next_id("thinking"),
             "type": "thinking",
-            "label": "Thinking through the evidence",
+            "label": "Working out the approach",
             "timestamp": ts,
             "iteration": iteration,
         }
@@ -207,7 +207,7 @@ def _lifecycle_phase(evt_type: str, d: dict, next_id) -> Optional[dict]:
         return {
             "id": next_id("think-done"),
             "type": "thinking_done",
-            "label": "Analysis ready",
+            "label": "Approach ready",
             "timestamp": ts,
             "iteration": iteration,
         }

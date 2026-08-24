@@ -31,9 +31,9 @@ describe('ThinkingBlock', () => {
     expect(screen.getByText('Working')).toBeInTheDocument();
   });
 
-  it('shows the "Approach" label and duration once finished', () => {
+  it('shows the "Thinking" label and duration once finished', () => {
     render(<ThinkingBlock thinking="Considered the trade-offs" thinkMs={2400} isStreaming={false} />);
-    expect(screen.getByText('Approach')).toBeInTheDocument();
+    expect(screen.getByText('Thinking')).toBeInTheDocument();
     expect(screen.getByText('2.4s')).toBeInTheDocument();
   });
 
@@ -50,9 +50,9 @@ describe('ThinkingBlock', () => {
 
   it('collapses the reasoning by default once the turn is done (ADR-36)', () => {
     // Collapse-after-done: when not streaming, the block starts collapsed so
-    // only the "Approach" header shows — not a persistent scrollback.
+    // only the "Thinking" header shows — not a persistent scrollback.
     render(<ThinkingBlock thinking="hidden reasoning" isStreaming={false} />);
-    expect(screen.getByText('Approach')).toBeInTheDocument();
+    expect(screen.getByText('Thinking')).toBeInTheDocument();
     expect(screen.queryByText(/hidden reasoning/)).not.toBeInTheDocument();
   });
 
@@ -60,7 +60,7 @@ describe('ThinkingBlock', () => {
     render(<ThinkingBlock thinking="expandable reasoning" isStreaming={false} />);
     expect(screen.queryByText(/expandable reasoning/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Approach'));
+    fireEvent.click(screen.getByText('Thinking'));
     expect(screen.getByText(/expandable reasoning/)).toBeInTheDocument();
   });
 

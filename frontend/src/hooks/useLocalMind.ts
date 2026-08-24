@@ -1945,7 +1945,7 @@ export function buildAgentPhase(
       return {
         id: `phase-thinking-${ts}-${Math.random().toString(36).slice(2, 6)}`,
         type: 'thinking',
-        label: 'Thinking through the evidence',
+        label: 'Working out the approach',
         timestamp: ts,
         iteration: data?.iteration !== undefined ? Number(data.iteration) : undefined,
       };
@@ -1954,7 +1954,7 @@ export function buildAgentPhase(
       return {
         id: `phase-think-done-${ts}-${Math.random().toString(36).slice(2, 6)}`,
         type: 'thinking_done',
-        label: 'Analysis ready',
+        label: 'Approach ready',
         timestamp: ts,
         iteration: data?.iteration !== undefined ? Number(data.iteration) : undefined,
       };

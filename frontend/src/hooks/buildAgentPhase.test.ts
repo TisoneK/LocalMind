@@ -287,12 +287,12 @@ describe('buildAgentPhase', () => {
   it('handles agent_thinker_start / agent_thinker_done with iteration', () => {
     const start = buildAgentPhase('agent_thinker_start', { iteration: 2 });
     expect(start!.type).toBe('thinking');
-    expect(start!.label).toBe('Thinking through the evidence');
+    expect(start!.label).toBe('Working out the approach');
     expect(start!.iteration).toBe(2);
 
     const done = buildAgentPhase('agent_thinker_done', { iteration: 2 });
     expect(done!.type).toBe('thinking_done');
-    expect(done!.label).toBe('Analysis ready');
+    expect(done!.label).toBe('Approach ready');
     expect(done!.iteration).toBe(2);
   });
 });
