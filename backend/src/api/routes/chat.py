@@ -49,6 +49,23 @@ _INTERNAL_DELEGATION_TOOLS = frozenset({"delegate", "delegate_parallel", "delega
 LIVE_PROGRESS_INTERVAL_S = 5  # Session 352: was 15s — too long, user stays in the dark
 LIVE_TOOL_EVENT_TYPES = frozenset({"tool_call", "tool_status", "terminal_output"})
 
+# B-2026-08-24-4: retain fire-and-forget background tasks. asyncio.create_task
+# only holds a WEAK reference to the task, so a task whose return value is
+# discarded can be garbage-collected before it runs. The title refine is
+# spawned this way at the tail of the SSE stream — in Agent mode (no classify
+# title) it is the ONLY thing that titles the session, and it was silently
+# being GC'd, leaving agent-turn sessions stuck on "New Chat". Keeping a strong
+# reference until the task completes fixes that.
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
+
+
+def _spawn_background(coro) -> asyncio.Task:
+    """Schedule a fire-and-forget coroutine and retain it until it finishes."""
+    task = asyncio.create_task(coro)
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+    return task
+
 
 def _visible_tool_output(tool_name: str, agent_name: str | None, output: str) -> str:
     """Keep delegated child results inside the parent-agent contract.
@@ -919,9 +936,11 @@ async def _event_stream(
                     f"[title] reused classify title for {session_id[:8]}: {_classify_title!r}"
                 )
             else:
-                # Classify emitted no title (e.g. an unparseable classify that
-                # fell back to a direct answer) — fall back to the LLM refine.
-                asyncio.create_task(refine_title_async(session_id, message))
+                # Classify emitted no title (e.g. Agent mode skips the classifier,
+                # or an unparseable classify that fell back to a direct answer) —
+                # fall back to the LLM refine. Retained so it isn't GC'd before it
+                # runs (B-2026-08-24-4 — the agent-turn "stuck on New Chat" bug).
+                _spawn_background(refine_title_async(session_id, message))
                 logger.info(
                     f"[title] no classify title — LLM refinement scheduled for {session_id[:8]}"
                 )
@@ -934,7 +953,7 @@ async def _event_stream(
         # Never let title-gen break the turn; fall back to the LLM refine.
         logger.warning(f"[title] finalize failed: {_title_exc} — using is_first fallback")
         if is_first:
-            asyncio.create_task(refine_title_async(session_id, message))
+            _spawn_background(refine_title_async(session_id, message))
 
 
 @router.post("/chat/{session_id}/abort")
