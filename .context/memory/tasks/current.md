@@ -2,9 +2,9 @@
 
 **Status:** ACTIVE — Session 399 burning down the B-2026-08-24 backlog one item at a time.
 
-**Done this session:** guard exemption (5678a05), B-24-5 label swap (0827fdf), B-24-10 shell timeout 45→120s (e827e8b), B-24-11 psutil dependency (7552aa0). All pushed. LIVE-TEST PENDING on Windows (user's machine).
+**Done this session:** guard exemption (5678a05), B-24-5 label swap (0827fdf), B-24-10 shell timeout 45→120s (e827e8b), B-24-11 psutil dependency (7552aa0), B-24-3 remove old tool selector (8447d22). All pushed. LIVE-TEST PENDING on Windows (user's machine).
 
-**Next candidates:** B-24-3 (remove old mode selector — started), B-24-2 (failure-aware iteration cap), B-24-4 (agent-turn titles), then the narration/thinking cluster B-24-1 + B-24-6 (incl. failure-path leak) + B-24-7 (gemini), B-24-9 (self-disclosure), B-24-12 (sysinfo native fallbacks).
+**Next candidates:** B-24-2 (failure-aware iteration cap), B-24-4 (agent-turn titles), then the narration/thinking cluster B-24-1 + B-24-6 (incl. failure-path leak) + B-24-7 (gemini), B-24-9 (self-disclosure), B-24-12 (sysinfo native fallbacks).
 
 ---
 
