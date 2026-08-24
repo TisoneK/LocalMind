@@ -1,19 +1,16 @@
 # Current Task
 
-**Status:** IDLE — Session 396 closed (B-9/B-12/B-21/B-22 UX sweep).
+**Status:** IDLE — Session 397 closed (agent synthesis nudge fix).
 
-## Session 396 outcome
+## Session 397 outcome
 
-Completed 4 backlog items:
+Fixed agent bug: tools execute successfully but final output narrates ("let me...") instead of presenting results.
 
-| Item | Commit | Summary |
-|------|--------|----------|
-| B-9 Action pill tooltips | `5b124d7` | shadcn Tooltip on compact pills: reasoning, input, output, error, duration |
-| B-12 Clickable filenames | `5b124d7` | Code block headers + StepDetail file paths open FilePreviewDialog via custom event |
-| B-21 Time formatting | `5b124d7` | All duration displays unified to `formatLatency()` (already had m/h support) |
-| B-22 Token K/M format | `5b124d7` | New `formatTokens()` utility wired into PerformanceMetrics + MessageMetrics |
+| Commit | Summary |
+|--------|----------|
+| `9f45b68` | SYNTHESIS REMINDER nudge in loop.py when tools succeeded but model narrates instead of answering |
 
-**Test results:** tsc clean; 330 frontend passed (18 pre-existing WorkspaceLayout failures unrelated); 13 progress tests (including new m/h + K/M cases).
+**Verification:** pending live-test (requires real model on port 8765).
 
 **Remaining unchecked actionable backlog items:**
 - B-10 (concrete planning — quality/prompt work)

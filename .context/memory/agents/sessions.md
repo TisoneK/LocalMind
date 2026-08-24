@@ -5495,3 +5495,12 @@ authoritative.
 - **Outcome:** done — derivation (`_title_for_goal`/`_title_for_sub_goal`, `DerivedGoal.title`, titled goal-tree dicts), loop seeding (text=title + content), SSE bridge persist (chat.py), migration 010 (`todos.title`), db upsert/list + API models/GET/POST/PATCH, frontend types/normalization/client/TodoList (title-first render + full-content hover tooltip, legacy fallback). Legacy text-only callers and NULL-title rows fall back to content.
 - **Verification:** backend 2507 passed / 2 skipped (incl. 4 new title tests, todo API suites with the new column); frontend 348 passed; tsc/ruff clean (pre-existing E501s only).
 - **Open items:** next candidates -33 op permissions, -34 chat modes, -35 never-rude, -37 write stats, -26 panel overflow, -9 tooltips.
+
+## Session 397 — B-2026-08-24: agent synthesis nudge fix — 2026-08-24
+
+- **Feature:** none (bug fix).
+- **Task:** Fix agent bug where tools execute successfully but final output narrates next actions ("let me...") instead of presenting results. Root cause: weak models don't synthesize from evidence without a nudge after tool execution.
+- **Commits:** 1 product (`9f45b68`) pushed to main.
+- **Outcome:** done — injected SYNTHESIS REMINDER user message in loop.py when successful tool steps exist, no failed/pending tools, iteration >= 1, and no observation log. Nudge tells model to present gathered data rather than plan more actions.
+- **Verification:** pending live-test (requires real model on port 8765).
+- **Open items:** user to live-test, then move to next issue.
