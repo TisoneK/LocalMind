@@ -1206,6 +1206,66 @@ _FOLLOW_THROUGH_PHRASES: tuple[str, ...] = (
     "i'll pull up",
 )
 
+# B-2026-08-24 (Session 397): post-evidence narration detection.
+# After tools have run successfully (iteration >= 1), weak models
+# sometimes narrate their NEXT intended action instead of synthesizing
+# the evidence they already gathered. E.g. "Let me call sysinfo to get
+# your system details" after describe_tool already ran.
+# Unlike _PROSE_COMMITMENT_PHRASES (which requires a tool-name mention
+# and fires when NO tools ran), this fires when tools DID run but the
+# model is still narrating instead of presenting results.
+_POST_EVIDENCE_NARRATION_PHRASES: tuple[str, ...] = (
+    "let me call that",
+    "let me call sysinfo",
+    "let me run the",
+    "let me use the",
+    "let me check the",
+    "let me get the",
+    "let me look at the",
+    "let me fetch the",
+    "let me search for",
+    "i'll call that",
+    "i'll call sysinfo",
+    "i'll run the",
+    "i'll use the",
+    "i'll check the",
+    "i'll get the",
+    "i'll look at the",
+    "i'll fetch the",
+    "i'll search for",
+    "i'm going to call",
+    "i'm going to run",
+    "i'm going to use",
+    "i'm going to check",
+    "i'm going to get",
+    "now let me call",
+    "now let me run",
+    "now let me use",
+    "now i'll call",
+    "now i'll run",
+    "now i'll use",
+)
+
+
+def narrates_after_evidence(text: str) -> bool:
+    """Detect post-evidence narration: model describes next action instead
+    of synthesizing gathered evidence.
+
+    Fires when text CONTAINS a narration phrase ("let me call X", "I'll run the...")
+    and the text is short enough that the narration IS the response (not a
+    long answer with narration buried in it). Only meaningful when tools
+    have already run — calling it on iteration 0 would false-positive on
+    legitimate first-action text.
+    """
+    if not text or len(text.strip()) < 10:
+        return False
+    lower = text.lower().strip()
+    # Long responses (>500 chars) likely contain real content alongside
+    # a narration fragment — only flag short responses that ARE narration.
+    if len(lower) > 500:
+        return False
+    return any(phrase in lower for phrase in _POST_EVIDENCE_NARRATION_PHRASES)
+
 
 def answer_fails_follow_through(text: str, had_tool_failure: bool) -> bool:
     """Detect a follow-through failure: the model says 'let me try...' after
@@ -6218,6 +6278,54 @@ class AgentLoop:
                                         "synthesize a direct answer from it NOW, or fetch ONE specific "
                                         "page if the snippets lack the detail you need. Do not ask the "
                                         "user to decide; act.\n"
+                                    ),
+                                }
+                            )
+                            return "", False
+                # B-2026-08-24 (Session 397): post-evidence narration detector.
+                # Three phases: (1) pre-action narration before tool calls —
+                # good UX; (2) post-evidence narration after tools ran — THE
+                # BUG, model narrates instead of synthesizing; (3) final
+                # synthesized output — what the user needs.
+                # The existing TOOL COMMITMENT detector skips when tools ran;
+                # ACTION NARRATION only fires on iter 0. This bridges the
+                # gap: iteration >= 1 + tools ran + narration detected.
+                if (
+                    is_parent
+                    and iteration >= 1
+                    and any(
+                        getattr(s, "tool_name", "")
+                        for s in getattr(trace, "steps", []) or []
+                    )
+                ):
+                    _final_text = getattr(trace, "final_response", "") or ""
+                    if narrates_after_evidence(_final_text):
+                        _already_post_ev_nudged = any(
+                            isinstance(m, dict)
+                            and isinstance(m.get("content", ""), str)
+                            and "[POST-EVIDENCE NARRATION]" in m.get("content", "")
+                            for m in (loop_messages or [])
+                        )
+                        if not _already_post_ev_nudged and iteration + 1 < effective_max_iter:
+                            if obs:
+                                obs.emit(
+                                    "agent_loop_gate_failed_replan",
+                                    intent=intent.value,
+                                    iteration=iteration + 1,
+                                    unmet=["model narrated next action after tools succeeded instead of synthesizing evidence"],
+                                )
+                            loop_messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        "\n[POST-EVIDENCE NARRATION] You already executed "
+                                        "tools in this turn. Your response must now be "
+                                        "the FINAL SYNTHESIZED OUTPUT — present the actual "
+                                        "results, data, or findings to the user. "
+                                        "Do NOT describe what you would do next; "
+                                        "do NOT say 'let me...' or 'I'll...'. "
+                                        "The action phase is over — give the user "
+                                        "the answer now.\n"
                                     ),
                                 }
                             )
