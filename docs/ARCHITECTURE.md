@@ -1,6 +1,11 @@
 # LocalMind — Architecture
 
 > **Updated:** 2026-08-20 — Parent-only scope amendment (ADR-53)
+>
+> **Long-term direction:** see [`VISION_ARCHITECTURE.md`](VISION_ARCHITECTURE.md)
+> (ADR-56) — LocalMind as an agent runtime + intelligence harness
+> ("Model Intelligence + Harness = Agent"). Direction only; ADR-53 governs
+> current scope.
 
 > **Naming:** the agent is **LocalMind**; "parent agent" / "Parent Agent" is its
 > architectural *role* (the root agent), not its name — the code says so directly
