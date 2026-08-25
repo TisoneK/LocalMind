@@ -357,9 +357,17 @@ def _load_knowledge_doc() -> str:
     Note: the decorator caches ANY non-None return, so the not-found "" is
     also cached (re-checked after the TTL, not every call).
     """
+    # B-2026-08-24-9: resolve cwd-INDEPENDENTLY. The Electron prod app spawns
+    # the backend with cwd=backend/ (main.js), so a bare Path.cwd() candidate
+    # missed the repo-root localmind.md and the whole knowledge doc (capabilities,
+    # tool reference, politeness + self-disclosure rules) silently failed to load
+    # in the packaged app — it only worked in dev, where npm runs from the root.
+    # parents[3]: backend/src/core/context_builder.py → LocalMind (repo root).
+    _src_file = Path(__file__).resolve()
     candidates = [
-        Path(__file__).parent.parent / "localmind.md",  # running from source
+        _src_file.parents[3] / "localmind.md",  # repo root, regardless of cwd
         Path.cwd() / "localmind.md",  # running from project root
+        _src_file.parent.parent / "localmind.md",  # legacy backend/src location
     ]
     for path in candidates:
         try:
