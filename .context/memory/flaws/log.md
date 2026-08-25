@@ -499,3 +499,11 @@ Flaws from Session 7 are now **fixed**:
 - **Lesson:** unit tests must not depend on a mutable on-disk runtime file that live-tests and the running app both write. Anything read from the config singleton that steers control flow (chat_mode, provider, flags) should be pinned to its default in `isolate_env`. Live-tests that mutate shared runtime state must restore it — but the durable fix is test isolation, not test-author discipline.
 - **Regression risk if reverted:** any future live-test (or a user leaving the app in agent/direct mode) silently disables the loop's deterministic guards inside the suite, producing confusing intermittent failures far from the cause.
 - **Status:** fixed
+
+## 2026-08-25 — Session 405 — force-tool relies on tool_choice, which some providers silently drop
+
+- **Symptom (live-test, bankofai/deepseek-v4-flash):** while live-verifying B-2026-08-25-11 (delete-then-exit), the backend logged `[adapter] bankofai rejected tool_choice; retrying without it`. The acceptance gate's force-tool detectors (ACTION-NARRATION, the new PENDING ACTION, TOOL COMMITMENT) all set `gate_force_tool[0]=True` so the main loop re-issues the request with `tool_choice` forcing a tool call. On bankofai (an OpenAI-compat endpoint that 400s on tool_choice) the adapter drops it and retries WITHOUT — so the model is never actually forced.
+- **Root cause:** the force mechanism assumed `tool_choice` is universally honored. It is not; several OpenAI-compat providers reject it. The only provider-agnostic lever left is the injected re-prompt TEXT ("[PENDING ACTION] … emit the tool_call NOW"), which happened to work here — but the design leaned on a capability that silently no-ops.
+- **Fix:** tracked as B-2026-08-25-13 — detect tool_choice support per adapter and, when unsupported, escalate the re-prompt (stronger imperative + example tool_call JSON) and/or enforce a "must emit a tool_call or one clarifying question" contract in the gate regardless of tool_choice.
+- **Lesson:** a control mechanism that depends on an optional provider capability must degrade to a model-agnostic path (prompt-level) and must not report success when the capability was dropped. Verify force-tool on a provider that rejects tool_choice, not only on one that honors it.
+- **Status:** open (B-2026-08-25-13)
