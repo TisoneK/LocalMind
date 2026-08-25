@@ -661,8 +661,12 @@ def _shell_timeout() -> int:
 
 def _run_command(command: str, cwd: str | None = None) -> tuple[str, RiskLevel]:
     """Execute a raw shell command. command must be a literal command string."""
+    # B-2026-08-25-1: the search guard runs FIRST — a tool name run as a shell
+    # command ("system_search operation=...") must steer to a tool call, not be
+    # caught by the NL guard (which would tell the model to write a shell
+    # command instead). Broad find/du also redirect here before anything runs.
+    _guard_broad_search(command)
     _guard_nl_command(command)
-    _guard_broad_search(command)  # B-2026-08-25-1: redirect find/du hunts → system_search
     result = _run(command, timeout=_shell_timeout(), cwd=cwd)
     if result["success"]:
         output = result["message"].strip() or "(command completed with no output)"
