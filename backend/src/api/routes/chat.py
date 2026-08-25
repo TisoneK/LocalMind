@@ -292,6 +292,30 @@ def _drain_live_lifecycle_events(obs: ObsCollector, session_id: str = ""):
             )
 
 
+# B-2026-08-24-15: obs events that mean the turn ended WITHOUT finishing its
+# work — on any of these, the remaining plan todos must NOT be auto-completed
+# (that would read as a false 100%). agent_loop_done ALSO counts when it carries
+# hit_limit=True (iteration limit).
+_INCOMPLETE_TURN_EVENTS = frozenset({
+    "agent_loop_gate_honest_stop",  # unmet acceptance criteria
+    "agent_loop_failure",  # classified failure (iteration cap / tool failure)
+    "agent_loop_wall_clock_cap",  # ran out of wall-clock time
+    "agent_loop_degraded",  # provider error / rate-limit cutoff (partial evidence)
+})
+
+
+def _turn_did_not_finish(history) -> bool:
+    """True if the turn ended without completing its work (see above)."""
+    for evt in history:
+        if getattr(evt, "type", None) in _INCOMPLETE_TURN_EVENTS:
+            return True
+        if getattr(evt, "type", None) == "agent_loop_done" and bool(
+            getattr(evt, "data", {}).get("hit_limit")
+        ):
+            return True
+    return False
+
+
 def _finalize_plan_todos(session_id: str, skip: bool = False) -> list[dict]:
     """Session 121: mark any plan todos the loop didn't explicitly advance as
     complete. The plan covers the whole turn, so when the turn ends the
@@ -416,7 +440,7 @@ async def _event_stream(
     # collector's non-destructive history BEFORE the final drain; both
     # _finalize_plan_todos call sites skip flipping plan todos on an honest
     # stop so the unmet goal items stay pending (no false 100%).
-    _honest_stop = False
+    _incomplete_turn = False
 
     # B-2026-08-23-17 follow-up: bind the session id at the TRANSPORT boundary.
     # _with_keepalives below advances the engine generator via a FRESH child
@@ -816,11 +840,15 @@ async def _event_stream(
             # being buffered by the server's write buffer.
             await asyncio.sleep(0)
 
-        # Session 330: capture the honest-stop signal before the destructive
-        # flush (history survives drain, but read it now for clarity).
-        _honest_stop = any(
-            evt.type == "agent_loop_gate_honest_stop" for evt in obs.history()
-        )
+        # Session 330 + B-2026-08-24-15: capture whether the turn ended WITHOUT
+        # finishing its work, before the destructive flush. Don't flip the
+        # remaining plan todos to "completed" on any such ending — an honest
+        # stop (unmet criteria), a classified failure (iteration cap / tool
+        # failure), the wall-clock cap, a provider-error/rate-limit cutoff that
+        # only preserved partial evidence, or the iteration limit — otherwise
+        # the panel reads a false 100% (live: a rate-limited turn created 1 of
+        # 3 files yet showed every todo complete).
+        _incomplete_turn = _turn_did_not_finish(obs.history())
 
         # Capture a structured observation before the destructive SSE flush.
         # The snapshot uses read-only collector access, so every event below
@@ -851,7 +879,7 @@ async def _event_stream(
         # the DB update for aborted/disconnected streams). Session 330: skip
         # on an honest stop — unmet goal items must stay pending (no false
         # 100%), and the loop already completed the passed ones itself.
-        for _td in _finalize_plan_todos(session_id, skip=_honest_stop):
+        for _td in _finalize_plan_todos(session_id, skip=_incomplete_turn):
             yield _sse({"type": "todo_completed", "todo": _td})
 
     except Exception as exc:
@@ -898,7 +926,7 @@ async def _event_stream(
         # Best-effort DB-only here (no yield in finally); the live SSE update
         # is emitted on the normal completion path above.
         try:
-            _finalize_plan_todos(session_id, skip=_honest_stop)
+            _finalize_plan_todos(session_id, skip=_incomplete_turn)
         except Exception:
             pass
 
