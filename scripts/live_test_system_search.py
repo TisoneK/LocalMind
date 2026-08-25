@@ -31,9 +31,15 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-REPO = Path("/home/z/my-project/LocalMind")
+# Derive the repo root from this script's location (scripts/ is at the repo
+# root) so the harness runs on any machine — not a hardcoded sandbox path.
+# Override with LOCALMIND_REPO if the layout ever differs.
+_repo_env = os.environ.get("LOCALMIND_REPO", "").strip()
+REPO = Path(_repo_env).expanduser() if _repo_env else Path(__file__).resolve().parent.parent
 BACKEND = REPO / "backend"
-VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
+# Prefer the platform-correct venv python; fall back to the current interpreter.
+_VENV_PY = BACKEND / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+VENV_PY = str(_VENV_PY) if _VENV_PY.exists() else sys.executable
 SCRATCH = REPO / "scratch"
 TRACEHOME = SCRATCH / "syssearch-home"
 
