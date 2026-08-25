@@ -66,6 +66,7 @@
   --color-brand-bg-base: var(--brand-bg-base);
   --color-brand-bg-code: var(--brand-bg-code);
   --color-brand-bg-panel: var(--brand-bg-panel);
+  --color-brand-bg-app: var(--brand-bg-app);
   --color-brand-bg-panel-alt: var(--brand-bg-panel-alt);
   --color-brand-bg-chat-input: var(--brand-bg-chat-input);
   --color-brand-bg-table: var(--brand-bg-table);
@@ -166,6 +167,11 @@
   --brand-bg-base: var(--s-base);
   --brand-bg-code: var(--s-1);
   --brand-bg-panel: var(--s-2);
+  /* B-2026-08-24-13: the app-shell surface. Elevated (panel) in DARK so the
+     window reads like the Settings surface; plain base (white) in LIGHT —
+     the elevated grey looked wrong as a full-app background (light-mode
+     override below). */
+  --brand-bg-app: var(--s-2);
   --brand-bg-panel-alt: var(--s-1);
   --brand-bg-chat-input: var(--s-2);
   --brand-bg-table: var(--s-1);
@@ -188,6 +194,13 @@
   --brand-gh-green: #3fb950; --brand-gh-purple: #a371f7; --brand-gh-text: #d7e2da;
   --brand-gh-red-soft: #ef9999; --brand-gh-green-soft: #b9d9bd;
   --brand-gh-red-bg: #4a2424; --brand-gh-green-bg: #18281b; --brand-gh-green-border: #2d5535;
+}
+
+/* B-2026-08-24-13: in ANY light theme the app-shell surface stays plain white
+   (base) — the elevated panel grey was wrong as a full-app background. Dark
+   themes keep the elevated panel via the :root default above. */
+:root[data-mode="light"] {
+  --brand-bg-app: var(--s-base);
 }
 
 /* ── Graphite · light ── */
@@ -365,9 +378,9 @@
 /* Prevent body scroll */
 html, body {
   overflow: hidden;
-  /* B-2026-08-24-13: app ground matches the Settings surface tone (panel),
-     so the shell reads as the same elevated surface as the Settings page. */
-  background: var(--brand-bg-panel);
+  /* B-2026-08-24-13: app ground = the shell surface (elevated panel in dark,
+     plain white in light — see --brand-bg-app). */
+  background: var(--brand-bg-app);
 }
 
 /* Fix: Long words/URLs pushing containers wider */
