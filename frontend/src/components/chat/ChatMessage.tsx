@@ -102,6 +102,47 @@ function FileResultChip({
   );
 }
 
+// ── B-2026-08-25-6: compact "applied" card — the normal view after Accept ────
+// The full colored diff collapses to this one-line summary; the diff itself
+// stays reachable via the View-diff toggle (re-opened read-only above/below).
+function DiffAppliedCard({
+  fileName,
+  additions,
+  deletions,
+  open,
+  onToggle,
+}: {
+  fileName: string;
+  additions: number;
+  deletions: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const shortName = fileName.split('/').pop() || fileName;
+  return (
+    <div className="flex items-center gap-2 my-2 px-2.5 py-1.5 rounded-lg border border-brand-green/25 bg-brand-green/5">
+      <FileEdit className="h-3.5 w-3.5 text-brand-green shrink-0" />
+      <span className="text-[11px] font-mono text-brand-green truncate" title={fileName}>
+        {shortName}
+      </span>
+      <span className="text-[10px] font-mono text-brand-green/70 shrink-0">
+        +{additions} <span className="text-brand-red/70">−{deletions}</span>
+      </span>
+      <span className="text-[9px] uppercase tracking-wider text-brand-green/60 shrink-0">
+        applied
+      </span>
+      <button
+        type="button"
+        onClick={onToggle}
+        data-testid="diff-applied-toggle"
+        className="ml-auto text-[10px] text-brand-green/80 hover:text-brand-green underline decoration-dotted underline-offset-2 shrink-0"
+      >
+        {open ? 'Hide diff' : 'View diff'}
+      </button>
+    </div>
+  );
+}
+
 // ── Themed code block — matches green-black UI ──────────────────────────────
 function CodeBlockComponent({ code, language, filename }: { code: string; language: string; filename?: string }) {
   const [copied, setCopied] = useState(false);
@@ -698,6 +739,28 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
     return [];
   }, [message.diffData]);
 
+  // B-2026-08-25-6: Accept collapses the full colored diff into a compact
+  // "applied" card (the normal view). The full diff stays reachable on
+  // demand via the card's View-diff toggle, rendered read-only (no second
+  // Accept bar — the change is already acknowledged). Component-local state:
+  // the message list is keyed by id, so this survives re-renders for as
+  // long as the message is mounted; diffData itself is live-stream-only
+  // (not persisted), so the card disappears entirely on reload either way.
+  const [diffAccepted, setDiffAccepted] = useState(false);
+  const [diffReopen, setDiffReopen] = useState(false);
+
+  const diffStats = useMemo(() => {
+    let additions = 0;
+    let deletions = 0;
+    for (const h of diffHunks) {
+      for (const l of h.lines) {
+        if (l.type === 'added') additions += 1;
+        else if (l.type === 'removed') deletions += 1;
+      }
+    }
+    return { additions, deletions };
+  }, [diffHunks]);
+
   return (
     <div className={`px-4 py-3 overflow-hidden group relative ${isUser ? 'justify-end' : 'justify-start border-l-2 border-l-brand-green/30'}`}>
       {/* Hover action row — auto-hides, revealed on message hover */}
@@ -795,13 +858,33 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
             />
           ))}
 
-          {/* Diff block — rendered when edit_file produces structured diff hunks */}
-          {diffHunks.length > 0 && (
+          {/* Diff block — rendered when edit_file produces structured diff hunks.
+              B-2026-08-25-6: pending → full diff with Accept/Reject; accepted →
+              compact "applied" card (the normal view), with the full diff
+              re-openable read-only on demand. */}
+          {diffHunks.length > 0 && !diffAccepted && (
             <DiffBlock
               hunks={diffHunks}
               language={message.diffData?.language || ''}
               showActions={true}
               isStreaming={isStreaming}
+              onAccept={() => setDiffAccepted(true)}
+            />
+          )}
+          {diffHunks.length > 0 && diffAccepted && (
+            <DiffAppliedCard
+              fileName={diffHunks[0]?.filePath || message.diffData?.filePath || 'file'}
+              additions={diffStats.additions}
+              deletions={diffStats.deletions}
+              open={diffReopen}
+              onToggle={() => setDiffReopen((v) => !v)}
+            />
+          )}
+          {diffHunks.length > 0 && diffAccepted && diffReopen && (
+            <DiffBlock
+              hunks={diffHunks}
+              language={message.diffData?.language || ''}
+              showActions={false}
             />
           )}
 

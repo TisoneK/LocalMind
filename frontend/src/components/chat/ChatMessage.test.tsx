@@ -107,3 +107,69 @@ describe('ChatMessage markdown table <br> handling', () => {
     expect(screen.getByText(/High: 23°C/)).toBeInTheDocument();
   });
 });
+
+// ── B-2026-08-25-6: Accept collapses the diff card to the normal view ──────
+
+/** A minimal single-hunk diff payload shaped like the live `diff` SSE event. */
+function makeDiffData() {
+  return {
+    hunks: [
+      {
+        filePath: '/home/z/notes/todo.md',
+        oldStart: 1,
+        oldLines: 1,
+        newStart: 1,
+        newLines: 2,
+        lines: [
+          { type: 'context' as const, content: 'shopping list' },
+          { type: 'removed' as const, oldLine: 2, content: '- milk' },
+          { type: 'added' as const, newLine: 2, content: '- oat milk' },
+          { type: 'added' as const, newLine: 3, content: '- bread' },
+        ],
+      },
+    ],
+    language: 'markdown',
+  };
+}
+
+describe('ChatMessage diff accept flow (B-2026-08-25-6)', () => {
+  it('renders the full diff with an Accept bar while pending', () => {
+    render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} onRetry={() => {}} />);
+    expect(screen.getByRole('button', { name: /accept/i })).toBeTruthy();
+    // A removed diff line is visible in the colored diff view.
+    expect(screen.getByText('- milk')).toBeTruthy();
+  });
+
+  it('collapses to the compact applied card after Accept — no colored diff, no Accept bar', () => {
+    render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} onRetry={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /accept/i }));
+    // Accept bar gone.
+    expect(screen.queryByRole('button', { name: /accept/i })).toBeNull();
+    // Colored diff lines gone (the normal view replaces them).
+    expect(screen.queryByText('- milk')).toBeNull();
+    // Compact applied card shows the file name and +/− stats.
+    expect(screen.getByText('todo.md')).toBeTruthy();
+    expect(screen.getByText(/\+2/)).toBeTruthy();
+    expect(screen.getByTestId('diff-applied-toggle')).toBeTruthy();
+  });
+
+  it('re-opens the diff read-only via View diff, and hides it again', () => {
+    render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} onRetry={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /accept/i }));
+    // Re-open.
+    fireEvent.click(screen.getByTestId('diff-applied-toggle'));
+    expect(screen.getByText('- milk')).toBeTruthy();
+    // Read-only: no second Accept bar in the re-opened diff.
+    expect(screen.queryByRole('button', { name: /^accept$/i })).toBeNull();
+    // Hide again — back to the compact card only.
+    fireEvent.click(screen.getByTestId('diff-applied-toggle'));
+    expect(screen.queryByText('- milk')).toBeNull();
+    expect(screen.getByTestId('diff-applied-toggle')).toBeTruthy();
+  });
+
+  it('renders no diff UI when the message has no diffData', () => {
+    render(<ChatMessage message={makeMessage()} onRetry={() => {}} />);
+    expect(screen.queryByTestId('diff-applied-toggle')).toBeNull();
+    expect(screen.queryByRole('button', { name: /apply these changes/i })).toBeNull();
+  });
+});
