@@ -881,8 +881,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     from core.trivial_input import _render_conversational_todos
 
                     todo_block = _render_conversational_todos(current_todos)
+                from core.trivial_input import CAPABILITY_NOTE
+
                 sys_prompt = (
-                    "You are LocalMind, a local AI assistant. Answer the user's "
+                    CAPABILITY_NOTE
+                    + "Answer the user's "
                     "latest message naturally and briefly using the recent conversation "
                     "as context. Resolve short follow-ups against what was just said; "
                     "do not repeat a previous answer when the user asks for more detail. "

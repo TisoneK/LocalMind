@@ -1040,6 +1040,9 @@ class AnswerSynthesizer:
         (pre-processed) data and produces a clean summary.
         """
         prompt_template = _SYNTHESIS_PROMPTS.get(intent, _SYNTHESIS_PROMPTS[Intent.SHELL])
+        # Lazy import — trivial_input pulls the engine, so a module-level import
+        # here would be circular (engine → agent_runtime → loop → synthesizer).
+        from core.trivial_input import CAPABILITY_NOTE
 
         # Pre-process web content before sending to LLM
         raw_data = extracted.raw_content
@@ -1064,7 +1067,7 @@ class AnswerSynthesizer:
         )
 
         messages = [
-            {"role": "system", "content": prompt},
+            {"role": "system", "content": CAPABILITY_NOTE + prompt},
             {"role": "user", "content": user_question},
         ]
 
@@ -1098,7 +1101,7 @@ class AnswerSynthesizer:
                 data=shorter_data,
             )
             messages = [
-                {"role": "system", "content": prompt},
+                {"role": "system", "content": CAPABILITY_NOTE + prompt},
                 {"role": "user", "content": user_question},
             ]
 
@@ -1153,6 +1156,8 @@ class AnswerSynthesizer:
         This uses a dedicated prompt that prioritizes the fetched page
         content over the search snippets.
         """
+        from core.trivial_input import CAPABILITY_NOTE  # lazy — avoid circular import
+
         prompt = _COMBINED_SYNTHESIS_PROMPT.format(
             question=user_question,
             page_content=page_content[:6000],
@@ -1160,7 +1165,7 @@ class AnswerSynthesizer:
         )
 
         messages = [
-            {"role": "system", "content": prompt},
+            {"role": "system", "content": CAPABILITY_NOTE + prompt},
             {"role": "user", "content": user_question},
         ]
 

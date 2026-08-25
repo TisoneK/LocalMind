@@ -1744,6 +1744,7 @@ class AgentLoop:
             # request clearly needs an ACTION (run a command, edit files, search
             # the machine), don't silently answer without doing it. Offer to
             # switch to Agent mode (the frontend renders an Accept/Decline gate).
+            from core.trivial_input import CAPABILITY_NOTE
             _dm_user_msg = reformulated_message or _user_message_text(messages) or ""
             if _message_implies_tool_action(_dm_user_msg):
                 if _obs:
@@ -1770,9 +1771,8 @@ class AgentLoop:
                 {
                     "role": "system",
                     "content": (
-                        "You are LocalMind, a helpful local AI assistant. "
-                        "Answer the user's question directly and concisely. "
-                        "Do not attempt to use any tools."
+                        CAPABILITY_NOTE
+                        + "Answer the user's question directly and concisely."
                     ),
                 },
                 *messages,
@@ -1965,11 +1965,13 @@ class AgentLoop:
                     # answer the user's latest message directly from the
                     # conversation history (fixes a follow-up like "why did you
                     # say X?" being met with a generic "tell me more").
+                    from core.trivial_input import CAPABILITY_NOTE
                     _hist_msgs = [
                         {
                             "role": "system",
                             "content": (
-                                "You are LocalMind, a helpful assistant. Answer the user's "
+                                CAPABILITY_NOTE
+                                + "Answer the user's "
                                 "LATEST message using the conversation above. If they are "
                                 "questioning or correcting a previous answer, address it "
                                 "directly and honestly using what was actually said earlier "

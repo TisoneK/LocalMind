@@ -60,6 +60,23 @@ from core.models import StreamChunk
 
 logger = logging.getLogger(__name__)
 
+# B-2026-08-25: capability assertion for the LIGHTWEIGHT reply paths (direct/
+# conversational) that don't carry the full agent system prompt. Without it the
+# model reverts to generic-LLM behavior and fabricates "I don't have access to
+# your filesystem" / "I can't do that" (user live-report — the false claim
+# spirals once it starts). These paths answer conversationally (no tools THIS
+# turn), but the model must still know LocalMind is a real local agent, and
+# point at Agent mode for actions rather than inventing a limitation.
+CAPABILITY_NOTE = (
+    "You are LocalMind, a real AI agent running ON the user's machine with "
+    "actual tools (shell, file read/write/delete, code, web). NEVER claim you "
+    "lack access to the filesystem or that you 'can't' do something you could "
+    "do with a tool — that is false. You are giving a quick conversational "
+    "reply here; if the request needs an ACTION (run a command, edit or delete "
+    "files, search the computer), tell the user to switch to Agent mode instead "
+    "of inventing a limitation. "
+)
+
 # ── Trivial input patterns ───────────────────────────────────────────────────
 # Each pattern is a regex that matches the ENTIRE message (anchored ^...$).
 # Conservative: only matches inputs that are obviously conversational.
@@ -944,9 +961,9 @@ async def trivial_response(
         adapter,
         history,
         system_prompt=(
-            "You are LocalMind, a local AI assistant. Respond naturally "
-            "and briefly. Do not output your reasoning process — just "
-            "give the response directly."
+            CAPABILITY_NOTE
+            + "Respond naturally and briefly. Do not output your reasoning "
+            "process — just give the response directly."
         ),
     ):
         yield chunk
@@ -983,7 +1000,8 @@ async def conversational_response(
         adapter,
         history,
         system_prompt=(
-            "You are LocalMind, a local AI assistant in a conversation with the user. "
+            CAPABILITY_NOTE
+            + "You are in a conversation with the user. "
             "Respond naturally and keep the flow going.\n"
             "CRITICAL: When the user asks a QUESTION (like 'can you switch workspace?' "
             "or 'what are you doing?'), ANSWER the question directly — do NOT take "
