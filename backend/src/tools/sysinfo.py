@@ -63,6 +63,119 @@ def _time_info() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Native fallbacks (B-2026-08-24-12) — so sysinfo reports CPU/RAM/disk/uptime
+# even when psutil is unavailable (a platform with no wheel, a broken install).
+# Uses stdlib (shutil.disk_usage, os.cpu_count) and lightweight platform
+# commands. Model/env-agnostic: sysinfo should never return an empty overview.
+# ---------------------------------------------------------------------------
+
+
+def _native_cpu_line() -> str | None:
+    n = os.cpu_count()
+    proc = (platform.processor() or platform.machine() or "").strip()
+    if not n:
+        return None
+    return f"CPU: {n} logical processors" + (f"  ({proc})" if proc else "")
+
+
+def _native_disk_line(path: str, label: str) -> str | None:
+    import shutil
+
+    try:
+        u = shutil.disk_usage(path)
+    except OSError:
+        return None
+    return (
+        f"Disk ({label}): {u.total / 1e9:.1f} GB total  |  {u.free / 1e9:.1f} GB free"
+    )
+
+
+def _native_ram_line() -> str | None:
+    import re
+    import subprocess
+
+    total: int | None = None
+    avail: int | None = None
+    try:
+        if sys.platform.startswith("linux"):
+            info: dict[str, int] = {}
+            with open("/proc/meminfo") as fh:
+                for line in fh:
+                    key, _, val = line.partition(":")
+                    parts_ = val.strip().split()
+                    if parts_:
+                        info[key.strip()] = int(parts_[0]) * 1024
+            total = info.get("MemTotal")
+            avail = info.get("MemAvailable") or info.get("MemFree")
+        elif sys.platform == "darwin":
+            out = subprocess.run(
+                ["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, timeout=3
+            ).stdout.strip()
+            total = int(out) if out.isdigit() else None
+            vm = subprocess.run(
+                ["vm_stat"], capture_output=True, text=True, timeout=3
+            ).stdout
+            page = 4096
+            pm = re.search(r"page size of (\d+)", vm)
+            if pm:
+                page = int(pm.group(1))
+            free_pages = 0
+            for key in ("Pages free", "Pages inactive", "Pages speculative"):
+                fm = re.search(rf"{key}:\s+(\d+)", vm)
+                if fm:
+                    free_pages += int(fm.group(1))
+            avail = free_pages * page if free_pages else None
+        elif sys.platform == "win32":
+            out = subprocess.run(
+                ["wmic", "OS", "get", "TotalVisibleMemorySize,FreePhysicalMemory", "/value"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout
+            for line in out.splitlines():
+                line = line.strip()
+                if line.startswith("TotalVisibleMemorySize=") and line.split("=", 1)[1].isdigit():
+                    total = int(line.split("=", 1)[1]) * 1024
+                elif line.startswith("FreePhysicalMemory=") and line.split("=", 1)[1].isdigit():
+                    avail = int(line.split("=", 1)[1]) * 1024
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    if not total:
+        return None
+    avail_str = f"  |  {avail / 1e9:.1f} GB available" if avail else ""
+    used_str = f"  ({(total - avail) / total * 100:.0f}% used)" if avail else ""
+    return f"RAM: {total / 1e9:.1f} GB total{avail_str}{used_str}"
+
+
+def _native_uptime_line() -> str | None:
+    import subprocess
+
+    boot_ts: float | None = None
+    try:
+        if sys.platform.startswith("linux"):
+            with open("/proc/uptime") as fh:
+                secs = int(float(fh.read().split()[0]))
+                boot_ts = time.time() - secs
+        elif sys.platform == "darwin":
+            out = subprocess.run(
+                ["sysctl", "-n", "kern.boottime"], capture_output=True, text=True, timeout=3
+            ).stdout
+            import re
+
+            m = re.search(r"sec = (\d+)", out)
+            if m:
+                boot_ts = float(m.group(1))
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    if boot_ts is None:
+        return None
+    secs = int(time.time() - boot_ts)
+    days, rem = divmod(secs, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+    uptime_str = f"{days}d {hours}h {minutes}m" if days else f"{hours}h {minutes}m"
+    return f"Uptime: {uptime_str}"
+
+
+# ---------------------------------------------------------------------------
 # Section: Default summary (broad overview)
 # ---------------------------------------------------------------------------
 
@@ -130,6 +243,17 @@ def _default_summary() -> str:
             parts.append(f"Uptime: {uptime_str}")
         except Exception:
             pass
+    else:
+        # B-2026-08-24-12: no psutil — report CPU/RAM/disk/uptime natively so
+        # the overview is never empty (append only the lines that resolve).
+        for line in (
+            _native_cpu_line(),
+            _native_ram_line(),
+            _native_disk_line(os.path.expanduser("~"), "home"),
+            _native_uptime_line(),
+        ):
+            if line:
+                parts.append(line)
 
     # Network (brief — interface + IPv4, skip loopback)
     if _HAS_PSUTIL:
@@ -378,10 +502,62 @@ def _environment_info() -> str:
 # ---------------------------------------------------------------------------
 
 
+def _native_disk_all() -> str:
+    """B-2026-08-24-12: mounted-filesystem usage without psutil — `df -kP` on
+    Unix, drive letters (via stdlib shutil) on Windows."""
+    import shutil
+    import subprocess
+
+    def _fmt(mount: str, total: int, free: int) -> str:
+        pct = int((total - free) / total * 100) if total else 0
+        filled = pct // 5
+        bar = "█" * filled + "░" * (20 - filled)
+        return (
+            f"  {mount:<25} {total / 1e9:>7.1f}G total  "
+            f"{free / 1e9:>7.1f}G free  [{bar}] {pct}%"
+        )
+
+    parts = ["Mounted filesystems:"]
+    try:
+        if sys.platform == "win32":
+            import string
+
+            for letter in string.ascii_uppercase:
+                drive = f"{letter}:\\"
+                if os.path.exists(drive):
+                    try:
+                        u = shutil.disk_usage(drive)
+                        parts.append(_fmt(drive, u.total, u.free))
+                    except OSError:
+                        continue
+        else:
+            out = subprocess.run(
+                ["df", "-kP"], capture_output=True, text=True, timeout=5
+            ).stdout
+            for line in out.splitlines()[1:]:
+                cols = line.split()
+                if len(cols) >= 6 and cols[1].isdigit() and cols[3].isdigit():
+                    total = int(cols[1]) * 1024
+                    if total <= 0:
+                        continue
+                    parts.append(_fmt(cols[5], total, int(cols[3]) * 1024))
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    if len(parts) == 1:  # nothing enumerated — fall back to root + home
+        for path in ("/", os.path.expanduser("~")):
+            try:
+                u = shutil.disk_usage(path)
+                parts.append(_fmt(path, u.total, u.free))
+            except OSError:
+                continue
+    return "\n".join(parts) if len(parts) > 1 else "Disk info unavailable."
+
+
 def _disk_all_info() -> str:
     """All mounted filesystems with usage bars."""
     if not _HAS_PSUTIL:
-        return "(Disk info requires psutil: pip install psutil)"
+        return _native_disk_all()
 
     parts = ["Mounted filesystems:"]
     try:
