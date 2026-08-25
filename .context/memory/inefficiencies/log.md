@@ -1046,3 +1046,12 @@ if literally nothing slowed you down.
 - **Cause:** `turn_complete` SSE event from agent_runtime does not include a `success` field. Harness defaulted to False.
 - **Workaround / fix:** Parse `gate=pass/fail/?` from server log as the authoritative source.
 - **Prevent next time:** When building test tooling, verify the event schema matches what the code actually emits before interpreting results.
+
+---
+## 2026-08-25 — Super Z / GLM-5.3 (Session 400 addendum)
+
+- **Problem (provider instruction drift — Session 331 REPEAT):** live-testing.md names **bankofai/deepseek-v4-flash as the PRIMARY live-test provider** ("if it works on bankofai, it works for the common case"; zai is only the weak-model check + rate-limit fallback). Session 400 traced on **zen/hy3-free then zai** instead and reported the feature live-verified — treating zen as primary because its model NAME (deepseek-v4-flash-free) resembled bankofai's. The user corrected: "for live testing we use bankofai but you were using zen, read again."
+- **Cost:** the verification bar was NOT met as documented (no primary-provider trace); user correction round; a second pass needed once the key arrives.
+- **Cause:** (1) did not internalize the provider section of live-testing.md FIRST — the exact Session 331 failure mode; (2) anchored on the user's chat api_keys block (which has zen/zai/etc but NO bankofai key) instead of flagging the missing primary-provider credential as a missing input per Binding Rule 7.
+- **Workaround / fix:** searched the machine for the bankofai key (~/LocalMind/settings.json, /home/z/my-project/scripts/, all env files, any settings.json): the sandbox was re-provisioned (~HOME rebuilt 02:50 Aug 25) and every documented key location is gone; keyless probe of api.bankofai.io returns 401 (auth required). Blocked on the user supplying BANKOFAI_API_KEY.
+- **Prevent next time:** before ANY live-test session, re-read the Providers section of `system/live-testing.md` and enumerate the keys it requires. If the mandated provider's key is absent from chat + machine, say so and ask IMMEDIATELY (Binding Rule 7) — do not substitute a same-model-name provider and call the bar met. When reporting live results, name the provider explicitly and flag any deviation from the documented primary.
