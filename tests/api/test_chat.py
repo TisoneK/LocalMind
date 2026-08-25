@@ -134,6 +134,39 @@ class TestChat:
             r = client.post("/api/chat", data={"message": "hi"})
         assert len(r.headers.get("x-session-id", "")) > 0
 
+    def test_error_chunk_with_text_emits_fallback_token_then_error(self, client):
+        """Session 401 field live-test: the agent loop's abort path yields a
+        user-facing fallback text TOGETHER with the error field. Dropping the
+        text made provider-failure turns end on an EMPTY bubble (live trace:
+        47s of tool work, zero user-visible output). The co-riding text must
+        reach the user as a token BEFORE the error event."""
+        from core.models import StreamChunk
+
+        async def _process(self, message, session_id, file=None, filename=None,
+                            content_type=None, obs=None, original_path=None,
+                            client_intent=None, client_confidence=0.0, **kwargs):
+            if obs:
+                obs.emit("intent_classified", primary="chat", secondary="none",
+                         confidence=0.95)
+            yield StreamChunk(
+                text="The model ran into an issue. Please try again.",
+                done=True,
+                error="bankofai returned 403: <cloudflare page>",
+            )
+
+        with patch("core.engine.Engine.process", _process):
+            r = client.post("/api/chat", data={"message": "weather", "session_id": "t-err-text"})
+        events = _parse_sse(r.text)
+        tokens = [e for e in events if e.get("type") == "token"]
+        errors = [e for e in events if e.get("type") == "error"]
+        assert errors, "expected the terminal error event"
+        assert tokens, "expected the fallback text token before the error event"
+        assert "model ran into an issue" in "".join(t.get("content", "") for t in tokens)
+        # Text BEFORE error: the fallback token must precede the error event.
+        first_token_idx = events.index(tokens[0])
+        first_error_idx = events.index(errors[0])
+        assert first_token_idx < first_error_idx
+
     def test_streams_text_content(self, client):
         with _mock_stream("Hello world"):
             r = client.post("/api/chat", data={"message": "hi", "session_id": "t3"})

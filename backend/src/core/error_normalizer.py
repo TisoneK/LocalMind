@@ -323,6 +323,35 @@ def _clean_text(text: str, limit: int = 220) -> str:
     return t
 
 
+# Cloudflare / edge-protection HTML pages (Session 401 live finding,
+# bankofai): a 403 whose body is an HTML challenge/block page is NOT an API
+# auth rejection — the request never reached the provider's auth layer. It
+# is transient edge protection (request-cadence triggered; a 200 follows
+# seconds later). Classifying it auth_error told the user to "check the API
+# key in Settings" with a perfectly valid key AND (retryable=False) skipped
+# the loop's evidence-preservation path — the turn died with an empty
+# answer after 47s of successful tool work. Misdiagnosis is worse than no
+# diagnosis: detect the edge-block shape BEFORE the status-code map.
+_CF_MARKERS = (
+    "cdn-cgi",                # Cloudflare challenge/block asset path
+    "cf.errors",              # Cloudflare error stylesheet
+    "attention required",     # CF block page headline
+    "just a moment",          # CF interstitial
+    "cloudflare ray id",      # CF footer
+    "checking your browser",  # older CF interstitial
+)
+
+
+def _looks_like_edge_block(text: str) -> bool:
+    """True if the error body is an HTML edge-protection page (Cloudflare &c)."""
+    if not text:
+        return False
+    head = text[:2000].lower()
+    if not head.lstrip().startswith(("<!doctype html", "<html")):
+        return False
+    return any(m in head for m in _CF_MARKERS)
+
+
 def _classify(
     status: int | None,
     text: str,
@@ -331,13 +360,16 @@ def _classify(
     """Classify a raw provider error into (code, retryable).
 
     Priority (ADR-21, provider-agnostic): the provider's own structured
-    error-type/code token first (explicit semantics), then the HTTP status,
+    error-type/code token first (explicit semantics), then edge-block body
+    shape (HTML challenge pages lie about auth), then the HTTP status,
     then content keywords; generic as the last resort.
     """
     if type_token:
         rule = _ERROR_TYPE_RULES.get(type_token)
         if rule:
             return rule
+    if _looks_like_edge_block(text):
+        return SERVER_ERROR, True
     if status is not None and status in _STATUS_CODES:
         return _STATUS_CODES[status]
     lowered = (text or "").lower()

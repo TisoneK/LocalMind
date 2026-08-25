@@ -747,6 +747,20 @@ async def _event_stream(
                 # internal consumers; this is the ONE place it becomes the
                 # canonical error object (code/message/retryable/raw) the
                 # frontend renders as a friendly card.
+                #
+                # Session 401 (field live-test, bankofai CF 403): the agent
+                # loop's abort path yields a USER-FACING fallback text together
+                # with the error field ("The model ran into an issue… try
+                # again"). Adapters' error chunks carry text="", so only the
+                # loop's friendly fallbacks ride both fields — and dropping the
+                # text made those turns END ON AN EMPTY BUBBLE (live trace: 47s
+                # of tool work, zero user-visible output). Emit the co-riding
+                # text as a token BEFORE the error event so the user sees the
+                # fallback; raw adapter error prose still never leaks (their
+                # text is empty by construction).
+                if chunk.text:
+                    yield _sse({"type": "token", "content": chunk.text})
+                    _response_chunks.append(chunk.text)
                 yield _sse({"type": "error", "error": normalize_error(chunk.error)})
                 _last_sent_time = time.monotonic()
                 return

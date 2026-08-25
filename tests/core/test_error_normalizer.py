@@ -408,3 +408,64 @@ class TestProviderEnvelopes:
         err = normalize_error("plain provider error " + "z" * 3000)
         assert len(err["raw"]) <= 2000
         assert err["message"] != ""
+
+
+# ── Session 401 field live-test: Cloudflare edge-block 403s are not auth errors ──
+
+# The exact shape bankofai/deepseek-v4-flash returned mid-turn (weather task,
+# 47s of tool work, then an empty answer): a 403 carrying a Cloudflare HTML
+# challenge page. The old classifier mapped ANY 403 → auth_error (retryable
+# False): the user was told to "check the API key" (the key was valid — 200s
+# before and after) AND the loop's evidence-preservation path (which requires
+# retryable=True) was skipped, killing the turn with zero user-visible output.
+BANKOFAI_CF_403 = (
+    "bankofai returned 403: <!DOCTYPE html>\n"
+    "<link rel=\"stylesheet\" id=\"cf_styles-css\" href=\"/cdn-cgi/styles/cf.errors.css\" />\n"
+    "<!--[if lt IE 9]><script src=\"/cdn-cgi/scripts/respond.min.js\"></script><![endif]-->\n"
+)
+
+
+def test_cloudflare_html_403_is_server_error_not_auth() -> None:
+    """A CF challenge page is transient edge protection, not an auth failure."""
+    out = normalize_error(BANKOFAI_CF_403)
+    assert out["code"] == SERVER_ERROR, out
+    assert out["retryable"] is True
+    assert out["source"] == SOURCE_PROVIDER
+    assert "API key" not in out["message"], "must not send the user to fix a valid key"
+
+
+def test_real_api_403_stays_auth_error() -> None:
+    """A structured 403 from the provider API (not an HTML edge page) is still
+    a genuine auth/permission rejection."""
+    out = normalize_error(
+        'bankofai returned 403: {"error":{"type":"permission_error",'
+        '"message":"This API key does not have access to that model."}}'
+    )
+    assert out["code"] == AUTH_ERROR, out
+    assert out["retryable"] is False
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        BANKOFAI_CF_403,
+        "zen returned 403: <!DOCTYPE html><html><head><title>Just a moment...</title></head></html>",
+        'provider returned 403: <html><body>Attention Required! | Cloudflare Ray ID: abc123</body></html>',
+    ],
+)
+def test_edge_block_variants_are_retryable(body: str) -> None:
+    out = normalize_error(body)
+    assert out["code"] == SERVER_ERROR, body[:60]
+    assert out["retryable"] is True
+
+
+def test_plain_html_without_cf_markers_stays_status_classified() -> None:
+    """An HTML body without edge-protection markers must not flip the status
+    classification (e.g. a provider's own HTML 404 page stays model_not_found
+    via status, not server_error)."""
+    out = normalize_error(
+        "prov returned 404: <!DOCTYPE html><html><body>No such model page</body></html>"
+    )
+    # 404 has no _STATUS_CODES HTML override — but the page lacks CF markers,
+    # so it falls to the status map as before.
+    assert out["code"] == MODEL_NOT_FOUND, out
