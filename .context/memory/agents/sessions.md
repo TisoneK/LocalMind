@@ -5599,3 +5599,10 @@ authoritative.
 - **FilePreviewDialog checked:** its Diff mode is a user-toggled switcher with showActions={false} — no accept flow, no stuck-diff symptom.
 - **Verification:** 4 new regression tests (pending/accept/reopen-hide/no-diff), frontend suite 356 passed / 31 files, tsc clean, eslint 0 errors (15 pre-existing warnings). Frontend-only change — no backend touched, no live provider trace needed; visual sign-off in the user's running app pending (B-24-13 pattern).
 - **Env note:** repo root is an npm workspace — frontend deps install into LocalMind/node_modules (run tsc/vitest/eslint via ../node_modules/.bin from frontend/).
+
+## Session 403 — ADR-56: future vision architecture documented — 2026-08-25
+
+- **Task (user):** document the future vision architecture (Model Intelligence + Harness = Agent; LocalMind as agent runtime + intelligence harness).
+- **Artifacts:** `docs/VISION_ARCHITECTURE.md` (the vision, layer by layer, each with vision / what-exists-today mapped to real modules / the gap; guiding principles; what the vision does NOT authorize; 4-stage progression with maturity gates) + ADR-56 in `plans/decisions.md` + a pointer link from `docs/ARCHITECTURE.md`.
+- **Key design choices:** (1) the doc explicitly reconciles with ADR-53 — specialists appear only behind §8 maturity gates (observed Parent maturity, evidence-citing ADR) so no future session uses the vision to reopen premature multi-agent work; (2) every layer is anchored to existing code (adapters/model_router, 35 tools, vector+session+failure memory, context_policy/builder/compactor, session workspace/sandbox/shell guards, parent loop, api+cli serving) — the vision is a continuation arc, not a rewrite; (3) the `.context`-as-context-substrate idea is recorded as the Context Engine's long-term direction with the dev protocol as its prototype.
+- **Verification:** documentation only; reviewed against current architecture for accuracy. No code changed.

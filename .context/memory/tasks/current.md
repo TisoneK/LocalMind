@@ -1,8 +1,8 @@
 # Current Task
 
-**Status:** IDLE — Session 402 (B-2026-08-25-6 diff-card accept fix) COMPLETE
-and pushed (3072074 + context commit); pending user visual sign-off in the
-running app. No live session in progress. The Session 399 notes below are
+**Status:** IDLE — Session 403 (vision documentation) COMPLETE: ADR-56 +
+docs/VISION_ARCHITECTURE.md. Session 402's B-25-6 fix still pending user
+visual sign-off. No live session in progress. Session 399 notes below
 retained for context.
 
 ## Session 399 — done this session (all pushed)
