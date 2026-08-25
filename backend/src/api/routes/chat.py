@@ -89,6 +89,50 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
+# B-2026-08-24-1: curated per-tool narration for the user's Thinking box. Plain
+# language, no internal wiring — what the agent is DOING, keyed on the tool. The
+# raw model chain-of-thought is no longer streamed (B-2026-08-24-6); these lines
+# are what the box shows instead.
+_TOOL_NARRATION: dict[str, str] = {
+    "sysinfo": "Checking your system",
+    "observe": "Looking at your desktop",
+    "system_search": "Searching your files",
+    "grep_search": "Searching inside files",
+    "find_path": "Looking for files",
+    "shell": "Running a command",
+    "code_exec": "Running some code",
+    "file_task": "Reading a file",
+    "file_write": "Writing a file",
+    "file_edit": "Editing a file",
+    "apply_proposed_edit": "Applying an edit",
+    "web_search": "Searching the web",
+    "web_research": "Researching on the web",
+    "web_fetch": "Fetching a page",
+    "browse": "Browsing the web",
+    "git": "Checking version control",
+    "memory_op": "Checking my memory",
+    "calculator": "Working out the numbers",
+    "process": "Managing a process",
+    "csv": "Reading the spreadsheet",
+    "json": "Reading the data",
+    "sql": "Querying the database",
+}
+
+# Internal/meta tools that should NOT surface as user-facing narration.
+_NARRATION_SKIP = frozenset({"todo_write", "describe_tool", "create_plan", "add_subgoal", "update_subgoal"})
+
+
+def _narration_sse(tool_name: str, status: str) -> str | None:
+    """SSE for the Thinking box: a curated line when a tool STARTS. None when the
+    tool is internal or the event isn't a start."""
+    if status not in ("started", "running", "pending", "in_progress"):
+        return None
+    if not tool_name or tool_name in _NARRATION_SKIP or tool_name in _INTERNAL_DELEGATION_TOOLS:
+        return None
+    line = _TOOL_NARRATION.get(tool_name, "Working on it")
+    return _sse({"type": "thinking_token", "thinking": line + "…\n"})
+
+
 def _tool_call_payload(evt, session_id: str) -> dict:
     """Build the same bounded tool event used by the normal SSE bridge.
 
@@ -164,6 +208,9 @@ async def _drain_live_tool_events(obs: ObsCollector, session_id: str):
         yield _sse(evt.to_sse_dict())
         if evt.type in ("tool_call", "tool_status"):
             yield _sse(_tool_call_payload(evt, session_id))
+            _narr = _narration_sse(evt.data.get("tool", ""), evt.data.get("status", ""))
+            if _narr:
+                yield _narr
         elif evt.type == "terminal_output":
             yield _sse(
                 {
@@ -645,6 +692,10 @@ async def _event_stream(
                             },
                         }
                     )
+                    # B-2026-08-24-1: curated narration line for the Thinking box.
+                    _narr = _narration_sse(_tool, _status)
+                    if _narr:
+                        yield _narr
 
                 # Session 27 legacy trio — shared todo bridging (also used by
                 # the S296 lifecycle drain so these survive no-text turns too).
@@ -786,14 +837,14 @@ async def _event_stream(
                 _response_chunks.append(chunk.text)
                 _last_sent_time = time.monotonic()
 
-            # 2. Emit thinking tokens (separate from text)
-            if chunk.thinking:
-                if chunk.thinking == "start":
-                    yield _sse({"type": "thinking_start"})
-                elif chunk.thinking == "end":
-                    yield _sse({"type": "thinking_end"})
-                else:
-                    yield _sse({"type": "thinking_token", "thinking": chunk.thinking})
+            # 2. Thinking lifecycle markers only — B-2026-08-24-6: the model's
+            # RAW chain-of-thought is NO LONGER streamed to the user's Thinking
+            # box (it leaked internal wiring — instruction echoes, "the synthesis
+            # reminder", schema musing, and messy recovery monologue). The box
+            # now shows the curated per-action narration emitted alongside each
+            # tool call (B-2026-08-24-1); the raw prose stays internal.
+            if chunk.thinking in ("start", "end"):
+                yield _sse({"type": f"thinking_{chunk.thinking}"})
                 _last_sent_time = time.monotonic()
 
             # 3. Emit done AFTER text (so all content is already sent)
