@@ -1,8 +1,9 @@
 # Current Task
 
-**Status:** ACTIVE — Session 399 (interactive) burning down the B-2026-08-24
-UI/agent backlog with the user, one item at a time. (Session 400, the
-system-search feature, completed separately — summary retained below.)
+**Status:** IDLE — Session 402 (B-2026-08-25-6 diff-card accept fix) COMPLETE
+and pushed (3072074 + context commit); pending user visual sign-off in the
+running app. No live session in progress. The Session 399 notes below are
+retained for context.
 
 ## Session 399 — done this session (all pushed)
 

@@ -5590,3 +5590,12 @@ authoritative.
 
 - **Task (user):** backlog the UI bug "diff mode does not change to normal after user clicks accept after file edit or creation."
 - **Logged as B-2026-08-25-6** with mechanism: ChatMessage renders the inline DiffBlock with showActions but NO onAccept/onReject — Accept only flips the internal status strip; the colored diff card never transitions back to a normal view, and the accept state is ephemeral (resets on reload). Pointers + repro included.
+
+## Session 402 — B-2026-08-25-6: diff card stuck after Accept — 2026-08-25
+
+- **Task (user):** fix B-2026-08-25-6 (its own session).
+- **Fix (3072074):** ChatMessage now wires onAccept — Accept collapses the full colored diff into a compact applied card (file name, +N −M, 'applied' label, FileResultChip visual family) with a View-diff toggle that re-renders the diff read-only (no second Accept bar) and Hide-diff to collapse again. Reject's existing internal status-strip behavior is unchanged (semantic question — the edit is already on disk when the diff shows; left for the user to direct if they want a different shape).
+- **Backlog correction (honest record):** my Session 401 addendum claimed the Accept bar REAPPEARS after reload — wrong. Verified: diff hunks are live-stream-only (no backend persistence; `getSessionHistory` maps no diffData), so the whole diff card disappears on reload. Corrected in the backlog entry.
+- **FilePreviewDialog checked:** its Diff mode is a user-toggled switcher with showActions={false} — no accept flow, no stuck-diff symptom.
+- **Verification:** 4 new regression tests (pending/accept/reopen-hide/no-diff), frontend suite 356 passed / 31 files, tsc clean, eslint 0 errors (15 pre-existing warnings). Frontend-only change — no backend touched, no live provider trace needed; visual sign-off in the user's running app pending (B-24-13 pattern).
+- **Env note:** repo root is an npm workspace — frontend deps install into LocalMind/node_modules (run tsc/vitest/eslint via ../node_modules/.bin from frontend/).
