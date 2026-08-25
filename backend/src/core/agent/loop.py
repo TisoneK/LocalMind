@@ -1324,17 +1324,34 @@ _OFFER_MARKERS: tuple[str, ...] = (
     "if you want", "want me to", "should i ", "shall i ", "do you want",
     "would you prefer", "if you'd prefer", "just say", "let me know if",
 )
+# Gerund / present-continuous action verbs. Live-test (Session 405,
+# bankofai/deepseek-v4-flash): the model ended its answer with "…which I will
+# leave untouched. Deleting the two .bin files now:" and stopped — no rm. That
+# phrasing has NO "let me/I'll" lead-in (it's a gerund) so trigger 1 missed it.
+# Trigger 2 catches an answer that ENDS by announcing the action as imminent
+# ("… now:", "… now.") — output was promised but never produced. Synthesis
+# gerunds ("summarizing", "checking") are deliberately excluded so the
+# post-evidence path still owns those.
+_GERUND_ACTION_VERBS: tuple[str, ...] = (
+    "deleting", "removing", "erasing", "wiping", "purging", "trashing",
+    "creating", "writing", "overwriting", "moving ", "renaming",
+    "installing", "uninstalling", "downloading", "executing",
+    "running the", "running this", "running that",
+)
 
 
 def narrates_pending_action(text: str) -> bool:
     """Detect a committed-but-unexecuted state-changing action.
 
-    Fires when a SHORT final answer (the narration IS the response) contains a
-    first-person future-intent lead-in ("let me…", "I'll…", "time to…") AND a
-    state-changing verb (delete/create/run/move…), and is NOT an offer/hedge
-    ("let me know if you want me to…"). The caller uses this to FORCE a tool
-    call rather than end the turn — the opposite remedy from
-    `narrates_after_evidence` (which wants synthesis).
+    Two triggers, both on a SHORT final answer (the narration IS the response)
+    that is NOT an offer/hedge ("let me know if you want me to…"):
+      1. a first-person future-intent lead-in ("let me…", "I'll…", "time to…")
+         AND a state-changing verb (delete/create/run/move…);
+      2. the answer ENDS by announcing the action as imminent/in-progress —
+         a gerund action verb ("deleting…", "removing…") followed by a "now:"
+         / "now." / bare-colon tail (output promised, never produced).
+    The caller uses this to FORCE a tool call rather than end the turn — the
+    opposite remedy from `narrates_after_evidence` (which wants synthesis).
     """
     if not text or len(text.strip()) < 10:
         return False
@@ -1346,9 +1363,23 @@ def narrates_pending_action(text: str) -> bool:
     # Offers defer to the user — never coerce a destructive action from them.
     if any(marker in lower for marker in _OFFER_MARKERS):
         return False
-    if not any(lead in lower for lead in _ACTION_INTENT_LEADINS):
-        return False
-    return any(verb in lower for verb in _STATE_CHANGING_VERBS)
+    # Trigger 1 — explicit future-intent lead-in + a state-changing verb.
+    if any(lead in lower for lead in _ACTION_INTENT_LEADINS) and any(
+        verb in lower for verb in _STATE_CHANGING_VERBS
+    ):
+        return True
+    # Trigger 2 — the answer ends by announcing an imminent action and stops.
+    tail = lower[-120:]
+    if any(g in tail for g in _GERUND_ACTION_VERBS) and (
+        lower.endswith(":")
+        or lower.endswith("now")
+        or lower.endswith("now.")
+        or lower.endswith("now:")
+        or lower.endswith("shortly.")
+        or lower.endswith("shortly:")
+    ):
+        return True
+    return False
 
 
 def narrates_after_evidence(text: str) -> bool:

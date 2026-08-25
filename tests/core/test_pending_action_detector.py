@@ -42,6 +42,44 @@ def test_committed_actions_fire(text):
     assert narrates_pending_action(text) is True
 
 
+def test_live_gerund_ending_fires():
+    """Session 405 live-test (bankofai/deepseek-v4-flash): the turn ended with
+    this exact answer and no rm — a gerund ending with no 'let me/I'll' lead-in."""
+    text = (
+        "The folder contains exactly two .bin files — bigfile_A.bin (40M) and "
+        "bigfile_B.bin (55M) — plus a keep/ subdirectory, which I will leave "
+        "untouched. Deleting the two .bin files now:"
+    )
+    assert narrates_pending_action(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Deleting the two files now:",
+        "Removing the old logs now.",
+        "Creating the project structure now:",
+        "Great — the paths check out. Deleting them now:",
+    ],
+)
+def test_gerund_imminent_endings_fire(text):
+    assert narrates_pending_action(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Synthesis gerunds ending in "now:" are NOT actions — post-evidence owns them.
+        "I have all the data. Summarizing the results now:",
+        "Checking the remaining directories now:",
+        # A gerund action mentioned but the answer does NOT end on the imminent tail.
+        "Deleting files can be risky, so I recommend reviewing them first.",
+    ],
+)
+def test_gerund_non_actions_do_not_fire(text):
+    assert narrates_pending_action(text) is False
+
+
 # ── Safety negative: offers must NOT be coerced into an action ───────────────
 
 
