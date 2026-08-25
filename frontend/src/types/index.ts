@@ -125,6 +125,9 @@ export interface ChatMessage {
   codeBlocks?: CodeBlock[];
   fileResults?: FileResult[];
   pendingWrite?: PendingWrite;
+  /** B-2026-08-24-16: Chat mode asked to switch to Agent for an action.
+   *  Carries the original user message so Accept can resend it as an agent turn. */
+  switchToAgent?: { message: string };
   /** Structured diff data from edit_file tool results */
   diffData?: DiffData;
   /** Session 30: system status feedback — reflects real pipeline stage

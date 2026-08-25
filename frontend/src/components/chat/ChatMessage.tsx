@@ -653,6 +653,48 @@ function PermissionGate({ pending, onResolved }: { pending: PendingWrite; onReso
   );
 }
 
+// B-2026-08-24-16: Chat mode offered to switch to Agent for an action. Accept
+// dispatches a window event (WorkspaceLayout switches mode + resends); Decline
+// keeps Chat mode. Self-contained, modeled on PermissionGate.
+function SwitchToAgentGate({ message }: { message: string }) {
+  const [resolved, setResolved] = useState<null | 'accepted' | 'declined'>(null);
+  const accept = () => {
+    setResolved('accepted');
+    window.dispatchEvent(new CustomEvent('localmind:switch-to-agent', { detail: { message } }));
+  };
+  return (
+    <div className="mt-2 rounded-md border border-blue-400/30 bg-blue-400/5 px-3 py-2">
+      {resolved === null && (
+        <>
+          <div className="text-[11px] text-brand-green-soft mb-2">
+            This needs an action. Switch to <strong className="text-blue-400">Agent mode</strong> and do it?
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={accept}
+              className="px-2.5 py-1 text-[11px] font-medium rounded border border-blue-400/30 bg-blue-400/10 text-blue-400 hover:bg-blue-400/20 transition-colors"
+            >
+              ✓ Switch &amp; do it
+            </button>
+            <button
+              onClick={() => setResolved('declined')}
+              className="px-2.5 py-1 text-[11px] font-medium rounded border border-brand-border bg-brand-bg-base text-brand-green-muted hover:text-brand-green-soft transition-colors"
+            >
+              Stay in Chat
+            </button>
+          </div>
+        </>
+      )}
+      {resolved === 'accepted' && (
+        <div className="text-[11px] text-blue-400 animate-pulse">Switched to Agent mode — running it…</div>
+      )}
+      {resolved === 'declined' && (
+        <div className="text-[11px] text-brand-green-muted">Staying in Chat mode.</div>
+      )}
+    </div>
+  );
+}
+
 // ── ChatMessage component ──────────────────────────────────────────────────
 
 // ── MessageActions — hover-reveal copy/retry row (auto-hides) ─────────────
@@ -908,6 +950,9 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
                 // The gate is self-contained — no parent state update needed.
               }}
             />
+          )}
+          {message.switchToAgent && (
+            <SwitchToAgentGate message={message.switchToAgent.message} />
           )}
         </div>
       </div>

@@ -859,6 +859,11 @@ async def _event_stream(
                     pending = chunk.metadata.get("pending_write")
                     if pending:
                         done_payload["requires_confirmation"] = pending
+                    # B-2026-08-24-16: Chat mode asked to switch to Agent for an
+                    # action — the frontend renders an Accept/Decline gate.
+                    switch = chunk.metadata.get("switch_to_agent")
+                    if switch:
+                        done_payload["switch_to_agent"] = switch
                     # Session 344 Phase 3: emit structured response blocks
                     # so the frontend can render tables, charts, diagrams
                     # natively instead of forcing everything through Markdown.

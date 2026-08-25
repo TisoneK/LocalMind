@@ -412,6 +412,20 @@ export function WorkspaceLayout() {
     [currentSessionId, send, refreshSessions, refreshActions]
   );
 
+  // B-2026-08-24-16: the Chat→Agent gate (in ChatMessage) dispatches this when
+  // the user accepts. Switch to Agent mode (persist to backend) THEN resend the
+  // original message as an agent turn — the await ensures the backend has the
+  // new mode before the turn runs.
+  useEffect(() => {
+    const onSwitch = async (e: Event) => {
+      const msg = (e as CustomEvent).detail?.message as string | undefined;
+      await handleChatModeChange('agent');
+      if (msg && msg.trim()) handleSend(msg);
+    };
+    window.addEventListener('localmind:switch-to-agent', onSwitch);
+    return () => window.removeEventListener('localmind:switch-to-agent', onSwitch);
+  }, [handleChatModeChange, handleSend]);
+
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-brand-bg-app">
       {/* ADR-34 B-11: deliberate LocalMind title-bar chrome */}

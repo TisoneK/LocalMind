@@ -1740,6 +1740,29 @@ class AgentLoop:
         _chat_mode = getattr(_cfg, 'localmind_chat_mode', 'auto')
 
         if _chat_mode == 'direct' and getattr(agent_config, "name", "") == "parent":
+            # B-2026-08-24-16: Chat mode answers with no tools — but if the
+            # request clearly needs an ACTION (run a command, edit files, search
+            # the machine), don't silently answer without doing it. Offer to
+            # switch to Agent mode (the frontend renders an Accept/Decline gate).
+            _dm_user_msg = reformulated_message or _user_message_text(messages) or ""
+            if _message_implies_tool_action(_dm_user_msg):
+                if _obs:
+                    _obs.emit("agent_loop_done", intent=intent.value, direct=True)
+                yield StreamChunk(
+                    text=(
+                        "This looks like it needs an action — running a command, "
+                        "editing files, or searching your computer — which Chat "
+                        "mode can't do. Switch to Agent mode and I'll handle it, "
+                        "or stay in Chat and I'll answer as best I can without tools."
+                    ),
+                    done=False,
+                )
+                yield StreamChunk(
+                    text="", done=True,
+                    metadata={"switch_to_agent": {"message": _dm_user_msg}},
+                )
+                return
+
             # Direct mode: lightweight chat, no tools, no init, no planning.
             if _obs:
                 _obs.emit("agent_loop_done", intent=intent.value, direct=True)

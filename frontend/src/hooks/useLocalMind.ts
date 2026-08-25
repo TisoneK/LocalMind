@@ -1435,6 +1435,22 @@ export function useChat(
                     return updated;
                   });
                 }
+                // B-2026-08-24-16: Chat mode asked to switch to Agent for an
+                // action — attach the prompt so ChatMessage renders the gate.
+                if (parsed.switch_to_agent) {
+                  const sw = parsed.switch_to_agent as { message?: string };
+                  setMessages((prev) => {
+                    const updated = [...prev];
+                    const last = updated[updated.length - 1];
+                    if (last && last.role === 'assistant') {
+                      updated[updated.length - 1] = {
+                        ...last,
+                        switchToAgent: { message: sw.message || '' },
+                      };
+                    }
+                    return updated;
+                  });
+                }
                 break;
               }
 

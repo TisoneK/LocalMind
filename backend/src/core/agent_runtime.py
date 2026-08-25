@@ -1380,6 +1380,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # streams thinking as "start"/"end" markers plus token text — mirror
         # the frontend's phase-separator behavior (\n\n between phases).
         thinking_parts: list[str] = []
+        # B-2026-08-24-16: capture a Chat→Agent switch offer emitted by the loop
+        # (direct mode + action request) so it survives into the terminal done
+        # chunk below (the runtime rebuilds that chunk, dropping loop metadata).
+        _switch_to_agent: Optional[dict] = None
         usage: dict[str, int] = {}
         try:
             async for chunk in parent.run(
@@ -1422,6 +1426,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             ):
                 if chunk.usage:
                     usage.update(chunk.usage)
+                if getattr(chunk, "metadata", None) and chunk.metadata.get("switch_to_agent"):
+                    _switch_to_agent = chunk.metadata["switch_to_agent"]
                 if chunk.thinking:
                     if chunk.thinking == "start":
                         # Phase boundary — separate reasoning phases like the
@@ -1685,9 +1691,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         except Exception:
             logger.debug("[agent-runtime] presentation classification skipped", exc_info=True)
 
+        _final_meta: dict = {}
+        if _response_blocks:
+            _final_meta["response_blocks"] = _response_blocks
+        if _switch_to_agent:
+            _final_meta["switch_to_agent"] = _switch_to_agent
         yield StreamChunk(
             text="",
             done=True,
             usage=usage,
-            metadata={"response_blocks": _response_blocks} if _response_blocks else {},
+            metadata=_final_meta,
         )
