@@ -590,12 +590,34 @@ def _first_positional(tokens: list[str]) -> str | None:
     return None
 
 
+_SUDO_WORDS = frozenset({"sudo", "doas"})
+
+
 def _guard_broad_search(command: str) -> None:
-    """Redirect a broad filesystem search to system_search before it runs."""
-    cmd = command.strip()
-    # The search command lives in the first pipeline segment.
-    segment = re.split(r"\||;|&&", cmd, maxsplit=1)[0].strip()
+    """Redirect a broad filesystem search to system_search before it runs.
+
+    B-2026-08-25-1 live follow-up (bankofai/deepseek-v4-flash traces): the
+    guard previously inspected only the FIRST pipeline segment and did not
+    strip privilege prefixes, so two real-world shapes escaped the redirect:
+    - compound commands: `ls -d X; echo ---; find /home/z -maxdepth 4 …` —
+      the broad find lived in segment 2+ and ran anyway (find_project trace);
+    - sudo-prefixed searches: `sudo find / …` — head computed as `sudo`, the
+      full-disk scan executed and wasted the turn on a sort error
+      (largest_files trace).
+    Now EVERY segment is inspected and sudo/doas prefixes are skipped.
+    """
+    for segment in re.split(r"\|\||&&|\||;", command.strip()):
+        _guard_search_segment(segment.strip())
+
+
+def _guard_search_segment(segment: str) -> None:
+    """Inspect ONE command segment for a broad search / tool-as-shell call."""
     tokens = segment.split()
+    if not tokens:
+        return
+    # Skip privilege prefixes — the search command is what matters.
+    while tokens and tokens[0].lower() in _SUDO_WORDS:
+        tokens = tokens[1:]
     if not tokens:
         return
     head = tokens[0].lower().lstrip("\\/").rsplit("/", 1)[-1].rsplit("\\", 1)[-1]

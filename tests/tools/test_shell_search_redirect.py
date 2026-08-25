@@ -92,3 +92,44 @@ def test_redirect_message_names_system_search_and_op() -> None:
         msg = str(exc)
         assert "system_search" in msg
         assert "largest" in msg  # du → largest-files operation
+
+
+# ── B-2026-08-25-1 bankofai live follow-up: compound commands + sudo ────────
+
+
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        # find_project trace: quick existence check first, broad find in segment 2+
+        'ls -d /home/z/my-project/LocalMind 2>/dev/null; echo "---"; find /home/z -maxdepth 4 -type d -name "LocalMind" 2>/dev/null | head -20',
+        "echo --- && find /Users/bao -iname '*cv*'",
+        "cd /tmp || find / -name x",
+        # largest_files trace: full-disk find behind a sudo prefix
+        "sudo find / -path /proc -prune -o -type f -printf '%s %p\\n'",
+        "sudo du -a / | sort -rn | head",
+        "doas find / -name foo",
+        # sudo + internal tool
+        "sudo system_search operation='recent' root=/home/z",
+    ],
+)
+def test_compound_and_sudo_broad_searches_redirect(cmd: str) -> None:
+    """bankofai live traces: the broad find escaped the guard when it lived in
+    a LATER segment of a compound command, and `sudo find /` escaped because
+    head computed as 'sudo'. Both must redirect."""
+    assert _redirects(cmd) is True
+
+
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        # Compound commands with only bounded/narrow parts must still pass.
+        'ls -d /home/z/my-project/LocalMind; echo "---"; find /home/z/my-project/LocalMind -name "*.py" | head',
+        "sudo cat /etc/hosts",
+        "echo hi && ls -la",
+        "git status && git diff",
+        # A broad find with a *specific subdir* root in a later segment passes.
+        "echo start; find /home/z/my-project/LocalMind/backend -name loop.py",
+    ],
+)
+def test_compound_and_sudo_bounded_commands_pass(cmd: str) -> None:
+    assert _redirects(cmd) is False
