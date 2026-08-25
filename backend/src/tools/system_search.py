@@ -443,7 +443,23 @@ def _op_recent(args: dict) -> ToolResult:
     root, err = _resolve_root(raw_root)
     if err:
         return err
-    days = _clamp(args.get("days"), _DEFAULT_DAYS, 1, _HARD_DAYS)
+    # B-2026-08-25-1 live finding: models pass `minutes` (e.g. 120) — parse it
+    # instead of silently falling back to the 7-day default with a wrong label.
+    # Explicit minutes win over the days DEFAULT (both explicit = the more
+    # specific unit, minutes, decides the window).
+    minutes_raw = args.get("minutes")
+    minutes = 0
+    try:
+        minutes = int(float(minutes_raw)) if minutes_raw is not None else 0
+    except (TypeError, ValueError):
+        minutes = 0
+    minutes = max(0, min(minutes, _HARD_DAYS * 1440))
+    if minutes > 0:
+        days = minutes / 1440.0
+        window_label = f"last {minutes} minute(s)"
+    else:
+        days = _clamp(args.get("days"), _DEFAULT_DAYS, 1, _HARD_DAYS)
+        window_label = f"last {days} day(s)"
     limit = _clamp(args.get("limit"), _DEFAULT_LIMIT, 1, _HARD_LIMIT)
     budget_ms = _clamp(args.get("budget_ms"), _DEFAULT_BUDGET_STAT_MS, 100, _HARD_BUDGET_MS)
     query = str(args.get("query", "") or "").strip()
@@ -491,7 +507,7 @@ def _op_recent(args: dict) -> ToolResult:
         for mtime, p, size in ranked
     ]
 
-    lines = [f"Files modified in the last {days} day(s) under {root} ({in_window:,} in window, newest {len(results)}):"]
+    lines = [f"Files modified in the {window_label} under {root} ({in_window:,} in window, newest {len(results)}):"]
     for r in results:
         lines.append(
             f"  🕒 {_fmt_mtime(r['modified'])} · {_fmt_size(r['size'])} · {r['path']}"
@@ -509,7 +525,8 @@ def _op_recent(args: dict) -> ToolResult:
         source="system_search",
         metadata={
             "operation": "recent",
-            "days": days,
+            "days": round(days, 4),
+            "minutes": minutes or None,
             "total": in_window,
             "returned": len(results),
             "truncated": in_window > len(results),
@@ -1014,6 +1031,8 @@ async def system_search(message: str) -> ToolResult:
         ext:       extension filter, e.g. "pdf" or "pdf,docx"
         kind:      "file" | "dir" (files op)
         days:      recency window in days (recent op, default 7, max 365)
+        minutes:   recency window in MINUTES (recent op) — wins over days
+                   when given (B-2026-08-25-1: models pass minutes)
         limit:     result cap (default 10, max 25)
         offset:    page offset (files op)
         path:      concrete file path (open_with op)

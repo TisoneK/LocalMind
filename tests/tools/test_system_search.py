@@ -563,3 +563,66 @@ async def test_files_no_relaxation_when_exact_matches_exist(monkeypatch, tmp_pat
     assert r.success
     assert "showing matches for" not in r.content
     assert r.metadata["total"] == 1
+
+
+# ── B-2026-08-25-1 follow-up: `minutes` window arg must be honored ─────────
+
+
+@pytest.mark.asyncio
+async def test_recent_minutes_window_parsed(monkeypatch, tmp_path):
+    """Session 399 bankofai live finding: a model called
+    {operation: recent, minutes: 120} and the tool reported 'last 7 day(s)'
+    — minutes was silently ignored. It must define the window AND the label."""
+    from core.config import settings as cfg
+
+    tree = tmp_path / "home"
+    tree.mkdir()
+    fresh = tree / "fresh.txt"
+    fresh.write_text("now")
+    stale = tree / "stale.txt"
+    stale.write_text("old")
+    # stale: modified 5 hours ago; fresh: now. Window = 120 minutes.
+    import os as _os
+    _os.utime(stale, (time.time() - 5 * 3600, time.time() - 5 * 3600))
+
+    monkeypatch.setattr(cfg, "localmind_home", str(tmp_path))
+    monkeypatch.setattr("core.config._allowed_user_folders", lambda: [str(tree)])
+    monkeypatch.setattr("pathlib.Path.home", classmethod(lambda cls: tree))
+
+    from tools import dispatch
+    from core.models import Intent
+
+    r = await dispatch(
+        Intent.SYSTEM_SEARCH,
+        json.dumps({"operation": "recent", "minutes": 120, "limit": 10}),
+    )
+    assert r.success
+    assert "last 120 minute(s)" in r.content  # honest label, not "7 day(s)"
+    assert r.metadata["minutes"] == 120
+    assert r.metadata["days"] == round(120 / 1440.0, 4)
+    names = [Path(p["path"]).name for p in r.metadata["results"]]
+    assert "fresh.txt" in names
+    assert "stale.txt" not in names  # 5h old file is outside the 2h window
+
+
+@pytest.mark.asyncio
+async def test_recent_days_still_default_without_minutes(monkeypatch, tmp_path):
+    """No minutes arg → days default (7) unchanged; metadata minutes=None."""
+    from core.config import settings as cfg
+
+    tree = tmp_path / "home"
+    tree.mkdir()
+    (tree / "a.txt").write_text("x")
+
+    monkeypatch.setattr(cfg, "localmind_home", str(tmp_path))
+    monkeypatch.setattr("core.config._allowed_user_folders", lambda: [str(tree)])
+    monkeypatch.setattr("pathlib.Path.home", classmethod(lambda cls: tree))
+
+    from tools import dispatch
+    from core.models import Intent
+
+    r = await dispatch(Intent.SYSTEM_SEARCH, json.dumps({"operation": "recent"}))
+    assert r.success
+    assert "last 7 day(s)" in r.content
+    assert r.metadata["minutes"] is None
+    assert r.metadata["days"] == 7

@@ -143,6 +143,7 @@ TOOL_DEFINITIONS: list[dict] = [
                     "ext": {"type": "string"},
                     "kind": {"type": "string", "enum": ["file", "dir"]},
                     "days": {"type": "integer"},
+                    "minutes": {"type": "integer", "description": "Recency window in minutes for operation=recent (wins over days)"},  # noqa: E501
                     "limit": {"type": "integer"},
                     "offset": {"type": "integer"},
                     "path": {"type": "string", "description": "File path for open_with"},
