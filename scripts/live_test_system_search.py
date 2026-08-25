@@ -64,13 +64,20 @@ def boot_server(port: int, log_file: Path) -> subprocess.Popen:
             "PYTHONPATH": str(BACKEND / "src"),
         }
     )
+    # The log handle stays open for the subprocess's lifetime (closed when the
+    # server exits / the script ends) — a context manager doesn't fit a
+    # background process, so this is deliberate.
+    log_fh = open(log_file, "wb")  # noqa: SIM115
     proc = subprocess.Popen(
         [VENV_PY, "server.py"],
         cwd=str(BACKEND),
         env=env,
-        stdout=open(log_file, "wb"),
+        stdout=log_fh,
         stderr=subprocess.STDOUT,
-        preexec_fn=os.setsid,
+        # start_new_session puts the server in its own process group (via setsid
+        # in the child) so we can killpg the whole tree later — thread-safe,
+        # unlike preexec_fn=os.setsid.
+        start_new_session=True,
     )
     for _ in range(45):
         try:
@@ -78,7 +85,9 @@ def boot_server(port: int, log_file: Path) -> subprocess.Popen:
                 f"http://127.0.0.1:{port}/api/health", timeout=2
             ).read()
             return proc
-        except Exception:
+        except OSError:
+            # URLError is an OSError subclass — covers connection-refused while
+            # the server is still booting.
             time.sleep(1)
     proc.kill()
     raise RuntimeError("server failed to start within 45s")
@@ -195,7 +204,7 @@ def main() -> int:
     TRACEHOME.mkdir(parents=True, exist_ok=True)
     log_file = SCRATCH / f"server-syssearch-{args.label}.log"
 
-    subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={args.port}"], capture_output=True)
+    subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={args.port}"], capture_output=True, check=False)
     time.sleep(1)
 
     srv = boot_server(args.port, log_file)
@@ -242,7 +251,9 @@ def main() -> int:
     finally:
         try:
             os.killpg(os.getpgid(srv.pid), 15)
-        except Exception:
+        except OSError:
+            # ProcessLookupError (already gone) or similar — fall back to a
+            # direct kill of the leader.
             srv.kill()
 
     out_file = SCRATCH / f"results-syssearch-{args.label}.json"
