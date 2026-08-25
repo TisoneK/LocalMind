@@ -2,11 +2,11 @@
 Shared pytest fixtures for all LocalMind tests.
 """
 from __future__ import annotations
-import pytest
-import tempfile
-import os
+
 import sys
 from pathlib import Path
+
+import pytest
 
 # Ensure backend/src/ is on sys.path so test modules can import
 # `from tools.file_reader import ...`, `from adapters.ollama import ...`, etc.
@@ -24,17 +24,22 @@ def isolate_env(monkeypatch):
     monkeypatch.setenv("OLLAMA_MODEL", "test-model")
     monkeypatch.setenv("LOCALMIND_CODE_EXEC_ENABLED", "true")
     monkeypatch.setenv("LOCALMIND_LOG_LEVEL", "WARNING")
+    # Pin chat mode to the product default so tests are hermetic against a
+    # polluted runtime settings.json. The config singleton loads
+    # ~/LocalMind/settings.json at import, and both the running app and any
+    # live-test that POSTs /api/settings/chat-mode write `chat_mode` there —
+    # leaving it on "agent"/"direct" silently disables the loop's pre-init
+    # deterministic guards (they gate on `_chat_mode != 'agent'`) and breaks
+    # unrelated tests. A test that needs a non-default mode sets it itself;
+    # monkeypatch restores this after each test.
+    from core.config import settings as _settings
+
+    monkeypatch.setattr(_settings, "localmind_chat_mode", "auto", raising=False)
 
 
 @pytest.fixture
 def tmp_db(tmp_path):
     """Return a path to a temporary SQLite DB that is cleaned up after the test."""
-    return str(tmp_path / "test.db")
-
-
-@pytest.fixture
-def tmp_db(tmp_path):
-    """Return a path to a temporary SQLite database file."""
     return str(tmp_path / "test.db")
 
 
