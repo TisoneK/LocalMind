@@ -1055,3 +1055,12 @@ if literally nothing slowed you down.
 - **Cause:** (1) did not internalize the provider section of live-testing.md FIRST — the exact Session 331 failure mode; (2) anchored on the user's chat api_keys block (which has zen/zai/etc but NO bankofai key) instead of flagging the missing primary-provider credential as a missing input per Binding Rule 7.
 - **Workaround / fix:** searched the machine for the bankofai key (~/LocalMind/settings.json, /home/z/my-project/scripts/, all env files, any settings.json): the sandbox was re-provisioned (~HOME rebuilt 02:50 Aug 25) and every documented key location is gone; keyless probe of api.bankofai.io returns 401 (auth required). Blocked on the user supplying BANKOFAI_API_KEY.
 - **Prevent next time:** before ANY live-test session, re-read the Providers section of `system/live-testing.md` and enumerate the keys it requires. If the mandated provider's key is absent from chat + machine, say so and ask IMMEDIATELY (Binding Rule 7) — do not substitute a same-model-name provider and call the bar met. When reporting live results, name the provider explicitly and flag any deviation from the documented primary.
+
+---
+## 2026-08-25 — Super Z (Session 404)
+
+- **Problem:** the new suite harness crashed 14 tests into the full live run — `TypeError: _asks_clarify() takes 1 positional argument but 2 were given` at AM-1. Three check helpers had inconsistent signatures (`_asks_clarify(text)`, `_no_delete(parsed)`, `_no_presentation_file(parsed)`) while every check is invoked as `fn(text, parsed)`.
+- **Cost:** ~15 min + a resume run (run1b) and a merged-results step; 14 completed results were preserved by incremental saving, so no live turns were re-burned.
+- **Cause:** helpers written at different times with different shapes, never smoke-tested against the real call signature — the R-4 smoke test only exercised the RX/FN lambda paths, not the direct-helper paths.
+- **Workaround / fix:** unified all check callables to `(text, parsed)` (defaulted second arg where sensible) and added a pre-flight that invokes ALL 105 checks with a synthetic payload before any network I/O. Resume via `--only <remaining ids>`.
+- **Prevent next time:** every harness that accepts pluggable check functions should run a signature sweep over the whole catalog in the smoke test, not just one happy-path test.

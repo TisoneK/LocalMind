@@ -1,9 +1,15 @@
 # Current Task
 
-**Status:** IDLE — Session 403 (vision documentation) COMPLETE: ADR-56 +
-docs/VISION_ARCHITECTURE.md. Session 402's B-25-6 fix still pending user
-visual sign-off. No live session in progress. Session 399 notes below
-retained for context.
+**Status:** IDLE — Session 404 (full-system prompt-suite benchmark) COMPLETE:
+`scripts/lm_suite_tests.py` (50 tests / 64 turns, the user's 20 categories) +
+`scripts/run_suite_detached.sh`, live-run on bankofai/deepseek-v4-flash.
+29 PASS / 14 PARTIAL / 7 FAIL raw (31 PASS after 2 confirmed check
+false-negatives). Results + root-cause clusters:
+`memory/system/suite-results-404.md`. New backlog: B-2026-08-25-7 (fast-path
+context loss — High), B-2026-08-25-8 (narration-instead-of-action — High),
+B-2026-08-25-9 (unresolved-reference ambiguity — Medium). Session 402's
+B-25-6 fix still pending user visual sign-off. No live session in progress.
+Session 399 notes below retained for context.
 
 ## Session 399 — done this session (all pushed)
 
