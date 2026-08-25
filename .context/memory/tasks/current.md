@@ -13,11 +13,15 @@ failure-aware/wall-clock-bound iteration cap (ef465ea + 487e408, live-tested) ·
 WorkspaceLayout stale test mock (ae298ad) · B-24-13 app bg = Settings surface
 (1b15c2f) · B-24-14 removed `layout` reflow jitter from live lists (6cc1aa7).
 
+**More done:** B-24-9 self-disclosure policy + knowledge-doc load-path fix
+(0a2c67c, live-verified); B-25-1 local-search-over-shell 4-layer fix
+(a2d4ff4/8f3c1e1/1bf3594, live-verified); live_test script made portable.
+
 **Open B-24 items:** B-24-1 + B-24-6 (curated narration — user chose "curated
-narration only"; next big item) · B-24-7 (gemini bypasses agent) · B-24-9
-(self-disclosure) · B-24-12 (sysinfo native fallbacks) · B-24-15 (todos
-completed on cut-short turn) · B-24-16 (chat→agent switch prompt) · B-24-17
-(terminal redesign). B-24-8 = standing live-test practice.
+narration only"; big item) · B-24-7 (gemini bypasses agent) · B-24-12 (sysinfo
+native fallbacks) · B-24-15 (todos completed on cut-short turn) · B-24-16
+(chat→agent switch prompt) · B-24-17 (terminal redesign). Open B-25: -2
+(content search), -3 (open_with verify). B-24-8 = standing live-test practice.
 
 **Live-test:** authorized per-item when necessary; test backend on **port 8010**
 (never 8000 — the user's app). Read `.context/memory/system/live-testing.md`.
