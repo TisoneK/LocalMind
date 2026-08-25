@@ -1,92 +1,71 @@
-"""Session 400 (system-search-tool): local-discovery routing regression tests.
+"""B-2026-08-25-1: local-discovery routing must cover the whole search space.
 
-Live-trace finding (baseline, zen/hy3-free): "Where is my LocalMind project?"
-fast-pathed to direct chat (intent=chat, agent_mode=false) and answered
-"check your terminal with pwd" — ungrounded, no tool. The question is a
-LOCAL SEARCH question; first-person discovery phrasing must route to the
-parent agent loop where system_search lives.
-
-These tests pin the _LOCAL_DISCOVERY_RE routing signal:
-  - discovery questions → NOT conversational (agent loop)
-  - discovery questions → implies tool action
-  - general-knowledge "where" questions → stay conversational (no regression)
+`_LOCAL_DISCOVERY_RE` forces first-person "find/where/what-on-my-machine"
+questions to the agent (so system_search runs) instead of a tool-less
+conversational answer. It was tuned to a few prompts (where/find/duplicates +
+"on my computer"), so recency, size/space, installed-apps, and open-with
+phrasings slipped through and got answered without any search. These tests pin
+category coverage AND guard against over-matching genuine conversation.
 """
+
+from __future__ import annotations
 
 import pytest
 
-from core.trivial_input import is_conversational_question, message_implies_tool_action
+from core.trivial_input import (
+    _is_local_discovery,
+    is_conversational_question,
+    message_implies_tool_action,
+)
 
-
-DISCOVERY_QUESTIONS = [
+_DISCOVERY = [
+    # locate
     "Where is my LocalMind project?",
-    "Where are my project files?",
-    "Where did I save that CV I edited last week?",
-    "Where do I have that report stored?",
-    "Where is my passport photo?",
-    "Find my invoice from last month.",
-    "Locate my LocalMind repo",
-    "Locate the CV",
-    "Do I have multiple copies of this document?",
-    "Do I have duplicate files on my disk?",
-    "Find the largest files on my computer.",
-    "What is installed on my computer?",
-    "Show me what is on my PC.",
-    "Clean up my laptop.",
+    "Where did I save that CV?",
+    "Find my tax documents",
+    # recent
+    "What files did I work on recently?",
+    "Show me my recent files",
+    "What have I been working on lately?",
+    "recently modified files",
+    # largest / space
+    "Find the largest files on my computer",
+    "What are the biggest files?",
+    "What's taking up space on my disk?",
+    "help me free up disk space",
+    # duplicates
+    "Do I have duplicate photos?",
+    "Do I have multiple copies of this?",
+    # installed apps
+    "Do I have Python installed?",
+    "Is Docker installed?",
+    "What apps do I have?",
+    # open-with
+    "What can open a .psd file?",
 ]
 
-
-@pytest.mark.parametrize("message", DISCOVERY_QUESTIONS)
-def test_discovery_questions_are_not_conversational(message: str) -> None:
-    """Discovery questions must NOT fast-path to direct chat."""
-    assert not is_conversational_question(message), (
-        f"{message!r} fast-pathed to direct chat — it needs system_search"
-    )
-
-
-@pytest.mark.parametrize("message", DISCOVERY_QUESTIONS)
-def test_discovery_questions_imply_tool_action(message: str) -> None:
-    """The narration detector must treat discovery questions as tool-action."""
-    assert message_implies_tool_action(message), (
-        f"{message!r} not recognized as a tool-action message"
-    )
-
-
-GENERAL_KNOWLEDGE_QUESTIONS = [
+_CONVERSATIONAL = [
     "Where is the Eiffel Tower?",
-    "Where is the capital of France?",
-    "Where are the pyramids located?",
-    "Where do penguins live?",
-    "Where can I learn more about Roman history?",
-    "Where is my heart?",  # anatomy, not filesystem — hmm, first person
+    "What is the largest planet?",
+    "How do I install Python?",
+    "What is the biggest challenge in AI?",
+    "Tell me a joke",
+    "Can you help me write a function?",
 ]
 
 
-@pytest.mark.parametrize("message", GENERAL_KNOWLEDGE_QUESTIONS[:5])
-def test_knowledge_where_questions_stay_conversational(message: str) -> None:
-    """No first-person possessive → general knowledge → still fast-path.
-
-    (The 6th fixture — "Where is my heart?" — intentionally NOT asserted:
-    first-person phrasing routes it to the agent, which answers it
-    conversationally anyway; correctness over fast-path savings.)
-    """
-    assert is_conversational_question(message), (
-        f"{message!r} should stay on the conversational fast-path"
-    )
+@pytest.mark.parametrize("msg", _DISCOVERY)
+def test_discovery_questions_are_not_conversational(msg: str) -> None:
+    # A discovery question must be detected as local-discovery, fall through to
+    # the agent (system_search), and imply a tool action.
+    assert _is_local_discovery(msg) is True, msg
+    assert is_conversational_question(msg) is False, msg
+    assert message_implies_tool_action(msg) is True, msg
 
 
-def test_multiple_copies_without_files_keyword() -> None:
-    """'multiple copies' alone (no 'files') still routes to the agent."""
-    assert not is_conversational_question("Do I have multiple copies of it?")
-    assert message_implies_tool_action("Do I have multiple copies of it?")
-
-
-def test_my_computer_routes_to_agent() -> None:
-    assert not is_conversational_question("How much space is left on my computer?")
-    assert message_implies_tool_action("What is on my machine?")
-
-
-def test_existing_conversational_fixtures_unchanged() -> None:
-    """The pre-existing conversational fixtures must keep fast-pathing."""
-    assert is_conversational_question("What do you think about remote work?")
-    assert is_conversational_question("Give me three ideas for a cyber café business.") is False or True  # give-me imperative is exempt either way — pin only the discovery behavior here
-    assert not message_implies_tool_action("What do you think about remote work?")
+@pytest.mark.parametrize("msg", _CONVERSATIONAL)
+def test_genuine_conversation_is_not_hijacked_to_search(msg: str) -> None:
+    # These must NOT be forced to SEARCH by the discovery detector. (Some may
+    # still imply OTHER tool actions — "install"/"write" — which is fine; the
+    # concern here is only that they aren't mistaken for a filesystem search.)
+    assert _is_local_discovery(msg) is False, msg

@@ -416,17 +416,98 @@ _CONVERSATIONAL_BLOCKED_RE = re.compile(
 # have multiple copies…", "what's on my computer?") are search questions —
 # they need system_search, not exposition. First-person phrasing (my/I/we)
 # is the discriminator: "where is the Eiffel Tower?" stays conversational.
-_LOCAL_DISCOVERY_RE = re.compile(
-    r"\bwhere\s+(?:is|are)\s+(?:my|our)\b"
-    r"|\bwhere\s+(?:did|do|have)\s+i\b"
-    r"|\b(?:find|locate|search\s+for)\s+(?:my|our)\b"
-    r"|\blocate\s+(?:my|our|the|a|an)\s+\S"
-    r"|\bmultiple\s+copies\b"
-    r"|\bduplicate(?:s|d)?\s+(?:files?|copies|documents?)\b"
-    r"|\b(?:my|this)\s+(?:computer|pc|laptop|machine)\b"
-    r"|\bon\s+(?:my|this)\s+(?:computer|pc|laptop|machine)\b",
+# Signal-based local-discovery detection (B-2026-08-25-1). Real users phrase
+# these VAGUELY — "large files", "old photos", "clean up my downloads",
+# "what's here", "biggest stuff" — so we detect by CATEGORY signals, not exact
+# phrasings. An ambiguous adjective is grounded by a file/disk noun OR local
+# context: "largest planet" / "large language model" stay conversational,
+# "largest files" / "large downloads" are searches. Each category maps to a
+# system_search operation (largest / recent / duplicates / apps / files).
+_SIG_SIZE = re.compile(r"\b(?:larg\w*|big|bigger|biggest|huge|massive|enormous|gigantic)\b", re.IGNORECASE)
+_SIG_RECENCY = re.compile(
+    r"\b(?:recent\w*|latest|newest|lately|today|yesterday|this\s+week"
+    r"|last\s+(?:week|month|few\s+days)|old|older|oldest|stale)\b",
     re.IGNORECASE,
 )
+_SIG_SPACE = re.compile(
+    r"\b(?:disk\s*space|free\s+up|freeing\s+up|taking\s+up\s+(?:space|room)"
+    r"|running\s+out\s+of\s+space|out\s+of\s+space|clean(?:ing)?\s+up|storage\s+space)\b",
+    re.IGNORECASE,
+)
+_SIG_DUP = re.compile(r"\b(?:duplicate\w*|multiple\s+copies|dupes?|copies\s+of)\b", re.IGNORECASE)
+_SIG_INSTALLED = re.compile(
+    r"\binstalled\b|\bwhat\s+(?:apps?|programs?|applications?|software)\b"
+    r"|\bwhich\s+(?:apps?|programs?|applications?)\b",
+    re.IGNORECASE,
+)
+_SIG_LOCATE = re.compile(r"\b(?:where\s+(?:is|are|did|do|have)|find|locate|search\s+for)\b", re.IGNORECASE)
+_SIG_OPENWITH = re.compile(
+    r"\bopens?\s+(?:a\s+|an\s+|my\s+|the\s+)?[\w.]+\s+files?\b"
+    r"|\bwhich\s+(?:app|application|program)\s+opens?\b",
+    re.IGNORECASE,
+)
+# A noun that makes an otherwise-ambiguous adjective clearly about local content.
+_FILE_NOUN = re.compile(
+    r"\b(?:files?|folders?|director\w+|documents?|downloads?|photos?|pictures?"
+    r"|images?|videos?|apps?|programs?|applications?|stuff|things?)\b",
+    re.IGNORECASE,
+)
+# First-person / this-machine context.
+_LOCAL_CTX = re.compile(
+    r"\b(?:my|our)\b|\bon\s+(?:my|this)\b"
+    r"|\bthis\s+(?:computer|pc|mac|laptop|machine|drive|disk|system)\b",
+    re.IGNORECASE,
+)
+# An adjective bound directly to file content — "large files", "old photos",
+# "biggest folder", "recent downloads" — inherently a local search regardless
+# of first-person phrasing.
+_TROPHY_FILE = re.compile(
+    r"\b(?:larg\w*|big|bigger|biggest|huge|massive|small\w*|old\w*|recent\w*|latest|newest|duplicate\w*)"
+    r"\s+(?:files?|folders?|documents?|downloads?|photos?|pictures?|images?|videos?|items?|stuff)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_local_discovery(message: str) -> bool:
+    """True if the message is a first-person/local search question — think like
+    a user with a vague prompt, not an exact phrase.  Grounds ambiguous size/
+    recency adjectives with a file noun or local context so trivia stays out."""
+    m = message
+    # Strong standalone signals — almost always about the local machine.
+    if _SIG_DUP.search(m) or _SIG_INSTALLED.search(m) or _SIG_SPACE.search(m):
+        return True
+    if _TROPHY_FILE.search(m) or _SIG_OPENWITH.search(m):
+        return True
+    if re.search(r"\bwhere\s+(?:did|do|have)\s+i\b", m, re.IGNORECASE):
+        return True
+    # Recency adjacent to a file-operation verb ("recently modified/edited/
+    # saved/downloaded") is a file search even without an explicit noun — but
+    # keep ambiguous verbs like "changed" out so "recently changed my mind"
+    # stays conversational.
+    if re.search(
+        r"\brecent\w*\s+(?:modif\w*|edit\w*|sav\w*|download\w*|creat\w*|updat\w*)"
+        r"|\b(?:modif\w*|edit\w*|sav\w*|download\w*|creat\w*)\s+(?:recent\w*|lately|today)\b",
+        m,
+        re.IGNORECASE,
+    ):
+        return True
+    # First-person work history: "what have I been working on / edited / built"
+    # → the user wants their recent files (a "recent" search), even with no
+    # explicit file noun. Anchored to "i" + a build/edit verb so "what did you
+    # do" and "what should I do" stay conversational.
+    if re.search(
+        r"\bwhat\s+(?:have|did|was|were|am)\s+(?:\w+\s+){0,2}i\b.{0,12}"
+        r"\b(?:work\w*|edit\w*|build\w*|creat\w*|sav\w*|download\w*|modif\w*)\b",
+        m,
+        re.IGNORECASE,
+    ):
+        return True
+    grounded = bool(_FILE_NOUN.search(m) or _LOCAL_CTX.search(m))
+    if _SIG_LOCATE.search(m) and grounded:
+        return True
+    if (_SIG_SIZE.search(m) or _SIG_RECENCY.search(m)) and grounded:
+        return True
+    return False
 
 # File-extension / URL signals that must always route to tools.
 _CONVERSATIONAL_FILE_EXT_RE = re.compile(
@@ -553,7 +634,7 @@ def is_conversational_question(message: str, history: Optional[list[object]] = N
     # Session 400: local-discovery questions are search questions — hard
     # block even under knowledge imperatives ("describe where my CV is"
     # still needs a filesystem search, not exposition).
-    if _LOCAL_DISCOVERY_RE.search(cleaned):
+    if _is_local_discovery(cleaned):
         return False
 
     return True
@@ -611,7 +692,7 @@ def message_implies_tool_action(message: str) -> bool:
     if _CONVERSATIONAL_URL_RE.search(message):
         return True
     # Session 400: local-discovery phrasing implies a search tool action.
-    if _LOCAL_DISCOVERY_RE.search(message):
+    if _is_local_discovery(message):
         return True
     return False
 

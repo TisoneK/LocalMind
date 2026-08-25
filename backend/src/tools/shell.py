@@ -553,6 +553,85 @@ def _guard_nl_command(command: str) -> None:
         )
 
 
+# ── B-2026-08-25-1: prefer the search tools over shell for broad filesystem
+# searches. Weak/free models ignore the prompt steering ("use system_search —
+# never find hunts") and reach for `find /` / `du ~` / recursive Get-ChildItem,
+# which scan the whole disk/home tree and time out (live-verified on
+# bankofai + zai). A broad-rooted search is intercepted HERE and the model is
+# redirected to system_search — deterministic and model-agnostic, and it
+# prevents the timeout because the shell command never runs.
+class _SearchRedirectError(ValueError):
+    """A broad filesystem search that should go through system_search instead."""
+
+
+def _is_broad_root(root: str) -> bool:
+    """True if a search rooted here scans an enormous tree (whole disk / home)."""
+    r = root.strip().strip("\"'").rstrip("/\\")
+    if r in ("", "/", "~", "$HOME", "${HOME}", "$env:USERPROFILE", "%USERPROFILE%"):
+        return True
+    # A home directory with NO deeper subpath (e.g. /Users/tison, /home/z) — a
+    # specific project dir below it (/Users/tison/Code/app) is fine and passes.
+    if re.fullmatch(r"/Users/[^/]+", r) or re.fullmatch(r"/home/[^/]+", r):
+        return True
+    # Windows drive root (C:) or a user home (C:\Users or C:\Users\name).
+    if re.fullmatch(r"[A-Za-z]:", r) or re.fullmatch(
+        r"[A-Za-z]:\\Users(\\[^\\]+)?", r, re.IGNORECASE
+    ):
+        return True
+    return False
+
+
+def _first_positional(tokens: list[str]) -> str | None:
+    """The first non-flag argument after the command word (the search root)."""
+    for tok in tokens[1:]:
+        if tok.startswith("-"):
+            continue
+        return tok
+    return None
+
+
+def _guard_broad_search(command: str) -> None:
+    """Redirect a broad filesystem search to system_search before it runs."""
+    cmd = command.strip()
+    # The search command lives in the first pipeline segment.
+    segment = re.split(r"\||;|&&", cmd, maxsplit=1)[0].strip()
+    tokens = segment.split()
+    if not tokens:
+        return
+    head = tokens[0].lower().lstrip("\\/").rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    low = segment.lower()
+
+    op: str | None = None
+    if head == "find":
+        root = _first_positional(tokens)
+        if root is not None and _is_broad_root(root):
+            op = "files"
+    elif head == "du":
+        root = _first_positional(tokens)
+        if root is not None and _is_broad_root(root):
+            op = "largest"
+    elif head in ("locate", "mlocate", "plocate"):
+        op = "files"  # whole-system index scan
+    elif re.search(r"-recurse\b|--recursive\b|(?:^|\s)-r\b|/s\b", low) and re.search(
+        r"get-childitem|gci|(?:^|\s)ls\b|(?:^|\s)dir\b", low
+    ):
+        # Recursive listing (PowerShell -Recurse / ls -R / dir /s) over a broad root.
+        m = re.search(r"-path\s+(\S+)", segment, re.IGNORECASE)
+        root = m.group(1) if m else _first_positional(tokens)
+        if root is not None and _is_broad_root(root):
+            op = "files"
+
+    if op:
+        raise _SearchRedirectError(
+            f"That command scans a huge tree (whole disk or home directory) and "
+            f"will TIME OUT. Do NOT search with find/du/locate/recursive listing "
+            f"over '/' or the home directory. Use the system_search tool instead — "
+            f"it is bounded, ranked, and stays inside allowed folders. Call "
+            f"system_search with operation='{op}' (operations: files, recent, "
+            f"largest, duplicates, apps, open_with) plus a query and/or root."
+        )
+
+
 def _shell_timeout() -> int:
     """Per-command shell timeout (configurable; sane floor). A legitimate scan
     (recursive disk sizing over a large tree) routinely needs 1-2 minutes, so the
@@ -569,6 +648,7 @@ def _shell_timeout() -> int:
 def _run_command(command: str, cwd: str | None = None) -> tuple[str, RiskLevel]:
     """Execute a raw shell command. command must be a literal command string."""
     _guard_nl_command(command)
+    _guard_broad_search(command)  # B-2026-08-25-1: redirect find/du hunts → system_search
     result = _run(command, timeout=_shell_timeout(), cwd=cwd)
     if result["success"]:
         output = result["message"].strip() or "(command completed with no output)"
@@ -852,6 +932,18 @@ class ShellContract(ToolContract):
                 source="shell",
                 success=False,
                 error_type="nl_command_rejected",
+                error_message=str(exc),
+            )
+        except _SearchRedirectError as exc:
+            # B-2026-08-25-1: a broad filesystem search that would time out —
+            # redirect the model to system_search deterministically (works on
+            # weak/free models that ignore the prompt steering).
+            return ToolResult(
+                content=str(exc),
+                risk=RiskLevel.LOW,
+                source="shell",
+                success=False,
+                error_type="use_system_search",
                 error_message=str(exc),
             )
         except Exception as exc:

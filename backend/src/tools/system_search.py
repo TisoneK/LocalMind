@@ -60,6 +60,7 @@ import heapq
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -86,6 +87,52 @@ _MAX_DUP_GROUPS = 25              # duplicates: groups returned, hard cap
 _MAX_APPS_SHOWN = 25
 
 _OPERATIONS = ("files", "recent", "largest", "duplicates", "apps", "open_with")
+
+# B-2026-08-25-1: when the tool is called with a PLAIN string (not JSON) — which
+# is what weak models do, especially after the shell→system_search redirect
+# hands them "operation='largest'" — recognise a leading operation keyword so
+# "largest /Users/x", "recent", "duplicates *.jpg", "apps python" run the right
+# op instead of being treated as a filename search for the word "largest".
+_OP_SYNONYMS: dict[str, str] = {
+    "largest": "largest", "biggest": "largest", "large": "largest", "big": "largest",
+    "recent": "recent", "recently": "recent", "latest": "recent", "newest": "recent",
+    "duplicate": "duplicates", "duplicates": "duplicates", "dupes": "duplicates", "dup": "duplicates",
+    "app": "apps", "apps": "apps", "application": "apps", "applications": "apps",
+    "installed": "apps", "program": "apps", "programs": "apps",
+    "openwith": "open_with", "open_with": "open_with", "opens": "open_with",
+    "file": "files", "files": "files", "find": "files", "locate": "files", "search": "files",
+}
+
+
+def _looks_like_path(tok: str) -> bool:
+    tc = tok.strip("\"'")
+    return tc.startswith("/") or tc.startswith("~") or bool(re.match(r"^[A-Za-z]:[\\/]", tc))
+
+
+def _parse_plain_query(text: str) -> dict:
+    """Turn a plain (non-JSON) system_search input into structured args.
+
+    Leading operation keyword → that op, with a path-like token as `root` and
+    the remaining words as `query`. No leading keyword → a files name search
+    (the original behaviour), so genuine name lookups like "README" still work.
+    """
+    toks = text.split()
+    op = _OP_SYNONYMS.get(toks[0].lower()) if toks else None
+    if not op:
+        return {"operation": "files", "query": text.strip()}
+    args: dict = {"operation": op}
+    query_terms: list[str] = []
+    for t in toks[1:]:
+        tc = t.strip("\"'")
+        if tc in ("*", "**", "."):  # glob-all / here → no filter
+            continue
+        if _looks_like_path(tc):
+            args["root"] = tc
+        else:
+            query_terms.append(tc)
+    if query_terms:
+        args["query"] = " ".join(query_terms)
+    return args
 
 # open_with: last-resort extension → candidate application-name fragments,
 # matched against the installed-programs list (and PATH). Not a registry —
@@ -976,8 +1023,9 @@ async def system_search(message: str) -> ToolResult:
         if message.strip().startswith("{"):
             args = json.loads(message)
         elif message.strip():
-            # Plain string → treat as a name query (files op).
-            args = {"operation": "files", "query": message.strip()}
+            # Plain string → parse a leading operation keyword if present,
+            # else a name query (B-2026-08-25-1).
+            args = _parse_plain_query(message.strip())
         else:
             # Bare call → the most useful overview: recent work.
             args = {"operation": "recent"}
