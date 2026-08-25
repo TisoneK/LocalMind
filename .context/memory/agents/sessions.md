@@ -5585,3 +5585,8 @@ authoritative.
 - **Backlogged real errors:** B-2026-08-25-4 (model leaks internal "Worker report — tool execution evidence" format verbatim into user answers — py_count trace, model token event, not a fallback; B-24-9 family), B-2026-08-25-5 (file created via shell echo > redirect instead of file_write — deliverable correct but no diff card; steering gap on this model).
 - **Harness scoring notes:** narration-leak regex false-positives on conversational closers ("Let me know and I'll take it from there" with zero tools ran) — scoring should require tools>0 to flag; tool events fire started+done (dedup by status==started); noted for the next harness revision, not fixed this session.
 - **Verification:** full suite 2631 passed / 2 skipped; ruff clean; all field artifacts in scratch/ (sse-field-*.sse, results-field-*.json, server-field-*.log).
+
+## Session 401 addendum — user-reported UI backlog item — 2026-08-25
+
+- **Task (user):** backlog the UI bug "diff mode does not change to normal after user clicks accept after file edit or creation."
+- **Logged as B-2026-08-25-6** with mechanism: ChatMessage renders the inline DiffBlock with showActions but NO onAccept/onReject — Accept only flips the internal status strip; the colored diff card never transitions back to a normal view, and the accept state is ephemeral (resets on reload). Pointers + repro included.
