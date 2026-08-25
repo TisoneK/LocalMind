@@ -601,6 +601,20 @@ def _guard_broad_search(command: str) -> None:
     head = tokens[0].lower().lstrip("\\/").rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
     low = segment.lower()
 
+    # Weak models sometimes try to RUN an internal tool as a shell command
+    # (live-seen: `system_search operation='recent' root=...`), which would just
+    # fail as "command not found". Steer them to emit a proper tool call.
+    _INTERNAL_TOOLS = {
+        "system_search", "find_path", "grep_search", "web_search", "web_fetch",
+        "web_research", "file_task", "sysinfo", "memory_op", "todo_write",
+    }
+    if head in _INTERNAL_TOOLS:
+        raise _SearchRedirectError(
+            f"'{head}' is a LocalMind tool, not a shell command — running it in "
+            f"the shell fails. Emit a real tool call to {head} instead (with its "
+            f"arguments), not a shell command."
+        )
+
     op: str | None = None
     if head == "find":
         root = _first_positional(tokens)

@@ -66,6 +66,24 @@ def test_is_broad_root_matrix() -> None:
         assert _is_broad_root(narrow) is False, narrow
 
 
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        "system_search operation='recent' root='/Users/bao'",
+        "find_path loop.py",
+        "grep_search foo",
+    ],
+)
+def test_running_a_tool_as_a_shell_command_is_steered(cmd: str) -> None:
+    # Weak models try to run internal tools as shell commands — steer to a call.
+    assert _redirects(cmd) is True
+
+
+@pytest.mark.parametrize("cmd", ["systeminfo", "system_profiler SPHardwareDataType", "ls -la"])
+def test_real_commands_that_look_tool_ish_still_pass(cmd: str) -> None:
+    assert _redirects(cmd) is False
+
+
 def test_redirect_message_names_system_search_and_op() -> None:
     try:
         _guard_broad_search("du -sh /")
