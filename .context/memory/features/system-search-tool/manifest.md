@@ -132,6 +132,22 @@ model per ADR-40.
 4. zai rate limits (429, code 1302) after ~2 back-to-back turns — 45s+
    cooldowns needed; one largest_files trace lost to it (evidence kept).
 
+**Session 400 addendum — bankofai PRIMARY-provider verification (the documented bar):**
+
+Provider key supplied by the user mid-session (stored `secrets/bankofai-key`).
+Live traces on bankofai/deepseek-v4-flash, port 8765 (scratch/ artifacts):
+
+| trace | before (bankofai-primary) | after (fix-bankofai) |
+|---|---|---|
+| find_project | shell ×4 — compound command put the broad find in segment 2+, guard missed it | system_search FIRST call (plain query "files LocalMind /home/z"), ranked catalog, then one bounded ls to compare the two candidates |
+| largest_files | `sudo find /` RAN (guard saw head=sudo), sort error, turn ended in a narration leak | shell redirects fired ×2 → model recovered to system_search → ranked top-10 (461.3 MB), grounded answer |
+
+Fixes shipped from these traces: `9d1cc72` (guard scans every segment +
+strips sudo/doas), `5282808` (recent op honors `minutes`). 2/2 prompts now
+select system_search, 2/2 grounded, 0 errors. The Session 331 provider-drift
+correction is closed: the feature is now verified on the PRIMARY provider as
+`system/live-testing.md` documents, not just zen/zai.
+
 **Next-session candidates:**
 - B-2026-08-25-1: largest-files tool selection on weak models (deterministic
   pre-init nudge? or accept + document per-model behavior).
