@@ -1285,6 +1285,71 @@ _POST_EVIDENCE_NARRATION_PHRASES: tuple[str, ...] = (
     "now i'll use",
 )
 
+# B-2026-08-25-11 (Session 405): pending-ACTION narration. Distinct from
+# post-evidence narration (which wants the model to SYNTHESIZE): here the
+# model narrates a concrete STATE-CHANGING action it is ABOUT to take
+# (delete, create, run, move, install…) but emits no tool call, and the loop
+# ends — so the action never happens. The remedy is the OPPOSITE of the
+# post-evidence one: FORCE THE TOOL CALL, never "the action phase is over,
+# synthesize" (that would suppress the very deletion/creation the user asked
+# for). User live-report ("delete huge files"): the agent said "Got it —
+# time to act. Let me verify the exact paths and then delete them." and the
+# loop ended with nothing deleted.
+_ACTION_INTENT_LEADINS: tuple[str, ...] = (
+    "let me ", "let me now", "i'll ", "i will ", "i'm going to",
+    "i am going to", "i'm about to", "i am about to", "i should now",
+    "now i'll", "now i will", "now let me", "time to ", "next, i", "next i'll",
+)
+# State-changing verbs whose narration WITHOUT a tool call is the bug. Kept to
+# unambiguous mutations (destructive / creative / execution); substrings that
+# collide with common words ("clear"→"clearly", "apply"→"applying") are
+# excluded to avoid false positives. Each is matched only after an intent
+# lead-in and an offer-marker exclusion (below), so the co-occurrence is a
+# strong signal even as a bare substring.
+_STATE_CHANGING_VERBS: tuple[str, ...] = (
+    "delete", "remove", "erase", "wipe", "uninstall", "purge", "trash",
+    "create", "write ", "overwrite", "save ", "move ", "rename", "install",
+    "download", "kill ", "terminate", "execute", "mkdir", "chmod",
+    " rm ", "`rm", "rm -",
+    # "run" only in unambiguous multiword forms — bare "run" collides with the
+    # read-only idiom "run through the results".
+    "run the ", "run this ", "run that ", "run a ", "run our ", "run it",
+)
+# Offers / hedges: the model is DEFERRING to the user, not committing to act.
+# "Let me know if you want me to delete them" must NEVER force a delete — that
+# would perform a destructive action the user has not confirmed. When any of
+# these are present the text is treated as an offer, not a pending action.
+_OFFER_MARKERS: tuple[str, ...] = (
+    "let me know", "would you like", "if you'd like", "if you would like",
+    "if you want", "want me to", "should i ", "shall i ", "do you want",
+    "would you prefer", "if you'd prefer", "just say", "let me know if",
+)
+
+
+def narrates_pending_action(text: str) -> bool:
+    """Detect a committed-but-unexecuted state-changing action.
+
+    Fires when a SHORT final answer (the narration IS the response) contains a
+    first-person future-intent lead-in ("let me…", "I'll…", "time to…") AND a
+    state-changing verb (delete/create/run/move…), and is NOT an offer/hedge
+    ("let me know if you want me to…"). The caller uses this to FORCE a tool
+    call rather than end the turn — the opposite remedy from
+    `narrates_after_evidence` (which wants synthesis).
+    """
+    if not text or len(text.strip()) < 10:
+        return False
+    lower = text.lower().strip()
+    # Long responses likely contain real content (e.g. a report that mentions
+    # deleting) — only flag short responses that ARE the narration.
+    if len(lower) > 500:
+        return False
+    # Offers defer to the user — never coerce a destructive action from them.
+    if any(marker in lower for marker in _OFFER_MARKERS):
+        return False
+    if not any(lead in lower for lead in _ACTION_INTENT_LEADINS):
+        return False
+    return any(verb in lower for verb in _STATE_CHANGING_VERBS)
+
 
 def narrates_after_evidence(text: str) -> bool:
     """Detect post-evidence narration: model describes next action instead
@@ -6333,6 +6398,59 @@ class AgentLoop:
                         if gate_force_tool is not None:
                             gate_force_tool[0] = True
                         return "", False
+                # B-2026-08-25-11 (Session 405): pending-ACTION narration.
+                # The model committed to a concrete state-changing action
+                # ("Let me verify the exact paths and then delete them.") but
+                # ended the turn with no tool call — the deletion/creation
+                # never happened. Unlike ACTION NARRATION (iter 0 + zero tools)
+                # this fires at ANY iteration and even after read-only tools
+                # ran (a search finds the files, then the delete is narrated
+                # but not executed). The remedy is to FORCE the tool call —
+                # the OPPOSITE of POST-EVIDENCE NARRATION's "synthesize now"
+                # (which would suppress the very action the user asked for).
+                # `narrates_pending_action` excludes offers ("let me know if
+                # you want me to delete…") so an un-confirmed destructive
+                # action is never coerced.
+                if is_parent:
+                    _final_text = getattr(trace, "final_response", "") or ""
+                    if narrates_pending_action(_final_text):
+                        _already_pending_nudged = any(
+                            isinstance(m, dict)
+                            and isinstance(m.get("content", ""), str)
+                            and "[PENDING ACTION]" in m.get("content", "")
+                            for m in (loop_messages or [])
+                        )
+                        if not _already_pending_nudged and iteration + 1 < effective_max_iter:
+                            if obs:
+                                obs.emit(
+                                    "agent_loop_gate_failed_replan",
+                                    intent=intent.value,
+                                    iteration=iteration + 1,
+                                    unmet=[
+                                        "model narrated a state-changing action "
+                                        "(delete/create/run/…) but emitted no tool call"
+                                    ],
+                                )
+                            loop_messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        "\n[PENDING ACTION] You said you would perform an "
+                                        "action (e.g. delete, create, move, run) but you did "
+                                        "NOT emit the tool_call — the action has not happened. "
+                                        "Emit the tool_call NOW to actually perform it (use "
+                                        "shell for filesystem/system changes, file_write to "
+                                        "write files, etc.). If you have genuinely completed "
+                                        "it already, report the concrete result instead. Do "
+                                        "NOT narrate the action again without executing it, and "
+                                        "do NOT ask the user to confirm an action they already "
+                                        "requested.\n"
+                                    ),
+                                }
+                            )
+                            if gate_force_tool is not None:
+                                gate_force_tool[0] = True
+                            return "", False
                 # B-2026-08-20-13 (Session 314): the hedge detector. Distinct
                 # from the prose-commitment detector (which fires when NO tool
                 # ran): this fires when tools DID run (evidence exists) but the
