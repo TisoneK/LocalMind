@@ -154,6 +154,9 @@ class Settings(BaseSettings):
     zenmux_model: str = ""
     # ADR-55: BankOfAI (B.AI) — api.bankofai.io, live-tested (Session 321).
     bankofai_model: str = ""
+    # OmniRoute — self-hosted OpenAI-compatible gateway (localhost:20128/v1);
+    # base_url env-overridable via OMNIROUTE_BASE_URL. Session 405.
+    omniroute_model: str = ""
 
     # Server
     localmind_host: str = "127.0.0.1"
@@ -576,6 +579,8 @@ class Settings(BaseSettings):
             "zenmux": "ZENMUX_API_KEY",
             # ADR-55: BankOfAI (B.AI) — api.bankofai.io, live-tested.
             "bankofai": "BANKOFAI_API_KEY",
+            # OmniRoute — self-hosted gateway; dashboard key as Bearer.
+            "omniroute": "OMNIROUTE_API_KEY",
         }
         env_var = env_key_map.get(provider)
         if env_var:

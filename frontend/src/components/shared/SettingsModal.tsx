@@ -33,6 +33,7 @@ const PROVIDERS: ProviderDef[] = [
   { id: 'groq', name: 'Groq' },
   { id: 'lite-llm', name: 'LiteLLM Proxy' },
   { id: 'mistral', name: 'Mistral AI' },
+  { id: 'omniroute', name: 'OmniRoute (self-hosted gateway — 500+ models)' },
   { id: 'openai', name: 'OpenAI' },
   { id: 'openrouter', name: 'OpenRouter' },
   { id: 'sambanova', name: 'SambaNova' },

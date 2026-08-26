@@ -479,6 +479,35 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         model_env="BANKOFAI_MODEL",
         settings_field="bankofai_model",
     ),
+    # OmniRoute — a SELF-HOSTED, OpenAI-compatible AI gateway the user runs
+    # locally (`npm i -g omniroute && omniroute`, or the docker image). It
+    # fronts 290+ upstream providers / 500+ models (many with free tiers or
+    # OAuth-gated free access — DeepSeek/Groq/Cerebras/Mistral free credits,
+    # plus no-auth providers) behind ONE endpoint at localhost:20128/v1, and
+    # auto-falls-back across providers when a quota runs out. Because it is a
+    # local gateway, base_url is env-overridable (the port/host can differ) and
+    # the key is the OmniRoute *dashboard* key, sent as the default
+    # `Authorization: Bearer <key>` — upstream provider auth is handled inside
+    # OmniRoute, not here.
+    #
+    # SETUP the user must do: run the gateway, grab the dashboard key, and set
+    # the model to one listed by `curl localhost:20128/v1/models` (ids vary by
+    # which upstreams they enabled; `default_model` below is only a fallback).
+    # CAVEAT for the agent loop: OmniRoute's tool-calling is per-upstream —
+    # `native`, prompt-`emulated`, or `none` (tools silently dropped). Route to
+    # a NATIVE tool-calling model for agent work; `emulated`/`none` upstreams
+    # will also reject `tool_choice` (see B-2026-08-25-13). Ref: github.com/
+    # diegosouzapw/OmniRoute, omniroute.online.
+    "omniroute": ProviderConfig(
+        name="omniroute",
+        display_name="OmniRoute (self-hosted gateway — 500+ models)",
+        base_url=os.getenv("OMNIROUTE_BASE_URL", "http://localhost:20128/v1"),
+        api_key="",
+        default_model="deepseek-chat",
+        key_env="OMNIROUTE_API_KEY",
+        model_env="OMNIROUTE_MODEL",
+        settings_field="omniroute_model",
+    ),
 }
 
 

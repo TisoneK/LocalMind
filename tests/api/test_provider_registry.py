@@ -64,3 +64,27 @@ def test_bankofai_model_context_windows():
 def test_bankofai_resolves_in_derived_maps():
     assert models_mod._model_setting_attr("bankofai") == "bankofai_model"
     assert "bankofai" in models_mod._build_model_setting_map()
+
+
+def test_omniroute_is_registered():
+    """OmniRoute (Session 405) — a self-hosted OpenAI-compatible gateway.
+
+    base_url points at the local gateway and is env-overridable via
+    OMNIROUTE_BASE_URL (the port/host can differ per install); the key is the
+    OmniRoute dashboard key, sent as the default Bearer header.
+    """
+    cfg = PROVIDER_CONFIGS["omniroute"]
+    assert cfg.name == "omniroute"
+    # Default is the local gateway; env-overridable via OMNIROUTE_BASE_URL
+    # (same os.getenv pattern as litellm/vercel/cloudflare).
+    assert cfg.base_url == "http://localhost:20128/v1"
+    assert cfg.key_env == "OMNIROUTE_API_KEY"
+    assert cfg.model_env == "OMNIROUTE_MODEL"
+    assert cfg.settings_field == "omniroute_model"
+    # No custom headers — plain Authorization: Bearer <dashboard key>.
+    assert cfg.headers is None
+
+
+def test_omniroute_resolves_in_derived_maps():
+    assert models_mod._model_setting_attr("omniroute") == "omniroute_model"
+    assert "omniroute" in models_mod._build_model_setting_map()

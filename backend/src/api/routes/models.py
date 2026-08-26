@@ -258,7 +258,9 @@ async def list_models(provider: str | None = None):
         # Gemini: generativelanguage.googleapis.com/v1beta/openai/models
         # Chutes: llm.chutes.ai/v1/models (all TEE-suffixed)
         # Z.ai: api.z.ai/api/paas/v4/models (GLM-5.2, GLM-4.5-Flash, etc.)
-        if adapter_name in ("zen", "cerebras", "gemini", "chutes", "zai", "bankofai"):
+        # OmniRoute: localhost:20128/v1/models (self-hosted gateway, 500+
+        # models across 290+ upstreams — live-listing is its headline feature).
+        if adapter_name in ("zen", "cerebras", "gemini", "chutes", "zai", "bankofai", "omniroute"):
             try:
                 available = await adapter.list_models()
                 for m in available:
