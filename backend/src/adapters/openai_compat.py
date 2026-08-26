@@ -493,6 +493,13 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
     # SETUP the user must do: run the gateway, grab the dashboard key, and set
     # the model to one listed by `curl localhost:20128/v1/models` (ids vary by
     # which upstreams they enabled; `default_model` below is only a fallback).
+    # Model IDs are provider-prefixed (`nvidia/deepseek-ai/deepseek-v4-flash`,
+    # `openai/gpt-oss-120b`); a bare id like "deepseek-chat" is rejected 400
+    # "Ambiguous model" (Session 405 live-test). The default is OmniRoute's own
+    # `auto/best-coding` meta-router — it always resolves to a currently-LIVE
+    # upstream (direct nvidia/* ids churn through frequent EOL) and supports
+    # tool-calling (live-verified: it emitted a real get_weather tool_call
+    # through this adapter).
     # CAVEAT for the agent loop: OmniRoute's tool-calling is per-upstream —
     # `native`, prompt-`emulated`, or `none` (tools silently dropped). Route to
     # a NATIVE tool-calling model for agent work; `emulated`/`none` upstreams
@@ -503,7 +510,7 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         display_name="OmniRoute (self-hosted gateway — 500+ models)",
         base_url=os.getenv("OMNIROUTE_BASE_URL", "http://localhost:20128/v1"),
         api_key="",
-        default_model="deepseek-chat",
+        default_model="auto/best-coding",
         key_env="OMNIROUTE_API_KEY",
         model_env="OMNIROUTE_MODEL",
         settings_field="omniroute_model",
