@@ -32,6 +32,20 @@ from typing import Optional
 
 from core.agent.constants import MAX_ITERATIONS
 from core.agent.tool_schemas import compact_tool_summary, render_tool_list
+from core.system_snapshot import get_cached_summary
+
+
+def _system_env_line() -> str:
+    """The boot-cached system summary as a prompt line, with guidance to answer
+    from it instead of calling sysinfo. Empty when the cache is unset."""
+    summary = get_cached_summary()
+    if not summary:
+        return ""
+    return (
+        f"{summary}\n(You already know the machine above — answer OS/CPU/RAM/disk/"
+        "hostname questions directly from it; only call sysinfo for details not "
+        "listed, e.g. processes, network, or a live re-read.)"
+    )
 from core.models import Intent
 
 
@@ -523,10 +537,14 @@ def build_agent_system_prompt(
                 + "\n".join(f"- {fact}" for fact in memory_facts[:10])
                 + "\n"
             )
+        # B-2026-08-30-17 Phase 3: the boot-cached system summary. The agent
+        # already KNOWS the machine, so it answers CPU/RAM/disk/OS questions
+        # directly instead of reflexively calling sysinfo.
+        _sys = _system_env_line()
+        system_section = f"\n{_sys}\n" if _sys else ""
         return f"""You are LocalMind, the user-facing parent agent running locally on the user's machine.
 
-{agent_context or ''}
-{memory_section}
+{agent_context or ''}{system_section}{memory_section}
 
 You own the user's complete objective. On this first parent call, either answer
 naturally in plain text when no external evidence is needed, or use the native

@@ -65,3 +65,32 @@ class TestSystemInfoStore:
         bad = SystemInfoStore("/nonexistent-dir/definitely/not/here.db")
         counters = bad.refresh_at_boot()  # must not raise
         assert counters == {"static_new": 0, "static_skipped": 0, "mutating_updated": 0}
+
+
+# ── Phase 3: the cached summary is injected into the first-call prompt ────────
+
+
+def test_cached_summary_injected_into_bootstrap_prompt():
+    from core.agent.prompts import build_agent_system_prompt
+    from core.models import Intent
+    from core.system_snapshot import set_cached_summary
+    from tools import available_tools
+
+    set_cached_summary("System: TestOS 1.0, x86_64, 4 CPUs, 8.6 GB RAM, 121 GB disk (4.3 GB free)")
+    try:
+        prompt = build_agent_system_prompt(
+            intent=Intent.SHELL, available_tools=available_tools(),
+            tool_defs=None, native_bootstrap=True,
+        )
+        assert "8.6 GB RAM" in prompt and "TestOS 1.0" in prompt
+        assert "sysinfo" in prompt.lower()  # the "only call sysinfo for..." guidance
+    finally:
+        set_cached_summary("")
+
+
+def test_no_system_section_when_cache_unset():
+    from core.agent.prompts import _system_env_line
+    from core.system_snapshot import set_cached_summary
+
+    set_cached_summary("")
+    assert _system_env_line() == ""

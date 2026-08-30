@@ -23,6 +23,21 @@ import time
 
 logger = logging.getLogger(__name__)
 
+# B-2026-08-30-17 Phase 3: the compact `System:` summary is computed ONCE at
+# boot (from the DB cache) and held here, so the hot prompt-assembly path injects
+# it without a DB read every turn. Empty until the boot hook sets it.
+_CACHED_SUMMARY = ""
+
+
+def set_cached_summary(summary: str) -> None:
+    global _CACHED_SUMMARY
+    _CACHED_SUMMARY = summary or ""
+
+
+def get_cached_summary() -> str:
+    """The boot-cached `System: …` line for prompt injection (empty if unset)."""
+    return _CACHED_SUMMARY
+
 
 def _try(fn):
     try:

@@ -133,9 +133,13 @@ async def lifespan(app: FastAPI):
     # are written once and skipped on later boots; mutating fields (disk/RAM/
     # uptime) are updated each boot. Best-effort — never blocks startup.
     try:
+        from core.system_snapshot import set_cached_summary
         from storage.system_info_store import SystemInfoStore
 
-        SystemInfoStore(settings.localmind_db_path).refresh_at_boot()
+        _sysinfo_store = SystemInfoStore(settings.localmind_db_path)
+        _sysinfo_store.refresh_at_boot()
+        # Phase 3: cache the compact summary for prompt injection every turn.
+        set_cached_summary(_sysinfo_store.get_summary())
     except Exception as _sysinfo_exc:  # pragma: no cover - defensive
         logger.warning("[startup] system-info cache refresh skipped: %s", _sysinfo_exc)
 
