@@ -787,6 +787,37 @@ class OpenAICompatAdapter(BaseAdapter):
             return None
         return int(m.group(1)), int(m.group(2))
 
+    @staticmethod
+    def _clamp_reasoning_effort(effort: str, model: str) -> str | None:
+        """Map a configured reasoning_effort to the model's supported set.
+
+        The valid ``reasoning_effort`` set is GLM-version-specific (z.ai docs):
+          * GLM-5.3+ : {max, high, low} — the model ALWAYS thinks and cannot be
+            disabled, so ``none``/``minimal``/``medium``/``xhigh`` are rejected
+            with a 400 ("该模型始终思考，不支持关闭思考；请使用 low、high 或 max").
+          * GLM-5.2  : {max, xhigh, high, medium, low, minimal, none}.
+
+        We clamp before sending so a user's ``none`` ("think as little as
+        possible") still yields a VALID request on an always-thinking model —
+        mapped to the nearest valid level (``low``) instead of 400-ing the turn.
+        Non-GLM / unknown model ids pass through unchanged; the
+        reasoning_effort-reject retry in _send_streaming_with_retry is the
+        backstop there. Returns the (possibly remapped) effort, or None to omit.
+        """
+        e = (effort or "").strip().lower()
+        if not e:
+            return None
+        ver = OpenAICompatAdapter._zai_model_version(model)
+        if ver is None:
+            return e  # not a GLM id — additive, let the server accept/ignore it
+        if ver >= (5, 3):
+            if e in ("max", "high", "low"):
+                return e
+            # none/minimal/medium → low (least thinking that 5.3 allows);
+            # xhigh → high. Any other unknown level also degrades to low.
+            return {"xhigh": "high"}.get(e, "low")
+        return e  # GLM<=5.2 accepts the full effort set
+
     @property
     def thinking_enabled(self) -> bool:
         """True when this adapter's calls run with the model's reasoning ON.
@@ -861,7 +892,12 @@ class OpenAICompatAdapter(BaseAdapter):
         # never breaks a call.
         effort = (getattr(_settings, "localmind_reasoning_effort", "") or "").strip().lower()
         if effort and not force_off:
-            payload["reasoning_effort"] = effort
+            # Clamp to the model's supported set — e.g. GLM-5.3 always thinks and
+            # rejects "none"/"minimal" (400001); map those to the nearest valid
+            # level rather than sending an invalid value that fails the turn.
+            clamped = self._clamp_reasoning_effort(effort, self._model)
+            if clamped:
+                payload["reasoning_effort"] = clamped
         return payload
 
     @staticmethod
@@ -1065,12 +1101,19 @@ class OpenAICompatAdapter(BaseAdapter):
                             )
                             continue
                     # Session 262: a GLM version that doesn't support the
-                    # reasoning_effort "thinking level" (e.g. <5.2) may 400 on
-                    # it — drop it and retry once so the level stays additive.
+                    # reasoning_effort "thinking level" (e.g. <5.2), or an
+                    # always-thinking model that rejects an "off" level
+                    # (GLM-5.3: "该模型始终思考…请使用 low、high 或 max", code
+                    # 400001), may 400 on it. reasoning_effort is an optional
+                    # bounding hint, so as a LAST resort (after every specific
+                    # matcher above) drop it and retry once. The reject body may
+                    # be localized (Chinese) and omit the English word
+                    # "reasoning", so we can't gate on a body substring — the
+                    # presence of the param + an otherwise-unhandled 400/422 is
+                    # the signal. Fires once (reasoning_effort_retry flag).
                     if (
                         reasoning_effort_retry
                         and "reasoning_effort" in request_payload
-                        and ("reasoning_effort" in body or "reasoning" in body)
                     ):
                         await response.aclose()
                         request_payload = dict(request_payload)
