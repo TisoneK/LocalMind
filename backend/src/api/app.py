@@ -128,6 +128,17 @@ async def lifespan(app: FastAPI):
     await _chat_engine.startup()
     set_engine_ready()
 
+    # B-2026-08-30-17 Phase 2: refresh the boot-time system-info cache so the
+    # agent has system knowledge without calling the sysinfo tool. Static fields
+    # are written once and skipped on later boots; mutating fields (disk/RAM/
+    # uptime) are updated each boot. Best-effort — never blocks startup.
+    try:
+        from storage.system_info_store import SystemInfoStore
+
+        SystemInfoStore(settings.localmind_db_path).refresh_at_boot()
+    except Exception as _sysinfo_exc:  # pragma: no cover - defensive
+        logger.warning("[startup] system-info cache refresh skipped: %s", _sysinfo_exc)
+
     if settings.localmind_adapter != "ollama":
         logger.info(
             "[startup] Cloud adapter '%s' active — skipping Ollama warmup entirely.",
