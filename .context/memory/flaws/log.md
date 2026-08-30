@@ -507,3 +507,10 @@ Flaws from Session 7 are now **fixed**:
 - **Fix:** tracked as B-2026-08-25-13 — detect tool_choice support per adapter and, when unsupported, escalate the re-prompt (stronger imperative + example tool_call JSON) and/or enforce a "must emit a tool_call or one clarifying question" contract in the gate regardless of tool_choice.
 - **Lesson:** a control mechanism that depends on an optional provider capability must degrade to a model-agnostic path (prompt-level) and must not report success when the capability was dropped. Verify force-tool on a provider that rejects tool_choice, not only on one that honors it.
 - **Status:** open (B-2026-08-25-13)
+
+## 2026-08-30 — Session 406 — context-sync verify false-positives on Windows (core.autocrlf=true)
+
+- **Symptom:** `pwsh -File .context/core/bin/context-sync.ps1 verify` reported EVERY core file FAILED (all 21) with CORE INTEGRITY FAILURE. Content on disk was correct per git (`git status .context/core` clean).
+- **Root cause:** this Windows checkout has `core.autocrlf=true`; the MANIFEST.sha256 hashes were computed over LF bytes, but git checks the text files out as CRLF (`i/lf w/crlf` per `git ls-files --eol`), so `Get-FileHash` sees different bytes. The .ps1 verify hashes raw file bytes with no EOL normalization — a Windows-normalization false positive, not corruption. `rollback` cannot fix it (it restores from git, which re-checks-out CRLF).
+- **Impact/lesson:** on Windows with autocrlf, verify is unreliable. Either set `core.autocrlf=false` + `git checkout -- .context/core` to force LF working-tree bytes for core, or the .ps1 (and sh script on Windows-mounted repos) need EOL-normalized hashing. Until then: treat an all-files-FAILED result on a git-clean tree as the CRLF signature; only a SUBSET of files failing indicates real drift. Logged as B-2026-08-30-17.
+- **Status:** open (workaround documented; proper fix = EOL-normalized hashing in context-sync)
