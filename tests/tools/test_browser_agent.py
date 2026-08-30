@@ -125,3 +125,81 @@ def test_browse_tool_is_registered():
 
     assert Intent.BROWSE in _REGISTRY
     assert "inspect DOM" in _REGISTRY[Intent.BROWSE]["description"]
+
+
+# ── B-2026-08-30: open/read return page CONTENT as evidence ──────────────────
+
+
+@pytest.mark.asyncio
+async def test_open_navigates_and_returns_page_content(mock_browser):
+    """`open` must navigate AND pull the page text back (persistent session), so
+    the content reaches the agent as evidence instead of only the browser window."""
+    result = await browser_module.browser_agent(
+        json.dumps({"action": "open", "url": "https://wttr.in/Nairobi?format=j1"})
+    )
+    assert result.success is True
+    assert "page content" in result.content.lower()
+    assert "mock browser output" in result.content  # the extracted text
+    assert result.metadata["content_chars"] > 0
+    # two agent-browser commands: navigate, then extract text in the same session
+    assert mock_browser[0] == ["open", "https://wttr.in/Nairobi?format=j1"]
+    assert mock_browser[1][0] == "eval"
+
+
+@pytest.mark.asyncio
+async def test_read_reextracts_current_page_without_url(mock_browser):
+    """`read` with no url just re-extracts the current page (one eval, no open)."""
+    result = await browser_module.browser_agent(json.dumps({"action": "read"}))
+    assert result.success is True
+    assert "mock browser output" in result.content
+    assert mock_browser == [["eval", "document.body ? document.body.innerText : ''"]]
+
+
+@pytest.mark.asyncio
+async def test_open_navigation_failure_is_reported(monkeypatch):
+    """A failed navigation surfaces open_failed, not a false success."""
+    async def _run(args, timeout: int = 30):
+        return (1, "", "net::ERR_NAME_NOT_RESOLVED") if args[0] == "open" else (0, "x", "")
+
+    monkeypatch.setattr(browser_module, "BROWSER_AVAILABLE", True)
+    monkeypatch.setattr(browser_module, "_run_browser_cmd", _run)
+    result = await browser_module.browser_agent(
+        json.dumps({"action": "open", "url": "https://nope.invalid"})
+    )
+    assert result.success is False
+    assert result.error_type == "open_failed"
+
+
+@pytest.mark.asyncio
+async def test_open_without_content_guides_fallback(monkeypatch):
+    """When extraction yields nothing, open still succeeds and suggests snapshot/dom."""
+    async def _run(args, timeout: int = 30):
+        return (0, "", "") if args[0] == "eval" else (0, "navigated", "")
+
+    monkeypatch.setattr(browser_module, "BROWSER_AVAILABLE", True)
+    monkeypatch.setattr(browser_module, "_run_browser_cmd", _run)
+    result = await browser_module.browser_agent(
+        json.dumps({"action": "open", "url": "https://example.com"})
+    )
+    assert result.success is True
+    assert result.metadata["content_chars"] == 0
+    assert "snapshot" in result.content and "dom" in result.content
+
+
+@pytest.mark.asyncio
+async def test_extract_unwraps_json_quoted_eval_result(monkeypatch):
+    """agent-browser may print eval output JSON-encoded; the raw text is returned."""
+    async def _run(args, timeout: int = 30):
+        return (0, '"{\\"temp_C\\": \\"18\\"}"', "") if args[0] == "eval" else (0, "ok", "")
+
+    monkeypatch.setattr(browser_module, "BROWSER_AVAILABLE", True)
+    monkeypatch.setattr(browser_module, "_run_browser_cmd", _run)
+    text = await browser_module._extract_page_text()
+    assert text == '{"temp_C": "18"}'
+
+
+def test_read_action_parses_from_natural_language():
+    assert browser_module._parse_action("read https://wttr.in/Nairobi?format=j1") == {
+        "action": "read",
+        "url": "https://wttr.in/Nairobi?format=j1",
+    }

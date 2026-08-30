@@ -94,6 +94,35 @@ async def _run_browser_cmd(
         return 1, "", f"Browser command failed: {e}"
 
 
+async def _extract_page_text(max_chars: int = _MAX_OUTPUT) -> str:
+    """Best-effort: return the CURRENT page's rendered text (document.body.innerText).
+
+    B-2026-08-30 (agent-browser content capture): `open` and the read actions
+    left page content in the browser window — it never came back as tool
+    evidence, so the agent opened a URL, saw nothing useful, and thrashed. The
+    browser session is persistent (see the tool registration), so we can pull
+    the rendered text via a follow-up `eval` in the same session.
+
+    Returns "" on ANY failure — callers treat that as "no text extracted" and
+    fall back gracefully (never breaking the navigation itself). Args are passed
+    argv-style (no shell), so the script needs no cross-platform quoting.
+    """
+    rc, out, err = await _run_browser_cmd(
+        ["eval", "document.body ? document.body.innerText : ''"]
+    )
+    if rc != 0:
+        return ""
+    text = (out or "").strip()
+    # agent-browser may print the eval result JSON-encoded (a quoted string).
+    # Unwrap a single layer so the agent gets the raw text, not "\"{...}\"".
+    if len(text) >= 2 and text[0] == '"' and text[-1] == '"':
+        try:
+            text = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            text = text[1:-1]
+    return text[:max_chars]
+
+
 def _parse_action(message: str) -> dict | None:
     """Parse the browser action from the message.
 
@@ -125,17 +154,24 @@ def _parse_action(message: str) -> dict | None:
     # Natural language patterns
     msg_lower = message.lower()
 
-    # URL by itself → open
+    # "read <url>" / "fetch <url>" — navigate + return content (same as open,
+    # matched BEFORE the bare-URL shortcut so the verb is honored). Match the URL
+    # against the ORIGINAL message so its case (e.g. /Nairobi) is preserved.
+    read_match = re.match(r"(?:read|fetch)\s+(https?://\S+)", message, re.IGNORECASE)
+    if read_match:
+        return {"action": "read", "url": read_match.group(1)}
+
+    # "open <url>"
+    open_match = re.match(r"open\s+(https?://\S+)", message, re.IGNORECASE)
+    if open_match:
+        return {"action": "open", "url": open_match.group(1)}
+
+    # A bare URL → open (which now navigates AND returns the page text).
     url_match = re.search(r"https?://\S+", message)
     if url_match and not msg_lower.startswith(
         ("click", "fill", "scroll", "snapshot", "screenshot", "close", "back", "forward", "eval")
     ):
         return {"action": "open", "url": url_match.group(0)}
-
-    # "open <url>"
-    open_match = re.match(r"open\s+(https?://\S+)", msg_lower)
-    if open_match:
-        return {"action": "open", "url": open_match.group(1)}
 
     # "snapshot" or "screenshot"
     if "snapshot" in msg_lower:
@@ -203,7 +239,8 @@ async def browser_agent(message: str) -> ToolResult:
         return ToolResult(
             content=(
                 "Could not parse browser action. Use one of:\n"
-                '  {"action": "open", "url": "https://example.com"}\n'
+                '  {"action": "open", "url": "https://example.com"}  (navigates AND returns page text)\n'
+                '  {"action": "read"}  (re-read the current page\'s text)\n'
                 '  {"action": "snapshot"}\n'
                 '  {"action": "click", "ref": "@e1"}\n'
                 '  {"action": "fill", "ref": "@e2", "value": "text"}\n'
@@ -239,9 +276,9 @@ async def browser_agent(message: str) -> ToolResult:
     args: list[str] = []
     risk = RiskLevel.LOW
 
-    if act == "open":
+    if act in ("open", "read", "content", "get_content", "read_content"):
         url = action.get("url", "")
-        if not url:
+        if not url and act == "open":
             return ToolResult(
                 content="No URL provided for 'open' action.",
                 risk=RiskLevel.LOW,
@@ -249,8 +286,43 @@ async def browser_agent(message: str) -> ToolResult:
                 success=False,
                 error_type="missing_url",
             )
-        args = ["open", url]
-        risk = RiskLevel.MEDIUM  # Navigating to a URL is medium risk
+        # Navigate (if a URL is given) then pull the rendered page TEXT back as
+        # evidence in the SAME call — the session is persistent, so a single
+        # `open` returns the content instead of leaving it in the browser
+        # window. `read`/`content` re-extract the current page without needing
+        # a URL. Extraction is best-effort: navigation success is never lost.
+        if url:
+            nav_rc, nav_out, nav_err = await _run_browser_cmd(["open", url])
+            if nav_rc != 0:
+                err_txt = (nav_err or nav_out).strip()
+                return ToolResult(
+                    content=f"Failed to open {url}: {err_txt or 'unknown error'}",
+                    risk=RiskLevel.MEDIUM,
+                    source="browser_agent",
+                    success=False,
+                    error_type="open_failed",
+                    error_message=err_txt or "navigation failed",
+                    metadata={"action": act, "url": url},
+                )
+        page_text = await _extract_page_text()
+        where = f" {url}" if url else " current page"
+        if page_text:
+            content = f"Opened{where} — page content:\n\n{page_text}"
+        else:
+            content = (
+                f"Opened{where}, but no text content was extracted (the page may be "
+                "JS-rendered, empty, or non-HTML). Try action 'snapshot' for "
+                "interactive elements, 'dom' for raw HTML, or a screenshot."
+            )
+        if len(content) > _MAX_OUTPUT:
+            content = content[: _MAX_OUTPUT - 24] + "\n\n[... content truncated]"
+        return ToolResult(
+            content=content,
+            risk=RiskLevel.MEDIUM,  # page content may contain user/session data
+            source="browser_agent",
+            success=True,
+            metadata={"action": act, "url": url, "content_chars": len(page_text)},
+        )
 
     elif act == "snapshot":
         interactive = action.get("interactive", True)
@@ -418,7 +490,7 @@ async def browser_agent(message: str) -> ToolResult:
 
     else:
         supported = (
-            "open, snapshot, click, fill, type, press, scroll, scrollintoview, "
+            "open, read, snapshot, click, fill, type, press, scroll, scrollintoview, "
             "screenshot, text, dom, network, console, url, title, eval, back, "
             "forward, reload, close, wait"
         )
@@ -477,8 +549,14 @@ register_tool(
     browser_agent,
     description=(
         "Real browser interaction — navigate, click, fill forms, scroll, screenshot, "
-        "inspect DOM/network/console, and execute JS. DOM, network, and console "
-        "inspection may expose page data. Uses agent-browser CLI."
+        "inspect DOM/network/console, and execute JS. To READ a page's content, use "
+        "action 'open' (or 'read') with the url: it navigates AND returns the page "
+        "text in one step — you do NOT open then separately read, and the content "
+        "comes back to you here, not just in the browser window. Use 'snapshot'/'dom' "
+        "only when you need interactive element refs or raw HTML. For a plain HTTP "
+        "GET of text/JSON (e.g. an API/weather endpoint), prefer web_fetch — the "
+        "browser is for JS-rendered or interactive pages. DOM/network/console may "
+        "expose page data. Uses agent-browser CLI."
     ),
     cost=0.5,
     latency_ms=3000,
