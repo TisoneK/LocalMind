@@ -66,9 +66,6 @@ further cut without a fresh live trace — trimming schemas can regress weak
 models' tool choice.
 """
 
-import shutil
-from functools import lru_cache
-
 from core.skills import available_skills_summary
 
 # ── Tier split (ADR-40 option C): always-present vs on-demand ──────────────
@@ -792,40 +789,8 @@ TOOL_DEFINITIONS: list[dict] = [
 # backward-compatible module constant; it is appended by tool_defs_for_call().
 
 
-@lru_cache(maxsize=1)
-def _browser_agent_installed() -> bool:
-    """True when the `agent-browser` CLI is on PATH (the `browse` tool's backend).
-
-    Cached: install state doesn't change within a process, and browser_agent.py
-    resolves the same binary at import — so the roster and the tool agree.
-    """
-    return shutil.which("agent-browser") is not None
-
-
-# Long-tail tools whose backend is an OPTIONAL external dependency: offer them
-# only when the dependency is actually present, so the model is never handed a
-# capability that can only fail at call time (B-2026-08-30-3 — `browse` was
-# chosen for a simple GET, cost a describe_tool + a failed call discovering
-# agent-browser was not installed).
-_DEP_GATED_TOOLS: dict[str, "callable"] = {"browse": _browser_agent_installed}
-
-
-def available_long_tail_tools() -> frozenset[str]:
-    """LONG_TAIL_TOOL_NAMES minus any tool whose optional dependency is missing."""
-    return frozenset(
-        n for n in LONG_TAIL_TOOL_NAMES if n not in _DEP_GATED_TOOLS or _DEP_GATED_TOOLS[n]()
-    )
-
-
 def long_tail_tool_summary() -> str:
-    """Comma-separated on-demand tool names (for the describe_tool catalog hint).
-
-    This is the full static catalog of loadable tools. Availability gating (e.g.
-    hiding `browse` when agent-browser is not installed) is applied in
-    ``render_tool_list`` — the per-turn "Available tools" roster the model
-    actually scans to pick a tool — not here, so the meta-tool's documentation
-    stays a stable, complete index.
-    """
+    """Comma-separated on-demand tool names (for the describe_tool hint)."""
     return ", ".join(sorted(LONG_TAIL_TOOL_NAMES))
 
 
@@ -938,13 +903,8 @@ def render_tool_list(tool_defs: list[dict] | None = None) -> list[str]:
         List of `- name: description` lines, one per tool, in catalog order.
     """
     defs = tool_defs if tool_defs is not None else TOOL_DEFINITIONS
-    # B-2026-08-30-3: hide dependency-gated tools that aren't installed (e.g.
-    # `browse` without agent-browser) from the per-turn roster the model scans,
-    # so it doesn't pick — and waste a call discovering — an unavailable tool.
-    _avail = available_long_tail_tools()
     return [
         f"  - {td.get('function', {}).get('name', '?')}: "
         f"{str(td.get('function', {}).get('description', '')).strip()}"
         for td in defs
-        if (_n := td.get('function', {}).get('name', '')) not in _DEP_GATED_TOOLS or _n in _avail
     ]

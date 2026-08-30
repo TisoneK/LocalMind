@@ -21,11 +21,7 @@ import json
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 from core.agent.loop import TOOL_DEFINITIONS, _filtered_tool_defs
 from core.agent.prompts import build_agent_system_prompt
-from core.agent.tool_schemas import (
-    _DEP_GATED_TOOLS,
-    available_long_tail_tools,
-    render_tool_list,
-)
+from core.agent.tool_schemas import render_tool_list
 from core.models import Intent
 from tools import available_tools
 
@@ -113,16 +109,7 @@ def test_render_tool_list_matches_defs() -> None:
     """The in-prompt tool list is rendered from the same defs (one source)."""
     scoped = _filtered_tool_defs(AGENT_ALLOWED_TOOLS)
     lines = render_tool_list(scoped)
-    # B-2026-08-30-3: the roster hides dependency-gated tools whose optional
-    # dependency is missing (e.g. `browse` without agent-browser), so it's a
-    # 1:1 render of the AVAILABLE defs, not every scoped def.
-    _avail = available_long_tail_tools()
-    expected = [
-        td
-        for td in scoped
-        if td["function"]["name"] not in _DEP_GATED_TOOLS or td["function"]["name"] in _avail
-    ]
-    assert len(lines) == len(expected)
+    assert len(lines) == len(scoped)
     names = {td["function"]["name"] for td in scoped}
     for line in lines:
         name = line.split(":", 1)[0].strip().lstrip("-").strip()
@@ -150,42 +137,3 @@ def test_system_prompt_list_derived_from_tool_defs() -> None:
         if t["intent"] == "web_search" and "web_search" in t["description"]:
             old_line = f"  - web_search: {t['description']}"
             assert old_line not in prompt, "stale metadata description still injected"
-
-
-# ── B-2026-08-30-3: dependency-gated tools hidden from the roster ────────────
-
-
-def test_browse_hidden_from_roster_when_agent_browser_missing(monkeypatch) -> None:
-    """`browse` needs the agent-browser CLI; when it's not on PATH the model
-    must not be offered it in the per-turn roster (it would only fail at call
-    time — see B-2026-08-30-3). The static catalog summary still lists it."""
-    import shutil as _shutil
-
-    import core.agent.tool_schemas as ts
-
-    # Force "not installed" regardless of the host running the suite.
-    monkeypatch.setattr(_shutil, "which", lambda name: None)
-    ts._browser_agent_installed.cache_clear()
-    try:
-        assert "browse" not in ts.available_long_tail_tools()
-        roster_names = {line.split(":", 1)[0].strip().lstrip("-").strip() for line in ts.render_tool_list()}
-        assert "browse" not in roster_names
-        # catalog summary is the full static index — browse still documented
-        assert "browse" in ts.long_tail_tool_summary()
-    finally:
-        ts._browser_agent_installed.cache_clear()
-
-
-def test_browse_present_in_roster_when_agent_browser_installed(monkeypatch) -> None:
-    import shutil as _shutil
-
-    import core.agent.tool_schemas as ts
-
-    monkeypatch.setattr(_shutil, "which", lambda name: "/usr/local/bin/agent-browser")
-    ts._browser_agent_installed.cache_clear()
-    try:
-        assert "browse" in ts.available_long_tail_tools()
-        roster_names = {line.split(":", 1)[0].strip().lstrip("-").strip() for line in ts.render_tool_list()}
-        assert "browse" in roster_names
-    finally:
-        ts._browser_agent_installed.cache_clear()
