@@ -1048,7 +1048,13 @@ export function useChat(
                 // the parent run's heading instead of "Turn N" (rides the
                 // existing init event — no extra model call).
                 if (obs.type === 'agent_initialization_done') {
-                  const title = String((obs.data || obs).title || '').trim();
+                  // B-2026-08-30-5: sanitize the classify title before it heads
+                  // the turn — a weak model can echo the raw user message (a
+                  // pasted 6KB JSON blob became the turn title). Collapse
+                  // whitespace to one line and hard-cap the length so the turn
+                  // heading is always a short label, never a wall of text.
+                  const rawTitle = String((obs.data || obs).title || '').replace(/\s+/g, ' ').trim();
+                  const title = rawTitle.length > 48 ? `${rawTitle.slice(0, 47)}…` : rawTitle;
                   if (title) {
                     setAgentRuns((prev) => updateAgentRun(prev, rootRunId, { title }));
                   }
@@ -1907,6 +1913,34 @@ const LIFECYCLE_PHASE_RANK: Record<string, number> = {
 // entries that have something useful to say).
 //
 // Exported for direct unit testing (Session 181).
+/**
+ * B-2026-08-30-6: collapse consecutive identical phases into one entry with a
+ * run count. Lifecycle phases fire per-iteration, so a multi-iteration turn
+ * repeated "Working out the approach" / "Approach ready" 5× each. Adjacent
+ * phases with the same `type` AND `label` are merged (keeping the first, whose
+ * id stays the stable React key); `count` records how many were folded, and the
+ * merged entry carries the LAST occurrence's iteration/detail so the timeline
+ * still reflects the latest state. Non-adjacent repeats (a phase that recurs
+ * after a different phase) are preserved — only runs of the same phase collapse.
+ */
+export function collapseAdjacentPhases(phases: AgentPhase[]): AgentPhase[] {
+  const out: AgentPhase[] = [];
+  for (const phase of phases) {
+    const prev = out[out.length - 1];
+    if (prev && prev.type === phase.type && prev.label === phase.label) {
+      out[out.length - 1] = {
+        ...prev,
+        count: (prev.count ?? 1) + 1,
+        iteration: phase.iteration ?? prev.iteration,
+        detail: phase.detail ?? prev.detail,
+      };
+    } else {
+      out.push(phase);
+    }
+  }
+  return out;
+}
+
 export function buildAgentPhase(
   eventType: string,
   data: any,

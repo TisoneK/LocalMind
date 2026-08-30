@@ -7,7 +7,16 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildAgentPhase } from './useLocalMind';
+import { buildAgentPhase, collapseAdjacentPhases } from './useLocalMind';
+import type { AgentPhase } from '../types';
+
+const mkPhase = (type: AgentPhase['type'], label: string, iteration?: number): AgentPhase => ({
+  id: `${type}-${label}-${iteration ?? 'x'}-${Math.random().toString(36).slice(2, 6)}`,
+  type,
+  label,
+  timestamp: Date.now(),
+  iteration,
+});
 
 describe('buildAgentPhase', () => {
   // ── plan_nodes_created ─────────────────────────────────────────────────
@@ -294,5 +303,44 @@ describe('buildAgentPhase', () => {
     expect(done!.type).toBe('thinking_done');
     expect(done!.label).toBe('Approach ready');
     expect(done!.iteration).toBe(2);
+  });
+});
+
+describe('collapseAdjacentPhases (B-2026-08-30-6)', () => {
+  it('collapses consecutive identical phases into one with a count', () => {
+    const phases = [
+      mkPhase('thinking', 'Working out the approach', 1),
+      mkPhase('thinking', 'Working out the approach', 2),
+      mkPhase('thinking', 'Working out the approach', 3),
+    ];
+    const out = collapseAdjacentPhases(phases);
+    expect(out).toHaveLength(1);
+    expect(out[0].count).toBe(3);
+    // keeps the first entry's id (stable React key) but the latest iteration
+    expect(out[0].id).toBe(phases[0].id);
+    expect(out[0].iteration).toBe(3);
+  });
+
+  it('does not merge different phase types or labels', () => {
+    const out = collapseAdjacentPhases([
+      mkPhase('thinking', 'Working out the approach'),
+      mkPhase('thinking_done', 'Approach ready'),
+      mkPhase('working', 'Executing the plan'),
+    ]);
+    expect(out).toHaveLength(3);
+    expect(out.every((p) => p.count === undefined)).toBe(true);
+  });
+
+  it('only collapses ADJACENT runs — a recurring phase after another is kept', () => {
+    const out = collapseAdjacentPhases([
+      mkPhase('thinking', 'Working out the approach'),
+      mkPhase('working', 'Executing the plan'),
+      mkPhase('thinking', 'Working out the approach'),
+    ]);
+    expect(out).toHaveLength(3);
+  });
+
+  it('handles an empty list', () => {
+    expect(collapseAdjacentPhases([])).toEqual([]);
   });
 });

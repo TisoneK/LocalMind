@@ -18,6 +18,7 @@ import type { AgentRun, AgentRunStatus, ToolCall } from '@/types';
 import { formatLatency, isActiveToolStatus } from '@/lib/localmind/progress';
 import { useEnterMotion } from '@/lib/localmind/motion';
 import { PHASE_META } from '@/components/chat/AgentPhases';
+import { collapseAdjacentPhases } from '@/hooks/useLocalMind';
 
 interface AgentWorkspaceProps {
   runs: AgentRun[];
@@ -89,7 +90,11 @@ function RunNode({
   // classify call, replacing a bare "Turn N". Falls back to "Turn N" until the
   // classify result arrives or when the model omitted a title. Ordinal stays
   // in the badge.
-  const turnLabel = run.role === 'parent' ? (run.title || '').trim() : '';
+  // B-2026-08-30-5: sanitize defensively — collapse whitespace to one line and
+  // cap the length so a turn heading is never a wall of pasted text, regardless
+  // of what set run.title (live classify or a reloaded run tree).
+  const rawTurnLabel = run.role === 'parent' ? (run.title || '').replace(/\s+/g, ' ').trim() : '';
+  const turnLabel = rawTurnLabel.length > 48 ? `${rawTurnLabel.slice(0, 47)}…` : rawTurnLabel;
   const headingLabel =
     run.role === 'parent'
       ? turnLabel || (turnIndex !== undefined ? `Turn ${turnIndex}` : 'Parent Agent')
@@ -194,9 +199,11 @@ function RunNode({
                 <div className="relative pl-3.5">
                   <span aria-hidden className="absolute left-[5px] top-1 bottom-1 w-px bg-gradient-to-b from-brand-green/40 via-brand-border to-transparent" />
                   <AnimatePresence initial={false}>
-                    {run.phases.map((phase, pIdx) => {
+                    {(() => {
+                      const collapsed = collapseAdjacentPhases(run.phases!);
+                      return collapsed.map((phase, pIdx) => {
                       const meta = PHASE_META[phase.type] || PHASE_META.plan_created;
-                      const isLast = pIdx === run.phases!.length - 1;
+                      const isLast = pIdx === collapsed.length - 1;
                       return (
                         <motion.div
                           key={phase.id}
@@ -222,6 +229,11 @@ function RunNode({
                               <span className="block text-[9px] text-brand-green-soft truncate" title={phase.label}>
                                 {phase.label}
                               </span>
+                              {phase.count && phase.count > 1 && (
+                                <span className="shrink-0 text-[8px] text-brand-green-faint tabular-nums" title={`${phase.count}× this turn`}>
+                                  ×{phase.count}
+                                </span>
+                              )}
                             </span>
                             {phase.detail && (
                               <span className="block text-[8px] text-brand-green-faint truncate pl-3.5" title={phase.detail}>
@@ -231,7 +243,8 @@ function RunNode({
                           </span>
                         </motion.div>
                       );
-                    })}
+                    });
+                    })()}
                   </AnimatePresence>
                 </div>
               </div>

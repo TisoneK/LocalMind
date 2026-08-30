@@ -40,6 +40,56 @@ _STORE_PAT = re.compile(
     re.IGNORECASE,
 )
 
+# B-2026-08-30-4: a durable fact should be a short, meaningful statement — not a
+# raw paste. When the user said "remember this source" + a 6KB weather-JSON dump,
+# the whole blob was stored verbatim as one "fact". Cap the size and distill: a
+# large/dump-shaped blob that contains a URL is almost always "remember THIS
+# source" — store the URL; a large blob with no URL is stored-as-garbage, so ask
+# for the specific fact instead of persisting the wall of text.
+_MAX_FACT_CHARS = 400
+_URL_RE = re.compile(r"https?://[^\s\"'<>)\]]+", re.IGNORECASE)
+
+
+def _looks_like_dump(text: str) -> bool:
+    """Heuristic: raw tool output / JSON / a big paste rather than a stated fact."""
+    if len(text) > _MAX_FACT_CHARS:
+        return True
+    stripped = text.lstrip()
+    if stripped[:1] in "{[" and ('":' in text or '" :' in text):
+        return True  # JSON-ish object/array
+    # Many quoted key/value pairs across lines = structured dump, not prose.
+    return text.count('":') >= 3
+
+
+def _distill_fact(message: str, fact: str) -> tuple[str | None, str | None]:
+    """Reduce a store request to a concise durable fact.
+
+    Returns ``(fact_to_store, note)``:
+      * ``(fact, None)``            — store ``fact`` as-is (already concise).
+      * ``(distilled, note)``       — store ``distilled`` (e.g. a URL pulled from
+                                       a paste); ``note`` explains what was kept.
+      * ``(None, guidance)``        — do NOT store; return ``guidance`` asking the
+                                       user for the specific fact.
+    """
+    fact = (fact or "").strip()
+    if not _looks_like_dump(fact):
+        return fact, None
+    urls = _URL_RE.findall(fact)
+    if urls:
+        # De-dup preserving order; a "source"/"url" cue keeps the natural label.
+        seen: list[str] = []
+        for u in urls:
+            if u not in seen:
+                seen.append(u)
+        label = "Source" if re.search(r"\bsource\b", message, re.IGNORECASE) else "URL"
+        distilled = f"{label}: {seen[0]}" if len(seen) == 1 else f"{label}s: {', '.join(seen[:5])}"
+        return distilled, f"kept the {label.lower()} from the pasted content"
+    return None, (
+        "That's a large block of text — I don't want to store the whole thing as one "
+        "memory. Tell me the specific fact to remember, e.g. \"remember my weather "
+        "source is https://wttr.in/{place}?format=j1\"."
+    )
+
 
 async def memory_op(
     message: str,
@@ -177,6 +227,18 @@ async def memory_op(
             source="memory",
         )
 
+    # B-2026-08-30-4: distill a raw paste to a concise fact (or ask for one)
+    # instead of persisting a wall of text as a single "memory".
+    _distilled, _distill_note = _distill_fact(message, fact)
+    if _distilled is None:
+        return ToolResult(
+            content=_distill_note or "Tell me the specific fact you'd like me to remember.",
+            risk=RiskLevel.LOW,
+            source="memory",
+            metadata={"declined_reason": "content_too_large"},
+        )
+    fact = _distilled
+
     # Infer importance from wording
     importance = (
         0.8
@@ -250,8 +312,11 @@ async def memory_op(
             logger.warning("[memory_op] fallback storage also failed: %s", fallback_exc)
 
     if success:
+        _msg = f"Remembered: *{fact}*"
+        if _distill_note:
+            _msg += f"\n\n(I {_distill_note} rather than storing the whole block.)"
         return ToolResult(
-            content=f"Remembered: *{fact}*",
+            content=_msg,
             risk=RiskLevel.LOW,
             source="memory",
             metadata={"fact": fact, "importance": importance},

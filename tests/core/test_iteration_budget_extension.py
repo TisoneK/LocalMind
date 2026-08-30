@@ -11,7 +11,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.agent.loop import _ITER_ABSOLUTE_CEILING, _iteration_budget_extendable
+from core.agent.loop import (
+    _DESCRIBE_TOOL_CREDIT_CAP,
+    _ITER_ABSOLUTE_CEILING,
+    _base_cap_reached,
+    _iteration_budget_extendable,
+)
 
 
 @dataclass
@@ -57,3 +62,34 @@ def test_absolute_ceiling_is_a_high_finite_runaway_guard() -> None:
     # A fixed, high ceiling: high enough that wall-clock binds first for a long
     # succeeding task, finite so the loop can never truly run away.
     assert 32 <= _ITER_ABSOLUTE_CEILING <= 1000
+
+
+# ── B-2026-08-30-2: describe_tool schema-loading is refunded from the cap ─────
+
+
+def test_no_credit_reaches_cap_normally() -> None:
+    # With zero on-demand tools loaded, the base cap behaves exactly as before.
+    assert _base_cap_reached(iteration=6, loaded_tool_count=0, effective_max_iter=6) is True
+    assert _base_cap_reached(iteration=5, loaded_tool_count=0, effective_max_iter=6) is False
+
+
+def test_describe_tool_load_refunds_an_iteration() -> None:
+    # The exact reported scenario: cap 6, but 2 tools (browse + web_fetch) were
+    # loaded via describe_tool. Those 2 iterations are overhead, so at iter 6 the
+    # ACTION count is 4 — the task must NOT be cut off.
+    assert _base_cap_reached(iteration=6, loaded_tool_count=2, effective_max_iter=6) is False
+    # It only trips once real action iterations reach the cap (6 + 2 credits = 8).
+    assert _base_cap_reached(iteration=8, loaded_tool_count=2, effective_max_iter=6) is True
+
+
+def test_credit_is_bounded() -> None:
+    # A describe_tool spam loop cannot buy unlimited budget — credit is capped,
+    # so the failsafe (and wall-clock) still terminate the run.
+    huge = _DESCRIBE_TOOL_CREDIT_CAP + 50
+    assert _base_cap_reached(
+        iteration=_DESCRIBE_TOOL_CREDIT_CAP + 6, loaded_tool_count=huge, effective_max_iter=6
+    ) is True
+
+
+def test_negative_count_is_safe() -> None:
+    assert _base_cap_reached(iteration=6, loaded_tool_count=-3, effective_max_iter=6) is True

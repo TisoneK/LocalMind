@@ -204,6 +204,10 @@ export interface AgentPhase {
   /** Iteration the phase fired at (1-indexed). Optional — some phases
    *  (plan_created) fire before iteration 1. */
   iteration?: number;
+  /** How many consecutive identical phases this entry collapses (B-2026-08-30-6).
+   *  Undefined/1 = a single occurrence; >1 renders as a "×N" run count so the
+   *  lifecycle shows one line instead of the same phase repeated per iteration. */
+  count?: number;
 }
 
 /** A single candidate in a best-of-N edit result (B-2026-08-09-12). */

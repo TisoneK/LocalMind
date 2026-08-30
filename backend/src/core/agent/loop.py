@@ -861,6 +861,30 @@ def same_tool_failure_streak(trace) -> tuple[int, str]:
 # fires; set high enough that wall-clock always binds first in practice.
 _ITER_ABSOLUTE_CEILING = 100
 
+# B-2026-08-30-2: max iterations "refunded" for on-demand tool loading.
+# describe_tool (ADR-40 option C) costs a whole iteration purely to pull ONE
+# tool's schema into context before the tool can be called — pure overhead, not
+# task progress. We credit one iteration per DISTINCT tool loaded on-demand this
+# run so schema-loading does not eat the failsafe budget (a weather lookup that
+# had to load `browse` + `web_fetch` docs was burning ~half its iterations on
+# describe_tool alone and hitting the cap). Bounded so a describe_tool spam loop
+# still terminates; the wall-clock cap and _ITER_ABSOLUTE_CEILING also bind.
+_DESCRIBE_TOOL_CREDIT_CAP = 8
+
+
+def _base_cap_reached(iteration: int, loaded_tool_count: int, effective_max_iter: int) -> bool:
+    """True when the failsafe base iteration cap is reached, AFTER refunding the
+    iterations spent purely on describe_tool schema-loading (B-2026-08-30-2).
+
+    ``loaded_tool_count`` is the number of DISTINCT tools loaded on-demand this
+    run (``len(loaded_tools)``); each cost an iteration to fetch a schema, which
+    is overhead, not task progress. Credit is bounded by _DESCRIBE_TOOL_CREDIT_CAP.
+    This only governs the base failsafe — the caller still applies the
+    progress-extension and wall-clock checks on top.
+    """
+    credits = min(max(loaded_tool_count, 0), _DESCRIBE_TOOL_CREDIT_CAP)
+    return (iteration - credits) >= effective_max_iter
+
 
 def _iteration_budget_extendable(trace) -> bool:
     """True if the run may continue past the base iteration cap.
@@ -2883,12 +2907,20 @@ class AgentLoop:
             # whose tools keep succeeding. A non-progressing run stops here at the
             # base cap (unchanged behavior); a succeeding run earns up to
             # _PROGRESS_EXTENSION_ITERS more, still bounded by the wall-clock cap.
-            if iteration >= _effective_max_iter and not _iteration_budget_extendable(trace):
+            # B-2026-08-30-2: the failsafe cap measures ACTION iterations —
+            # iterations spent purely on describe_tool schema-loading are
+            # refunded (see _base_cap_reached), so a task that must load a couple
+            # of long-tail tools still gets its full budget instead of hitting
+            # the cap on overhead.
+            if _base_cap_reached(
+                iteration, len(loaded_tools), _effective_max_iter
+            ) and not _iteration_budget_extendable(trace):
                 logger.info(
                     "[agent_loop] base iteration cap %d reached and not progressing "
-                    "(iter %d) — stopping",
+                    "(iter %d, describe_tool credits %d) — stopping",
                     _effective_max_iter,
                     iteration + 1,
+                    min(len(loaded_tools), _DESCRIBE_TOOL_CREDIT_CAP),
                 )
                 break
 

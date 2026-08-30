@@ -17,6 +17,7 @@
 
 import { memo } from 'react';
 import type { AgentPhase } from '../../types';
+import { collapseAdjacentPhases } from '@/hooks/useLocalMind';
 
 interface AgentPhasesProps {
   phases?: AgentPhase[];
@@ -75,9 +76,9 @@ function AgentPhasesBase({ phases, isStreaming }: AgentPhasesProps) {
       data-testid="agent-phases-strip"
     >
       <div className="flex flex-col gap-1.5">
-        {phases.map((phase, idx) => {
+        {collapseAdjacentPhases(phases).map((phase, idx, arr) => {
           const meta = PHASE_META[phase.type] || PHASE_META.plan_created;
-          const isLast = idx === phases.length - 1;
+          const isLast = idx === arr.length - 1;
           const isInProgress = isStreaming && isLast && (
             phase.type === 'gate_failed_replan' ||
             phase.type === 'orchestrator_replan_start' ||
@@ -100,6 +101,11 @@ function AgentPhasesBase({ phases, isStreaming }: AgentPhasesProps) {
                   {phase.iteration !== undefined && (
                     <span className="text-brand-green-faint text-[10px]">
                       iter {phase.iteration}
+                    </span>
+                  )}
+                  {phase.count && phase.count > 1 && (
+                    <span className="text-brand-green-faint text-[10px] tabular-nums" title={`${phase.count}× this turn`}>
+                      ×{phase.count}
                     </span>
                   )}
                 </div>
