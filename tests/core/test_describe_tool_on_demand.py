@@ -45,16 +45,16 @@ def test_tier_split_covers_catalog_exactly() -> None:
     catalog = {td["function"]["name"] for td in TOOL_DEFINITIONS}
     assert CORE_TOOL_NAMES | LONG_TAIL_TOOL_NAMES == catalog
     assert CORE_TOOL_NAMES.isdisjoint(LONG_TAIL_TOOL_NAMES)
-    assert len(CORE_TOOL_NAMES) == 16  # Session 400: +system_search, -find_path (retired to long-tail) — net zero
-    assert len(LONG_TAIL_TOOL_NAMES) == 17  # Session 400: +find_path (retired from core to on-demand)
-    # the ADR's named long tail is all present
-    for name in ("browse", "delegate", "sql", "csv", "json", "best_of_n_edit",
+    assert len(CORE_TOOL_NAMES) == 17  # B-2026-08-30-13: +browse (promoted to core)
+    assert len(LONG_TAIL_TOOL_NAMES) == 16  # B-2026-08-30-13: -browse (now core)
+    # the ADR's named long tail is all present (browse is now CORE, not long-tail)
+    for name in ("delegate", "sql", "csv", "json", "best_of_n_edit",
                  "propose_str_replace", "propose_write_file", "apply_proposed_edit",
                  "add_subgoal", "update_subgoal", "create_plan", "skill", "diagnostics"):
         assert name in LONG_TAIL_TOOL_NAMES
-    # the always-present core set from the task spec
+    # the always-present core set from the task spec (browse promoted in)
     for name in ("shell", "file_task", "file_write", "edit_file", "system_search",
-                 "web_search", "web_fetch", "code_exec", "git"):
+                 "web_search", "web_fetch", "code_exec", "git", "browse"):
         assert name in CORE_TOOL_NAMES
 
 
@@ -81,28 +81,29 @@ def test_composition_always_present_surface_is_core_plus_meta() -> None:
     # no long-tail tool leaks into the always-present surface
     assert set(names).isdisjoint(LONG_TAIL_TOOL_NAMES)
     assert names.count("describe_tool") == 1
-    # describe_tool's description advertises the on-demand index
-    assert "browse" in DESCRIBE_TOOL_DEFINITION["function"]["description"]
+    # describe_tool's description advertises the on-demand index (sql is a
+    # long-tail example — browse is CORE now, B-2026-08-30-13)
+    assert "sql" in DESCRIBE_TOOL_DEFINITION["function"]["description"]
     assert "delegate" in DESCRIBE_TOOL_DEFINITION["function"]["description"]
 
 
 def test_composition_loaded_tool_appears_with_full_schema() -> None:
-    composed = tool_defs_for_call(TOOL_DEFINITIONS, AGENT_ALLOWED_TOOLS, {"browse"})
+    composed = tool_defs_for_call(TOOL_DEFINITIONS, AGENT_ALLOWED_TOOLS, {"sql"})
     names = _names(composed)
-    assert "browse" in names
-    browse_def = next(td for td in composed if td["function"]["name"] == "browse")
-    assert browse_def == get_full_tool_def("browse"), "loaded schema must be the FULL def"
+    assert "sql" in names
+    sql_def = next(td for td in composed if td["function"]["name"] == "sql")
+    assert sql_def == get_full_tool_def("sql"), "loaded schema must be the FULL def"
     # core tools can never be duplicated by a load (git is core)
-    composed2 = tool_defs_for_call(TOOL_DEFINITIONS, AGENT_ALLOWED_TOOLS, {"browse", "git"})
+    composed2 = tool_defs_for_call(TOOL_DEFINITIONS, AGENT_ALLOWED_TOOLS, {"sql", "git"})
     assert _names(composed2).count("git") == 1
 
 
 def test_composition_respects_scope() -> None:
-    scope = frozenset({"shell", "file_task", "browse"})
+    scope = frozenset({"shell", "file_task", "sql"})
     scoped = [td for td in TOOL_DEFINITIONS if td["function"]["name"] in scope]
-    composed = tool_defs_for_call(scoped, scope, {"browse", "delegate"})
+    composed = tool_defs_for_call(scoped, scope, {"sql", "delegate"})
     names = _names(composed)
-    assert "browse" in names and "shell" in names and "file_task" in names
+    assert "sql" in names and "shell" in names and "file_task" in names
     assert "delegate" not in names, "a loaded tool outside the scope must not appear"
     assert "describe_tool" in names
 
@@ -122,12 +123,12 @@ def test_composition_after_load_is_monotonic_and_stable() -> None:
 
 @pytest.mark.asyncio
 async def test_describe_tool_loads_long_tail_schema() -> None:
-    result = await dispatch(Intent.DESCRIBE_TOOL, "browse")
+    result = await dispatch(Intent.DESCRIBE_TOOL, "sql")
     assert result is not None and result.success
-    assert result.metadata["loaded_tool"] == "browse"
-    assert result.metadata["chars"] > 500
+    assert result.metadata["loaded_tool"] == "sql"
+    assert result.metadata["chars"] > 100
     # the returned text contains the actual schema (params + required)
-    assert '"action"' in result.content
+    assert '"query"' in result.content
     assert '"required"' in result.content
 
 
@@ -140,10 +141,23 @@ async def test_describe_tool_core_tool_not_loaded() -> None:
 
 
 @pytest.mark.asyncio
+async def test_describe_tool_core_tool_does_not_redump_schema() -> None:
+    """B-2026-08-30-13: describe_tool on a CORE tool must NOT re-dump the full
+    schema (it's already in the tools list) — that ~3k dump for browse overflowed
+    the context window. Return a short 'call it directly' nudge instead."""
+    for name in ("browse", "web_fetch"):
+        result = await dispatch(Intent.DESCRIBE_TOOL, name)
+        assert result.success and result.metadata.get("already_loaded") is True
+        assert len(result.content) < 400, f"{name} describe result should be short"
+        assert '"enum"' not in result.content and '"parameters"' not in result.content
+        assert "directly" in result.content.lower()
+
+
+@pytest.mark.asyncio
 async def test_describe_tool_unknown_and_missing() -> None:
     unknown = await dispatch(Intent.DESCRIBE_TOOL, "nope")
     assert unknown is not None and not unknown.success and unknown.error_type == "not_found"
-    assert "browse" in unknown.content  # hints the available on-demand names
+    assert "sql" in unknown.content  # hints the available on-demand names
     missing = await dispatch(Intent.DESCRIBE_TOOL, "")
     assert missing is not None and not missing.success and missing.error_type == "validation_error"
 
@@ -173,14 +187,18 @@ def test_note_described_tool_uses_metadata_not_contextvar() -> None:
 
 
 class _OnDemandAdapter:
-    """Stub adapter: describe_tool on call 1, browse on call 2, final text."""
+    """Stub adapter: describe_tool on call 1, sql on call 2, final text.
+
+    Uses `sql` as the on-demand example — browse is CORE now (B-2026-08-30-13),
+    so it's always present and no longer exercises the describe_tool→load path.
+    """
 
     def __init__(self) -> None:
         self.calls = 0
         self.tools_seen: list[list[dict]] = []
 
     async def chat(self, messages, temperature=0.1, intent="chat"):
-        yield StreamChunk(text="STEPS:\n1. Load browse and open the page\n2. Answer\n")
+        yield StreamChunk(text="STEPS:\n1. Load sql and query the db\n2. Answer\n")
         return
 
     async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None, tool_choice=None):
@@ -189,14 +207,14 @@ class _OnDemandAdapter:
         from adapters.ollama import ToolCallResult
 
         if self.calls == 1:
-            return ToolCallResult(tool_name="describe_tool", tool_args={"tool_name": "browse"},
-                                  raw_content="browse is on-demand — loading it.")
+            return ToolCallResult(tool_name="describe_tool", tool_args={"tool_name": "sql"},
+                                  raw_content="sql is on-demand — loading it.")
         if self.calls == 2:
-            return ToolCallResult(tool_name="browse", tool_args={"action": "open", "url": "https://example.test"},
-                                  raw_content="Opening the page.")
+            return ToolCallResult(tool_name="sql", tool_args={"path": "data.db", "query": "SELECT 1"},
+                                  raw_content="Querying the db.")
 
         async def _stream():
-            yield StreamChunk(text="The page is open.", done=False)
+            yield StreamChunk(text="The query ran.", done=False)
             yield StreamChunk(text="", done=True)
 
         return _stream()
@@ -205,14 +223,14 @@ class _OnDemandAdapter:
 @pytest.mark.asyncio
 async def test_loop_loads_on_demand_tool_then_calls_it() -> None:
     adapter = _OnDemandAdapter()
-    browse_result = ToolResult(
-        content="Page loaded: example.test, title 'Example'", risk=RiskLevel.LOW,
-        source="browse", success=True,
+    sql_result = ToolResult(
+        content="1 row: (1,)", risk=RiskLevel.LOW,
+        source="sql", success=True,
     )
     describe_result = ToolResult(
-        content="Tool 'browse' is now LOADED — its full schema is below.\n\n{...}",
+        content="Tool 'sql' is now LOADED — its full schema is below.\n\n{...}",
         risk=RiskLevel.LOW, source="describe_tool", success=True,
-        metadata={"loaded_tool": "browse", "chars": 100},
+        metadata={"loaded_tool": "sql", "chars": 100},
     )
 
     from unittest.mock import patch
@@ -220,35 +238,35 @@ async def test_loop_loads_on_demand_tool_then_calls_it() -> None:
     async def _fake_dispatch(tool_intent, tool_input, **kwargs):
         if tool_intent == Intent.DESCRIBE_TOOL:
             return describe_result, False, 0
-        return browse_result, False, 0
+        return sql_result, False, 0
 
     with patch("core.agent.loop.dispatch_with_retry", side_effect=_fake_dispatch):
         chunks = [
             chunk
             async for chunk in AgentLoop(adapter=adapter).run(
-                messages=[{"role": "user", "content": "open example.test in a browser"}],
-                intent=Intent.BROWSE,
+                messages=[{"role": "user", "content": "query data.db"}],
+                intent=Intent.SQL,
                 initial_tool_result=None,
                 available_tools=[],
                 adapter=adapter,
             )
         ]
 
-    assert adapter.calls == 3, "describe_tool → browse → final answer"
+    assert adapter.calls == 3, "describe_tool → sql → final answer"
     names0 = [td["function"]["name"] for td in adapter.tools_seen[0]]
     names1 = [td["function"]["name"] for td in adapter.tools_seen[1]]
     names2 = [td["function"]["name"] for td in adapter.tools_seen[2]]
 
-    # call 1: browse NOT present (on-demand), describe_tool IS
-    assert "describe_tool" in names0 and "browse" not in names0
-    # call 2: browse is now present with its FULL schema
-    assert "browse" in names1
-    browse_def = next(td for td in adapter.tools_seen[1] if td["function"]["name"] == "browse")
-    assert browse_def == get_full_tool_def("browse")
+    # call 1: sql NOT present (on-demand), describe_tool IS
+    assert "describe_tool" in names0 and "sql" not in names0
+    # call 2: sql is now present with its FULL schema
+    assert "sql" in names1
+    sql_def = next(td for td in adapter.tools_seen[1] if td["function"]["name"] == "sql")
+    assert sql_def == get_full_tool_def("sql")
     # the load persists for the rest of the run
-    assert "browse" in names2
+    assert "sql" in names2
     # no duplicates — describe_tool appears exactly once in every tools param
     for names in (names0, names1, names2):
         assert names.count("describe_tool") == 1
-    assert "The page is open." in "".join(chunk.text for chunk in chunks)
+    assert "The query ran." in "".join(chunk.text for chunk in chunks)
     assert sum(chunk.done for chunk in chunks) == 1

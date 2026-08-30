@@ -37,11 +37,15 @@ def test_lean_catalog_size_budget() -> None:
     ~15,981 chars (~3,995 est tokens). Budget was 17,000; bumped to 18,500
     after Session 340 added web_research tool (~600 chars); bumped to 19,500
     after Session 400 added system_search (~1,000 chars trimmed to the bone —
-    a necessary new core tool, not prose creep). The lower bound guards
-    against an accidental empty/truncated catalog.
+    a necessary new core tool, not prose creep); bumped to 20,500 after
+    B-2026-08-30-13 promoted `browse` to CORE and gave it batch/read/extract/
+    links actions (the describe_tool round-trip that loaded ~3k of browse schema
+    every browse turn was blowing the context window — a lean always-present
+    schema is the fix, not prose creep). The lower bound guards against an
+    accidental empty/truncated catalog.
     """
     size = _catalog_chars()
-    assert 9_000 < size < 19_500, f"catalog size {size} outside the lean budget"
+    assert 9_000 < size < 20_500, f"catalog size {size} outside the lean budget"
 
 
 def test_all_tools_keep_callable_structure() -> None:

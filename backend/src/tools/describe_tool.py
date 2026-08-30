@@ -53,12 +53,15 @@ async def describe_tool(message: str) -> ToolResult:
         )
 
     if name in CORE_TOOL_NAMES:
-        td = get_full_tool_def(name)
-        schema = json.dumps(td, indent=2) if td is not None else "(no schema)"
+        # B-2026-08-30-13: do NOT re-dump the schema for a core tool — it is
+        # already in the model's tools list. Dumping ~2-3k chars here (browse
+        # was the worst offender) bloated context and could overflow the window.
+        # Return a short nudge to call it directly instead.
         return ToolResult(
             content=(
-                f"Tool {name!r} is ALWAYS loaded (a core tool) — you can call it "
-                f"directly, no describe_tool needed. Its schema for reference:\n\n{schema}"
+                f"Tool {name!r} is a CORE tool — it is already loaded and in your tools "
+                f"list. Call it DIRECTLY now; describe_tool is only for on-demand tools "
+                f"and wastes a step on core tools."
             ),
             risk=RiskLevel.LOW,
             source="describe_tool",

@@ -389,6 +389,11 @@ class TestClusterFVagueImperative:
         "Make the button green in index.html",
         "Build a todo app with Python and SQLite",
         "Use the shell tool to list the files",
+        # B-2026-08-30-14: a named tool/capability + web-navigation is concrete —
+        # "use browser, navigate to wikipedia" is actionable, NOT a vague ask.
+        "Use browser agent, navigate to wikipedia and do random browsing",
+        "Open reddit and browse the front page",
+        "use the browser to check the news",
         "Improve the system?",
         "Can you improve the system?",
         "Can you fix my project?",

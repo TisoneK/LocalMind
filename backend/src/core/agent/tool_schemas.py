@@ -96,12 +96,18 @@ CORE_TOOL_NAMES: frozenset[str] = frozenset(
         "observe",
         "calculator",
         "todo_write",  # ADR-43: agent-driven live UI todo checklist — always available
+        # B-2026-08-30-13 (ADR-40 amendment): browse promoted from the long tail
+        # to CORE. The describe_tool round-trip loaded ~3k chars of browse schema
+        # EVERY turn a browse task ran — it blew the context window and timed the
+        # turn out, and cost an extra iteration. The browser is now a first-class
+        # capability (see B-2026-08-30-3 revert / -10 / -11) meant to become the
+        # primary web tool, so its lean schema is always present, no docs load.
+        "browse",
     }
 )
 
 LONG_TAIL_TOOL_NAMES: frozenset[str] = frozenset(
     {
-        "browse",
         "find_path",  # Session 400: retired from the always-present surface (system_search is the front door) — kept on-demand for compatibility
         "delegate",
         "delegate_parallel",
@@ -198,14 +204,18 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "browse",
-            "description": "Drive a real headless browser: open, click, fill forms, type, press, scroll, screenshots, read text/DOM, inspect network + console, run JS. Page output may contain sensitive user or session data.",  # noqa: E501
+            "description": "Real browser for JS/interactive pages. 'open'/'read' navigate AND return the page text in one step. 'batch' runs a whole flow in ONE call (steps=[open,click,read]) — prefer it over many browse calls. 'extract' → JSON array for a CSS selector (attr=text|href|src|value); 'links' all links; 'snapshot' @e refs for click/fill; 'dom' HTML. For a plain text/JSON GET prefer web_fetch. May expose page data.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
                         "enum": [
+                            "batch",
                             "open",
+                            "read",
+                            "extract",
+                            "links",
                             "snapshot",
                             "click",
                             "fill",
@@ -228,13 +238,16 @@ TOOL_DEFINITIONS: list[dict] = [
                             "wait",
                         ],
                     },
-                    "url": {"type": "string", "description": "For open: URL to navigate to"},
-                    "ref": {"type": "string", "description": "Element reference such as @e1"},
-                    "selector": {"type": "string", "description": "For dom: CSS selector or element reference; defaults to html"},  # noqa: E501
+                    "url": {"type": "string", "description": "For open/read: URL to navigate to"},
+                    "steps": {"type": "array", "items": {"type": "object"}, "description": "For batch: action objects to run in order"},  # noqa: E501
+                    "ref": {"type": "string", "description": "Element reference such as @e1 (from snapshot)"},
+                    "selector": {"type": "string", "description": "For extract/dom: CSS selector"},
+                    "attr": {"type": "string", "description": "For extract: text|href|src|value|<attribute>"},
                     "value": {"type": "string", "description": "Text, key, script, or wait target depending on action"},
                     "script": {"type": "string", "description": "For eval: JavaScript to execute"},
                     "direction": {"type": "string", "enum": ["up", "down", "left", "right"]},
                     "amount": {"type": "integer"},
+                    "limit": {"type": "integer", "description": "For extract/links: max matches"},
                     "path": {"type": "string"},
                     "full": {"type": "boolean"},
                     "filter": {"type": "string", "description": "For network: URL pattern filter"},
@@ -244,6 +257,7 @@ TOOL_DEFINITIONS: list[dict] = [
                     "clear": {"type": "boolean", "description": "For network/console: clear captured entries after reading"},  # noqa: E501
                     "json": {"type": "boolean"},
                     "interactive": {"type": "boolean", "description": "For snapshot: interactive elements only (default true)"},  # noqa: E501
+                    "stop_on_error": {"type": "boolean", "description": "For batch: stop at first failed step (default true)"},  # noqa: E501
                 },
                 "required": ["action"],
             },
@@ -810,10 +824,9 @@ DESCRIBE_TOOL_DEFINITION: dict = {
             "Load the FULL usage schema for an ON-DEMAND tool before using it. "
             "The schema is loaded for the NEXT native step and persists for "
             "the rest of this run. "
-            "NEVER call this for core tools (shell, file_task, file_write, edit_file, "
-            "code_exec, web_search, web_fetch, git, sysinfo, find_path, memory_op) "
-            "— they already have their schemas loaded. Calling describe_tool "
-            "for a core tool wastes an iteration. "
+            "ONLY for the on-demand tools listed below. NEVER call this for a core "
+            "tool (" + ", ".join(sorted(CORE_TOOL_NAMES)) + ") — including browse — "
+            "they are already loaded; calling describe_tool on one wastes a step. "
             f"On-demand tools: {long_tail_tool_summary()}."
         ),
         "parameters": {
@@ -821,7 +834,7 @@ DESCRIBE_TOOL_DEFINITION: dict = {
             "properties": {
                 "tool_name": {
                     "type": "string",
-                    "description": "Name of the on-demand tool to load, e.g. 'browse'",
+                    "description": "Name of the on-demand tool to load, e.g. 'sql'",
                 },
             },
             "required": ["tool_name"],

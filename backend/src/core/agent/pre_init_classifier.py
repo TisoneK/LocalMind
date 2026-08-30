@@ -280,6 +280,10 @@ _VAGUE_EXCLUSION_RE = re.compile(
     r"|\b(?:files?|folders?|directories?|paths?|scripts?|code|functions?|classes?|apis?|databases?|dbs?|servers?|"
     r"frontend|backend|ui|react|python|javascript|typescript|node|django|flask|express|json|yaml|configs?|tests?|"
     r"git|url|http|install|packages?|weather|news|search|bugs?|errors?|crashes?|exceptions?|"
+    # B-2026-08-30-14: a named tool/capability or web-navigation cue makes the
+    # request concrete — "Use browser agent, navigate to wikipedia and browse"
+    # is actionable, not a vague imperative to clarify.
+    r"browse|browser|browsing|navigate|navigating|website|webpages?|web\s?page|wikipedia|links?|screenshots?|"
     r"shell|tool|terminal|command|workspace)\b)",
     re.IGNORECASE,
 )
