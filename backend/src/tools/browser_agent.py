@@ -58,6 +58,14 @@ _BROWSER_TIMEOUT = 30
 # Max output length to prevent context bloat
 _MAX_OUTPUT = 8000
 
+# Max actions in a single `batch` call. Batching many steps into ONE tool call
+# is the browser's key efficiency lever — a login-then-read flow costs one agent
+# iteration instead of N — but a runaway batch must still terminate.
+_MAX_BATCH_STEPS = 16
+
+# Ordering so a batch reports the HIGHEST risk any of its steps carried.
+_RISK_ORDER = {RiskLevel.LOW: 0, RiskLevel.MEDIUM: 1, RiskLevel.HIGH: 2}
+
 
 async def _run_browser_cmd(
     args: list[str], timeout: int = _BROWSER_TIMEOUT
@@ -276,6 +284,73 @@ async def browser_agent(message: str) -> ToolResult:
     args: list[str] = []
     risk = RiskLevel.LOW
 
+    # ── batch: run a sequence of actions in ONE tool call (efficiency) ────────
+    # A multi-step flow (open → wait → click → read) costs a single agent
+    # iteration instead of one per step, which is what stops the browse-then-
+    # thrash-to-the-iteration-cap failure. Steps run in order against the same
+    # persistent session; by default it stops at the first failed step.
+    if act in ("batch", "sequence", "steps"):
+        steps = action.get("steps") or action.get("actions") or []
+        if not isinstance(steps, list) or not steps:
+            return ToolResult(
+                content=(
+                    "batch requires a non-empty 'steps' list, e.g. "
+                    '{"action":"batch","steps":[{"action":"open","url":"https://x"},'
+                    '{"action":"click","ref":"@e2"},{"action":"read"}]}'
+                ),
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="invalid_batch",
+            )
+        if len(steps) > _MAX_BATCH_STEPS:
+            return ToolResult(
+                content=f"batch has {len(steps)} steps; the max is {_MAX_BATCH_STEPS}.",
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="batch_too_large",
+            )
+        stop_on_error = bool(action.get("stop_on_error", True))
+        parts: list[str] = []
+        highest_risk = RiskLevel.LOW
+        ran = 0
+        all_ok = True
+        for i, step in enumerate(steps, start=1):
+            if not isinstance(step, dict) or not str(step.get("action", "")).strip():
+                parts.append(f"[step {i}] SKIPPED — each step must be an object with an 'action'.")
+                all_ok = False
+                if stop_on_error:
+                    break
+                continue
+            if str(step.get("action", "")).strip().lower() in ("batch", "sequence", "steps"):
+                parts.append(f"[step {i}] SKIPPED — nested batch is not allowed.")
+                all_ok = False
+                if stop_on_error:
+                    break
+                continue
+            sub = await browser_agent(json.dumps(step))  # reuse full validation/dispatch
+            ran += 1
+            if _RISK_ORDER.get(sub.risk, 0) > _RISK_ORDER.get(highest_risk, 0):
+                highest_risk = sub.risk
+            label = str(step.get("action", "?"))
+            parts.append(f"[step {i}: {label}] {'OK' if sub.success else 'FAILED'}\n{sub.content}")
+            if not sub.success:
+                all_ok = False
+                if stop_on_error:
+                    break
+        combined = "\n\n".join(parts)
+        if len(combined) > _MAX_OUTPUT:
+            marker = "\n\n[... batch output truncated]"
+            combined = combined[: _MAX_OUTPUT - len(marker)] + marker
+        return ToolResult(
+            content=combined or "batch produced no output",
+            risk=highest_risk,
+            source="browser_agent",
+            success=all_ok,
+            metadata={"action": "batch", "steps": len(steps), "ran": ran},
+        )
+
     if act in ("open", "read", "content", "get_content", "read_content"):
         url = action.get("url", "")
         if not url and act == "open":
@@ -427,6 +502,59 @@ async def browser_agent(message: str) -> ToolResult:
         args = ["get", "html", selector.strip()]
         risk = RiskLevel.MEDIUM  # Rendered HTML may contain user or session data
 
+    elif act in ("extract", "query"):
+        # Structured extraction: return a JSON array of the chosen attribute for
+        # every element matching a CSS selector — one call gets ALL the matches
+        # (prices, rows, links) instead of a ref-by-ref crawl. Built on `eval`
+        # with the selector/attr embedded as JSON string literals (no injection).
+        selector = action.get("selector", action.get("ref", ""))
+        if not isinstance(selector, str) or not selector.strip():
+            return ToolResult(
+                content=(
+                    "extract requires a CSS 'selector', e.g. "
+                    '{"action":"extract","selector":"h2.title","attr":"text"}'
+                ),
+                risk=RiskLevel.LOW,
+                source="browser_agent",
+                success=False,
+                error_type="missing_selector",
+            )
+        attr = str(action.get("attr", "text")).strip().lower()
+        limit = action.get("limit", 200)
+        try:
+            limit = max(1, min(int(limit), 1000))
+        except (TypeError, ValueError):
+            limit = 200
+        attr_expr = {
+            "text": "e.innerText",
+            "html": "e.innerHTML",
+            "href": "e.href",
+            "src": "e.src",
+            "value": "e.value",
+        }.get(attr, f"e.getAttribute({json.dumps(attr)})")
+        sel_json = json.dumps(selector.strip())
+        script = (
+            f"JSON.stringify(Array.from(document.querySelectorAll({sel_json}))"
+            f".slice(0,{limit}).map(function(e){{return {attr_expr};}}))"
+        )
+        args = ["eval", script]
+        risk = RiskLevel.MEDIUM  # extracted content may include user/session data
+
+    elif act == "links":
+        # Convenience: every link on the page as {text, href} — common enough to
+        # not make the model hand-write the selector each time.
+        limit = action.get("limit", 200)
+        try:
+            limit = max(1, min(int(limit), 1000))
+        except (TypeError, ValueError):
+            limit = 200
+        script = (
+            "JSON.stringify(Array.from(document.querySelectorAll('a[href]'))"
+            f".slice(0,{limit}).map(function(a){{return {{text:(a.innerText||'').trim(), href:a.href}};}}))"
+        )
+        args = ["eval", script]
+        risk = RiskLevel.MEDIUM
+
     elif act == "network":
         args = ["network", "requests"]
         risk = RiskLevel.MEDIUM  # URLs/headers may expose tokens or personal data
@@ -490,9 +618,9 @@ async def browser_agent(message: str) -> ToolResult:
 
     else:
         supported = (
-            "open, read, snapshot, click, fill, type, press, scroll, scrollintoview, "
-            "screenshot, text, dom, network, console, url, title, eval, back, "
-            "forward, reload, close, wait"
+            "batch, open, read, extract, links, snapshot, click, fill, type, press, "
+            "scroll, scrollintoview, screenshot, text, dom, network, console, url, "
+            "title, eval, back, forward, reload, close, wait"
         )
         return ToolResult(
             content=f"Unknown browser action: '{act}'. Supported: {supported}",
@@ -548,15 +676,17 @@ register_tool(
     Intent.BROWSE,
     browser_agent,
     description=(
-        "Real browser interaction — navigate, click, fill forms, scroll, screenshot, "
-        "inspect DOM/network/console, and execute JS. To READ a page's content, use "
-        "action 'open' (or 'read') with the url: it navigates AND returns the page "
-        "text in one step — you do NOT open then separately read, and the content "
-        "comes back to you here, not just in the browser window. Use 'snapshot'/'dom' "
-        "only when you need interactive element refs or raw HTML. For a plain HTTP "
-        "GET of text/JSON (e.g. an API/weather endpoint), prefer web_fetch — the "
-        "browser is for JS-rendered or interactive pages. DOM/network/console may "
-        "expose page data. Uses agent-browser CLI."
+        "Real browser for JS-rendered / interactive pages. To READ content use "
+        "'open' (or 'read') with a url — it navigates AND returns the page text in "
+        "one step (comes back here, not just the window); no separate read needed. "
+        "EFFICIENCY: use 'batch' to run a whole flow in ONE call "
+        "(steps=[open, click, read]) instead of one tool call per step. "
+        "'extract' returns a JSON array for a CSS selector "
+        "(selector + attr=text|href|src|value|<attr>); "
+        "'links' returns all page links. 'snapshot' gives interactive element refs "
+        "(@e1) for click/fill; 'dom' gives raw HTML. For a plain HTTP GET of "
+        "text/JSON (e.g. a weather/API endpoint) prefer web_fetch. DOM/network/"
+        "console/extract may expose page data. Uses agent-browser CLI."
     ),
     cost=0.5,
     latency_ms=3000,

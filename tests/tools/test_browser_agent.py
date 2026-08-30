@@ -124,7 +124,9 @@ def test_browse_tool_is_registered():
     from tools import _REGISTRY
 
     assert Intent.BROWSE in _REGISTRY
-    assert "inspect DOM" in _REGISTRY[Intent.BROWSE]["description"]
+    desc = _REGISTRY[Intent.BROWSE]["description"]
+    # the advertised capabilities the model relies on to pick the right action
+    assert "batch" in desc and "extract" in desc and "web_fetch" in desc
 
 
 # ── B-2026-08-30: open/read return page CONTENT as evidence ──────────────────
@@ -203,3 +205,112 @@ def test_read_action_parses_from_natural_language():
         "action": "read",
         "url": "https://wttr.in/Nairobi?format=j1",
     }
+
+
+# ── batch + extract (advanced/efficient capabilities) ────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_batch_runs_steps_in_one_call(mock_browser):
+    """A whole flow runs in ONE tool call — one agent iteration, not N."""
+    payload = {
+        "action": "batch",
+        "steps": [
+            {"action": "open", "url": "https://example.com"},
+            {"action": "snapshot"},
+            {"action": "read"},
+        ],
+    }
+    result = await browser_module.browser_agent(json.dumps(payload))
+    assert result.success is True
+    assert result.metadata["action"] == "batch"
+    assert result.metadata["ran"] == 3
+    # every step is reported
+    assert "[step 1: open]" in result.content
+    assert "[step 2: snapshot]" in result.content
+    assert "[step 3: read]" in result.content
+
+
+@pytest.mark.asyncio
+async def test_batch_stops_on_first_failure_by_default(monkeypatch):
+    """stop_on_error (default) halts the flow at the first failed step."""
+    async def _run(args, timeout: int = 30):
+        # snapshot fails; anything before/after returns ok
+        if args[:1] == ["snapshot"]:
+            return 1, "", "boom"
+        return 0, "ok", ""
+
+    monkeypatch.setattr(browser_module, "BROWSER_AVAILABLE", True)
+    monkeypatch.setattr(browser_module, "_run_browser_cmd", _run)
+    payload = {
+        "action": "batch",
+        "steps": [
+            {"action": "open", "url": "https://x"},
+            {"action": "snapshot"},
+            {"action": "click", "ref": "@e1"},  # must NOT run
+        ],
+    }
+    result = await browser_module.browser_agent(json.dumps(payload))
+    assert result.success is False
+    assert result.metadata["ran"] == 2  # open + snapshot; click skipped
+    assert "[step 3" not in result.content
+
+
+@pytest.mark.asyncio
+async def test_batch_rejects_nested_batch(mock_browser):
+    payload = {"action": "batch", "steps": [{"action": "batch", "steps": []}]}
+    result = await browser_module.browser_agent(json.dumps(payload))
+    assert result.success is False
+    assert "nested batch" in result.content.lower()
+
+
+@pytest.mark.asyncio
+async def test_batch_requires_steps(mock_browser):
+    result = await browser_module.browser_agent(json.dumps({"action": "batch"}))
+    assert result.success is False
+    assert result.error_type == "invalid_batch"
+
+
+@pytest.mark.asyncio
+async def test_batch_caps_step_count(mock_browser):
+    steps = [{"action": "read"}] * (browser_module._MAX_BATCH_STEPS + 1)
+    result = await browser_module.browser_agent(json.dumps({"action": "batch", "steps": steps}))
+    assert result.success is False
+    assert result.error_type == "batch_too_large"
+
+
+@pytest.mark.asyncio
+async def test_extract_builds_selector_eval(mock_browser):
+    """extract compiles to an eval over querySelectorAll with the chosen attr."""
+    result = await browser_module.browser_agent(
+        json.dumps({"action": "extract", "selector": "h2.title", "attr": "href"})
+    )
+    assert result.success is True
+    assert mock_browser[0][0] == "eval"
+    script = mock_browser[0][1]
+    assert 'querySelectorAll("h2.title")' in script
+    assert "e.href" in script
+
+
+@pytest.mark.asyncio
+async def test_extract_requires_selector(mock_browser):
+    result = await browser_module.browser_agent(json.dumps({"action": "extract"}))
+    assert result.success is False
+    assert result.error_type == "missing_selector"
+
+
+@pytest.mark.asyncio
+async def test_extract_unknown_attr_uses_getattribute(mock_browser):
+    await browser_module.browser_agent(
+        json.dumps({"action": "extract", "selector": "a", "attr": "data-id"})
+    )
+    script = mock_browser[0][1]
+    assert 'getAttribute("data-id")' in script
+
+
+@pytest.mark.asyncio
+async def test_links_extracts_anchors(mock_browser):
+    result = await browser_module.browser_agent(json.dumps({"action": "links"}))
+    assert result.success is True
+    assert mock_browser[0][0] == "eval"
+    assert "a[href]" in mock_browser[0][1]
