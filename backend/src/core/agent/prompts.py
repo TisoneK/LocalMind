@@ -31,7 +31,7 @@ from __future__ import annotations
 from typing import Optional
 
 from core.agent.constants import MAX_ITERATIONS
-from core.agent.tool_schemas import render_tool_list
+from core.agent.tool_schemas import compact_tool_summary, render_tool_list
 from core.models import Intent
 
 
@@ -511,8 +511,11 @@ def build_agent_system_prompt(
         # The first native call must stay light. It only needs a capability
         # index so it can name a tool for describe_tool; sending every
         # registry description here recreates the old kitchen-sink prompt.
-        names = [str(t.get("intent", "")).strip() for t in available_tools if t.get("intent")]
-        compact_tool_list = ", ".join(dict.fromkeys(names))
+        # B-2026-08-30-17 Phase 1: a NAME-only list made the first tool choice
+        # blind to purpose (sysinfo picked for a weather query). Give a compact
+        # per-tool purpose summary so selection is informed from turn 1, while
+        # staying well below the full-schema kitchen sink.
+        compact_tool_list = compact_tool_summary()
         memory_section = ""
         if memory_facts:
             memory_section = (
@@ -530,8 +533,12 @@ naturally in plain text when no external evidence is needed, or use the native
 tool API when the request needs files, current information, code, or system
 state. Never fabricate tool results.
 
-Capability names:
+Available tools — pick the RIGHT one for the request (name: what it does):
 {compact_tool_list}
+Selection hints: current info (weather/news/prices) → web_search or web_fetch;
+find files on this computer → system_search; read a file → file_task; run a
+command → shell; system facts (CPU/RAM/disk) → sysinfo. Do NOT use sysinfo for
+web/weather questions.
 
 Core tools (shell, file_task, file_write, edit_file, system_search,
 web_search, web_fetch, web_research, code_exec, git, process, memory_op,

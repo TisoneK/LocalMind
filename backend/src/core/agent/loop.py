@@ -1797,11 +1797,19 @@ class AgentLoop:
         # ever added.
         def _current_tool_defs() -> list[dict]:
             _allowed = scoped_tools if scoped_tools is not None else AGENT_ALLOWED_TOOLS
+            # B-2026-08-30-16: the call-1 tool param ALWAYS includes core tools.
+            # Bootstrap used to send ONLY describe_tool, which forced a handshake
+            # round-trip — and for a CORE tool it caused an INFINITE describe_tool
+            # loop (live: the model wanted web_search, but with only describe_tool
+            # in the param it called describe_tool("web_search") 5x → iteration
+            # cap). Core tools are now present from turn 1 so the model calls them
+            # directly. The lighter bootstrap PROMPT (compact tool summary) is
+            # kept via `native_bootstrap`, independent of the tool surface.
             return tool_defs_for_call(
                 filtered_tools,
                 _allowed,
                 loaded_tools,
-                bootstrap_only=_parent_native_turn,
+                bootstrap_only=False,
             )
 
         # Scope the metadata tool list the same way so the system-prompt

@@ -141,3 +141,24 @@ def test_system_prompt_list_derived_from_tool_defs() -> None:
         if t["intent"] == "web_search" and "web_search" in t["description"]:
             old_line = f"  - web_search: {t['description']}"
             assert old_line not in prompt, "stale metadata description still injected"
+
+
+# ── B-2026-08-30-17 Phase 1: complete tool summary for the first-call prompt ──
+
+
+def test_compact_tool_summary_covers_all_tools_with_purpose() -> None:
+    """Every tool in the catalog gets a `- name: purpose` line so the parent's
+    FIRST tool choice is informed (not name-only). Pins that the reflex-prone
+    tools carry a distinguishing purpose and the summary stays compact."""
+    from core.agent.tool_schemas import compact_tool_summary
+
+    summary = compact_tool_summary()
+    names = {td["function"]["name"] for td in TOOL_DEFINITIONS}
+    for name in names:
+        assert f"- {name}:" in summary, f"{name} missing from the tool summary"
+    # the tools the model confused (sysinfo vs web/search) must carry a purpose
+    for name in ("web_fetch", "web_search", "system_search", "sysinfo"):
+        line = next(ln for ln in summary.splitlines() if ln.startswith(f"- {name}:"))
+        assert len(line) > len(f"- {name}: ") + 8, f"{name} purpose too short"
+    # compact: a per-tool summary, not the full-schema kitchen sink
+    assert len(summary) < 4000, f"summary too large ({len(summary)} chars)"

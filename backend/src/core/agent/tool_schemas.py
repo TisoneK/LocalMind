@@ -808,6 +808,33 @@ def long_tail_tool_summary() -> str:
     return ", ".join(sorted(LONG_TAIL_TOOL_NAMES))
 
 
+def compact_tool_summary() -> str:
+    """One short ``- name: purpose`` line per tool for the ENTIRE catalog (core
+    AND long-tail), for the first-call / bootstrap prompt.
+
+    B-2026-08-30-17 (Phase 1): the parent's FIRST tool choice used to be made
+    from bare tool NAMES only — it grabbed `sysinfo` for a *weather* query
+    because nothing told it `web_fetch`/`web_search` are the web tools. This
+    gives every tool's PURPOSE up front so selection is informed from turn 1,
+    while staying far below the full-schema "kitchen sink" (first clause of each
+    description, ~one line each; ~2.6k chars for the whole catalog).
+    """
+    import re as _re
+
+    lines: list[str] = []
+    for td in TOOL_DEFINITIONS:
+        fn = td.get("function", {})
+        name = fn.get("name", "")
+        if not name:
+            continue
+        desc = str(fn.get("description", "")).strip()
+        clause = _re.split(r"(?<=[.!?])\s|—|;\s", desc)[0]
+        if len(clause) > 84:
+            clause = clause[:84].rsplit(" ", 1)[0] + "…"
+        lines.append(f"- {name}: {clause.rstrip('.,')}")
+    return "\n".join(lines)
+
+
 def get_full_tool_def(name: str) -> dict | None:
     """Return the full tool definition for `name`, or None if unknown."""
     for td in TOOL_DEFINITIONS:
