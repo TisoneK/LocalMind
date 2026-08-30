@@ -47,7 +47,10 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "backend"
-VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
+if sys.platform == "win32":
+    VENV_PY = str(BACKEND / ".venv" / "Scripts" / "python.exe")
+else:
+    VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
 SCRATCH = REPO / "scratch"
 TRACEHOME = SCRATCH / "suite-home"
 PORT = 8765
@@ -651,6 +654,23 @@ TESTS: list[dict] = [
 # ══════════════════════════════════════════════════════════════════════════════
 
 
+def _kill_stale_port() -> None:
+    """Kill anything still listening on PORT (stale server from a crashed run)."""
+    if sys.platform == "win32":
+        try:
+            out = subprocess.run(["netstat", "-ano", "-p", "TCP"],
+                                 capture_output=True, text=True).stdout
+            pids = {ln.split()[-1] for ln in out.splitlines()
+                    if f":{PORT}" in ln and "LISTENING" in ln}
+            for pid in pids:
+                if pid.isdigit() and pid != "0":
+                    subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True)
+        except Exception:
+            pass
+    else:
+        subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={PORT}"], capture_output=True)
+
+
 def boot_server(log_file: Path) -> subprocess.Popen:
     env = os.environ.copy()
     env.update({
@@ -659,10 +679,13 @@ def boot_server(log_file: Path) -> subprocess.Popen:
         "LOCALMIND_SHELL_ENABLED": "true",
         "PYTHONPATH": str(BACKEND / "src"),
     })
+    popen_kwargs: dict = {}
+    if sys.platform != "win32":
+        popen_kwargs["preexec_fn"] = os.setsid
     proc = subprocess.Popen(
         [VENV_PY, "server.py"], cwd=str(BACKEND), env=env,
         stdout=open(log_file, "wb"), stderr=subprocess.STDOUT,
-        preexec_fn=os.setsid,
+        **popen_kwargs,
     )
     for _ in range(60):
         try:
@@ -897,7 +920,7 @@ def main() -> int:
         seed_fixtures()
 
     log_file = SCRATCH / f"server-suite-{args.label}.log"
-    subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={PORT}"], capture_output=True)
+    _kill_stale_port()
     time.sleep(1)
 
     print(f"[boot] starting server on port {PORT} (home: {TRACEHOME})")
@@ -922,7 +945,7 @@ def main() -> int:
             os.killpg(os.getpgid(srv.pid), signal.SIGKILL)
         except Exception:
             srv.kill()
-        subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={PORT}"], capture_output=True)
+        _kill_stale_port()
 
     # ── Summary ──────────────────────────────────────────────────────────────
     out_file.write_text(json.dumps(results, indent=1), encoding="utf-8")
