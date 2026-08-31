@@ -2532,12 +2532,19 @@ class AgentLoop:
 
         # Build the parent execution prompt with plan context, memory facts,
         # and any caller-provided routing hint
+        # LocalMind Caching (2026-08-31): the STABLE system prompt must be
+        # byte-identical across calls so the provider caches it (and cached vs.
+        # input tokens count cleanly). Tool descriptions stay here (stable);
+        # skills are NOT here (planner-only); and the two dynamic inputs that
+        # used to leak in — memory_facts and intent_history — are moved to the
+        # trailing turn_context message below. So this prompt = identity +
+        # instructions + tool descriptions only.
         system_prompt = build_agent_system_prompt(
             intent=intent,
             available_tools=scoped_available,
-            intent_history=intent_history,
+            intent_history=None,
             plan_context=plan_context if plan_context else None,
-            memory_facts=memory_facts,
+            memory_facts=None,
             orchestrator_context=orchestrator_context,
             agent_context=agent_context,
             # ADR-40: render the in-prompt "Available tools" list from the SAME
@@ -2619,6 +2626,16 @@ class AgentLoop:
         turn_context_parts = [
             _build_environment_context(include_tool_list=False, session_id=session_id)
         ]
+        # LocalMind Caching (2026-08-31): memory + intent history are DYNAMIC
+        # (they change per retrieval/turn), so they live here in the trailing
+        # turn-context — NOT in the cacheable system prefix above.
+        if memory_facts:
+            turn_context_parts.append(
+                "What you know about this user:\n"
+                + "\n".join(f"- {f}" for f in memory_facts)
+            )
+        if intent_history:
+            turn_context_parts.append("Recent intent history: " + ", ".join(intent_history))
         if workspace_context:
             turn_context_parts.append(workspace_context)
         # Session 359: inject the session's CURRENT todo list (persisted from
