@@ -3,9 +3,12 @@
 from __future__ import annotations
 import json, os, shutil, subprocess, sys, time, urllib.request, urllib.parse
 from pathlib import Path
-PORT = "8765"; SC = Path("/tmp/lm-empty-debug"); TH = SC / "tracehome"
-BACKEND = Path("/home/z/my-project/LocalMind/backend")
-VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
+from harness_common import venv_python
+
+REPO = Path(__file__).resolve().parent.parent
+PORT = "8765"; SC = REPO / "scratch" / "lm-empty-debug"; TH = SC / "tracehome"
+BACKEND = REPO / "backend"
+VENV_PY = venv_python(BACKEND)
 ZAI_KEY = "a9fa08105a9a4127805da89d23da59f0.j51uE0L0dw2H1rV6"
 if SC.exists(): shutil.rmtree(SC)
 SC.mkdir(parents=True); TH.mkdir(parents=True)

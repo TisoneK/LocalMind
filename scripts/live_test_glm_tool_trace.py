@@ -23,11 +23,13 @@ from pathlib import Path
 from collections import Counter
 
 PORT = "8765"
-SC = Path("/tmp/lm-glm-tool-trace")
+REPO = Path(__file__).resolve().parent.parent
+SC = REPO / "scratch" / "lm-glm-tool-trace"
 TH = SC / "tracehome"
-PROJ = Path("/home/z/my-project/LocalMind")
-BACKEND = PROJ / "backend"
-VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
+BACKEND = REPO / "backend"
+from harness_common import venv_python
+
+VENV_PY = venv_python(BACKEND)
 
 # API keys from the user's chat message — never print these.
 KEYS = {
@@ -211,7 +213,7 @@ def main():
                 print(f"  has_shell_call: {result.get('has_shell_call')}")
                 print(f"  final_text: {result.get('final_text', '')[:200]!r}")
                 # Save the trace for analysis
-                shutil.copy(SC / "trace.log", PROJ / "scripts" / f"trace-{provider}.log")
+                shutil.copy(SC / "trace.log", REPO / "scripts" / f"trace-{provider}.log")
                 return 1
         else:
             reason = result.get("reason", "unknown")
@@ -220,7 +222,7 @@ def main():
                 continue  # try next provider
             # Save log for debugging
             try:
-                shutil.copy(SC / "trace.log", PROJ / "scripts" / f"boot-fail-{provider}.log")
+                shutil.copy(SC / "trace.log", REPO / "scripts" / f"boot-fail-{provider}.log")
             except Exception:
                 pass
     print("\n[FAIL] no provider produced a clean tool trace")

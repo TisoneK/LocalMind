@@ -6,9 +6,11 @@ from __future__ import annotations
 import json, os, shutil, subprocess, sys, time, urllib.request, urllib.parse
 from pathlib import Path
 
-PORT = "8765"; SC = Path("/tmp/lm-cheptais"); TH = SC / "tracehome"
-BACKEND = Path("/home/z/my-project/LocalMind/backend")
-VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
+PORT = "8765"; SC = Path(__file__).resolve().parent.parent / "scratch" / "lm-cheptais"; TH = SC / "tracehome"
+BACKEND = Path(__file__).resolve().parent.parent / "backend"
+from harness_common import venv_python
+
+VENV_PY = venv_python(BACKEND)
 ZAI_KEY = "a9fa08105a9a4127805da89d23da59f0.j51uE0L0dw2H1rV6"
 
 if SC.exists(): shutil.rmtree(SC)

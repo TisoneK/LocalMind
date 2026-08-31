@@ -29,11 +29,13 @@ from pathlib import Path
 # ── Hard rules ──────────────────────────────────────────────────────────────
 # Never touch port 8000. Never print API-key values. Isolate LOCALMIND_HOME.
 PORT = "8765"
-SC = Path("/tmp/lm-session305-scratch")
+REPO = Path(__file__).resolve().parent.parent
+SC = REPO / "scratch" / "lm-session305-scratch"
 TH = SC / "tracehome"
-PROJ = Path("/home/z/my-project/LocalMind")
-BACKEND = PROJ / "backend"
-VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
+BACKEND = REPO / "backend"
+from harness_common import venv_python
+
+VENV_PY = venv_python(BACKEND)
 
 # z.ai API key from the user's chat message — never print it.
 ZAI_KEY = "a9fa08105a9a4127805da89d23da59f0.j51uE0L0dw2H1rV6"

@@ -31,6 +31,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from harness_common import kill_port, kill_process_tree, venv_python
+
 # Derive the repo root from this script's location (scripts/ is at the repo
 # root) so the harness runs on any machine — not a hardcoded sandbox path.
 # Override with LOCALMIND_REPO if the layout ever differs.
@@ -38,8 +40,7 @@ _repo_env = os.environ.get("LOCALMIND_REPO", "").strip()
 REPO = Path(_repo_env).expanduser() if _repo_env else Path(__file__).resolve().parent.parent
 BACKEND = REPO / "backend"
 # Prefer the platform-correct venv python; fall back to the current interpreter.
-_VENV_PY = BACKEND / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-VENV_PY = str(_VENV_PY) if _VENV_PY.exists() else sys.executable
+VENV_PY = venv_python(BACKEND)
 SCRATCH = REPO / "scratch"
 TRACEHOME = SCRATCH / "syssearch-home"
 
@@ -74,9 +75,8 @@ def boot_server(port: int, log_file: Path) -> subprocess.Popen:
         env=env,
         stdout=log_fh,
         stderr=subprocess.STDOUT,
-        # start_new_session puts the server in its own process group (via setsid
-        # in the child) so we can killpg the whole tree later — thread-safe,
-        # unlike preexec_fn=os.setsid.
+        # start_new_session puts the server in its own process group so we can
+        # kill the whole tree later — thread-safe, unlike preexec_fn=os.setsid.
         start_new_session=True,
     )
     for _ in range(45):
@@ -204,7 +204,7 @@ def main() -> int:
     TRACEHOME.mkdir(parents=True, exist_ok=True)
     log_file = SCRATCH / f"server-syssearch-{args.label}.log"
 
-    subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={args.port}"], capture_output=True, check=False)
+    kill_port(args.port)
     time.sleep(1)
 
     srv = boot_server(args.port, log_file)
@@ -249,12 +249,7 @@ def main() -> int:
             )
             time.sleep(args.cooldown)
     finally:
-        try:
-            os.killpg(os.getpgid(srv.pid), 15)
-        except OSError:
-            # ProcessLookupError (already gone) or similar — fall back to a
-            # direct kill of the leader.
-            srv.kill()
+        kill_process_tree(srv)
 
     out_file = SCRATCH / f"results-syssearch-{args.label}.json"
     out_file.write_text(json.dumps(results, indent=2), encoding="utf-8")

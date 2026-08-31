@@ -33,7 +33,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 BACKEND = REPO / "backend"
-VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
+from harness_common import kill_port, kill_process_tree, server_popen_kwargs, venv_python
+
+VENV_PY = venv_python(BACKEND)
 SCRATCH = REPO / "scratch"
 TRACEHOME = SCRATCH / "field-home"
 
@@ -103,7 +105,7 @@ def boot_server(port: int, log_file: Path) -> subprocess.Popen:
         env=env,
         stdout=open(log_file, "wb"),
         stderr=subprocess.STDOUT,
-        preexec_fn=os.setsid,
+        **server_popen_kwargs(),
     )
     for _ in range(45):
         try:
@@ -231,7 +233,7 @@ def main() -> int:
     TRACEHOME.mkdir(parents=True, exist_ok=True)
     log_file = SCRATCH / f"server-field-{args.label}.log"
 
-    subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={args.port}"], capture_output=True)
+    kill_port(args.port)
     time.sleep(1)
 
     srv = boot_server(args.port, log_file)
@@ -274,10 +276,7 @@ def main() -> int:
                 results.append(run_prompt(args.port, name, prompt, category, args.label))
                 time.sleep(args.cooldown)
     finally:
-        try:
-            os.killpg(os.getpgid(srv.pid), 15)
-        except Exception:
-            srv.kill()
+        kill_process_tree(srv)
 
     out_file = SCRATCH / f"results-field-{args.label}.json"
     out_file.write_text(json.dumps(results, indent=2), encoding="utf-8")

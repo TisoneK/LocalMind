@@ -19,9 +19,11 @@ import time
 import urllib.request
 from pathlib import Path
 
-REPO = Path("/home/z/my-project/localmind")
+REPO = Path(__file__).resolve().parent.parent
 BACKEND = REPO / "backend"
-VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
+from harness_common import kill_port, kill_process_tree, server_popen_kwargs, venv_python
+
+VENV_PY = venv_python(BACKEND)
 SCRATCH = REPO / "scratch"
 TRACEHOME = SCRATCH / "tracehome"
 SETTINGS = TRACEHOME / "settings.json"
@@ -56,7 +58,7 @@ def boot_server(port: int, log_file: Path) -> subprocess.Popen:
         env=env,
         stdout=open(log_file, "wb"),
         stderr=subprocess.STDOUT,
-        preexec_fn=os.setsid,
+        **server_popen_kwargs(),
     )
     # Wait for /api/health
     for _ in range(45):
@@ -213,7 +215,7 @@ def main():
     log_file = SCRATCH / f"server-{args.label}.log"
 
     # Kill any leftover
-    subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={port}"], check=False)
+    kill_port(port)
     time.sleep(1)
 
     print(f"[boot] starting server on port {port}, log → {log_file}")
@@ -251,13 +253,8 @@ def main():
 
     finally:
         if proc is not None:
-            try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                time.sleep(1)
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except Exception:
-                pass
-        subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={port}"], check=False)
+            kill_process_tree(proc)
+        kill_port(port)
 
 
 if __name__ == "__main__":

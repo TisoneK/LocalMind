@@ -21,11 +21,13 @@ from collections import Counter
 
 # ── Hard rules ──────────────────────────────────────────────────────────────
 PORT = "8765"
-SC = Path("/tmp/lm-audit-313")
+REPO = Path(__file__).resolve().parent.parent
+SC = REPO / "scratch" / "lm-audit-313"
 TH = SC / "tracehome"
-PROJ = Path("/home/z/my-project/LocalMind")
-BACKEND = PROJ / "backend"
-VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
+BACKEND = REPO / "backend"
+from harness_common import venv_python
+
+VENV_PY = venv_python(BACKEND)
 ZAI_KEY = "a9fa08105a9a4127805da89d23da59f0.j51uE0L0dw2H1rV6"
 
 # Results store

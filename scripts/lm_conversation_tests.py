@@ -37,9 +37,11 @@ from pathlib import Path
 
 # Portable repo layout — resolves on any checkout (unlike the hardcoded
 # /home/z paths in the older scripts).
+from harness_common import kill_port, kill_process_tree, server_popen_kwargs, venv_python
+
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "backend"
-VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
+VENV_PY = venv_python(BACKEND)
 SCRATCH = REPO / "scratch"
 TRACEHOME = SCRATCH / "tracehome"
 DEFAULT_SETTINGS = Path.home() / "LocalMind" / "settings.json"
@@ -300,7 +302,7 @@ def boot_server(port: int, log_file: Path) -> subprocess.Popen:
         env=env,
         stdout=open(log_file, "wb"),
         stderr=subprocess.STDOUT,
-        preexec_fn=os.setsid,
+        **server_popen_kwargs(),
     )
     for _ in range(60):
         try:
@@ -496,7 +498,7 @@ def main():
 
     port = 8765
     log_file = SCRATCH / "server-conversations.log"
-    subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={port}"], check=False)
+    kill_port(port)
     time.sleep(1)
 
     print(f"[boot] starting server on port {port} (venv: {VENV_PY})")
@@ -516,13 +518,8 @@ def main():
         print(f"\n[abort] KeyboardInterrupt — saved {len(results)} partial results")
     finally:
         if proc is not None:
-            try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                time.sleep(1)
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except Exception:
-                pass
-        subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={port}"], check=False)
+            kill_process_tree(proc)
+        kill_port(port)
 
     out = SCRATCH / f"conversations-{int(time.time())}.json"
     out.write_text(json.dumps(results, indent=2), encoding="utf-8")

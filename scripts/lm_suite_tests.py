@@ -47,10 +47,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "backend"
-if sys.platform == "win32":
-    VENV_PY = str(BACKEND / ".venv" / "Scripts" / "python.exe")
-else:
-    VENV_PY = str(BACKEND / ".venv" / "bin" / "python")
+from harness_common import kill_port, kill_process_tree, server_popen_kwargs, venv_python
+
+VENV_PY = venv_python(BACKEND)
 SCRATCH = REPO / "scratch"
 TRACEHOME = SCRATCH / "suite-home"
 PORT = 8765
@@ -656,19 +655,7 @@ TESTS: list[dict] = [
 
 def _kill_stale_port() -> None:
     """Kill anything still listening on PORT (stale server from a crashed run)."""
-    if sys.platform == "win32":
-        try:
-            out = subprocess.run(["netstat", "-ano", "-p", "TCP"],
-                                 capture_output=True, text=True).stdout
-            pids = {ln.split()[-1] for ln in out.splitlines()
-                    if f":{PORT}" in ln and "LISTENING" in ln}
-            for pid in pids:
-                if pid.isdigit() and pid != "0":
-                    subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True)
-        except Exception:
-            pass
-    else:
-        subprocess.run(["pkill", "-f", f"LOCALMIND_PORT={PORT}"], capture_output=True)
+    kill_port(PORT)
 
 
 def boot_server(log_file: Path) -> subprocess.Popen:
@@ -679,13 +666,10 @@ def boot_server(log_file: Path) -> subprocess.Popen:
         "LOCALMIND_SHELL_ENABLED": "true",
         "PYTHONPATH": str(BACKEND / "src"),
     })
-    popen_kwargs: dict = {}
-    if sys.platform != "win32":
-        popen_kwargs["preexec_fn"] = os.setsid
     proc = subprocess.Popen(
         [VENV_PY, "server.py"], cwd=str(BACKEND), env=env,
         stdout=open(log_file, "wb"), stderr=subprocess.STDOUT,
-        **popen_kwargs,
+        **server_popen_kwargs(),
     )
     for _ in range(60):
         try:
@@ -939,12 +923,7 @@ def main() -> int:
     except KeyboardInterrupt:
         print("\n[abort] partial results saved")
     finally:
-        try:
-            os.killpg(os.getpgid(srv.pid), signal.SIGTERM)
-            time.sleep(1)
-            os.killpg(os.getpgid(srv.pid), signal.SIGKILL)
-        except Exception:
-            srv.kill()
+        kill_process_tree(srv)
         _kill_stale_port()
 
     # ── Summary ──────────────────────────────────────────────────────────────
