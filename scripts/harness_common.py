@@ -16,6 +16,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import os
 import signal
 import subprocess
@@ -24,6 +25,25 @@ import time
 from pathlib import Path
 
 IS_WINDOWS = sys.platform == "win32"
+
+
+def provider_key(provider: str) -> str:
+    """Read a provider API key without ever printing or logging it.
+
+    Order: env var <PROVIDER>_API_KEY (e.g. ZAI_API_KEY), then the app's
+    settings file (~/LocalMind/settings.json -> api_keys[provider]).
+    Returns "" when no key is configured - callers must fail fast on that
+    (a missing credential is a missing input, never a hardcoded literal).
+    """
+    val = os.environ.get(f"{provider.upper()}_API_KEY", "")
+    if val:
+        return val
+    settings = Path.home() / "LocalMind" / "settings.json"
+    try:
+        keys = json.loads(settings.read_text(encoding="utf-8")).get("api_keys", {})
+        return keys.get(provider, "") or ""
+    except Exception:
+        return ""
 
 
 def venv_python(backend: Path) -> str:

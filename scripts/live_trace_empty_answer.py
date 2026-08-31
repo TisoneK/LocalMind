@@ -3,13 +3,15 @@
 from __future__ import annotations
 import json, os, shutil, subprocess, sys, time, urllib.request, urllib.parse
 from pathlib import Path
-from harness_common import venv_python
+from harness_common import provider_key, venv_python
 
 REPO = Path(__file__).resolve().parent.parent
 PORT = "8765"; SC = REPO / "scratch" / "lm-empty-debug"; TH = SC / "tracehome"
 BACKEND = REPO / "backend"
 VENV_PY = venv_python(BACKEND)
-ZAI_KEY = "a9fa08105a9a4127805da89d23da59f0.j51uE0L0dw2H1rV6"
+ZAI_KEY = provider_key("zai")  # env ZAI_API_KEY or ~/LocalMind/settings.json - never printed
+if not ZAI_KEY:
+    sys.exit("ERROR: no zai key in env (ZAI_API_KEY) or ~/LocalMind/settings.json")
 if SC.exists(): shutil.rmtree(SC)
 SC.mkdir(parents=True); TH.mkdir(parents=True)
 (TH / "settings.json").write_text(json.dumps({"adapter":"zai","model":"glm-4.5-flash","thinking":"enabled","reasoning_effort":"low","shell_enabled":True,"api_keys":{"zai":ZAI_KEY}}))

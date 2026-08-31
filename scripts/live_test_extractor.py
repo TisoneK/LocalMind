@@ -14,11 +14,12 @@ REPO = Path(__file__).resolve().parent.parent
 SC = REPO / "scratch" / "lm-extractor-live"
 TH = SC / "tracehome"
 BACKEND = REPO / "backend"
-from harness_common import venv_python
+from harness_common import provider_key, venv_python
 
 VENV_PY = venv_python(BACKEND)
-ZAI_KEY = "a9fa08105a9a4127805da89d23da59f0.j51uE0L0dw2H1rV6"
-
+ZAI_KEY = provider_key("zai")  # env ZAI_API_KEY or ~/LocalMind/settings.json - never printed
+if not ZAI_KEY:
+    sys.exit("ERROR: no zai key in env (ZAI_API_KEY) or ~/LocalMind/settings.json")
 def setup():
     if SC.exists(): shutil.rmtree(SC)
     SC.mkdir(parents=True); TH.mkdir(parents=True)

@@ -27,16 +27,21 @@ REPO = Path(__file__).resolve().parent.parent
 SC = REPO / "scratch" / "lm-glm-tool-trace"
 TH = SC / "tracehome"
 BACKEND = REPO / "backend"
-from harness_common import venv_python
+from harness_common import provider_key, venv_python
 
 VENV_PY = venv_python(BACKEND)
 
-# API keys from the user's chat message — never print these.
-KEYS = {
-    "zai": ("a9fa08105a9a4127805da89d23da59f0.j51uE0L0dw2H1rV6", "glm-4.5-flash"),
-    "zen": ("sk-nm1fjrywWtjADgniEcddUZlZ1Ol3pQBiEzdFikO8wZ4bCKyijRrWahPCqMQQgv3G", "hy3-free"),
-    "deepseek": ("sk-2beef2a502f0469b95807d346187dda8", "deepseek-chat"),
-}
+# Keys resolved at runtime via provider_key() (env or settings.json) -
+# never hardcoded, never printed.
+MODELS = {"zai": "glm-4.5-flash", "zen": "hy3-free", "deepseek": "deepseek-chat"}
+
+
+class _Keys:
+    def __getitem__(self, provider: str):
+        return (provider_key(provider), MODELS[provider])
+
+
+KEYS = _Keys()
 
 # Try providers in order; first that succeeds wins.
 PROVIDER_ORDER = ["zai", "zen", "deepseek"]
@@ -193,6 +198,9 @@ def run_trace(provider: str, model: str) -> dict:
 
 def main():
     for provider in PROVIDER_ORDER:
+        if not provider_key(provider):
+            print(f"\n[skip] {provider}: no key in env/settings")
+            continue
         model = KEYS[provider][1]
         result = run_trace(provider, model)
         if result.get("ok"):
