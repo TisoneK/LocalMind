@@ -94,3 +94,21 @@ def test_no_system_section_when_cache_unset():
 
     set_cached_summary("")
     assert _system_env_line() == ""
+
+
+def test_cached_summary_injected_into_chat_prompt():
+    """A system question routed to conversation mode (Intent.CHAT) also carries
+    the system summary, so the agent answers from it without a tool."""
+    from core.agent.prompts import build_agent_system_prompt
+    from core.models import Intent
+    from core.system_snapshot import set_cached_summary
+    from tools import available_tools
+
+    set_cached_summary("System: TestOS 9, arm64, 8 CPUs, 16 GB RAM, 500 GB disk")
+    try:
+        prompt = build_agent_system_prompt(
+            intent=Intent.CHAT, available_tools=available_tools(), tool_defs=None,
+        )
+        assert "16 GB RAM" in prompt and "TestOS 9" in prompt
+    finally:
+        set_cached_summary("")

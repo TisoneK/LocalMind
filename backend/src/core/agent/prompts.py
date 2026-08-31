@@ -594,8 +594,10 @@ XML tool calls or expose internal reasoning.
                 + "\n"
             )
 
+        _sys_conv = _system_env_line()
+        system_section = f"\n{_sys_conv}\n" if _sys_conv else ""
         return f"""You are LocalMind — a local AI assistant running on the user's machine. You are thoughtful, direct, and genuinely helpful. You remember things about this user and use that knowledge to be more useful.
-{memory_section}{intent_ctx}
+{system_section}{memory_section}{intent_ctx}
 HOW TO RESPOND:
 - Answer from your knowledge. Do NOT call any tools — you're in conversation mode.
 - Think before you write. If the question has depth, show your reasoning. If it's simple, be brief.
