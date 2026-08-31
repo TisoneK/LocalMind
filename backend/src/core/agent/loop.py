@@ -3319,6 +3319,16 @@ class AgentLoop:
             result_usage = getattr(result, "usage", None)
             if result_usage:
                 _provider_usage.update(result_usage)
+                # Prompt-cache visibility: what fraction of input was a cheap
+                # cache HIT (the byte-stable system prefix). Only logs when the
+                # provider reports it (DeepSeek/OpenAI/Anthropic-family).
+                _cached = result_usage.get("cached_tokens")
+                _pt = result_usage.get("prompt_tokens")
+                if _cached is not None and _pt:
+                    logger.info(
+                        "[agent.loop] iter=%d cache: %d/%d prompt tokens hit (%.0f%%)",
+                        iteration + 1, _cached, _pt, 100.0 * _cached / max(_pt, 1),
+                    )
                 yield StreamChunk(text="", done=False, usage=dict(_provider_usage))
             # When the model returns multiple tool calls in a single response,
             # dispatch independent ones concurrently via asyncio.gather().

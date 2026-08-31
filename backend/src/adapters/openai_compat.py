@@ -587,6 +587,24 @@ def _normalize_usage(usage: dict | None) -> dict:
         normalized["total_tokens"] = total
     elif prompt is not None or completion is not None:
         normalized["total_tokens"] = (prompt or 0) + (completion or 0)
+
+    # Prompt-cache telemetry — the fraction of input tokens billed at the cheap
+    # CACHE-HIT tier (DeepSeek: prompt_cache_hit_tokens; OpenAI:
+    # prompt_tokens_details.cached_tokens; Anthropic: cache_read_input_tokens).
+    # Without this, LocalMind had zero visibility into whether prompt caching was
+    # working — you can't optimize what you don't measure.
+    cached = _positive_int("prompt_cache_hit_tokens", "cache_read_input_tokens", "cached_tokens")
+    if cached is None:
+        details = usage.get("prompt_tokens_details")
+        if isinstance(details, dict):
+            v = details.get("cached_tokens")
+            if isinstance(v, (int, float)) and v >= 0:
+                cached = int(v)
+    if cached is not None:
+        normalized["cached_tokens"] = cached
+    miss = _positive_int("prompt_cache_miss_tokens")
+    if miss is not None:
+        normalized["cache_miss_tokens"] = miss
     return normalized
 
 

@@ -927,3 +927,26 @@ class TestToolChoicePassthrough:
         assert response.status_code == 200
         assert "tool_choice" in requests[0]
         assert "tool_choice" not in requests[1]
+
+
+# ── Prompt-cache telemetry (LocalMind Caching, 2026-08-31) ───────────────────
+
+
+def test_normalize_usage_captures_cache_hit_tokens():
+    """Cache-hit tokens (the cheap cached-input tier) must be captured across
+    provider shapes so caching can be MEASURED, not assumed."""
+    from adapters.openai_compat import _normalize_usage as n
+
+    # DeepSeek / bankofai
+    d = n({"prompt_tokens": 5000, "completion_tokens": 200,
+           "prompt_cache_hit_tokens": 4800, "prompt_cache_miss_tokens": 200})
+    assert d["cached_tokens"] == 4800 and d["cache_miss_tokens"] == 200
+    # OpenAI nested details
+    o = n({"prompt_tokens": 5000, "completion_tokens": 200,
+           "prompt_tokens_details": {"cached_tokens": 4736}})
+    assert o["cached_tokens"] == 4736
+    # Anthropic-family
+    a = n({"input_tokens": 300, "output_tokens": 200, "cache_read_input_tokens": 4700})
+    assert a["cached_tokens"] == 4700
+    # no cache reported → field omitted (never fabricated)
+    assert "cached_tokens" not in n({"prompt_tokens": 100, "completion_tokens": 50})
