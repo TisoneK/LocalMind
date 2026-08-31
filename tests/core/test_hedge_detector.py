@@ -82,7 +82,7 @@ def _make_trace_with_tools(final_response: str):
 
 @pytest.mark.asyncio
 async def test_gate_reprompts_on_hedge_after_evidence():
-    """Parent hedges after tools ran → gate injects [HEDGE] re-prompt."""
+    """Parent hedges after tools ran → gate injects [SYNTHESIZE] re-prompt."""
     loop = AgentLoop(adapter=None)
     trace = _make_trace_with_tools(
         "Would you like me to fetch the weather page for you?"
@@ -97,7 +97,7 @@ async def test_gate_reprompts_on_hedge_after_evidence():
 
     assert is_final is False
     assert suffix == ""
-    assert any("[HEDGE]" in str(m.get("content", "")) for m in loop_messages)
+    assert any("[SYNTHESIZE]" in str(m.get("content", "")) for m in loop_messages)
 
 
 @pytest.mark.asyncio
@@ -108,7 +108,7 @@ async def test_gate_oneshot_guard_does_not_renudge_hedge_twice():
     loop_messages = [
         {"role": "user", "content": "weather in Kitengela"},
         {"role": "assistant", "content": "Would you like me to fetch it?"},
-        {"role": "user", "content": "\n[HEDGE] You gathered evidence but asked the user..."},
+        {"role": "user", "content": "\n[SYNTHESIZE] You gathered evidence but asked the user..."},
         {"role": "assistant", "content": "Would you like me to fetch it?"},
     ]
     original_len = len(loop_messages)
@@ -142,8 +142,8 @@ async def test_gate_does_not_trigger_hedge_when_no_tools_ran():
     )
 
     # No tools ran → no hedge nudge; the prose-commitment path may or may not
-    # fire depending on the text. Either way, no [HEDGE] nudge.
-    assert not any("[HEDGE]" in str(m.get("content", "")) for m in loop_messages)
+    # fire depending on the text. Either way, no [SYNTHESIZE] nudge.
+    assert not any("[SYNTHESIZE]" in str(m.get("content", "")) for m in loop_messages)
 
 
 @pytest.mark.asyncio

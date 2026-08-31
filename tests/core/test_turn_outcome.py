@@ -78,3 +78,30 @@ def test_post_evidence_narration_ignored_before_any_tool():
         tools_ran_this_turn=False, is_post_evidence_narration=True,
     )
     assert a.outcome is TurnOutcome.ANSWER
+
+
+def test_follow_through_failure_forces_a_tool():
+    a = classify_turn_outcome(
+        has_tool_calls=False, final_text="Let me try the next source.",
+        tools_ran_this_turn=True, is_follow_through_failure=True,
+    )
+    assert a.outcome is TurnOutcome.INCOMPLETE
+    assert a.recovery is Recovery.FORCE_TOOL
+
+
+def test_hedge_after_evidence_synthesizes():
+    a = classify_turn_outcome(
+        has_tool_calls=False, final_text="Would you like me to fetch weather-atlas.com?",
+        tools_ran_this_turn=True, is_hedge_after_evidence=True,
+    )
+    assert a.outcome is TurnOutcome.INCOMPLETE
+    assert a.recovery is Recovery.SYNTHESIZE
+
+
+def test_force_tool_beats_synthesize_when_both_flags_set():
+    # A committed action (FORCE_TOOL) takes precedence over a hedge (SYNTHESIZE).
+    a = classify_turn_outcome(
+        has_tool_calls=False, final_text="Deleting now; would you like me to continue?",
+        tools_ran_this_turn=True, is_pending_action_narration=True, is_hedge_after_evidence=True,
+    )
+    assert a.recovery is Recovery.FORCE_TOOL

@@ -102,7 +102,30 @@ from core.agent.initialization import (
 )
 from core.agent.models import AgentStep, AgentTrace
 from core.agent.prompts import build_agent_system_prompt, build_planning_prompt
-from core.agent.turn_outcome import classify_turn_outcome
+from core.agent.turn_outcome import Recovery, TurnOutcome, classify_turn_outcome
+
+# Loop-discipline re-architecture: the four stacked recovery nudges
+# ([PENDING ACTION] / [FOLLOW-THROUGH] / [HEDGE] / [POST-EVIDENCE NARRATION])
+# collapse to TWO, one per Recovery. Same instructions, one place.
+_FORCE_TOOL_NUDGE = (
+    "\n[FORCE-TOOL] You said you would perform an action (delete/create/move/run, "
+    "or 'try the next source') but you did NOT emit the tool_call — it has not "
+    "happened. Emit the tool_call NOW to actually do it: shell for filesystem/"
+    "system changes, file_write to write files, web_fetch/web_research for web "
+    "(if a prior fetch failed, e.g. 403, call the NEXT url/source now). If you "
+    "have genuinely completed it already, report the concrete result instead. Do "
+    "NOT narrate the action again without executing it, and do NOT ask the user "
+    "to confirm an action they already requested.\n"
+)
+_SYNTHESIZE_NUDGE = (
+    "\n[SYNTHESIZE] Tools already ran this turn and you have the evidence. Your "
+    "response must now be the FINAL SYNTHESIZED answer — present the actual "
+    "results/data/findings to the user. Do NOT describe what you would do next, "
+    "do NOT say 'let me...' or 'I'll...', and do NOT ask the user to choose or "
+    "confirm ('Would you like me to...?', 'Which source would you prefer?'). The "
+    "action phase is over — give the answer now. If one specific detail is "
+    "genuinely missing, fetch ONE more page; otherwise answer from what you have.\n"
+)
 from core.agent.synthesizer import AnswerSynthesizer
 from core.agent.task_state import TaskState
 from core.agent.text_tools import (
@@ -6497,215 +6520,75 @@ class AgentLoop:
                         if gate_force_tool is not None:
                             gate_force_tool[0] = True
                         return "", False
-                # Loop-discipline re-architecture (step 1): classify this
-                # final-answer turn through the ONE contract and log it.
-                # OBSERVATIONAL for now — the scattered recovery guards below
-                # (pending-action → force tool, hedge, post-evidence →
-                # synthesize) are migrated onto assessment.outcome/recovery one
-                # at a time, so the guard count goes down without regression.
+                # Loop-discipline seam: classify this parent final-answer
+                # turn ONCE and apply exactly one recovery. Replaces the four
+                # stacked detector blocks (pending-action / follow-through ->
+                # FORCE_TOOL; hedge / post-evidence -> SYNTHESIZE) with a single
+                # decision. See core.agent.turn_outcome.classify_turn_outcome.
                 if is_parent:
-                    _ft0 = getattr(trace, "final_response", "") or ""
+                    _ft = getattr(trace, "final_response", "") or ""
+                    _tools_ran = any(
+                        getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
+                    )
+                    _had_tool_failure = any(
+                        getattr(s, "tool_failed", False)
+                        or "error" in (getattr(s, "observation", "") or "").lower()
+                        for s in getattr(trace, "steps", []) or []
+                    )
                     _assessment = classify_turn_outcome(
-                        has_tool_calls=False,  # this is the no-tool-call final-answer gate
-                        final_text=_ft0,
-                        tools_ran_this_turn=any(
-                            getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
+                        has_tool_calls=False,
+                        final_text=_ft,
+                        tools_ran_this_turn=_tools_ran,
+                        is_pending_action_narration=narrates_pending_action(_ft),
+                        is_follow_through_failure=(
+                            _tools_ran and answer_fails_follow_through(_ft, _had_tool_failure)
                         ),
-                        is_pending_action_narration=narrates_pending_action(_ft0),
-                        is_post_evidence_narration=narrates_after_evidence(_ft0),
+                        is_post_evidence_narration=(_tools_ran and narrates_after_evidence(_ft)),
+                        is_hedge_after_evidence=(_tools_ran and answer_hedges_after_evidence(_ft)),
                     )
                     logger.info(
                         "[agent.loop] turn outcome=%s recovery=%s (%s)",
                         _assessment.outcome.value, _assessment.recovery.value, _assessment.reason,
                     )
-
-                # B-2026-08-25-11 (Session 405): pending-ACTION narration.
-                # The model committed to a concrete state-changing action
-                # ("Let me verify the exact paths and then delete them.") but
-                # ended the turn with no tool call — the deletion/creation
-                # never happened. Unlike ACTION NARRATION (iter 0 + zero tools)
-                # this fires at ANY iteration and even after read-only tools
-                # ran (a search finds the files, then the delete is narrated
-                # but not executed). The remedy is to FORCE the tool call —
-                # the OPPOSITE of POST-EVIDENCE NARRATION's "synthesize now"
-                # (which would suppress the very action the user asked for).
-                # `narrates_pending_action` excludes offers ("let me know if
-                # you want me to delete…") so an un-confirmed destructive
-                # action is never coerced.
-                if is_parent:
-                    _final_text = getattr(trace, "final_response", "") or ""
-                    if narrates_pending_action(_final_text):
-                        _already_pending_nudged = any(
+                    if (
+                        _assessment.outcome is TurnOutcome.INCOMPLETE
+                        and _assessment.recovery is not Recovery.NONE
+                        and iteration + 1 < effective_max_iter
+                    ):
+                        _tag = (
+                            "[FORCE-TOOL]"
+                            if _assessment.recovery is Recovery.FORCE_TOOL
+                            else "[SYNTHESIZE]"
+                        )
+                        _already = any(
                             isinstance(m, dict)
                             and isinstance(m.get("content", ""), str)
-                            and "[PENDING ACTION]" in m.get("content", "")
+                            and _tag in m["content"]
                             for m in (loop_messages or [])
                         )
-                        if not _already_pending_nudged and iteration + 1 < effective_max_iter:
+                        if not _already:
                             if obs:
                                 obs.emit(
                                     "agent_loop_gate_failed_replan",
                                     intent=intent.value,
                                     iteration=iteration + 1,
-                                    unmet=[
-                                        "model narrated a state-changing action "
-                                        "(delete/create/run/…) but emitted no tool call"
-                                    ],
+                                    unmet=[_assessment.reason],
                                 )
                             loop_messages.append(
                                 {
                                     "role": "user",
                                     "content": (
-                                        "\n[PENDING ACTION] You said you would perform an "
-                                        "action (e.g. delete, create, move, run) but you did "
-                                        "NOT emit the tool_call — the action has not happened. "
-                                        "Emit the tool_call NOW to actually perform it (use "
-                                        "shell for filesystem/system changes, file_write to "
-                                        "write files, etc.). If you have genuinely completed "
-                                        "it already, report the concrete result instead. Do "
-                                        "NOT narrate the action again without executing it, and "
-                                        "do NOT ask the user to confirm an action they already "
-                                        "requested.\n"
+                                        _FORCE_TOOL_NUDGE
+                                        if _assessment.recovery is Recovery.FORCE_TOOL
+                                        else _SYNTHESIZE_NUDGE
                                     ),
                                 }
                             )
-                            if gate_force_tool is not None:
+                            if (
+                                _assessment.recovery is Recovery.FORCE_TOOL
+                                and gate_force_tool is not None
+                            ):
                                 gate_force_tool[0] = True
-                            return "", False
-                # B-2026-08-20-13 (Session 314): the hedge detector. Distinct
-                # from the prose-commitment detector (which fires when NO tool
-                # ran): this fires when tools DID run (evidence exists) but the
-                # model's answer hedges — "Would you like me to fetch...?",
-                # "Which source would you prefer?" — instead of synthesizing
-                # from the evidence it already gathered. Live transcript: model
-                # had 8 search results with "16°, overcast" but answered
-                # "Would you like me to get the current weather from
-                # weather-atlas.com?" — a non-answer after real work was done.
-                # Inject ONE bounded re-prompt; one-shot guard prevents loops.
-                if is_parent and any(
-                    getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
-                ):
-                    _final_text = getattr(trace, "final_response", "") or ""
-                    if answer_hedges_after_evidence(_final_text):
-                        _already_hedge_nudged = any(
-                            isinstance(m, dict)
-                            and isinstance(m.get("content", ""), str)
-                            and "[HEDGE]" in m.get("content", "")
-                            for m in (loop_messages or [])
-                        )
-                        if not _already_hedge_nudged and iteration + 1 < effective_max_iter:
-                            if obs:
-                                obs.emit(
-                                    "agent_loop_gate_failed_replan",
-                                    intent=intent.value,
-                                    iteration=iteration + 1,
-                                    unmet=["model hedged after evidence — asked user to choose"],
-                                )
-                            loop_messages.append(
-                                {
-                                    "role": "user",
-                                    "content": (
-                                        "\n[HEDGE] You gathered evidence (tools ran) but then asked "
-                                        "the user to choose or confirm instead of synthesizing the "
-                                        "answer. Do NOT ask 'Would you like me to...' or 'Which "
-                                        "source would you prefer?'. You already have the evidence — "
-                                        "synthesize a direct answer from it NOW, or fetch ONE specific "
-                                        "page if the snippets lack the detail you need. Do not ask the "
-                                        "user to decide; act.\n"
-                                    ),
-                                }
-                            )
-                            return "", False
-                # B-2026-08-24 (Session 397): post-evidence narration detector.
-                # Three phases: (1) pre-action narration before tool calls —
-                # good UX; (2) post-evidence narration after tools ran — THE
-                # BUG, model narrates instead of synthesizing; (3) final
-                # synthesized output — what the user needs.
-                # The existing TOOL COMMITMENT detector skips when tools ran;
-                # ACTION NARRATION only fires on iter 0. This bridges the
-                # gap: iteration >= 1 + tools ran + narration detected.
-                if (
-                    is_parent
-                    and iteration >= 1
-                    and any(
-                        getattr(s, "tool_name", "")
-                        for s in getattr(trace, "steps", []) or []
-                    )
-                ):
-                    _final_text = getattr(trace, "final_response", "") or ""
-                    if narrates_after_evidence(_final_text):
-                        _already_post_ev_nudged = any(
-                            isinstance(m, dict)
-                            and isinstance(m.get("content", ""), str)
-                            and "[POST-EVIDENCE NARRATION]" in m.get("content", "")
-                            for m in (loop_messages or [])
-                        )
-                        if not _already_post_ev_nudged and iteration + 1 < effective_max_iter:
-                            if obs:
-                                obs.emit(
-                                    "agent_loop_gate_failed_replan",
-                                    intent=intent.value,
-                                    iteration=iteration + 1,
-                                    unmet=["model narrated next action after tools succeeded instead of synthesizing evidence"],
-                                )
-                            loop_messages.append(
-                                {
-                                    "role": "user",
-                                    "content": (
-                                        "\n[POST-EVIDENCE NARRATION] You already executed "
-                                        "tools in this turn. Your response must now be "
-                                        "the FINAL SYNTHESIZED OUTPUT — present the actual "
-                                        "results, data, or findings to the user. "
-                                        "Do NOT describe what you would do next; "
-                                        "do NOT say 'let me...' or 'I'll...'. "
-                                        "The action phase is over — give the user "
-                                        "the answer now.\n"
-                                    ),
-                                }
-                            )
-                            return "", False
-                # Session 348: follow-through failure — the model says "let me
-                # try the next source" after a 403 but doesn't actually call a
-                # tool. Reject and force a real tool call.
-                if is_parent and any(
-                    getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
-                ):
-                    _final_text = getattr(trace, "final_response", "") or ""
-                    # Check if any tool FAILED this run
-                    _had_tool_failure = any(
-                        getattr(s, "tool_failed", False) or
-                        "error" in (getattr(s, "observation", "") or "").lower()
-                        for s in getattr(trace, "steps", []) or []
-                    )
-                    if answer_fails_follow_through(_final_text, _had_tool_failure):
-                        _already_followup_nudged = any(
-                            isinstance(m, dict)
-                            and isinstance(m.get("content", ""), str)
-                            and "[FOLLOW-THROUGH]" in m.get("content", "")
-                            for m in (loop_messages or [])
-                        )
-                        if not _already_followup_nudged and iteration + 1 < effective_max_iter:
-                            if obs:
-                                obs.emit(
-                                    "agent_loop_gate_failed_replan",
-                                    intent=intent.value,
-                                    iteration=iteration + 1,
-                                    unmet=["model said 'let me try' but didn't call a tool — follow-through failure"],
-                                )
-                            loop_messages.append(
-                                {
-                                    "role": "user",
-                                    "content": (
-                                        "\n[FOLLOW-THROUGH] You said 'let me try the next source' "
-                                        "but did not actually call web_fetch or web_research. "
-                                        "Your previous tool failed (e.g. 403 Forbidden). You MUST "
-                                        "call web_fetch with the NEXT URL from the search results "
-                                        "NOW, or call web_research to handle multi-source acquisition "
-                                        "automatically. Do NOT stop with a partial response — "
-                                        "the user needs the actual weather data, not a status update.\n"
-                                    ),
-                                }
-                            )
                             return "", False
                 return "", True
             _streak, _streak_tool = same_tool_failure_streak(trace)

@@ -52,32 +52,51 @@ def classify_turn_outcome(
     final_text: str,
     tools_ran_this_turn: bool,
     is_pending_action_narration: bool = False,
+    is_follow_through_failure: bool = False,
     is_post_evidence_narration: bool = False,
+    is_hedge_after_evidence: bool = False,
 ) -> TurnAssessment:
     """Classify a completed model turn as ACT / ANSWER / INCOMPLETE.
+
+    The four INCOMPLETE detector-flags collapse to exactly two recoveries:
+      * FORCE_TOOL — the model committed to / promised an action but emitted no
+        tool call (pending-action narration, or "let me try the next source"
+        follow-through after a failure). The action must actually happen.
+      * SYNTHESIZE — the model has evidence (tools ran) but narrated the next
+        step, hedged ("would you like me to…?"), or went empty instead of
+        answering. It must synthesize the answer from that evidence.
 
     Args:
         has_tool_calls: the model emitted one or more tool calls this turn.
         final_text: the answer text the model streamed (may be empty).
-        tools_ran_this_turn: at least one tool has executed this turn/run — so
-            evidence exists and an empty/narrated turn should SYNTHESIZE rather
-            than be forced to act again.
-        is_pending_action_narration: the detector says the text narrates a
-            committed-but-unexecuted action ("Deleting the files now:").
-        is_post_evidence_narration: the detector says the text narrates the NEXT
-            action instead of synthesizing already-gathered evidence.
+        tools_ran_this_turn: at least one tool has executed this run — evidence
+            exists, so an empty/narrated/hedged turn should SYNTHESIZE.
+        is_pending_action_narration: text narrates a committed-but-unexecuted
+            action ("Deleting the files now:").
+        is_follow_through_failure: text says it will try again ("let me try the
+            next source") after a tool failed, but emitted no tool call.
+        is_post_evidence_narration: text narrates the NEXT action instead of
+            synthesizing already-gathered evidence.
+        is_hedge_after_evidence: text asks the user to choose/confirm instead of
+            answering from the evidence already gathered.
     """
     if has_tool_calls:
         return TurnAssessment(TurnOutcome.ACT, "emitted tool call(s)")
 
     text = (final_text or "").strip()
 
-    # A committed pending action with no tool call is INCOMPLETE regardless of
-    # whether other tools ran — the promised action must actually happen.
+    # FORCE_TOOL: a committed/promised action with no tool call must actually
+    # happen — this wins even if earlier tools ran (search-then-delete shape).
     if is_pending_action_narration:
         return TurnAssessment(
             TurnOutcome.INCOMPLETE,
             "narrated a pending action without a tool call",
+            Recovery.FORCE_TOOL,
+        )
+    if is_follow_through_failure:
+        return TurnAssessment(
+            TurnOutcome.INCOMPLETE,
+            "said it would retry after a failure but emitted no tool call",
             Recovery.FORCE_TOOL,
         )
 
@@ -89,10 +108,17 @@ def classify_turn_outcome(
             Recovery.SYNTHESIZE if tools_ran_this_turn else Recovery.FORCE_TOOL,
         )
 
+    # SYNTHESIZE: evidence exists but the model narrated/hedged instead of answering.
     if tools_ran_this_turn and is_post_evidence_narration:
         return TurnAssessment(
             TurnOutcome.INCOMPLETE,
             "narrated the next action instead of synthesizing evidence",
+            Recovery.SYNTHESIZE,
+        )
+    if tools_ran_this_turn and is_hedge_after_evidence:
+        return TurnAssessment(
+            TurnOutcome.INCOMPLETE,
+            "hedged (asked the user to choose) instead of synthesizing evidence",
             Recovery.SYNTHESIZE,
         )
 

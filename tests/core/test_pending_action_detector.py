@@ -150,7 +150,7 @@ def _make_trace(final_response: str, *, has_tool_step: bool = True):
 
 @pytest.mark.asyncio
 async def test_gate_forces_tool_on_pending_delete():
-    """The live delete case: gate rejects, injects [PENDING ACTION], forces a tool."""
+    """The live delete case: gate rejects, injects [FORCE-TOOL], forces a tool."""
     from core.agent.loop import AgentLoop
     from core.models import Intent
 
@@ -176,7 +176,7 @@ async def test_gate_forces_tool_on_pending_delete():
 
     assert is_final is False
     assert suffix == ""
-    assert any("[PENDING ACTION]" in str(m.get("content", "")) for m in loop_messages)
+    assert any("[FORCE-TOOL]" in str(m.get("content", "")) for m in loop_messages)
     assert force[0] is True, "the main loop must be told to force a tool_choice"
 
 
@@ -206,7 +206,7 @@ async def test_gate_does_not_coerce_an_offer():
         gate_force_tool=force,
     )
 
-    assert not any("[PENDING ACTION]" in str(m.get("content", "")) for m in loop_messages)
+    assert not any("[FORCE-TOOL]" in str(m.get("content", "")) for m in loop_messages)
     assert force[0] is False
 
 
@@ -220,7 +220,7 @@ async def test_gate_oneshot_does_not_renudge():
     trace = _make_trace("Let me delete those files now.")
     loop_messages = [
         {"role": "user", "content": "delete the huge files"},
-        {"role": "user", "content": "\n[PENDING ACTION] ... (already nudged)\n"},
+        {"role": "user", "content": "\n[FORCE-TOOL] ... (already nudged)\n"},
     ]
     force = [False]
 
