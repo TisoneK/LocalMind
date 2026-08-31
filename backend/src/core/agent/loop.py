@@ -102,6 +102,7 @@ from core.agent.initialization import (
 )
 from core.agent.models import AgentStep, AgentTrace
 from core.agent.prompts import build_agent_system_prompt, build_planning_prompt
+from core.agent.turn_outcome import classify_turn_outcome
 from core.agent.synthesizer import AnswerSynthesizer
 from core.agent.task_state import TaskState
 from core.agent.text_tools import (
@@ -6496,6 +6497,28 @@ class AgentLoop:
                         if gate_force_tool is not None:
                             gate_force_tool[0] = True
                         return "", False
+                # Loop-discipline re-architecture (step 1): classify this
+                # final-answer turn through the ONE contract and log it.
+                # OBSERVATIONAL for now — the scattered recovery guards below
+                # (pending-action → force tool, hedge, post-evidence →
+                # synthesize) are migrated onto assessment.outcome/recovery one
+                # at a time, so the guard count goes down without regression.
+                if is_parent:
+                    _ft0 = getattr(trace, "final_response", "") or ""
+                    _assessment = classify_turn_outcome(
+                        has_tool_calls=False,  # this is the no-tool-call final-answer gate
+                        final_text=_ft0,
+                        tools_ran_this_turn=any(
+                            getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
+                        ),
+                        is_pending_action_narration=narrates_pending_action(_ft0),
+                        is_post_evidence_narration=narrates_after_evidence(_ft0),
+                    )
+                    logger.info(
+                        "[agent.loop] turn outcome=%s recovery=%s (%s)",
+                        _assessment.outcome.value, _assessment.recovery.value, _assessment.reason,
+                    )
+
                 # B-2026-08-25-11 (Session 405): pending-ACTION narration.
                 # The model committed to a concrete state-changing action
                 # ("Let me verify the exact paths and then delete them.") but
