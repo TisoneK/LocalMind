@@ -432,3 +432,53 @@ class TestClusterFVagueImperative:
         ]
         o = classify_pre_init("Improve the system.", history=history)
         assert o.mode == "clarify"
+
+
+# ── Cluster G (B-2026-08-25-9): unresolved reference → clarify ───────────────
+
+
+class TestClusterGUnresolvedReference:
+    """A first-turn action on an entity named only by a pronoun / bare definite
+    (no antecedent) must CLARIFY which thing, not explore and invent one."""
+
+    FIRES = [
+        "Send the report to him before the meeting.",   # AM-1
+        "Fix the issue with the file.",                 # AM-2
+        "Open the latest one and summarize it.",        # AM-3
+        "Email the document to her.",
+        "Forward the invoice to them.",
+    ]
+
+    NO_FIRE = [
+        # concrete specifier resolves the reference
+        "Fix the bug in src/agent.py",
+        "Send the report to John before the meeting.",  # named recipient
+        "Open https://reddit.com and summarize it",
+        "Summarize the meeting notes in notes.txt",
+        # not an action / no unresolved reference
+        "What is the capital of Kenya?",
+        "Create a folder called demo and two files",
+        "How much RAM do I have?",
+        "Write a Python script that adds two numbers",
+        "Use the browser to open wikipedia",            # B-14: browser is concrete
+    ]
+
+    def test_unresolved_reference_fires_clarify(self):
+        for prompt in self.FIRES:
+            o = classify_pre_init(prompt, history=[])
+            assert o.mode == "clarify", f"{prompt!r} should clarify (unresolved reference)"
+            assert o.clarifying_question
+
+    def test_resolved_or_concrete_does_not_fire_clusterG(self):
+        from core.agent.pre_init_classifier import _detect_unresolved_reference
+        for prompt in self.NO_FIRE:
+            assert _detect_unresolved_reference(prompt, []) is None, f"{prompt!r} must NOT clarify"
+
+    def test_prior_context_suppresses_clusterG(self):
+        from core.agent.pre_init_classifier import _detect_unresolved_reference
+        history = [
+            {"role": "user", "content": "I just finished the Q2 report."},
+            {"role": "assistant", "content": "Nice work."},
+        ]
+        # with an antecedent in history, "the report / him" may resolve — don't clarify
+        assert _detect_unresolved_reference("Send the report to him.", history) is None

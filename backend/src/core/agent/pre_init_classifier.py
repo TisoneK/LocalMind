@@ -400,6 +400,78 @@ def _detect_pressured_reask(message: str, history) -> bool:
 # ── Public entry point ──────────────────────────────────────────────────────
 
 
+# ── Cluster G (B-2026-08-25-9): unresolved reference → clarify ───────────────
+# "Send the report to him", "Fix the issue with the file", "Open the latest one
+# and summarize it" — an action on an entity named ONLY by a pronoun or a bare
+# definite article, with NO antecedent (first turn). The right first move is to
+# ASK which thing, not to explore the filesystem and invent one. Distinct from
+# Cluster F (vague imperative with NO object) — here there IS a definite object,
+# it's just unresolved. Fires ONLY on a fresh turn, only for an actionable
+# imperative, and only when nothing concrete disambiguates the reference.
+_G_ACTION_VERB_RE = re.compile(
+    r"\b(send|email|share|forward|deliver|fix|repair|open|read|summar|update|edit|"
+    r"change|delete|remove|move|rename|close|finish|complete|review|print|upload|"
+    r"download|attach|reply|respond|post|publish)\w*\b",
+    re.IGNORECASE,
+)
+# A path, extension, URL, or quoted name means the reference IS specified.
+_G_CONCRETE_RE = re.compile(r"\.[a-z0-9]{2,5}\b|[/\\]|https?://|[\"']", re.IGNORECASE)
+_G_PERSON_PRONOUN_RE = re.compile(r"\b(him|her|them)\b", re.IGNORECASE)
+_G_UNRESOLVED_ONE_RE = re.compile(
+    r"\bthe\s+(latest|last|newest|oldest|first|next|previous|other)\s+one\b"
+    r"|\b(that|this)\s+one\b",
+    re.IGNORECASE,
+)
+_G_BARE_DEFINITE_RE = re.compile(
+    r"\bthe\s+(report|file|issue|document|doc|email|message|meeting|attachment|"
+    r"photo|picture|image|link|invoice|ticket|pr|pull request)\b"
+    r"(?=\s*(?:$|[.,;!?]|\s+(?:to|for|with|before|after|in|on|and|but|so|now|"
+    r"then|please|asap)\b))",
+    re.IGNORECASE,
+)
+# Capitalized words that are NOT proper-noun specifiers.
+_G_COMMON_CAPS = {"i", "i'm", "i'll", "i've", "ok", "okay", "please", "the", "a", "an"}
+
+
+def _detect_unresolved_reference(message: str, history) -> Optional[str]:
+    """Return a clarifying question when a first-turn action targets an entity
+    named only by an unresolved pronoun / bare definite article; else None."""
+    # With prior context the reference may resolve — only fire on a fresh turn.
+    for msg in history or []:
+        if str(msg.get("content", "")).strip():
+            return None
+    text = message.strip()
+    words = text.split()
+    if not (1 <= len(words) <= 16):
+        return None
+    if not _G_ACTION_VERB_RE.search(text):
+        return None
+    if _G_CONCRETE_RE.search(text):
+        return None  # a path/extension/url/quote specifies the entity
+    # A proper noun past the first word (a named person/thing) resolves it.
+    for w in words[1:]:
+        wc = w.strip(".,;:!?()").strip()
+        if len(wc) >= 2 and wc[0].isupper() and wc[1:].islower() and wc.lower() not in _G_COMMON_CAPS:
+            return None
+    low = text.lower()
+    if _G_PERSON_PRONOUN_RE.search(low):
+        return (
+            "Who do you mean — who should I send it to? I don't have that person "
+            "in our conversation yet. Can you name them?"
+        )
+    if _G_UNRESOLVED_ONE_RE.search(low):
+        return (
+            "Which one do you mean? I don't have 'the latest one' in context yet — "
+            "the latest what, and from where?"
+        )
+    if _G_BARE_DEFINITE_RE.search(low):
+        return (
+            "Which one do you mean? I don't have that in our conversation yet — "
+            "can you point me to the specific file/report/item?"
+        )
+    return None
+
+
 def classify_pre_init(message: str, history: Optional[list[dict]] = None) -> PreInitOverride:
     """Run the cluster guards against the user message.
 
@@ -441,6 +513,18 @@ def classify_pre_init(message: str, history: Optional[list[dict]] = None) -> Pre
         )
         override.acknowledgement = "I want to make sure I work on the right thing."
         override.objective = "Clarify the vague request before doing anything."
+        override.title = "Clarify Request"
+        override.skip_workspace_state = True
+        return override
+
+    # Cluster G (B-2026-08-25-9): unresolved reference → clarify. An action on an
+    # entity named only by a pronoun / bare definite with no antecedent.
+    unresolved_q = _detect_unresolved_reference(message, history)
+    if unresolved_q:
+        override.mode = "clarify"
+        override.clarifying_question = unresolved_q
+        override.acknowledgement = "I want to make sure I act on the right thing."
+        override.objective = "Clarify which item the request refers to before acting."
         override.title = "Clarify Request"
         override.skip_workspace_state = True
         return override
