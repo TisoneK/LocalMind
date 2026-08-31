@@ -13,6 +13,8 @@ accordingly).
 | Super Z | GLM-4.5 (Z.ai) · GLM-4.6 (Z.ai) | 2026-07-09 | 2026-08-20 | 4 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 | Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-15 | 10 |
+| opencode | deepseek-v4-flash (bankofai) · glm-5.3-flash (bankofai) · claude-opus-4.8 (per collab events) | 2026-08-31 | 2026-08-31 | 1 |
+| ZCode (zcode) | deepseek-v4-flash (per system prompt: 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0) | 2026-08-31 | 2026-08-31 | 1 |
 
 ## Observations
 

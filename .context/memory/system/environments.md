@@ -20,21 +20,23 @@ block (and its "last verified" date) every time you run on it again.
 
 ---
 ---
-## Tison's local Windows machine (last verified 2026-07-11)
+## Tison's local Windows machine (last verified 2026-08-31)
 
 - **Identify by:** hostname matches `Tison`; OS is Windows; user home is `C:\Users\tison`; Dev root is `C:\Users\tison\Dev`
-- **OS:** Windows 11 (PowerShell)
+- **OS:** Windows 11 (PowerShell, Git Bash available)
 - **Runtimes:** Node.js v24.13.0, Python 3.14.2, npm 11.12.1
 - **Package manager:** npm (root `package-lock.json` with workspaces); pip (system Python, not venv — on Windows, PEP 668 is advisory only)
 - **Verified commands:**
-  - `node --version` → v24.13.0 (2026-07-11)
-  - `python --version` → Python 3.14.2 (2026-07-11)
-  - `npm --version` → 11.12.1 (2026-07-11)
+  - `node --version` → v24.13.0 (2026-07-11, re-verified 2026-08-31)
+  - `python --version` → Python 3.14.2 (2026-07-11, re-verified 2026-08-31)
+  - `npm --version` → 11.12.1 (2026-07-11, re-verified 2026-08-31)
+  - Git Bash is the working shell for `.context/core/bin/*` scripts; `pwsh` also available (2026-08-31)
 - **Quirks:**
   - Windows paths use backslashes; PowerShell handles both `/` and `\`
   - No `make` — use npm scripts or PowerShell equivalents
   - Python is system-wide (no venv isolation required on Windows, but still recommended for backend work)
   - This is a local development machine — persistent storage, full filesystem access
+  - **`core.autocrlf=true` makes `context-sync verify` false-positive** (all 21 core files FAILED, git tree clean; LF-normalized hashes match) — documented flaw B-2026-08-30-17, see `flaws/log.md` Session 406. Don't rollback on an all-files-FAILED + clean-git-tree signature.
 
 ## Z.ai cloud sandbox (last verified 2026-08-02)
 

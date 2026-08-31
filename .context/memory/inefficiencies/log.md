@@ -1064,3 +1064,12 @@ if literally nothing slowed you down.
 - **Cause:** helpers written at different times with different shapes, never smoke-tested against the real call signature — the R-4 smoke test only exercised the RX/FN lambda paths, not the direct-helper paths.
 - **Workaround / fix:** unified all check callables to `(text, parsed)` (defaulted second arg where sensible) and added a pre-flight that invokes ALL 105 checks with a synthetic payload before any network I/O. Resume via `--only <remaining ids>`.
 - **Prevent next time:** every harness that accepts pluggable check functions should run a signature sweep over the whole catalog in the smoke test, not just one happy-path test.
+
+---
+## 2026-08-31 — ZCode / deepseek-v4-flash (joining session)
+
+- **Problem:** the pre-commit gate (`sh .context/core/bin/context-gates run pre-commit`) fails on this Windows machine on the explicit ruff command: `backend/.venv/bin/ruff: No such file or directory` (exit 127).
+- **Cost:** ~5 min to diagnose; gate cannot pass for `.context/`-only commits without manual bypass.
+- **Cause:** `workflows/gates.conf` hardcodes the POSIX venv path `backend/.venv/bin/ruff`; on Windows the venv layout is `backend/.venv/Scripts/ruff(.exe)`. Also, with the correct path the repo currently has 34 pre-existing ruff findings (E501 line-length, I001 import sort, F401 unused imports, and Python-3.10-incompatible f-string escapes in `pre_init_classifier.py`) — all in files untouched this session, so they are baseline debt, not regressions.
+- **Workaround / fix:** run `backend/.venv/Scripts/ruff check backend/src` manually; the universal `git diff --cached --check` still runs. Note that ruff 0.15.20 flags `pre_init_classifier.py` f-string backslash escapes as invalid on Python 3.10 — the venv here is 3.14, so that's a lint-target-version mismatch, not a syntax error in this runtime.
+- **Prevent next time:** gates.conf should use a platform-neutral ruff invocation (e.g. `python -m ruff`) or both bin/Scripts variants; and a `.gitattributes`/EOL policy for core files (see flaws B-2026-08-30-17) would stop the CRLF verify false positive.
