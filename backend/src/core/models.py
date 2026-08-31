@@ -26,7 +26,7 @@ import time
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Role & Intent — foundational enums
@@ -226,6 +226,17 @@ class ToolResult(BaseModel):
     success: bool = True
     error_type: str = ""
     error_message: str = ""
+
+    # None is the natural "no error" value a tool passes on its success path
+    # (e.g. `error_type=None if success else ...`). Without this, that None
+    # fails str validation and the whole ToolResult construction raises — the
+    # error then gets re-wrapped as a misleading "<tool> failed: validation
+    # error" even though the tool SUCCEEDED. Coerce None -> "" so the fields
+    # stay real strings for consumers while accepting the intuitive None.
+    @field_validator("error_type", "error_message", mode="before")
+    @classmethod
+    def _none_to_empty(cls, v):
+        return "" if v is None else v
 
 
 class AgentAbortedError(Exception):
