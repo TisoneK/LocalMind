@@ -85,3 +85,22 @@ def test_real_answer_is_not_scaffold():
 def test_scaffold_detection_is_case_insensitive():
     assert answer_is_internal_scaffold("The Synthesis Reminder says stop.") is True
     assert answer_punts_requested_part("I COULDN'T PULL the news.") is True
+
+
+def test_punt_with_no_tools_ran_is_gated_off():
+    # zcode review concern 1 (relevant-tool guardrail): the loop wires the
+    # punt flag as (_tools_ran AND detector) — with ZERO tools run this turn
+    # the flag stays False, so a knowledge-answer "couldn't find X" (no
+    # applicable tool) classifies as a plain ANSWER instead of forcing a
+    # wasted tool call. This pins that call-site contract through the seam:
+    # without the flag set, the same punt text does not recover.
+    from core.agent.turn_outcome import Recovery, TurnOutcome, classify_turn_outcome
+
+    a = classify_turn_outcome(
+        has_tool_calls=False,
+        final_text=ARSENAL_PUNT,
+        tools_ran_this_turn=False,
+        is_punted_requested_part=False,
+    )
+    assert a.outcome is TurnOutcome.ANSWER
+    assert a.recovery is Recovery.NONE
