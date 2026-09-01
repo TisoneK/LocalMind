@@ -89,6 +89,8 @@ def _tool_timeout(intent: Intent) -> float:
             Intent.SHELL: settings.ollama_timeout_shell,
             Intent.SYSINFO: settings.ollama_timeout_sysinfo,
             Intent.MEMORY_OP: settings.ollama_timeout_memory_op,
+            Intent.BROWSE: settings.ollama_timeout_browse,
+            Intent.WEB_RESEARCH: settings.ollama_timeout_web_research,
         }
         return float(mapping.get(intent, settings.ollama_timeout_default))
     except Exception:

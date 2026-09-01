@@ -227,6 +227,12 @@ class Settings(BaseSettings):
     ollama_timeout_code_exec: int = 240
     ollama_timeout_sysinfo: int = 60
     ollama_timeout_memory_op: int = 120
+    # browse is a single interactive command (open+extract, each internally
+    # bounded to 30s); web_research chains search+fetch+optional JS render.
+    # Both previously fell through to the 180s default, so a hung browser op
+    # ran the full 180s (B-2026-09-01 browser slowness). Right-size them.
+    ollama_timeout_browse: int = 60
+    ollama_timeout_web_research: int = 120
     ollama_timeout_default: int = 180
 
     # Agent loop

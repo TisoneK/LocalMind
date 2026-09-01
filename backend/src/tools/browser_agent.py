@@ -40,11 +40,32 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import shutil
+import signal
 
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
+
+
+def _terminate_proc_group(proc) -> None:
+    """Best-effort kill of a subprocess AND its children (the browser it spawned).
+
+    A plain proc.kill() reaps only the CLI wrapper; grandchild processes
+    (Chromium) survive and keep inherited pipes open, which can hang a
+    follow-up communicate(). When the process was started with
+    start_new_session=True, its pid is its own process-group leader, so a
+    single killpg tears down the whole tree. Falls back to proc.kill() on any
+    platform/edge case where the group signal is unavailable.
+    """
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, AttributeError, OSError):
+        try:
+            proc.kill()
+        except (ProcessLookupError, OSError):
+            pass
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +103,16 @@ async def _run_browser_cmd(
     logger.info("[browser_agent] running: %s", " ".join(cmd[:5]))
 
     try:
+        # start_new_session=True puts the CLI (and any Chromium it spawns for
+        # THIS invocation) in its own process group so a timeout can reap the
+        # whole tree, not just the CLI wrapper. The persistent agent-browser
+        # daemon is a pre-existing, separately-grouped process, so this does
+        # not tear down the session reused across calls.
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
         )
         stdout_bytes, stderr_bytes = await asyncio.wait_for(
             proc.communicate(),
@@ -95,8 +122,17 @@ async def _run_browser_cmd(
         stderr = stderr_bytes.decode("utf-8", errors="replace")
         return proc.returncode or 0, stdout, stderr
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
+        # The internal timeout MUST return promptly. proc.kill() reaps only the
+        # CLI wrapper; Chromium children can keep the stdout/stderr pipes open,
+        # so a bare `await proc.communicate()` here blocks until the OUTER
+        # dispatch timeout (180s) fires — that is exactly the 3m browse hang.
+        # Kill the whole process group, then bound the drain so this returns at
+        # ~`timeout`, not 180s (B-2026-09-01 browser slowness).
+        _terminate_proc_group(proc)
+        try:
+            await asyncio.wait_for(proc.communicate(), timeout=2)
+        except (asyncio.TimeoutError, ProcessLookupError, Exception):
+            pass
         return 1, "", f"Browser command timed out after {timeout}s"
     except Exception as e:
         return 1, "", f"Browser command failed: {e}"
