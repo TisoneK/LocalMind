@@ -53,12 +53,14 @@ def classify_turn_outcome(
     tools_ran_this_turn: bool,
     is_pending_action_narration: bool = False,
     is_follow_through_failure: bool = False,
+    is_punted_requested_part: bool = False,
+    is_internal_scaffold_text: bool = False,
     is_post_evidence_narration: bool = False,
     is_hedge_after_evidence: bool = False,
 ) -> TurnAssessment:
     """Classify a completed model turn as ACT / ANSWER / INCOMPLETE.
 
-    The four INCOMPLETE detector-flags collapse to exactly two recoveries:
+    The INCOMPLETE detector-flags collapse to exactly two recoveries:
       * FORCE_TOOL — the model committed to / promised an action but emitted no
         tool call (pending-action narration, or "let me try the next source"
         follow-through after a failure). The action must actually happen.
@@ -75,6 +77,13 @@ def classify_turn_outcome(
             action ("Deleting the files now:").
         is_follow_through_failure: text says it will try again ("let me try the
             next source") after a tool failed, but emitted no tool call.
+        is_punted_requested_part: the final answer concedes an explicitly
+            requested part is still unmet ("couldn't pull X in this pass",
+            "you can check X yourself") — the requested work must happen, not
+            be deferred to the user.
+        is_internal_scaffold_text: the "answer" is internal-scaffolding prose
+            (references to reminders/directives/instructions) rather than
+            content for the user.
         is_post_evidence_narration: text narrates the NEXT action instead of
             synthesizing already-gathered evidence.
         is_hedge_after_evidence: text asks the user to choose/confirm instead of
@@ -98,6 +107,18 @@ def classify_turn_outcome(
             TurnOutcome.INCOMPLETE,
             "said it would retry after a failure but emitted no tool call",
             Recovery.FORCE_TOOL,
+        )
+    if is_punted_requested_part:
+        return TurnAssessment(
+            TurnOutcome.INCOMPLETE,
+            "final answer concedes a requested part is unmet (punted to the user or a later pass)",
+            Recovery.FORCE_TOOL,
+        )
+    if is_internal_scaffold_text:
+        return TurnAssessment(
+            TurnOutcome.INCOMPLETE,
+            "final text is internal scaffolding, not a user answer",
+            Recovery.SYNTHESIZE if tools_ran_this_turn else Recovery.FORCE_TOOL,
         )
 
     if not text:

@@ -1473,6 +1473,95 @@ def answer_fails_follow_through(text: str, had_tool_failure: bool) -> bool:
     return any(phrase in lower for phrase in _FOLLOW_THROUGH_PHRASES)
 
 
+# Handoff agent-followthrough-persistence (live, bankofai/glm-5.3-flash,
+# "Arsenal livescore and news"): the model answered sub-goal 1 well, then
+# ENDED the turn with "I couldn't pull additional news headlines in this
+# pass — the Sofascore match page is tracking it live." — conceding an
+# explicitly requested part while tools that could get it were available.
+# Unlike answer_fails_follow_through (mid-turn retry talk after a tool
+# FAILURE), this fires on the FINAL ANSWER confessing an unmet part —
+# no tool failure required. Phrase classes:
+#   admission — explicit non-acquisition confession ("couldn't pull X")
+#   deferral  — pushing the missing part to "the next pass" or onto the user
+# Bounded at the call site: one [FORCE-TOOL] nudge per turn (the _already
+# tag check) + the iteration budget.
+_PUNT_ADMISSION_PHRASES: tuple[str, ...] = (
+    "couldn't pull", "could not pull",
+    "couldn't get", "could not get",
+    "couldn't fetch", "could not fetch",
+    "couldn't retrieve", "could not retrieve",
+    "couldn't grab", "could not grab",
+    "wasn't able to pull", "was not able to pull",
+    "wasn't able to get", "was not able to get",
+    "wasn't able to fetch", "was not able to fetch",
+    "unable to pull", "unable to fetch", "unable to retrieve",
+    "unable to get the", "unable to find the",
+)
+
+_PUNT_DEFERRAL_PHRASES: tuple[str, ...] = (
+    "in this pass",
+    "this time around",
+    "on a future pass",
+    "next pass",
+    "look it up yourself",
+    "look it up on",
+    "check it yourself",
+    "check it on",
+    "check yourself",
+    "track it live",
+    "tracking it live",
+    "follow it live",
+    "following it live",
+)
+
+
+def answer_punts_requested_part(text: str) -> bool:
+    """Detect the final-answer PUNT: the answer concedes an explicitly
+    requested part is still unmet and defers it (to a later pass or to the
+    user themselves) instead of calling a tool that could get it.
+
+    Deliberately does NOT require had_tool_failure — the punt usually
+    follows a SUCCESSFUL partial answer (part 1 answered, part 2 conceded).
+    """
+    if not text:
+        return False
+    lower = text.lower()
+    if any(phrase in lower for phrase in _PUNT_ADMISSION_PHRASES):
+        return True
+    return any(phrase in lower for phrase in _PUNT_DEFERRAL_PHRASES)
+
+
+# Same live trace family: the "final answer" can be internal-scaffolding
+# prose that leaked into content — e.g. "The synthesis reminder says do NOT
+# call another tool and present results now." (handoff-before baseline,
+# bankofai/glm-5.3-flash: 77 chars, classified ANSWER, turn over, zero
+# sub-goals covered). _filter_system_leaks strips XML-tagged system leaks;
+# these are plain-prose scaffold references and get through. They are NEVER
+# a legitimate final answer — route to SYNTHESIZE (evidence exists) or
+# FORCE_TOOL (nothing ran yet).
+_SCAFFOLD_LEAK_PHRASES: tuple[str, ...] = (
+    "the synthesis reminder",
+    "synthesis reminder says",
+    "do not call another tool",
+    "[action narration]",
+    "[force-tool]",
+    "[synthesize]",
+    "[recovery]",
+    "the system reminder",
+    "per the reminder",
+)
+
+
+def answer_is_internal_scaffold(text: str) -> bool:
+    """True when the final text is internal-scaffolding prose (references to
+    reminders, directives, or injected instruction blocks) rather than an
+    answer for the user."""
+    if not text:
+        return False
+    lower = text.lower()
+    return any(phrase in lower for phrase in _SCAFFOLD_LEAK_PHRASES)
+
+
 def _recovery_nudge_tail(loop_messages: list[dict], trace=None) -> str:
     """Task-anchor a recovery nudge: the user's ORIGINAL request, plus an
     advancement hint when tools already ran this turn.
@@ -6543,6 +6632,10 @@ class AgentLoop:
                         is_follow_through_failure=(
                             _tools_ran and answer_fails_follow_through(_ft, _had_tool_failure)
                         ),
+                        is_punted_requested_part=(
+                            _tools_ran and answer_punts_requested_part(_ft)
+                        ),
+                        is_internal_scaffold_text=answer_is_internal_scaffold(_ft),
                         is_post_evidence_narration=(_tools_ran and narrates_after_evidence(_ft)),
                         is_hedge_after_evidence=(_tools_ran and answer_hedges_after_evidence(_ft)),
                     )
@@ -7810,8 +7903,22 @@ class AgentLoop:
         # The model's reasoning often contains a sentence like "the current
         # temperature is 16°C" or "the hostname is xyz". Find sentences that
         # mention the user's key entity and look like answers.
+        # Handoff agent-followthrough-persistence (live glm-5.3-flash, free
+        # tier): after the empty-response budget exhausted, the extractor
+        # pulled 124 chars of SCAFFOLD prose from the reasoning buffer
+        # ("However, the instruction is emphatic: 'Do NOT call another
+        # tool.'...") and served it as the final answer. A scaffold fragment
+        # is not an answer — reject it and let later strategies / the clean
+        # fallback speak (silent-failure contract: always yield SOMETHING,
+        # but it must be meaningful).
         if reasoning_buffer and reasoning_buffer.strip():
             extracted = self._extract_answer_sentence(reasoning_buffer, user_message)
+            if extracted and answer_is_internal_scaffold(extracted):
+                logger.info(
+                    "[agent.loop] reasoning-buffer extraction rejected internal scaffolding (%d chars)",
+                    len(extracted),
+                )
+                extracted = ""
             if extracted:
                 logger.info(
                     "[agent.loop] answer extracted from reasoning buffer (%d chars, zero-LLM)",
