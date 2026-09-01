@@ -1073,3 +1073,12 @@ if literally nothing slowed you down.
 - **Cause:** `workflows/gates.conf` hardcodes the POSIX venv path `backend/.venv/bin/ruff`; on Windows the venv layout is `backend/.venv/Scripts/ruff(.exe)`. Also, with the correct path the repo currently has 34 pre-existing ruff findings (E501 line-length, I001 import sort, F401 unused imports, and Python-3.10-incompatible f-string escapes in `pre_init_classifier.py`) — all in files untouched this session, so they are baseline debt, not regressions.
 - **Workaround / fix:** run `backend/.venv/Scripts/ruff check backend/src` manually; the universal `git diff --cached --check` still runs. Note that ruff 0.15.20 flags `pre_init_classifier.py` f-string backslash escapes as invalid on Python 3.10 — the venv here is 3.14, so that's a lint-target-version mismatch, not a syntax error in this runtime.
 - **Prevent next time:** gates.conf should use a platform-neutral ruff invocation (e.g. `python -m ruff`) or both bin/Scripts variants; and a `.gitattributes`/EOL policy for core files (see flaws B-2026-08-30-17) would stop the CRLF verify false positive.
+
+---
+## 2026-09-01 — ZCode / deepseek-v4-flash (Session 406)
+
+- **Problem:** isolated-harness live trace with a conversational prompt ("how did arsenal play") never exercised the agent loop — `[agent-runtime] fast-path(conversational)` routed it to the deterministic single-call chat, which streams no reasoning. The trace came back with 0 thinking_token events and looked like a fix failure.
+- **Cost:** ~2 diagnostic boots (~4 min) to find the routing difference.
+- **Cause:** in a FRESH session (no history) the conversational fast path classifies many natural prompts as chat; the user's app only routed the same prompt through the agent loop because of its session context.
+- **Workaround / fix:** live traces of agent-loop paths must use explicitly tool-requiring prompts ("Use web research to find X, then tell me Y") in the isolated harness. Noted in scripts/live_test_thinking_block.py.
+- **Prevent next time:** when a live trace shows an unexpectedly quiet stream, check the boot log for `fast-path(conversational)` before suspecting the code under test.

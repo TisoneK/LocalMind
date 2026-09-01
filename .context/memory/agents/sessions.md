@@ -821,6 +821,7 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** Live BrowserAgent smoke test on a machine with `agent-browser install`; B-2026-07-31-9 Observe capability; B-2026-07-31-10 non-coding capability roadmap; ADR-8 runtime-wiring follow-ups.
 - **Report:** `.context/memory/reviews/2026-07-31-review-7.md`
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-07-31 — Session 51
@@ -847,6 +848,7 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** add a separate observation snapshot contract; later integrate catalog metadata into discovery/UI; add catalog-to-tool registry integrity checks; reconcile the existing todo-plan assertion and three non-E501 Ruff findings.
 - **Report:** `.context/memory/reviews/2026-07-31-review-10.md`
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-07-31 — Session 54
@@ -899,6 +901,7 @@ Removed duplicate Session 6 entry (byte-identical to the entry above). Deduplica
 - **Open items:** define capability-family and observation contracts; build an incremental Observe vertical slice; reconcile the todo-plan baseline assertion; clean the three non-E501 Ruff findings; preserve all developer-agent roles and toolsets.
 - **Report:** `.context/memory/reviews/2026-07-31-review-9.md`
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-07-31 — Session 57
@@ -3369,6 +3372,7 @@ program + ADR-22). -->
 - **Open items:** Provider quota exhaustion remains real; prompt-diet/post-tool synthesis reduction is the next reliability lever.
 - **Report:** `.context/memory/reviews/2026-08-15-review-37.md`
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-15 — Session 242
@@ -3433,6 +3437,7 @@ program + ADR-22). -->
 - **Open items:** none new — tool-schema diet (B-2026-08-15-14) remains the next agent-loop token lever.
 - **Report:** `.context/memory/reviews/2026-08-16-review.md`
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 
@@ -3447,6 +3452,7 @@ program + ADR-22). -->
 - **Open items:** none new — recommend a grep for any remaining per-chunk trimming `_strip_minimax_tool_calls` call sites on streaming deltas.
 - **Report:** `.context/memory/reviews/2026-08-16-review-2.md`
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ## 2026-08-16 — Session 248
 
@@ -3459,6 +3465,7 @@ program + ADR-22). -->
 - **Open items:** duplicate-message fix only repairs NEW replies — old chats keep their dup rows. Deferred (unchanged): tool-schema diet `B-2026-08-15-14`.
 - **Report:** `.context/memory/reviews/2026-08-16-review-3.md`
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ## 2026-08-16 — Session 249
 
@@ -3904,6 +3911,7 @@ program + ADR-22). -->
 - **Open items:** backlog B-2026-08-17-1 (progressive tool-schema disclosure, ADR-43 Phase 3), on-box verification of bugs 2&3.
 - **Report:** .context/memory/reviews/2026-08-17-review-57.md
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-17 — Session 290 (thinking/ack persistence + execute-opt-in ROOT fix)
@@ -3921,6 +3929,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-3 (constrained JSON — gate on init log), B-2026-08-17-4 (thinkMs/diffData/candidates restore), B-2026-08-17-2 (on-box verify).
 - **Report:** .context/memory/reviews/2026-08-17-review-58.md
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-17 — Session 291 (LIVE-tested the local path; meter fix; fixed the 5 "pre-existing" fails)
@@ -3936,6 +3945,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-3 (format=json DEMOTED — live evidence disproved the parse-failure hypothesis), B-2026-08-17-4, ADR-43 Phase 3 (phi4-mini slow execute loop = tool-schema prompt cost).
 - **Report:** .context/memory/reviews/2026-08-17-review-59.md
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-17 — Session 292 (Settings bugs A–E, live-tested on Ollama)
@@ -3951,6 +3961,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-5 (embedding models leak into chat list); then STARTING ADR-43 Phase 3.
 - **Report:** .context/memory/reviews/2026-08-17-review-60.md
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-17 — Session 293 (ADR-43 start: L3 file_write confirmation)
@@ -3964,6 +3975,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-6 (path quirk), finish L3 clean trace, L2 steering, L4 observation contract.
 - **Report:** (folded into review-60 / this log; no separate report for the start)
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-17 — Session 294 (MULTIAGENT: ADR-43 L2/L3 + path/verify fix)
@@ -3981,6 +3993,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-17-7 (read-blocked false grounding), L2 discovery/shell-before-create steering, L3 clean trace on a read-allowed path, L4.
 - **Report:** .context/memory/reviews/2026-08-17-review-61.md
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-17 — Session 295 (MULTIAGENT: token/speed optimization)
@@ -4013,6 +4026,7 @@ program + ADR-22). -->
 - **Open items:** optimization roadmap B-2026-08-17-8..12 (review-62).
 - **Report:** .context/memory/reviews/2026-08-17-review-63.md
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 297 (memorize/document the Parent Agent spec)
@@ -4028,6 +4042,7 @@ program + ADR-22). -->
 - **Report:** .context/memory/reviews/2026-08-18-review-64.md
 - **Colab:** peer agent **Buffy/Freebuff** joined read-only and independently verified the reconciliation, sharpening it — the divergence is the ENTIRE multi-agent layer, not just delegation (ParentAgent is the live entry `agent_runtime.py:667`, 11 specialists registered, delegation wired, `selection.py` demoted to UI metadata). Peer persisted it as a review-64 addendum + a SHARPENED note under B-2026-08-18-1 (peer commit `383fba4`). I re-verified the claims (greps held) and folded the sharpening into ADR-47's durable record (decisions.md) so it doesn't live only in the review report. Peer coordinated via a shared durable file rather than a `context-collab` event — logged as a flaw.
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 297 (cont.) — spec §40/§43 gap analysis
@@ -4042,6 +4057,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-1 decision; the 4 partials (existing backlog).
 - **Report:** .context/memory/reviews/2026-08-18-review-65.md
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (parent-vs-spec conformance audit)
@@ -4056,6 +4072,7 @@ program + ADR-22). -->
 - **Outcome:** done — parent audit delivered; B-2026-08-18-2 filed (actionable parent-scoped fix). Awaiting user on B-2026-08-18-1/-2.
 - **Report:** .context/memory/reviews/2026-08-18-review-66.md
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (cont.) — implemented the parent completion-verification floor
@@ -4071,6 +4088,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-1 (delegation/identity decision, recommended (c)); the deferred loop-wide efficiency roadmap (B-2026-08-17-8..12) that was descoped this session.
 - **Report:** .context/memory/reviews/2026-08-18-review-66.md (IMPLEMENTED addendum)
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (cont.) — identity clarification: the agent is LocalMind
@@ -4083,6 +4101,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-1 (delegation/identity decision; identity itself now settled = LocalMind, single user-facing agent).
 - **Report:** (folded into review-66 lineage; no separate report)
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (cont.) — e2e coverage for the completion floor
@@ -4095,6 +4114,7 @@ program + ADR-22). -->
 - **Outcome:** done — floor is now unit + e2e + live-verified.
 - **Open items:** B-2026-08-18-1 (delegation decision; identity settled = LocalMind).
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (cont.) — resolve B-2026-08-18-1 → accept-and-harden (ADR-48)
@@ -4109,6 +4129,7 @@ program + ADR-22). -->
 - **Open items:** §40 hardening backlog (efficiency B-2026-08-17-8..12 first).
 - **Report:** ADR-48 in plans/decisions.md; lineage in review-65/66.
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (cont.) — web_search relevance-gated race (Kitengela weather bug)
@@ -4124,6 +4145,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-3 (agent-level "successful-but-irrelevant results → change strategy"; the OUTPUT twin of the completion floor).
 - **Report:** .context/memory/reviews/2026-08-18-review-67.md
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (cont.) — anti-spin nudge + workspace UX + upfront todo plan
@@ -4141,6 +4163,7 @@ program + ADR-22). -->
 - **Open items:** the §40 efficiency roadmap (B-2026-08-17-8..12) remains.
 - **Report:** review-67 (search) + ADR-49 (plan); this log.
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (cont.) — workspace card refinement + table-card rendering
@@ -4157,6 +4180,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-4 (guaranteed weather card); §40 efficiency roadmap.
 - **Report:** this log + backlog B-2026-08-18-4.
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (cont.) — follow-ups ignored context (classify-flake fallback)
@@ -4172,6 +4196,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-18-6 (grounding), B-2026-08-18-4 (weather card), §40 efficiency.
 - **Report:** this log + backlog.
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (cont.) — left-panel action cards: same collapse behavior
@@ -4182,6 +4207,7 @@ program + ADR-22). -->
 - **Outcome:** done — left-panel action cards now match the workspace collapse UX.
 - **Open items:** B-2026-08-18-6 (grounding), B-2026-08-18-4 (weather card), §40 efficiency.
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (cont.) — <br>-in-table fix + weather steer (proven unreliable)
@@ -4195,6 +4221,7 @@ program + ADR-22). -->
 - **Outcome:** done — <br> rendering fixed; steer strengthened but honestly logged as insufficient; guaranteed path scoped.
 - **Open items:** B-2026-08-18-4 (structured weather — the real fix), B-2026-08-18-6 (grounding), §40 efficiency.
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-18 — Session 298 (cont.) — remove phantom "do not read it back" instruction everywhere (B-2026-08-18-7)
@@ -4208,6 +4235,7 @@ program + ADR-22). -->
 - **LESSON:** the earlier "fixed in one place" was wrong — the same instruction was duplicated across tool output + loop feedback + system prompt. For any "remove this phrasing" task, grep ALL generators (tool output, loop-injected evidence, system prompts) — don't trust a single-site fix.
 - **Open items:** B-2026-08-18-4 (weather card), -6 (grounding), §40 efficiency.
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-19 — Session 298 (cont.) — code_exec run-a-file recovery (B-2026-08-18-8)
@@ -4221,6 +4249,7 @@ program + ADR-22). -->
 - **Outcome:** done — code_exec run-a-file dead-end fixed structurally.
 - **Open items:** B-2026-08-18-4 (weather card), -6 (grounding); the z.ai init-timeout flakiness (known slow-provider, ADR-45) surfaced again on live tests.
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-19 — Session 298 (cont.) — GENERAL tool-error recovery (root fix, ADR-50)
@@ -4234,6 +4263,7 @@ program + ADR-22). -->
 - **Outcome:** done — general recovery layer replaces the whack-a-mole.
 - **Open items:** B-2026-08-18-4 (weather card), -6 (grounding); could add more structural auto-corrects per known mis-use.
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-19 — Session 298 (cont.) — shell failures now feed the recovery layer (B-2026-08-18-10)
@@ -4248,6 +4278,7 @@ program + ADR-22). -->
 - **LESSON:** the general recovery layer (ADR-50) only works if tools REPORT failures. shell's success=True-on-failure was hiding them (same root as the completion-floor observation-check workaround). Fixing the SOURCE (tool reports failure) is better than working around it downstream.
 - **Open items:** B-2026-08-18-4 (weather card), -6 (grounding).
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-19 — Session 298 (cont.) — synthesize-from-reasoning rescue (B-2026-08-18-11) — user's hypothesis CONFIRMED
@@ -4262,6 +4293,7 @@ program + ADR-22). -->
 - **Outcome:** done — the empty_response dead-end is fixed at the root (the answer was in the reasoning channel; now captured + synthesized). Completes the recovery arc (ADR-50 + B-2026-08-18-8/-10/-11).
 - **Open items:** B-2026-08-18-4 (weather card), -6 (grounding).
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-19 — Session 299 — structured tool failure recovery boundary
@@ -4540,6 +4572,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), B-2026-08-20-19 (broken test-import, Low), ADR-55 live smoke (blocked on key).
 - **Report:** `.context/memory/reviews/2026-08-20-review-85.md`
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-20 — Session 320 — fix B.AI model ID casing + context windows (ADR-55 correction)
@@ -4552,6 +4585,7 @@ program + ADR-22). -->
 - **Open items:** ADR-55 live smoke (blocked on key), B-2026-08-20-10 (MiniMax XML conflict), B-2026-08-20-11 (429 empty bubble), B-2026-08-20-19 (broken test-import).
 - **Report:** `.context/memory/reviews/2026-08-20-review-86.md`
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-20 — Session 321 — switch B.AI to api.bankofai.io + live-verify (ADR-55)
@@ -4563,6 +4597,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-10 (MiniMax XML conflict, High), B-2026-08-20-11 (429 empty bubble, Medium), B-2026-08-20-19 (broken test-import, Low). ADR-55 now live-verified; `hy3` absent from live list (window entry retained as harmless).
 - **Report:** `.context/memory/reviews/2026-08-20-review-87.md`
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-20 — Session 322 — rename B.AI provider bai → bankofai (drop "bai")
@@ -4575,6 +4610,7 @@ program + ADR-22). -->
 - **Open items:** B-2026-08-20-10 (High), B-2026-08-20-11 (Medium), B-2026-08-20-19 (Low). User to restart backend before retrying.
 - **Report:** `.context/memory/reviews/2026-08-20-review-88.md`
 - **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
 
 ---
 ## 2026-08-20 — Session 323 — task-anchored recovery nudges + creation-commitment detection
@@ -5632,3 +5668,15 @@ authoritative.
 - **Transfer:** user directed handoff to zcode (9cf4f64); my impl checkpointed as e0f90c7 by the transfer; I committed the missing guard-pin test (62fb5e4) as handover material. zcode owns live-test + zcode-ft-review assessment + release. My B-2026-08-30-7 claim (chat.py thinking panel) NOT transferred — remains mine, paused.
 - **Pre-existing failures found:** tests/e2e/test_parent_completion_floor_e2e.py (2: successful_last_action_accepts_done, low_stakes_failure_is_not_gated) fail on CLEAN HEAD — not mine (verified via stash run); plus ~41 more full-suite failures unattributed (single -x run cut short at tests/api; test_chat.py itself 44/44 green with my changes; one order-dependent FOREIGN KEY flake). Worth a peer baseline pass.
 - **Also this session:** cross-platform harnesses (harness_common.py, 18 scripts), key-leak remediation (provider_key()), CAT2/CAT1/LM-MATH benchmark runs, B-2026-08-30-7 root-cause + claim posted.
+## 2026-09-01 — Session 406 — zcode joins the collab; B-2026-08-30-7 thinking-panel fix
+
+- **Agent:** ZCode (zcode) | **Model:** deepseek-v4-flash | **Platform:** Windows (Tison's local machine, same checkout as opencode) | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** none — collaboration join + bug fix
+- **Task:** Join the opencode+claude collaboration per the protocol; publish peer review notes; fix the Thinking panel (B-2026-08-30-7) after user redirected "reclaim the task" to mean the thinking block.
+- **Commits:** 3f8d37b (join: registry + collab README), 6c61fda (ft review notes event), 8f9879c (b30-7 live evidence event), e0f90c7 (opencode impl checkpoint, preserved), 2f7ca6c (opencode claim event committed), 9cf4f64 (ft handoff to zcode), c16c59a (b30-7 handoff to zcode), 4d53397 (thinking fix), 7086e96 (live trace script).
+- **Outcome (B-2026-08-30-7 fix, 4d53397):** chat.py bridge now forwards the loop's leak-filtered reasoning prose as thinking_token (scaffold-guarded via answer_is_internal_scaffold — plain-prose refs pass the XML filter); _narration_sse moved to status_update (its documented channel). 52 api tests + 77 regression slice pass, ruff clean. **Live-verified (bankofai/glm-5.3-flash, isolated 8765):** curated label "Researching on the web…" arrived on status_update and thinking_token count = 0 (no more masquerading). **Live-inconclusive:** reasoning-prose forwarding — the trace turn errored after 2 tokens (documented bankofai free-tier 429 pattern), no reasoning streamed to forward. Unit tests cover the forwarding + scaffold guard.
+- **Open items:** final prose check = user restarts the app (old code still running on 8000) and runs one agent query — Thinking box should show real reasoning, status area shows labels; or rerun scripts/live_test_thinking_block.py in a clean provider window. Peer baseline pass on opencode's reported pre-existing failures (2x test_parent_completion_floor_e2e on clean HEAD + ~41 unattributed full-suite). Follow-through live-test + release: handed to claude-opus-4.8 with this session end (user: both agents hand over).
+- **Ownership note:** user directed B-2026-08-30-7 to zcode (c16c59a); opencode's session entry logged "remains mine, paused" 2 minutes AFTER that event (race) — trail authority is the user direction.
+- **Report:** none — fix session (tests + live trace are the verification)
+- **Notes:** none
+- **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
