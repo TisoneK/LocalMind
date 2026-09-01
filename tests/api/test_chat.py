@@ -175,6 +175,51 @@ class TestChat:
         full = "".join(e.get("content", "") for e in events if e.get("type") == "token")
         assert "Hello world" in full
 
+    def test_forwards_reasoning_prose_as_thinking_token(self, client):
+        """B-2026-08-30-7: the loop yields leak-filtered reasoning prose as
+        StreamChunk(thinking=...); the bridge must forward it as thinking_token
+        so the Thinking box shows the model's ACTUAL reasoning (it previously
+        dropped the prose and showed only curated tool labels)."""
+
+        async def _process(self, message, session_id, file=None, filename=None,
+                            content_type=None, obs=None, original_path=None,
+                            client_intent=None, client_confidence=0.0, **kwargs):
+            from core.models import StreamChunk
+            yield StreamChunk(text="", thinking="start", done=False)
+            yield StreamChunk(text="", thinking="The user wants the weather; I should search.", done=False)
+            yield StreamChunk(text="", thinking="end", done=False)
+            yield StreamChunk(text="22°C", done=True)
+
+        with patch("core.engine.Engine.process", _process):
+            r = client.post("/api/chat", data={"message": "weather", "session_id": "t-think"})
+        events = _parse_sse(r.text)
+        kinds = [e.get("type") for e in events]
+        assert "thinking_start" in kinds
+        assert "thinking_end" in kinds
+        toks = [e for e in events if e.get("type") == "thinking_token"]
+        assert toks, "expected reasoning prose forwarded as thinking_token"
+        assert "user wants the weather" in toks[0].get("thinking", "")
+
+    def test_thinking_scaffold_prose_is_not_forwarded(self, client):
+        """B-2026-08-30-7 guard: plain-prose scaffold references pass the loop's
+        XML leak filter but must NOT reach the user's Thinking box."""
+
+        async def _process(self, message, session_id, file=None, filename=None,
+                            content_type=None, obs=None, original_path=None,
+                            client_intent=None, client_confidence=0.0, **kwargs):
+            from core.models import StreamChunk
+            yield StreamChunk(text="", thinking="The synthesis reminder says do not call another tool.", done=False)
+            yield StreamChunk(text="", thinking="Real reasoning here.", done=False)
+            yield StreamChunk(text="ok", done=True)
+
+        with patch("core.engine.Engine.process", _process):
+            r = client.post("/api/chat", data={"message": "x", "session_id": "t-think-guard"})
+        events = _parse_sse(r.text)
+        toks = [e for e in events if e.get("type") == "thinking_token"]
+        assert len(toks) == 1
+        assert "Real reasoning here." in toks[0].get("thinking", "")
+        assert "synthesis reminder" not in toks[0].get("thinking", "")
+
     def test_first_sse_event_is_immediate_control_event(self, client):
         """ADR-37: no hardcoded narration — the first wire event is an immediate
         obs/control event, not a delayed model token or a stage-name status."""

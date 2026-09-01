@@ -1,9 +1,10 @@
-"""B-2026-08-24-1 + -6: the Thinking box shows curated narration, not raw CoT.
+"""B-2026-08-24-1 / B-2026-08-30-7: curated narration is a STATUS label.
 
-The raw model chain-of-thought is no longer streamed to the box (it leaked
-internal wiring — instruction echoes, "the synthesis reminder", schema musing).
-Instead, a short plain-language line is emitted when each tool STARTS. These
-tests pin the narration helper's contract.
+The narration helper emits a short plain-language line when each tool
+STARTS — on the status_update channel (its documented home), NOT as
+thinking_token. The Thinking box is reserved for the model's actual
+(leak-filtered) reasoning; tool labels masquerading as thinking was the
+B-2026-08-30-7 bug. These tests pin the narration helper's contract.
 """
 
 from __future__ import annotations
@@ -20,18 +21,26 @@ def _payload(sse: str | None) -> dict | None:
     return json.loads(sse[len("data: "):].strip())
 
 
-def test_start_events_emit_a_curated_line() -> None:
+def test_start_events_emit_a_curated_status_line() -> None:
     p = _payload(_narration_sse("sysinfo", "started"))
     assert p is not None
-    assert p["type"] == "thinking_token"
-    assert "Checking your system" in p["thinking"]
+    assert p["type"] == "status_update"
+    assert "Checking your system" in p["status"]
     # Plain language — no tool name / internal wiring leaked.
-    assert "sysinfo" not in p["thinking"]
+    assert "sysinfo" not in p["status"]
+
+
+def test_narration_never_emits_thinking_token() -> None:
+    """B-2026-08-30-7 regression guard: tool labels must not masquerade as
+    model reasoning on the thinking_token channel."""
+    p = _payload(_narration_sse("web_research", "started"))
+    assert p is not None
+    assert p["type"] != "thinking_token"
 
 
 def test_unknown_tool_gets_a_generic_line() -> None:
     p = _payload(_narration_sse("some_new_tool", "running"))
-    assert p is not None and "Working on it" in p["thinking"]
+    assert p is not None and "Working on it" in p["status"]
 
 
 def test_non_start_status_emits_nothing() -> None:
@@ -52,4 +61,4 @@ def test_common_tools_have_plain_language_lines() -> None:
         ("file_write", "Writing a file"),
     ]:
         p = _payload(_narration_sse(tool, "started"))
-        assert p is not None and expect in p["thinking"]
+        assert p is not None and expect in p["status"]

@@ -36,6 +36,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
+from core.agent.loop import answer_is_internal_scaffold
 from core.config import settings
 from core.engine import Engine
 from core.error_normalizer import SOURCE_INTERNAL, normalize_error
@@ -123,14 +124,38 @@ _NARRATION_SKIP = frozenset({"todo_write", "describe_tool", "create_plan", "add_
 
 
 def _narration_sse(tool_name: str, status: str) -> str | None:
-    """SSE for the Thinking box: a curated line when a tool STARTS. None when the
-    tool is internal or the event isn't a start."""
+    """SSE for the status area: a curated line when a tool STARTS. None when the
+    tool is internal or the event isn't a start.
+
+    B-2026-08-30-7: moved from thinking_token to status_update — the Thinking
+    box is for the model's actual reasoning (leak-filtered thinking chunks
+    from the loop), not curated tool labels. status_update is the documented
+    progress channel (useLocalMind.ts case 'status_update' → statusText)."""
     if status not in ("started", "running", "pending", "in_progress"):
         return None
     if not tool_name or tool_name in _NARRATION_SKIP or tool_name in _INTERNAL_DELEGATION_TOOLS:
         return None
     line = _TOOL_NARRATION.get(tool_name, "Working on it")
-    return _sse({"type": "thinking_token", "thinking": line + "…\n"})
+    return _sse({"type": "status_update", "status": line + "…"})
+
+
+def _thinking_token_sse(text: str) -> str:
+    """SSE for the Thinking box: the loop's leak-filtered reasoning prose.
+
+    B-2026-08-30-7: the loop already filters system-leak XML before yielding
+    reasoning chunks (loop.py StreamChunk.thinking sites); the bridge drops
+    them (B-2026-08-24-6), so the box only ever showed curated labels.
+    Forward the filtered prose as thinking_token — the channel the frontend
+    maps into message.thinking (CenterPanel ThinkingBlock).
+
+    Scaffold-guard: plain-prose scaffold references ("the synthesis reminder
+    says…") are NOT user answers and pass _filter_system_leaks, so they are
+    dropped here too (same detector the loop's final-answer gate uses)."""
+    if not text:
+        return ""
+    if answer_is_internal_scaffold(text):
+        return ""
+    return _sse({"type": "thinking_token", "thinking": text})
 
 
 def _tool_call_payload(evt, session_id: str) -> dict:
@@ -837,14 +862,20 @@ async def _event_stream(
                 _response_chunks.append(chunk.text)
                 _last_sent_time = time.monotonic()
 
-            # 2. Thinking lifecycle markers only — B-2026-08-24-6: the model's
-            # RAW chain-of-thought is NO LONGER streamed to the user's Thinking
-            # box (it leaked internal wiring — instruction echoes, "the synthesis
-            # reminder", schema musing, and messy recovery monologue). The box
-            # now shows the curated per-action narration emitted alongside each
-            # tool call (B-2026-08-24-1); the raw prose stays internal.
-            if chunk.thinking in ("start", "end"):
-                yield _sse({"type": f"thinking_{chunk.thinking}"})
+            # 2. Thinking — B-2026-08-30-7: forward the loop's leak-filtered
+            # reasoning prose as thinking_token so the Thinking box shows the
+            # model's ACTUAL reasoning again (it had shown only curated tool
+            # labels since B-2026-08-24-6). The loop filters system-leak XML;
+            # the bridge adds a scaffold-prose guard (answer_is_internal_
+            # scaffold) because plain-prose scaffold refs pass the XML filter.
+            # Lifecycle markers still bridge to thinking_start/thinking_end.
+            if isinstance(chunk.thinking, str) and chunk.thinking:
+                if chunk.thinking in ("start", "end"):
+                    yield _sse({"type": f"thinking_{chunk.thinking}"})
+                else:
+                    tok = _thinking_token_sse(chunk.thinking)
+                    if tok:
+                        yield tok
                 _last_sent_time = time.monotonic()
 
             # 3. Emit done AFTER text (so all content is already sent)
