@@ -3336,10 +3336,13 @@ class AgentLoop:
             ):
                 _synth_hint = (
                     "\nSYNTHESIS REMINDER: You have already gathered tool evidence "
-                    "in this conversation (see the tool results above). "
-                    "Your NEXT response must PRESENT the actual results to the user — "
-                    "report the data you found, do NOT say 'let me run' or 'I'll check'. "
-                    "If you have the data, show it now. Do NOT call another tool.\n"
+                    "in this conversation (see the tool results above). Do NOT narrate "
+                    "more planning ('let me run…', 'I'll check…') — narrating a next step "
+                    "without doing it wastes the turn. If the evidence you have FULLY "
+                    "answers the request, present it now. But if a distinct part of the "
+                    "request is still unanswered and a tool can get it, call that tool "
+                    "directly (don't announce it) — a partial answer plus a punt is not "
+                    "done.\n"
                 )
                 iteration_messages.append({"role": "user", "content": _synth_hint})
 
