@@ -175,6 +175,13 @@ def _extract_readable_content(html: str) -> str:
     # Remove HTML comments
     html = re.sub(r"<!--[\s\S]*?-->", "", html)
 
+    # Preserve table structure: put a visible separator between cells so a row's
+    # values don't concatenate into an unreadable run. Without this, <td>6</td>
+    # <td>2</td> collapsed to "62" (the '22006246' standings rows the model had
+    # to guess-parse, burning iterations — B-2026-09-01 EPL-table trace). Rows
+    # still become newlines via the <tr> rule below.
+    html = re.sub(r"</(?:td|th)>", " | ", html, flags=re.IGNORECASE)
+
     # Convert block elements to newlines for readability
     for tag in [
         "p",
