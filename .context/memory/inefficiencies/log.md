@@ -1082,3 +1082,13 @@ if literally nothing slowed you down.
 - **Cause:** in a FRESH session (no history) the conversational fast path classifies many natural prompts as chat; the user's app only routed the same prompt through the agent loop because of its session context.
 - **Workaround / fix:** live traces of agent-loop paths must use explicitly tool-requiring prompts ("Use web research to find X, then tell me Y") in the isolated harness. Noted in scripts/live_test_thinking_block.py.
 - **Prevent next time:** when a live trace shows an unexpectedly quiet stream, check the boot log for `fast-path(conversational)` before suspecting the code under test.
+
+---
+## 2026-09-02 — ZCode / qwen3.8-flash (Session 407)
+- **Problem:** `tasks/backlog.md` (318KB) exceeds the Read tool's 256KB cap — forced grep/sed/awk line-extraction workarounds for the marking sweep.
+- **Cost:** ~10 extra tool calls + two persisted-output files to re-read.
+- **Cause:** append-only growth with no compaction path; the file is now the largest memory file.
+- **Workaround / fix:** line-numbered `grep -n` + `awk 'NR==…'` extraction works; a future core release could add a `backlog archive` convention (move checked entries older than N months to `tasks/archive/`, leaving IDs + one-line status in place).
+- **Prevent next time:** know the Read cap before opening backlog.md; go straight to targeted greps.
+- **Problem 2:** `gates.conf` pre-commit hardcodes the POSIX venv path `backend/.venv/bin/ruff` — fails 127 on Windows (`backend/.venv/Scripts/ruff.exe`). Ran ruff manually via the Windows path (clean).
+- **Prevent next time:** gates.conf needs a platform-aware ruff path (or a `ruff` shim on PATH); logged for a future core/gates fix.

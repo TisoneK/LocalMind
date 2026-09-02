@@ -154,3 +154,7 @@ Root-caused the Windows dev-folder transcript: the loop re-ran near-identical `G
 ## Session 380 (2026-08-23) — Buffy/GLM-5.2 — B-2026-08-23-32 file diffs for any write
 
 User picked B-2026-08-23-32. The frontend DiffBlock only ever filled for edit_file; file_write/script rewrites showed no diff. Loop now snapshots pre-write content and emits the same file_diff obs event after a successful file_write (single-tool + batch paths); new files diff all-added, overwrites exact-changed, unchanged → no event. Prompt steering added (shell file-writes are last resort; prefer write tools) with justified budget bumps. Part 3 "store stats?" left OPEN. Backend 2490/2, frontend diff suites green. `008995c`.
+
+## Session 407 (2026-09-02) — ZCode/qwen3.8-flash — backlog marking sweep
+
+User: "most were fixed but not marked." Verified all 90 unchecked backlog entries against git log (ID-tagged commits), sessions.md closures, collab release events, and code/test inspection; checked off 40 with dated evidence notes (27 shipped, 7 ADR-53-parked, 2 superseded, 2 demoted, loop-discipline Steps 3-5). ~50 genuinely open. Re-confirmed B-2026-08-30-17 (CRLF verify false-positive) live and corrected its "subset = real drift" heuristic in flaws/log.md.

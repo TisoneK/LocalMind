@@ -5680,3 +5680,17 @@ authoritative.
 - **Report:** none — fix session (tests + live trace are the verification)
 - **Notes:** none
 - **Handover (final, user-directed):** both zcode and opencode hand all open scopes to claude-opus-4.8 — see the two handoff events in this push (agent-followthrough-persistence, B-2026-08-30-7).
+
+---
+## 2026-09-02 — Session 407 — backlog marking sweep (memory hygiene)
+
+- **Agent:** ZCode | **Model:** 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0/qwen3.8-flash | **Platform:** Windows (Tison's local machine) | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** none — `.context/` memory hygiene
+- **Task:** User: "most were fixed but not marked." Verified all 90 unchecked backlog entries against git history (ID-tagged commits), sessions.md closure notes, collab release events, and direct code/test inspection. Checked off 40 with dated evidence notes (in place, per Step 15): 27 fixed+shipped, 7 superseded/parked by ADR-53, 2 superseded-by-newer-entry, 2 demoted/closed-by-evidence, plus loop-discipline Steps 3-5. ~50 remain genuinely open (newest Session-404/405/406-era items, token/efficiency family, frontend features, standing items). Sweep section appended to backlog.md.
+- **Incident:** `context-sync verify` failed on 2 core files — confirmed the known B-2026-08-30-17 Windows autocrlf false-positive (git blobs match manifest exactly). Correction appended to flaws/log.md: the "subset failing = real drift" heuristic in the 2026-08-30 entry is WRONG (only LF-stored files convert; the reliable check is git-blob hash vs manifest).
+- **Baseline (pre-existing, NOT from this session):** `ruff check backend/src` on clean HEAD = 34 errors (product code untouched here — consistent with Session 405/406's reported pre-existing failures needing a peer baseline pass). `tsc -b --noEmit` clean.
+- **Commits:** 1 (backlog marks + sweep section + logs)
+- **Outcome:** done — backlog now reflects verified state; no product code touched.
+- **Open items:** the ~50 still-open entries in backlog.md (see the 2026-09-02 sweep section for the grouped list).
+- **Report:** none — bookkeeping session (the sweep section in backlog.md is the record)
+- **Notes:** none

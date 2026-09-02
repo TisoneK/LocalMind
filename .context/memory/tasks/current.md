@@ -1,49 +1,26 @@
 # Current Task
 
-**Status:** IDLE — Session 404 (full-system prompt-suite benchmark) COMPLETE:
-`scripts/lm_suite_tests.py` (50 tests / 64 turns, the user's 20 categories) +
-`scripts/run_suite_detached.sh`, live-run on bankofai/deepseek-v4-flash.
-29 PASS / 14 PARTIAL / 7 FAIL raw (31 PASS after 2 confirmed check
-false-negatives). Results + root-cause clusters:
-`memory/system/suite-results-404.md`. New backlog: B-2026-08-25-7 (fast-path
-context loss — High), B-2026-08-25-8 (narration-instead-of-action — High),
-B-2026-08-25-9 (unresolved-reference ambiguity — Medium). Session 402's
-B-25-6 fix still pending user visual sign-off. No live session in progress.
-Session 399 notes below retained for context.
+**Status:** IDLE — Session 407 (backlog marking sweep) COMPLETE: verified all 90
+unchecked backlog entries against git history, session logs, collab release
+events, and code/test inspection; checked off 40 with dated evidence notes
+(27 fixed+shipped, 7 superseded/parked by ADR-53, 2 superseded-by-newer,
+2 demoted/closed-by-evidence, loop-discipline Steps 3-5). ~50 remain genuinely
+open — grouped list in the `2026-09-02 — Backlog marking sweep` section of
+`tasks/backlog.md`. Re-confirmed B-2026-08-30-17 (Windows autocrlf verify
+false-positive) live; heuristic correction appended to `flaws/log.md`.
+No product code touched. No live session in progress.
 
-## Session 399 — done this session (all pushed)
+**Feature:** none
 
-guard exemption (5678a05) · B-24-5 label swap (0827fdf) · B-24-3 remove old
-tool selector (8447d22) · B-24-4 agent-turn titles (9e374e1) · B-24-10 shell
-timeout 45→120s (e827e8b) · B-24-11 psutil dependency (7552aa0) · B-24-2
-failure-aware/wall-clock-bound iteration cap (ef465ea + 487e408, live-tested) ·
-WorkspaceLayout stale test mock (ae298ad) · B-24-13 app bg = Settings surface
-(1b15c2f) · B-24-14 removed `layout` reflow jitter from live lists (6cc1aa7).
+## Notes for the next session
 
-**More done:** B-24-9 self-disclosure policy + knowledge-doc load-path fix
-(0a2c67c, live-verified); B-25-1 local-search-over-shell 4-layer fix
-(a2d4ff4/8f3c1e1/1bf3594, live-verified); live_test script made portable.
-
-**Open B-24 items:** B-24-1 + B-24-6 (curated narration — user chose "curated
-narration only"; big item) · B-24-7 (gemini bypasses agent) · B-24-12 (sysinfo
-native fallbacks) · B-24-15 (todos completed on cut-short turn) · B-24-16
-(chat→agent switch prompt) · B-24-17 (terminal redesign). Open B-25: -2
-(content search), -3 (open_with verify). B-24-8 = standing live-test practice.
-
-**Live-test:** authorized per-item when necessary; test backend on **port 8010**
-(never 8000 — the user's app). Read `.context/memory/system/live-testing.md`.
-
----
-
-## Session 400 — system-search-tool Phase 1 COMPLETE (separate session)
-
-**Feature:** system_search unified local search tool (6 ops), local-discovery
-routing fix, find_path retired from model surface; backend 2586 passed / 2
-skipped; live-verified on zen/hy3-free + zai/glm-4.5-flash. Next candidates
-logged as B-2026-08-25-1/-2/-3. See
-`features/system-search-tool/manifest.md` for the evidence table and limits.
-
-**User directive reminders (standing):** one feature per session; fix spotted
-issues unless they need their own session; no pauses between sessions; multi-
-agent development; live-test the real app on free models; never touch port
-8000; never print key values.
+- The backlog's unchecked set is now trustworthy: unchecked = no fix evidence
+  found on 2026-09-02. Newest open items: B-2026-08-25-4/-7/-12/-13,
+  B-2026-08-30-8/-12/-15 (verify), B-2026-08-29-1, B-2026-08-24-7/-17,
+  B-2026-08-23-20/-24, B-2026-08-25-2/-3/-10, loop-discipline Step 5 remainder
+  (context-quality pass).
+- **Live-test:** authorized per-item when necessary; test backend on **port 8010**
+  (never 8000 — the user's app). Read `.context/memory/system/live-testing.md`.
+- Collaboration: last trail events are claude-opus-4.8 releases (web-truncation,
+  follow-through, suite-nl2-id3, web-fetch-table) — all scopes released, none
+  active as of 2026-09-02.

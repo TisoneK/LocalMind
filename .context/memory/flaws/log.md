@@ -532,3 +532,12 @@ Flaws from Session 7 are now **fixed**:
 - **Root cause:** (1) the event contract says refs may be "event IDs or commit SHAs" but the matcher treats only event IDs as release links; (2) `check` appears to do unindexed O(n²)-style scanning (plus, on Windows/Git Bash, possible subshell slowness) with no progress output.
 - **Suggested fix:** package: (a) make `released()` also match release→commit→claim linkage (or document that releases MUST cite the claim event ID and have the tool warn when a release references only SHAs); (b) give `check` a bounded scan + progress output, and profile its loops.
 - **Status:** open (filed against package upstream TisoneK/.context)
+
+---
+## 2026-09-02 — Session 407 — ZCode — correction: the CRLF verify heuristic ("subset failing = real drift") is wrong
+
+- **Flaw:** the 2026-08-30 entry (Session 406) advised: "treat an all-files-FAILED result on a git-clean tree as the CRLF signature; only a SUBSET of files failing indicates real drift."
+- **Symptom:** today `context-sync verify` failed on exactly 2 of 21 core files (`schemas/context.schema.json`, `templates/AGENTS.md`) on a clean tree — the heuristic says "real drift", but `git show HEAD:<file> | sha256sum` matched the manifest for both. False positive on a subset.
+- **Root cause:** with `core.autocrlf=true`, git only converts files whose repo content is LF; files already stored with CRLF check out unchanged and pass. So the false-positive set = the LF-stored subset, not "all files".
+- **Suggested fix:** package: EOL-normalized hashing in context-sync verify (hash LF-normalized bytes); until then the reliable manual check is `git show HEAD:<path> | sha256sum` vs the manifest line, per file.
+- **Status:** open (B-2026-08-30-17 remains the tracked item)
