@@ -48,6 +48,21 @@ def test_divergent_text_yields_nothing_safe():
     assert _flush_after_live_stream("shown preamble", "completely different") == ""
 
 
+def test_long_answer_head_plus_tail_composition():
+    """The long-answer flush path concatenates the first buffering loop's text
+    (_stripped_buffer, ~2000-char detection buffer) with the remainder loop's
+    cleaned text; the shown prefix must still be subtracted exactly."""
+    head = "x" * 2000  # fills _MINIMAX_CHECK_CHARS
+    mid = " The answer begins here."  # streamed live past the buffer loop
+    tail = "Final part of the answer."  # arrived via the remainder loop only
+    shown = head + mid
+    full = head + mid + tail
+    remainder = _flush_after_live_stream(shown, full)
+    assert remainder == tail
+    # Concatenating shown + remainder reconstructs the full answer.
+    assert shown + remainder == full
+
+
 def test_leading_whitespace_in_clean_text_still_dedupes():
     """Clean text starting with whitespace then the shown prefix dedupes."""
     assert _flush_after_live_stream("head", "  head tail") == " tail"

@@ -6415,8 +6415,17 @@ class AgentLoop:
                     )
                     if _flush_tail:
                         yield StreamChunk(text=_flush_tail, done=False, usage=dict(_provider_usage))
-                elif _iteration_clean_text.strip():
-                    yield StreamChunk(text=_iteration_clean_text, done=False, usage=dict(_provider_usage))
+                else:
+                    # B-2026-09-02 (pre-existing S332-B head-drop): the buffered
+                    # flush yielded ONLY _iteration_clean_text — on answers long
+                    # enough to fill the 2000-char detection buffer, the head
+                    # (_stripped_buffer) never reached the user. Flush the head
+                    # before the tail (non-streamed turns have no dedupe need:
+                    # nothing was shown live).
+                    if _stripped_buffer.strip():
+                        yield StreamChunk(text=_stripped_buffer, done=False, usage=dict(_provider_usage))
+                    if _iteration_clean_text.strip():
+                        yield StreamChunk(text=_iteration_clean_text, done=False, usage=dict(_provider_usage))
                 # Session 237: gate passed but no model answer — synthesize the
                 # real content from tool evidence (not just "✓ n/n criteria met").
                 if not full_text.strip():
