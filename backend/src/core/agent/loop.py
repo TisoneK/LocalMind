@@ -1155,6 +1155,33 @@ def parent_completion_floor_note(trace) -> Optional[str]:
     return None
 
 
+def _flush_after_live_stream(streamed_text: str, clean_text: str) -> str:
+    """Return the not-yet-seen remainder of `clean_text` after live streaming.
+
+    B-2026-09-02 (ADR-57 slice 1): when the head of an iteration's answer was
+    streamed live, the post-gate flush must emit only what the user has NOT
+    already seen — otherwise a cleaned/intercepted buffer re-yields the whole
+    answer (the Session 332 duplicate-answer class, reintroduced by streaming).
+
+    Prefix-aware: the live path never yields a detected tool-call marker (the
+    pending-marker hold flips the turn back to the buffered path first), so
+    the cleaned full text should start with the streamed prefix. If it does,
+    return the tail; if it doesn't (unexpected guard rewrite), return "" —
+    losing a few unseen chars beats duplicating the answer in the bubble.
+    """
+    shown = (streamed_text or "").strip()
+    clean = (clean_text or "").strip()
+    if not clean:
+        return ""
+    if not shown:
+        return clean
+    # The buffered text is whitespace-stripped by _strip_minimax_tool_calls,
+    # so compare against the stripped shown prefix (the head was yielded raw).
+    if clean.startswith(shown):
+        return clean[len(shown):]
+    return ""
+
+
 # B-2026-08-20-6 — prose tool-action commitment detector (Session 307).
 # Phrases that indicate the model is *preamble-ing* a tool call rather than
 # answering. Matched case-insensitively as substrings. Scoped to iterations
@@ -4975,6 +5002,46 @@ class AgentLoop:
                 # the frontend got error="" and rendered nothing.
                 _minimax_partial_seen = False  # track if we've seen start of XML
 
+                # B-2026-09-02: live-stream the final answer instead of buffering
+                # it for a single burst (timeline: ~51s of dead air then a dump).
+                # SAFE-GATED — live streaming only when NO discard path can fire
+                # after text is already on screen (no frontend supersede yet):
+                #   (a) POST-TOOL iteration (iteration>=1 with a tool already
+                #       run) — first-iteration force-tool recovery cannot apply;
+                #   (b) the LAST tool run is NOT high-stakes (file_write/
+                #       file_edit/shell/code_exec) — those turns keep the
+                #       parent-completion-floor's ability to discard + replan
+                #       silently (B-2026-08-18-2) without a duplicate answer;
+                #   (c) NO success criteria — a research/chat turn; the
+                #       acceptance gate passes trivially, so Session 332-B's
+                #       "don't show discarded text" guarantee is not at stake
+                #       (goal turns keep buffering).
+                # The buffer path stays authoritative: we only ADD live yields
+                # once a small lookahead confirms no text-encoded tool-call
+                # marker, and per-chunk holds below catch a marker arriving
+                # mid-stream. The fabricated-data recovery is bypassed once
+                # live streaming started (obs-emitted) — its `continue` would
+                # duplicate the shown text.
+                from core.agent.post_execution_verifier import is_high_stakes_intent
+
+                _last_tool_name = next(
+                    (
+                        getattr(s, "tool_name", "") or ""
+                        for s in reversed(trace.steps if trace else [])
+                        if getattr(s, "tool_name", "")
+                    ),
+                    "",
+                )
+                _stream_live_ok = (
+                    iteration >= 1
+                    and bool(_last_tool_name)
+                    and not is_high_stakes_intent(_last_tool_name)
+                    and not getattr(trace, "success_criteria", None)
+                )
+                _streamed_live = False
+                _streamed_live_text: list[str] = []
+                _pending_text = ""
+
                 async for chunk in result:
                     # B-2026-08-02-2 (A2): abort check during stream buffering.
                     if abort_signal is not None and abort_signal.is_set():
@@ -4986,6 +5053,40 @@ class AgentLoop:
                     _minimax_chunks.append(
                         StreamChunk(text=filtered_text, done=chunk.done, usage=dict(_provider_usage))
                     )
+                    # Live streaming (gated): flush the head once past a ~150-char
+                    # lookahead with no tool-call marker, then stream each chunk.
+                    # Subsequent chunks are held one pending-buffer deep so a
+                    # text-encoded tool-call marker arriving mid-stream (<invoke
+                    # … / minimax:tool_call) is NEVER yielded live — a marker
+                    # flips the turn back to the buffered path (the interceptor
+                    # owns it) instead of leaking XML into the chat bubble. A
+                    # chunk merely ENDING in "<" is held one more chunk (a
+                    # marker can straddle a chunk boundary).
+                    if _stream_live_ok:
+                        if not _streamed_live:
+                            if (len(_minimax_buffer) >= 150 or chunk.done) and not (
+                                _MINIMAX_PARTIAL_RE.search(_minimax_buffer)
+                                or _STANDALONE_PARTIAL_RE.search(_normalize_dsml(_minimax_buffer))
+                                or _has_minimax_tool_call(_minimax_buffer)
+                            ):
+                                _streamed_live = True
+                                _streamed_live_text.append(_minimax_buffer)
+                                yield StreamChunk(text=_minimax_buffer, done=False, usage=dict(_provider_usage))
+                        elif filtered_text:
+                            _pending_text += filtered_text
+                            _pending_lower = _pending_text.lower()
+                            if (
+                                "<invoke" in _pending_lower
+                                or "minimax:tool_call" in _pending_lower
+                                or _pending_text.rstrip().endswith("<")
+                            ):
+                                # Possible tool-call XML — stop live-streaming;
+                                # pending text stays in the buffer path only.
+                                _stream_live_ok = False
+                            else:
+                                _streamed_live_text.append(_pending_text)
+                                yield StreamChunk(text=_pending_text, done=False, usage=dict(_provider_usage))
+                                _pending_text = ""
                     # ADR-41 (Session 254): forward the model's reasoning live
                     # as it streams (GLM thinking → ThinkingBlock). Reasoning is
                     # user-visible progress and never affects MiniMax/DSML
@@ -5604,6 +5705,12 @@ class AgentLoop:
                     _fabricated_data_detected
                     and intent in (Intent.WEB_SEARCH, Intent.WEB_FETCH)
                     and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES + 1
+                    # B-2026-09-02: once the answer streamed live, the recovery's
+                    # `continue` would show the forced re-search under the text
+                    # already on screen (duplicate). The head was veto-checked
+                    # before streaming started; a late pattern match is logged
+                    # and the answer stands (slice-1 tradeoff, ADR-57 Open-Q4).
+                    and not _streamed_live
                 ):
                     # The model fabricated time-sensitive data from training — this is
                     # the most dangerous hallucination because it looks plausible.
@@ -6139,7 +6246,15 @@ class AgentLoop:
                             )
                         continue
                     # Session 332-B: gate passed — flush the buffered text now.
-                    if _stripped_buffer.strip():
+                    # B-2026-09-02: if the head streamed live, flush only the
+                    # unseen tail (prefix-aware) — never re-yield shown text.
+                    if _streamed_live:
+                        _flush_tail = _flush_after_live_stream(
+                            "".join(_streamed_live_text), _stripped_buffer
+                        )
+                        if _flush_tail:
+                            yield StreamChunk(text=_flush_tail, done=False, usage=dict(_provider_usage))
+                    elif _stripped_buffer.strip():
                         yield StreamChunk(text=_stripped_buffer, done=False, usage=dict(_provider_usage))
                     # Session 237: the gate passed but the model may have run
                     # the tool without writing an answer — synthesize the real
@@ -6287,7 +6402,20 @@ class AgentLoop:
                         )
                     continue
                 # Session 332-B: gate passed — flush the buffered text now.
-                if _iteration_clean_text.strip():
+                # B-2026-09-02: if the head streamed live, flush only the unseen
+                # tail. The full clean answer = _stripped_buffer (first buffering
+                # loop — includes any held pending chunk) + _iteration_clean_text
+                # (this remainder loop's per-chunk cleaned text); the shown prefix
+                # is subtracted prefix-aware, so held-but-unseen text is recovered
+                # and shown text is never re-yielded.
+                if _streamed_live:
+                    _flush_tail = _flush_after_live_stream(
+                        "".join(_streamed_live_text),
+                        _stripped_buffer + _iteration_clean_text,
+                    )
+                    if _flush_tail:
+                        yield StreamChunk(text=_flush_tail, done=False, usage=dict(_provider_usage))
+                elif _iteration_clean_text.strip():
                     yield StreamChunk(text=_iteration_clean_text, done=False, usage=dict(_provider_usage))
                 # Session 237: gate passed but no model answer — synthesize the
                 # real content from tool evidence (not just "✓ n/n criteria met").
