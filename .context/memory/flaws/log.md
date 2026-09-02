@@ -541,3 +541,12 @@ Flaws from Session 7 are now **fixed**:
 - **Root cause:** with `core.autocrlf=true`, git only converts files whose repo content is LF; files already stored with CRLF check out unchanged and pass. So the false-positive set = the LF-stored subset, not "all files".
 - **Suggested fix:** package: EOL-normalized hashing in context-sync verify (hash LF-normalized bytes); until then the reliable manual check is `git show HEAD:<path> | sha256sum` vs the manifest line, per file.
 - **Status:** open (B-2026-08-30-17 remains the tracked item)
+
+---
+## 2026-09-02 — Session 407 — ZCode — second CRLF symptom: the sh context-sync port can't parse a CRLF MANIFEST.sha256 at all
+
+- **Flaw:** on this Windows checkout, `sh .context/core/bin/context-gates run exit` → the core-integrity step died with `sha256sum: 'bin/context-sync.ps1'$'\r': No such file or directory` for every manifest line.
+- **Symptom:** the sh port fails EARLIER than the .ps1 port: the .ps1 hashes raw bytes (false-positive on LF-stored files); the sh port reads MANIFEST.sha256 with `while read`, and autocrlf gives every filename a trailing `\r`, so no file can even be opened. Exit gate can't run core verify on Windows via sh.
+- **Root cause:** same as B-2026-08-30-17 (autocrlf=true) + the sh script not stripping CR when parsing the manifest.
+- **Suggested fix:** package: `tr -d '\r'` when reading MANIFEST.sha256 in the sh port (and EOL-normalized hashing per the 2026-08-30 entry).
+- **Status:** open (same tracked item B-2026-08-30-17)
