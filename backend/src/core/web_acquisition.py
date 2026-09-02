@@ -807,7 +807,11 @@ async def web_research(
             min(max_sources, len(urls)),
             url[:80],
         )
-        result = await acquire_web_content(url, query=query)
+        # Per-source: CHEAP strategies only (static + browser_read). The heavy
+        # scrapamoja stealth render is NOT run per source — in a multi-source
+        # loop that stacked ~65s per thin source and blew whole turns past the
+        # provider rate limit (B-2026-09-02). It runs at most ONCE below.
+        result = await acquire_web_content(url, query=query, max_strategies=2)
         # Session 341: run evidence validation after acquisition
         result = validate_web_result(result, query=query)
         if result.is_success():
@@ -816,6 +820,24 @@ async def web_research(
             # Keep the best partial result as a fallback
             if best_result is None or result.confidence > best_result.confidence:
                 best_result = result
+
+    # Final fallback: if no source yielded substantive content and the best we
+    # have is a thin skeleton, try the stealth renderer ONCE on the top source
+    # (this is where a JS/anti-bot page actually needs it). Bounded to a single
+    # attempt so it can't stack across sources.
+    best_thin = best_result is None or len(
+        (best_result.content or "").strip()
+    ) < _MIN_STATIC_SUBSTANCE_CHARS
+    if best_thin and scrapamoja_available() and urls:
+        logger.info("[web-research] all sources thin — one scrapamoja render on %s", urls[0][:80])
+        srender = await _scrapamoja_render(urls[0])
+        srender = validate_web_result(srender, query=query)
+        if srender.is_success():
+            return srender
+        if srender.status == AcquisitionStatus.PARTIAL and (
+            best_result is None or srender.confidence > best_result.confidence
+        ):
+            best_result = srender
 
     # All sources failed — return the best partial or a failure
     if best_result:

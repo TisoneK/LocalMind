@@ -10,6 +10,7 @@ venv, so LocalMind only needs to: find it, invoke it, and parse the
 from __future__ import annotations
 
 import json
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -100,3 +101,45 @@ async def test_render_unavailable_returns_failure(monkeypatch, tmp_path):
     r = await wa._scrapamoja_render("u")
     assert r.status is wa.AcquisitionStatus.FAILED
     assert "not available" in (r.error or "")
+
+
+@pytest.mark.asyncio
+async def test_web_research_runs_scrapamoja_at_most_once(monkeypatch):
+    """Regression (B-2026-09-02): the heavy stealth render must NOT run per
+    source in web_research's multi-source loop (it stacked ~65s per thin source
+    and blew whole turns past the provider rate limit). It runs at most ONCE, as
+    a final fallback, after the cheap static+browser strategies fail on every
+    source.
+    """
+    from unittest.mock import AsyncMock
+
+    # search returns 3 sources
+    search = MagicMock()
+    search.success = True
+    search.content = "\n".join(
+        f"{i}. **S{i}**\n   https://s{i}.example.com/x\n   snippet" for i in range(1, 4)
+    )
+    # every static fetch returns a thin skeleton → escalates
+    thin = MagicMock()
+    thin.success = True
+    thin.content = "Loading…"
+
+    calls = {"scrapamoja": 0}
+
+    async def _fake_render(url, timeout=None):
+        calls["scrapamoja"] += 1
+        return wa.WebResult(
+            status=wa.AcquisitionStatus.FAILED, source=url,
+            acquisition_method=wa.AcquisitionMethod.SCRAPAMOJA_RENDER, content="",
+            error="blocked",
+        )
+
+    monkeypatch.setattr("tools.web_search.web_search", AsyncMock(return_value=search))
+    monkeypatch.setattr("tools.web_fetch.web_fetch", AsyncMock(return_value=thin))
+    monkeypatch.setattr("tools.browser_agent._run_browser_cmd",
+                        AsyncMock(return_value=(1, "", "browser failed")))
+    monkeypatch.setattr(wa, "scrapamoja_available", lambda: True)
+    monkeypatch.setattr(wa, "_scrapamoja_render", _fake_render)
+
+    await wa.web_research("some query", max_sources=3)
+    assert calls["scrapamoja"] <= 1, f"scrapamoja ran {calls['scrapamoja']}x — must be at most once"
