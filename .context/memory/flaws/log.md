@@ -523,3 +523,12 @@ Flaws from Session 7 are now **fixed**:
 - **RESIDUAL RISK (open):** the keys remain in git HISTORY (public). Removing them from HEAD does not unpublish them. Required user action: ROTATE/REVOKE the zai, zen, and deepseek keys. Until rotated, treat those credentials as burned.
 - **Prevent next time:** never write a key into a script - `harness_common.provider_key()` is the only sanctioned path; any new harness must fail fast on a missing key, never embed one.
 - **Status:** fix shipped; KEY ROTATION still owed by the user.
+
+---
+## 2026-09-01 — Session 406 — zcode — context-collab status/check don't link releases by commit SHA, and check hangs
+
+- **Flaw:** two issues in `.context/core/bin/context-collab` (0.8.0) on a trail with ~23 events: (1) `released()` only matches a release/handoff whose `refs` contain the claim EVENT ID — releases citing commit SHAs (the more useful pointer, and what every claude release in this trail used) never mark their claim released, so `status` reports long-closed claims as "Active claims" indefinitely; (2) `check` produced zero output and hung >3.5 minutes on this trail (killed), while `status` (same file scans minus the validation) runs in seconds.
+- **Symptom:** peers reading `status` believe work is unfinished; integration gate `check` unusable past a handful of events.
+- **Root cause:** (1) the event contract says refs may be "event IDs or commit SHAs" but the matcher treats only event IDs as release links; (2) `check` appears to do unindexed O(n²)-style scanning (plus, on Windows/Git Bash, possible subshell slowness) with no progress output.
+- **Suggested fix:** package: (a) make `released()` also match release→commit→claim linkage (or document that releases MUST cite the claim event ID and have the tool warn when a release references only SHAs); (b) give `check` a bounded scan + progress output, and profile its loops.
+- **Status:** open (filed against package upstream TisoneK/.context)
