@@ -65,9 +65,11 @@ returns empty/boilerplate content, it escalates automatically.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from enum import Enum
 from typing import Optional
 
@@ -92,6 +94,7 @@ class AcquisitionMethod(Enum):
     STATIC_FETCH = "static_fetch"  # httpx GET + HTML parse
     BROWSER_READ = "browser_read"  # agent-browser read [url] (JS render)
     BROWSER_OPEN = "browser_open"  # agent-browser open + snapshot + text
+    SCRAPAMOJA_RENDER = "scrapamoja_render"  # scrapamoja stealth browser (anti-bot/skeleton)
     SEARCH_ONLY = "search_only"  # only snippets available, no full content
 
 
@@ -285,6 +288,11 @@ class WebResult:
 # Boilerplate markers — if the extracted content is mostly these, it's not
 # real data. Catches the "Premier League Table / Navigation / Footer /
 # Advertisement" failure the user described.
+
+# Below this many chars of extracted static text, treat the result as a JS
+# skeleton/shell and escalate to a rendering strategy instead of accepting it.
+_MIN_STATIC_SUBSTANCE_CHARS = 250
+
 _BOILERPLATE_MARKERS = [
     "javascript",
     "please enable javascript",
@@ -482,6 +490,110 @@ async def _browser_read(url: str, timeout: int = 30) -> WebResult:
         )
 
 
+def _scrapamoja_paths() -> Optional[tuple[str, str]]:
+    """Return (venv_python, project_dir) for scrapamoja, or None if unavailable.
+
+    Availability = the configured project dir exists AND has a venv interpreter.
+    Cheap and side-effect-free so it can gate the strategy on every call.
+    """
+    try:
+        from core.config import settings
+        base = str(getattr(settings, "localmind_scrapamoja_path", "") or "").strip()
+    except Exception:
+        base = ""
+    if not base:
+        return None
+    proj = Path(base)
+    if not proj.is_dir():
+        return None
+    for rel in ("bin/python", "Scripts/python.exe"):  # POSIX, Windows
+        py = proj / ".venv" / rel
+        if py.exists():
+            return (str(py), str(proj))
+    return None
+
+
+def scrapamoja_available() -> bool:
+    return _scrapamoja_paths() is not None
+
+
+async def _scrapamoja_render(url: str, timeout: Optional[int] = None) -> WebResult:
+    """Strategy C: scrapamoja stealth render. Strongest option for heavy-JS /
+    skeleton / anti-bot sites — a real stealth Chromium that waits for
+    client-side hydration, in scrapamoja's own venv (subprocess, no in-process
+    Playwright dependency for LocalMind).
+    """
+    paths = _scrapamoja_paths()
+    if paths is None:
+        return WebResult(
+            status=AcquisitionStatus.FAILED, source=url,
+            acquisition_method=AcquisitionMethod.SCRAPAMOJA_RENDER, content="",
+            error="scrapamoja not available", attempted_strategies=["scrapamoja_render"],
+        )
+    venv_py, proj = paths
+    if timeout is None:
+        try:
+            from core.config import settings
+            timeout = int(getattr(settings, "localmind_scrapamoja_timeout", 45))
+        except Exception:
+            timeout = 45
+    sentinel = "@@RENDER_JSON@@ "
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            venv_py, "-m", "src.render", url, "--json", "--timeout", str(timeout),
+            cwd=proj, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            out_b, _err_b = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout + 20
+            )
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+                await asyncio.wait_for(proc.communicate(), timeout=2)
+            except Exception:
+                pass
+            return WebResult(
+                status=AcquisitionStatus.FAILED, source=url,
+                acquisition_method=AcquisitionMethod.SCRAPAMOJA_RENDER, content="",
+                error=f"scrapamoja render timed out after {timeout + 20}s",
+                attempted_strategies=["scrapamoja_render"],
+            )
+        # The JSON is on a sentinel line (scrapamoja logs to stdout too).
+        payload = None
+        for line in out_b.decode("utf-8", "replace").splitlines():
+            idx = line.find(sentinel)
+            if idx != -1:
+                try:
+                    payload = json.loads(line[idx + len(sentinel):])
+                except Exception:
+                    payload = None
+        if not payload or not (payload.get("text") or "").strip():
+            return WebResult(
+                status=AcquisitionStatus.FAILED, source=url,
+                acquisition_method=AcquisitionMethod.SCRAPAMOJA_RENDER, content="",
+                error=(payload or {}).get("error", "scrapamoja render returned no content"),
+                attempted_strategies=["scrapamoja_render"],
+            )
+        content = payload["text"].strip()
+        title = (payload.get("title") or "").strip()
+        body = f"**{title}**\n{content}" if title else content
+        return WebResult(
+            status=AcquisitionStatus.SUCCESS, source=url,
+            acquisition_method=AcquisitionMethod.SCRAPAMOJA_RENDER, content=body,
+            confidence=0.9,  # stealth-rendered DOM is the most complete we get
+            freshness=_extract_freshness(content),
+            attempted_strategies=["scrapamoja_render"],
+        )
+    except Exception as e:
+        return WebResult(
+            status=AcquisitionStatus.FAILED, source=url,
+            acquisition_method=AcquisitionMethod.SCRAPAMOJA_RENDER, content="",
+            error=f"scrapamoja_render exception: {e}",
+            attempted_strategies=["scrapamoja_render"],
+        )
+
+
 # ── The router ──────────────────────────────────────────────────────────────
 
 
@@ -525,7 +637,12 @@ async def acquire_web_content(
             # Validate: is it boilerplate? Does it match the query?
             score = _score_content(result.content, query) if query else 0.5
             result.confidence = max(result.confidence, score)
-            if not _is_boilerplate(result.content) and score >= confidence_threshold:
+            # A very short static body is almost always a JS skeleton/shell (the
+            # data hasn't hydrated). Don't accept it — escalate so browser_read /
+            # scrapamoja can render the real content. It's still kept as the
+            # best-effort PARTIAL fallback if every richer strategy also fails.
+            substantive = len(result.content.strip()) >= _MIN_STATIC_SUBSTANCE_CHARS
+            if not _is_boilerplate(result.content) and score >= confidence_threshold and substantive:
                 result.attempted_strategies = attempted
                 logger.info(
                     "[web-acquire] static_fetch succeeded for %s (confidence=%.2f)",
@@ -534,10 +651,11 @@ async def acquire_web_content(
                 )
                 return result
             logger.info(
-                "[web-acquire] static_fetch returned boilerplate/low-confidence "
-                "for %s (score=%.2f) — escalating to browser_read",
+                "[web-acquire] static_fetch boilerplate/low-confidence/thin "
+                "for %s (score=%.2f, chars=%d) — escalating",
                 url[:80],
                 score,
+                len(result.content.strip()),
             )
         else:
             logger.info(
@@ -552,7 +670,8 @@ async def acquire_web_content(
         if result.is_success():
             score = _score_content(result.content, query) if query else 0.5
             result.confidence = max(result.confidence, score)
-            if not _is_boilerplate(result.content) and score >= confidence_threshold:
+            substantive = len(result.content.strip()) >= _MIN_STATIC_SUBSTANCE_CHARS
+            if not _is_boilerplate(result.content) and score >= confidence_threshold and substantive:
                 result.attempted_strategies = attempted
                 logger.info(
                     "[web-acquire] browser_read succeeded for %s (confidence=%.2f)",
@@ -571,6 +690,37 @@ async def acquire_web_content(
                 "[web-acquire] browser_read failed for %s: %s",
                 url[:80],
                 result.error,
+            )
+
+    # Strategy C: scrapamoja stealth render — strongest option for heavy-JS /
+    # skeleton / anti-bot sites (real stealth Chromium, waits for hydration).
+    # Only engages when static + agent-browser did not yield accepted content
+    # AND scrapamoja is installed; otherwise it's silently skipped.
+    if max_strategies >= 3 and scrapamoja_available():
+        sresult = await _scrapamoja_render(url)
+        attempted.append("scrapamoja_render")
+        if sresult.is_success():
+            score = _score_content(sresult.content, query) if query else 0.5
+            sresult.confidence = max(sresult.confidence, score)
+            if not _is_boilerplate(sresult.content) and score >= confidence_threshold:
+                sresult.attempted_strategies = attempted
+                logger.info(
+                    "[web-acquire] scrapamoja_render succeeded for %s (confidence=%.2f)",
+                    url[:80],
+                    sresult.confidence,
+                )
+                return sresult
+            logger.info(
+                "[web-acquire] scrapamoja_render low-confidence for %s (score=%.2f)",
+                url[:80],
+                score,
+            )
+            result = sresult  # keep as best-effort PARTIAL candidate below
+        else:
+            logger.info(
+                "[web-acquire] scrapamoja_render failed for %s: %s",
+                url[:80],
+                sresult.error,
             )
 
     # All strategies failed or returned low-confidence content

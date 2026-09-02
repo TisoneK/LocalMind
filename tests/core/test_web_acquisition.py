@@ -24,6 +24,30 @@ from core.web_acquisition import (
 )
 
 
+# These tests exercise the base static→browser ladder. scrapamoja is an
+# OPTIONAL external strategy (covered in test_scrapamoja_acquisition.py); disable
+# it here so the ladder tests are hermetic and don't shell out to a real install
+# that may or may not be present on the machine.
+@pytest.fixture(autouse=True)
+def _no_scrapamoja(monkeypatch):
+    monkeypatch.setattr("core.web_acquisition.scrapamoja_available", lambda: False)
+
+
+# A realistic full-page content body. The router now escalates a very short
+# static/browser body as a probable JS skeleton, so mock content must be as
+# substantial as a real extracted page would be.
+_LONG_STANDINGS = (
+    "Premier League Table — Current Season Standings\n"
+    "1. Manchester City — 85 pts (W26 D7 L5)\n"
+    "2. Arsenal — 84 pts (W25 D9 L4)\n"
+    "3. Liverpool — 82 pts (W25 D7 L6)\n"
+    "4. Aston Villa — 73 pts (W21 D10 L7)\n"
+    "5. Tottenham Hotspur — 66 pts (W19 D9 L10)\n"
+    "6. Manchester United — 60 pts (W18 D6 L14)\n"
+    "7. Newcastle United — 57 pts (W17 D6 L15)"
+)
+
+
 # ── Content validation ─────────────────────────────────────────────────────
 
 
@@ -147,7 +171,7 @@ class TestStaticFetchStrategy:
         """Mock web_fetch to return content → static_fetch succeeds."""
         mock_result = MagicMock()
         mock_result.success = True
-        mock_result.content = "Premier League Table\n1. Manchester City — 85 pts\n2. Arsenal — 84 pts"
+        mock_result.content = _LONG_STANDINGS
 
         with patch("tools.web_fetch.web_fetch", new=AsyncMock(return_value=mock_result)):
             result = await acquire_web_content(
@@ -171,7 +195,7 @@ class TestStaticFetchStrategy:
             patch("tools.web_fetch.web_fetch", new=AsyncMock(return_value=mock_fetch_result)),
             patch("tools.browser_agent._run_browser_cmd", new=AsyncMock(return_value=(
                 0,  # returncode
-                "Premier League Table\n1. Manchester City — 85 pts\n2. Arsenal — 84 pts",
+                _LONG_STANDINGS,
                 "",  # stderr
             ))),
         ):
@@ -192,14 +216,7 @@ class TestStaticFetchStrategy:
         mock_fetch_result.content = "Failed to fetch"
 
         # Mock browser_read to return substantial content
-        browser_content = (
-            "Premier League Table — Current Season\n"
-            "1. Manchester City — 85 pts (W26 D7 L5)\n"
-            "2. Arsenal — 84 pts (W25 D9 L4)\n"
-            "3. Liverpool — 82 pts (W25 D7 L6)\n"
-            "4. Aston Villa — 73 pts\n"
-            "5. Tottenham — 66 pts"
-        )
+        browser_content = _LONG_STANDINGS
         with (
             patch("tools.web_fetch.web_fetch", new=AsyncMock(return_value=mock_fetch_result)),
             patch("tools.browser_agent._run_browser_cmd", new=AsyncMock(return_value=(
@@ -326,12 +343,7 @@ class TestWebResearch:
         # Use substantial content (>50 chars, with query keywords)
         mock_fetch_result = MagicMock()
         mock_fetch_result.success = True
-        mock_fetch_result.content = (
-            "Premier League Table — Current Season Standings\n"
-            "1. Manchester City — 85 pts (W26 D7 L5)\n"
-            "2. Arsenal — 84 pts (W25 D9 L4)\n"
-            "3. Liverpool — 82 pts (W25 D7 L6)"
-        )
+        mock_fetch_result.content = _LONG_STANDINGS
 
         with (
             patch("tools.web_search.web_search", new=AsyncMock(return_value=mock_search_result)),
@@ -365,12 +377,7 @@ class TestWebResearch:
 
         mock_fetch_success = MagicMock()
         mock_fetch_success.success = True
-        mock_fetch_success.content = (
-            "Premier League Table — Current Season Standings\n"
-            "1. Manchester City — 85 pts (W26 D7 L5)\n"
-            "2. Arsenal — 84 pts (W25 D9 L4)\n"
-            "3. Liverpool — 82 pts (W25 D7 L6)"
-        )
+        mock_fetch_success.content = _LONG_STANDINGS
 
         with (
             patch("tools.web_search.web_search", new=AsyncMock(return_value=mock_search_result)),

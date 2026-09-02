@@ -235,6 +235,13 @@ class Settings(BaseSettings):
     ollama_timeout_web_research: int = 120
     ollama_timeout_default: int = 180
 
+    # Scrapamoja: an external stealth-browser project (its own venv + Playwright)
+    # used as the strongest acquisition strategy for heavy-JS / skeleton /
+    # anti-bot sites. LocalMind shells out to `python -m src.render <url> --json`
+    # in scrapamoja's venv. Empty path or a missing venv → strategy is skipped.
+    localmind_scrapamoja_path: str = str(Path.home() / "Code" / "scrapamoja")
+    localmind_scrapamoja_timeout: int = 45
+
     # Agent loop
     # (Note: localmind_agent_max_iterations was REMOVED — it was dead code
     # never read by anything. The loop's iteration cap comes from
