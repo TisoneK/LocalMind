@@ -4840,23 +4840,29 @@ class AgentLoop:
                 # tool-capable intents, only when the model actually reasons
                 # (thinking enabled), only on a real successful observation. Any
                 # failure/timeout is swallowed — the Thinker never blocks a turn.
+                # B-2026-09-02: value-gate the post-tool Thinker. Session 350
+                # made it consult after EVERY tool, but on slow/reasoning
+                # providers each consult is a full LLM round-trip (up to the
+                # plan timeout) — the user saw ~2 min turns where the web fetch
+                # was 4.5s and the rest was these reasoning calls. The Thinker
+                # earns that cost in two cases: after a FAILURE (it can steer
+                # recovery — "that 403'd, try the next source") and when there
+                # are MULTIPLE sources to reconcile. After a single successful
+                # fetch it mostly just says "you have enough, synthesize" — which
+                # the (free) synthesis reminder already conveys — so skip it and
+                # let synthesis proceed directly.
+                _succ_tools = sum(
+                    1 for s in trace.steps
+                    if getattr(s, "tool_name", "") and not getattr(s, "tool_failed", False)
+                )
+                _last_failed = bool(getattr(trace.steps[-1], "tool_failed", False)) if trace.steps else False
+                _thinker_worth_it = _last_failed or _succ_tools >= 2
                 if (
                     observation
                     and intent in AGENT_INTENTS
                     and getattr(active_adapter, "thinking_enabled", False)
+                    and _thinker_worth_it
                 ):
-                    # Session 350: removed the `_thinker_consulted` once-per-turn
-                    # gate and the `not tool_failed` gate. The Thinker should
-                    # consult after EVERY tool result — including failures —
-                    # because:
-                    # 1. After a 403, the Thinker can tell the model "the fetch
-                    #    failed, try the next URL from the search results"
-                    # 2. After a successful first fetch, the Thinker can tell the
-                    #    model "you have enough evidence, synthesize the answer"
-                    # 3. After a second successful fetch, the Thinker can evaluate
-                    #    whether the new evidence contradicts or supplements
-                    # Bounded by: it's still a no-op on empty observations, and
-                    # its timeout prevents hanging.
                     _thinker_consulted = True
                     try:
                         from core.agent.thinker import Evidence, Thinker
