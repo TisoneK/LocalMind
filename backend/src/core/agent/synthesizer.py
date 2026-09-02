@@ -811,6 +811,7 @@ class AnswerSynthesizer:
         intent: Intent,
         user_question: str,
         adapter=None,
+        on_chunk=None,
     ) -> SynthesisResult:
         """
         Run the full extraction -> sufficiency -> LLM synthesis pipeline.
@@ -866,7 +867,7 @@ class AnswerSynthesizer:
 
             # ── Phase 3: LLM Synthesis (PRIMARY PATH) ────────────
             if adapter:
-                answer = await self._llm_synthesize(extracted, user_question, intent, adapter)
+                answer = await self._llm_synthesize(extracted, user_question, intent, adapter, on_chunk=on_chunk)
             else:
                 answer = self._template_synthesize(extracted, user_question, intent)
 
@@ -910,6 +911,7 @@ class AnswerSynthesizer:
         fetch_result: ToolResult,
         user_question: str,
         adapter=None,
+        on_chunk=None,
     ) -> SynthesisResult:
         """
         Synthesize a combined answer from web_search + web_fetch results.
@@ -962,6 +964,7 @@ class AnswerSynthesizer:
                 page_content=page_content,
                 user_question=user_question,
                 adapter=adapter,
+                on_chunk=on_chunk,
             )
             return SynthesisResult(
                 answer=answer,
@@ -1032,6 +1035,7 @@ class AnswerSynthesizer:
         user_question: str,
         intent: Intent,
         adapter,
+        on_chunk=None,
     ) -> str:
         """
         Use the LLM to synthesize a user-facing answer.
@@ -1085,6 +1089,8 @@ class AnswerSynthesizer:
                     break
                 if chunk.text:
                     full_response.append(chunk.text)
+                    if on_chunk:
+                        on_chunk(chunk.text)
 
         try:
             await asyncio.wait_for(_collect(), timeout=self.timeout_secs)
@@ -1149,6 +1155,7 @@ class AnswerSynthesizer:
         page_content: str,
         user_question: str,
         adapter,
+        on_chunk=None,
     ) -> str:
         """
         Use the LLM to synthesize a combined answer from search + fetch.
@@ -1183,6 +1190,8 @@ class AnswerSynthesizer:
                     break
                 if chunk.text:
                     full_response.append(chunk.text)
+                    if on_chunk:
+                        on_chunk(chunk.text)
 
         await asyncio.wait_for(_collect(), timeout=self.timeout_secs)
 

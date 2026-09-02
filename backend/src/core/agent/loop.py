@@ -7202,83 +7202,101 @@ class AgentLoop:
 
         asyncio.create_task(_write_file())
 
-        # ── Synthesis pipeline ──────────────────────────────────────────
-        synthesis_answer = None
+        # ── Synthesis pipeline (STREAMED) ───────────────────────────────
+        # B-2026-09-02: stream the synthesis token-by-token instead of
+        # buffering the whole answer and emitting one burst at the end. The
+        # per-turn timeline showed ~51s of dead air then the answer arriving
+        # as ONE chunk — an agent-side defect on any model (opencode streams
+        # the same work live). The synthesizer now calls on_chunk per token;
+        # we run it as a task, drain a queue, and yield StreamChunk live. A
+        # correctness guard re-yields the authoritative final answer if
+        # post-processing (fabrication filter / timeout-retry / smart-extract
+        # fallback) changed it from what streamed.
+        _q: asyncio.Queue = asyncio.Queue()
 
-        if self._synthesizer.enabled:
-            try:
-                # Create a ToolResult from the search output for the synthesizer
-                from core.models import RiskLevel, ToolResult
+        async def _run_synthesis() -> str:
+            def _sink(t: str) -> None:
+                _q.put_nowait(("chunk", t))
 
-                search_result = ToolResult(
-                    content=safe_obs,
-                    risk=RiskLevel.LOW,
-                    source="web_search",
-                )
+            _ans = None
+            if self._synthesizer.enabled:
+                try:
+                    from core.models import RiskLevel, ToolResult
 
-                # Step 1: Check sufficiency of search snippets
-                synthesis = await self._synthesizer.synthesize(
-                    tool_results=[search_result],
-                    intent=Intent.WEB_SEARCH,
-                    user_question=user_question or query,
-                    adapter=adapter or self._adapter,
-                )
-
-                if synthesis.needs_followup and synthesis.followup_tool == "web_fetch":
-                    # Snippets are insufficient — fetch the top URL for actual data
-                    followup_url = (synthesis.followup_args or {}).get("url", "")
-                    if followup_url:
-                        logger.info(f"[agent.loop] synthesis requests web_fetch for: {followup_url[:80]}")
-                        # Emit a status chunk so the user knows we're fetching
-                        yield StreamChunk(text="", done=False, status=f"Reading page: {followup_url[:60]}")
-                        fetch_result, fetch_failed, _ = await dispatch_with_retry(
-                            Intent.WEB_FETCH,
-                            followup_url,
-                            allowed_tool_names=allowed_tool_names,
-                        )
-                        if fetch_result and not fetch_failed:
-                            # Step 2: Use synthesize_combined() — this is the PRIMARY
-                            # synthesis path for web queries. It uses a dedicated prompt
-                            # that prioritizes fetched page content over search snippets,
-                            # and pre-processes the content to remove ads/noise.
-                            fetch_synthesis = await self._synthesizer.synthesize_combined(
-                                search_result=search_result,
-                                fetch_result=fetch_result,
-                                user_question=user_question or query,
-                                adapter=adapter or self._adapter,
+                    search_result = ToolResult(
+                        content=safe_obs, risk=RiskLevel.LOW, source="web_search",
+                    )
+                    synthesis = await self._synthesizer.synthesize(
+                        tool_results=[search_result],
+                        intent=Intent.WEB_SEARCH,
+                        user_question=user_question or query,
+                        adapter=adapter or self._adapter,
+                        on_chunk=_sink,
+                    )
+                    if synthesis.needs_followup and synthesis.followup_tool == "web_fetch":
+                        followup_url = (synthesis.followup_args or {}).get("url", "")
+                        if followup_url:
+                            logger.info(f"[agent.loop] synthesis requests web_fetch for: {followup_url[:80]}")
+                            _q.put_nowait(("status", f"Reading page: {followup_url[:60]}"))
+                            fetch_result, fetch_failed, _ = await dispatch_with_retry(
+                                Intent.WEB_FETCH, followup_url,
+                                allowed_tool_names=allowed_tool_names,
                             )
-                            synthesis_answer = fetch_synthesis.answer
+                            if fetch_result and not fetch_failed:
+                                fetch_synthesis = await self._synthesizer.synthesize_combined(
+                                    search_result=search_result,
+                                    fetch_result=fetch_result,
+                                    user_question=user_question or query,
+                                    adapter=adapter or self._adapter,
+                                    on_chunk=_sink,
+                                )
+                                _ans = fetch_synthesis.answer
+                            else:
+                                _ans = synthesis.answer or (
+                                    "I found some relevant results but couldn't read the "
+                                    "full page content. The search snippets didn't contain "
+                                    "enough detail to fully answer your question."
+                                )
                         else:
-                            # Fetch failed — use the search-only synthesis
-                            synthesis_answer = synthesis.answer or (
-                                "I found some relevant results but couldn't read the "
-                                "full page content. The search snippets didn't contain "
-                                "enough detail to fully answer your question."
+                            _ans = synthesis.answer or (
+                                "I found search results but need more detail. "
+                                "The search snippets didn't contain enough specific data."
                             )
-                    else:
-                        synthesis_answer = synthesis.answer or (
-                            "I found search results but need more detail. "
-                            "The search snippets didn't contain enough specific data."
-                        )
-                elif synthesis.answer:
-                    # Search snippets were sufficient — use the synthesized answer
-                    synthesis_answer = synthesis.answer
-                elif synthesis.is_gap_report:
-                    # Honest gap report
-                    synthesis_answer = synthesis.answer
-
-            except Exception as e:
-                logger.warning(f"[agent.loop] synthesis failed: {e}")
-                # Use smart extraction instead of dumping raw content
+                    elif synthesis.answer:
+                        _ans = synthesis.answer
+                    elif synthesis.is_gap_report:
+                        _ans = synthesis.answer
+                except Exception as e:
+                    logger.warning(f"[agent.loop] synthesis failed: {e}")
+                    from core.agent.synthesizer import _smart_extract_key_data
+                    _ans = _smart_extract_key_data(safe_obs, user_question or query)
+            if not _ans:
                 from core.agent.synthesizer import _smart_extract_key_data
+                _ans = _smart_extract_key_data(safe_obs, user_question or query)
+            return _ans
 
-                synthesis_answer = _smart_extract_key_data(safe_obs, user_question or query)
+        _task = asyncio.create_task(_run_synthesis())
+        _streamed: list[str] = []
+        while not _task.done() or not _q.empty():
+            try:
+                _kind, _payload = await asyncio.wait_for(_q.get(), timeout=0.1)
+            except asyncio.TimeoutError:
+                continue
+            if _kind == "chunk":
+                _streamed.append(_payload)
+                yield StreamChunk(text=_payload, done=False)
+            elif _kind == "status":
+                yield StreamChunk(text="", done=False, status=_payload)
+        synthesis_answer = _task.result()
 
-        # Fallback: if synthesis didn't produce an answer, use smart extraction
-        if not synthesis_answer:
-            from core.agent.synthesizer import _smart_extract_key_data
-
-            synthesis_answer = _smart_extract_key_data(safe_obs, user_question or query)
+        # Correctness guard: if post-processing changed the answer (or nothing
+        # streamed — a gap/fallback path with no LLM stream), show the
+        # authoritative final answer. In the common case streamed == final and
+        # nothing is re-emitted.
+        _streamed_text = "".join(_streamed)
+        if synthesis_answer and synthesis_answer.strip() != _streamed_text.strip():
+            _prefix = "\n\n" if _streamed_text.strip() else ""
+            yield StreamChunk(text=_prefix + synthesis_answer, done=False)
 
         trace.final_response = synthesis_answer
         trace.steps.append(
@@ -7290,8 +7308,6 @@ class AgentLoop:
                 observation=f"Results → {filename}, synthesized answer provided",
             )
         )
-
-        yield StreamChunk(text=synthesis_answer, done=False)
         yield StreamChunk(text="", done=True)
 
     # ------------------------------------------------------------------
