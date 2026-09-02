@@ -1,26 +1,28 @@
 # Current Task
 
-**Status:** IDLE — Session 407 (backlog marking sweep) COMPLETE: verified all 90
-unchecked backlog entries against git history, session logs, collab release
-events, and code/test inspection; checked off 40 with dated evidence notes
-(27 fixed+shipped, 7 superseded/parked by ADR-53, 2 superseded-by-newer,
-2 demoted/closed-by-evidence, loop-discipline Steps 3-5). ~50 remain genuinely
-open — grouped list in the `2026-09-02 — Backlog marking sweep` section of
-`tasks/backlog.md`. Re-confirmed B-2026-08-30-17 (Windows autocrlf verify
-false-positive) live; heuristic correction appended to `flaws/log.md`.
-No product code touched. No live session in progress.
+**Status:** IDLE — Session 408 COMPLETE: ADR-57 slice 1 implemented and
+shipped (recovers the cut-off predecessor session that had pushed the doc
+corrections but left its implementation uncommitted). Post-tool final answers
+now stream live (gated: no criteria, post-tool, non-high-stakes last tool;
+pending-hold catches mid-stream tool-call markers; prefix-aware flush dedupe
+protects the S332 guarantee). Live-verified before/after on bankofai
+(1-token burst at 32.8s of a 34.3s turn → 125 streamed token events) and zai
+(88 events, clean gates). Pre-existing S332-B head-drop on the mid-stream
+path found and fixed in the same pass. Commits 2d9b733, 6bc5437, a42d901 —
+all pushed to main.
 
 **Feature:** none
 
 ## Notes for the next session
 
-- The backlog's unchecked set is now trustworthy: unchecked = no fix evidence
-  found on 2026-09-02. Newest open items: B-2026-08-25-4/-7/-12/-13,
-  B-2026-08-30-8/-12/-15 (verify), B-2026-08-29-1, B-2026-08-24-7/-17,
-  B-2026-08-23-20/-24, B-2026-08-25-2/-3/-10, loop-discipline Step 5 remainder
-  (context-quality pass).
-- **Live-test:** authorized per-item when necessary; test backend on **port 8010**
-  (never 8000 — the user's app). Read `.context/memory/system/live-testing.md`.
-- Collaboration: last trail events are claude-opus-4.8 releases (web-truncation,
-  follow-through, suite-nl2-id3, web-fetch-table) — all scopes released, none
-  active as of 2026-09-02.
+- **ADR-57 slice 2 = Thinker gating.** The Session 408 baseline trace shows
+  **3 reflexive agent_thinker_start/done calls on ONE research turn** — the
+  concrete number slice 2 exists to cut. Gate the Thinker to fire on
+  failure/multi-source, not after every tool; keep it streamed.
+- First-loop rejection mechanic (model-emitted done → rejection path) is
+  wired but was never exercised live in 408 — trace it before relying on it.
+- Tool-talk recovery after a streamed head leaves an orphan fragment
+  (cosmetic); frontend supersede mechanism is ADR-57 Open-Q4.
+- Standing: ~41 unattributed full-suite failures + the 34-error ruff
+  baseline still need a peer pass (S405-407 note); live-test authorized
+  per-item, port 8010 for the user-facing test backend (never 8000).

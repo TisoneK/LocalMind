@@ -1092,3 +1092,11 @@ if literally nothing slowed you down.
 - **Prevent next time:** know the Read cap before opening backlog.md; go straight to targeted greps.
 - **Problem 2:** `gates.conf` pre-commit hardcodes the POSIX venv path `backend/.venv/bin/ruff` — fails 127 on Windows (`backend/.venv/Scripts/ruff.exe`). Ran ruff manually via the Windows path (clean).
 - **Prevent next time:** gates.conf needs a platform-aware ruff path (or a `ruff` shim on PATH); logged for a future core/gates fix.
+
+---
+## 2026-09-02 — Buffy / glm-5.3-flash (Session 408)
+- **Problem:** `run_terminal_command` heredoc commit failed once on an apostrophe in the message ("answer's") — the enclosing bash -c quoting broke and the staged `git add` rolled back with it; re-ran add+commit separately.
+- **Cost:** one wasted command cycle.
+- **Cause:** apostrophes inside heredoc-wrapped `-m` messages are safe in plain bash but this tool wraps the command — avoid `'` in commit messages composed through it.
+- **Workaround / fix:** use ASCII hyphenated paraphrases ("answer head") or double quotes; verify `git status` shows the staged files before the commit step.
+- **Prevent next time:** keep commit messages apostrophe-free when scripting commits through the terminal tool; stage + commit in ONE command only when the message contains no single quotes.

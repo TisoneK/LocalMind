@@ -5694,3 +5694,18 @@ authoritative.
 - **Open items:** the ~50 still-open entries in backlog.md (see the 2026-09-02 sweep section for the grouped list).
 - **Report:** none — bookkeeping session (the sweep section in backlog.md is the record)
 - **Notes:** none
+
+---
+## 2026-09-02 — Session 408 — ADR-57 slice 1 implemented: gated live-streaming of post-tool answers (recovers cut-off session)
+
+- **Agent:** Buffy | **Model:** z-ai/glm-5.3-flash | **Platform:** macOS (user's local machine) | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** none — ADR-57 slice-1 implementation; recovered a cut-off predecessor session that had pushed the doc corrections (88077f6, 6d7a6ef, a2e0501) but left its loop.py implementation uncommitted and itself unlogged.
+- **Task:** Finish the predecessor's ADR-57 slice 1 (stream every call — kill the validate-then-show burst), per the verification bar: unit + LIVE before/after on real models, then commit + push + log.
+- **Commits:** 2d9b733 (perf(agent): gated live streaming + prefix-aware flush dedupe + 7 unit pins), 6bc5437 (test(scripts): timed live-test harness), a42d901 (fix(agent): pre-existing S332-B head-drop on the mid-stream path, found during review — buffered long answers never yielded _stripped_buffer).
+- **Implementation (loop.py):** on post-tool iterations (iteration>=1, a tool ran, NO success_criteria, last tool NOT high-stakes) the final answer streams live after a ~150-char marker-free lookahead; per-chunk pending hold catches mid-stream <invoke>/minimax:tool_call markers and flips the turn back to the buffered interceptor path. Fabricated-data recovery bypassed once streaming started (obs-emitted). Post-gate flush is prefix-aware (_flush_after_live_stream): shown text never re-yielded (S332 duplicate class), held-but-unseen tails recovered; goal turns and high-stakes-tool turns keep full buffering (parent completion floor can still discard+replan silently).
+- **Live-verified (scripts/live_test_stream_gating.py, isolated 8765, scratch LOCALMIND_HOME, app-settings mirrored, keys never printed):** bankofai/deepseek-v4-flash — baseline 1 token event at t=32.79s of a 34.31s turn (96% dead air, single 948-char burst) vs fix 125 token events streaming 30.83-31.68s, 0 discards/leaks/duplicates/errors. zai/glm-4.5-flash — 88 token events, TTFT 27.62s, same clean gates. SSE + JSON evidence in scratch/ (gitignored, kept).
+- **Unit-tested:** 7 flush-dedupe pins (one test failure during authoring exposed a real whitespace-stripping expectation bug in MY test, not the helper — fixed the test); 119 targeted regression + 1563 core/api + 44 api pass; ruff findings byte-identical to HEAD baseline (4 pre-existing on loop.py, 34 project-wide per S407).
+- **Also found:** baseline trace shows 3 reflexive agent_thinker_start/done calls on ONE research turn — the ADR-57 Thinker-gating target for slice 2, now with a concrete number.
+- **Open items:** ADR-57 slices 2+ (Thinker gating/concurrency; metrics as first-class); tool-talk recovery after a streamed head yields an orphan fragment (cosmetic; frontend supersede is Open-Q4); first-loop rejection mechanic (model-emitted done) untested live — wire it and trace before relying on it; ~41 unattributed suite failures + ruff baseline still need the peer pass (S405-407 note).
+- **Report:** none — fix session (commit messages + live evidence are the record)
+- **Notes:** none
