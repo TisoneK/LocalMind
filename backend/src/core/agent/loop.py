@@ -343,6 +343,44 @@ def _thinker_context_block(analysis) -> str:
     return "\n".join(parts)
 
 
+# Junk lines to drop from raw evidence when synthesis fails and we must show the
+# tool output directly (rate-limit fallback). These are page chrome — nav items,
+# login/subscription prompts, loading placeholders — that made the fallback look
+# like a wall of "Subscribe now / LOGOUT / Loading…" instead of the actual
+# headlines (B-2026-09-02).
+_EVIDENCE_JUNK_RE = re.compile(
+    r"^(?:loading[.…\s]*|logout|log\s?in|sign\s?in|sign\s?up|subscribe.*|"
+    r"subscribed.*|menu|home|register|follow(?:\s+this\s+topic)?|share|more|"
+    r"skip to (?:content|main).*|advertisement|sponsored|you are logged in|"
+    r"newsletter|show more.*|see more.*|read more.*|view all.*|privacy policy|"
+    r"terms.*|all rights reserved|©.*|cookie.*|account settings|go to my account|"
+    r"bookmarks|manage subscriptions?|need help.*|loading)$",
+    re.IGNORECASE,
+)
+
+
+def _clean_evidence_text(text: str) -> str:
+    """Strip obvious page chrome from a tool observation for the raw-evidence
+    fallback, keeping substantive lines (headlines, sentences, the Source line).
+
+    Conservative: keeps anything that isn't clearly nav/subscription junk, so a
+    real headline is never dropped. Returns the cleaned text (may be empty).
+    """
+    kept: list[str] = []
+    for ln in (text or "").splitlines():
+        s = ln.strip()
+        if not s:
+            continue
+        if _EVIDENCE_JUNK_RE.match(s):
+            continue
+        # Drop bare one-word menu tokens (no space, no sentence punctuation),
+        # but keep markdown headers (**Source:** …) and anything with real length.
+        if len(s) < 14 and " " not in s and not s.startswith("**") and not s[0].isdigit():
+            continue
+        kept.append(s)
+    return "\n".join(kept).strip()
+
+
 def _thinker_user_summary(analysis) -> str:
     """Render a Thinker analysis (ADR-42) as USER-facing text for the
     degraded-evidence fallback (B-2026-08-16-12).
@@ -5417,8 +5455,12 @@ class AgentLoop:
                             for s in (trace.steps if trace else []):
                                 _obs = getattr(s, "observation", "") or ""
                                 if _obs and len(_obs.strip()) > 20:
-                                    # Truncate to first 500 chars of useful content
-                                    _evidence_lines.append(_obs.strip()[:500])
+                                    # Strip page chrome (nav/login/loading junk) so
+                                    # the fallback shows headlines, not a wall of
+                                    # "Subscribe now / LOGOUT". Keep the first ~600
+                                    # chars of the cleaned content.
+                                    _clean = _clean_evidence_text(_obs) or _obs.strip()
+                                    _evidence_lines.append(_clean[:600])
                             if _evidence_lines:
                                 _summary = (
                                     "Here's what I found (the model provider was "

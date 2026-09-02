@@ -327,9 +327,48 @@ _BOILERPLATE_MARKERS = [
 ]
 
 
+# Phrases that mean the real content is ABSENT — a JS gate or a bare loading
+# shell. A plain fetch of these gets the notice, not the data, so they should
+# escalate to a rendering strategy (browser/scrapamoja) that runs the JS.
+_CONTENT_GATE_MARKERS = (
+    "please enable javascript",
+    "javascript is required",
+    "enable javascript to",
+    "requires javascript",
+    "javascript must be enabled",
+    "you need to enable javascript",
+    "turn on javascript",
+    "this site requires javascript",
+)
+
+
+def _is_content_gated_shell(content: str) -> bool:
+    """True when the body is a JS-gate or bare 'Loading…' shell (content absent).
+
+    Conservative: a real, long article that merely mentions one of these phrases
+    (e.g. in a footer notice) is NOT flagged — the gate signal only counts on a
+    short-ish body, where it dominates. Loading shells are caught by how little
+    remains once the word 'loading' is removed.
+    """
+    if not content:
+        return True
+    stripped = content.strip()
+    lower = stripped.lower()
+    if len(stripped) < 1500 and any(m in lower for m in _CONTENT_GATE_MARKERS):
+        return True
+    # A body that is essentially just "Loading…" repeated.
+    without_loading = re.sub(r"\bloading\b[.…\s]*", "", stripped, flags=re.IGNORECASE).strip()
+    if "loading" in lower and len(without_loading) < 80:
+        return True
+    return False
+
+
 def _is_boilerplate(content: str) -> bool:
     """Return True if the content is mostly navigation/boilerplate, not real data."""
     if not content or len(content.strip()) < 50:
+        return True
+    # Content-absent shells (JS gate / loading) have no data regardless of length.
+    if _is_content_gated_shell(content):
         return True
     lower = content.lower()
     marker_count = sum(1 for marker in _BOILERPLATE_MARKERS if marker in lower)
