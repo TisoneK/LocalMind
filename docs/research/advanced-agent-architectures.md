@@ -18,9 +18,20 @@ reasoning. They are fast because:
 4. Extra LLM calls exist only for **genuinely parallelizable or isolatable
    work** (sub-agents, not inline second-guessing), and those run concurrently.
 
-LocalMind currently pays an "orchestration tax": it calls the model to *decide*,
-again to *analyze*, again to *synthesize* — reasoning 2–4× where these agents
-reason once. Half of a LocalMind turn is invisible, redundant round-trips.
+LocalMind currently pays an "orchestration tax" — but the tax is in **how** it
+runs its calls (serial, silent, redundant), not in **having** them.
+
+> **CORRECTION (2026-09-02, owner-directed).** An earlier reading of this
+> research concluded "LocalMind should be a thin loop → remove the Thinker" and
+> excused the latency as the model being slow. Both are wrong. (1) Those agents
+> can be thin because their model is *strong* enough to reason inline; LocalMind's
+> product thesis (ADR-56) is that the **harness adds intelligence on top of ANY
+> model** — the Thinker is that intelligence and it **stays**. (2) The latency is
+> an **agent-architecture** problem, fixable in our code on any model — never
+> "the provider is slow." The lesson to copy from these agents is not "one call";
+> it is **calls that are streamed and concurrent, never serial-and-silent**. Read
+> §12–13 below through that lens: the goal is *multiple LLM calls done right*
+> (streamed + concurrent + gated), keeping the Thinker.
 
 ---
 
@@ -102,11 +113,12 @@ call does real, visible work (it either acts or answers). LocalMind inserts
 *next* call) — and, in LocalMind's case, those extra calls **stream nothing**,
 so the user pays their latency and sees an empty "Thinking" box.
 
-The math from the live test is stark: LocalMind produced ~790 tokens for
-"Trending stories today" but split them across multiple calls at ~7 tok/s ≈ 110s;
-Claude Code would produce the same information in 2 streamed calls, and on faster
-infra, but the *architectural* difference alone (fewer calls, all streamed) is
-the part LocalMind can actually close.
+The point is agent-side and model-agnostic: LocalMind split "Trending stories
+today" across serial, mostly-silent calls that block each other, so the user
+waited with nothing on screen. Whatever the model's speed, the fixable defect is
+that the calls are **serial and silent** — the agent should stream every call
+and overlap the independent ones. A fast model would only hide this; the
+architecture would still be wrong.
 
 ---
 
@@ -274,20 +286,23 @@ strong prompt; extra calls only for parallel sub-agents.**
 | Reasoning | inline in the acting/answering call | separate Thinker sub-calls |
 | Streaming | everything streams | Thinker silent; synthesis reasoning not surfaced (esp. deepseek) → empty "Thinking" box |
 | Doneness | model stops calling tools | model + acceptance-gate machinery |
-| Extra calls | parallel sub-agents | serial, on the hot path |
-| Weak-model discipline | model-tuned prompt | Thinker + gates + replan scaffold |
+| Extra calls | parallel sub-agents | serial, on the hot path (← fix: make concurrent) |
+| Harness intelligence | in the model + prompt | Thinker + gates (← keep; the value-add of the harness) |
 | Context mgmt | first-class (compaction, trim, JIT) | partial |
 
-The tax is: **reasoning is paid for 2–4× per turn, serially, and most of it is
-invisible.** That is the entire felt-latency story on a slow provider.
+The tax is: **the agent runs its calls serially and silently, and some
+reflexively.** That is the felt-latency story — an agent-architecture defect on
+any model, not a property of the provider.
 
 ---
 
 ## 12. Design principles for LocalMind's redesign
 
-1. **One model call per step; fuse reason + act.** Delete the separate pre/post
-   Thinker calls from the hot path. Let the acting call reason (extended thinking
-   on) and the synthesis call reason — each once.
+1. **Keep the Thinker; run its call *well*.** The Thinker is harness intelligence
+   (ADR-56) and stays. Fix its *execution*, not its existence: stream its
+   reasoning (never silent), run it concurrently with work it doesn't block, and
+   value-gate it so it fires when it adds signal — not reflexively after every
+   tool. "Multiple LLM calls done right," not "one call."
 2. **Stream everything.** Forward the model's real reasoning to the Thinking
    panel (fix the deepseek empty-block path) and stream synthesis tokens. This
    alone fixes most of the *felt* latency for free.
@@ -314,16 +329,23 @@ invisible.** That is the entire felt-latency story on a slow provider.
 ```
 messages = build_context(system_prompt, memory, user_msg)   # code, no LLM
 while iteration < cap:
-    # ONE streamed call: reasons (thinking streamed to panel) + acts/answers
+    # Acting call — STREAMS reasoning + tool calls to the UI (never silent):
     resp = adapter.stream(messages, tools=current_tools, thinking=on)
-    stream_to_ui(resp.thinking, resp.text)                  # live
+    stream_to_ui(resp.thinking, resp.text)                   # live, on any model
     if resp.tool_calls:
-        results = await run_parallel(resp.tool_calls)        # concurrent
+        results = await run_parallel(resp.tool_calls)         # concurrent tools
+        # Thinker STAYS — harness intelligence. But: STREAMED (not silent),
+        # value-GATED (fire on failure / multi-source, not reflexively), and
+        # run CONCURRENTLY where it doesn't block the next step. Optionally a
+        # faster model for this lightweight role.
+        if thinker_worth_it(results):
+            analysis = await stream_thinker(results)          # visible, gated
+            messages += analysis
         messages += [resp, results]
-        messages = compact_if_needed(messages)               # code, no LLM
+        messages = compact_if_needed(messages)                # code, no LLM
         continue
-    # no tool call => done. Structural completion check only (code):
-    outcome = classify_turn_outcome(resp, tools_ran)         # ACT/ANSWER/INCOMPLETE
+    # no tool call => done. Structural completion check (code, no LLM call):
+    outcome = classify_turn_outcome(resp, tools_ran)          # ACT/ANSWER/INCOMPLETE
     if outcome is INCOMPLETE and recoverable:
         messages += nudge(outcome)                            # a reminder, not a call
         continue
@@ -332,19 +354,21 @@ while iteration < cap:
 # PARALLEL sub-agents with isolated context, composed on return.
 ```
 
-Calls per turn: **one per step + finish** (like the advanced agents), all
-streamed, with the model's own reasoning doing the analysis the Thinker used to
-do as a separate round-trip. Multi-call scaling happens through **parallel
-sub-agents**, not serial inline calls.
+The change vs today is **not** call count — it is that every call **streams**
+(no dead air on any model), independent calls run **concurrently** (no serial
+stacking), and reflexive calls are **gated**. The Thinker keeps doing its job;
+it just stops being a silent, blocking, always-on round-trip. Multi-call scaling
+for breadth happens through **parallel `delegate` sub-agents**.
 
 ---
 
 ## 14. Open questions to resolve before implementing
 
-1. **Does removing the Thinker regress weak models?** Needs an A/B on
-   bankofai/glm-4.5-flash (the "weak" model) — disciplined-prompt-only vs
-   Thinker — measuring correctness *and* calls/turn. The hypothesis (from
-   OpenCode) is that a good prompt replaces the Thinker; verify it.
+1. **Which calls are truly independent (safe to run concurrently) vs. must be
+   serial** (the Thinker's analysis feeds the next action)? Map the data
+   dependencies in the loop before parallelizing — this, not "remove the
+   Thinker," is the real design question. Measure on more than one model to prove
+   the streamed+concurrent+gated agent is faster *model-agnostically*.
 2. **deepseek reasoning forwarding.** Confirm why the Thinking panel is empty for
    deepseek-v4-flash — is the adapter surfacing its reasoning tokens at all? This
    is likely an adapter/bridge gap independent of the loop redesign.
