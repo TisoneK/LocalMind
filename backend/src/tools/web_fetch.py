@@ -32,7 +32,40 @@ from tools import register_tool
 logger = logging.getLogger(__name__)
 
 WEB_FETCH_TIMEOUT_SECS = 15
-WEB_FETCH_MAX_CHARS = 8000
+WEB_FETCH_MAX_CHARS = 10000
+
+
+def smart_truncate(text: str, cap: int, marker: str = "\n\n[... content truncated]") -> str:
+    """Truncate to ~cap chars WITHOUT slicing through a data table.
+
+    A blunt ``text[:cap]`` severed standings/score tables mid-row (the user's
+    EPL-table trace lost rows 5–16), leaving the model an incomplete table it
+    then chased across more sources. Instead cut on a line boundary; and if the
+    cut lands inside a run of table rows (lines containing '|'), keep taking
+    rows until the table ends — bounded by a hard ceiling so output can't blow
+    up on a pathologically long table.
+    """
+    if len(text) <= cap:
+        return text
+    hard = int(cap * 1.75)
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    total = 0
+    i, n = 0, len(lines)
+    while i < n:
+        ln = lines[i]
+        if total + len(ln) > cap:
+            # Inside a table straddling the cut? Keep the whole table (to the ceiling).
+            if "|" in ln and out and "|" in out[-1]:
+                while i < n and "|" in lines[i] and total + len(lines[i]) <= hard:
+                    out.append(lines[i])
+                    total += len(lines[i])
+                    i += 1
+            break
+        out.append(ln)
+        total += len(ln)
+        i += 1
+    return "".join(out).rstrip() + marker
 """Maximum chars returned from a fetched web page. Raised from 4000 to 8000
 because the AnswerSynthesizer pre-processes content before sending to the LLM
 (removing ads, nav, etc.), so we need enough raw content for the LLM to
@@ -452,9 +485,8 @@ async def web_fetch(url: str) -> ToolResult:
                     metadata={"url": url, "title": title},
                 )
 
-            # Truncate to max chars
-            if len(readable) > WEB_FETCH_MAX_CHARS:
-                readable = readable[:WEB_FETCH_MAX_CHARS] + "\n\n[... content truncated]"
+            # Truncate to max chars — table-aware so data tables aren't severed.
+            readable = smart_truncate(readable, WEB_FETCH_MAX_CHARS)
 
             # Format the output
             output_parts = []

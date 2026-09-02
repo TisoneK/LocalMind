@@ -47,6 +47,7 @@ import signal
 
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
+from tools.web_fetch import smart_truncate
 
 
 def _terminate_proc_group(proc) -> None:
@@ -76,8 +77,16 @@ BROWSER_AVAILABLE = _AGENT_BROWSER_BIN is not None
 # Default timeout for browser commands (seconds)
 _BROWSER_TIMEOUT = 30
 
-# Max output length to prevent context bloat
-_MAX_OUTPUT = 8000
+# Navigation (`open`) has a bounded duration profile: a cold Chromium launch is
+# ~14s and warm opens are ~1-2s, so a page still not ready at 25s is almost
+# always JS-heavy or blocking automation (e.g. anti-bot walls). Fail navigation
+# a bit sooner than generic commands so the agent falls through to a static
+# source faster instead of burning the full 30s (B-2026-09-01 flashscore trace).
+_BROWSER_OPEN_TIMEOUT = 25
+
+# Max output length to prevent context bloat. Table-aware truncation
+# (smart_truncate) keeps data tables whole within this budget.
+_MAX_OUTPUT = 10000
 
 # Max actions in a single `batch` call. Batching many steps into ONE tool call
 # is the browser's key efficiency lever — a login-then-read flow costs one agent
@@ -376,9 +385,7 @@ async def browser_agent(message: str) -> ToolResult:
                 if stop_on_error:
                     break
         combined = "\n\n".join(parts)
-        if len(combined) > _MAX_OUTPUT:
-            marker = "\n\n[... batch output truncated]"
-            combined = combined[: _MAX_OUTPUT - len(marker)] + marker
+        combined = smart_truncate(combined, _MAX_OUTPUT, "\n\n[... batch output truncated]")
         return ToolResult(
             content=combined or "batch produced no output",
             risk=highest_risk,
@@ -403,11 +410,20 @@ async def browser_agent(message: str) -> ToolResult:
         # window. `read`/`content` re-extract the current page without needing
         # a URL. Extraction is best-effort: navigation success is never lost.
         if url:
-            nav_rc, nav_out, nav_err = await _run_browser_cmd(["open", url])
+            nav_rc, nav_out, nav_err = await _run_browser_cmd(
+                ["open", url], timeout=_BROWSER_OPEN_TIMEOUT
+            )
             if nav_rc != 0:
                 err_txt = (nav_err or nav_out).strip()
+                timed_out = "timed out" in err_txt.lower()
+                hint = (
+                    " This page is likely JavaScript-heavy or blocking automation. "
+                    "Do NOT retry the browser on this URL — use web_fetch or web_research "
+                    "on a different source instead."
+                    if timed_out else ""
+                )
                 return ToolResult(
-                    content=f"Failed to open {url}: {err_txt or 'unknown error'}",
+                    content=f"Failed to open {url}: {err_txt or 'unknown error'}.{hint}",
                     risk=RiskLevel.MEDIUM,
                     source="browser_agent",
                     success=False,
@@ -425,8 +441,7 @@ async def browser_agent(message: str) -> ToolResult:
                 "JS-rendered, empty, or non-HTML). Try action 'snapshot' for "
                 "interactive elements, 'dom' for raw HTML, or a screenshot."
             )
-        if len(content) > _MAX_OUTPUT:
-            content = content[: _MAX_OUTPUT - 24] + "\n\n[... content truncated]"
+        content = smart_truncate(content, _MAX_OUTPUT)
         return ToolResult(
             content=content,
             risk=RiskLevel.MEDIUM,  # page content may contain user/session data
@@ -687,16 +702,13 @@ async def browser_agent(message: str) -> ToolResult:
     output = stdout.strip()
     if not output and stderr.strip():
         output = stderr.strip()
-    if len(output) > _MAX_OUTPUT:
-        output = output[:_MAX_OUTPUT] + f"\n\n[... output truncated, {len(stdout)} total chars]"
+    output = smart_truncate(output, _MAX_OUTPUT, f"\n\n[... output truncated, {len(stdout)} total chars]")
 
     success = exit_code == 0
     if not success and stderr:
         output = f"Error: {stderr.strip()}\n\n{output}"
     content = f"Browser action: {act}\n\n{output}" if output else f"Browser action: {act} (no output)"
-    if len(content) > _MAX_OUTPUT:
-        marker = "\n\n[... browser output truncated]"
-        content = content[: _MAX_OUTPUT - len(marker)] + marker
+    content = smart_truncate(content, _MAX_OUTPUT, "\n\n[... browser output truncated]")
 
     return ToolResult(
         content=content,
