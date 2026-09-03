@@ -5762,3 +5762,35 @@ grep (the harness thinker-count parser under-counts — grep is authoritative):
   in the session log at capture time.
 
 No product code changed this session; docs/memory only.
+
+### Session 409 addendum 3 — Thinker A/B re-run per user request (Buffy/glm-5.3-flash)
+
+User asked to re-run the A/B on a working provider, then specified
+bankofai/qwen3.8-flash. Provider probe (auth-only, no key values printed):
+bankofai+gemini+chutes auth OK (chutes balance $0); zai 401, cerebras 403,
+zen DNS-dead. bankofai free models: hy3/glm-5.3-flash/qwen3.8-flash; kimi-k3
+/glm-5.3/qwen3.8-max/minimax-m3/deepseek-v4-pro/claude-fable-5 all 403
+"Deposit required"; deepseek-v4-flash 429 (paid). gemini quota then ate 3 FIX
+attempts (429 -> 429 -> 120s timeout mapped to context_overflow); its clean
+BASE capture is retained.
+
+**A/B, identical 3-language prompt, raw-SSE ground truth (grep):**
+- `scratch/sse-stream-tg5-base-hy3.sse` (BASE, hy3): 16 tool events -> **4
+  Thinker starts (iter 0, 3, 4, 5)** — re-fire x3.
+- `scratch/sse-stream-tg6-base-qwen.sse` (BASE, qwen3.8-flash): 16 tool
+  events -> **4 starts (iter 0, 2, 3, 4)**; consult time 18.0s total (3+5+5+5);
+  1 token event, TTFT 54.33s (burst, pre-slice-1-style).
+- `scratch/sse-stream-tg6-fix-qwen.sse` (FIX, same model+prompt): 16 tool
+  events -> **2 starts (iter 0, 2)** — exactly the once-guard contract, no
+  redundant re-fires; **105 token events streamed** (slice 1 confirmed on
+  qwen too), TTFT 27.81s. Clean answers both sides (1515/2760 chars, 0
+  errors).
+- Supporting: `tg4-base-gem2` (gemini BASE, 2 rounds only — once-guard
+  window never opened; kept as negative control).
+
+**Net: on the user-specified qwen3.8-flash, FIX halves the Thinker calls
+(4 -> 2) on an identical turn shape, cuts ~10s of redundant consult time,
+and turns the burst into a stream.** Deterministic fail-on-HEAD tests
+already pin the logic; this closes the live-verification loop on two more
+models. tg4-fix attempts are documented dead ends (quota), not failures of
+the change.
