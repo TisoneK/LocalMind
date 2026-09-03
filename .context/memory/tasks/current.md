@@ -1,28 +1,33 @@
 # Current Task
 
-**Status:** IDLE — Session 408 COMPLETE: ADR-57 slice 1 implemented and
-shipped (recovers the cut-off predecessor session that had pushed the doc
-corrections but left its implementation uncommitted). Post-tool final answers
-now stream live (gated: no criteria, post-tool, non-high-stakes last tool;
-pending-hold catches mid-stream tool-call markers; prefix-aware flush dedupe
-protects the S332 guarantee). Live-verified before/after on bankofai
-(1-token burst at 32.8s of a 34.3s turn → 125 streamed token events) and zai
-(88 events, clean gates). Pre-existing S332-B head-drop on the mid-stream
-path found and fixed in the same pass. Commits 2d9b733, 6bc5437, a42d901 —
-all pushed to main.
+**Status:** IDLE — Session 409 COMPLETE: ADR-57 slice 2 (Thinker value-gating)
+shipped. Post-tool consult now honors its long-documented once-per-turn
+contract (`not _thinker_consulted`, finally wired) and the pre-tool consult is
+skipped on DIRECT_RETRIEVAL_INTENTS. Measured 3 reflexive Thinker calls on one
+research turn; the once-guard drops the redundant re-fires. Verified by 2 new
+deterministic tests that FAIL on HEAD and pass on the fix (4→1 starts on a
+synthetic 3-tool turn), 1573 core+api green, ruff unchanged, and a live
+gemini-2.5-flash trace (post-tool fired once). Commits ae722e4 + 12a97a0,
+pushed to main.
 
 **Feature:** none
 
 ## Notes for the next session
 
-- **ADR-57 slice 2 = Thinker gating.** The Session 408 baseline trace shows
-  **3 reflexive agent_thinker_start/done calls on ONE research turn** — the
-  concrete number slice 2 exists to cut. Gate the Thinker to fire on
-  failure/multi-source, not after every tool; keep it streamed.
-- First-loop rejection mechanic (model-emitted done → rejection path) is
-  wired but was never exercised live in 408 — trace it before relying on it.
-- Tool-talk recovery after a streamed head leaves an orphan fragment
-  (cosmetic); frontend supersede mechanism is ADR-57 Open-Q4.
-- Standing: ~41 unattributed full-suite failures + the 34-error ruff
-  baseline still need a peer pass (S405-407 note); live-test authorized
-  per-item, port 8010 for the user-facing test backend (never 8000).
+- **ADR-57 slice 3 = serial→concurrent.** The pre-tool Thinker consult still
+  runs SERIAL before the first model call (adds its round-trip to time-to-
+  first-action). The next lever is to run it concurrently with the first
+  model call, or fold it in. Also: parallel tools + parallel `delegate`
+  sub-agents. Map which LLM calls are independent (Open-Q1).
+- **Provider outage (2026-09-03):** bankofai balance=0, zai key 401-expired,
+  chutes balance $0, cerebras 403. Only **gemini-2.5-flash** usable for live
+  tests (openai_compat, thinking_enabled=True). The harness now takes
+  `--adapter gemini`. Re-run bankofai/zai traces once keys are refreshed.
+- **Honest note:** real web queries classify as parent-intent ANALYZE, so the
+  pre-tool intent-skip mostly helps bare direct-intent turns; the post-tool
+  once-guard is the effective win. If more pre-tool savings are wanted, the
+  clean path is slice 3 (concurrency), not a brittle message-complexity
+  classifier (CONV-05/06/11 regression surface).
+- Standing: ~41 unattributed full-suite failures + 34-error ruff baseline
+  still need a peer pass (S405-407); live-test port 8010 for the user app
+  backend (never 8000).

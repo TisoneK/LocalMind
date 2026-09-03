@@ -5709,3 +5709,19 @@ authoritative.
 - **Open items:** ADR-57 slices 2+ (Thinker gating/concurrency; metrics as first-class); tool-talk recovery after a streamed head yields an orphan fragment (cosmetic; frontend supersede is Open-Q4); first-loop rejection mechanic (model-emitted done) untested live — wire it and trace before relying on it; ~41 unattributed suite failures + ruff baseline still need the peer pass (S405-407 note).
 - **Report:** none — fix session (commit messages + live evidence are the record)
 - **Notes:** none
+
+---
+## 2026-09-03 — Session 409 — ADR-57 slice 2: value-gate the reflexive Thinker
+
+- **Agent:** claude-opus-4.8 | **Model:** claude-opus-4-8 | **Platform:** macOS (user's local machine) | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** none — ADR-57 slice 2 (Thinker gating), continues slice 1 (Session 408)
+- **Task:** User "doit" on the proposed slice. The S408 baseline trace measured 3 reflexive Thinker round-trips on ONE research turn (pre-tool iter 0 + post-tool iter 2 AND iter 3). Gate them without removing the Thinker (ADR-56).
+- **Root causes:** (1) the post-tool consult's `if` never checked `_thinker_consulted` — its own comment (loop.py ~2926 "consults ONCE") was documented but unwired, so the value-gate (`_last_failed or _succ_tools>=2`) re-fired every qualifying iteration. (2) the pre-tool consult was ungated except intent/thinking — fired on every tool-capable turn.
+- **Fix (ae722e4):** (1) post-tool once-guard: added `and not _thinker_consulted`. (2) pre-tool value-gate: skip on new `DIRECT_RETRIEVAL_INTENTS` frozenset (constants.py: web_*, find_path, calc/csv/json/sql, git, memory_op, observe); keep for ANALYZE/DEBUG/REVIEW/file/code (narration-without-action risk, CONV-05/06/11 — all kept).
+- **Verified — deterministic (the gold standard for a control-flow gate):** 2 new tests in test_agent_loop_pre_tool_thinker.py FAIL on HEAD (once-guard: HEAD 4 starts→FIX 1 on a synthetic 3-tool web_search turn; pre-tool skip: HEAD fires for web_search→FIX skips) and pass on the fix — proven meaningful by stash-running them against HEAD product code. 1573 core+api pass; ruff identical to HEAD baseline.
+- **Verified — live (real provider):** gemini-2.5-flash (isolated 8765) FIX 3-tool turn → post-tool consult fired ONCE (iter 4). Baseline reference = S408 bankofai 3-fetch turn (iter 0,2,3). **Provider note:** bankofai balance=0, zai key 401-expired, chutes balance $0, cerebras 403 — only gemini usable today; user asked to "se hy3 for bankofai" but hy3 is not a resolvable env var/key and the stored bankofai key is still balance-0, so bankofai could not be run.
+- **Honest scope:** real web queries classify as parent-intent ANALYZE (WEB_* intents are internal tool-selection, not the parent turn intent), so the pre-tool skip mostly helps bare direct-intent turns (git/calc/short queries); the **post-tool once-guard is the effective latency win**. The pre-tool gate is safe+correct+tested but lower-impact than the intent list suggests.
+- **Commits:** ae722e4 (perf: the two gates + 2 tests), 12a97a0 (test(scripts): harness --adapter/--prompt/thinker-count/error-fix). Collab: claim 20260903T182754Z, release 20260903T184521Z.
+- **Open items:** ADR-57 slice 3+ (serial→concurrent: run the pre-tool consult concurrently with the first model call rather than before it; parallel tools/sub-agents); a bankofai/zai live trace once a working key is available; the harness thinker-count parser under-counts vs raw grep (SSE line framing) — grep is ground truth.
+- **Report:** none — fix session (commit messages + fail-on-HEAD tests + live trace are the record)
+- **Notes:** none
