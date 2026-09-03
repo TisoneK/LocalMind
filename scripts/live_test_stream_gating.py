@@ -47,15 +47,27 @@ FORBIDDEN_TOKENS = [
 ]
 
 
-def prepare_tracehome() -> None:
+# The app settings.json ADAPTER wins over the LOCALMIND_ADAPTER env var, so the
+# harness must WRITE the requested adapter (+ a matching model) into the scratch
+# settings to actually switch providers. Keys are copied from the app settings.
+_ADAPTER_MODEL = {
+    "bankofai": "deepseek-v4-flash",
+    "zai": "glm-4.5-flash",
+    "chutes": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
+    "gemini": "gemini-2.5-flash",
+}
+
+
+def prepare_tracehome(adapter: str = "bankofai") -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     TRACEHOME.mkdir(parents=True, exist_ok=True)
-    # Copy the APP's settings so the trace sees what the user's app sees
-    # (bankofai/deepseek-v4-flash). Never print any api_keys value.
+    # Copy the APP's settings so the trace sees the user's real api_keys.
+    # Never print any api_keys value.
     src = Path.home() / "LocalMind" / "settings.json"
     data = json.loads(src.read_text(encoding="utf-8"))
-    data.setdefault("adapter", "bankofai")
-    data.setdefault("model", "deepseek-v4-flash")
+    data["adapter"] = adapter
+    if adapter in _ADAPTER_MODEL:
+        data["model"] = _ADAPTER_MODEL[adapter]
     data["shell_enabled"] = True
     SETTINGS.write_text(json.dumps(data), encoding="utf-8")
 
@@ -130,8 +142,15 @@ def analyze(raw: str, timed, label: str) -> dict:
     tool_events = []
     token_payloads = []
     errors = []
+    thinker_iters = []  # ADR-57 slice 2: which iterations the Thinker fired on
+    intent_seen = None
     for t_rel, obj in events:
         typ = obj.get("type") or ""
+        if typ == "agent_thinker_start":
+            data = obj.get("data") or obj
+            thinker_iters.append(data.get("iteration"))
+        if intent_seen is None:
+            intent_seen = obj.get("intent") or (obj.get("data") or {}).get("intent")
         if typ == "token":
             token_payloads.append(obj.get("content", "") or "")
             if first_token_t is None:
@@ -142,11 +161,16 @@ def analyze(raw: str, timed, label: str) -> dict:
         elif typ in ("turn_complete", "done"):
             done_t = t_rel
         elif typ in ("error", "agent_loop_error"):
-            errors.append((obj.get("error", "") or "")[:120])
+            # The error payload may be a dict (normalized provider error) or a
+            # string — coerce before slicing so the analyzer never crashes.
+            errors.append(str(obj.get("error", "") or "")[:160])
 
     answer = "".join(token_payloads)
     return {
         "label": label,
+        "intent": intent_seen,
+        "thinker_calls": len(thinker_iters),
+        "thinker_iters": thinker_iters,
         "ttft_s": first_token_t,
         "last_token_s": last_token_t,
         "turn_complete_s": done_t,
@@ -169,16 +193,17 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--label", default="fix-N", help="baseline | fix-N")
     ap.add_argument("--adapter", default="bankofai", help="bankofai | zai (weak-model check)")
+    ap.add_argument("--prompt", default=PROMPT, help="override the turn prompt")
     args = ap.parse_args()
 
-    prepare_tracehome()
+    prepare_tracehome(adapter=args.adapter)
     kill_port(PORT)
     time.sleep(1)
     log_file = SCRATCH / f"server-stream-{args.label}.log"
     proc = boot_server(log_file, adapter=args.adapter)
     try:
         raw, timed = fire_chat_timed(
-            PROMPT, session_id=f"stream-{args.label}-{int(time.time())}"
+            args.prompt, session_id=f"stream-{args.label}-{int(time.time())}"
         )
         sse_file = SCRATCH / f"sse-stream-{args.label}.sse"
         sse_file.write_text(raw, encoding="utf-8")
