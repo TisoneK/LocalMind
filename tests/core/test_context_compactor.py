@@ -148,3 +148,77 @@ class TestSimplifyToolResults:
         # Non-content keys survive the stub ({**messages[i], "content": stub}).
         assert stubbed["tool_call_id"] == "call_x"
         assert stubbed["extra"] == {"tool": "file_task", "path": "/tmp/x.py"}
+
+
+class TestSession410Defaults:
+    """Session 410 (P0 Context Engineering) tightened the module defaults:
+    KEEP_LAST_TOOL_RESULTS 4 → 1 and STUB_MAX_CHARS 600 → 400, after the
+    prompt-assembly audit showed tool-result history growing 91 → 4228
+    tokens across one research turn. These tests pin the new defaults so a
+    future agent can't quietly regress them.
+    """
+
+    def test_default_keep_last_is_one(self):
+        """With default args, only the NEWEST tool result stays verbatim."""
+        big = "x" * 5_000
+        messages = [
+            _tool_msg(big, "call_1"),
+            _tool_msg(big, "call_2"),
+            _tool_msg(big, "call_3"),
+            _tool_msg(big, "call_4"),  # newest — must stay verbatim
+        ]
+        out = simplify_tool_results(messages)  # default args
+        # The newest (call_4) is verbatim.
+        assert out[-1]["content"] == big
+        assert out[-1]["tool_call_id"] == "call_4"
+        # The three older ones are stubbed (would have been verbatim under
+        # the legacy keep_last=4 default).
+        for i in (0, 1, 2):
+            assert "truncated for length" in out[i]["content"]
+            assert out[i]["tool_call_id"] == f"call_{i+1}"
+
+    def test_default_stub_max_chars_is_400(self):
+        """With default args, a stubbed result's content is ~400 chars
+        (200 head + marker + 200 tail), not the legacy 600."""
+        # Build content where head and tail are distinguishable.
+        content = "H" * 200 + "M" * 5_000 + "T" * 200
+        messages = [
+            _tool_msg(content, "old"),
+            _tool_msg(content, "older"),
+            _tool_msg("final", "new"),  # newest — verbatim
+        ]
+        out = simplify_tool_results(messages)  # default args
+        stub = out[0]["content"]
+        # Head and tail survive.
+        assert stub.startswith("H" * 200)
+        assert stub.endswith("T" * 200)
+        # The stub is well under the legacy 600-char head+tail (which would
+        # have been 300+300=600). With max_chars=400, head+tail = 200+200=400.
+        # The marker adds ~90 chars, so total stub length is ~490.
+        assert len(stub) < 600, (
+            f"stub length {len(stub)} suggests max_chars is still 600 — "
+            "Session 410 tightened STUB_MAX_CHARS to 400"
+        )
+
+    def test_default_aggressive_compaction_in_research_scenario(self):
+        """Simulates the audit's research-turn shape: 5 tool results, each
+        ~5000 chars (≈1300 tokens, like a web_fetch result). Under the new
+        defaults, the oldest 4 collapse to ~490-char stubs and only the
+        newest stays verbatim — ~5.5K chars of history instead of ~25K."""
+        big = "x" * 5_000
+        messages = [
+            _user_msg("research prompt"),
+            _tool_msg(big, "c1"),
+            _tool_msg(big, "c2"),
+            _tool_msg(big, "c3"),
+            _tool_msg(big, "c4"),
+            _tool_msg(big, "c5"),  # newest — verbatim
+        ]
+        out = simplify_tool_results(messages)
+        total_chars = sum(len(m.get("content", "")) for m in out if m["role"] == "tool")
+        # 4 stubs × ~490 + 1 verbatim × 5000 = ~6960 chars
+        # Under legacy keep_last=4, this would be 4 × 5000 + 1 stub × ~690 = ~20690
+        assert total_chars < 8_000, (
+            f"total tool content {total_chars} chars — expected <8K under "
+            "Session 410 defaults (keep_last=1, stub=400)"
+        )

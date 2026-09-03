@@ -58,8 +58,13 @@ class TestLegacyNoop:
             _tool_msg(big, "call_5"),
             _tool_msg(big, "call_6"),
         ]
-        with_policy = simplify_tool_results(messages, policy=None)
-        without = simplify_tool_results(messages)
+        # Pass keep_last=4 explicitly — Session 410 tightened the module
+        # default to 1 (P0 Context Engineering), but this test's intent is
+        # "policy=None is a no-op for the same keep_last", not "the default
+        # is 4". Pinning keep_last=4 keeps the legacy-window assertions
+        # below deterministic regardless of the module default.
+        with_policy = simplify_tool_results(messages, keep_last=4, policy=None)
+        without = simplify_tool_results(messages, keep_last=4)
         assert with_policy == without
         # Newest 4 verbatim, oldest 2 stubbed.
         assert _STUB_MARKER in with_policy[1]["content"]
@@ -68,7 +73,13 @@ class TestLegacyNoop:
 
     def test_default_policy_is_legacy(self):
         big = "x" * 5_000
-        messages = [_tool_msg(big, "c1"), _tool_msg(big, "c2"), _tool_msg(big, "c3"), _tool_msg(big, "c4"), _tool_msg(big, "c5")]
+        messages = [
+            _tool_msg(big, "c1"),
+            _tool_msg(big, "c2"),
+            _tool_msg(big, "c3"),
+            _tool_msg(big, "c4"),
+            _tool_msg(big, "c5"),
+        ]
         default = simplify_tool_results(messages, policy=policy_for(None))
         assert default == simplify_tool_results(messages)
 
@@ -92,7 +103,11 @@ class TestPolicyKeep:
             _tool_msg(big, "call_7"),
             _tool_msg(big, "call_8"),
         ]
-        result = simplify_tool_results(messages, policy=debug)
+        # Pass keep_last=4 explicitly — Session 410 tightened the module
+        # default to 1, but this test's intent is "marker protection works
+        # independently of the keep_last window". Pinning keep_last=4 keeps
+        # the window assertions below deterministic.
+        result = simplify_tool_results(messages, keep_last=4, policy=debug)
         # call_1 (old, marker 'test failed') is kept verbatim despite being
         # older than the keep_last=4 window (which covers call_5..call_8).
         assert result[1]["content"] == messages[1]["content"]

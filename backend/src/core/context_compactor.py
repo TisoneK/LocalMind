@@ -44,9 +44,22 @@ from typing import Optional
 from core.context_policy import ContextPolicy
 
 # Keep this many of the NEWEST tool-role results verbatim.
-KEEP_LAST_TOOL_RESULTS: int = 4
+# Session 410 (P0 Context Engineering): tightened 4 → 1 after the prompt-assembly
+# audit showed tool-result history growing 91 → 4228 tokens across one research
+# turn (5 iters), with the legacy keep_last=4 stubbing at most one result. Only
+# the immediately-previous tool result needs to stay verbatim — the model just
+# acted on it and may still need to reference its details. Older results the
+# model has already synthesized from collapse to a head+tail stub; the ADR-19
+# policy keep_markers still protect task-critical content (errors, URLs, etc.)
+# verbatim regardless of age. Live-verified on bankofai/qwen3.8-flash.
+KEEP_LAST_TOOL_RESULTS: int = 1
 # Head/tail length retained from a stubbed result.
-STUB_MAX_CHARS: int = 600
+# Session 410: tightened 600 → 400 — the legacy 600-char stub was generous for
+# results the model has already acted on; 400 chars (200 head + 200 tail) still
+# preserves the result's opening (where the useful title/summary lives for
+# web_fetch, the file path for file_task, the command for shell) plus a tail
+# stub. Smaller stubs = more history freed per iteration.
+STUB_MAX_CHARS: int = 400
 # Marker that identifies an already-stubbed result (idempotency).
 # Worded to signal the tool SUCCEEDED so a model doing verify-after-write
 # (Session 32 safety workflow) doesn't misread the omission as a failure.
