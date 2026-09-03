@@ -5794,3 +5794,32 @@ and turns the burst into a stream.** Deterministic fail-on-HEAD tests
 already pin the logic; this closes the live-verification loop on two more
 models. tg4-fix attempts are documented dead ends (quota), not failures of
 the change.
+
+### Session 409 addendum 4 — Prompt Assembly Audit (P0 Context Engineering, Buffy/glm-5.3-flash)
+
+User screenshot: 3 trivial turns -> 19.5K tokens (19.4K prompt / 164
+completion, Context 59%). User directive: audit the EXACT outgoing payload
+before any re-architecture; the issue is input tokens on every call,
+regardless of path. Delivered:
+
+- **Instrumentation (the missing component):** env-gated audit hook at the
+  adapter send funnel (`LOCALMIND_PROMPT_AUDIT=<file>` in
+  openai_compat.py): per-call JSONL record (system/tools/history/current
+  breakdown, chars/4 estimate calibrated against provider prompt_tokens) +
+  full payload dump. Zero cost when off; cannot break chat.
+- **Runner:** scripts/live_test_prompt_audit.py replays the exact
+  Hi / How are you / Good to know that + research scenario on the 8765
+  harness. Report: .context/memory/reviews/2026-09-03-prompt-audit.md.
+- **Key measured findings (bankofai/qwen3.8-flash, 10 calls, ~50.3K total):**
+  (1) trivial turns make ZERO model calls on main (S206 holds — the 19.4K
+  screenshot is NOT current-main trivial turns); (2) every agent-loop call
+  carries ~3.3K tokens of 18 tool schemas + ~2.7K system prompt as a fixed
+  floor; (3) tool-result history grows 38 -> 3677 tokens in one research
+  turn and is then re-sent on every subsequent call (the compounding
+  conversation-centric pattern the user diagnosed — confirmed by data).
+- **Prioritized cuts (in the report):** tool-result compaction > schema
+  diet (ADR-40 extend) > system-prompt diet > six-layer budget manager.
+  Target: research turn 9.9K -> <=5K per iteration.
+- Bugs found on the way: two docstring corruptions in my own insert
+  (caught by compile), and the audit print KeyError swallowed by its own
+  except (caught by unit-probing the recorder before re-running live).

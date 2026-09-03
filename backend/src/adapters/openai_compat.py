@@ -162,6 +162,128 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
 _MAX_TRANSIENT_429_WAIT = 10.0
 
 
+# ─── B-2026-09-03 Prompt Assembly Audit (env-gated, zero-cost when off) ──────
+# Milestone: Context Engineering & Prompt Efficiency (P0). The user-visible
+# symptom: 3 trivial turns ("Hi"/"How are you") reported ~19.4K prompt tokens
+# with ~164 completion tokens — the budget is spent re-sending context, not
+# answering. The audit answers "where do the prompt tokens go?" by dumping the
+# EXACT outgoing payload of every model call to a JSONL file, one line per
+# call, with a per-section token breakdown. Off by default: when the env var
+# is unset the only cost is two attribute reads per request.
+_PROMPT_AUDIT_ENV = "LOCALMIND_PROMPT_AUDIT"
+
+
+def _audit_enabled() -> bool:
+    return bool(os.environ.get(_PROMPT_AUDIT_ENV))
+
+
+def _audit_path() -> str:
+    return os.environ.get(_PROMPT_AUDIT_ENV) or ""
+
+
+def _audit_tokens(s: str) -> int:
+    """~chars/4 heuristic, same convention the engine already uses for
+    approximations. Provider-reported prompt_tokens (the real count) is
+    recorded alongside in the audit line, so the heuristic is calibrated,
+    not trusted."""
+    return max(1, len(s) // 4)
+
+
+def _audit_breakdown(messages: list[dict], tools: list[dict] | None) -> dict:
+    """Per-section token estimate over the EXACT outgoing payload.
+
+    Sections follow the audit plan: system / history / current / tools /
+    other. System is ALL system-role messages combined (LocalMind sends one
+    composite system message per call today); current is the LAST non-system
+    message (the user's turn); everything else is history (assistant turns,
+    tool results, synthetic continuation messages)."""
+    system_tokens = current_tokens = other_tokens = 0
+    n_system = n_history = 0
+    last_user_idx = None
+    for i, m in enumerate(messages or []):
+        if isinstance(m, dict) and m.get("role") != "system":
+            last_user_idx = i
+    for i, m in enumerate(messages or []):
+        content = m.get("content") if isinstance(m, dict) else None
+        text = content if isinstance(content, str) else ""
+        if not text and isinstance(content, list):
+            text = " ".join(
+                p.get("text", "")
+                for p in content
+                if isinstance(p, dict) and p.get("type") == "text"
+            )
+        if not text and m.get("tool_calls"):
+            text = json.dumps(m.get("tool_calls"), default=str)
+        t = _audit_tokens(text)
+        role = m.get("role")
+        if role == "system":
+            system_tokens += t
+            n_system += 1
+        elif i == last_user_idx:
+            current_tokens += t
+        else:
+            other_tokens += t
+            n_history += 1
+    tools_tokens = 0
+    n_tools = 0
+    for t in tools or []:
+        tools_tokens += _audit_tokens(json.dumps(t, default=str))
+        n_tools += 1
+    return {
+        "system": system_tokens,
+        "tools": tools_tokens,
+        "history": other_tokens,  # assistant turns + tool results + synthetic
+        "current": current_tokens,
+        "n_system_msgs": n_system,
+        "n_tools": n_tools,
+        "n_history_msgs": n_history,
+        "n_messages": len(messages or []),
+    }
+
+
+def _audit_record(
+    payload: dict,
+    adapter_name: str,
+    model: str,
+    intent: str,
+    call_kind: str,
+) -> None:
+    """Append one JSONL line + the full payload JSON to the audit dir/file.
+    Never raises: an audit must never break a chat turn."""
+    try:
+        import time as _time
+
+        path = _audit_path()
+        if not path:
+            return
+        messages = payload.get("messages") or []
+        tools = payload.get("tools") or []
+        b = _audit_breakdown(messages, tools)
+        rec = {
+            "ts": _time.strftime("%H:%M:%S"),
+            "adapter": adapter_name, "model": model, "intent": intent,
+            "call": call_kind, **b,
+        }
+        print(
+            "[prompt-audit] {adapter}/{model} {call} intent={intent} "
+            "system={system} tools={tools} history={history} current={current} "
+            "total~{total} msgs={n_messages} tooldefs={n_tools}".format(
+                total=sum(b[k] for k in ("system", "tools", "history", "current")),
+                **rec,
+            ),
+            flush=True,
+        )
+        d = os.path.dirname(path)
+        if d:
+            os.makedirs(d, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+        with open(path + ".last-payload.json", "w", encoding="utf-8") as f:
+            f.write(json.dumps({"record": rec, "payload": payload}, default=str))
+    except Exception as e:  # audit must never break the chat path
+        logger.debug("[prompt-audit] record failed: %s", e)
+
+
 def _flatten_message_content(messages):
     """Convert block-style message content (``[{"type":"text","text":...,
     "cache_control":...}]``) back to a plain string. Degrades prompt-cache
@@ -1045,6 +1167,21 @@ class OpenAICompatAdapter(BaseAdapter):
         cache_control_retry = True
         reasoning_effort_retry = True
         request_payload = payload
+        if _audit_enabled():
+            # B-2026-09-03: prompt assembly audit — record the EXACT outgoing
+            # request once per call (attempt 0), before any retry-field
+            # mutation.tool_choice/stream_options/cache_control retries only
+            # REMOVE fields, so attempt-0 is the maximal payload and the
+            # right thing to measure. (Intent granularity is not in the
+            # payload — the record distinguishes chat vs tools calls via
+            # `call`, which is enough to localize the bloat.)
+            _audit_record(
+                payload,
+                self._provider_name,
+                self._model,
+                "",
+                "tools" if payload.get("tools") else "chat",
+            )
         for attempt in range(3):  # 0, 1, 2 = 3 total attempts
             request = self._client.build_request(
                 "POST",
