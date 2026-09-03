@@ -138,6 +138,10 @@ def analyze(raw: str, timed, label: str) -> dict:
             obj = json.loads(payload)
         except Exception:
             continue
+        # Obs events are wrapped: {"obs_event": {"type": ..., "data": {...}}}.
+        # Token/error frames are top-level. Unwrap so `type` is always found.
+        if isinstance(obj.get("obs_event"), dict):
+            obj = obj["obs_event"]
         events.append((t_rel, obj))
 
     first_token_t = None
@@ -147,12 +151,21 @@ def analyze(raw: str, timed, label: str) -> dict:
     token_payloads = []
     errors = []
     thinker_iters = []  # ADR-57 slice 2: which iterations the Thinker fired on
+    thinker_starts = {}  # iteration -> start t_rel
+    thinker_spans = []  # (iteration, duration_s) — consult wall time
     intent_seen = None
     for t_rel, obj in events:
         typ = obj.get("type") or ""
         if typ == "agent_thinker_start":
             data = obj.get("data") or obj
-            thinker_iters.append(data.get("iteration"))
+            it = data.get("iteration")
+            thinker_iters.append(it)
+            thinker_starts[it] = t_rel
+        elif typ == "agent_thinker_done":
+            data = obj.get("data") or obj
+            it = data.get("iteration")
+            if it in thinker_starts:
+                thinker_spans.append((it, round(t_rel - thinker_starts[it], 2)))
         if intent_seen is None:
             intent_seen = obj.get("intent") or (obj.get("data") or {}).get("intent")
         if typ == "token":
@@ -175,6 +188,7 @@ def analyze(raw: str, timed, label: str) -> dict:
         "intent": intent_seen,
         "thinker_calls": len(thinker_iters),
         "thinker_iters": thinker_iters,
+        "thinker_spans_s": thinker_spans,
         "ttft_s": first_token_t,
         "last_token_s": last_token_t,
         "turn_complete_s": done_t,
