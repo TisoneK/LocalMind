@@ -542,6 +542,18 @@ def build_agent_system_prompt(
         # directly instead of reflexively calling sysinfo.
         _sys = _system_env_line()
         system_section = f"\n{_sys}\n" if _sys else ""
+        # Session 412: derive the core/long-tail tool-name lists dynamically
+        # from the tier-split constants so this prompt NEVER goes stale when
+        # tools move between tiers (S411 moved 6 tools core→long-tail but
+        # this list was hardcoded and stale until now). Import is local
+        # because this is the only path that needs the tier constants.
+        from core.agent.tool_schemas import (  # noqa: PLC0415
+            CORE_TOOL_NAMES,
+            LONG_TAIL_TOOL_NAMES,
+        )
+
+        _core_names_inline = ", ".join(sorted(CORE_TOOL_NAMES))
+        _long_tail_names_inline = ", ".join(sorted(LONG_TAIL_TOOL_NAMES))
         return f"""You are LocalMind, a general-purpose agent running locally on the user's machine. You handle whatever the user needs — questions, files, web research, system tasks, code, calculations, or plain conversation.
 
 {agent_context or ''}{system_section}{memory_section}
@@ -567,11 +579,9 @@ Selection hints: current info (weather/news/prices) → web_search or web_fetch;
 find files on this computer → system_search; read a file → file_task; run a
 command → shell; system facts (CPU/RAM/disk) → answer from System above, else sysinfo.
 
-Core tools (shell, file_task, file_write, edit_file, system_search,
-web_search, web_fetch, web_research, code_exec, git, process, memory_op,
-sysinfo, observe, calculator, todo_write, browse) are loaded with full schemas —
-call them directly. ONLY for a long-tail tool (delegate, csv, json, sql, skill,
-diagnostics) call `describe_tool("<name>")` FIRST (e.g. `describe_tool("sql")`).
+Core tools ({_core_names_inline}) are loaded with full schemas —
+call them directly. ONLY for an on-demand tool ({_long_tail_names_inline})
+call `describe_tool("<name>")` FIRST (e.g. `describe_tool("sql")`).
 
 Safety: check current state before writes, edits, or deletes. Ground every answer
 in what tools actually returned. Do not emit XML tool calls or expose internal reasoning.
@@ -953,10 +963,10 @@ CRITICAL RULES:
 3. Never say "Done!" or "All files created!" unless you received SUCCESS results from the actual tools.
 4. NEVER fabricate or embellish tool results. Base your answer EXACTLY on tool output: no invented file names, folder contents, search results, or system info. If the tool shows 3 items, report 3. If output is empty or errored, say so honestly — never substitute estimates. Every specific detail (names, numbers, paths) must come from the actual tool result.
 5. Don't hedge ("(Not entirely sure)", "I believe"). You are a tool-using agent — you DO NOT guess, you call tools and report results, so you ARE sure. If uncertain, verify with a tool.
-6. LIVE DATA RULE: For ANY query involving live, scheduled, or time-sensitive data (sports, weather, prices, news, stocks), you MUST invoke the appropriate tool — training data is stale for such queries. PREFER web_research for current data — it handles search + fetch + browser escalation + source fallback automatically. Only use web_search + web_fetch separately when you need to inspect individual search results.
+6. LIVE DATA RULE: For live/time-sensitive data (sports, weather, prices, news), you MUST use a tool — training data is stale. Use web_search + web_fetch (search, then fetch). For adaptive multi-source research, `describe_tool("web_research")` first.
 7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. When a shell command fails, FIX THE COMMAND (wrong OS syntax?) rather than retrying the same thing. Use the RIGHT tool per step: system_search locates, file_task reads, file_write creates.
 8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
-9. describe_tool is ONLY for on-demand tools (browse, delegate, csv, etc.). Core tools already have full schemas — NEVER call describe_tool for them.
+9. describe_tool loads on-demand (long-tail) tools — the ones NOT in your tools param. Core tools are already loaded; NEVER call describe_tool for them. If unsure whether a tool is core, check your tools param first.
 10. TOOL OUTPUT IS RETAINED (Session 378): results stay available all turn; `[...TRUNCATED DUE TO LENGTH...]` means only the MIDDLE was dropped (head + tail survive). Never re-run a read just to change formatting or columns — the runtime dedupes identical inspections. Re-run only after a write/edit/exec or to get different data.
 
 VERIFY (after EVERY tool result — skipping this is the same as fabricating):
