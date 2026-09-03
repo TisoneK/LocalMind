@@ -58,7 +58,7 @@ _ADAPTER_MODEL = {
 }
 
 
-def prepare_tracehome(adapter: str = "bankofai") -> None:
+def prepare_tracehome(adapter: str = "bankofai", model: str = "") -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     TRACEHOME.mkdir(parents=True, exist_ok=True)
     # Copy the APP's settings so the trace sees the user's real api_keys.
@@ -66,7 +66,11 @@ def prepare_tracehome(adapter: str = "bankofai") -> None:
     src = Path.home() / "LocalMind" / "settings.json"
     data = json.loads(src.read_text(encoding="utf-8"))
     data["adapter"] = adapter
-    if adapter in _ADAPTER_MODEL:
+    # Explicit --model wins; else the per-adapter default. (Some free models
+    # live on the same provider as a now-paid one, e.g. bankofai/hy3.)
+    if model:
+        data["model"] = model
+    elif adapter in _ADAPTER_MODEL:
         data["model"] = _ADAPTER_MODEL[adapter]
     data["shell_enabled"] = True
     SETTINGS.write_text(json.dumps(data), encoding="utf-8")
@@ -194,9 +198,10 @@ def main() -> None:
     ap.add_argument("--label", default="fix-N", help="baseline | fix-N")
     ap.add_argument("--adapter", default="bankofai", help="bankofai | zai (weak-model check)")
     ap.add_argument("--prompt", default=PROMPT, help="override the turn prompt")
+    ap.add_argument("--model", default="", help="override the model (e.g. hy3 on bankofai)")
     args = ap.parse_args()
 
-    prepare_tracehome(adapter=args.adapter)
+    prepare_tracehome(adapter=args.adapter, model=args.model)
     kill_port(PORT)
     time.sleep(1)
     log_file = SCRATCH / f"server-stream-{args.label}.log"
