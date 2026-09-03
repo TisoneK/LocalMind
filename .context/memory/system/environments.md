@@ -38,7 +38,7 @@ block (and its "last verified" date) every time you run on it again.
   - This is a local development machine — persistent storage, full filesystem access
   - **`core.autocrlf=true` makes `context-sync verify` false-positive** (all 21 core files FAILED, git tree clean; LF-normalized hashes match) — documented flaw B-2026-08-30-17, see `flaws/log.md` Session 406. Don't rollback on an all-files-FAILED + clean-git-tree signature.
 
-## Z.ai cloud sandbox (last verified 2026-09-03, Session 410)
+## Z.ai cloud sandbox (last verified 2026-09-03, Session 411)
 
 - **Identify by:** workspace path `/home/z/my-project/`; env vars `FC_FUNCTION_NAME` / `SIGMA_APP_NAME` present; `CLAWHUB_WORKDIR=/home/z/my-project`
 - **OS:** Linux 6.5 (Ubuntu-based, containerized — `KATA_CONTAINER=true`)
