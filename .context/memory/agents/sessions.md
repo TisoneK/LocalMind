@@ -5865,3 +5865,17 @@ regardless of path. Delivered:
 - **Report:** `.context/memory/reviews/2026-09-03-review-3.md`
 - **Notes:** (1) The first fix-3 run hit the iteration limit (6 iters) — same variance pattern as fix-2's first run. Re-running fix-3b succeeded cleanly (5 iters, final answer). The hit_limit is model non-determinism, not a prompt-change regression — tool selection was correct on both runs. (2) The prompt-size-budget test caught my change immediately (8 intents over budget after loosening Rule #6/9) — the test is a good guard. Tightening Rule #6 brought all 15 back under budget. (3) The pre-existing E402 at prompts.py:49 (`from core.models import Intent` after a function definition) is part of the 32-error ruff baseline — not introduced this session.
 
+
+---
+
+## 2026-09-03 — Session 413 — Dependabot triage: npm audit fix (3 vulns patched)
+
+- **Agent:** Super Z (cloud/sandbox) | **Model:** GLM (Z.ai) | **Platform:** Z.ai cloud sandbox | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** none — security triage
+- **Task:** Triage the GitHub Dependabot alerts (4 vulns on main, 3 high + 1 moderate — flagged on every push since S410).
+- **Commits:** 1 product (`f8320ed`) — `fix(security): npm audit fix — 3 vulns patched (S413)`
+- **Outcome:** done — all 4 advisories resolved. The 4 GitHub alerts were 4 advisories across 3 transitive npm dev-dep packages: (1) @xmldom/xmldom 0.8.13→0.8.15 (moderate, XML fragment injection GHSA-6gmq-8vp8-gcm6); (2) browserslist 4.28.5→4.28.8 (high, OOM + crash, GHSA-c83g-rgw3-j3cx + GHSA-73wf-gq98-2v4g); (3) fast-uri 3.1.5→3.1.7 (high, SSRF + host confusion, 4 advisories GHSA-5jgf-p345-68v8 + GHSA-f65p-4m7j-42xc + GHSA-fph4-wmhf-6fwf + GHSA-jqff-g426-hqxp). 5 transitive deps also bumped (patch/minor) for compatibility: baseline-browser-mapping, caniuse-lite, electron-to-chromium, node-releases, update-browserslist-db. All changes in package-lock.json only (no package.json changes — transitive deps). Frontend typecheck passes (tsc -b --noEmit exit 0). npm audit reports 0 vulnerabilities locally. GitHub Dependabot alert may take time to refresh (still showing 4 at push time — stale cache).
+- **Open items:** None from this session. GitHub Dependabot alert should clear after cache refresh.
+- **Report:** none — security fix (commit message is the record)
+- **Notes:** (1) The 4 vulns were all in DEV dependencies (build tooling — browserslist, caniuse-lite, fast-uri) — not in the production backend (Python) or the Electron runtime bundle. Risk was low but the alerts were noise on every push. (2) `npm audit fix` produced a clean 58-line diff (29 insertions, 29 deletions) — only the 3 vuln packages + 5 transitive deps changed, all patch/minor bumps. No major version changes. (3) The `npx tsc` command at root resolves to a stub package; run tsc via `/home/z/my-project/LocalMind/node_modules/.bin/tsc -b <tsconfig-path> --noEmit` instead.
+

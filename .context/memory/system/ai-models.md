@@ -10,7 +10,7 @@ accordingly).
 | Agent | Model | First seen | Last seen | Sessions |
 |---|---|---|---|---|
 | Buffy | openai/gpt-5.6-luna · deepseek/deepseek-v4-flash · deepseek/deepseek-v4-pro · z-ai/glm-5.2 (varies per session — see Observations) | 2026-07-31 | 2026-08-23 | 35 |
-| Super Z | GLM-4.5 (Z.ai) · GLM-4.6 (Z.ai) · GLM (Z.ai, 2026-09-03 re-verified) | 2026-07-09 | 2026-09-03 | 7 |
+| Super Z | GLM-4.5 (Z.ai) · GLM-4.6 (Z.ai) · GLM (Z.ai, 2026-09-03 re-verified) | 2026-07-09 | 2026-09-03 | 8 |
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 | Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-15 | 10 |
 | opencode | deepseek-v4-flash (bankofai) · glm-5.3-flash (bankofai) · claude-opus-4.8 (per collab events) | 2026-08-31 | 2026-08-31 | 1 |
