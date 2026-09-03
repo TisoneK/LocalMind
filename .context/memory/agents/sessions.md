@@ -5725,3 +5725,18 @@ authoritative.
 - **Open items:** ADR-57 slice 3+ (serial→concurrent: run the pre-tool consult concurrently with the first model call rather than before it; parallel tools/sub-agents); a bankofai/zai live trace once a working key is available; the harness thinker-count parser under-counts vs raw grep (SSE line framing) — grep is ground truth.
 - **Report:** none — fix session (commit messages + fail-on-HEAD tests + live trace are the record)
 - **Notes:** none
+
+### Session 409 addendum — bankofai/hy3 same-provider before/after (correction)
+
+The session-body "bankofai could not be run" was resolved: the user clarified
+that bankofai/**deepseek-v4-flash is now PAID** (hence balance=0), but the
+free model **hy3** still runs on the same bankofai provider (openai_compat.py
+lists hy3 = 256K ctx, free). Added `--model` to the harness and captured a
+clean same-provider before/after on **bankofai/hy3**, python WEB-1 prompt:
+- BASELINE (pre-slice-2 code, checked out 5d03a0b): 3 tools → **3 Thinker
+  starts** (iter 0, 2, 3) — reproduces the ADR-57 defect exactly.
+- FIX (slice 2, HEAD): **5** tools → **2 Thinker starts** (iter 0, 2) — the
+  post-tool once-guard held even across MORE tools. Both answered clean, no
+  errors. Commit 5a93ace (harness --model).
+Also free per the user (2026-09-03): glm-5.3-flash, qwen3.8-flash. deepseek
+-v4-flash is paid. zai key 401-expired; chutes/cerebras out of credit.

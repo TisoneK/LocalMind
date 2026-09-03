@@ -19,10 +19,13 @@ pushed to main.
   first-action). The next lever is to run it concurrently with the first
   model call, or fold it in. Also: parallel tools + parallel `delegate`
   sub-agents. Map which LLM calls are independent (Open-Q1).
-- **Provider outage (2026-09-03):** bankofai balance=0, zai key 401-expired,
-  chutes balance $0, cerebras 403. Only **gemini-2.5-flash** usable for live
-  tests (openai_compat, thinking_enabled=True). The harness now takes
-  `--adapter gemini`. Re-run bankofai/zai traces once keys are refreshed.
+- **Live-test providers (2026-09-03):** bankofai/**deepseek-v4-flash is now
+  PAID** (balance=0 errors) — but the free model **hy3** runs on the same
+  bankofai provider: `--adapter bankofai --model hy3` (256K ctx, free). Also
+  free: glm-5.3-flash, qwen3.8-flash. zai key 401-expired; chutes/cerebras out
+  of credit; gemini-2.5-flash works. NOTE: the app settings.json `adapter`
+  wins over `LOCALMIND_ADAPTER` env, so the harness writes adapter+model into
+  the scratch settings (`--adapter`/`--model`).
 - **Honest note:** real web queries classify as parent-intent ANALYZE, so the
   pre-tool intent-skip mostly helps bare direct-intent turns; the post-tool
   once-guard is the effective win. If more pre-tool savings are wanted, the
