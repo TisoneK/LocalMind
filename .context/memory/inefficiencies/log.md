@@ -1100,3 +1100,11 @@ if literally nothing slowed you down.
 - **Cause:** apostrophes inside heredoc-wrapped `-m` messages are safe in plain bash but this tool wraps the command — avoid `'` in commit messages composed through it.
 - **Workaround / fix:** use ASCII hyphenated paraphrases ("answer head") or double quotes; verify `git status` shows the staged files before the commit step.
 - **Prevent next time:** keep commit messages apostrophe-free when scripting commits through the terminal tool; stage + commit in ONE command only when the message contains no single quotes.
+
+---
+## 2026-09-03 — Buffy / glm-5.3-flash (Session 409 addendum 2)
+- **Problem:** the S409 addendum recorded the bankofai/hy3 before/after NUMBERS but never the evidence FILES — the SSE/results landed under generic `tg2-*` labels while the log said "hy3 A/B", so the follow-up session grepped for `*hy3*` filenames, found nothing, and nearly re-ran a live A/B that already existed.
+- **Cost:** ~8 tool calls of evidence hunting + a false "gemini" provider attribution for tg3b (its server log actually says bankofai/hy3).
+- **Cause:** memory entries described measurements without file pointers; scratch labels were sequential-harness labels unrelated to the described content.
+- **Workaround / fix:** ground truth recovered from raw SSE grep + server logs (both committed nothing — scratch is gitignored, so the SSE files are the ONLY record). Added the file pointers to sessions.md addendum 2.
+- **Prevent next time:** every session-log measurement MUST cite its evidence path (sse/results file) at capture time; when a log says "model X", verify against the server log line `parent-kernel] ready adapter=... model=...` before trusting it.

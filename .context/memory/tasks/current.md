@@ -1,14 +1,13 @@
 # Current Task
 
-**Status:** IDLE — Session 409 COMPLETE: ADR-57 slice 2 (Thinker value-gating)
-shipped. Post-tool consult now honors its long-documented once-per-turn
-contract (`not _thinker_consulted`, finally wired) and the pre-tool consult is
-skipped on DIRECT_RETRIEVAL_INTENTS. Measured 3 reflexive Thinker calls on one
-research turn; the once-guard drops the redundant re-fires. Verified by 2 new
-deterministic tests that FAIL on HEAD and pass on the fix (4→1 starts on a
-synthetic 3-tool turn), 1573 core+api green, ruff unchanged, and a live
-gemini-2.5-flash trace (post-tool fired once). Commits ae722e4 + 12a97a0,
-pushed to main.
+**Status:** IDLE — Session 409 fully closed (addendum 2). ADR-57 slice 2
+(Thinker value-gating) shipped in `ae722e4` and the cut-off HEAD-vs-FIX A/B is
+resolved WITHOUT new runs: the evidence was `scratch/sse-stream-tg2-base.sse`
+vs `tg2-fix.sse` (bankofai/hy3, identical WEB-1 python prompt). Ground truth
+from raw SSE grep: BASE 3 tools -> **3 Thinker starts** (iter 0, 2, 3 —
+redundant re-fire at 3); FIX 5 tools -> **2 starts** (iter 0, 2) — the
+once-guard held across MORE tools. No product code changed in the closeout;
+session-log pointers + inefficiency entry committed.
 
 **Feature:** none
 
@@ -26,11 +25,13 @@ pushed to main.
   of credit; gemini-2.5-flash works. NOTE: the app settings.json `adapter`
   wins over `LOCALMIND_ADAPTER` env, so the harness writes adapter+model into
   the scratch settings (`--adapter`/`--model`).
-- **Honest note:** real web queries classify as parent-intent ANALYZE, so the
-  pre-tool intent-skip mostly helps bare direct-intent turns; the post-tool
-  once-guard is the effective win. If more pre-tool savings are wanted, the
-  clean path is slice 3 (concurrency), not a brittle message-complexity
-  classifier (CONV-05/06/11 regression surface).
+- **Evidence discipline (new, from inefficiencies log):** cite the scratch
+  sse/results file path for every measurement IN the session log at capture
+  time; confirm provider/model from the server's `parent-kernel] ready
+  adapter=... model=...` line, not from what the log body assumed.
+- **Harness caveat:** `results-*.json` thinker-count under-counts (SSE line
+  framing) — raw `grep -o '"agent_thinker_start".*iteration": [0-9]*'` on the
+  .sse file is ground truth.
 - Standing: ~41 unattributed full-suite failures + 34-error ruff baseline
   still need a peer pass (S405-407); live-test port 8010 for the user app
   backend (never 8000).

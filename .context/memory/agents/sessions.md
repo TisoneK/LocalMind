@@ -5740,3 +5740,25 @@ clean same-provider before/after on **bankofai/hy3**, python WEB-1 prompt:
   errors. Commit 5a93ace (harness --model).
 Also free per the user (2026-09-03): glm-5.3-flash, qwen3.8-flash. deepseek
 -v4-flash is paid. zai key 401-expired; chutes/cerebras out of credit.
+
+### Session 409 addendum 2 — HEAD vs FIX A/B resolved + evidence pointers (Buffy/glm-5.3-flash)
+
+The cut-off "HEAD vs FIX on the same 3-tool weather turn" comparison was
+already captured; the files were just never named. Ground truth from raw SSE
+grep (the harness thinker-count parser under-counts — grep is authoritative):
+- **BASE** (`scratch/sse-stream-tg2-base.sse`, pre-slice-2, bankofai/hy3,
+  WEB-1 python prompt): 3 tools -> **3 Thinker starts** (iter 0, 2, 3) — the
+  iter-3 re-fire is the redundant call the once-guard exists to kill.
+- **FIX** (`scratch/sse-stream-tg2-fix.sse`, HEAD, same adapter/model/prompt):
+  5 tools (10 events) -> **2 Thinker starts** (iter 0, 2) — once-guard held
+  across MORE tools; no errors; clean answers on both sides (1138 / 973 chars).
+- Server logs confirm both runs: adapter=bankofai model=hy3, identical prompt
+  "Find the official description of Python and summarize it briefly."
+- tg3-measure / tg3b are bankofai/hy3 too (not gemini as the S409 log body
+  assumed) — tg3b = the same WEB-1 prompt on HEAD, 1 Thinker start (iter 0,
+  pre-tool only; post-tool gate did not re-fire) with 4 tool events. Corrects
+  the "gemini-2.5-flash" provider note in the S409 body.
+- Evidence-label lesson -> inefficiencies/log.md: name scratch evidence files
+  in the session log at capture time.
+
+No product code changed this session; docs/memory only.
