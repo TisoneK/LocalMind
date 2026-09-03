@@ -87,14 +87,26 @@ CORE_TOOL_NAMES: frozenset[str] = frozenset(
         "system_search",
         "web_search",
         "web_fetch",
-        "web_research",  # Session 340: adaptive web acquisition — always loaded
+        # Session 411 (P0 Context Engineering): web_research moved to LONG_TAIL.
+        # It overlaps with web_search + web_fetch (both stay in core); the
+        # audit measured its schema at ~154 tok/call carried on EVERY agent
+        # call regardless of intent. When a research task genuinely needs the
+        # adaptive acquisition (search→fetch→browser escalation), the model
+        # loads it via describe_tool("web_research") — 1 extra iteration.
         "code_exec",
-        "git",  # coding agent's #1 companion — keep always-present
-        "process",
+        # Session 411 (P0 Context Engineering): git moved to LONG_TAIL.
+        # CORE_TOOL_NAMES is GLOBAL (always-present across ALL intents); for
+        # non-coding intents (~70% of turns) git was pure dead weight at
+        # ~275 tok/call. Coding tasks load it via describe_tool("git") — the
+        # structured safety guardrails (reset --hard BLOCKED, status-before-
+        # commit) survive in the full schema. Live-verified on
+        # bankofai/qwen3.8-flash: coding tasks correctly load git before use.
         "memory_op",
-        "sysinfo",
-        "observe",
-        "calculator",
+        # Session 411 (P0 Context Engineering): sysinfo, observe, calculator,
+        # process moved to LONG_TAIL — all rare in the agent loop
+        # (system info, desktop state, arithmetic, long-running process mgmt).
+        # Combined ~470 tok/call saved; shell handles <20s commands and
+        # code_exec handles arithmetic if the model hasn't loaded calculator.
         "todo_write",  # ADR-43: agent-driven live UI todo checklist — always available
         # B-2026-08-30-13 (ADR-40 amendment): browse promoted from the long tail
         # to CORE. The describe_tool round-trip loaded ~3k chars of browse schema
@@ -124,6 +136,17 @@ LONG_TAIL_TOOL_NAMES: frozenset[str] = frozenset(
         "create_plan",
         "skill",
         "diagnostics",
+        # Session 411 (P0 Context Engineering): 6 tools moved from CORE to
+        # LONG_TAIL to cut the always-present tools-param token cost (~900
+        # tok/call saved). See CORE_TOOL_NAMES comments for per-tool rationale.
+        # ADR-40 guardrail satisfied: live-verified tool SELECTION on
+        # bankofai/qwen3.8-flash (weak model) after the cut.
+        "git",
+        "process",
+        "web_research",
+        "observe",
+        "sysinfo",
+        "calculator",
     }
 )
 

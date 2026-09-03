@@ -24,7 +24,6 @@ These tests pin:
 from __future__ import annotations
 
 import pytest
-
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 from core.agent.loop import AgentLoop, _note_described_tool
 from core.agent.tool_schemas import (
@@ -45,16 +44,22 @@ def test_tier_split_covers_catalog_exactly() -> None:
     catalog = {td["function"]["name"] for td in TOOL_DEFINITIONS}
     assert CORE_TOOL_NAMES | LONG_TAIL_TOOL_NAMES == catalog
     assert CORE_TOOL_NAMES.isdisjoint(LONG_TAIL_TOOL_NAMES)
-    assert len(CORE_TOOL_NAMES) == 17  # B-2026-08-30-13: +browse (promoted to core)
-    assert len(LONG_TAIL_TOOL_NAMES) == 16  # B-2026-08-30-13: -browse (now core)
-    # the ADR's named long tail is all present (browse is now CORE, not long-tail)
+    # Session 411 (P0 Context Engineering): 6 tools moved from CORE to LONG_TAIL
+    # (git, process, web_research, observe, sysinfo, calculator) — ~900 tok/call
+    # saved on the always-present tools param. Core: 17→11, long-tail: 16→22.
+    assert len(CORE_TOOL_NAMES) == 11  # Session 411: -git, -process, -web_research, -observe, -sysinfo, -calculator
+    assert len(LONG_TAIL_TOOL_NAMES) == 22  # Session 411: +git, +process, +web_research, +observe, +sysinfo, +calculator
+    # the ADR's named long tail is all present (browse is CORE, not long-tail)
     for name in ("delegate", "sql", "csv", "json", "best_of_n_edit",
                  "propose_str_replace", "propose_write_file", "apply_proposed_edit",
                  "add_subgoal", "update_subgoal", "create_plan", "skill", "diagnostics"):
         assert name in LONG_TAIL_TOOL_NAMES
-    # the always-present core set from the task spec (browse promoted in)
+    # Session 411: the 6 tools moved from core to long-tail
+    for name in ("git", "process", "web_research", "observe", "sysinfo", "calculator"):
+        assert name in LONG_TAIL_TOOL_NAMES
+    # the always-present core set (Session 411: git removed — now on-demand)
     for name in ("shell", "file_task", "file_write", "edit_file", "system_search",
-                 "web_search", "web_fetch", "code_exec", "git", "browse"):
+                 "web_search", "web_fetch", "code_exec", "browse"):
         assert name in CORE_TOOL_NAMES
 
 
@@ -134,7 +139,9 @@ async def test_describe_tool_loads_long_tail_schema() -> None:
 
 @pytest.mark.asyncio
 async def test_describe_tool_core_tool_not_loaded() -> None:
-    result = await dispatch(Intent.DESCRIBE_TOOL, "git")
+    # Session 411: git moved to LONG_TAIL — use "shell" (still CORE) as the
+    # example of a core tool that describe_tool should NOT re-load.
+    result = await dispatch(Intent.DESCRIBE_TOOL, "shell")
     assert result is not None and result.success
     assert result.metadata.get("already_loaded") is True
     assert "loaded_tool" not in result.metadata, "core tools are never 'loaded'"
@@ -199,7 +206,6 @@ class _OnDemandAdapter:
 
     async def chat(self, messages, temperature=0.1, intent="chat"):
         yield StreamChunk(text="STEPS:\n1. Load sql and query the db\n2. Answer\n")
-        return
 
     async def chat_with_tools(self, messages, tools, temperature=0.3, intent=None, tool_choice=None):
         self.calls += 1
