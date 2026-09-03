@@ -31,9 +31,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from adapters.ollama import ToolCallResult
 from core.agent.loop import AgentLoop, _thinker_context_block, _user_message_text
 from core.agent.thinker import ThinkerAnalysis
-from core.models import Intent, StreamChunk
+from core.models import Intent, RiskLevel, StreamChunk, ToolResult
 from core.obs import ObsCollector
 
 
@@ -367,3 +368,103 @@ async def test_vague_imperative_short_circuits_before_thinker():
     assert not any(e.type == "agent_thinker_start" for e in obs.history())
     user_text = "".join(c.text for c in chunks)
     assert "clarify" in user_text.lower() or "could you" in user_text.lower(), user_text
+
+
+# ── ADR-57 slice 2 (B-2026-09-03): value-gate the reflexive Thinker ──────────
+# Two firings were measured on ONE research turn (pre-tool iter 0 + post-tool
+# iter 2 AND iter 3 = 3 calls). These pin the gates that cut the redundant
+# calls while keeping the Thinker's value.
+
+
+@pytest.mark.asyncio
+async def test_pretool_thinker_skipped_for_direct_retrieval_intent():
+    """A direct-retrieval intent (WEB_SEARCH) has an obvious action — the
+    pre-tool consult is a wasted serial round-trip and must be skipped. ANALYZE
+    (the open-ended case) still fires it (covered by the test above)."""
+    loop = AgentLoop(adapter=MagicMock())
+
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        return _clarify_stream()  # answer directly, no tool
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat_with_tools = chat_with_tools
+    mock_adapter.chat = lambda *a, **k: iter(())
+    mock_adapter.thinking_enabled = True
+    obs = ObsCollector()
+
+    with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+         patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), \
+         patch("core.agent.thinker.Thinker", _AnalysisThinker):
+        async for _ in loop.run(
+            messages=[{"role": "user", "content": "latest python version"}],
+            intent=Intent.WEB_SEARCH,
+            initial_tool_result=None,
+            available_tools=[],
+            adapter=mock_adapter,
+            obs=obs,
+            skip_planning=True,
+        ):
+            pass
+
+    assert not any(e.type == "agent_thinker_start" for e in obs.history()), \
+        "pre-tool consult must be skipped for a direct-retrieval intent"
+
+
+@pytest.mark.asyncio
+async def test_posttool_thinker_consults_once_across_many_tools():
+    """The post-tool consult fires at most ONCE per turn even when several
+    successful tools each satisfy the value-gate. The iter-N re-fire (measured:
+    iter 2 AND iter 3 on a 3-source turn) was pure redundancy — the once-guard
+    (the site's own long-documented contract, finally wired) drops it.
+
+    Uses WEB_SEARCH so the pre-tool consult is skipped: every start counted
+    here is therefore a POST-tool consult, isolating the once-guard.
+    """
+    loop = AgentLoop(adapter=MagicMock())
+    seen = {"calls": 0}
+
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        seen["calls"] += 1
+        if seen["calls"] <= 3:
+            return ToolCallResult(
+                tool_name="web_search",
+                tool_args={"query": f"source {seen['calls']}"},
+                raw_content="",
+            )
+
+        async def _answer():
+            yield StreamChunk(text="Here is the combined answer from the sources.", done=False)
+            yield StreamChunk(text="", done=True)
+
+        return _answer()
+
+    async def fake_dispatch(intent, raw_input, allowed_tool_names=None):
+        return (
+            ToolResult(content="a real search result", risk=RiskLevel.LOW, source="web_search"),
+            False,  # not failed
+            0,
+        )
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat_with_tools = chat_with_tools
+    mock_adapter.chat = lambda *a, **k: iter(())
+    mock_adapter.thinking_enabled = True
+    obs = ObsCollector()
+
+    with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+         patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), \
+         patch("core.agent.loop.dispatch_with_retry", side_effect=fake_dispatch), \
+         patch("core.agent.thinker.Thinker", _AnalysisThinker):
+        async for _ in loop.run(
+            messages=[{"role": "user", "content": "find the weather in three cities"}],
+            intent=Intent.WEB_SEARCH,
+            initial_tool_result=None,
+            available_tools=[],
+            adapter=mock_adapter,
+            obs=obs,
+            skip_planning=True,
+        ):
+            pass
+
+    starts = [e for e in obs.history() if e.type == "agent_thinker_start"]
+    assert len(starts) == 1, f"post-tool consult must fire exactly once, got {len(starts)}"

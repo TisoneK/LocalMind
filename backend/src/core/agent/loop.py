@@ -62,6 +62,7 @@ from core.agent.constants import (
     AGENT_ALLOWED_TOOLS,
     AGENT_INTENTS,
     CLARIFICATION_THRESHOLD,
+    DIRECT_RETRIEVAL_INTENTS,
     INTENT_TOOL_SCOPES,
     MAX_ITERATIONS,
     MAX_WALL_CLOCK_SECS,
@@ -2867,6 +2868,14 @@ class AgentLoop:
             not initial_tool_result
             and not _pre_init_override.mode
             and intent in AGENT_INTENTS
+            # ADR-57 slice 2 (B-2026-09-03): value-gate the pre-tool consult.
+            # On direct-retrieval intents (WEB_*, find_path, bounded compute,
+            # git, memory) the action is obvious and the model acts on the
+            # first call — the consult is a wasted serial round-trip before
+            # the first tool. Keep it only for open-ended objectives (ANALYZE/
+            # DEBUG/REVIEW/file/code) where narration-without-action is the
+            # risk it was added to prevent (CONV-05/06/11).
+            and intent not in DIRECT_RETRIEVAL_INTENTS
             and getattr(active_adapter, "thinking_enabled", False)
         ):
             try:
@@ -4889,6 +4898,12 @@ class AgentLoop:
                     and intent in AGENT_INTENTS
                     and getattr(active_adapter, "thinking_enabled", False)
                     and _thinker_worth_it
+                    # ADR-57 slice 2 (B-2026-09-03): wire the once-per-turn guard
+                    # this site's own comment (line ~2926 "consults ONCE") always
+                    # documented but never checked — the value-gate could re-fire
+                    # every qualifying iteration (measured: iter 2 AND iter 3 on a
+                    # 3-source turn, the iter-3 call redundantly re-reconciling).
+                    and not _thinker_consulted
                 ):
                     _thinker_consulted = True
                     try:

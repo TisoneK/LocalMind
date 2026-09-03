@@ -183,6 +183,31 @@ AGENT_INTENTS: frozenset[Intent] = frozenset(
     }
 )
 
+# ADR-57 slice 2 (B-2026-09-03): agent intents whose action is obvious from
+# the request itself — a direct retrieval, search, or bounded compute the
+# model will execute without a planning pass. The pre-tool Thinker (ADR-42)
+# earns its serial LLM round-trip only on OPEN-ENDED objectives (ANALYZE
+# "understand what to build", DEBUG, REVIEW, file/code work) where
+# narration-without-action is the real risk (CONV-05/06/11). On these direct
+# intents the pre-consult is dead time before the first tool, so it is
+# skipped. This is a subset of AGENT_INTENTS; anything not listed keeps the
+# pre-tool consult.
+DIRECT_RETRIEVAL_INTENTS: frozenset[Intent] = frozenset(
+    {
+        Intent.WEB_SEARCH,
+        Intent.WEB_FETCH,
+        Intent.WEB_RESEARCH,
+        Intent.FIND_PATH,
+        Intent.OBSERVE,
+        Intent.CALCULATE,
+        Intent.CSV,
+        Intent.JSON,
+        Intent.SQL,
+        Intent.GIT,
+        Intent.MEMORY_OP,
+    }
+)
+
 AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
     {
         "web_search",
