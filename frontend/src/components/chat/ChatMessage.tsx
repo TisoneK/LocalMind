@@ -53,7 +53,7 @@ import { formatLatency, formatTokens } from '@/lib/localmind/progress';
 import { repairMarkdown } from '@/lib/markdownRepair';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ResponseBlockRenderer } from './ResponseBlockRenderer';
-import { ToolSteps } from './ToolSteps';
+import { ActionRows } from './ActionRow';
 import { TurnTimeline } from './TurnTimeline';
 import { AgentPhases } from './AgentPhases';
 import { ErrorMessage } from './ErrorMessage';
@@ -878,12 +878,9 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
                   onFocusTool={(toolId) => setToolFocus({ toolId, at: Date.now() })}
                 />
               )}
-              <ToolSteps
-                compact
-                toolCalls={message.toolCalls}
-                isStreaming={isStreaming}
-                focusSignal={toolFocus}
-              />
+              {/* Calm, collapsible-by-default action rows (ZCode-inspired) — a
+                  timeline segment click opens + scrolls the matching row. */}
+              <ActionRows toolCalls={message.toolCalls} focusSignal={toolFocus} />
             </>
           )}
 
