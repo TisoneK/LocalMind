@@ -217,3 +217,57 @@ async def test_post_loop_synthesis_handles_synthesis_exception():
         chunks.append(chunk)
 
     assert chunks == []  # exception caught, nothing yielded
+
+
+# ── B-2026-09-05-5: _force_final_answer must stream thinking LIVE ────────────
+# The old implementation buffered thinking chunks in _final_chunks and flushed
+# them after the whole synthesis stream completed. The frontend's thinking
+# timer (first→last thinking_token wall time) then measured ~1ms for a full
+# paragraph of reasoning — the hit-limit transcript case ("Thinking 1ms").
+# Regression: the FIRST thinking chunk must arrive while the adapter stream is
+# still unconsumed — i.e. streamed as the model produces it, not held back.
+
+@pytest.mark.asyncio
+async def test_force_final_answer_streams_thinking_live():
+    loop = AgentLoop(adapter=None)
+
+    class _TrackingAdapter:
+        """Fake synthesis adapter that records when its stream is exhausted."""
+
+        def __init__(self):
+            self.exhausted = False
+
+        async def chat(self, messages, temperature=0.4, **_kw):
+            yield StreamChunk(text="", thinking="start", done=False)
+            yield StreamChunk(text="", thinking="I should report the observed tool outputs honestly.", done=False)
+            yield StreamChunk(text="Here is what I found.", done=False)
+            yield StreamChunk(text="", done=True)
+            self.exhausted = True
+
+    adapter = _TrackingAdapter()
+    collected: list[str] = []
+    thinking_seen_before_exhaustion = False
+    async for chunk in loop._force_final_answer(
+        loop_messages=[{"role": "user", "content": "wrap up"}],
+        observation_log="[shell] ls /tmp → file1.txt",
+        active_adapter=adapter,
+        trace=None,
+        provider_usage={},
+    ):
+        if getattr(chunk, "thinking", ""):
+            collected.append(("thinking", chunk.thinking))
+            if not adapter.exhausted:
+                thinking_seen_before_exhaustion = True
+        elif chunk.text:
+            collected.append(("text", chunk.text))
+
+    kinds = [k for k, _ in collected]
+    assert "thinking" in kinds, f"thinking chunks must still be forwarded, got {kinds}"
+    assert thinking_seen_before_exhaustion, (
+        "the first thinking chunk arrived only after the adapter stream was "
+        "fully consumed — thinking is being buffered to the flush again"
+    )
+    # Reasoning must still precede the answer text (ThinkingBlock before body).
+    first_thinking = kinds.index("thinking")
+    texts = [i for i, k in enumerate(kinds) if k == "text" and collected[i][1]]
+    assert texts and first_thinking < texts[0]

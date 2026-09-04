@@ -8633,8 +8633,15 @@ class AgentLoop:
                     _final_text_parts.append(filtered_text)
                 # ADR-41 (Session 254): forward the model's reasoning in the
                 # final synthesis too — a thinking model (GLM) streams
-                # reasoning before this answer as well. Held with the text
-                # so the ThinkingBlock renders it before the answer.
+                # reasoning before this answer as well.
+                # B-2026-09-05-5: yield it LIVE, not held with the text.
+                # Buffering made every thinking_token arrive in one flush
+                # burst after synthesis completed, so the frontend's
+                # client-side thinking timer (first→last token wall time)
+                # measured ~1ms for a full paragraph of reasoning — the
+                # hit-limit transcript case. Text stays buffered for the
+                # work-report contract below; thinking still precedes the
+                # answer because it streams during synthesis.
                 # (isinstance guard: test stubs may carry a truthy non-str
                 # .thinking.)
                 _thinking = (
@@ -8642,10 +8649,12 @@ class AgentLoop:
                     if isinstance(chunk.thinking, str) and chunk.thinking
                     else ""
                 )
+                if _thinking:
+                    yield StreamChunk(text="", thinking=_thinking, done=False, usage=dict(_provider_usage))
                 # Hold the terminal marker until the worker report contract
                 # has been enforced below.
                 _final_chunks.append(
-                    StreamChunk(text=filtered_text, thinking=_thinking, done=False, usage=dict(_provider_usage))
+                    StreamChunk(text=filtered_text, done=False, usage=dict(_provider_usage))
                 )
             logger.info(f"[agent.loop] final synthesis: {round((time.monotonic() - t_final) * 1000)}ms")
         except Exception as exc:
