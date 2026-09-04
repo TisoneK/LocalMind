@@ -50,6 +50,11 @@ Grounded in two research reports:
   `llm_calls`; frontend cached chip (hit %, hidden when unreported) + calls
   chip + context-meter cached share. 14 new tests; LIVE-verified bankofai/
   qwen3.8-flash isolated 8765: SSE total_cached 5120/6790 (75.6% hit).
+- **S416 addendum** (`7b9c039`): user-reported meter bug fixed — the Context
+  meter divided session-cumulative prompt by the per-call window (false 100%
+  after 4 turns); now measures the LAST call's prompt + same-basis cached
+  chip. Live-verified 4-turn trace: 10,977/32,768 = 33%, cached 56%.
+  qwen3.8-flash missing from MODEL_CONTEXT_WINDOWS → B-2026-09-04-1.
 
 ## Constraints / do-not-regress
 

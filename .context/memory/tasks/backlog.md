@@ -798,3 +798,5 @@ B-07-31-10, Anthropic live-verify).
 confirmed the known B-2026-08-30-17 Windows autocrlf false-positive (git blobs
 match the manifest exactly; only CRLF-on-disk differs). No rollback needed;
 item remains open.
+
+- **B-2026-09-04-1** (P2, from S416 addendum): `qwen3.8-flash` (and other bankofai free models beyond deepseek-v4-flash/hy3) are missing from `MODEL_CONTEXT_WINDOWS` (backend/src/adapters/openai_compat.py:50) — they silently fall back to the 32,768 default. bankofai's `/v1/models` exposes NO context_length metadata (probed live 2026-09-04: only id/owned_by/supported_endpoint_types), so a value must come from provider docs/user research — do NOT guess. A too-small window makes the context meter over-predict degradation; verify before adding. Also consider: should the meter warn when it's running on the "default" fallback (unknown model) instead of showing a confident percentage?

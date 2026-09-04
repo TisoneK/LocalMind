@@ -1140,3 +1140,13 @@ if literally nothing slowed you down.
 - **Cause:** (1) MSYS path translation of variables inside redirection targets in multi-statement commands; (2) jsdom tests with hard real-time boundaries share one CPU — parallel runners oversubscribe it and cross the timeout line.
 - **Workaround / fix:** (1) Bake the Windows paths into a small bash script (`scratch/s416/trace.sh`) and run `bash <script>` — inline env-var prefixes for the server boot itself work fine. (2) Never run two vitest suites concurrently on this box; verify any suspect failure with the file isolated (`npx vitest run <file>`) and, when needed, a stash-baseline comparison — the baseline flaking MORE than the changed tree proves load, not regression.
 - **Prevent next time:** Recorded in `system/environments.md` (Windows block, verified commands + quirks). Related pre-existing trap re-confirmed: pytest has no `--timeout` plugin here — drop the flag.
+
+---
+
+## 2026-09-04 — ZCode / local Windows (Session 416 addendum)
+
+- **Problem:** The S416 cached-chip shipped with a basis mismatch that the user caught within hours: the context meter divided SESSION-CUMULATIVE prompt tokens by the PER-CALL window (false 100% after 4 short turns) while the new cached chip divided last-call cached tokens by that same cumulative denominator — producing two different cache percentages (19% vs 47%) for the same turn on screen.
+- **Cost:** User trust hit ("Something is not right"); one fix session (~45 min) incl. a 4-turn live verification.
+- **Cause:** I wired the cached chip onto lastMetrics (per-call) without noticing the meter's own numerator (`cumulativeContextTokens` from sessionStats) was a DIFFERENT accumulation basis. The S416 pre-change comment even documented the cumulative basis as intended ("matching how PerformanceMetrics computes its corner prompt counter") — I extended a wrong design instead of auditing it.
+- **Workaround / fix:** Meter + chip both now use the LAST model call's prompt (liveObservation.contextTokens / lastMetrics fallback); the session cumulative stays only in the stats corner. Tooltip states the basis.
+- **Prevent next time:** When adding a ratio/percentage UI, enumerate every input's accumulation basis (per-call / per-turn / per-session) and assert they match — a percentage built from mixed bases is silently wrong and looks plausible. Also: live-verify UI percentages against the SSE ground-truth numbers they derive from, not just that the fields arrive.

@@ -5906,3 +5906,22 @@ regardless of path. Delivered:
 - **Open items:** Step 2 byte-stable system prefix (next); `total_*` fields on the wire ready for an "equivalent work across N calls" display; ~36 Windows backend failures + 32-34 ruff baseline still owed the peer pass; frontend vitest parallel-load flakes worth a test-infra session.
 - **Report:** .context/memory/reviews/2026-09-04-review.md
 - **Notes:** (1) `context-sync verify` failed on this checkout — known B-2026-08-30-17 CRLF false-positive (subset-FAILED variant, per the S407 correction); git blobs match the manifest; NOT rolled back. (2) The chat.py `metrics` re-emit never fired in the traces — turn_complete (verified) + /api/metrics polling (verified) are the real paths; re-emit kept as belt-and-braces. (3) bankofai omits cache telemetry on some calls (trace-b: cached 0) — UI hides the chip when unreported. (4) Git Bash mangles `$VAR`-in-`>`-redirect Windows paths → use a baked-path bash script for the live harness (logged in environments.md).
+
+### Session 416 addendum — context-meter false-100% fix (`7b9c039`)
+
+User reported "4 turns and context window is 100% full???" with a screenshot
+(32.7K prompt / 19% cached on meter / 47% cached in corner / qwen3.8-flash).
+Root cause: the meter divided session-CUMULATIVE prompt tokens by the
+PER-CALL context window — prompts re-send history so per-turn prompts
+overlap, not stack; 4 turns × ~8K avg summed to 32.7K ÷ 32,768 default
+window = false 100%. The S416 cached chip also divided last-call cached by
+the cumulative denominator (the 19%-vs-47% mismatch the user flagged).
+
+Fix: meter basis = LAST model call's prompt (`liveObservation.contextTokens`,
+live lastMetrics fallback); cached chip on the same last-call basis; tooltip
+states the basis. Live-verified 4-turn trace (scratch/s416b/): turn 4 =
+10,977/32,768 = 33% with 6,144 cached (56% of call); matches the screenshot's
+turn-level SSE ground truth. ALSO: `qwen3.8-flash` is NOT in
+MODEL_CONTEXT_WINDOWS (openai_compat.py) — bankofai /v1/models exposes no
+context_length (probed: id/owned_by only), so it silently uses the 32,768
+default. Left at default pending a documented value (NOT guessed).
