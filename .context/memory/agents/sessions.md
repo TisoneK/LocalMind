@@ -5925,3 +5925,27 @@ turn-level SSE ground truth. ALSO: `qwen3.8-flash` is NOT in
 MODEL_CONTEXT_WINDOWS (openai_compat.py) — bankofai /v1/models exposes no
 context_length (probed: id/owned_by only), so it silently uses the 32,768
 default. Left at default pending a documented value (NOT guessed).
+
+### Session 416 addendum 2 — context-window discovery (`6d4b45e`)
+
+User directive: context windows should be fetched from the model, not
+hardcoded — "that's your job." Delivered (fetch-first + honest fallback +
+verified entry, per the owner's spec):
+
+- **Fetch-first:** `openai_compat.py` keeps raw /models entries;
+  `extract_context_window_from_model_entry()` reads context_length /
+  max_model_len / context_window / max_input_tokens / OpenRouter
+  `top_provider.context_length` (junk-bounded ≤4M). `probe_context_window()`
+  upgrades `window_source` default→fetched; reuses the list_models fetch
+  (no extra HTTP call). models route probes when source=default.
+- **Honest UI:** when the source is the registry "default" guess, the route
+  OMITS context_window; CenterPanel shows `N tok · window unknown` — never a
+  percentage on a fabricated denominator. Source flag:
+  context_window_source = table | fetched | detected (Ollama) | default.
+- **Verified entry (owner-supplied B.AI docs):** qwen3.8-flash = 1,000,000
+  (max input 991,808; thinking-mode 983,616; output 131,072 — the table
+  stores the advertised window).
+- Tests: 12 new backend + 3 WorkspaceLayout tests rewritten from the
+  Session-265 cumulative basis to the last-call basis (the old pins encoded
+  the bug). Live-verified: qwen3.8-flash → {1000000, table}; unlisted model
+  → context_window absent from every option.
