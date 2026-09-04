@@ -1056,6 +1056,30 @@ def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
             "A hard limit was reached. Stop calling tools and give the best honest answer you can "
             "from the evidence gathered so far."
         )
+    if et == "cloud_placeholder":
+        # B-2026-09-05-1: OneDrive Files-On-Demand placeholder with the sync
+        # provider down — the transcript case that burned 4+ iterations on
+        # doomed retries (code_exec, shell Copy-Item) because the generic
+        # directive said "try a different approach". No local tool can read
+        # cloud-only bytes; the only fix is user action.
+        return (
+            f"`{tool_name}` could not read the file because it is a cloud-only placeholder "
+            "(OneDrive Files-On-Demand) and the sync provider is not available — NO other tool "
+            "can read it right now (code_exec and shell copies fail identically), so do NOT "
+            "retry with another tool or command. Tell the user to open the file once, or "
+            "right-click it in Explorer → 'Always keep on this device', and try again after "
+            "they confirm it downloaded."
+        )
+    if et == "unsupported_format":
+        # B-2026-09-05-2: known binary container with no parser (.pub/.doc/.ppt era).
+        # Re-reading raw returns mojibake; conversion is the only path.
+        return (
+            f"`{tool_name}` found the file but LocalMind has no parser for that format yet "
+            "(supported: PDF, DOCX, XLSX, CSV, images, text/code). Reading it raw returns "
+            "binary garbage — do NOT retry. Tell the user which formats are supported and "
+            "offer to convert the file (open it in its app, 'Save As' PDF or DOCX), then "
+            "read the converted copy."
+        )
     # git_error, internal_error, child_exception, parse-anything-else, unknown.
     # B-2026-08-21: OS-aware shell recovery hint. When shell fails with
     # "not recognized" or similar, the model almost always used the

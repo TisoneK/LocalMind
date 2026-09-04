@@ -1,5 +1,8 @@
 """Tests for the file reader tool."""
+import pathlib
+
 import pytest
+
 from tools.file_reader import _chunk_text, _extract_path_candidates, parse_file
 
 
@@ -153,3 +156,182 @@ async def test_parse_file_unknown_extension():
     data = b"Some content in an unknown file type"
     attachment = await parse_file(data=data, filename="file.xyz", content_type="application/xyz")
     assert len(attachment.chunks) >= 1
+
+
+# ── Cloud placeholders (OneDrive Files-On-Demand) — B-2026-09-05-1 ───────────
+# Live transcript (qwen3.8-flash, CV-read session): the user's CV was a cloud
+# placeholder with OneDrive NOT running. open() → errno 22, copies → WinError
+# 362; file_task classified it internal_error, whose recovery directive says
+# "try a different approach" — so the model burned 4+ iterations on doomed
+# retries (code_exec, shell Copy-Item) before the turn died. The fix classifies
+# these reads as cloud_placeholder with an explicit do-not-retry directive.
+
+
+
+class _FakeStat:
+    """Minimal stat_result stand-in carrying only st_file_attributes."""
+
+    def __init__(self, attrs):
+        self.st_file_attributes = attrs
+
+
+def test_is_cloud_placeholder_detects_recall_attr():
+    from tools.file_reader import _is_cloud_placeholder_file
+
+    # 0x00400020 = ARCHIVE | RECALL_ON_DATA_ACCESS — the live CV file's attrs.
+    assert _is_cloud_placeholder_file(_FakeStat(0x00400020)) is True
+    assert _is_cloud_placeholder_file(_FakeStat(0x20)) is False
+
+
+def test_is_cloud_placeholder_non_windows_stat():
+    """Non-Windows stat results have no st_file_attributes — not a placeholder."""
+    from tools.file_reader import _is_cloud_placeholder_file
+
+    class _UnixStat:
+        pass
+
+    assert _is_cloud_placeholder_file(_UnixStat()) is False
+
+
+def test_classify_read_error_winerror_362():
+    """WinError 362 (cloud provider not running) is cloud_placeholder even
+    without the attribute (shutil surfaces exactly this)."""
+    from tools.file_reader import _classify_read_error
+
+    exc = OSError(22, "Invalid argument")
+    exc.winerror = 362
+    assert _classify_read_error(exc, has_recall_attr=False) == "cloud_placeholder"
+
+
+def test_classify_read_error_errno22_needs_recall_corroboration():
+    from tools.file_reader import _classify_read_error
+
+    assert _classify_read_error(OSError(22, "Invalid argument"), has_recall_attr=True) == "cloud_placeholder"
+    # errno 22 without the placeholder attribute is NOT confidently a cloud
+    # failure — keep the generic class instead of a misleading diagnosis.
+    assert _classify_read_error(OSError(22, "bogus"), has_recall_attr=False) == "internal_error"
+
+
+def test_classify_read_error_permission_and_generic():
+    from tools.file_reader import _classify_read_error
+
+    assert _classify_read_error(OSError(13, "Permission denied"), has_recall_attr=False) == "permission_denied"
+    assert _classify_read_error(OSError(5, "Access is denied"), has_recall_attr=False) == "internal_error"
+
+
+@pytest.mark.asyncio
+async def test_file_task_cloud_placeholder_returns_honest_no_retry(monkeypatch, tmp_path):
+    """A placeholder whose read fails (provider down) yields cloud_placeholder
+    with the no-retry hint — NOT the old internal_error retry loop."""
+    from tools.file_reader import file_task
+
+    f = tmp_path / "CV.docx"
+    f.write_bytes(b"PK\x03\x04not-really-a-zip")  # exists() must pass
+    monkeypatch.setattr(
+        pathlib.Path, "read_bytes", lambda self: (_ for _ in ()).throw(OSError(22, "Invalid argument"))
+    )
+    # The temp file is a real local file; force the placeholder stat signal.
+    monkeypatch.setattr("tools.file_reader._is_cloud_placeholder_file", lambda st: True)
+
+    result = await file_task(f"Read {f}")
+
+    assert result.success is False
+    assert result.error_type == "cloud_placeholder"
+    assert "do NOT retry" in result.content
+    assert "Always keep on this device" in result.content
+
+
+@pytest.mark.asyncio
+async def test_file_task_provider_down_winerror_362(monkeypatch, tmp_path):
+    """shutil-style WinError 362 surfaces the same honest cloud_placeholder."""
+    from tools.file_reader import file_task
+
+    class _CloudOSError(OSError):
+        def __init__(self, *args):
+            super().__init__(*args)
+            self.winerror = 362
+
+    f = tmp_path / "notes.txt"
+    f.write_bytes(b"hello")
+    monkeypatch.setattr(
+        pathlib.Path,
+        "read_bytes",
+        lambda self: (_ for _ in ()).throw(
+            _CloudOSError(22, "The cloud file provider is not running")
+        ),
+    )
+
+    result = await file_task(f"Read {f}")
+
+    assert result.error_type == "cloud_placeholder"
+    assert "do NOT retry" in result.content
+
+
+# ── Unsupported binary containers — B-2026-09-05-2 ───────────────────────────
+# .pub/.doc/.ppt-era files used to reach the plain-text decode path and come
+# back as mojibake line-numbered garbage the model could mistake for contents.
+
+@pytest.mark.asyncio
+async def test_file_task_ole2_container_is_unsupported_not_mojibake(tmp_path):
+    """A legacy .pub (OLE2 compound doc) gets an honest unsupported_format
+    result with a convert-first instruction — never decoded garbage."""
+    from tools.file_reader import file_task
+
+    f = tmp_path / "CV-TisoneKironget.pub"
+    f.write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64)
+
+    result = await file_task(f"Read {f}")
+
+    assert result.success is False
+    assert result.error_type == "unsupported_format"
+    assert "Save As" in result.content
+    # The OLE2 magic must NOT leak into the content as decoded text.
+    assert "\xd0\xcf" not in result.content
+
+
+@pytest.mark.asyncio
+async def test_file_task_zip_container_doc_is_unsupported(tmp_path):
+    """A legacy .doc that is really a zip-container binary gets the same guard."""
+    from tools.file_reader import file_task
+
+    f = tmp_path / "old.doc"
+    f.write_bytes(b"PK\x03\x04" + b"\x00" * 64)
+
+    result = await file_task(f"Read {f}")
+
+    assert result.error_type == "unsupported_format"
+    assert "PDF, DOCX" in result.content
+
+
+@pytest.mark.asyncio
+async def test_file_task_plain_text_still_reads_normally(tmp_path):
+    """Guard is magic-based only — a normal text file is untouched."""
+    from tools.file_reader import file_task
+
+    f = tmp_path / "notes.md"
+    f.write_bytes("Line one.\nLine two.\n".encode("utf-8"))
+
+    result = await file_task(f"Read {f}")
+
+    assert result.success is not False
+    assert "Line one." in result.content
+
+
+def test_extract_legacy_office_paths():
+    """.pub/.doc paths are now extracted instead of not_found."""
+    got = _extract_path_candidates(r"read C:\Users\tison\OneDrive\Documents\CV-TisoneKironget.pub")
+    assert got[0] == r"C:\Users\tison\OneDrive\Documents\CV-TisoneKironget.pub"
+    # docx must still win over doc in the alternation (order-sensitive regex).
+    assert _extract_path_candidates(r"C:\Users\tison\Documents\CV.docx")[0] == r"C:\Users\tison\Documents\CV.docx"
+    assert _extract_path_candidates(r"C:\Users\tison\Documents\CV.xlsx")[0] == r"C:\Users\tison\Documents\CV.xlsx"
+
+
+@pytest.mark.asyncio
+async def test_parse_file_upload_path_rejects_ole2():
+    """parse_file (upload path) returns the honest unsupported text instead of
+    mojibake chunks for a legacy .pub attachment."""
+    data = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\x00" * 64
+    attachment = await parse_file(data=data, filename="brochure.pub", content_type="application/octet-stream")
+    joined = " ".join(attachment.chunks)
+    assert "Unsupported binary format" in joined
+    assert "Save As" in joined

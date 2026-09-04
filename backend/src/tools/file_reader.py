@@ -135,6 +135,86 @@ def _format_with_line_numbers(text: str, max_bytes: int) -> tuple[str, int, bool
     return "".join(output_parts), total_lines, truncated, shown
 
 
+# ── Cloud-placeholder read failures (B-2026-09-05-1) ────────────────────────
+# OneDrive Files-On-Demand placeholders: the directory entry EXISTS (so
+# p.exists() passes) but the bytes live in the cloud. When the OneDrive
+# provider isn't running, EVERY read fails the same way — open() → errno 22
+# "Invalid argument", copies → WinError 362 "cloud file provider is not
+# running" — which this tool used to surface as a generic internal_error.
+# The recovery directive then nudged the model to "try a different approach",
+# and a real session burned 4+ iterations on doomed retries (code_exec, shell
+# Copy-Item) before the turn died. These reads are classified so the loop can
+# say: no tool can read this file right now — ask the user to materialize it.
+_FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x400000
+
+_CLOUD_PLACEHOLDER_HINT = (
+    "This file is an OneDrive Files-On-Demand placeholder — its bytes are in "
+    "the cloud and the sync provider is not available to fetch them. No local "
+    "tool can read it right now (file_task, code_exec, and shell copies all "
+    "fail identically), so do NOT retry with another tool or command. Ask the "
+    "user to open the file once, or right-click it in Explorer and choose "
+    "'Always keep on this device', then try again after they confirm it "
+    "downloaded."
+)
+
+
+def _is_cloud_placeholder_file(st_result) -> bool:
+    """True when a stat result carries the Files-On-Demand recall attribute.
+
+    Windows-only signal (``st_file_attributes`` is absent elsewhere, which
+    reads as False — nothing to detect on other platforms). The attribute
+    alone is NOT an error: pinned-but-hydrated files carry it too and read
+    fine while OneDrive is healthy, so callers still attempt the read.
+    """
+    attrs = getattr(st_result, "st_file_attributes", None)
+    if attrs is None:
+        return False
+    return bool(attrs & _FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS)
+
+
+def _classify_read_error(exc: OSError, has_recall_attr: bool) -> str:
+    """Map a failed file read to a recovery error_type.
+
+    winerror 362 is ERROR_CLOUD_FILE_PROVIDER_NOT_RUNNING. errno 22
+    (Invalid argument) is what open() returns on a cloud placeholder whose
+    provider is down — but it is ambiguous alone, so the placeholder stat
+    attribute must corroborate it before we claim "cloud_placeholder".
+    """
+    if getattr(exc, "winerror", None) == 362:
+        return "cloud_placeholder"
+    if exc.errno == 22 and has_recall_attr:
+        return "cloud_placeholder"
+    if exc.errno == 13:
+        return "permission_denied"
+    return "internal_error"
+
+
+# ── Binary container sniffing (B-2026-09-05-2) ──────────────────────────────
+# Legacy office formats (.pub, .doc, .ppt, .xls) have no parser here, but
+# they DID reach the plain-text decode path and returned mojibake garbage
+# that the model then treated as the file's contents. Known container
+# magics get an honest unsupported_format result instead.
+_BINARY_MAGICS: tuple[tuple[bytes, str], ...] = (
+    (b"PK\x03\x04", "an Open XML / ZIP-based document (docx, pptx, xlsx, or a zip archive)"),
+    (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", "an OLE2 compound document (e.g. .doc, .pub, .ppt, or .xls)"),
+    (b"MZ", "a Windows executable"),
+)
+
+
+def _binary_container_sniff(data: bytes) -> str | None:
+    """Return a human description when the head bytes match a known binary
+    container we cannot parse; None for everything else (text or unknown)."""
+    head = data[:8]
+    for magic, label in _BINARY_MAGICS:
+        if head.startswith(magic):
+            return label
+    # Heuristic: a text file's first pages are virtually never majority-NUL.
+    sample = data[:4096]
+    if sample and sample.count(0) > len(sample) // 2:
+        return "a binary file"
+    return None
+
+
 def _detect_line_ending(data: bytes) -> str:
     """Detect the dominant line ending from raw file bytes.
 
@@ -384,40 +464,49 @@ async def parse_file(
         elif ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff"):
             text = await _parse_image(data, filename)
         else:
-            # Plain text / code — decode as UTF-8.  Truncation is
-            # line-aware (never splits a multi-byte character mid-
-            # sequence) and reports the exact line count so the model
-            # can reason about the file's true size.
-            try:
-                text = data.decode("utf-8", errors="replace")
-                if len(data) > FILE_READ_MAX_BYTES:
-                    lines = text.splitlines(keepends=True)
-                    truncated_lines: list[str] = []
-                    byte_count = 0
-                    for line in lines:
-                        line_bytes = len(line.encode("utf-8"))
-                        if byte_count + line_bytes > FILE_READ_MAX_BYTES:
-                            break
-                        truncated_lines.append(line)
-                        byte_count += line_bytes
-                    shown = len(truncated_lines)
-                    total = len(lines)
-                    text = "".join(truncated_lines)
-                    truncated_kb = FILE_READ_MAX_BYTES // 1024
-                    original_kb = len(data) // 1024
-                    text += (
-                        f"\n\n[... file truncated: showing first {shown} lines "
-                        f"({truncated_kb} KB) of {total} lines "
-                        f"({original_kb} KB) total. "
-                        f"Use shell tool to inspect specific lines ...]"
-                    )
-                    logger.warning(
-                        f"[file_reader] {filename}: truncated {original_kb} KB -> {truncated_kb} KB "
-                        f"({shown}/{total} lines)"
-                    )
-            except Exception as e:
-                text = f"[Could not read file: {e}]"
-                logger.error(f"[file_reader] Text decode error for {filename}: {e}")
+            # Legacy/binary containers (.pub, .doc, renamed .zip, …) used to
+            # hit the UTF-8 decode below and come back as mojibake chunks the
+            # model treated as the file's real contents. Sniff and refuse
+            # honestly instead (same guard as file_task's text path).
+            container = _binary_container_sniff(data)
+            if container:
+                text = (
+                    f"[Unsupported binary format: {filename} is {container}. "
+                    "LocalMind parses PDF, DOCX, XLSX, CSV, images, and text/code — "
+                    "convert the file (open it in its app and Save As PDF or DOCX) "
+                    "and attach the converted copy.]"
+                )
+            else:
+                try:
+                    text = data.decode("utf-8", errors="replace")
+                    if len(data) > FILE_READ_MAX_BYTES:
+                        lines = text.splitlines(keepends=True)
+                        truncated_lines: list[str] = []
+                        byte_count = 0
+                        for line in lines:
+                            line_bytes = len(line.encode("utf-8"))
+                            if byte_count + line_bytes > FILE_READ_MAX_BYTES:
+                                break
+                            truncated_lines.append(line)
+                            byte_count += line_bytes
+                        shown = len(truncated_lines)
+                        total = len(lines)
+                        text = "".join(truncated_lines)
+                        truncated_kb = FILE_READ_MAX_BYTES // 1024
+                        original_kb = len(data) // 1024
+                        text += (
+                            f"\n\n[... file truncated: showing first {shown} lines "
+                            f"({truncated_kb} KB) of {total} lines "
+                            f"({original_kb} KB) total. "
+                            f"Use shell tool to inspect specific lines ...]"
+                        )
+                        logger.warning(
+                            f"[file_reader] {filename}: truncated {original_kb} KB -> {truncated_kb} KB "
+                            f"({shown}/{total} lines)"
+                        )
+                except Exception as e:
+                    text = f"[Could not read file: {e}]"
+                    logger.error(f"[file_reader] Text decode error for {filename}: {e}")
 
         if not text.strip():
             text = f"[File {filename} appears to be empty or contains no readable text]"
@@ -443,7 +532,11 @@ async def parse_file(
 
 
 # Readable file extensions used by the path extractor below.
-_READ_EXTS = r"py|js|ts|txt|md|csv|pdf|docx|xlsx|json|yaml|yml|toml|html|sh|rs|go|log|cfg|ini|env"
+# Legacy office extensions (.doc/.pub/.ppt/.pptx/.xls/.xlsx) are included so
+# "read my CV.pub" extracts the path — the reader then answers honestly
+# (unsupported_format) instead of the message failing path extraction and
+# returning the generic not_found prompt to attach a file.
+_READ_EXTS = r"py|js|ts|txt|md|csv|pdf|docx|doc|pub|ppt|pptx|xlsx|xls|json|yaml|yml|toml|html|sh|rs|go|log|cfg|ini|env"
 
 # Ordered path patterns for pulling a file reference out of a message.
 # Matches: "quoted path.ext", C:\Windows\path.ext, /unix/path.ext, ~/path, bare.ext
@@ -526,15 +619,67 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                     error_type="permission_denied",
                     error_message=f"Path not in allowed read paths: {p}",
                 )
+            # Probe for a cloud placeholder BEFORE the read. A healthy
+            # OneDrive hydrates on open and this flag costs nothing; a
+            # downed provider fails the read and the flag corroborates the
+            # errno-22 classification.
+            try:
+                has_recall = _is_cloud_placeholder_file(p.stat())
+            except OSError:
+                has_recall = False
             try:
                 data = p.read_bytes()
-                ext = p.suffix.lower()
+            except OSError as read_err:
+                err_class = _classify_read_error(read_err, has_recall)
+                logger.warning(
+                    "[file_task] read failed [%s]: %s: %s", err_class, p, read_err
+                )
+                content = f"Could not read {p}: {read_err}"
+                if err_class == "cloud_placeholder":
+                    content += f"\n\n{_CLOUD_PLACEHOLDER_HINT}"
+                elif err_class == "permission_denied":
+                    content += (
+                        "\n\nThe file exists but access was denied — check its "
+                        "permissions, or ask the user to move it into an allowed "
+                        "folder."
+                    )
+                return ToolResult(
+                    content=content,
+                    risk=RiskLevel.LOW,
+                    source="file_reader",
+                    success=False,
+                    error_type=err_class,
+                    error_message=str(read_err),
+                )
+            ext = p.suffix.lower()
 
+            try:
                 # ── Plain text / code files: line-numbered output ────────
                 # Bypass the chunked parse_file() pipeline so the model
                 # sees exact content, line numbers, and original formatting
                 # that edit_file's search/replace can rely on.
                 if ext not in _SPECIAL_FORMAT_EXTS:
+                    container = _binary_container_sniff(data)
+                    if container:
+                        logger.info(
+                            "[file_task] unsupported binary format: %s (%s)", p, container
+                        )
+                        return ToolResult(
+                            content=(
+                                f"File: {p}\nSize: {len(data):,} bytes\n\n"
+                                f"This is {container}, which LocalMind cannot parse yet "
+                                "(supported: PDF, DOCX, XLSX, CSV, images, text/code). "
+                                "Do not read it again — the bytes are binary, not text. "
+                                "Tell the user which formats are supported and offer to "
+                                "convert the file first (open it in its app and 'Save As' "
+                                "PDF or DOCX), then read the converted copy."
+                            ),
+                            risk=RiskLevel.LOW,
+                            source="file_reader",
+                            success=False,
+                            error_type="unsupported_format",
+                            error_message=f"no parser for {container}",
+                        )
                     try:
                         raw_text = data.decode("utf-8")
                     except UnicodeDecodeError:
