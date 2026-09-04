@@ -5949,3 +5949,27 @@ verified entry, per the owner's spec):
   Session-265 cumulative basis to the last-call basis (the old pins encoded
   the bug). Live-verified: qwen3.8-flash → {1000000, table}; unlisted model
   → context_window absent from every option.
+
+### Session 416 addendum 3 — transcript audit follow-up (`2c4dfbb`)
+
+User audit of a 4-turn transcript flagged 4 inconsistencies. Verified each
+against code before fixing:
+
+- **Cached-% conflict (REAL, fixed):** the per-token SSE handler rebuilt
+  lastMetrics WITHOUT carrying cachedTokens/llmCalls — the corner's cache
+  telemetry was wiped mid-stream until turn_complete re-delivered it. Both
+  token-case sites now preserve the fields. Residual difference is BY DESIGN
+  (header = last call's share; corner = session cumulative) — tooltips on
+  both surfaces now state their basis.
+- **Latency 23.6s vs turn 40.8s (label ambiguity, fixed):** the corner shows
+  the AVERAGE per-turn latency at rest (session wall time / turn count).
+  Label 'Latency' → 'Avg latency' + explicit tooltip.
+- **Elections countdown 369 vs 340 days (NOT a code bug):** no countdown
+  feature exists in the UI — the figure was the model's own arithmetic in
+  chat content. Correct count: 340 days (Sept 4 2026 → Kenya's second
+  Tuesday of August, Aug 10 2027). The model was simply wrong.
+- **Turn-1 thinking 1.7s vs turn 7.6s (expected behavior):** the gap is
+  pipeline overhead outside the thinking stream (classify, prompt assembly,
+  fast-path) — streams no thinking tokens by design.
+- Model-name/provider flags in the audit were retracted by the user
+  (qwen3.8-flash and bankofai are real, owner-verified).
