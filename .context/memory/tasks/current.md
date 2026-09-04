@@ -1,44 +1,33 @@
 # Current Task
 
-**Status:** IDLE — P0 Context Architecture Research delivered (Session 414,
-no code changes). The research is in
-`.context/memory/reviews/2026-09-04-context-architecture-research.md`.
-Awaiting user direction on the proposed architecture + Implementation Plan.
+**Status:** IDLE — Session 416 closed. P0 Context Engineering **Step 1
+(surface cache data to the UI) shipped** in `05e332f` and live-verified on
+bankofai/qwen3.8-flash (isolated 8765): `turn_complete` now carries
+`cached_tokens`/`llm_calls` + accumulating `total_*` usage; the stats bar
+shows a cached chip (hit %) and a calls chip; the context meter shows the
+cached share. 14 new tests; report in
+`.context/memory/reviews/2026-09-04-review.md`.
 
-**Feature:** `p0-context-engineering` (preview) — research milestone complete
+**Feature:** `p0-context-engineering` (preview) — Step 1 complete; Steps 2-8 open
 
 ## Notes for the next session
 
-- **The research is the deliverable.** The user's pasted file said: "I would
-  NOT let the coding agents implement anything yet. First produce the
-  research." That research is done. The Implementation Plan (Part 5 of the
-  report) proposes 7 steps across ~10-14 sessions, starting with Step 1
-  (surface cache data to UI — 1 session, smallest blast radius).
-- **Key live finding (verified this session):** bankofai/qwen3.8-flash DOES
-  pass through prompt caching. Live test: call 1 = 0 cached / 1256 prompt;
-  call 2 = 1024 cached / 1256 prompt (81.5% hit). The cache IS working. The
-  user's "Context 59%" is the UNDISCOUNTED number — the frontend uses
-  `prompt_tokens_approx` (chars/4 estimate of FULL prompt) instead of the
-  provider-reported `cached_tokens`. The backend already captures
-  `cached_tokens` (openai_compat.py:718) and logs the hit rate (loop.py:3536);
-  the gap is purely frontend display.
-- **Step 1 (highest leverage):** wire `cached_tokens` from `provider_usage` →
-  SSE → frontend `PerformanceMetrics`. Show per-call fresh/cached/write/output
-  split + cumulative across N calls + equivalent inference work (after 90%
-  cache discount). 1 session, no agent-loop change, immediately changes the
-  user's mental model of the problem.
-- **S410-S412 status:** validated as compatible groundwork (compactor tune +
-  tool scoping + stale-ref fixes), NOT the architectural change. Keep them.
-- **The architectural change starts at Step 5 (Context Budget Manager).**
-  Steps 1-4 are enabling work (UI display, byte-stable prefix, memory
-  retrieval gate, checkpoint compaction). Step 6 (Instruction Epoch) + Step 7
-  (Internal Agent Pattern) are refinements.
-- **Environment quirks (logged across S410-S414):** (1) sandbox wipes between
-  sessions — re-clone + re-venv + re-settings each session; (2) bg processes
-  die immediately — run sync; (3) Bash tool resets cwd — use `git -C` or
-  absolute paths; (4) iteration-count variance — tool selection is the
-  reliable signal; (5) subagents may lose Bash/Write mid-session — they
-  complete research before failure and include worklog inline.
-- **GitHub Dependabot:** 0 vulns locally after S413 (npm audit fix).
-- **Standing:** ~41 unattributed full-suite failures + 32-error ruff baseline
-  still need a peer pass (deferred — P0 architecture takes priority).
+- **Next: Step 2 — byte-stabilize the system prefix** (addendum plan).
+  Audit `build_agent_system_prompt` for intent-varying sections (persona,
+  safety, skill fragment); split a durable byte-stable baseline from the
+  intent tail; put the cache breakpoint at the baseline end. Live-verify
+  cache hit rate on intent-switching turns.
+- **Enabler already on the wire:** `total_prompt_tokens`/`llm_calls` ride
+  `turn_complete.provider_usage` — an "equivalent work across N calls"
+  display (addendum Component 4) needs no new backend plumbing.
+- **Caveat:** bankofai omits cache telemetry on some calls (trace-b: 0
+  cached) — the UI hides the chip when unreported; don't treat a 0 as a
+  regression. The chat.py `metrics` re-emit didn't fire in traces (dead on
+  the parent path; turn_complete + /api/metrics are the real channels).
+- **Environment:** Windows box — no pytest-timeout plugin (drop `--timeout`);
+  Git Bash mangles `$VAR`-path redirects in compound commands (use the
+  `scratch/s416/trace.sh` baked-path script pattern); frontend vitest flakes
+  under parallel local load (stash-baseline flaked 9 vs 1-2 on the changed
+  tree — verify failures in isolation).
+- **Standing:** ~36 pre-existing Windows backend failures + 32-34-error ruff
+  baseline still need the deferred peer pass.

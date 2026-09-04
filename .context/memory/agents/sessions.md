@@ -5893,3 +5893,16 @@ regardless of path. Delivered:
 - **Report:** .context/memory/reviews/2026-09-04-context-architecture-research.md
 - **Notes:** Sandbox wiped between sessions (3rd time); re-cloned + re-venv + re-settings. 4 of 5 subagents lost Bash/Write mid-session but completed research first. Live cache test is the key finding: the cache IS working, the user's 19.4K prompt is largely cached re-sends at 10% cost, but the UI doesn't show it.
 
+
+---
+
+## 2026-09-04 — Session 416 — P0 Context Engineering Step 1: cache telemetry → UI
+
+- **Agent:** ZCode (local) | **Model:** qwen3.8-flash-class (per system prompt ID 18ae0130; not user-stated) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** `p0-context-engineering` (preview) — Step 1 of the addendum-confirmed 8-step plan (user chat target: the addendum is the plan; hybrid confirmed)
+- **Task:** Surface provider prompt-cache telemetry to the UI — the S414 research found the backend captures `cached_tokens` (openai_compat.py:718) but the frontend showed only the undiscounted `prompt_tokens_approx`, making the context meter overstate real cost.
+- **Commits:** 1 product (`05e332f`) — `feat(metrics): surface provider prompt-cache telemetry in the UI (P0 Step 1)` (14 files, +379/−9; loop `_merge_call_usage` + runtime/metrics/chat.py pass-through + PerformanceMetrics cached/calls chips + CenterPanel cached share; 14 new tests)
+- **Outcome:** done + LIVE-verified (bankofai/qwen3.8-flash, isolated 8765 + scratch home, never 8000): SSE `turn_complete` now carries `provider_usage {total_prompt_tokens: 6790, total_cached_tokens: 5120 (75.6%), llm_calls: 1, ...}` + top-level `cached_tokens/llm_calls` (`scratch/s416/trace-a.sse`); `/api/metrics` returns `cachedTokens/llmCalls`; correct grounded answer (web_search ×5). Semantics pinned: occupancy keys keep LAST-CALL values; `total_*`/`llm_calls` accumulate. Tests: 9 backend + 5 frontend new, all pass; targeted suites 206 pass; full backend 2756/36f (documented Windows baseline); tsc 0 errors; frontend full suite 1-2 timeout flakes = LOAD (stashed baseline flaked 9 under the same conditions; all pass in isolation).
+- **Open items:** Step 2 byte-stable system prefix (next); `total_*` fields on the wire ready for an "equivalent work across N calls" display; ~36 Windows backend failures + 32-34 ruff baseline still owed the peer pass; frontend vitest parallel-load flakes worth a test-infra session.
+- **Report:** .context/memory/reviews/2026-09-04-review.md
+- **Notes:** (1) `context-sync verify` failed on this checkout — known B-2026-08-30-17 CRLF false-positive (subset-FAILED variant, per the S407 correction); git blobs match the manifest; NOT rolled back. (2) The chat.py `metrics` re-emit never fired in the traces — turn_complete (verified) + /api/metrics polling (verified) are the real paths; re-emit kept as belt-and-braces. (3) bankofai omits cache telemetry on some calls (trace-b: cached 0) — UI hides the chip when unreported. (4) Git Bash mangles `$VAR`-in-`>`-redirect Windows paths → use a baked-path bash script for the live harness (logged in environments.md).

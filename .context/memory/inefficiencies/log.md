@@ -1130,3 +1130,13 @@ if literally nothing slowed you down.
 - **Workaround / fix:** When a live-test shows an iteration-count increase after a change, RE-RUN the same prompt before investigating. The ADR-40 guardrail is about tool SELECTION (right tool, valid args), not iteration count. If tool selection is correct and the model produces a final answer, the change is safe — iteration-count variance is model non-determinism, not a regression. Only investigate if the iteration increase reproduces across 2+ runs OR tool selection regresses (wrong tool, invalid args, no final answer).
 - **Prevent next time:** Add a "variance vs regression" note to live-testing.md: the agent loop is non-deterministic; a single run's iteration count is NOT a reliable signal. The reliable signals are: tool SELECTION (right tool?), arg validity (valid args?), and final answer production (did the model answer?). Token counts ARE reliable (they're deterministic given the same prompt + history).
 
+
+---
+
+## 2026-09-04 — ZCode / local Windows (Session 416)
+
+- **Problem:** Two environment traps cost debugging cycles during the S416 live test. (1) Git Bash mangled `$VAR`-holding-Windows-path redirects inside compound commands — `> "$SC/trace-a.sse"` with `SC="C:/Users/..."` resolved to `/trace-a.sse` (filesystem root) and failed with permission denied; a later attempt also wrote to `C:/Program Files/Git/server-a.log`. (2) The frontend vitest full suite flakes on timeout-boundary tests (~5s) when run under parallel local load; two suites racing (changed tree + stashed baseline) produced 9-13 failure signals that all passed in isolation afterward.
+- **Cost:** ~3 failed live-trace attempts (~10 min) + 3 full vitest runs (~13 min) to separate signal from load.
+- **Cause:** (1) MSYS path translation of variables inside redirection targets in multi-statement commands; (2) jsdom tests with hard real-time boundaries share one CPU — parallel runners oversubscribe it and cross the timeout line.
+- **Workaround / fix:** (1) Bake the Windows paths into a small bash script (`scratch/s416/trace.sh`) and run `bash <script>` — inline env-var prefixes for the server boot itself work fine. (2) Never run two vitest suites concurrently on this box; verify any suspect failure with the file isolated (`npx vitest run <file>`) and, when needed, a stash-baseline comparison — the baseline flaking MORE than the changed tree proves load, not regression.
+- **Prevent next time:** Recorded in `system/environments.md` (Windows block, verified commands + quirks). Related pre-existing trap re-confirmed: pytest has no `--timeout` plugin here — drop the flag.

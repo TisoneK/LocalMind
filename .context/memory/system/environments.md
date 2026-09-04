@@ -20,7 +20,7 @@ block (and its "last verified" date) every time you run on it again.
 
 ---
 ---
-## Tison's local Windows machine (last verified 2026-08-31)
+## Tison's local Windows machine (last verified 2026-09-04)
 
 - **Identify by:** hostname matches `Tison`; OS is Windows; user home is `C:\Users\tison`; Dev root is `C:\Users\tison\Dev`
 - **OS:** Windows 11 (PowerShell, Git Bash available)
@@ -31,12 +31,19 @@ block (and its "last verified" date) every time you run on it again.
   - `python --version` → Python 3.14.2 (2026-07-11, re-verified 2026-08-31)
   - `npm --version` → 11.12.1 (2026-07-11, re-verified 2026-08-31)
   - Git Bash is the working shell for `.context/core/bin/*` scripts; `pwsh` also available (2026-08-31)
+  - `backend/.venv/Scripts/python.exe -m pytest tests -q` (repo root) → full backend suite; no pytest-timeout plugin here — do NOT pass `--timeout` (2026-09-04)
+  - `backend/.venv/Scripts/python.exe -m pytest <files> -q` (from `backend/`) → targeted suites (2026-09-04)
+  - `backend/.venv/Scripts/ruff.exe check backend/src` → 34 pre-existing findings = the Windows baseline (2026-09-04)
+  - `cd frontend && npx tsc -b --noEmit` → 0 errors (2026-09-04)
+  - `cd frontend && npx vitest run` → 365 tests; **timeout-boundary tests flake under parallel local load** — a stashed baseline flaked 9 vs 1-2 on the changed tree; verify failures in isolation before believing them (2026-09-04)
+  - Isolated live harness: from `backend/`, `LOCALMIND_PORT=8765 LOCALMIND_HOME=<scratch>/home LOCALMIND_SHELL_ENABLED=true .venv/Scripts/python.exe server.py &` + curl `/api/chat` — the Session-330 one-command pattern works; env-var prefixes survive Git Bash (2026-09-04)
 - **Quirks:**
   - Windows paths use backslashes; PowerShell handles both `/` and `\`
   - No `make` — use npm scripts or PowerShell equivalents
   - Python is system-wide (no venv isolation required on Windows, but still recommended for backend work)
   - This is a local development machine — persistent storage, full filesystem access
   - **`core.autocrlf=true` makes `context-sync verify` false-positive** (all 21 core files FAILED, git tree clean; LF-normalized hashes match) — documented flaw B-2026-08-30-17, see `flaws/log.md` Session 406. Don't rollback on an all-files-FAILED + clean-git-tree signature.
+  - **Git Bash mangles `$VAR`-holding-Windows-paths inside compound commands**: `> "$SC/file"` where `SC="C:/..."` can resolve to `/file` (root) and fail with permission denied. Workaround: write a small bash script with the paths baked in (`scratch/s416/trace.sh` pattern) and run `bash <script>` — env-var prefixes for the server boot still work fine inline. (2026-09-04, Session 416)
 
 ## Z.ai cloud sandbox (last verified 2026-09-03, Session 411)
 
