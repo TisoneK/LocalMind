@@ -218,7 +218,7 @@ export function CenterPanel({
           {windowSize && occupancyPct !== null && (cachedTokens || 0) > 0 && (
             <div
               className="flex items-center gap-1.5"
-              title={`Context window: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} tokens (${occupancyPct}%). Last request: ${(cachedTokens || 0).toLocaleString()} input tokens were served from the provider's prompt cache at ~10% of the price.`}
+              title={`Last model call: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} context tokens (${occupancyPct}%). ${(cachedTokens || 0).toLocaleString()} of them were served from the provider's prompt cache at ~10% of the price. The stats corner's prompt counter is the session cumulative — calls re-send history, so per-turn prompts overlap rather than stack.`}
             >
               <span className="text-[9px] text-brand-green-muted uppercase tracking-wider">Context</span>
               <div className="w-14 h-1.5 rounded-full bg-brand-border overflow-hidden">
@@ -239,7 +239,7 @@ export function CenterPanel({
           {windowSize && occupancyPct !== null && !(cachedTokens || 0) && (
             <div
               className="flex items-center gap-1.5"
-              title={`Context window: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} tokens (${occupancyPct}%)`}
+              title={`Last model call: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} context tokens (${occupancyPct}%). The stats corner's prompt counter is the session cumulative — calls re-send history, so per-turn prompts overlap rather than stack.`}
             >
               <span className="text-[9px] text-brand-green-muted uppercase tracking-wider">Context</span>
               <div className="w-14 h-1.5 rounded-full bg-brand-border overflow-hidden">

@@ -143,7 +143,7 @@ export function WorkspaceLayout() {
       // Non-fatal — default to new chat.
     });
   }, [sessions, sessionsLoading]);
-  const { messages, fileDiffs, isStreaming, activeToolCalls, agentRuns, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession } =
+  const { messages, fileDiffs, isStreaming, activeToolCalls, agentRuns, liveObservation, lastMetrics, elapsedMs, sessionStats, send, abort, steer, setMessages, resetSession } =
     useChat(currentSessionId, handleTerminalEvent);
   const { actions: apiActions, refresh: refreshActions } = useActions(currentSessionId, isStreaming);
   const { files, refresh: refreshFiles } = useFileTree();
@@ -182,15 +182,21 @@ export function WorkspaceLayout() {
     ? lastMetrics
     : polledMetrics;
 
-  // Cumulative context consumed across the conversation: the hook already
-  // sums each turn's prompt tokens into sessionStats.promptTokens (the same
-  // running total the bottom-right stats corner shows). While a turn is
-  // streaming, that turn's prompt isn't in the totals yet, so add the live
-  // estimate on top — matching how PerformanceMetrics computes its corner
-  // prompt counter. Previously this meter showed only the LAST turn's prompt
-  // (a single response), which under-reported as the conversation grew.
-  const cumulativeContextTokens =
-    sessionStats.promptTokens + (isStreaming ? (lastMetrics?.promptTokens || 0) : 0);
+  // Context-window occupancy for the top-bar meter: the LAST model call's
+  // prompt (liveObservation.contextTokens = last turn's call; the live
+  // lastMetrics estimate while streaming), NOT the session-cumulative prompt
+  // sum. The old basis (cumulative ÷ window) always raced to 100% within a
+  // few turns regardless of real occupancy — the window fills by per-call
+  // prompt size, not by adding whole turns' re-sent prompts (each call
+  // re-sends history, so per-turn prompt tokens overlap, they don't stack).
+  const lastCallPromptTokens = Math.max(
+    Number(liveObservation?.contextTokens || 0),
+    lastMetrics?.promptTokens || 0,
+  );
+  const meterBasisTokens = lastCallPromptTokens || 0;
+  const cachedTokensForMeter = lastCallPromptTokens > 0
+    ? Math.min(lastCallPromptTokens, lastMetrics?.cachedTokens || 0)
+    : 0;
 
   // Clear liveActions when switching sessions so the Actions panel doesn't
   // show the previous session's tool calls.
@@ -484,8 +490,8 @@ export function WorkspaceLayout() {
           // model's input window is — cumulative prompt tokens consumed
           // across the conversation / the adapter's max window.
           contextWindowSize={currentModel?.contextWindow}
-          contextTokens={cumulativeContextTokens}
-          cachedTokens={metrics?.cachedTokens || 0}
+          contextTokens={meterBasisTokens}
+          cachedTokens={cachedTokensForMeter}
           fileDiffs={fileDiffs}
         />
       </div>
