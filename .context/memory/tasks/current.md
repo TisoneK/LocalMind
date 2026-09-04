@@ -1,39 +1,44 @@
 # Current Task
 
-**Status:** IDLE — Dependabot triage delivered (Session 413, commit `f8320ed`).
-All 4 GitHub Dependabot alerts resolved (3 high + 1 moderate — @xmldom/xmldom,
-browserslist, fast-uri with 4 advisories). npm audit reports 0 vulns locally;
-GitHub alert may take time to refresh. Next: P0 step 4 (context budgeting)
-or ruff baseline / full-suite failures peer pass.
+**Status:** IDLE — P0 Context Architecture Research delivered (Session 414,
+no code changes). The research is in
+`.context/memory/reviews/2026-09-04-context-architecture-research.md`.
+Awaiting user direction on the proposed architecture + Implementation Plan.
 
-**Feature:** `p0-context-engineering` (preview)
+**Feature:** `p0-context-engineering` (preview) — research milestone complete
 
 ## Notes for the next session
 
-- **P0 step 4 — session-level context budgeting** (structural): the six-layer
-  model request (core system / current task / required capabilities /
-  relevant history / relevant memory / task state) — the Context Budget
-  Manager. Needs design work before implementation.
-- **System-prompt diet (deferred bigger cuts):** merging CRITICAL RULES +
-  COMPLETION ENFORCEMENT, trimming personas, cutting base.md's "Your values"
-  recap. Need A/B testing across multiple task types.
-- **Ruff baseline (32 errors):** S411 auto-fixed 2 I001 errors (34→32).
-  The remaining 32 are in backend/src. Most are E501 (line too long) +
-  E402 (module-level import not at top). A peer pass could auto-fix many
-  with `ruff check --fix`.
-- **~41 unattributed full-suite failures:** need a peer pass to cluster by
-  root cause (S405-407 started this). 2 confirmed pre-existing in
-  test_parent_completion_floor_e2e.py.
-- **Live-test providers:** bankofai free = hy3, glm-5.3-flash, qwen3.8-flash.
-  **S410-S412 verified qwen3.8-flash works.**
-- **Cumulative P0 reduction (S410+S411+S412):** total session tokens
-  48,790 → ~39,197 (19.7%), tools per call 3,332 → 2,386 (28.4%), peak
-  history 4,228 → ~1,598-1,709 (60-62%). System prompt unchanged (~2,680
-  tok/call) — diet deferred.
-- **Environment quirks (logged):** (1) bankofai transient 400 on replan —
-  re-run to confirm; (2) bg processes die — run sync; (3) Bash tool resets
-  cwd — use `git -C` or absolute paths; (4) iteration-count variance —
-  tool selection is the reliable signal; (5) `npx tsc` at root resolves to
-  a stub — use `node_modules/.bin/tsc -b <tsconfig> --noEmit`.
-- **GitHub Dependabot:** 0 vulns locally after S413; GitHub alert may be
-  stale cache. Re-check on next push.
+- **The research is the deliverable.** The user's pasted file said: "I would
+  NOT let the coding agents implement anything yet. First produce the
+  research." That research is done. The Implementation Plan (Part 5 of the
+  report) proposes 7 steps across ~10-14 sessions, starting with Step 1
+  (surface cache data to UI — 1 session, smallest blast radius).
+- **Key live finding (verified this session):** bankofai/qwen3.8-flash DOES
+  pass through prompt caching. Live test: call 1 = 0 cached / 1256 prompt;
+  call 2 = 1024 cached / 1256 prompt (81.5% hit). The cache IS working. The
+  user's "Context 59%" is the UNDISCOUNTED number — the frontend uses
+  `prompt_tokens_approx` (chars/4 estimate of FULL prompt) instead of the
+  provider-reported `cached_tokens`. The backend already captures
+  `cached_tokens` (openai_compat.py:718) and logs the hit rate (loop.py:3536);
+  the gap is purely frontend display.
+- **Step 1 (highest leverage):** wire `cached_tokens` from `provider_usage` →
+  SSE → frontend `PerformanceMetrics`. Show per-call fresh/cached/write/output
+  split + cumulative across N calls + equivalent inference work (after 90%
+  cache discount). 1 session, no agent-loop change, immediately changes the
+  user's mental model of the problem.
+- **S410-S412 status:** validated as compatible groundwork (compactor tune +
+  tool scoping + stale-ref fixes), NOT the architectural change. Keep them.
+- **The architectural change starts at Step 5 (Context Budget Manager).**
+  Steps 1-4 are enabling work (UI display, byte-stable prefix, memory
+  retrieval gate, checkpoint compaction). Step 6 (Instruction Epoch) + Step 7
+  (Internal Agent Pattern) are refinements.
+- **Environment quirks (logged across S410-S414):** (1) sandbox wipes between
+  sessions — re-clone + re-venv + re-settings each session; (2) bg processes
+  die immediately — run sync; (3) Bash tool resets cwd — use `git -C` or
+  absolute paths; (4) iteration-count variance — tool selection is the
+  reliable signal; (5) subagents may lose Bash/Write mid-session — they
+  complete research before failure and include worklog inline.
+- **GitHub Dependabot:** 0 vulns locally after S413 (npm audit fix).
+- **Standing:** ~41 unattributed full-suite failures + 32-error ruff baseline
+  still need a peer pass (deferred — P0 architecture takes priority).

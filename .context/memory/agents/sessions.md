@@ -5879,3 +5879,17 @@ regardless of path. Delivered:
 - **Report:** none — security fix (commit message is the record)
 - **Notes:** (1) The 4 vulns were all in DEV dependencies (build tooling — browserslist, caniuse-lite, fast-uri) — not in the production backend (Python) or the Electron runtime bundle. Risk was low but the alerts were noise on every push. (2) `npm audit fix` produced a clean 58-line diff (29 insertions, 29 deletions) — only the 3 vuln packages + 5 transitive deps changed, all patch/minor bumps. No major version changes. (3) The `npx tsc` command at root resolves to a stub package; run tsc via `/home/z/my-project/LocalMind/node_modules/.bin/tsc -b <tsconfig-path> --noEmit` instead.
 
+
+---
+
+## 2026-09-04 — Session 414 — P0 Context Architecture Research (no code changes)
+
+- **Agent:** Super Z (cloud/sandbox) | **Model:** GLM (Z.ai) | **Platform:** Z.ai cloud sandbox | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** `p0-context-engineering` (preview) — research milestone
+- **Task:** User directive (pasted conversation): research-first approach BEFORE touching code. 5 parallel subagents (Claude Code+Anthropic, OpenCode, Zed, Codex+ChatGPT, prompt caching+local models) + codebase verification + live cache test.
+- **Commits:** 0 product (research only) — this chore(context) commit is the report
+- **Outcome:** done. Key findings: (1) bankofai/qwen3.8-flash DOES pass through prompt caching — live test 81.5% cache hit (1024/1256 tokens) on call 2; (2) backend already captures cached_tokens (openai_compat.py:718) but frontend displays prompt_tokens_approx (undiscounted) — the user's Context 59% is the UNDISCOUNTED number; (3) every mature harness uses provider prefix caching as primary cost-reduction, NOT send less; (4) architectural gap = Context Budget Manager + Instruction Epoch + Checkpoint Compaction + Context Observability UI. 6 components proposed, 7 implementation steps across ~10-14 sessions. S410-S412 validated as compatible groundwork. Report: .context/memory/reviews/2026-09-04-context-architecture-research.md.
+- **Open items:** Awaiting user direction on architecture + Implementation Plan + whether to start Step 1 (surface cache data to UI).
+- **Report:** .context/memory/reviews/2026-09-04-context-architecture-research.md
+- **Notes:** Sandbox wiped between sessions (3rd time); re-cloned + re-venv + re-settings. 4 of 5 subagents lost Bash/Write mid-session but completed research first. Live cache test is the key finding: the cache IS working, the user's 19.4K prompt is largely cached re-sends at 10% cost, but the UI doesn't show it.
+
