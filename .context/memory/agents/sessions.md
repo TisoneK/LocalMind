@@ -5973,3 +5973,15 @@ against code before fixing:
   fast-path) — streams no thinking tokens by design.
 - Model-name/provider flags in the audit were retracted by the user
   (qwen3.8-flash and bankofai are real, owner-verified).
+
+---
+## 2026-09-04 — Session 417 — transcript fixes: search relevance/safety + thinking-timer double-count
+
+- **Agent:** claude-opus-4.8 | **Model:** claude-opus-4-8 | **Platform:** macOS (user's local machine) | **Role:** engineer | **Core:** 0.8.0
+- **Task:** User: "pull changes then fix this" + a 4-turn transcript flagging two issues on qwen3.8-flash/bankofai. Pulled origin (behind 9, ff). Fixed both.
+- **Fix 1 — B-2026-09-04-3 (`c9c18c0`, search relevance/safety):** `web_search` surfaced off-topic fallback result sets when no provider cleared the relevance bar — dictionary defs of "top" for a news query, and OnlyFans pages (coverage 0/3) for "breaking news headlines today". Added `_fallback_is_on_topic()` (>= half distinctive-term coverage) so junk is discarded and the tool returns no relevant results instead. 30 web_search tests (exact transcript fixtures assert discard; on-topic partial still survives; old best-effort test rewritten). Live: both queries now return NYT/CBS.
+- **Fix 2 — B-2026-09-04-4 (`df0f9b1`, timing double-count):** frontend `thinkMs` was a first-to-last wall span that included tool time (components summed to 73.7s > 57.1s turn). Now accumulates active thinking only, pausing on `tool_call(start)`; `status_update` no longer advances it. Fake-timer test asserts the 12s tool gap is excluded. tsc clean; 36 frontend tests.
+- **Verification:** backend ruff clean; 30 web_search + 36 frontend tests pass; live web_search sanity on both transcript queries (relevant results, no OnlyFans/dictionary).
+- **Open items:** search still fires BEFORE the RSS fetch for trending-news queries (tool-routing, not this fix); brave fallback path is not relevance-gated (pre-existing); the P0 Context Engineering plan (Steps 2-8) remains the standing priority.
+- **Report:** none — fix session (commit messages + fail-on-old tests + live sanity are the record)
+- **Notes:** heredoc-in-commit-substitution broke twice via the tool wrapper (apostrophe/EOF); used `git commit -F <file>` (see inefficiencies note prior session).

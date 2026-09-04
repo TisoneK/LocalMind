@@ -550,3 +550,21 @@ Flaws from Session 7 are now **fixed**:
 - **Root cause:** same as B-2026-08-30-17 (autocrlf=true) + the sh script not stripping CR when parsing the manifest.
 - **Suggested fix:** package: `tr -d '\r'` when reading MANIFEST.sha256 in the sh port (and EOL-normalized hashing per the 2026-08-30 entry).
 - **Status:** open (same tracked item B-2026-08-30-17)
+
+---
+## 2026-09-04 — Session 417 — search relevance: off-topic fallback surfaced as an answer (B-2026-09-04-3, FIXED)
+
+- **Flaw:** `web_search`'s provider race held sub-threshold (off-topic) result sets as a best-effort fallback, then used the best-covering one REGARDLESS of coverage when no provider cleared the near-full relevance bar.
+- **Symptom (user transcript, qwen3.8-flash):** "top trending news stories today September 4 2026" → nothing but dictionary definitions of the word "top" (Cambridge/Merriam-Webster/Wiktionary), coverage <=2/6 distinctive terms. "breaking news headlines today" → five OnlyFans blog/status links (coverage 0/3) — adult-platform content surfaced for a plain news query. Both searches wasted ~24s; the real answer came from directly fetching news.google.com/rss.
+- **Root cause:** `web_search.py` fallback selection had no coverage floor — a fast provider latching onto one generic word (or matching nothing) still won when the better providers failed/were empty.
+- **Fix (`c9c18c0`):** `_fallback_is_on_topic()` — a held set is usable only if it covers >= half the query's distinctive terms; below that, return no relevant results so the model tries another source. Coverage-0 sets (e.g. OnlyFans) are always rejected. Deterministic tests with the exact transcript fixtures; live-verified both queries now return relevant news (NYT/CBS).
+- **Status:** FIXED. Residual (not fixed here): the model still fires web_search BEFORE the RSS fetch for "trending news"-type queries — a tool-routing question, separate from this relevance/safety fix.
+
+---
+## 2026-09-04 — Session 417 — thinking timer double-counts tool time (B-2026-09-04-4, FIXED)
+
+- **Flaw:** the frontend computed `thinkMs` as `Date.now() - thinkStartTime` where `thinkStartTime` was the FIRST thinking token of the turn — a wall-clock span that includes the tool executions between iterations.
+- **Symptom (user transcript):** Turn 2 components summed to MORE than the whole — thinking 47.6s + search 12.0s + search 12.0s + fetch 2.1s = 73.7s vs a 57.1s turn (~16.6s of double-counted overlap). The opposite of the earlier turn-1 "missing pipeline overhead" case (addendum 3).
+- **Root cause:** thinking spans multiple model calls with tools between them; `status_update` (fires during tool execution) also advanced `thinkMs`. Both counted tool time as thinking.
+- **Fix (`df0f9b1`):** accumulate only ACTIVE thinking segments; pause on `tool_call(start)`; `status_update` reports the frozen accumulator instead of resuming. `thinkMs` + tool durations + overhead no longer overlap. Fake-timer test asserts the tool gap is excluded (8000ms, not the 23000ms naive span).
+- **Status:** FIXED.
