@@ -5996,3 +5996,19 @@ fallback now relevance-gated (`_fallback_is_on_topic`). 96 backend tests
 (3 news-feed + 2 Brave + updated); ruff clean (fixed a pre-existing I001/E501
 in the import block touched). Live: both transcript queries return Google News
 top stories via web_research. No frontend/agent-loop change.
+
+---
+## 2026-09-05 — Session 419 — ZCode (local Windows) — transcript fixes: file reader honesty + 3 UI/loop defects (collab protocol)
+
+- **Agent:** ZCode (model id: per system context, GLM-family flash; exact id unknown) | **Platform:** Windows, ZCode CLI | **Role:** engineer | **Core:** 0.8.0
+- **Task:** user transcript audit (qwen3.8-flash CV-read session) flagging: (0) file reader can't read common office formats — primary for normal users; (1) unrelated session's tool log in the terminal dock; (2) header cached-% chip missing; (3) "Thinking 1ms" on a long reasoning trace; (4) sanity-check the constant "cached: 5.1K" across sessions. Session 418's uncommitted Step-2 work in the main checkout was declared OFF-LIMITS; user said "initialize collaboration protocol" — ran the full `.context/memory/collaboration/` flow (product worktree `../LocalMind-zcode-419`, coordination branch `collab/zcode-419/coordination`, claim → amended claim → release).
+- **Findings:** file-reader root cause is NOT missing parsers — DOCX/PDF verified working when bytes are local. The CV is a OneDrive Files-On-Demand placeholder with OneDrive NOT RUNNING (RECALL_ON_DATA_ACCESS attr; open → errno 22, copies → WinError 362). file_task classified it internal_error → recovery directive invited doomed retries → 4+ iterations burned. Also .pub/.doc (OLE2/ZIP) hit the text path and returned mojibake, and weren't in the path regex.
+- **Fixes (branch collab/zcode-419/zcode, pushed):**
+  - 20fa3c1 file_task: `cloud_placeholder` classification + no-retry directive; binary-container sniff → honest `unsupported_format` (file_task + parse_file); .doc/.pub/.ppt/.pptx/.xls path extraction. B-2026-09-05-1/-2.
+  - 67c8db0 terminal dock: `clearAgentLines()` on chat-session switch (agent lines are conversation-scoped; user-typed lines survive). B-2026-09-05-3.
+  - c842da3 cached chip always present (0% on miss, dimmed + explanatory tooltip). B-2026-09-05-4.
+  - 06f0187 `_force_final_answer` streams thinking live instead of buffering to one flush burst (the "Thinking 1ms" bug on hit-limit turns). B-2026-09-05-5.
+- **Verification:** 29 file_reader (12 new) + 12 recovery + 63 loop-adjacent backend tests; 36 frontend tests (18 WorkspaceLayout + 18 CenterPanel incl. 2 new pins); tsc clean; ruff clean on touched files (loop.py has 14 pre-existing baseline errors, unchanged — my hunks add none). LIVE per the verification bar: (a) real placeholder CV → cloud_placeholder + no-retry hint; synthetic OLE2 .pub → unsupported_format + convert instruction; (b) 8765 harness, bankofai, iteration_limit trace: 108 thinking_token events spanning 3709ms (`scripts/s419_thinking_timing.py`, committed). "5.1K cached": NOT a bug — provider-reported cached_tokens (openai_compat.py:762-773), 5.1/12.8K = 40% consistent; constant because the shared static prefix is what hits.
+- **Integration notes:** loop.py has TWO pending authors — my hunks (recovery map ~1013-1117 + force-final ~8640-8665) are disjoint from Session 418's uncommitted Step-2 regions (~imports, ~2742-2860); disclose at merge. Merge collab/zcode-419/zcode into main when 418's work lands or independently.
+- **Report:** none — fix session (events + commits + this log are the record).
+- **Open items:** OneDrive not running on the user's machine — the CV stays unreadable until OneDrive runs and the file materializes (I pinned it via `attrib +p` so it hydrates when the provider returns); UI oneDrive-placeholder hint is backend-driven, no frontend change needed; Session 418 Step 2 remains the standing priority.

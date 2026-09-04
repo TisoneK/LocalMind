@@ -582,3 +582,37 @@ The two residuals noted on the B-2026-09-04-3 entry are now fixed (`73b5930`):
 - **Brave gate:** the Brave fallback now passes through `_fallback_is_on_topic`
   like the free tiers — off-topic paid results are discarded, not surfaced.
 - Also fixed a pre-existing I001 + E501 in the web_acquisition import block.
+
+---
+## 2026-09-05 — Session 419 — file_task surfaces cloud-placeholder reads as retryable internal errors (B-2026-09-05-1, FIXED)
+
+- **Flaw:** `file_task` classified a failed read of a OneDrive Files-On-Demand placeholder as `internal_error`, whose recovery directive tells the model to "try a corrected call or a different tool/approach".
+- **Symptom (user transcript, qwen3.8-flash):** "read them" on `CV-TisoneKironget.docx` burned 4+ iterations on doomed equivalents (file_task → code_exec → shell Copy-Item → shell Get-Item) — every read fails identically when the OneDrive provider is down (open → errno 22, copies → WinError 362) — then the turn died at iteration_limit with the honest-but-late explanation.
+- **Root cause:** verified live on the real file: `st_file_attributes` has RECALL_ON_DATA_ACCESS (0x400000), OneDrive process not running. The read failure is not retryable by ANY local tool; only user action (materialize the file) fixes it. Also: legacy binary formats (.pub/.doc, OLE2/ZIP containers) reached the plain-text decode path and returned mojibake the model could mistake for contents; .pub/.doc weren't even in the path-extraction regex.
+- **Fix (20fa3c1):** classify read failures (winerror 362, or errno 22 corroborated by the placeholder attribute) as `cloud_placeholder`; new binary-container sniff (ZIP/OLE2/MZ/NUL-heavy) returns honest `unsupported_format` on both file_task and parse_file; `.doc/.pub/.ppt/.pptx/.xls` added to `_READ_EXTS`; `tool_error_recovery_directive` gains no-retry branches for both classes.
+- **Status:** FIXED. 29 file_reader tests (12 new) + 12 recovery tests; live-verified on the real placeholder CV and a synthetic OLE2 .pub.
+
+---
+## 2026-09-05 — Session 419 — terminal dock shows previous conversation's agent tool log (B-2026-09-05-3, FIXED)
+
+- **Flaw:** `useTerminal`'s `lines` state (which receives agent-bridged tool output via `addToolOutput`) was never cleared when the user switched chat sessions — only the terminal's OWN tab switch called `changeSession`.
+- **Symptom (user transcript):** a DuckDuckGo search for Premier League fixtures from an unrelated session rendered inside the CV-reading session's terminal dock.
+- **Root cause:** `WorkspaceLayout` clears `liveActions` on `currentSessionId` change but had no corresponding reset for agent terminal lines; agent output is conversation-scoped, user-typed terminal work is not.
+- **Fix (67c8db0):** `clearAgentLines()` filters `source === 'agent'` lines; wired to `currentSessionId` in WorkspaceLayout. User-typed lines survive.
+- **Status:** FIXED. 18 WorkspaceLayout tests + tsc clean.
+
+---
+## 2026-09-05 — Session 419 — context meter's cached chip vanishes on a cache miss (B-2026-09-05-4, FIXED)
+
+- **Flaw:** the header chip required `cachedTokens > 0`, so a 0-cached call hid the "· NN% cached" indicator entirely instead of showing "· 0% cached" — read as a regression in the transcript audit (S416 had made it a documented, always-present figure).
+- **Fix (c842da3):** merged the two render branches; chip always renders when the meter does, dimmed at 0%, with a miss-explanation tooltip (first call of a session / prompt changed).
+- **Status:** FIXED. 2 new CenterPanel test pins.
+
+---
+## 2026-09-05 — Session 419 — forced-final synthesis buffers thinking → "Thinking 1ms" (B-2026-09-05-5, FIXED)
+
+- **Flaw:** `_force_final_answer` accumulated reasoning chunks into `_final_chunks` and flushed them after the whole synthesis stream completed; every `thinking_token` SSE event arrived in one burst, so the frontend's client-side thinking timer (first→last token wall time, per B-2026-09-04-4's active-segment model) measured ~1ms for a full paragraph.
+- **Symptom (user transcript):** Turn 2 (hit-limit turn) showed a multi-sentence reasoning trace stamped "Thinking 1ms".
+- **Root cause:** the main loop path streams thinking live (ADR-41); only the forced-synthesis path buffered it (comment said "Held with the text so the ThinkingBlock renders it before the answer" — but streaming thinking also precedes the text since synthesis yields text after reasoning arrives).
+- **Fix (06f0187):** yield thinking chunks live in `_force_final_answer`; text stays buffered for the work-report contract. Regression test consumes the stream with an exhaustion-tracking adapter and fails if the first thinking chunk arrives after the adapter stream is done.
+- **Status:** FIXED. LIVE-verified on the 8765 harness (bankofai): an iteration_limit trace produced 108 thinking_token events spanning 3709ms (scripts/s419_thinking_timing.py).

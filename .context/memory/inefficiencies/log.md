@@ -1150,3 +1150,13 @@ if literally nothing slowed you down.
 - **Cause:** I wired the cached chip onto lastMetrics (per-call) without noticing the meter's own numerator (`cumulativeContextTokens` from sessionStats) was a DIFFERENT accumulation basis. The S416 pre-change comment even documented the cumulative basis as intended ("matching how PerformanceMetrics computes its corner prompt counter") — I extended a wrong design instead of auditing it.
 - **Workaround / fix:** Meter + chip both now use the LAST model call's prompt (liveObservation.contextTokens / lastMetrics fallback); the session cumulative stays only in the stats corner. Tooltip states the basis.
 - **Prevent next time:** When adding a ratio/percentage UI, enumerate every input's accumulation basis (per-call / per-turn / per-session) and assert they match — a percentage built from mixed bases is silently wrong and looks plausible. Also: live-verify UI percentages against the SSE ground-truth numbers they derive from, not just that the fields arrive.
+
+---
+
+## 2026-09-05 — ZCode / local Windows (Session 419)
+
+- **Problem:** Two harness traps cost cycles during the S419 live check. (1) SSE arrival timing: the first live-test build read the whole SSE body with `resp.read()` and stamped events during parsing — every event got the same clock reading and the thinking span measured a fake 0.4ms; timing claims require stamping per line DURING streaming. (2) The collab worktree lacks gitignored assets the harness needs (`backend/.venv`, `node_modules`); Windows junctions (`mklink /J`) to the main checkout's copies work because the harness boots with `PYTHONPATH=<worktree>/backend/src`, which overrides the editable install's .pth pointer into the main checkout.
+- **Cost:** one wasted live run (~60s) + one script fix round.
+- **Cause:** (1) measuring parse time instead of arrival time; (2) `venv_python(BACKEND)` resolves inside the worktree, which has no venv of its own.
+- **Workaround / fix:** stamp `time.monotonic()` per line while iterating the response; junction `.venv` and `node_modules` into the worktree (gitignored, so no status noise).
+- **Prevent next time:** any live check that asserts event SPACING must stream-and-stamp, never post-parse; worktree live-testing needs the two junctions before `scripts/*.py` will boot.
