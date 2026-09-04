@@ -53,7 +53,7 @@ import { formatLatency, formatTokens } from '@/lib/localmind/progress';
 import { repairMarkdown } from '@/lib/markdownRepair';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ResponseBlockRenderer } from './ResponseBlockRenderer';
-import { ActionRows } from './ActionRow';
+import { ToolSteps } from './ToolSteps';
 import { TurnTimeline } from './TurnTimeline';
 import { AgentPhases } from './AgentPhases';
 import { ErrorMessage } from './ErrorMessage';
@@ -878,9 +878,16 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
                   onFocusTool={(toolId) => setToolFocus({ toolId, at: Date.now() })}
                 />
               )}
-              {/* Calm, collapsible-by-default action rows (ZCode-inspired) — a
-                  timeline segment click opens + scrolls the matching row. */}
-              <ActionRows toolCalls={message.toolCalls} focusSignal={toolFocus} />
+              {/* ADR-34 B-11: chat stays COMPACT (chips only). The full
+                  expandable per-action detail lives in the Actions tab /
+                  Agent Workspace — never duplicated here. A Turn Anatomy
+                  segment click flashes the matching chip. */}
+              <ToolSteps
+                compact
+                toolCalls={message.toolCalls}
+                isStreaming={isStreaming}
+                focusSignal={toolFocus}
+              />
             </>
           )}
 
