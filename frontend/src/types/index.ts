@@ -117,6 +117,9 @@ export interface ChatMessage {
   thinkingBlock?: ThinkingStep;
   thinking?: string;
   thinkMs?: number;
+  /** Wall time spent streaming the final answer (first→last token), for the
+   *  Turn Anatomy strip. Distinct from thinkMs (reasoning) and tool durations. */
+  answerMs?: number;
   isAgent?: boolean;
   /** ADR-36: the Agent's opening acknowledgement, streamed during parent
    *  initialization. Belongs in chat as the first line of the reply —

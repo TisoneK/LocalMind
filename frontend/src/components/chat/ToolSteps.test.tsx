@@ -171,3 +171,28 @@ describe('ToolSteps — Actions timeline', () => {
     expect(within(timeline).getByText('Step 1')).toBeInTheDocument();
   });
 });
+
+describe('ToolSteps compact — Turn Anatomy focus', () => {
+  it('flashes the chip whose id matches the focus signal', () => {
+    const calls: ToolCall[] = [
+      call({ id: 'a', name: 'web_search', duration: 12000 }),
+      call({ id: 'b', name: 'web_fetch', duration: 2100 }),
+    ];
+    const { container, rerender } = render(
+      <ToolSteps compact toolCalls={calls} focusSignal={null} />,
+    );
+    // No focus yet → no ring on either chip.
+    expect(container.querySelector('[data-tool-chip="a"]')?.className).not.toContain('ring-2');
+
+    // Focus tool "a" → its chip gets the flash ring, the other does not.
+    rerender(<ToolSteps compact toolCalls={calls} focusSignal={{ toolId: 'a', at: 1 }} />);
+    expect(container.querySelector('[data-tool-chip="a"]')?.className).toContain('ring-2');
+    expect(container.querySelector('[data-tool-chip="b"]')?.className).not.toContain('ring-2');
+  });
+
+  it('exposes a data-tool-chip target for every compact chip', () => {
+    const calls: ToolCall[] = [call({ id: 'x', name: 'shell', duration: 500 })];
+    const { container } = render(<ToolSteps compact toolCalls={calls} />);
+    expect(container.querySelector('[data-tool-chip="x"]')).toBeInTheDocument();
+  });
+});

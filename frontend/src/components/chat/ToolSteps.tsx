@@ -16,7 +16,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { ToolCall } from '@/types';
 import { useEnterMotion } from '@/lib/localmind/motion';
 import { formatLatency } from '@/lib/localmind/progress';
@@ -37,6 +37,10 @@ interface ToolStepsProps {
    *  auto-expands and the running step pulses so the user watches the
    *  agent work in realtime (Session 118; timeline redesign Session 210). */
   isStreaming?: boolean;
+  /** Turn Anatomy: when set (and changed), scroll the matching tool chip into
+   *  view and flash it — the timeline segment above jumps here. `at` is a
+   *  nonce so repeated clicks of the same tool re-trigger the flash. */
+  focusSignal?: { toolId: string; at: number } | null;
 }
 
 const toolIcons: Record<string, React.ReactNode> = {
@@ -472,14 +476,29 @@ function ShellDisabledTip() {
   );
 }
 
-export function ToolSteps({ toolCalls, compact, isStreaming }: ToolStepsProps) {
+export function ToolSteps({ toolCalls, compact, isStreaming, focusSignal }: ToolStepsProps) {
   const blocked = toolCalls?.some(isShellBlocked);
+  const chipRowRef = useRef<HTMLDivElement>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
+  // Turn Anatomy: a timeline segment above was clicked → scroll the matching
+  // chip into view and flash a ring so the eye lands on it.
+  useEffect(() => {
+    if (!focusSignal?.toolId) return;
+    const el = chipRowRef.current?.querySelector<HTMLElement>(
+      `[data-tool-chip="${CSS.escape(focusSignal.toolId)}"]`,
+    );
+    if (!el) return;
+    el.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    setFlashId(focusSignal.toolId);
+    const t = setTimeout(() => setFlashId((cur) => (cur === focusSignal.toolId ? null : cur)), 1400);
+    return () => clearTimeout(t);
+  }, [focusSignal]);
   // v0.7: Compact mode — minimal inline chips showing tool status.
   // B-2026-08-23-9: each pill gets a hover Tooltip with full input/output summary.
   if (compact) {
     return (
       <TooltipProvider delayDuration={400}>
-        <div className="flex flex-wrap gap-1.5 items-center">
+        <div ref={chipRowRef} className="flex flex-wrap gap-1.5 items-center">
           {toolCalls.map((tc) => {
             const status = statusConfig[tc.status] || statusConfig.pending;
             const icon = toolIcons[tc.name] || <Terminal className="h-3 w-3" />;
@@ -497,7 +516,8 @@ export function ToolSteps({ toolCalls, compact, isStreaming }: ToolStepsProps) {
               <Tooltip key={tc.id}>
                 <TooltipTrigger asChild>
                   <div
-                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-mono cursor-default ${status.bg} ${status.color}`}
+                    data-tool-chip={tc.id}
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-mono cursor-default transition-shadow duration-300 ${status.bg} ${status.color} ${flashId === tc.id ? 'ring-2 ring-brand-green ring-offset-1 ring-offset-brand-bg-dark' : ''}`}
                   >
                     {icon}
                     <span className="truncate max-w-[120px]">{label}</span>

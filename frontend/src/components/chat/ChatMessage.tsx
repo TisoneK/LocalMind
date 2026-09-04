@@ -763,6 +763,9 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
   // (text/code/markdown/office docs parsed server-side, images as data URLs).
   const [previewPath, setPreviewPath] = useState<string | null>(null);
 
+  // Turn Anatomy: clicking a tool segment in the timeline focuses its chip.
+  const [toolFocus, setToolFocus] = useState<{ toolId: string; at: number } | null>(null);
+
   // B-2026-08-23-12: listen for file-preview requests from code block filenames
   // and tool step file paths (they dispatch localmind:open-file-preview).
   React.useEffect(() => {
@@ -868,9 +871,19 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
                   mental math. Fed by thinkMs + tool durations; self-hides for
                   trivial turns. */}
               {message.isAgent && (
-                <TurnTimeline thinkMs={message.thinkMs} toolCalls={message.toolCalls} />
+                <TurnTimeline
+                  thinkMs={message.thinkMs}
+                  answerMs={message.answerMs}
+                  toolCalls={message.toolCalls}
+                  onFocusTool={(toolId) => setToolFocus({ toolId, at: Date.now() })}
+                />
               )}
-              <ToolSteps compact toolCalls={message.toolCalls} isStreaming={isStreaming} />
+              <ToolSteps
+                compact
+                toolCalls={message.toolCalls}
+                isStreaming={isStreaming}
+                focusSignal={toolFocus}
+              />
             </>
           )}
 

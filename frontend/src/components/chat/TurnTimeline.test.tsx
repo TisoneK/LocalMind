@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { vi } from 'vitest';
 
 import { TurnTimeline } from './TurnTimeline';
 import type { ToolCall } from '@/types';
@@ -49,6 +50,42 @@ describe('TurnTimeline', () => {
     // thinking only, no tools → one block, not worth a bar
     const { container } = render(<TurnTimeline thinkMs={3000} toolCalls={[]} />);
     expect(container.firstChild).toBeNull();
+  });
+
+  it('adds an answer segment from answerMs and folds it into the total', () => {
+    render(
+      <TurnTimeline thinkMs={5000} answerMs={5000} toolCalls={[tool('t1', 'web_search', 12000), tool('t2', 'web_fetch', 3000)]} />,
+    );
+    const bar = screen.getByTestId('turn-timeline');
+    // total = 5 + 12 + 3 + 5 = 25s
+    expect(screen.getByText('25s')).toBeInTheDocument();
+    const answer = bar.querySelector('[title^="Answer"]') as HTMLElement;
+    expect(answer).toBeTruthy();
+    expect(answer.style.width).toBe('20%'); // 5 / 25
+  });
+
+  it('makes tool segments clickable and reports the tool id', () => {
+    const onFocusTool = vi.fn();
+    render(
+      <TurnTimeline
+        thinkMs={5000}
+        toolCalls={[tool('t1', 'web_search', 12000), tool('t2', 'web_fetch', 3000)]}
+        onFocusTool={onFocusTool}
+      />,
+    );
+    const bar = screen.getByTestId('turn-timeline');
+    const search = bar.querySelector('[title^="web_search"]') as HTMLElement;
+    expect(search.tagName).toBe('BUTTON');
+    fireEvent.click(search);
+    expect(onFocusTool).toHaveBeenCalledWith('t1');
+  });
+
+  it('does not make thinking or answer segments clickable', () => {
+    const onFocusTool = vi.fn();
+    render(<TurnTimeline thinkMs={5000} answerMs={5000} toolCalls={[tool('t1', 'web_search', 12000)]} onFocusTool={onFocusTool} />);
+    const bar = screen.getByTestId('turn-timeline');
+    expect((bar.querySelector('[title^="Thinking"]') as HTMLElement).tagName).toBe('DIV');
+    expect((bar.querySelector('[title^="Answer"]') as HTMLElement).tagName).toBe('DIV');
   });
 
   it('renders nothing when no durations are measured', () => {

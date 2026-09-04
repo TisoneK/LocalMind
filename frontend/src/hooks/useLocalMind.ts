@@ -701,6 +701,10 @@ export function useChat(
         if (thinkStartTime) { thinkAccumMs += Date.now() - thinkStartTime; thinkStartTime = 0; }
       };
       const thinkElapsed = () => thinkAccumMs + (thinkStartTime ? Date.now() - thinkStartTime : 0);
+      // Turn Anatomy: wall time spent streaming the final answer (first→last
+      // token). Answer tokens arrive after the tools (gated streaming), so this
+      // is the answer-generation span, disjoint from thinking + tool time.
+      let answerStartedAt = 0;
       const toolCalls: ToolCall[] = [];
       const toolsUsedSet = new Set<string>();
 
@@ -739,6 +743,8 @@ export function useChat(
                 // the static "Generating response..." indicator.
                 currentContent += token;
                 streamedProgressText += token;
+                if (!answerStartedAt) answerStartedAt = Date.now();
+                const answerMs = Date.now() - answerStartedAt;
                 const estimatedCompletionTokens = estimateTokens(streamedProgressText);
                 const liveElapsed = streamStartedAtRef.current
                   ? Date.now() - streamStartedAtRef.current
@@ -761,7 +767,7 @@ export function useChat(
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
                   if (last && last.role === 'assistant') {
-                    updated[updated.length - 1] = { ...last, content: currentContent };
+                    updated[updated.length - 1] = { ...last, content: currentContent, answerMs };
                   }
                   return updated;
                 });
