@@ -487,8 +487,10 @@ export function WorkspaceLayout() {
           onChatModeChange={handleChatModeChange}
           // Context-window occupancy meter: the freed top-bar slot that used
           // to show the redundant confidence badge now shows how full the
-          // model's input window is — cumulative prompt tokens consumed
-          // across the conversation / the adapter's max window.
+          // model's input window is — the LAST call's prompt / the window.
+          // currentModel.contextWindow is absent when the window is unknown
+          // (backend omits it rather than sending the "default" guess), and
+          // CenterPanel then shows the token count without a percentage.
           contextWindowSize={currentModel?.contextWindow}
           contextTokens={meterBasisTokens}
           cachedTokens={cachedTokensForMeter}

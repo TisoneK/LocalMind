@@ -193,7 +193,12 @@ async def list_models(provider: str | None = None):
     # Also read the active adapter's effective context window (the max
     # input-token budget) once so every model option carries it — the
     # frontend uses it for the live context-window occupancy meter.
+    # When the window came from the registry's conservative "default"
+    # (model unknown), try to discover the real value from the provider's
+    # /models metadata first — never present a guess as fact (the UI hides
+    # the percentage when the source is "default").
     context_window: int | None = None
+    context_window_source: str | None = None
     try:
         adapter = get_adapter(adapter_name)
         available = await adapter.list_models()
@@ -204,7 +209,17 @@ async def list_models(provider: str | None = None):
             _prime = getattr(adapter, "prime_context_window", None)
             if callable(_prime):
                 await _prime()
+            context_window_source = "detected"
+        else:
+            _source = getattr(adapter, "window_source", None)
+            _probe = getattr(adapter, "probe_context_window", None)
+            if _source == "default" and callable(_probe):
+                try:
+                    await _probe()
+                except Exception:
+                    logger.debug("[models] context-window probe failed for %s", adapter_name, exc_info=True)
         context_window = adapter.effective_context_window
+        context_window_source = getattr(adapter, "window_source", None)
     except Exception:
         available = []
 
@@ -291,10 +306,14 @@ async def list_models(provider: str | None = None):
             )
 
     # Attach the active model's token budget to every option (additive field;
-    # the frontend falls back gracefully when it's absent).
-    if context_window:
+    # the frontend falls back gracefully when it's absent). When the ONLY
+    # source is the registry's "default" guess, omit the value entirely —
+    # the UI shows "window unknown" rather than a percentage built on a
+    # fabricated denominator.
+    if context_window and context_window_source != "default":
         for opt in model_options:
             opt["context_window"] = context_window
+            opt["context_window_source"] = context_window_source
 
     return {"models": model_options, "current": current_model, "provider": adapter_name}
 

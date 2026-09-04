@@ -248,16 +248,27 @@ describe('WorkspaceLayout', () => {
     expect(typeof center.onSteer).toBe('function');
   });
 
-  it('passes the model context window + cumulative session prompt tokens to the center meter', () => {
+  it('passes the model context window + the LAST CALL prompt to the center meter', () => {
     setup({
       models: [{ id: 'm1', name: 'Model One', provider: 'zen', contextWindow: 32768 }],
-      // Session 265: the meter counts CUMULATIVE prompt tokens across the
-      // conversation (sessionStats.promptTokens), not the last turn's.
+      // S416 addendum (user-reported false 100%): the meter measures the
+      // LAST model call's prompt against the window — NOT the session
+      // cumulative (prompts re-send history; per-turn prompts overlap,
+      // they don't stack). Falls back to sessionStats only when no
+      // per-call source has reported yet.
       sessionStats: { promptTokens: 12000, completionTokens: 9, latencyMs: 2300, genTimeMs: 500, turnCount: 2 },
+      liveObservation: {
+        intent: 'chat',
+        confidence: 0.99,
+        toolsUsed: [],
+        memoryHits: 0,
+        contextTokens: 4200, // last call's prompt — wins over the cumulative
+        latency: 2300,
+      },
     });
     const center = mockPanelProps.center;
     expect(center.contextWindowSize).toBe(32768);
-    expect(center.contextTokens).toBe(12000);
+    expect(center.contextTokens).toBe(4200);
   });
 
   it('wires terminal/metrics/observation/capabilities into RightPanel', () => {
@@ -402,11 +413,11 @@ describe('WorkspaceLayout', () => {
     expect(center.selectedModel).toMatchObject({ id: 'm2', name: 'm2', provider: '' });
   });
 
-  // Session 265: the context-window meter is cumulative across the whole
-  // conversation (sessionStats.promptTokens) — a single response's prompt
-  // (liveObservation.contextTokens) or a stale polled observation must not
-  // replace the running total. These regression tests pin that wiring.
-  it('does not let a single-response prompt replace the cumulative total', () => {
+  // S416 addendum (user-reported false 100%): the meter basis is the LAST
+  // model call's prompt (liveObservation.contextTokens), NOT the session
+  // cumulative — Session 265's cumulative basis sent the meter to 100%
+  // after a few short turns. These tests pin the corrected wiring.
+  it('meter shows the last call prompt, not the session cumulative', () => {
     setup({
       sessionStats: { promptTokens: 7500, completionTokens: 29, latencyMs: 7300, genTimeMs: 1000, turnCount: 2 },
       liveObservation: {
@@ -414,23 +425,23 @@ describe('WorkspaceLayout', () => {
         confidence: 0.99,
         toolsUsed: [],
         memoryHits: 0,
-        contextTokens: 1200, // last turn's prompt — must NOT win
+        contextTokens: 1200, // last call's prompt — the meter's basis
         latency: 2300,
       },
       observation: { contextTokens: 3500, latency: 0, stages: [], vectorHits: 0, status: 'idle' },
     });
     const center = mockPanelProps.center;
-    expect(center.contextTokens).toBe(7500);
+    expect(center.contextTokens).toBe(1200);
   });
 
-  it('adds the in-flight turn estimate while streaming (cumulative + live)', () => {
+  it('meter uses the live in-flight prompt estimate while streaming', () => {
     setup({
       isStreaming: true,
       sessionStats: { promptTokens: 3500, completionTokens: 0, latencyMs: 0, genTimeMs: 0, turnCount: 1 },
       lastMetrics: { promptTokens: 4000, completionTokens: 0, totalTokens: 0, latency: 0 },
     });
     const center = mockPanelProps.center;
-    expect(center.contextTokens).toBe(7500);
+    expect(center.contextTokens).toBe(4000);
   });
 
   it('does NOT pass observation/capabilities/currentIntent to any panel (ADR-34 B-10)', () => {

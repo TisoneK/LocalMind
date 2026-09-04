@@ -576,8 +576,14 @@ export interface ModelOption {
   provider: string;
   size?: string;
   /** The model's max input-token budget (backend adapter effective_context_window).
-   *  Used by the top-bar context-window occupancy meter. */
+   *  Used by the top-bar context-window occupancy meter. ABSENT when the
+   *  window is unknown (provider doesn't report it and the model isn't in
+   *  the backend registry) — the meter then shows tokens without a %. */
   contextWindow?: number;
+  /** Where contextWindow came from: "table" (backend registry), "fetched"
+   *  (provider /models metadata), "detected" (Ollama /api/show), or
+   *  "default" (conservative guess — contextWindow is absent then). */
+  contextWindowSource?: 'table' | 'fetched' | 'detected' | 'default';
 }
 
 /** Cumulative per-chat performance totals (stats split — bottom-right corner).

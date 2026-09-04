@@ -251,6 +251,20 @@ export function CenterPanel({
               <span className="text-[10px] font-mono text-brand-green-soft">{occupancyPct}%</span>
             </div>
           )}
+          {/* Window unknown (provider doesn't report it, model not in the
+              registry): show the last call's token count WITHOUT a fake
+              percentage — a meter against a guessed denominator lies. */}
+          {!windowSize && (contextTokens || 0) > 0 && (
+            <div
+              className="flex items-center gap-1.5"
+              title={`Last model call: ${(contextTokens || 0).toLocaleString()} tokens. The model's context window is unknown (the provider doesn't report it and it isn't in the registry), so no percentage is shown — a meter against a guessed denominator would lie.`}
+            >
+              <span className="text-[9px] text-brand-green-muted uppercase tracking-wider">Context</span>
+              <span className="text-[10px] font-mono text-brand-green-soft">
+                {(contextTokens || 0).toLocaleString()} tok · window unknown
+              </span>
+            </div>
+          )}
           {/* Memory badge */}
           <div className="flex items-center gap-1.5" title={`Memory: ${memoryCount} facts loaded`}>
             <Brain className="h-3 w-3 text-brand-amber" />

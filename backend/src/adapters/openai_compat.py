@@ -135,6 +135,11 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     # promo models are time-limited (not a stable tier) and revert to paid.
     "deepseek-v4-flash": 1000000,
     "hy3": 256000,
+    # qwen3.8-flash — owner-verified from B.AI's model docs (2026-09-04):
+    # context window 1,000,000; max input 991,808 (983,616 in thinking
+    # mode); max output 131,072. The table stores the advertised window
+    # (the meter's capacity denominator); the input ceiling is 0.8% lower.
+    "qwen3.8-flash": 1000000,
     # Default fallback
     "default": 32768,
 }
@@ -310,9 +315,51 @@ def _flatten_message_content(messages):
 
 
 _MODELS_CACHE: "TTLCache[list[str]]" = TTLCache(ttl_seconds=30.0, max_entries=32)
+# Raw /models entries (dicts) from the same fetch — context-window discovery
+# reads provider metadata (context_length / max_model_len / …) that the plain
+# id list drops. Filled as a side effect of _fetch_models_cached's GET.
+_MODELS_RAW_CACHE: "TTLCache[list[dict]]" = TTLCache(ttl_seconds=30.0, max_entries=32)
 # Per-provider lock so CONCURRENT misses (startup pollers fire within
 # the same second) collapse into a single fetch instead of re-bursting.
 _models_fetch_locks: dict[str, asyncio.Lock] = {}
+
+# Provider /models entries that carry context metadata use one of these
+# field names (OpenRouter: context_length + top_provider.context_length;
+# vLLM/self-hosted: max_model_len; generic aggregators: context_window or
+# max_input_tokens). The OpenAI spec's own /models response has NONE of
+# them — absence here is normal, not an error.
+_CONTEXT_WINDOW_ENTRY_KEYS = (
+    "context_length",
+    "max_model_len",
+    "context_window",
+    "max_input_tokens",
+    "max_context_length",
+)
+
+
+def extract_context_window_from_model_entry(entry: dict) -> int | None:
+    """Pull the model's context window from a raw /models entry, if present.
+
+    Accepts the field names providers actually use (see
+    _CONTEXT_WINDOW_ENTRY_KEYS) plus OpenRouter's nested
+    ``top_provider.context_length``. Returns None when the entry carries no
+    usable value — the caller must fall back to the registry/default and
+    mark the window UNKNOWN, never guess.
+    """
+    if not isinstance(entry, dict):
+        return None
+    candidates: list[object] = [entry.get(k) for k in _CONTEXT_WINDOW_ENTRY_KEYS]
+    top = entry.get("top_provider")
+    if isinstance(top, dict):
+        candidates.append(top.get("context_length"))
+    for value in candidates:
+        if isinstance(value, (int, float)) and value > 0:
+            window = int(value)
+            # Sanity bound: no known model exceeds ~4M tokens; anything
+            # larger is provider junk, not a context length.
+            if window <= 4_000_000:
+                return window
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -812,7 +859,11 @@ class OpenAICompatAdapter(BaseAdapter):
                 )
                 if response.status_code == 200:
                     data = response.json()
-                    models = [m.get("id") for m in data.get("data", [])]
+                    entries = [m for m in data.get("data", []) if isinstance(m, dict)]
+                    models = [m.get("id") for m in entries]
+                    # Keep the raw dicts for context-window discovery
+                    # (probe_context_window) — same fetch, no extra request.
+                    _MODELS_RAW_CACHE.set(key, entries)
                     # Only cache successes — a failure must retry next call.
                     _MODELS_CACHE.set(key, models)
                     return models
@@ -851,6 +902,10 @@ class OpenAICompatAdapter(BaseAdapter):
         self._provider_name = cfg.name
         self._provider_key = provider  # raw key like "gemini", "cerebras", etc.
         self._base_url = cfg.base_url.rstrip("/")
+        # Context window discovered at runtime from provider metadata (see
+        # probe_context_window) — None until a probe succeeds; context_window
+        # prefers it over the registry so fetched values win.
+        self._probed_context_window: int | None = None
         # Read the model from settings (set by select_model or settings.json),
         # falling back to the provider default. Previously this only used
         # cfg.default_model (a static value evaluated at import time), so
@@ -1353,7 +1408,56 @@ class OpenAICompatAdapter(BaseAdapter):
 
     @property
     def context_window(self) -> int:
+        probed = self._probed_context_window
+        if probed:
+            return probed
         return MODEL_CONTEXT_WINDOWS.get(self._model, MODEL_CONTEXT_WINDOWS["default"])
+
+    @property
+    def window_source(self) -> str:
+        """Where the context_window number came from: "table" (registry hit)
+        or "default" (model unknown — a conservative guess, NOT the model's
+        real capacity). probe_context_window() may upgrade "default" →
+        "fetched" when the provider's /models metadata carries the value."""
+        if self._probed_context_window:
+            return "fetched"
+        if self._model in MODEL_CONTEXT_WINDOWS:
+            return "table"
+        return "default"
+
+    async def probe_context_window(self) -> int | None:
+        """Try to discover the model's context window from provider metadata.
+
+        Fetches (or reuses the cached) /models entries and extracts
+        context metadata for the active model. Returns None when the
+        provider exposes nothing (the OpenAI spec's /models response has
+        no context fields — absence is normal, e.g. bankofai). On success
+        the discovered value is remembered for the adapter instance's
+        lifetime and window_source upgrades to "fetched".
+        """
+        if self._provider_name == "anthropic":
+            return None
+        key = self._provider_key
+        entries = _MODELS_RAW_CACHE.get(key)
+        if entries is None:
+            # populate the raw cache via the shared fetch path
+            await self._fetch_models_cached()
+            entries = _MODELS_RAW_CACHE.get(key)
+        if not entries:
+            return None
+        target = self._model.lower()
+        for entry in entries:
+            if str(entry.get("id", "")).lower() != target:
+                continue
+            window = extract_context_window_from_model_entry(entry)
+            if window:
+                self._probed_context_window = window
+                logger.info(
+                    "[adapter] %s: context window discovered from provider metadata: %d",
+                    self._model, window,
+                )
+                return window
+        return None
 
     @property
     def effective_context_window(self) -> int:

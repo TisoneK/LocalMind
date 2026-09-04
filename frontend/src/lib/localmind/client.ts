@@ -148,7 +148,7 @@ interface ModelsResponse {
 /** Wire shape of /api/models — the backend sends the token budget as
  *  `context_window` (snake_case); the frontend type uses `contextWindow`. */
 interface ModelsResponseWire {
-  models: Array<ModelOption & { context_window?: number }>;
+  models: Array<ModelOption & { context_window?: number; context_window_source?: ModelOption['contextWindowSource'] }>;
   current: string;
   provider: string;
 }
@@ -1019,6 +1019,7 @@ class LocalMindClient {
           typeof m.context_window === 'number'
             ? m.context_window
             : m.contextWindow,
+        contextWindowSource: m.context_window_source,
       })),
     };
   }
