@@ -63,6 +63,10 @@ interface CenterPanelProps {
   contextWindowSize?: number;
   /** Current window occupancy in tokens (this turn's real prompt size). */
   contextTokens?: number;
+  /** P0 Context Engineering Step 1: last request's provider-reported cache-hit
+   *  input tokens (0 when the provider doesn't report caching). Shows the
+   *  cached share next to the occupancy percentage. */
+  cachedTokens?: number;
   /** B-2026-08-23-18: per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
   /** B-2026-08-23-34: Current chat mode. */
@@ -83,6 +87,7 @@ export function CenterPanel({
   sessionId,
   contextWindowSize,
   contextTokens,
+  cachedTokens,
   fileDiffs,
   chatMode,
   onChatModeChange,
@@ -169,6 +174,12 @@ export function CenterPanel({
       : occupancyPct >= 60
         ? 'bg-brand-amber'
         : 'bg-brand-green';
+  // P0 Context Engineering Step 1: the cached share of that prompt (last
+  // request's cache-hit tokens) — the meter's raw percentage overstates the
+  // real load when the provider's prompt cache is serving most of it.
+  const cacheHitPct = cachedTokens && contextTokens && contextTokens > 0
+    ? Math.min(100, Math.round((cachedTokens / contextTokens) * 100))
+    : 0;
 
   // Clean up model name for display: remove internal suffixes, format nicely
   const rawModelName = selectedModel?.name || selectedModel?.id || '';
@@ -204,7 +215,28 @@ export function CenterPanel({
               it duplicated the Observe panel's Intent Classification section
               and was low-value as an always-on number. The window meter is the
               actionable one (predicts degradation / compaction). */}
-          {windowSize && occupancyPct !== null && (
+          {windowSize && occupancyPct !== null && (cachedTokens || 0) > 0 && (
+            <div
+              className="flex items-center gap-1.5"
+              title={`Context window: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} tokens (${occupancyPct}%). Last request: ${(cachedTokens || 0).toLocaleString()} input tokens were served from the provider's prompt cache at ~10% of the price.`}
+            >
+              <span className="text-[9px] text-brand-green-muted uppercase tracking-wider">Context</span>
+              <div className="w-14 h-1.5 rounded-full bg-brand-border overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${occupancyColor}`}
+                  style={{ width: `${occupancyPct}%` }}
+                />
+              </div>
+              <span className="text-[10px] font-mono text-brand-green-soft">{occupancyPct}%</span>
+              <span
+                className="text-[9px] font-mono text-brand-green"
+                title={`${(cachedTokens || 0).toLocaleString()} input tokens hit the provider's prompt cache (~10% cost) — the real inference load is well under the raw percentage.`}
+              >
+                · {cacheHitPct}% cached
+              </span>
+            </div>
+          )}
+          {windowSize && occupancyPct !== null && !(cachedTokens || 0) && (
             <div
               className="flex items-center gap-1.5"
               title={`Context window: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} tokens (${occupancyPct}%)`}

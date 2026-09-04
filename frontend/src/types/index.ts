@@ -142,6 +142,11 @@ export interface ChatMessage {
     promptTokens?: number;
     completionTokens?: number;
     tokensPerSecond?: number;
+    /** Provider-reported cache-hit input tokens for this turn (0/absent when
+     *  the provider doesn't report caching). */
+    cachedTokens?: number;
+    /** LLM calls that reported usage this turn. */
+    llmCalls?: number;
   };
   /** Best-of-N editor candidates (B-2026-08-09-12 / C2 spec step 7), rendered
    * as an expandable section in the message. Populated from the tool result
@@ -557,6 +562,12 @@ export interface PerformanceMetrics {
   totalTokens: number;
   promptTokens: number;
   completionTokens: number;
+  /** Provider-reported cache-hit input tokens for the last request (P0
+   *  Context Engineering Step 1). 0/undefined when the provider doesn't
+   *  report caching — the display hides the cached/fresh split then. */
+  cachedTokens?: number;
+  /** LLM calls that reported usage this turn (multi-call agent turns). */
+  llmCalls?: number;
 }
 
 export interface ModelOption {
@@ -581,4 +592,9 @@ export interface SessionStats {
   /** Sum of per-turn generation time (ms) — weighted speed = completionTokens / genTimeMs. */
   genTimeMs: number;
   turnCount: number;
+  /** Sum of provider-reported cache-hit input tokens across turns (0 when
+   *  the provider never reports caching). */
+  cachedTokens: number;
+  /** Total LLM calls that reported usage across turns. */
+  llmCalls: number;
 }

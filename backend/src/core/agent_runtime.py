@@ -1079,6 +1079,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     total_tokens=_prompt_tokens + _completion_tokens,
                     prompt_tokens=_prompt_tokens,
                     completion_tokens=_completion_tokens,
+                    cached_tokens=_fast_usage.get("cached_tokens"),
+                    llm_calls=_fast_usage.get("llm_calls"),
                 )
                 yield StreamChunk(text="", done=True, usage=_fast_usage)
                 return
@@ -1561,6 +1563,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 + int(usage.get("completion_tokens", 0) or 0),
                 prompt_tokens=int(usage.get("prompt_tokens", 0) or 0),
                 completion_tokens=int(usage.get("completion_tokens", 0) or 0),
+                cached_tokens=usage.get("cached_tokens"),
+                llm_calls=usage.get("llm_calls"),
             )
 
         # Reflection and response-fact extraction remain post-turn services;
@@ -1612,6 +1616,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
                 "latency_ms": total_ms,
+                "cached_tokens": int(usage.get("cached_tokens", 0) or 0),
+                "llm_calls": int(usage.get("llm_calls", 0) or 0),
             },
             agent_runs=agent_runs,
             agent_phases=agent_phases,
@@ -1655,6 +1661,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             memory_facts=len(memory_facts),
             agent_mode=True,
             provider_usage=usage,
+            cached_tokens=int(usage.get("cached_tokens", 0) or 0),
+            llm_calls=int(usage.get("llm_calls", 0) or 0),
         )
         self._store_observation(
             session_id,

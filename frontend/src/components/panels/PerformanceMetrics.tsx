@@ -10,6 +10,10 @@ interface PerformanceMetricsType {
   totalTokens?: number;
   promptTokens?: number;
   completionTokens?: number;
+  /** Provider-reported cache-hit input tokens (P0 Context Engineering Step 1). */
+  cachedTokens?: number;
+  /** LLM calls that reported usage this turn. */
+  llmCalls?: number;
 }
 
 interface PerformanceMetricsProps {
@@ -69,6 +73,19 @@ export function PerformanceMetrics({
   const promptTokens = sessionPrompt + (isStreaming ? (live.promptTokens || 0) : 0);
   const totalTokens = promptTokens + completionTokens;
 
+  // ── Prompt-cache telemetry (P0 Context Engineering Step 1) ────────────
+  // The "prompt" number above is what the model READ; much of it was served
+  // from the provider's prompt cache at ~10% of the price. cachedTokens is
+  // the cache-hit share (last-turn while live, summed across turns at rest).
+  const cachedTokens = (sessionStats?.cachedTokens ?? 0) + (isStreaming ? (live.cachedTokens || 0) : 0);
+  const llmCalls = (sessionStats?.llmCalls || 0) + (isStreaming ? (live.llmCalls || 0) : 0);
+  const cacheHitPct = cachedTokens > 0 && promptTokens > 0
+    ? Math.min(100, Math.round((cachedTokens / promptTokens) * 100))
+    : 0;
+  // Fresh input is billed full price; cached input at ~10% (0.1×). This is
+  // the honest "equivalent work" number the single prompt count obscured.
+  const equivalentInputTokens = Math.round(promptTokens - cachedTokens * 0.9);
+
   const hasTokenBreakdown = totalTokens > 0 || sessionTurnCount > 0;
 
   return (
@@ -122,10 +139,34 @@ export function PerformanceMetrics({
             <span className="text-[9px] text-brand-green-muted">prompt:</span>
             <span className="text-[10px] text-brand-green-soft font-mono">{formatTokens(promptTokens)}</span>
           </div>
+          {cachedTokens > 0 && (
+            <div
+              className="flex items-center gap-1"
+              title={
+                `Prompt cache: ${formatTokens(cachedTokens)} of ${formatTokens(promptTokens)} input tokens ` +
+                `(${cacheHitPct}%) were served from the provider's cache at ~10% of the price. ` +
+                `Equivalent full-price input: ~${formatTokens(equivalentInputTokens)} tokens.`
+              }
+            >
+              <span className="text-[9px] text-brand-green-muted">cached:</span>
+              <span className="text-[10px] text-brand-green font-mono">
+                {formatTokens(cachedTokens)} ({cacheHitPct}%)
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-1">
             <span className="text-[9px] text-brand-green-muted">completion:</span>
             <span className="text-[10px] text-brand-green-soft font-mono">{formatTokens(completionTokens)}</span>
           </div>
+          {llmCalls > 0 && (
+            <div
+              className="flex items-center gap-1"
+              title={`${llmCalls} LLM call${llmCalls === 1 ? '' : 's'} reported usage. Agent turns chain several model calls and each re-sends the conversation; the prompt count is the LAST call's context size, so real input across a multi-call turn is larger.`}
+            >
+              <span className="text-[9px] text-brand-green-muted">calls:</span>
+              <span className="text-[10px] text-brand-green-soft font-mono">{llmCalls}</span>
+            </div>
+          )}
         </div>
       )}
 

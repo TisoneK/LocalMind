@@ -57,5 +57,11 @@ async def get_metrics():
         "totalTokens": streaming.get("totalTokens", 0),
         "promptTokens": streaming.get("promptTokens", 0),
         "completionTokens": streaming.get("completionTokens", 0),
+        # P0 Context Engineering Step 1: provider-reported cache telemetry for
+        # the last request — cachedTokens is the input billed at the cheap
+        # cache-hit tier, llmCalls the calls that reported usage. 0/absent
+        # when the provider doesn't report caching.
+        "cachedTokens": streaming.get("cachedTokens", 0),
+        "llmCalls": streaming.get("llmCalls", 0),
         "uptime": round(time.time() - _SERVER_START, 2),
     }

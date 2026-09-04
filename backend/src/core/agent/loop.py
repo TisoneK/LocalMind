@@ -315,6 +315,26 @@ def _user_message_text(messages: list[dict]) -> str:
     return ""
 
 
+def _merge_call_usage(accum: dict[str, int], call: dict) -> None:
+    """Fold one LLM call's usage into the turn accumulator.
+
+    Occupancy fields (prompt_tokens/completion_tokens/cached_tokens/...)
+    keep LAST-CALL semantics — the context-window meter must show what the
+    next call will carry, not a sum across calls. The ``total_*`` fields
+    accumulate across every call in the turn, and ``llm_calls`` counts the
+    calls that reported usage, so the UI can show real per-turn cost:
+    fresh vs cached input and output (P0 Context Engineering Step 1 —
+    surface cache data to the UI).
+    """
+    for key in ("prompt_tokens", "completion_tokens", "cached_tokens", "cache_miss_tokens"):
+        value = call.get(key)
+        if isinstance(value, (int, float)) and value > 0:
+            accum[f"total_{key}"] = int(accum.get(f"total_{key}", 0)) + int(value)
+    if call.get("prompt_tokens"):
+        accum["llm_calls"] = int(accum.get("llm_calls", 0)) + 1
+    accum.update(call)
+
+
 def _thinker_context_block(analysis) -> str:
     """Render a Thinker analysis (ADR-42) into a compact block the loop injects
     so the model's NEXT action is shaped by the reasoning-on-evidence — facts
@@ -3525,7 +3545,7 @@ class AgentLoop:
             # ── Handle MultiToolCallResult (model invoked multiple tools) ──
             result_usage = getattr(result, "usage", None)
             if result_usage:
-                _provider_usage.update(result_usage)
+                _merge_call_usage(_provider_usage, result_usage)
                 # Prompt-cache visibility: what fraction of input was a cheap
                 # cache HIT (the byte-stable system prefix). Only logs when the
                 # provider reports it (DeepSeek/OpenAI/Anthropic-family).
@@ -3881,7 +3901,7 @@ class AgentLoop:
             if isinstance(result, ToolCallResult):
                 result_usage = getattr(result, "usage", None)
                 if result_usage:
-                    _provider_usage.update(result_usage)
+                    _merge_call_usage(_provider_usage, result_usage)
                     yield StreamChunk(text="", done=False, usage=dict(_provider_usage))
                 tool_name = result.tool_name
                 tool_args = result.tool_args
@@ -5064,7 +5084,7 @@ class AgentLoop:
                     filtered_text = _filter_system_leaks(chunk.text)
                     _minimax_buffer += filtered_text
                     if chunk.usage:
-                        _provider_usage.update(chunk.usage)
+                        _merge_call_usage(_provider_usage, chunk.usage)
                     _minimax_chunks.append(
                         StreamChunk(text=filtered_text, done=chunk.done, usage=dict(_provider_usage))
                     )
@@ -6326,7 +6346,7 @@ class AgentLoop:
                     if abort_signal is not None and abort_signal.is_set():
                         raise AgentAbortedError("aborted during streaming")
                     if chunk.usage:
-                        _provider_usage.update(chunk.usage)
+                        _merge_call_usage(_provider_usage, chunk.usage)
                     filtered_text = _filter_system_leaks(chunk.text)
                     full_text += filtered_text
                     _mid_stream_text += filtered_text
@@ -8562,7 +8582,7 @@ class AgentLoop:
             t_final = time.monotonic()
             async for chunk in active_adapter.chat(force_msg, temperature=0.4):
                 if chunk.usage:
-                    _provider_usage.update(chunk.usage)
+                    _merge_call_usage(_provider_usage, chunk.usage)
                 if chunk.error:
                     _error_report = trace.work_report().render() if trace is not None else ""
                     yield StreamChunk(

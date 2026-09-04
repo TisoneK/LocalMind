@@ -146,6 +146,10 @@ class MetricsStore:
         self._last_total_tokens: int = 0
         self._last_prompt_tokens: int = 0
         self._last_completion_tokens: int = 0
+        # P0 Context Engineering Step 1: prompt-cache telemetry for the last
+        # request (0/None when the provider doesn't report it).
+        self._last_cached_tokens: int = 0
+        self._last_llm_calls: int = 0
         self._request_start_time: float = 0.0
 
     # ── Write ─────────────────────────────────────────────────────────────────
@@ -267,14 +271,24 @@ class MetricsStore:
             self._last_total_tokens = 0
             self._last_prompt_tokens = 0
             self._last_completion_tokens = 0
+            self._last_cached_tokens = 0
+            self._last_llm_calls = 0
 
     def record_streaming_complete(
         self,
         total_tokens: int,
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
+        cached_tokens: int | None = None,
+        llm_calls: int | None = None,
     ) -> None:
-        """Call after streaming completes with token counts."""
+        """Call after streaming completes with token counts.
+
+        ``cached_tokens`` (provider-reported cache-hit input tokens) and
+        ``llm_calls`` (calls that reported usage this turn) are optional —
+        providers without cache telemetry leave them None and the store
+        reports 0, keeping the /api/metrics shape stable.
+        """
         with self._lock:
             if self._request_start_time > 0:
                 elapsed_s = time.monotonic() - self._request_start_time
@@ -282,6 +296,8 @@ class MetricsStore:
                 self._last_total_tokens = total_tokens
                 self._last_prompt_tokens = prompt_tokens
                 self._last_completion_tokens = completion_tokens
+                self._last_cached_tokens = int(cached_tokens or 0)
+                self._last_llm_calls = int(llm_calls or 0)
                 self._last_tokens_per_second = total_tokens / elapsed_s if elapsed_s > 0 else 0
                 self._request_start_time = 0
 
@@ -294,6 +310,8 @@ class MetricsStore:
                 "totalTokens": self._last_total_tokens,
                 "promptTokens": self._last_prompt_tokens,
                 "completionTokens": self._last_completion_tokens,
+                "cachedTokens": self._last_cached_tokens,
+                "llmCalls": self._last_llm_calls,
             }
 
     # ── Maintenance ───────────────────────────────────────────────────────────

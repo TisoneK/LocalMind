@@ -988,6 +988,8 @@ class LocalMindClient {
         totalTokens: 0,
         promptTokens: 0,
         completionTokens: 0,
+        cachedTokens: 0,
+        llmCalls: 0,
       };
     }
   }

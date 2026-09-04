@@ -57,6 +57,8 @@ const _EMPTY_SESSION_STATS: SessionStats = {
   latencyMs: 0,
   genTimeMs: 0,
   turnCount: 0,
+  cachedTokens: 0,
+  llmCalls: 0,
 };
 
 /** Rebuild session totals from loaded history (assistant messages that carry
@@ -75,6 +77,8 @@ function _seedSessionStats(history: ChatMessage[]): SessionStats {
       ? (completion / p.tokensPerSecond) * 1000
       : latency;
     acc.turnCount += 1;
+    acc.cachedTokens += p.cachedTokens ?? 0;
+    acc.llmCalls += p.llmCalls ?? 0;
   }
   return acc;
 }
@@ -312,6 +316,8 @@ export function useChat(
     completion: number;
     latency: number;
     genMs: number;
+    cached: number;
+    llmCalls: number;
   } | null>(null);
   const sessionStatsSeededForRef = useRef<string | null>(null);
   const sessionStatsBySessionRef = useRef<Map<string, SessionStats>>(new Map());
@@ -379,6 +385,8 @@ export function useChat(
             promptTokens: m.promptTokens > 0 ? m.promptTokens : undefined,
             completionTokens: m.completionTokens > 0 ? m.completionTokens : undefined,
             tokensPerSecond: m.tokensPerSecond > 0 ? m.tokensPerSecond : undefined,
+            cachedTokens: (m.cachedTokens || 0) > 0 ? m.cachedTokens : undefined,
+            llmCalls: (m.llmCalls || 0) > 0 ? m.llmCalls : undefined,
           },
         };
       }
@@ -400,6 +408,8 @@ export function useChat(
     const completion = Math.max(0, m.completionTokens || 0);
     const prompt = Math.max(0, m.promptTokens || 0);
     const latency = Math.max(0, m.latency || 0);
+    const cached = Math.max(0, m.cachedTokens || 0);
+    const calls = Math.max(0, m.llmCalls || 0);
     const hasTokens = completion > 0 || prompt > 0;
     const hasLatency = latency > 0 || (m.totalTokens || 0) > 0;
     if (!hasTokens || !hasLatency) return;
@@ -418,6 +428,8 @@ export function useChat(
           latencyMs: prev.latencyMs - prevContribution.latency + latency,
           genTimeMs: prev.genTimeMs - prevContribution.genMs + genMs,
           turnCount: Math.max(0, prev.turnCount - 1) + 1,
+          cachedTokens: prev.cachedTokens - prevContribution.cached + cached,
+          llmCalls: prev.llmCalls - prevContribution.llmCalls + calls,
         }
       : {
           promptTokens: prev.promptTokens + prompt,
@@ -425,10 +437,12 @@ export function useChat(
           latencyMs: prev.latencyMs + latency,
           genTimeMs: prev.genTimeMs + genMs,
           turnCount: prev.turnCount + 1,
+          cachedTokens: prev.cachedTokens + cached,
+          llmCalls: prev.llmCalls + calls,
         };
     applySessionStats(next);
     if (sessionId) sessionStatsBySessionRef.current.set(sessionId, next);
-    lastTurnContributionRef.current = { turn, prompt, completion, latency, genMs };
+    lastTurnContributionRef.current = { turn, prompt, completion, latency, genMs, cached, llmCalls: calls };
   }, [isStreaming, lastMetrics, sessionId, applySessionStats]);
 
   // SAFETY: force-reset isStreaming only when the stream is genuinely
@@ -1325,6 +1339,18 @@ export function useChat(
                     const _tokens = Number(obsData.tokens_approx || 0);
                     const _promptTokens = Number(obsData.prompt_tokens_approx || obsData.prompt_tokens || 0);
                     const _latency = Number(obsData.total_latency_ms || obsData.latency_ms || 0);
+                    // P0 Context Engineering Step 1: provider cache telemetry.
+                    // turn_complete carries top-level cached_tokens/llm_calls
+                    // (normalized ints) and the raw provider_usage dict — prefer
+                    // the top-level fields, fall back to the dict.
+                    const _providerUsage = (obsData.provider_usage && typeof obsData.provider_usage === 'object')
+                      ? obsData.provider_usage : {};
+                    const _cachedTokens = Number(
+                      obsData.cached_tokens ?? _providerUsage.cached_tokens ?? 0
+                    ) || 0;
+                    const _llmCalls = Number(
+                      obsData.llm_calls ?? _providerUsage.llm_calls ?? 0
+                    ) || 0;
                     if (_tokens > 0 || _latency > 0) {
                       const _elapsed_s = _latency / 1000;
                       // tokens_approx is the RESPONSE (completion) token count.
@@ -1354,6 +1380,10 @@ export function useChat(
                           totalTokens: completionTokens + promptTokens,
                           promptTokens,
                           completionTokens,
+                          cachedTokens: _cachedTokens > 0
+                            ? _cachedTokens
+                            : prev?.cachedTokens || 0,
+                          llmCalls: _llmCalls > 0 ? _llmCalls : prev?.llmCalls || 0,
                         };
                       });
                     }
@@ -1530,6 +1560,10 @@ export function useChat(
                 const _tokens = Number(m.tokens_approx || 0);
                 const _promptTokens = Number(m.prompt_tokens_approx || 0);
                 const _latency = Number(m.total_latency_ms || 0);
+                // P0 Context Engineering Step 1: cache telemetry rides the
+                // final metrics event too (0 when the provider omits it).
+                const _cachedTokens = Number(m.cached_tokens || 0);
+                const _llmCalls = Number(m.llm_calls || 0);
                 if (_tokens > 0 || _latency > 0) {
                   const _elapsed_s = _latency / 1000;
                   setLastMetrics((prev) => {
@@ -1549,6 +1583,10 @@ export function useChat(
                       totalTokens: completionTokens + promptTokens,
                       promptTokens,
                       completionTokens,
+                      cachedTokens: _cachedTokens > 0
+                        ? _cachedTokens
+                        : prev?.cachedTokens || 0,
+                      llmCalls: _llmCalls > 0 ? _llmCalls : prev?.llmCalls || 0,
                     };
                   });
                 }
@@ -2788,7 +2826,7 @@ export function useObservability(sessionId: string | null) {
 // ─── useMetrics ────────────────────────────────────────────────────────
 
 export function useMetrics(isStreaming?: boolean, intervalMs = 5000) {  // 5s — was 60s, caused dead metrics bar
-  const [metrics, setMetrics] = useState<PerformanceMetrics>({ tokensPerSecond: 0, latency: 0, totalTokens: 0, promptTokens: 0, completionTokens: 0 });
+  const [metrics, setMetrics] = useState<PerformanceMetrics>({ tokensPerSecond: 0, latency: 0, totalTokens: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, llmCalls: 0 });
   const wasStreamingRef = useRef(false);
 
   const fetchMetrics = useCallback(async () => {

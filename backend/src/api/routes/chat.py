@@ -971,6 +971,10 @@ async def _event_stream(
                             "total_latency_ms": evt.data.get("total_latency_ms", 0),
                             "memory_facts": evt.data.get("memory_facts", 0),
                             "confidence": evt.data.get("confidence", 0),
+                            # P0 Context Engineering Step 1: provider cache
+                            # telemetry (0 when the provider doesn't report it)
+                            "cached_tokens": evt.data.get("cached_tokens", 0),
+                            "llm_calls": evt.data.get("llm_calls", 0),
                         },
                     }
                 )

@@ -485,6 +485,7 @@ export function WorkspaceLayout() {
           // across the conversation / the adapter's max window.
           contextWindowSize={currentModel?.contextWindow}
           contextTokens={cumulativeContextTokens}
+          cachedTokens={metrics?.cachedTokens || 0}
           fileDiffs={fileDiffs}
         />
       </div>
