@@ -97,8 +97,9 @@ describe('ActionHistory', () => {
     // The input also appears in the collapsed header preview, so it renders twice.
     expect(screen.getAllByText('ls -la').length).toBeGreaterThan(0);
     expect(screen.getByText('total 4')).toBeInTheDocument();
-    // One copy button per body section (input + output).
-    expect(screen.getAllByTitle('Copy')).toHaveLength(2);
+    // A shell action renders one console block (command + output) with a single
+    // combined copy button (the terminal treatment).
+    expect(screen.getAllByTitle('Copy')).toHaveLength(1);
   });
 
   it('copies the section text when a copy button is clicked', () => {
@@ -179,5 +180,29 @@ describe('ActionHistory', () => {
     // Clicking the older one expands it (manual override).
     fireEvent.click(screen.getByText('Old step'));
     expect(screen.getByText('old-output')).toBeInTheDocument();
+  });
+});
+
+describe('ActionHistory — redesigned bodies', () => {
+  it('renders a shell action as a terminal block with a ❯ command line', () => {
+    render(
+      <ActionHistory
+        actions={[action({ id: 'a1', type: 'shell', label: 'Run tests', input: 'pytest -q', output: '30 passed', iteration: 1 })]}
+      />,
+    );
+    expect(screen.getByText('terminal')).toBeInTheDocument();
+    expect(screen.getByText('❯')).toBeInTheDocument();
+    expect(screen.getByText('30 passed')).toBeInTheDocument();
+  });
+
+  it('renders diff-shaped output with add/remove line washes', () => {
+    render(
+      <ActionHistory
+        actions={[action({ id: 'a1', type: 'file_write', label: 'Edit config', output: 'ctx\n- old line\n+ new line', iteration: 1 })]}
+      />,
+    );
+    expect(screen.getByText('Diff')).toBeInTheDocument();
+    expect(screen.getByText('- old line')).toHaveClass('bg-brand-gh-red-bg');
+    expect(screen.getByText('+ new line')).toHaveClass('bg-brand-gh-green-bg');
   });
 });

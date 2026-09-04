@@ -7,7 +7,6 @@ import {
   Terminal,
   Brain,
   Globe,
-  ChevronRight,
   ChevronDown,
   Loader2,
   CheckCircle2,
@@ -27,6 +26,10 @@ import { formatLatency } from '@/lib/localmind/progress';
 function isRunning(status: ActionItem['status']): boolean {
   return status === 'running' || status === 'started' || status === 'in_progress';
 }
+
+const isRunKind = (type: ActionItem['type']) => type === 'shell' || type === 'code_exec';
+const looksLikeDiff = (text: string) =>
+  /^[+-] /m.test(text) || /^@@ /m.test(text) || /^diff --git/m.test(text);
 
 interface ActionHistoryProps {
   actions: ActionItem[];
@@ -209,6 +212,10 @@ function ActionCard({ action, isMostRecent }: { action: ActionItem; isMostRecent
   const status = statusConfig[action.status] ?? statusConfig.pending;
   const hasBody = Boolean(action.output || action.error);
   const verbatim = action.input || action.detail || '';
+  // Expandable when there's anything to reveal — output/error, a verbatim
+  // command, OR just the reasoning (the "why:" header line moved into the body,
+  // so a reasoning-only action must still open to show its Why block).
+  const hasExpandable = Boolean(verbatim || hasBody || action.reasoning?.trim());
   const input = action.input ? formatInput(action.input) : null;
   const running = isRunning(action.status);
 
@@ -221,120 +228,163 @@ function ActionCard({ action, isMostRecent }: { action: ActionItem; isMostRecent
       }`}
     >
       <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full min-w-0 px-2 py-1.5 hover:bg-brand-border/40 transition-colors text-left"
+        onClick={() => hasExpandable && setExpanded(!expanded)}
+        disabled={!hasExpandable}
+        aria-expanded={expanded}
+        className={`flex items-center gap-2.5 w-full min-w-0 px-3 py-2 text-left transition-colors ${
+          hasExpandable ? 'hover:bg-brand-bg-panel cursor-pointer' : 'cursor-default'
+        }`}
       >
-        {verbatim || hasBody ? (
-          expanded ? (
-            <ChevronDown className="h-3 w-3 text-brand-green-muted shrink-0" />
-          ) : (
-            <ChevronRight className="h-3 w-3 text-brand-green-muted shrink-0" />
-          )
-        ) : (
-          <span className="w-3 shrink-0" />
-        )}
-        <span className={actionColors[action.type]}>{actionIcons[action.type]}</span>
+        <span className={`shrink-0 ${actionColors[action.type]}`}>{actionIcons[action.type]}</span>
         <span className="flex-1 min-w-0">
           {/* Title — the real action label (e.g. "Running: git status"), with
-              a provider badge when the tool reports which engine answered
-              (Session 271: web_search's winning search engine). */}
+              a provider badge when the tool reports which engine answered. */}
           <span className="flex items-center gap-1.5 min-w-0">
-            <span className="block text-[11px] text-brand-green-soft font-medium truncate">
+            <span className="block text-[12.5px] text-brand-green-soft font-medium truncate">
               {action.label}
             </span>
             {action.provider && (
               <span
-                className="shrink-0 rounded border border-brand-border bg-brand-bg-code px-1 py-px text-[8px] font-mono uppercase tracking-wide text-brand-blue"
+                className="shrink-0 rounded border border-brand-border bg-brand-bg-code px-1.5 py-px text-[9px] font-mono uppercase tracking-wide text-brand-blue"
                 title={`Answered by ${action.provider}`}
               >
                 {action.provider}
               </span>
             )}
           </span>
-          {/* Verbatim command/args — visible without expanding */}
+          {/* Verbatim command/args — visible without expanding (reasoning moves
+              to the Why block in the body to keep the row calm). */}
           {verbatim && (
             <span
-              className="block text-[9px] text-brand-green-muted font-mono truncate"
+              className="block text-[11px] text-brand-green-faint font-mono truncate mt-0.5"
               title={verbatim}
             >
               {verbatim}
             </span>
           )}
-          {/* Session 122: the reasoning that led to this step — Actions is the
-              trace (what + why), not a second copy of the task list. Session
-              265: only render it when it actually has content (whitespace-only
-              reasoning from an empty plan step would otherwise show a blank
-              "why:" line that wastes vertical space). */}
-          {action.reasoning?.trim() && (
-            <span
-              className="block text-[9px] italic text-brand-green-faint truncate"
-              title={action.reasoning}
-            >
-              why: {action.reasoning}
+        </span>
+        {/* Right cluster: status · duration · time · expand caret. */}
+        <span className="ml-auto flex items-center gap-2.5 shrink-0">
+          <span className={status.color} title={status.label}>{status.icon}</span>
+          {action.duration != null && (
+            <span className="text-[10px] font-mono text-brand-green-faint tabular-nums">
+              {formatLatency(action.duration * 1000)}
             </span>
           )}
+          {action.timestamp && (
+            <span className="text-[10px] font-mono text-brand-green-faint whitespace-nowrap">{action.timestamp}</span>
+          )}
+          {hasExpandable && (
+            <ChevronDown
+              className={`h-3.5 w-3.5 text-brand-green-faint transition-transform ${expanded ? 'rotate-180' : ''}`}
+            />
+          )}
         </span>
-        <span className={`${status.color} shrink-0`} title={status.label}>
-          {status.icon}
-        </span>
-        {action.duration != null && (
-          <span className="text-[9px] text-brand-green-muted shrink-0">
-            {formatLatency(action.duration * 1000)}
-          </span>
-        )}
-        {action.timestamp && (
-          <span className="text-[9px] text-brand-green-faint shrink-0 whitespace-nowrap">{action.timestamp}</span>
-        )}
       </button>
 
-      {expanded && (
-        <div className="border-t border-brand-border/50 bg-brand-bg-dark">
-          <div className="px-2.5 py-2 space-y-1.5 max-h-72 overflow-y-auto custom-scrollbar">
+      {expanded && hasExpandable && (
+        <div className="border-t border-brand-border-soft bg-brand-bg-dark">
+          <div className="px-3 py-2.5 space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
             {action.reasoning?.trim() && (
               <div>
-                <div className="text-[9px] text-brand-amber uppercase mb-0.5">Why</div>
-                <p className="text-[10px] italic text-brand-green-soft leading-snug whitespace-pre-wrap break-words">
+                <div className="text-[10px] uppercase tracking-wider text-brand-amber mb-1">Why</div>
+                <p className="text-[11px] italic text-brand-green-soft leading-snug whitespace-pre-wrap break-words">
                   {action.reasoning}
                 </p>
               </div>
             )}
-            {input && (
-              <div>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[9px] text-brand-green-muted uppercase">
-                    {action.type === 'shell' ? 'Command' : 'Input'}
-                  </span>
-                  <CopyButton text={input.text} />
+
+            {isRunKind(action.type) ? (
+              /* Terminal treatment — command + output as one console block. */
+              <div className="rounded-md bg-brand-bg-deep border border-brand-border-soft overflow-hidden">
+                <div className="flex items-center justify-between px-2.5 py-1 border-b border-brand-border-soft">
+                  <span className="text-[9px] uppercase tracking-wider text-brand-green-faint">terminal</span>
+                  {(input?.text || action.output) && (
+                    <CopyButton text={[input?.text, action.output].filter(Boolean).join('\n')} />
+                  )}
                 </div>
-                <pre className="text-[10px] font-mono text-brand-green-soft bg-brand-bg-base rounded px-2 py-1 whitespace-pre-wrap break-all">
-                  {input.isJson ? highlightJson(input.text) : input.text}
-                </pre>
+                <div className="px-2.5 py-2 font-mono text-[11px] leading-relaxed overflow-x-auto">
+                  {input?.text && (
+                    <div className="flex gap-2">
+                      <span className="text-brand-green shrink-0">❯</span>
+                      <span className="text-brand-green-soft whitespace-pre-wrap break-all">{input.text}</span>
+                    </div>
+                  )}
+                  {action.output && (
+                    <pre className={`mt-1 whitespace-pre-wrap break-words ${action.status === 'failed' ? 'text-brand-red' : 'text-brand-green-muted'}`}>
+                      {action.output}
+                    </pre>
+                  )}
+                </div>
               </div>
+            ) : (
+              <>
+                {input && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] uppercase tracking-wider text-brand-green-faint">Input</span>
+                      <CopyButton text={input.text} />
+                    </div>
+                    <pre className="text-[11px] font-mono text-brand-green-soft bg-brand-bg-base rounded px-2.5 py-1.5 whitespace-pre-wrap break-all">
+                      {input.isJson ? highlightJson(input.text) : input.text}
+                    </pre>
+                  </div>
+                )}
+                {action.output &&
+                  (looksLikeDiff(action.output) ? (
+                    /* Diff treatment — low-alpha wash + colored gutter edge. */
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] uppercase tracking-wider text-brand-green-faint">Diff</span>
+                        <CopyButton text={action.output} />
+                      </div>
+                      <div className="rounded-md bg-brand-bg-deep border border-brand-border-soft font-mono text-[11px] leading-relaxed overflow-x-auto max-h-72 overflow-y-auto">
+                        {action.output.split('\n').map((line, i) => {
+                          const add = line.startsWith('+') && !line.startsWith('+++');
+                          const del = line.startsWith('-') && !line.startsWith('---');
+                          const cls = add
+                            ? 'text-brand-gh-green-soft bg-brand-gh-green-bg border-l-2 border-brand-gh-green'
+                            : del
+                              ? 'text-brand-gh-red-soft bg-brand-gh-red-bg border-l-2 border-brand-gh-red'
+                              : line.startsWith('@@')
+                                ? 'text-brand-blue border-l-2 border-transparent'
+                                : 'text-brand-green-muted border-l-2 border-transparent';
+                          return (
+                            <div key={i} className={`whitespace-pre px-2.5 ${cls}`}>
+                              {line || ' '}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] uppercase tracking-wider text-brand-green-faint">Output</span>
+                        <CopyButton text={action.output} />
+                      </div>
+                      <pre className={`text-[11px] font-mono ${action.status === 'failed' ? 'text-brand-red' : 'text-brand-green'} bg-brand-bg-base rounded px-2.5 py-1.5 whitespace-pre-wrap break-all`}>
+                        {action.output}
+                      </pre>
+                    </div>
+                  ))}
+              </>
             )}
+
             {action.error && (
               <div>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[9px] text-brand-red uppercase">Error</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] uppercase tracking-wider text-brand-red">Error</span>
                   <CopyButton text={action.error} />
                 </div>
-                <pre className="text-[10px] font-mono text-brand-red bg-brand-bg-base rounded px-2 py-1 whitespace-pre-wrap break-all">
+                <pre className="text-[11px] font-mono text-brand-red bg-brand-bg-base rounded px-2.5 py-1.5 whitespace-pre-wrap break-all">
                   {action.error}
                 </pre>
               </div>
             )}
-            {action.output && (
-              <div>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[9px] text-brand-green-muted uppercase">Output</span>
-                  <CopyButton text={action.output} />
-                </div>
-                <pre className={`text-[10px] font-mono ${action.status === 'failed' ? 'text-brand-red' : 'text-brand-green'} bg-brand-bg-base rounded px-2 py-1 whitespace-pre-wrap break-all`}>
-                  {action.output}
-                </pre>
-              </div>
-            )}
-            {!hasBody && (
-              <div className="text-[10px] text-brand-green-faint">
+
+            {!hasBody && !input && (
+              <div className="text-[11px] text-brand-green-faint">
                 {action.status === 'running' ? 'Waiting for tool to complete…' : 'No output returned.'}
               </div>
             )}
