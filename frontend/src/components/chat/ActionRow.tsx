@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Brain,
-  ChevronRight,
+  ChevronDown,
   FileCode,
   FileEdit,
   FilePlus,
@@ -202,12 +202,9 @@ export function ActionRows({ toolCalls, focusSignal }: ActionRowsProps) {
                 hasBody ? 'cursor-pointer hover:bg-brand-bg-panel' : 'cursor-default'
               }`}
             >
-              <ChevronRight
-                className={`h-3 w-3 shrink-0 text-brand-green-faint transition-transform ${
-                  open ? 'rotate-90' : ''
-                } ${hasBody ? '' : 'opacity-0'}`}
-              />
-              <span className={`text-[12px] shrink-0 ${verb.className}`}>{verb.word}</span>
+              <span className={`text-[12px] shrink-0 ${verb.className}`}>
+                {verb.word.charAt(0).toUpperCase() + verb.word.slice(1)}
+              </span>
               {iconFor(tc.name, verb.className)}
               <span className="text-[13px] text-brand-green-soft font-medium truncate">{label}</span>
               <span className="ml-auto flex items-center gap-2.5 shrink-0">
@@ -218,6 +215,12 @@ export function ActionRows({ toolCalls, focusSignal }: ActionRowsProps) {
                 )}
                 {running && <Loader2 className="h-3 w-3 animate-spin text-brand-amber" />}
                 {dur && <span className="font-mono text-[11px] text-brand-green-faint tabular-nums">{dur}</span>}
+                {/* expand/collapse affordance — on the RIGHT, rotates when open */}
+                <ChevronDown
+                  className={`h-3.5 w-3.5 shrink-0 text-brand-green-faint transition-transform ${
+                    open ? 'rotate-180' : ''
+                  } ${hasBody ? '' : 'opacity-0'}`}
+                />
               </span>
             </button>
             {open && hasBody && <ActionBody tc={tc} />}
