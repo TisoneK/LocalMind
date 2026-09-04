@@ -204,6 +204,15 @@ export function WorkspaceLayout() {
     setLiveActions([]);
   }, [currentSessionId]);
 
+  // B-2026-09-05-3: the terminal dock is also per-conversation for AGENT
+  // output. Without this, the previous chat's bridged tool log (searches,
+  // shell commands) kept rendering inside the new conversation's dock.
+  // User-typed terminal lines (source 'user') survive the switch.
+  useEffect(() => {
+    terminal.clearAgentLines();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSessionId]);
+
   // FIX 3: Derive actions from live tool_calls so the Actions panel
   // always shows what's happening. When the API returns historical
   // actions, we merge them — live actions take priority.

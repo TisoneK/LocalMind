@@ -2699,6 +2699,15 @@ export function useTerminal(initialSessionId: string = 'default') {
     setLines([]);
   }, []);
 
+  // B-2026-09-05-3: agent-bridged tool output belongs to the CHAT session
+  // that produced it. When the user switches conversations, the terminal dock
+  // must not keep showing the previous conversation's tool log (transcript
+  // report: a Premier-League search from another session rendered inside the
+  // CV-reading session's dock). User-typed lines (source 'user') stay.
+  const clearAgentLines = useCallback(() => {
+    setLines((prev) => prev.filter((l) => l.source !== 'agent'));
+  }, []);
+
   const changeSession = useCallback((newSessionId: string) => {
     setSessionId(newSessionId);
     setLines([]);
@@ -2813,6 +2822,7 @@ export function useTerminal(initialSessionId: string = 'default') {
     isRunning,
     execute,
     clear,
+    clearAgentLines,
     sessionId,
     cwd,
     history,
