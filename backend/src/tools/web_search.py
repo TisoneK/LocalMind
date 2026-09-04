@@ -127,6 +127,26 @@ def _is_relevant_enough(query: str, results: list[dict]) -> bool:
     need = n if n < 4 else n - 1
     return _relevance_coverage(query, results) >= need
 
+
+def _fallback_is_on_topic(query: str, results: list[dict]) -> bool:
+    """A held (sub-threshold) set is usable as a best-effort fallback ONLY if it
+    still covers at least HALF the query's distinctive terms.
+
+    Below that it is off-topic garbage — a fast provider latching onto one
+    generic word — and surfacing it is worse than returning nothing: it wastes
+    the model's turn on junk and can expose the user to inappropriate results
+    (observed 2026-09-04, B-2026-09-04-3: "top trending news stories today
+    September 4 2026" → dictionary definitions of the word "top" [coverage
+    ≤2/6]; "breaking news headlines today" → OnlyFans blog/status pages
+    [coverage 0/3]). When the best held set is below this floor, web_search
+    returns no relevant results so the model tries another source (e.g. an RSS
+    fetch) instead of citing the junk. With no distinctive terms, any set passes."""
+    tokens = _query_content_tokens(query)
+    if not tokens:
+        return True
+    floor = max(1, (len(tokens) + 1) // 2)  # ceil(n/2) — at least half the terms
+    return _relevance_coverage(query, results) >= floor
+
 # Bing tolerates moderate scraping when it looks like a real browser. The
 # organic-results layout (``li.b_algo``) has been stable for years.
 _BING_HEADERS = {
@@ -673,14 +693,31 @@ async def web_search(query: str) -> ToolResult:
             pending = set()
             break
 
-    # No provider cleared the relevance bar → use the best-effort set we saw
-    # (still better than returning "no results" and forcing the model to guess).
+    # No provider cleared the relevance bar → use the best-effort set ONLY if it
+    # is still on-topic (covers ≥ half the query's distinctive terms). A set below
+    # that floor is off-topic garbage (B-2026-09-04-3) — discard it and return no
+    # relevant results so the model tries another source, rather than surfacing
+    # dictionary defs / unrelated (possibly adult) pages as if they answered.
     if not results and fallback is not None:
-        results, successful_provider, _cov = fallback
-        logger.info(
-            f"[web_search] No provider cleared the relevance bar; using "
-            f"best-effort {successful_provider} (coverage={_cov})"
-        )
+        _fb_results, _fb_provider, _cov = fallback
+        if _fallback_is_on_topic(query, _fb_results):
+            results, successful_provider = _fb_results, _fb_provider
+            logger.info(
+                f"[web_search] No provider cleared the relevance bar; using "
+                f"best-effort {_fb_provider} (coverage={_cov})"
+            )
+        else:
+            logger.info(
+                f"[web_search] Discarding off-topic best-effort {_fb_provider} "
+                f"(coverage={_cov}) — below the fallback floor; returning no "
+                f"relevant results so the model can try another source"
+            )
+            if not first_error_type:
+                first_error_type = "no_relevant_results"
+                first_error_message = (
+                    f"No relevant results for '{query}' — the available results "
+                    f"were off-topic. Try a more specific query or a direct source."
+                )
 
     # If we got results from the race, skip Brave
     if not results:

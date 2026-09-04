@@ -10,6 +10,7 @@ from tools.web_search import (
     MAX_SEARXNG_ATTEMPTS,
     _decode_bing_url,
     _format_results,
+    _fallback_is_on_topic,
     _is_relevant_enough,
     _query_content_tokens,
     _relevance_coverage,
@@ -47,8 +48,10 @@ async def test_web_search_returns_tool_result_on_success():
     _search_ddg to return results and _search_searxng to return empty so
     DDG wins the race deterministically.
     """
+    # Result covers the query's distinctive terms (test, query) so it clears the
+    # relevance gate — a realistic hit, not an off-topic set riding the fallback.
     mock_results = [
-        {"title": "Result", "href": "https://test.com", "body": "Body text"},
+        {"title": "Test query result", "href": "https://test.com", "body": "About the test query"},
     ]
     # Mock ALL three providers (Bing too) so the race is deterministic and never
     # hits the real network — DDG is the only provider with results, so it wins
@@ -69,7 +72,7 @@ async def test_web_search_returns_tool_result_on_success():
         result = await web_search("test query")
 
     assert result.source == "web_search"
-    assert "Result" in result.content
+    assert "Test query result" in result.content
     assert result.risk.value == "low"
     assert result.success is True
     # The winning provider is named in the content (model + user can see it).
@@ -326,7 +329,8 @@ async def test_search_bing_detects_non_html_block_page():
 @pytest.mark.asyncio
 async def test_web_search_race_bing_wins():
     """Bing is a racing tier — when it returns first with results it wins."""
-    mock_results = [{"title": "Bing Hit", "href": "https://bing.example", "body": "body"}]
+    # Title covers the query term ("test") so the set clears the relevance gate.
+    mock_results = [{"title": "Bing test hit", "href": "https://bing.example", "body": "body"}]
     with patch(
         "tools.web_search._search_ddg",
         new_callable=AsyncMock,
@@ -344,7 +348,7 @@ async def test_web_search_race_bing_wins():
 
     assert result.success is True
     assert result.metadata["successful_provider"] == "bing"
-    assert "Bing Hit" in result.content
+    assert "Bing test hit" in result.content
     # The winning provider is named in the content.
     assert "Search results via **Bing**" in result.content
 
@@ -470,9 +474,15 @@ async def test_race_relevance_beats_a_faster_offtopic_provider():
 
 
 @pytest.mark.asyncio
-async def test_race_falls_back_to_best_effort_when_all_offtopic():
-    """If NO provider clears the bar, the best-covering set is still returned
-    (never worse than the old 'first non-empty' behavior)."""
+async def test_race_discards_off_topic_fallback_below_floor():
+    """B-2026-09-04-3: if NO provider clears the bar AND the best held set is
+    below the fallback floor (< half the distinctive terms), it is DISCARDED —
+    returning off-topic junk (here: banking/electric-current pages for a weather
+    query, coverage 0/3) is worse than no results. The old behavior surfaced it;
+    the transcript (OnlyFans for a news query) proved that harmful.
+
+    Brave is disabled so we exercise the pure free-tier path.
+    """
     with patch(
         "tools.web_search._search_bing",
         new_callable=AsyncMock,
@@ -485,9 +495,69 @@ async def test_race_falls_back_to_best_effort_when_all_offtopic():
         "tools.web_search._search_searxng",
         new_callable=AsyncMock,
         return_value=([], "network", "searxng empty (mocked)"),
+    ), patch(
+        "core.config.settings.brave_search_api_key",
+        "",
     ):
         result = await web_search("current weather Kitengela Kenya right now")
 
-    # Off-topic, but still returned (graceful) rather than "no results".
-    assert result.success is True
-    assert "Future of Banking" in result.content
+    # Off-topic junk is NOT surfaced; the tool reports no relevant results so
+    # the model can try another source.
+    assert result.success is False
+    assert "Future of Banking" not in result.content
+
+
+# ── B-2026-09-04-3: off-topic fallback must be discarded, not surfaced ────────
+# When no provider clears the near-full relevance bar, the best-effort held set
+# is used ONLY if it still covers >= half the query's distinctive terms. Below
+# that it is off-topic garbage — worse than nothing (wastes the turn, can expose
+# adult content). Fixtures below are the EXACT failing result sets from the
+# 2026-09-04 transcript.
+
+# "top trending news stories today September 4 2026" -> dictionary defs of "top"
+_BING_TOP_DICTIONARY = [
+    {"title": "TOP | English meaning - Cambridge Dictionary",
+     "body": "TOP definition: 1. the highest place or part"},
+    {"title": "TOP Definition & Meaning - Merriam-Webster",
+     "body": "the highest point, level, or part of something"},
+    {"title": "Top - Wikipedia", "body": "Top most commonly refers to"},
+    {"title": "top - Wiktionary, the free dictionary",
+     "body": "Aug 27, 2026 - top (countable and uncountable, plural tops)"},
+]
+
+# "breaking news headlines today" -> OnlyFans blog/status (adult platform)
+_BING_ONLYFANS = [
+    {"title": "All - OnlyFans Blog", "body": "The official OnlyFans blog."},
+    {"title": "Creator Center - OnlyFans Blog", "body": "Explore Creator Center posts"},
+    {"title": "OnlyFans Status - Incident History", "body": "No incidents reported"},
+]
+
+# An on-topic PARTIAL match (covers >= half) must STILL be usable as a fallback.
+_DDG_PARTIAL_NEWS = [
+    {"title": "Trending news today - Reuters", "body": "Top stories and breaking news"},
+    {"title": "Google News", "body": "Headlines and trending stories worldwide"},
+]
+
+
+def test_top_dictionary_fallback_is_off_topic():
+    q = "top trending news stories today September 4 2026"
+    # covers at most top/2026 (<= 2 of 6 distinctive terms) — below the half floor
+    assert _relevance_coverage(q, _BING_TOP_DICTIONARY) < 3
+    assert _fallback_is_on_topic(q, _BING_TOP_DICTIONARY) is False
+
+
+def test_onlyfans_fallback_is_off_topic():
+    q = "breaking news headlines today"
+    assert _relevance_coverage(q, _BING_ONLYFANS) == 0
+    assert _fallback_is_on_topic(q, _BING_ONLYFANS) is False
+
+
+def test_on_topic_partial_match_survives_as_fallback():
+    q = "breaking news headlines today"  # distinctive: breaking, news, headlines
+    # Reuters/Google set covers news + breaking + headlines + trending -> >= half
+    assert _fallback_is_on_topic(q, _DDG_PARTIAL_NEWS) is True
+
+
+def test_no_distinctive_terms_any_set_is_on_topic():
+    # A query with only stopwords has nothing to judge on — don't over-reject.
+    assert _fallback_is_on_topic("what is it right now", _BING_ONLYFANS) is True
