@@ -688,3 +688,58 @@ describe('useChat child-agent lifecycle narration (bootup-telemetry follow-up)',
     unmount();
   });
 });
+
+// B-2026-09-04-4: thinking time must EXCLUDE tool-execution time. Thinking spans
+// multiple model calls with tools between them; measuring (last − first)
+// thinking-token wall time double-counted the tool time, so "Thinking Ns" + the
+// per-tool durations summed to more than the turn. The timer now pauses while a
+// tool runs.
+describe('useChat thinking timer excludes tool time', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    streamMock.getSessionHistory.mockResolvedValue([]);
+  });
+
+  it('pauses thinkMs during tool execution (no double-count)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000_000);
+    try {
+      const { result, onChunk, onDone, unmount } = renderChatWithCapturedStream();
+
+      act(() => {
+        onChunk()(JSON.stringify({ type: 'thinking_start' }));
+        onChunk()(JSON.stringify({ type: 'thinking_token', thinking: 'plan the search ' }));
+      });
+      vi.setSystemTime(1_005_000);  // 5s of active thinking
+      act(() => {
+        onChunk()(JSON.stringify({ type: 'thinking_token', thinking: 'still planning ' }));
+        // tool starts → thinking pauses
+        onChunk()(JSON.stringify({ type: 'tool_call', tool_call: { id: 't1', name: 'web_search', status: 'started' } }));
+      });
+      vi.setSystemTime(1_017_000);  // 12s of tool time (must NOT count as thinking)
+      act(() => {
+        onChunk()(JSON.stringify({ type: 'tool_call', tool_call: { id: 't1', name: 'web_search', status: 'done', latency_ms: 12000 } }));
+        // status_update fires during/after the tool — must not advance thinkMs
+        onChunk()(JSON.stringify({ type: 'status_update', status: 'Reading results…' }));
+      });
+      vi.setSystemTime(1_020_000);  // thinking resumes for 3s
+      act(() => {
+        onChunk()(JSON.stringify({ type: 'thinking_token', thinking: 'synthesize ' }));
+      });
+      vi.setSystemTime(1_023_000);
+      act(() => {
+        onChunk()(JSON.stringify({ type: 'thinking_end' }));
+        onDone();
+      });
+
+      const assistant = [...result.current.messages].reverse().find((m) => m.role === 'assistant');
+      expect(assistant).toBeDefined();
+      // Active thinking = 5s (first segment) + 3s (after the tool) = 8s.
+      // The 12s tool gap is excluded. The naive (last−first) span would be 23s.
+      expect(assistant!.thinkMs).toBe(8000);
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

@@ -688,7 +688,19 @@ export function useChat(
       let currentContent = '';
       let thinkingContent = '';
       let streamedProgressText = '';
-      let thinkStartTime = 0;
+      // B-2026-09-04-4: thinking spans multiple model calls with TOOL EXECUTIONS
+      // between them. Measuring thinkMs as (last − first) thinking-token wall time
+      // counts the tool time too, so "Thinking Ns" + the per-tool durations sum to
+      // MORE than the turn (observed: 47.6 + 12 + 12 + 2.1 = 73.7s > 57.1s turn).
+      // Fix: accumulate only ACTIVE thinking segments and PAUSE the timer while a
+      // tool runs, so thinkMs and the tool durations no longer overlap.
+      let thinkStartTime = 0;  // start of the current active segment (0 = paused)
+      let thinkAccumMs = 0;    // active thinking from completed segments
+      const thinkResume = () => { if (!thinkStartTime) thinkStartTime = Date.now(); };
+      const thinkPause = () => {
+        if (thinkStartTime) { thinkAccumMs += Date.now() - thinkStartTime; thinkStartTime = 0; }
+      };
+      const thinkElapsed = () => thinkAccumMs + (thinkStartTime ? Date.now() - thinkStartTime : 0);
       const toolCalls: ToolCall[] = [];
       const toolsUsedSet = new Set<string>();
 
@@ -767,12 +779,11 @@ export function useChat(
                 // phase boundaries insert a separator instead of truncating.
                 if (!thinkingContent) {
                   thinkingContent = '';
-                  // Don't reset thinkStartTime if already set by a status_update
-                  // that arrived before thinking_start.
-                  if (!thinkStartTime) thinkStartTime = Date.now();
                 } else {
                   thinkingContent += '\n\n';
                 }
+                // (Re)start a thinking segment — a preceding tool paused it.
+                thinkResume();
                 setMessages((prev) => {
                   const updated = [...prev];
                   const last = updated[updated.length - 1];
@@ -788,7 +799,8 @@ export function useChat(
                 const thinkingToken = parsed.thinking || parsed.content || '';
                 thinkingContent += thinkingToken;
                 streamedProgressText += thinkingToken;
-                const thinkMs = thinkStartTime ? Date.now() - thinkStartTime : 0;
+                thinkResume();  // a thinking token means reasoning is active again
+                const thinkMs = thinkElapsed();
                 const estimatedCompletionTokens = estimateTokens(streamedProgressText);
                 const liveElapsed = streamStartedAtRef.current
                   ? Date.now() - streamStartedAtRef.current
@@ -820,7 +832,8 @@ export function useChat(
 
               case 'thinking_end': {
                 if (thinkingContent) {
-                  const thinkMs = thinkStartTime ? Date.now() - thinkStartTime : 0;
+                  thinkPause();  // close the active segment; freeze the accumulator
+                  const thinkMs = thinkElapsed();
                   setMessages((prev) => {
                     const updated = [...prev];
                     const last = updated[updated.length - 1];
@@ -842,6 +855,9 @@ export function useChat(
                   window.dispatchEvent(new CustomEvent('localmind:tool-call-started', {
                     detail: { tool: tc.name || tc.tool || 'unknown' },
                   }));
+                  // B-2026-09-04-4: a tool is running now — pause the thinking
+                  // timer so its duration is not double-counted against the turn.
+                  thinkPause();
                 }
                 // FIX 2: Build human-readable label from tool_args if LLM didn't provide one.
                 // This replaces raw tool names like "file_write" with descriptions
@@ -1661,8 +1677,11 @@ export function useChat(
                     promptTokens: prev?.promptTokens || 0,
                     completionTokens: prev?.completionTokens || 0,
                   }));
-                  if (!thinkStartTime) thinkStartTime = Date.now();
-                  const statusMs = thinkStartTime ? Date.now() - thinkStartTime : 0;
+                  // B-2026-09-04-4: status_update fires DURING tool execution —
+                  // do NOT resume the thinking timer here (that recounted tool
+                  // time as thinking). Report the frozen accumulated value; the
+                  // tool has its own duration on the Actions card.
+                  const statusMs = thinkElapsed();
                   setMessages((prev) => {
                     const updated = [...prev];
                     const last = updated[updated.length - 1];
