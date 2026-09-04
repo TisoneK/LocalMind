@@ -568,3 +568,17 @@ Flaws from Session 7 are now **fixed**:
 - **Root cause:** thinking spans multiple model calls with tools between them; `status_update` (fires during tool execution) also advanced `thinkMs`. Both counted tool time as thinking.
 - **Fix (`df0f9b1`):** accumulate only ACTIVE thinking segments; pause on `tool_call(start)`; `status_update` reports the frozen accumulator instead of resuming. `thinkMs` + tool durations + overhead no longer overlap. Fake-timer test asserts the tool gap is excluded (8000ms, not the 23000ms naive span).
 - **Status:** FIXED.
+
+---
+## 2026-09-04 — Session 417 addendum — B-2026-09-04-3 follow-ups RESOLVED
+
+The two residuals noted on the B-2026-09-04-3 entry are now fixed (`73b5930`):
+- **News routing:** web_research seeds the Google News RSS feed as the first
+  source for news/headlines queries (`_news_feed_url` in web_acquisition.py) —
+  topicless → top-stories feed, subject named → topic-search feed — fetched via
+  static_fetch (~2s). web_search's tool description now steers open-ended news to
+  web_research. Live-verified: "trending news today" / "breaking news headlines
+  today" return Google News top stories (~9.5K chars), no keyword-search waste.
+- **Brave gate:** the Brave fallback now passes through `_fallback_is_on_topic`
+  like the free tiers — off-topic paid results are discarded, not surfaced.
+- Also fixed a pre-existing I001 + E501 in the web_acquisition import block.

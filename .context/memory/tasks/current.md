@@ -19,11 +19,13 @@ live web_search sanity on both transcript queries (NYT/CBS, no junk).
 - **Standing priority: P0 Context Engineering Step 2** — byte-stabilize the
   system prefix (addendum plan). Audit `build_agent_system_prompt` for
   intent-varying sections; split a durable baseline from the intent tail.
-- **Search follow-ups (deferred, not bugs fixed here):** (a) the model fires
-  web_search BEFORE the RSS fetch for "trending news"-type queries — a
-  tool-routing/selection question; (b) the Brave fallback path is not
-  relevance-gated (pre-existing) — if a Brave key is set, its results bypass
-  the coverage floor.
+- **Search follow-ups — DONE (`73b5930`):** (a) news routing — web_research
+  seeds the Google News RSS feed (`_news_feed_url`) for news/headlines queries,
+  fetched via static_fetch (~2s), and web_search's description steers open-ended
+  news to web_research; (b) Brave fallback now relevance-gated. Live-verified.
+  Residual (genuinely out of scope): the model's tool *selection* still isn't
+  forced — the description nudges it, but a wrong pick just yields "no relevant
+  results" and a retry, no longer wasted junk.
 - **Live-test providers (2026-09-04):** bankofai free models = hy3,
   glm-5.3-flash, qwen3.8-flash (`--adapter bankofai --model X`);
   deepseek-v4-flash is paid (429/balance). gemini-2.5-flash works but one

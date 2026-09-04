@@ -5985,3 +5985,14 @@ against code before fixing:
 - **Open items:** search still fires BEFORE the RSS fetch for trending-news queries (tool-routing, not this fix); brave fallback path is not relevance-gated (pre-existing); the P0 Context Engineering plan (Steps 2-8) remains the standing priority.
 - **Report:** none — fix session (commit messages + fail-on-old tests + live sanity are the record)
 - **Notes:** heredoc-in-commit-substitution broke twice via the tool wrapper (apostrophe/EOF); used `git commit -F <file>` (see inefficiencies note prior session).
+
+### Session 417 addendum — B-2026-09-04-3 follow-ups fixed (`73b5930`)
+
+User: "fix them" (the two deferred search follow-ups). (1) News routing —
+web_research now seeds Google News RSS (`_news_feed_url`: top-stories when
+topicless, topic-search when a subject is named), fetched by static_fetch;
+web_search's description steers open-ended news to web_research. (2) Brave
+fallback now relevance-gated (`_fallback_is_on_topic`). 96 backend tests
+(3 news-feed + 2 Brave + updated); ruff clean (fixed a pre-existing I001/E501
+in the import block touched). Live: both transcript queries return Google News
+top stories via web_research. No frontend/agent-loop change.
