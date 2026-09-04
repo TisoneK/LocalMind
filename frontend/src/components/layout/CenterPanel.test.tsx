@@ -202,3 +202,40 @@ describe('CenterPanel embed-model guide (B-2026-08-23-14)', () => {
     expect(sessionStorage.getItem('localmind:embed-guide-dismissed')).toBe('1');
   });
 });
+
+describe('CenterPanel cached chip (B-2026-09-05-4)', () => {
+  const meterModel: ModelOption = {
+    id: 'test-model',
+    name: 'Test Model',
+    provider: 'test',
+    contextWindow: 128000,
+  } as ModelOption;
+
+  it('shows the cached chip with 0% when the last call missed the cache', () => {
+    render(
+      <CenterPanel
+        {...baseProps}
+        health={{ status: 'online', parentReady: true, parentDegradedReason: '' }}
+        selectedModel={meterModel}
+        contextWindowSize={128000}
+        contextTokens={12000}
+        cachedTokens={0}
+      />,
+    );
+    expect(screen.getByText(/0% cached/)).toBeInTheDocument();
+  });
+
+  it('shows the cached share when the provider reports cached tokens', () => {
+    render(
+      <CenterPanel
+        {...baseProps}
+        health={{ status: 'online', parentReady: true, parentDegradedReason: '' }}
+        selectedModel={meterModel}
+        contextWindowSize={128000}
+        contextTokens={12000}
+        cachedTokens={6000}
+      />,
+    );
+    expect(screen.getByText(/50% cached/)).toBeInTheDocument();
+  });
+});

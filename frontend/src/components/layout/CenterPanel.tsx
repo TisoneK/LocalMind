@@ -214,11 +214,16 @@ export function CenterPanel({
           {/* Context-window occupancy meter — the confidence badge was removed:
               it duplicated the Observe panel's Intent Classification section
               and was low-value as an always-on number. The window meter is the
-              actionable one (predicts degradation / compaction). */}
-          {windowSize && occupancyPct !== null && (cachedTokens || 0) > 0 && (
+              actionable one (predicts degradation / compaction).
+              B-2026-09-05-4: the cached chip is ALWAYS present next to the
+              percentage — a 0-cached call (cache miss: first call of a
+              session, or right after the prompt changed) now shows
+              "· 0% cached" instead of the chip silently vanishing, which
+              read as a regression in the transcript audit. */}
+          {windowSize && occupancyPct !== null && (
             <div
               className="flex items-center gap-1.5"
-              title={`Last model call: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} context tokens (${occupancyPct}%). ${(cachedTokens || 0).toLocaleString()} of them were served from the provider's prompt cache at ~10% of the price. The stats corner's prompt counter is the session cumulative — calls re-send history, so per-turn prompts overlap rather than stack.`}
+              title={`Last model call: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} context tokens (${occupancyPct}%). ${(cachedTokens || 0).toLocaleString()} of them were served from the provider's prompt cache at ~10% of the price${(cachedTokens || 0) === 0 ? " — this call missed the cache (expected on a session's first call or right after the prompt changed)" : ''}. The stats corner's prompt counter is the session cumulative — calls re-send history, so per-turn prompts overlap rather than stack.`}
             >
               <span className="text-[9px] text-brand-green-muted uppercase tracking-wider">Context</span>
               <div className="w-14 h-1.5 rounded-full bg-brand-border overflow-hidden">
@@ -229,26 +234,11 @@ export function CenterPanel({
               </div>
               <span className="text-[10px] font-mono text-brand-green-soft">{occupancyPct}%</span>
               <span
-                className="text-[9px] font-mono text-brand-green"
+                className={`text-[9px] font-mono ${(cachedTokens || 0) > 0 ? 'text-brand-green' : 'text-brand-green-faint'}`}
                 title={`${(cachedTokens || 0).toLocaleString()} of the last call's ${(contextTokens || 0).toLocaleString()} input tokens hit the provider's prompt cache (~10% cost) — the real inference load is well under the raw percentage. This is the LAST call's share; the stats corner's "cached:" is the whole session's share, so the two can differ.`}
               >
                 · {cacheHitPct}% cached
               </span>
-            </div>
-          )}
-          {windowSize && occupancyPct !== null && !(cachedTokens || 0) && (
-            <div
-              className="flex items-center gap-1.5"
-              title={`Last model call: ${(contextTokens || 0).toLocaleString()} / ${windowSize.toLocaleString()} context tokens (${occupancyPct}%). The stats corner's prompt counter is the session cumulative — calls re-send history, so per-turn prompts overlap rather than stack.`}
-            >
-              <span className="text-[9px] text-brand-green-muted uppercase tracking-wider">Context</span>
-              <div className="w-14 h-1.5 rounded-full bg-brand-border overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-300 ${occupancyColor}`}
-                  style={{ width: `${occupancyPct}%` }}
-                />
-              </div>
-              <span className="text-[10px] font-mono text-brand-green-soft">{occupancyPct}%</span>
             </div>
           )}
           {/* Window unknown (provider doesn't report it, model not in the
