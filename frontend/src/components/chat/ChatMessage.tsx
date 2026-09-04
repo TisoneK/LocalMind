@@ -54,6 +54,7 @@ import { repairMarkdown } from '@/lib/markdownRepair';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ResponseBlockRenderer } from './ResponseBlockRenderer';
 import { ToolSteps } from './ToolSteps';
+import { TurnTimeline } from './TurnTimeline';
 import { AgentPhases } from './AgentPhases';
 import { ErrorMessage } from './ErrorMessage';
 import { DiffBlock, type DiffHunk } from '@/components/shared/DiffBlock';
@@ -861,7 +862,16 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
               removes the duplication where the chat transcript mirrored the
               Actions panel's detailed view. */}
           {message.toolCalls && message.toolCalls.length > 0 && (
-            <ToolSteps compact toolCalls={message.toolCalls} isStreaming={isStreaming} />
+            <>
+              {/* Turn Anatomy — a glanceable strip of where the turn's time
+                  went (thinking vs each tool), so the timing is a picture, not
+                  mental math. Fed by thinkMs + tool durations; self-hides for
+                  trivial turns. */}
+              {message.isAgent && (
+                <TurnTimeline thinkMs={message.thinkMs} toolCalls={message.toolCalls} />
+              )}
+              <ToolSteps compact toolCalls={message.toolCalls} isStreaming={isStreaming} />
+            </>
           )}
 
           {/* ADR-20: canonical error card — a failed reply renders this
