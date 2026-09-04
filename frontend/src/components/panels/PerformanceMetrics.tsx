@@ -109,11 +109,11 @@ export function PerformanceMetrics({
           className="text-[9px] text-brand-green-muted uppercase tracking-wider shrink-0"
           title={
             sessionTurnCount > 0
-              ? `Average latency per turn · ${formatLatency(sessionTotalLatency)} total wall time · ${sessionTurnCount} turns`
+              ? `AVERAGE latency per turn — the session's total wall time ${formatLatency(sessionTotalLatency)} across ${sessionTurnCount} turns, NOT the last turn's duration (that's on the turn card). While a reply streams, this shows the live wall clock instead.`
               : 'Response latency'
           }
         >
-          Latency
+          Avg latency
         </span>
         <span className="text-[11px] text-brand-green-soft font-mono font-medium whitespace-nowrap">
           {latency > 0 ? formatLatency(latency) : '—'}
@@ -143,9 +143,10 @@ export function PerformanceMetrics({
             <div
               className="flex items-center gap-1"
               title={
-                `Prompt cache: ${formatTokens(cachedTokens)} of ${formatTokens(promptTokens)} input tokens ` +
+                `Prompt cache (SESSION total): ${formatTokens(cachedTokens)} of ${formatTokens(promptTokens)} input tokens ` +
                 `(${cacheHitPct}%) were served from the provider's cache at ~10% of the price. ` +
-                `Equivalent full-price input: ~${formatTokens(equivalentInputTokens)} tokens.`
+                `Equivalent full-price input: ~${formatTokens(equivalentInputTokens)} tokens. ` +
+                `This is the whole session's share — the header's "· N% cached" is the LAST call's share, so the two can differ.`
               }
             >
               <span className="text-[9px] text-brand-green-muted">cached:</span>

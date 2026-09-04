@@ -230,7 +230,7 @@ export function CenterPanel({
               <span className="text-[10px] font-mono text-brand-green-soft">{occupancyPct}%</span>
               <span
                 className="text-[9px] font-mono text-brand-green"
-                title={`${(cachedTokens || 0).toLocaleString()} input tokens hit the provider's prompt cache (~10% cost) — the real inference load is well under the raw percentage.`}
+                title={`${(cachedTokens || 0).toLocaleString()} of the last call's ${(contextTokens || 0).toLocaleString()} input tokens hit the provider's prompt cache (~10% cost) — the real inference load is well under the raw percentage. This is the LAST call's share; the stats corner's "cached:" is the whole session's share, so the two can differ.`}
               >
                 · {cacheHitPct}% cached
               </span>

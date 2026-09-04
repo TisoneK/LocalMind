@@ -739,6 +739,11 @@ export function useChat(
                   totalTokens: estimatedCompletionTokens + (prev?.promptTokens || 0),
                   promptTokens: prev?.promptTokens || 0,
                   completionTokens: estimatedCompletionTokens,
+                  // Preserve the cache telemetry across per-token updates —
+                  // dropping it made the corner's cached chip flicker to a
+                  // different basis mid-stream.
+                  cachedTokens: prev?.cachedTokens || 0,
+                  llmCalls: prev?.llmCalls || 0,
                 }));
                 setMessages((prev) => {
                   const updated = [...prev];
@@ -796,6 +801,11 @@ export function useChat(
                   totalTokens: estimatedCompletionTokens + (prev?.promptTokens || 0),
                   promptTokens: prev?.promptTokens || 0,
                   completionTokens: estimatedCompletionTokens,
+                  // Preserve the cache telemetry across per-token updates —
+                  // dropping it made the corner's cached chip flicker to a
+                  // different basis mid-stream.
+                  cachedTokens: prev?.cachedTokens || 0,
+                  llmCalls: prev?.llmCalls || 0,
                 }));
                 setMessages((prev) => {
                   const updated = [...prev];
