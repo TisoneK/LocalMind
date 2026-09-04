@@ -561,3 +561,37 @@ def test_on_topic_partial_match_survives_as_fallback():
 def test_no_distinctive_terms_any_set_is_on_topic():
     # A query with only stopwords has nothing to judge on — don't over-reject.
     assert _fallback_is_on_topic("what is it right now", _BING_ONLYFANS) is True
+
+
+# ── B-2026-09-04-3: Brave is not exempt from the relevance floor ──────────────
+
+@pytest.mark.asyncio
+async def test_brave_off_topic_results_are_discarded():
+    """When the free tiers fail and Brave returns off-topic junk (OnlyFans for a
+    news query), it must be discarded like any other off-topic set — not used
+    just because it came from the paid tier."""
+    with patch("tools.web_search._search_ddg", new_callable=AsyncMock, return_value=([], "network", "x")), \
+         patch("tools.web_search._search_bing", new_callable=AsyncMock, return_value=([], "network", "x")), \
+         patch("tools.web_search._search_searxng", new_callable=AsyncMock, return_value=([], "network", "x")), \
+         patch("core.config.settings.brave_search_api_key", "test-key"), \
+         patch("tools.web_search._search_brave", new_callable=AsyncMock, return_value=(_BING_ONLYFANS, "", "")):
+        result = await web_search("breaking news headlines today")
+
+    assert result.success is False
+    assert "onlyfans" not in result.content.lower()
+
+
+@pytest.mark.asyncio
+async def test_brave_relevant_results_are_used():
+    """A relevant Brave result set (clears the floor) is still used normally."""
+    hits = [{"title": "breaking news headlines roundup",
+             "href": "https://news.example", "body": "today's top news headlines"}]
+    with patch("tools.web_search._search_ddg", new_callable=AsyncMock, return_value=([], "network", "x")), \
+         patch("tools.web_search._search_bing", new_callable=AsyncMock, return_value=([], "network", "x")), \
+         patch("tools.web_search._search_searxng", new_callable=AsyncMock, return_value=([], "network", "x")), \
+         patch("core.config.settings.brave_search_api_key", "test-key"), \
+         patch("tools.web_search._search_brave", new_callable=AsyncMock, return_value=(hits, "", "")):
+        result = await web_search("breaking news headlines today")
+
+    assert result.success is True
+    assert result.metadata["successful_provider"] == "brave"

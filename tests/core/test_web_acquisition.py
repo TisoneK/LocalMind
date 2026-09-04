@@ -13,6 +13,7 @@ import pytest
 
 from core.web_acquisition import (
     AcquisitionMethod,
+    _news_feed_url,
     AcquisitionStatus,
     WebResult,
     _is_boilerplate,
@@ -666,3 +667,36 @@ class TestValidateWebResult:
         validated = validate_web_result(result, query="current EPL standings")
         assert validated.status == AcquisitionStatus.FAILED
         assert validated.entity_validated is False  # not checked
+
+
+# ── B-2026-09-04-3 follow-up: news queries seed the Google News RSS feed ──────
+
+def test_news_feed_url_topicless_uses_top_stories():
+    # The exact transcript queries — topicless "what's trending / breaking news".
+    for q in [
+        "top trending news stories today September 4 2026",
+        "breaking news headlines today",
+        "what is the latest news",
+        "top headlines",
+    ]:
+        assert _news_feed_url(q) == "https://news.google.com/rss", q
+
+
+def test_news_feed_url_with_subject_uses_topic_search():
+    url = _news_feed_url("latest news on artificial intelligence regulation")
+    assert url is not None
+    assert url.startswith("https://news.google.com/rss/search?q=")
+    # The subject terms are carried into the feed query; framing words are not.
+    assert "regulation" in url
+    assert "news" not in url.split("?q=")[1]
+
+
+def test_news_feed_url_non_news_returns_none():
+    # No news cue → normal search-only discovery, feed not seeded.
+    for q in [
+        "current EPL standings",
+        "what is the latest Python version",
+        "weather in Nairobi",
+        "how do hash maps work",
+    ]:
+        assert _news_feed_url(q) is None, q

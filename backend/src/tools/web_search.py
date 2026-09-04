@@ -724,12 +724,27 @@ async def web_search(query: str) -> ToolResult:
         # Both free tiers failed — try Brave if available
         if getattr(settings, "brave_search_api_key", ""):
             logger.info("[web_search] Free tiers failed, trying Brave")
-            results, error_type, error_message = await _search_brave(
+            _brave_results, error_type, error_message = await _search_brave(
                 query, settings.brave_search_api_key
             )
-            if results:
+            # B-2026-09-04-3: Brave is not exempt from the relevance floor — an
+            # off-topic paid result is still off-topic. Gate it like the free
+            # tiers so junk is never surfaced just because it came from Brave.
+            if _brave_results and _fallback_is_on_topic(query, _brave_results):
+                results = _brave_results
                 successful_provider = "brave"
                 logger.info(f"[web_search] Brave succeeded with {len(results)} results")
+            elif _brave_results:
+                logger.info(
+                    f"[web_search] Discarding off-topic Brave results "
+                    f"(coverage below floor) for '{query}'"
+                )
+                if not error_message:
+                    error_type = "no_relevant_results"
+                    error_message = (
+                        f"No relevant results for '{query}' — the available "
+                        f"results were off-topic."
+                    )
         else:
             error_type = first_error_type or "all_tiers_failed"
             error_message = first_error_message or "All search providers failed"
@@ -803,7 +818,12 @@ async def web_search(query: str) -> ToolResult:
 register_tool(
     Intent.WEB_SEARCH,
     web_search,
-    description="Search the web for current information, news, prices, or recent events",
+    description=(
+        "Keyword web search for a SPECIFIC topic, fact, price, site, or named "
+        "event — returns links + snippets, not full pages. For open-ended "
+        "'what's the latest / trending / breaking news or headlines' with no "
+        "specific subject, prefer web_research (it pulls a live news feed)."
+    ),
     cost=0.05,
     latency_ms=1500,
 )

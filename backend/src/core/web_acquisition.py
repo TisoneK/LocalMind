@@ -68,9 +68,10 @@ import asyncio
 import json
 import logging
 import re
+import urllib.parse
 from dataclasses import dataclass, field
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -235,7 +236,8 @@ class WebResult:
 
     # Session 341: evidence-validation fields
     acquisition_trace: list[str] = field(default_factory=list)  # ordered steps taken
-    failure_reason: Optional[str] = None  # categorized failure: "stale", "wrong_entity", "boilerplate", "unreachable", "js_render_failed"
+    # categorized failure: stale / wrong_entity / boilerplate / unreachable / js_render_failed
+    failure_reason: Optional[str] = None
     source_timestamp: Optional[str] = None  # when the source's data was last updated (if known)
     retrieved_at: Optional[str] = None  # when we retrieved it (ISO timestamp)
     entity_validated: bool = False  # did we verify the content is about the right entity?
@@ -780,6 +782,55 @@ async def acquire_web_content(
     )
 
 
+# ── News-feed source (B-2026-09-04-3 follow-up) ──────────────────────────────
+# Keyword web_search is the WRONG tool for "what's trending / breaking news /
+# top headlines": the query carries no distinctive TOPIC to match, so search
+# returns generic junk and web_research burns calls discovering nothing (the
+# user's transcript: two wasted searches, then a hand-fetched news.google.com/
+# rss got the answer). Google News RSS is the canonical, IP-localized news feed
+# — a STATIC XML document the static-fetch strategy reads in ~2s. For a
+# news-shaped query we seed it as the authoritative FIRST source: the
+# top-stories feed when the query is topicless, the topic-search feed when it
+# names a subject. General — any news/headlines request benefits; non-news
+# queries get None and the normal discovery path is unchanged.
+_NEWS_CUE_RE = re.compile(
+    r"\b(news|headlines?|top stories|current events)\b|\bbreaking\s+news\b", re.I
+)
+# Framing/temporal words that are NOT the news TOPIC — stripped before deciding
+# topicless (top-stories feed) vs topic-specific (search feed). Month names +
+# bare years are temporal noise ("...today September 4 2026"), not a subject.
+_NEWS_FRAMING = frozenset(
+    {
+        "news", "headline", "headlines", "breaking", "trending", "top", "stories",
+        "story", "latest", "recent", "current", "events", "event", "update",
+        "updates", "roundup", "digest", "happening",
+        "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "sept",
+        "oct", "nov", "dec", "january", "february", "march", "april", "june",
+        "july", "august", "september", "october", "november", "december",
+    }
+)
+
+
+def _news_feed_url(query: str) -> Optional[str]:
+    """Google News RSS URL for a news/headlines query, else None.
+
+    Topicless ("trending news today", "breaking news headlines") → the
+    top-stories feed. Names a subject ("latest news on AI regulation") → the
+    topic-search feed. Not news-shaped → None (caller uses normal discovery)."""
+    if not _NEWS_CUE_RE.search(query or ""):
+        return None
+    from tools.web_search import _query_content_tokens
+
+    topic = [
+        t for t in _query_content_tokens(query)
+        if t not in _NEWS_FRAMING and not t.isdigit()
+    ]
+    if topic:
+        q = urllib.parse.quote(" ".join(topic))
+        return f"https://news.google.com/rss/search?q={q}&hl=en"
+    return "https://news.google.com/rss"
+
+
 async def web_research(
     query: str,
     max_sources: int = 3,
@@ -806,9 +857,32 @@ async def web_research(
 
     logger.info("[web-research] starting for query=%r", query[:80])
 
-    # Step 1: discover sources
+    # Step 1: discover sources. For a news/headlines query, seed the Google News
+    # RSS feed as the authoritative FIRST source (see _news_feed_url) — keyword
+    # search is the wrong tool for topicless "what's trending", and the feed is a
+    # static XML doc the static-fetch strategy reads in ~2s. Non-news queries get
+    # news_url=None and the normal search-only discovery path.
+    news_url = _news_feed_url(query)
     search_result = await web_search(query)
-    if not search_result.success:
+    urls = (
+        _extract_urls_from_search(search_result.content)
+        if search_result.success
+        else []
+    )
+    if news_url:
+        urls = [news_url] + [u for u in urls if u != news_url]
+
+    if not urls:
+        if search_result.success:
+            # Search returned snippets but no fetchable URLs — surface them.
+            return WebResult(
+                status=AcquisitionStatus.PARTIAL,
+                source="(search snippets)",
+                acquisition_method=AcquisitionMethod.SEARCH_ONLY,
+                content=search_result.content,
+                confidence=0.3,
+                attempted_strategies=["web_search"],
+            )
         return WebResult(
             status=AcquisitionStatus.FAILED,
             source="(search)",
@@ -818,22 +892,10 @@ async def web_research(
             attempted_strategies=["web_search"],
         )
 
-    # Extract URLs from the search result
-    urls = _extract_urls_from_search(search_result.content)
-    if not urls:
-        # No URLs — return the search snippets as a SEARCH_ONLY result
-        return WebResult(
-            status=AcquisitionStatus.PARTIAL,
-            source="(search snippets)",
-            acquisition_method=AcquisitionMethod.SEARCH_ONLY,
-            content=search_result.content,
-            confidence=0.3,
-            attempted_strategies=["web_search"],
-        )
-
     logger.info(
-        "[web-research] discovered %d sources, trying top %d",
+        "[web-research] discovered %d sources (news_feed=%s), trying top %d",
         len(urls),
+        bool(news_url),
         min(max_sources, len(urls)),
     )
 
