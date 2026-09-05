@@ -398,7 +398,7 @@ export function TerminalPanel({
   const shortCwd = cwd.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
 
   return (
-    <div className={`font-mono text-[11px] leading-relaxed flex flex-col ${isMaximized ? 'fixed inset-0 z-50 bg-brand-bg-dark' : ''}`}>
+    <div className={`font-mono text-[12px] leading-relaxed flex flex-col ${isMaximized ? 'fixed inset-0 z-50 bg-brand-bg-dark' : ''}`}>
       {/* ── Tab Bar ── */}
       <div className="flex items-center bg-brand-bg-panel-alt border-b border-brand-border">
         {tabs.map((tab) => (
@@ -584,6 +584,9 @@ export function TerminalPanel({
                 </span>
               )}
               <span className={`flex-1 break-all [overflow-wrap:anywhere] ${lineColors[line.type]}`}>
+                {line.type === 'command' && (
+                  <span className="text-brand-green mr-1.5 select-none">❯</span>
+                )}
                 {linePrefixes[line.type]}
                 {line.source === 'agent' && (
                   <span className="text-brand-gh-purple mr-1">&#9883;</span>
@@ -655,8 +658,8 @@ export function TerminalPanel({
 
       {/* ── Command Input ── */}
       {onExecute && (
-        <div className="flex items-center gap-1 px-2 py-1.5 bg-brand-bg-dark border-t border-brand-border">
-          <span className="text-brand-green text-[11px] shrink-0">$</span>
+        <div className="flex items-center gap-2 px-3 py-2 bg-brand-bg-dark border-t border-brand-border">
+          <span className="text-brand-green text-[13px] shrink-0">❯</span>
           <div className="relative flex-1">
             {/* Idle prompt cursor — a blinking block at the start of an empty
                 prompt so the terminal looks live and ready to type. Hidden
@@ -676,7 +679,7 @@ export function TerminalPanel({
               onKeyDown={handleKeyDown}
               placeholder={isRunning ? 'Running...' : 'Enter command... (↑ history, Tab autocomplete)'}
               disabled={isRunning}
-              className="w-full bg-transparent text-[11px] text-brand-green-soft placeholder:text-brand-green-deleted outline-none font-mono caret-brand-green"
+              className="w-full bg-transparent text-[12px] text-brand-green-soft placeholder:text-brand-green-faint outline-none font-mono caret-brand-green"
               spellCheck={false}
               autoComplete="off"
               autoCorrect="off"
