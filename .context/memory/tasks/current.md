@@ -1,14 +1,22 @@
 # Current Task
 
-**Status:** IDLE — Session 419 closed. P0 Context Engineering **Step 3
-(Memory Retrieval Gate)** shipped in `38739c5`: `cap_facts_to_budget` (~500
-tokens) applied at `agent_runtime._memory_facts`. Scoping finding — retrieval
-was already per-request/conditional/semantic-top-K/relevance-thresholded, so
-the only missing Component-5 piece was the token budget cap (count cap ≠ size
-cap). 5 cap tests + 50 memory regression pass; ruff clean. Behavior unchanged
-on normal turns (ceiling for long-fact sets). Also this session: UI rework —
-Actions tab (`fce41d5`), Terminal (`06d1d12`), terminal command grouping +
-newest-first Actions/Workspace (`9fa9827`).
+**Status:** IDLE — Session 420 closed. Fixed the "find my CV" transcript
+failure family (commits `33a81f2`, `e8cd69a`, `e32c92e`): (1) honest limit
+classification — `AgentTrace.limit_kind` (iteration_cap/wall_clock/
+repetition/hard_ceiling) drives `classify_failure` (wall_clock_limit /
+repetition_loop) and the Session 32 fallback wording, ending the
+"everything is iteration_limit" misdiagnosis; (2) `agent_loop_failure` no
+longer fires when the forced synthesis delivered a real answer (banner no
+longer lies above a complete answer; `_force_final_answer` sets
+`final_response` on real-model text only); (3) `identical_call_streak`
+hard-stops same-tool+same-args loops at 3 (the user's "limit a failing
+tool running the same command over and over" — done, in addition to the
+existing cap-failure-never-success extension rules); (4) system_search
+relaxed fallback quality gate (path→basename, generic-token stoplist,
+2-char distinctive token allowed). 15+2 new tests; full-suite failure set
+identical to baseline; live-verified on bankofai/qwen3.8-flash isolated
+8765 (CV answer + zero failure events; search gate on the exact
+transcript queries). Contract addendum in AGENTS.md item 2.
 
 **Feature:** `p0-context-engineering` (preview) — Steps 1-3 complete; 2b + 4-8 open
 
@@ -29,6 +37,8 @@ newest-first Actions/Workspace (`9fa9827`).
   (`--adapter bankofai --model X`); deepseek-v4-flash paid; gemini-2.5-flash
   works but one turn eats the per-minute quota; zai 401; chutes/cerebras $0.
 - **Tooling:** commit messages via `git commit -F <file>` (heredoc subst breaks
-  through the terminal wrapper); macOS box (no `timeout` CLI).
-- **Standing:** ~36 pre-existing Windows backend failures + ~32 ruff baseline
-  need the deferred peer pass; ADR-57 slice 3 (concurrent Thinker) queued.
+  through the terminal wrapper); macOS box (no `timeout` CLI). On Windows:
+  heredocs also eat backslashes — write path-holding code with the Write tool.
+- **Standing:** ~56 pre-existing backend failures (incl. 60 multipart
+  collection errors from missing python-multipart in this venv) + ruff
+  baseline need the deferred peer pass; ADR-57 slice 3 queued.

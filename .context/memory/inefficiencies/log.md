@@ -1150,3 +1150,13 @@ if literally nothing slowed you down.
 - **Cause:** I wired the cached chip onto lastMetrics (per-call) without noticing the meter's own numerator (`cumulativeContextTokens` from sessionStats) was a DIFFERENT accumulation basis. The S416 pre-change comment even documented the cumulative basis as intended ("matching how PerformanceMetrics computes its corner prompt counter") — I extended a wrong design instead of auditing it.
 - **Workaround / fix:** Meter + chip both now use the LAST model call's prompt (liveObservation.contextTokens / lastMetrics fallback); the session cumulative stays only in the stats corner. Tooltip states the basis.
 - **Prevent next time:** When adding a ratio/percentage UI, enumerate every input's accumulation basis (per-call / per-turn / per-session) and assert they match — a percentage built from mixed bases is silently wrong and looks plausible. Also: live-verify UI percentages against the SSE ground-truth numbers they derive from, not just that the fields arrive.
+
+---
+
+## 2026-09-05 — ZCode / local Windows (Session 420)
+
+- **Problem:** (1) Two parallel agents on this machine picked the same session number (S419 claimed by claude-opus-4.8 while this session was calling itself S419 in-chat). (2) Git-bash heredocs ate doubled backslashes in Python test code twice (echoed S416's redirection-mangling trap) — `"C:\Users\..."` landed as `"C:\Users\..."` and failed to even collect. (3) Full-suite flake noise: the first full run showed 2 extra failures that both passed in isolation and vanished on re-run — load flakiness, not regressions.
+- **Cost:** ~15 min of confusion around the number collision + 2 wasted test-file writes + one extra 2-min suite run to prove the flake.
+- **Cause:** (1) session numbers were counted from memory of the chat, not from the append-only log tail; (2) MSYS heredoc backslash translation; (3) shared-CPU parallel load (same trap as the S416 vitest note, pytest flavor).
+- **Workaround / fix:** (1) Number the session from `tail agents/sessions.md` at closeout. (2) Write backslash-holding code with the Write tool, or use forward slashes in test fixtures. (3) Compare the full-suite failure SET against a stash-baseline run (diff the FAILED lists) instead of trusting a single run's count.
+- **Prevent next time:** The baseline-diff pattern is the reliable regression signal on this box; record it in environments.md. Session numbering: always re-read the log tail at closeout — concurrent agents invalidate any in-session count.
