@@ -53,7 +53,7 @@ fi
 sha_cmd() {
   if command -v sha256sum >/dev/null 2>&1; then echo "sha256sum"
   elif command -v shasum >/dev/null 2>&1; then echo "shasum -a 256"
-  else die "need sha256sum or shasum on PATH"; fi
+  else die "need sha256sum or shasum on PATH — on Windows without them, use the PowerShell port instead: pwsh -File .context/core/bin/context-sync.ps1 ${CMD:-verify}"; fi
 }
 
 core_version() { # $1 = a core dir
@@ -95,11 +95,45 @@ find_source() { # echoes a core dir, or nothing. $1 = optional explicit source
 
 verify_tree() { # $1 = a core dir; returns 0 clean, 3 mismatch
   [ -f "$1/MANIFEST.sha256" ] || { err "no MANIFEST.sha256 in $1"; return 3; }
-  if ( cd "$1" && $(sha_cmd) --check --status MANIFEST.sha256 ); then
-    return 0
-  fi
-  ( cd "$1" && $(sha_cmd) --check MANIFEST.sha256 2>&1 | grep -v ': OK$' | head -n 20 ) >&2
-  return 3
+  _sha=$(sha_cmd); [ -n "$_sha" ] || return 3
+  # Hash the CR-stripped content of each file against the manifest. One
+  # manifest stays byte-compatible across LF checkouts (macOS/Linux) and CRLF
+  # copies (files copied outside git on Windows, where .gitattributes does not
+  # reach); LF-only files hash identically, so manifest values never change.
+  # The manifest itself is CR-stripped before parsing (B-2026-08-30-17).
+  _mf=$(mktemp 2>/dev/null) || _mf="$1/.MANIFEST.lf.$$"
+  tr -d '\r' < "$1/MANIFEST.sha256" > "$_mf" 2>/dev/null || cp "$1/MANIFEST.sha256" "$_mf"
+  _rc=0; _shown=0
+  while read -r _h _rest || [ -n "${_h:-}" ]; do
+    [ -n "${_h:-}" ] || continue
+    case $_h in '#'*) continue ;; esac
+    _p=${_rest#\*}
+    if [ ! -f "$1/$_p" ]; then
+      echo "$_p: FAILED open or read" >&2
+      _rc=3; continue
+    fi
+    _got=$(tr -d '\r' < "$1/$_p" | $_sha | awk '{print $1}')
+    if [ "$_got" != "$_h" ]; then
+      [ "$_shown" -lt 20 ] && echo "$_p: FAILED" >&2
+      _shown=$((_shown + 1))
+      _rc=3
+    fi
+  done < "$_mf"
+  rm -f "$_mf"
+  return $_rc
+}
+
+# rewrite every file under each $1... to LF in place (cat > keeps each file's
+# inode and mode). update/bootstrap run this on the staged copy so the
+# vendored core is byte-identical to its manifest no matter what line endings
+# the source checkout had.
+normalize_lf() {
+  for _dir in "$@"; do
+    find "$_dir" -type f -exec sh -c '
+      for f do
+        tr -d "\r" < "$f" > "$f.lf" && cat "$f.lf" > "$f" && rm -f "$f.lf"
+      done' _ {} +
+  done
 }
 
 write_lock() { # $1 = version
@@ -116,7 +150,9 @@ write_lock() { # $1 = version
 
 lock_version() {
   [ -f "$MEMORY_DIR/core.lock" ] || { echo ""; return; }
-  sed -n 's/^version=//p' "$MEMORY_DIR/core.lock" | head -n1
+  # tr -d '\r' keeps this correct when the lock file itself arrived CRLF
+  # (template copied outside git on Windows).
+  sed -n 's/^version=//p' "$MEMORY_DIR/core.lock" | head -n1 | tr -d '\r'
 }
 
 fleet_file() { echo "${CONTEXT_FLEET:-$PACKAGE_DIR/fleet.md}"; }
@@ -180,6 +216,13 @@ cmd_verify() {
 
 cmd_update() {
   need_project update
+  # refresh the core-owned root file and install the LF policy + CLAUDE.md
+  # pointer BEFORE any version logic: a 0.8.x project's first update runs the
+  # old script (which never installs these), so the post-update no-op run of
+  # the new script must still leave the project with them.
+  cp "$CORE_DIR/templates/context-README.md" "$CONTEXT_DIR/README.md" 2>/dev/null || true
+  [ -f "$CONTEXT_DIR/.gitattributes" ] || cp "$CORE_DIR/templates/.gitattributes" "$CONTEXT_DIR/.gitattributes" 2>/dev/null || true
+  [ -e "$PROJECT_DIR/CLAUDE.md" ] || cp "$CORE_DIR/templates/CLAUDE.md" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || true
   ALLOW_MAJOR=no; SRC_ARG=""
   for a in "$@"; do
     case "$a" in
@@ -201,13 +244,15 @@ cmd_update() {
   STAGE=$CONTEXT_DIR/core.new
   rm -rf "$STAGE"
   cp -R "$SRC" "$STAGE" || die "staging copy failed"
+  # rewrite the staged copy to LF so the vendored core is byte-identical to
+  # its manifest even when the source checkout was CRLF (Windows), then
+  # verify what is actually on disk.
+  normalize_lf "$STAGE"
   verify_tree "$STAGE" || { rm -rf "$STAGE"; die "staged copy fails verify — aborting, core untouched"; }
 
   # unlink-safe: this running script keeps its open inode
   rm -rf "$CORE_DIR" && mv "$STAGE" "$CORE_DIR" || die "swap failed — restore .context/core from git (git checkout -- .context/core)"
   write_lock "$SRC_V"
-  # refresh the core-owned root file
-  cp "$CORE_DIR/templates/context-README.md" "$CONTEXT_DIR/README.md" 2>/dev/null || true
   say "core updated: $LOCAL_V -> $SRC_V"
   say "next: read the new entries in .context/core/CHANGELOG.md;"
   say "      if templates/kickoff.md or templates/AGENTS.md changed materially,"
@@ -239,8 +284,11 @@ cmd_manifest() {
   need_package manifest
   cd "$CORE_DIR" || exit 1
   TMP=MANIFEST.sha256.tmp
+  # -t forces the text-mode separator ("hash  path") on every platform —
+  # without it Git Bash's sha256sum emits the binary marker ("hash *path")
+  # and a Windows-regenerated manifest churns all 46 lines vs a mac regen.
   find . -type f ! -name 'MANIFEST.sha256*' ! -name '.DS_Store' | LC_ALL=C sort \
-    | sed 's|^\./||' | while IFS= read -r f; do $(sha_cmd) "$f"; done > "$TMP" \
+    | sed 's|^\./||' | while IFS= read -r f; do $(sha_cmd) -t "$f"; done > "$TMP" \
     || { rm -f "$TMP"; die "manifest generation failed"; }
   mv "$TMP" MANIFEST.sha256
   say "wrote core/MANIFEST.sha256 ($(wc -l < MANIFEST.sha256 | tr -d ' ') files, version $(core_version "$CORE_DIR"))"
@@ -258,9 +306,16 @@ cmd_bootstrap() {
   mkdir "$DEST/.context" || exit 1
   cp -R "$CORE_DIR" "$DEST/.context/core"                            || die "vendoring core failed"
   cp -R "$CORE_DIR/templates/memory" "$DEST/.context/memory"         || die "copying memory skeleton failed"
+  # byte-identical vendored core + skeleton regardless of this checkout's
+  # line endings (Windows CRLF) — verify/rollback then work out of the box.
+  normalize_lf "$DEST/.context/core" "$DEST/.context/memory"
   cp "$CORE_DIR/templates/context-README.md" "$DEST/.context/README.md"
   cp "$CORE_DIR/templates/kickoff.md" "$DEST/.context/kickoff.md"
+  cp "$CORE_DIR/templates/.gitattributes" "$DEST/.context/.gitattributes" 2>/dev/null || true
   [ -e "$DEST/AGENTS.md" ] || cp "$CORE_DIR/templates/AGENTS.md" "$DEST/AGENTS.md"
+  # CLAUDE.md points Claude Code (which auto-loads it, not AGENTS.md) into
+  # the protocol. Only create it when absent — never clobber a real one.
+  [ -e "$DEST/CLAUDE.md" ] || cp "$CORE_DIR/templates/CLAUDE.md" "$DEST/CLAUDE.md"
 
   V=$(core_version "$CORE_DIR")
   {
@@ -280,12 +335,15 @@ cmd_bootstrap() {
     say "      by hand once it has one, so 'context-sync harvest' can reach it."
   fi
 
-  say "bootstrapped $DEST/.context (core $V) + AGENTS.md"
+  say "bootstrapped $DEST/.context (core $V) + AGENTS.md + CLAUDE.md"
   say "next (the bootstrapping agent does this):"
   say "  1. fill .context/kickoff.md Project Facts + AGENTS.md <PROJECT_NAME>"
   say "  2. fill memory/: user/, workflows/active.md, system/, tasks/current.md, agents/sessions.md"
   say "  3. scan: grep -rn '<PROJECT\\|<GIT_\\|<LIVE_' $DEST/.context --include='*.md' (hits only in HTML comments/token forms)"
-  say "  4. commit as: chore(context): bootstrap .context/ (core $V)  — and push"
+  say "  4. entrypoints: CLAUDE.md points Claude Code here. If the project also uses"
+  say "     Copilot/Cursor/Gemini/Codex, add a one-line 'read AGENTS.md first' pointer"
+  say "     to their entrypoint (.github/copilot-instructions.md, .cursor/rules, GEMINI.md)."
+  say "  5. commit as: chore(context): bootstrap .context/ (core $V)  — and push"
 }
 
 # resolve a fleet URL to a readable local checkout. Prefers a sibling clone

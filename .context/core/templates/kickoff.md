@@ -150,9 +150,16 @@ was declared, do not use `tasks/current.md` as a lock: create or join the
 shared session/issue event trail, use a separate worktree/branch, publish
 a claim, and inspect peer events before editing.
 
-For concurrent work, the coordination helper is:
+Peers are one team, not rivals. The everyday move is a `note` — the office
+channel. Then `claim → work → release`. Reach for the
+`proposal → assessment → agreement` ceremony only for a genuine conflict.
 
 ```bash
+# say what you're on (informal, never gates the check):
+sh .context/core/bin/context-collab emit note --session <SESSION_ID> \
+  --agent <AGENT_ID> --issue <ISSUE_ID> --to <PEER_ID> --re <path> \
+  --body "Taking the web side; leaving the loop to you."
+# claim scope, then release it citing the commit:
 sh .context/core/bin/context-collab emit claim --session <SESSION_ID> \
   --agent <AGENT_ID> --issue <ISSUE_ID> --paths <path1,path2> \
   --body-file <claim-notes-file>
@@ -160,6 +167,9 @@ sh .context/core/bin/context-collab status --session <SESSION_ID> --issue <ISSUE
 sh .context/core/bin/context-collab check --session <SESSION_ID> --issue <ISSUE_ID>
 ```
 
+`status` opens with a **Recent chatter** feed of notes — read it first. A
+`release`/`handoff` closes a claim by citing its event ID or by sharing its
+session+issue and overlapping paths, so citing only the commit SHA is fine.
 On Windows use `pwsh -File .context/core/bin/context-collab.ps1` with the
 same `emit`, `status`, and `check` arguments.
 

@@ -1,9 +1,12 @@
 # Agent Instructions — LocalMind
 
 <!-- Generated at bootstrap from .context/core/templates/AGENTS.md.
-Refreshed on core updates (fill <PROJECT_NAME> again). Optionally also
-copied to CLAUDE.md and .github/copilot-instructions.md so tools that
-auto-load those paths get the same digest. -->
+Refreshed on core updates (fill LocalMind again). This is the canonical
+entrypoint digest. Bootstrap also installs a CLAUDE.md pointer so Claude
+Code (which auto-loads CLAUDE.md, not this file) is routed here. If the
+project uses other agent tools, add a one-line "read AGENTS.md first"
+pointer to their entrypoint too — Copilot: .github/copilot-instructions.md,
+Cursor: .cursor/rules, Gemini: GEMINI.md, Codex/others: this AGENTS.md. -->
 
 This repo uses the `.context/` protocol: persistent agent memory plus a
 vendored copy of the full workflow, committed to git. **Before doing any
@@ -27,22 +30,35 @@ If you read nothing else, obey these rules:
 4. **Read memory before working:** at minimum
    `.context/memory/workflows/active.md`,
    `.context/memory/agents/sessions.md` (last entries),
+   `.context/memory/collaboration/README.md` and relevant event files
+   when collaboration is enabled, `.context/memory/workflows/gates.conf`,
    `.context/memory/tasks/current.md`, and
    `.context/memory/inefficiencies/log.md` (known traps). If the
    active session has detailed notes at
    `.context/memory/sessions/`, skim them for current state.
-5. **One task at a time.** If `.context/memory/tasks/current.md` shows
-   another live session in progress, do not start.
+5. **Choose the mode explicitly.** Without a shared collaboration
+   `session` + `issue`, `tasks/current.md` is the single-agent lock. In
+   collaboration mode you and your peers are one team, not rivals: use an
+   isolated git worktree/branch and the immutable event trail; do not block
+   peers on `tasks/current.md`. The everyday move is a `note` (the office
+   channel — say what you're on, flag a peer, review a diff); then
+   `claim → work → release`. Save the `proposal → assessment → agreement`
+   ceremony for a genuine conflict (same paths, incompatible changes).
+   Before each next action run `context-gates checkpoint`; before commits,
+   integration, and exit run the matching gate. On Windows, use the `.ps1`
+   ports.
 6. **Append-only files are append-only:** `agents/sessions.md`,
    `tasks/backlog.md`, `plans/decisions.md`, `flaws/log.md`,
    `inefficiencies/log.md`. Add at the bottom; never edit or delete
-   past entries.
+   past entries. Collaboration event files are stronger: immutable,
+   one event per file; emit a correction instead of editing one.
 7. **No secrets in tracked files, ever.** Values go only in
    `.context/memory/secrets/` (self-gitignored). Never echo a secret or
    token in chat, logs, or commit messages.
 8. **Two surfaces, two prefixes:** editing product code = normal commit
    prefixes; editing `.context/` = `chore(context):` (reports:
-   `docs(review):`). Never mix both surfaces in one commit.
+   `docs(review):`). Never mix both surfaces in one commit. Collaboration
+   events are separate immutable context commits.
 9. **The session is not done until everything is committed AND pushed**,
    the session is logged in `.context/memory/agents/sessions.md`, and
    `.context/memory/tasks/current.md` is cleared. If the user has to
@@ -55,6 +71,7 @@ If you read nothing else, obey these rules:
 Formats and file rules: `.context/core/schemas/context-schema.md` is
 the single source of truth. Project-specific rule adjustments:
 `.context/memory/overrides/rules.md` (they win over the edition).
+
 ## LocalMind architectural target (added 2026-07-26, Session 12)
 
 Agent-mode is aligned to the **CODING HARNESS closed-loop** model

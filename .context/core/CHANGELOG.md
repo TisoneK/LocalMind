@@ -10,6 +10,150 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+---
+
+## 0.9.1 — 2026-09-05
+
+**Windows verified on Windows.** 0.9.0 shipped the durable LF policy
+(`.gitattributes`) and the CRLF manifest-parse fix, but the verifiers still
+hashed raw on-disk bytes — so any CRLF copy of the core (a project checked
+out under `core.autocrlf=true` before the `.gitattributes` existed, or files
+copied outside git, where the attribute never reaches) still failed every
+hash and reported CORE INTEGRITY FAILURE. Worse, the advised remediation
+(`rollback`) re-restored CRLF bytes on those targets — an unfixable loop —
+and on the sh side a CRLF `memory/core.lock` poisoned the version lookup so
+rollback died with "no commit in history has core VERSION". This release
+was written and validated on Windows (Git Bash + PowerShell 7.6 + Windows
+PowerShell 5.1), closing the validation pass 0.9.0 owed.
+
+- **`verify` hashes CR-stripped content** (both sh and PowerShell). One
+  manifest stays byte-compatible across LF checkouts and CRLF copies:
+  LF-only files hash identically, so `MANIFEST.sha256` values are unchanged
+  and 0.9.1 verifiers validate 0.9.0 cores and vice versa. A CRLF copy now
+  verifies clean instead of reporting 46 false integrity failures.
+- **`update` / `bootstrap` normalize the staged copy to LF in place**
+  (sh `normalize_lf`; PowerShell `Convert-ToLf`), so a core vendored or
+  updated from a CRLF source is byte-identical to its manifest on disk —
+  no renormalize dance needed afterward. `bootstrap` normalizes the memory
+  skeleton too.
+- **PowerShell `rollback` rewrites the restored core to LF**, so a rollback
+  under `core.autocrlf=true` verifies afterward instead of looping.
+- **`lock_version` tolerates a CRLF `core.lock`** (sh), fixing the
+  rollback dead-end above.
+- **PowerShell `update` parity with sh:** installs `.context/.gitattributes`
+  and the root `CLAUDE.md` pointer when absent — and `update` now installs
+  them on *every* run, including a no-op, so a 0.8.x project's second
+  `update` (after the new core has landed) picks them up (0.9.0 taught
+  only the sh script; Windows agents run the `.ps1`).
+- **Gate results propagate again.** Two independent bugs silently turned
+  every gate failure into a pass. PowerShell: `Run-One`'s log lines went
+  through the return pipeline, so `if (-not (Run-One ...))` compared an
+  array — and `-not` on a non-empty array is always `$false`. sh:
+  `run_explicit` and `run_discovered` reset the caller's `_failed` counter
+  (functions have no locals in sh). Gate logs now go to the host stream
+  and the sh helpers use distinct failure counters. Also: a cmdlet-only
+  gate command no longer inherits a stale `$LASTEXITCODE`, a thrown
+  script error fails the gate instead of crashing it, and child `.ps1`
+  invocations pre-seed `$LASTEXITCODE` (a child script's `exit N` does
+  not reliably set it on every host, and reading it unset trips
+  StrictMode).
+- **PowerShell argument parsing works again.** Parameters named `$Args`
+  collide with the automatic variable of the same name, so every
+  `--session/--issue/--paths/...` flag was silently lost in
+  `context-collab.ps1` (status filters matched everything) and
+  `context-gates.ps1` (checkpoint and integration scopes no-oped).
+  Renamed throughout. A missing collaboration events directory no longer
+  crashes `context-collab-check.ps1` under StrictMode.
+- **`manifest` regenerates identically on Windows.** `sha256sum` under Git
+  Bash defaults to the binary-mode separator (`hash *path`), so a
+  Windows-regenerated manifest churned all 46 lines vs a mac `shasum`
+  regen; `cmd_manifest` now forces the text-mode separator (`-t`). The
+  parsers already accept both.
+
+**Migration from 0.9.0:** none — verify both ways, no manifest or memory
+changes. Projects still on a CRLF working tree no longer need the 0.9.0
+renormalize step for `verify` to pass; the `.gitattributes` LF policy
+remains the durable git-level fix and is worth committing anyway.
+
+**Upgrading a 0.8.x project on Windows:** (1) Use a git checkout of this
+package as the update source — a fresh clone, or the existing clone pulled
+to 0.9.1 and re-smudged (`rm -rf core && git checkout -- core`) if it
+predates 0.9.0. The 0.8.x verifier hashes raw bytes, so a CRLF source (a
+stale clone or a hand copy) will be refused. (2) Run the update under Git
+Bash or PowerShell 7 — the 0.8.x `.ps1` cannot be parsed by Windows
+PowerShell 5.1 (its UTF-8 punctuation breaks 5.1's ANSI decoding; the
+0.9.1 `.ps1` files are ASCII-clean). (3) Run `update` a second time after
+it lands: the first run executes the old script and swaps in 0.9.1, the
+second (no-op) run is the one that installs `.context/.gitattributes` and
+the root `CLAUDE.md` pointer. (4) Commit `chore(context): update core to
+0.9.1`, and `git add --renormalize .` if the project ever committed CRLF
+blobs. Once 0.9.1 is in place, `verify` passes on LF and CRLF working
+trees alike, so the rollback deadlock cannot recur.
+
+## 0.9.0 — 2026-09-05
+
+**Collaboration that feels like coworkers.** Peer collaboration was
+technically working but less effective than single-agent mode: fleet
+evidence (LocalMind's 42-event trail — the only trail that ever exercised
+it) showed agents paying heavy ceremony for solo work, never once
+completing an `agreement`, and colliding on identical paths with no
+resolution. The framing primed rivalry ("competing proposals are
+expected"), the tooling reported closed claims as active forever and hung
+for minutes, and Windows CRLF corrupted the integrity system. This release
+turns the "courtroom" into an "office."
+
+- **New `note` event — the office channel.** An informal heads-up to peers:
+  a body is all it needs (optional `--to <peer>`, `--re <event|path|commit>`),
+  it never gates `check`, and it never has to be resolved. `status` opens
+  with a **Recent chatter** feed. Notes give agents the low-stakes
+  back-and-forth they lacked, so peer reviews and hand-offs stop being
+  smuggled into shared durable files.
+- **Cooperative reframing.** The README, both protocol editions, the AGENTS
+  digest, the schema, and the kickoff now frame peers as one team with one
+  goal. The light path (`note` + `claim`/`release`) is the documented
+  default; the `proposal → assessment → agreement` ceremony is the
+  escalation for a genuine conflict (same paths, incompatible changes) only.
+- **`context-collab` tells the truth.** A `release`/`handoff` now closes a
+  claim when it cites the claim's event ID **or** simply shares its
+  session+issue and overlaps its paths — so a release citing only the commit
+  SHA no longer strands its claim as "active forever" (the common,
+  weak-agent case).
+- **`context-collab check` no longer hangs.** Rewritten as a single-pass
+  in-memory index instead of re-globbing the events dir and forking
+  `sed`+`head` per field. On a 42-event trail it went from > 3.5 minutes
+  (killed) to < 0.1 s. Notes are exempt from every gate; release/handoff
+  correspondence is checked by the same forgiving claim-linkage.
+- **Windows / CRLF root fix.** New package-root `.gitattributes` and a
+  shipped `templates/.gitattributes` (installed into `.context/` by
+  `bootstrap` and `update`) force `eol=lf` on the vendored core *and* the
+  memory logs — fixing the `context-sync verify` false-positive under
+  `core.autocrlf=true`, the `sh` manifest-parse death on `\r`-suffixed
+  filenames, and the phantom whole-file diffs in append-only logs. `verify`
+  also tolerates a CRLF manifest defensively, and the "no sha256sum" error
+  now points Windows users at the `.ps1` port.
+- **`context-gates.ps1` runs again.** Fixed a PowerShell binding crash
+  (`Cannot bind parameter because parameter 'PathType' is specified more
+  than once` — two `Test-Path` calls chained by `-or` without parenthesizing
+  each) that made every gate fail on Windows.
+- **No agent starts blind.** Bootstrap (and `update`) now install a root
+  `CLAUDE.md` pointer, because Claude Code auto-loads `CLAUDE.md`, not
+  `AGENTS.md`, and a session that never reads the digest runs with zero
+  `.context/` discipline (a logged fleet failure). `CLAUDE.md` routes into
+  `AGENTS.md` + the kickoff; the bootstrap guidance and `AGENTS.md` header
+  now name the other agent entrypoints (Copilot/Cursor/Gemini) that should
+  carry the same one-line pointer. Existing `CLAUDE.md` files are never
+  overwritten.
+
+**Migration from 0.8.x:** fully compatible — the seven formal event types
+keep their exact meaning; `note` is additive. New bootstraps and `update`
+install `.context/.gitattributes`. If a project was already checked out with
+CRLF (Windows `core.autocrlf=true`), run once after updating:
+`git add --renormalize . && git commit -m "chore(context): normalize line endings to LF"`
+(or set `core.autocrlf=false` and `git checkout -- .context`). The `.ps1`
+ports could not be executed on the maintainer's Mac (no `pwsh`); they were
+updated by mirroring the POSIX behavior and are cross-checked against the
+manifest — a Windows validation pass is still owed.
+
 ## 0.8.0 — 2026-08-17
 
 **Explicit lifecycle command gates.** Agents now have mechanical,

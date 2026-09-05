@@ -58,8 +58,11 @@ config_mode() {
   sed -n 's/^mode=//p' "$CONFIG" | head -n1 | grep . || printf 'hybrid\n'
 }
 
+# NOTE: _explicit_failed/_discovered_failed are distinct names on purpose —
+# run_explicit/run_discovered run in the caller's scope (no locals in sh), so
+# reusing _failed would reset run_gate's failure count (logged 2026-09-05).
 run_explicit() {
-  _gate=$1; _found=0; _failed=0
+  _gate=$1; _found=0; _explicit_failed=0
   [ -f "$CONFIG" ] || { CONFIG_FOUND=no; return 0; }
   CONFIG_FOUND=yes
   while IFS='|' read -r _kind _command; do
@@ -67,13 +70,13 @@ run_explicit() {
       "$_gate")
         [ -n "${_command:-}" ] || continue
         _found=$((_found + 1))
-        run_one "$_gate (explicit)" "$_command" || _failed=$((_failed + 1))
+        run_one "$_gate (explicit)" "$_command" || _explicit_failed=$((_explicit_failed + 1))
         ;;
     esac
   done < "$CONFIG"
   EXPLICIT_FOUND=$_found
-  EXPLICIT_FAILED=$_failed
-  [ "$_failed" -eq 0 ]
+  EXPLICIT_FAILED=$_explicit_failed
+  [ "$_explicit_failed" -eq 0 ]
 }
 
 package_manager() {
@@ -90,7 +93,7 @@ has_npm_script() {
 }
 
 run_discovered() {
-  _gate=$1; _found=0; _failed=0
+  _gate=$1; _found=0; _discovered_failed=0
   _pm=$(package_manager)
   if [ -n "$_pm" ] && [ -f "$PROJECT_DIR/package.json" ]; then
     for _script in typecheck lint test build; do
@@ -98,25 +101,25 @@ run_discovered() {
         pre-commit:typecheck|pre-commit:lint|pre-commit:test|integration:build|exit:test)
           if has_npm_script "$_script"; then
             _found=$((_found + 1))
-            run_one "$_gate (discovered)" "$_pm run $_script" || _failed=$((_failed + 1))
+            run_one "$_gate (discovered)" "$_pm run $_script" || _discovered_failed=$((_discovered_failed + 1))
           fi ;;
       esac
     done
   elif [ -f "$PROJECT_DIR/pyproject.toml" ] || [ -f "$PROJECT_DIR/pytest.ini" ]; then
     if [ "$_gate" = pre-commit ] || [ "$_gate" = integration ] || [ "$_gate" = exit ]; then
       if grep -Eq '\[tool\.pytest|pytest' "$PROJECT_DIR/pyproject.toml" 2>/dev/null || [ -f "$PROJECT_DIR/pytest.ini" ]; then
-        _found=$((_found + 1)); run_one "$_gate (discovered)" "python -m pytest" || _failed=$((_failed + 1))
+        _found=$((_found + 1)); run_one "$_gate (discovered)" "python -m pytest" || _discovered_failed=$((_discovered_failed + 1))
       fi
     fi
     if [ -f "$PROJECT_DIR/pyproject.toml" ] && grep -Eq '\[tool\.ruff|ruff' "$PROJECT_DIR/pyproject.toml"; then
       if [ "$_gate" = pre-commit ]; then
-        _found=$((_found + 1)); run_one "$_gate (discovered)" "ruff check ." || _failed=$((_failed + 1))
+        _found=$((_found + 1)); run_one "$_gate (discovered)" "ruff check ." || _discovered_failed=$((_discovered_failed + 1))
       fi
     fi
   fi
   DISCOVERED_FOUND=$_found
-  DISCOVERED_FAILED=$_failed
-  [ "$_failed" -eq 0 ]
+  DISCOVERED_FAILED=$_discovered_failed
+  [ "$_discovered_failed" -eq 0 ]
 }
 
 run_project_commands() {

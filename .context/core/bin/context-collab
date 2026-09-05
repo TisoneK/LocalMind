@@ -13,14 +13,21 @@
 #
 # Metadata:
 #   --paths CSV       repo-relative paths or logical scopes
-#   --refs CSV        event IDs or commit SHAs this event cites
+#   --refs / --re CSV event IDs or commit SHAs this event cites
 #   --option ID       proposal option ID
 #   --selected ID     option selected by an agreement
 #   --owner ID        implementation owner
 #   --participants CSV agents who accepted an agreement
+#   --to CSV          for a note: peer(s) you are addressing (optional)
 #   --body TEXT       one-line event detail (use --body-file for reasoning)
 #
-# Event types: claim proposal assessment agreement correction handoff release
+# Event types: note claim proposal assessment agreement correction handoff release
+#   note  — the office channel: an informal heads-up to peers. No refs,
+#           owner, or participants required; never gates integration. Use it
+#           to say what you're on, flag something, or review a peer's diff.
+#   The other seven are the formal trail; the proposal/assessment/agreement
+#   ceremony is reserved for a genuine conflict (same paths, incompatible
+#   changes), not the common case.
 # check validates the event trail for integration readiness.
 
 set -u
@@ -53,11 +60,18 @@ validate_id() {
 }
 
 field() {
-  sed -n "s/^$1: //p" "$2" | head -n 1
+  # tr -d '\r' keeps parsing correct on CRLF checkouts (Windows autocrlf).
+  sed -n "s/^$1: //p" "$2" | head -n 1 | tr -d '\r'
+}
+
+# First non-empty line of the event body (after the second '---'). Used for
+# the chatter feed. Kept to one line so status stays scannable.
+first_body_line() {
+  awk 'f && NF { print; exit } /^---$/ { c++; if (c==2) f=1 }' "$1" | tr -d '\r'
 }
 
 usage() {
-  sed -n '8,29p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '9,31p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -65,7 +79,7 @@ emit() {
   TYPE=${1:-}; [ -n "$TYPE" ] || usage
   shift
   case "$TYPE" in
-    claim|proposal|assessment|agreement|correction|handoff|release) ;;
+    claim|proposal|assessment|agreement|correction|handoff|release|note) ;;
     *) die "unknown event type '$TYPE'" ;;
   esac
 
@@ -78,7 +92,8 @@ emit() {
       --agent)         [ $# -ge 2 ] || die "--agent needs a value"; AGENT=$2; shift 2 ;;
       --issue)         [ $# -ge 2 ] || die "--issue needs a value"; ISSUE=$2; shift 2 ;;
       --paths)         [ $# -ge 2 ] || die "--paths needs a value"; PATHS=$2; shift 2 ;;
-      --refs)          [ $# -ge 2 ] || die "--refs needs a value"; REFS=$2; shift 2 ;;
+      --refs|--re)     [ $# -ge 2 ] || die "--refs needs a value"; REFS=$2; shift 2 ;;
+      --to)            [ $# -ge 2 ] || die "--to needs a value"; PARTICIPANTS=$2; shift 2 ;;
       --option)        [ $# -ge 2 ] || die "--option needs a value"; OPTION=$2; shift 2 ;;
       --selected)      [ $# -ge 2 ] || die "--selected needs a value"; SELECTED=$2; shift 2 ;;
       --owner)         [ $# -ge 2 ] || die "--owner needs a value"; OWNER=$2; shift 2 ;;
@@ -119,6 +134,7 @@ emit() {
   if [ -z "$BODY_FILE" ] && [ -z "$BODY" ]; then
     case "$TYPE" in
       claim) BODY="Intent and evidence: describe the intended change and why this scope is safe." ;;
+      note) die "note requires --body or --body-file — say what you want your peers to know" ;;
       *) die "$TYPE requires --body-file or --body with evidence and reasoning" ;;
     esac
   fi
@@ -156,17 +172,31 @@ emit() {
   } > "$TMP" || { rm -f "$TMP"; die "could not write event"; }
   mv "$TMP" "$TARGET" || { rm -f "$TMP"; die "could not publish event"; }
   say "created collaboration event: .context/memory/collaboration/events/$ID.md"
-  say "publish it in a separate chore(context): commit before changing the claimed product scope"
+  if [ "$TYPE" = note ]; then
+    say "publish it in a chore(context): commit so your peers see it — a note carries no obligation"
+  else
+    say "publish it in a separate chore(context): commit before changing the claimed product scope"
+  fi
 }
 
-released() {
-  _claim=$1
+released() { # $1 = claim event FILE
+  _cf=$1
+  _cid=$(field id "$_cf")
+  _cses=$(field session "$_cf"); _ciss=$(field issue "$_cf"); _cpaths=$(field paths "$_cf")
   for _f in "$EVENT_DIR"/*.md; do
     [ -f "$_f" ] || continue
     _type=$(field type "$_f")
     [ "$_type" = release ] || [ "$_type" = handoff ] || continue
+    # (a) explicit linkage: the release/handoff cites the claim's event ID.
     _refs=$(field refs "$_f")
-    case ",$_refs," in *",$_claim,"*) return 0 ;; esac
+    case ",$_refs," in *",$_cid,"*) return 0 ;; esac
+    # (b) weak-agent fallback: releases in this trail routinely cite only the
+    #     commit SHA, not the claim event ID (a logged bug that left claims
+    #     "Active" forever). Treat the claim as closed when a later
+    #     release/handoff shares its session+issue and overlaps its paths.
+    [ "$(field session "$_f")" = "$_cses" ] || continue
+    [ "$(field issue "$_f")" = "$_ciss" ] || continue
+    paths_overlap "$_cpaths" "$(field paths "$_f")" && return 0
   done
   return 1
 }
@@ -211,7 +241,7 @@ status() {
     sa=$(field session "$a"); ia=$(field issue "$a");
     [ -z "$SESSION" ] || [ "$sa" = "$SESSION" ] || continue
     [ -z "$ISSUE" ] || [ "$ia" = "$ISSUE" ] || continue
-    released "$(field id "$a")" && continue
+    released "$a" && continue
     say "- $(field id "$a") — agent=$(field agent "$a") paths=$(field paths "$a")"
     for b in "$EVENT_DIR"/*.md; do
       [ -f "$b" ] || continue
@@ -219,14 +249,31 @@ status() {
       [ "$(field type "$b")" = claim ] || continue
       [ "$(field session "$b")" = "$sa" ] || continue
       [ "$(field issue "$b")" = "$ia" ] || continue
-      released "$(field id "$b")" && continue
+      released "$b" && continue
       if paths_overlap "$(field paths "$a")" "$(field paths "$b")"; then
-        say "  POSSIBLE OVERLAP with $(field id "$b") — peers must assess and agree before either conflicting edit"
+        say "  POSSIBLE OVERLAP with $(field id "$b") — talk it through (a note), compare the two changes, and agree who takes it"
       fi
     done
   done
   say ""
-  say "Unresolved proposals/corrections require peer assessment and an agreement event before implementation."
+  say "Recent chatter (notes) — read these first to catch up, like a team channel:"
+  notes=0
+  for f in "$EVENT_DIR"/*.md; do
+    [ -f "$f" ] || continue
+    [ "$(field type "$f")" = note ] || continue
+    ns=$(field session "$f"); ni=$(field issue "$f")
+    [ -z "$SESSION" ] || [ "$ns" = "$SESSION" ] || continue
+    [ -z "$ISSUE" ] || [ "$ni" = "$ISSUE" ] || continue
+    notes=$((notes + 1))
+    nto=$(field participants "$f"); nre=$(field refs "$f")
+    [ "$nto" = none ] && nto=""
+    [ "$nre" = none ] && nre=""
+    say "- $(field agent "$f")${nto:+ →$nto}: $(first_body_line "$f")${nre:+  (re: $nre)}"
+  done
+  [ "$notes" -gt 0 ] || say "  (none yet — a quick 'note' is how you say what you're on or flag something to a peer)"
+  say ""
+  say "A genuine conflict (same paths, incompatible changes) escalates to proposal → assessment → agreement."
+  say "Everything else is a note plus your own claim/release — you're on the same team, not bidding against each other."
 }
 
 CMD=${1:-}; [ $# -gt 0 ] && shift

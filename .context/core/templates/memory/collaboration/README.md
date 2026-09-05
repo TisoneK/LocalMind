@@ -5,15 +5,46 @@ working on one issue or project session. It is **opt-in**: when no
 collaboration session is declared, the normal single-agent workflow and
 `tasks/current.md` lock still apply.
 
+**You and your peers are one team with one goal — the working product.**
+You are not bidding against each other and there is no prize for being
+first. Think of it as an open-plan office: you say out loud what you're
+picking up, you leave a quick note when something might affect a teammate,
+you glance at what others are doing before you start, and when two of you
+disagree you compare notes and pick the stronger option *together*. Most
+coordination is just talking. The heavier machinery below (proposals,
+assessments, agreements) is the escalation for a genuine conflict, not the
+everyday path.
+
 ## Goals
 
+- let agents talk — a lightweight `note` is the office channel, so a
+  heads-up, a hand-off in plain words, or a peer review has a home that
+  isn't a shared file or a heavyweight formal event;
 - let agents work concurrently without sharing a mutable working tree;
-- make overlapping claims and proposed changes visible to every peer;
-- let peers compare evidence and agree on the best option before applying
-  conflicting changes;
-- let an agent report a mistake with its cause and proposed repair, while
-  peers agree who should fix it;
+- make what each agent is doing, and any overlap, visible to every peer;
+- when changes genuinely conflict, let peers compare evidence and converge
+  on the best option before either applies it;
+- let an agent flag a mistake with its cause and proposed repair, and let
+  the team settle who fixes it;
 - preserve a durable, reviewable trail after agents or sessions disappear.
+
+## The light path and the escalation
+
+Reach for the lightest thing that works:
+
+1. **Say what you're on.** A `note` ("I'm taking the web_acquisition
+   timeout; leaving the loop to whoever has it") costs one line and keeps
+   peers from colliding with you.
+2. **Claim your scope, do the work, release it.** `claim` → work →
+   `release` (citing the commit) is the whole lifecycle for the common
+   case — non-overlapping work, or work no one else has touched. This is
+   the same shape as single-agent mode, plus visibility.
+3. **Reviewing a peer's diff?** That's a `note --re <their-claim>`, not a
+   competing `proposal`. Praise, concerns, and suggestions are just talk.
+4. **Only when two changes genuinely conflict** — the same paths with
+   incompatible edits — escalate to `proposal → assessment → agreement`.
+   That ceremony exists to resolve a real disagreement fairly; it is the
+   exception, and if you open it you finish it.
 
 ## Required workspace topology
 
@@ -69,12 +100,23 @@ separately from product changes using `chore(context):`.
 The optional helper creates valid event files atomically:
 
 ```bash
+# a quick word to your peers (the office channel) — no ceremony:
+sh .context/core/bin/context-collab emit note \
+  --session <session-id> --agent <agent-id> --issue <issue-id> \
+  --to <peer-id> --re src/auth.py \
+  --body "Taking the token-refresh path; leaving the session store to you."
+
+# claim scope, then release it citing the commit:
 sh .context/core/bin/context-collab emit claim \
   --session <session-id> --agent <agent-id> --issue <issue-id> \
   --paths src/auth.py,tests/test_auth.py --body-file /path/to/claim.md
 sh .context/core/bin/context-collab status --session <session-id> --issue <issue-id>
 sh .context/core/bin/context-collab check --session <session-id> --issue <issue-id>
 ```
+
+`status` opens with a **Recent chatter** feed of the notes — read it first
+to catch up, the way you'd skim a team channel. A `note` never gates
+`check` and never needs to be "resolved"; `--to` and `--re` are optional.
 
 `status` is for live work. `check` is the integration-readiness gate and
 fails if metadata or references are invalid, claims overlap, agreements are
@@ -102,7 +144,7 @@ Each event has immutable metadata followed by evidence and reasoning:
 ```markdown
 ---
 id: <globally-unique-event-id>
-type: claim | proposal | assessment | agreement | correction | handoff | release
+type: note | claim | proposal | assessment | agreement | correction | handoff | release
 session: <shared-collaboration-session-id>
 agent: <stable-agent-id>
 created: <UTC timestamp>
@@ -120,17 +162,29 @@ participants: <comma-separated agents who agreed, or none>
 
 `id`, `type`, `session`, `agent`, `created`, and `issue` are required.
 `paths` is required for a `claim`; `refs` is required for an
-`assessment`, `agreement`, or `correction`. The other fields are required
-when relevant to the event type.
+`assessment`, `agreement`, or `correction`. A `note` requires none of the
+type-specific fields — a body is all it needs. The other fields are
+required when relevant to the event type.
 
 ### Event meanings and lifecycle
 
+The everyday event is **note**; the rest are the formal trail.
+
+0. **note** — the office channel. Say what you're picking up, drop a
+   heads-up that might affect a teammate, or review a peer's diff. A note
+   carries no obligation: no required `refs`, `owner`, or `participants`,
+   and it never gates `check`. Optional `--to <peer>` addresses it;
+   optional `--re <event|path|commit>` points at what it's about. When in
+   doubt, a note is the right first move.
 1. **claim** — state the issue, paths or logical scope, intended change,
    current hypothesis, and why the scope is safe to take. Claims are
    advisory, not locks. Re-read the latest events before editing.
-2. **proposal** — present one concrete option, evidence, affected paths,
-   trade-offs, risks, and how it will be verified. Competing proposals
-   are expected.
+2. **proposal** — *(escalation, for a genuine conflict only)* present one
+   concrete option, evidence, affected paths, trade-offs, risks, and how it
+   will be verified. You reach for a proposal when two changes genuinely
+   conflict and the team needs to choose — not to review or to suggest
+   (that's a note). When peers do propose alternatives, they are
+   teammates converging on the best answer, not rivals.
 3. **assessment** — compare the referenced proposals against the same
    criteria: correctness, regression risk, compatibility, simplicity,
    and verification evidence. Recommend one and explain why; include
@@ -150,14 +204,17 @@ when relevant to the event type.
 
 ### Peer agreement rule
 
-There is no coordinator and no timestamp/priority winner. When options
-conflict, each involved agent reads the alternatives, independently checks
-the evidence, and records an assessment. Peers converge on the option
-with the strongest total case, not the option proposed first. The
-agreement event is the authority for implementation and must name the
-owner. If evidence remains genuinely tied, record the disagreement in an
-assessment, pause the conflicting edit, and ask the user to decide; never
-silently choose based on agent ID or arrival time.
+This is for a real conflict, and the goal is the best answer for the
+product, not a winner. There is no coordinator and no timestamp/priority
+tiebreak. When options genuinely conflict, each involved agent reads the
+alternatives, independently checks the evidence, and records an
+assessment — the way colleagues talk a decision through. Peers converge on
+the option with the strongest total case, not the one proposed first, and
+not "yours" vs "mine". The agreement event is the authority for
+implementation and must name the owner. If evidence stays genuinely tied,
+record the disagreement in an assessment, pause the conflicting edit, and
+ask the user to decide; never silently choose based on agent ID or
+arrival time.
 
 For a discovered mistake, the finder proposes the cause and repair in a
 `correction`; the original author and/or affected peers assess it; an
@@ -175,7 +232,16 @@ checks.
   `collab/<session-id>/coordination` and can be merged without combining
   product and memory surfaces.
 - A claim is not active after its scope is released or handed off. A peer
-  who changes scope emits a new claim rather than editing the old one.
+  who changes scope emits a new claim rather than editing the old one. A
+  `release`/`handoff` closes a claim when it cites the claim's event ID
+  **or** simply shares the claim's session + issue and overlaps its paths —
+  so citing only the commit SHA still closes the claim. Cite the claim
+  event ID when you can (it makes the trail explicit), but you won't strand
+  a claim as "active forever" by citing only the commit.
+- Coordination event files (including notes) are parsed line by line by the
+  helpers. Keep them LF: the shipped `.context/.gitattributes` enforces
+  `eol=lf`, which also keeps the append-only memory logs from showing
+  phantom whole-file diffs on Windows.
 - Non-overlapping scopes may proceed concurrently. Overlapping paths,
   shared interfaces, migrations, lockfiles, and generated files are
   conflicts even when the files differ; negotiate them explicitly.

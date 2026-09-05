@@ -72,8 +72,8 @@
     "appendOnly": "corrections are appended, never edited in; byte-identical duplicates may be removed with a note",
     "secrets": "values only under memory/secrets/, never in tracked files, never echoed",
     "coreReadOnly": "no agent writes under .context/core/ in a project repo, ever",
-    "collaboration": "isolated worktree/branch per agent; overlapping claims require peer assessment and an agreement naming the best-supported option and one owner; no timestamp or agent-ID tie-breaker",
-    "collaborationCheck": "context-collab check is the integration-readiness gate for malformed events, unresolved overlaps, incomplete agreements, unresolved corrections/handoffs, and releases without product commits",
+    "collaboration": "peers are one team, not rivals; isolated worktree/branch per agent; the everyday event is an informal note (body-only, non-gating); a release/handoff closes a claim by citing its event ID or by sharing session+issue and overlapping paths; overlapping ACTIVE claims escalate to peers comparing changes and an agreement naming the best-supported option and one owner; no timestamp or agent-ID tie-breaker",
+    "collaborationCheck": "context-collab check is the integration-readiness gate for malformed events, unresolved overlaps, incomplete agreements, unresolved corrections/handoffs, and releases without product commits; notes never gate it; single-pass so it stays fast on large trails",
     "lifecycleGates": "context-gates checkpoint runs before each next agent action; pre-commit, integration, and exit gates block their lifecycle transition on failure; explicit gates.conf commands take precedence over hybrid discovery"
   },
   "commitPrefixes": {

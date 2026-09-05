@@ -143,6 +143,81 @@ when two or more agents will work on the same issue, either concurrently
 or at different times. Without those IDs, the existing one-agent-per-repo
 workflow and `tasks/current.md` lock remain in force.
 
+**You and your peers are one team with one goal — the working product.**
+There is no prize for being first and no competition to win. Treat it like
+an open-plan office: say what you're picking up, drop a quick note when
+something might affect a teammate, glance at what others are doing before
+you start, and when two of you see it differently, compare notes and pick
+the stronger option *together* — same side of the table. Most coordination
+is just talking. `.context/memory/collaboration/README.md` is the full
+contract; the working shape is below.
+
+### The light path (the default)
+
+Reach for the lightest thing that works. For the common case —
+non-overlapping work, or work no one else has touched — the whole
+lifecycle is:
+
+1. **Say what you're on** with a `note`, the office channel. One line
+   ("taking the token-refresh path; leaving the session store to you")
+   keeps peers from colliding with you.
+2. **Claim your scope, do the work, release it** citing the commit:
+   `claim` → work → `release`. This is the same shape as single-agent
+   mode, plus visibility.
+3. **Reviewing a peer's diff** is a `note --re <their-claim>`, not a
+   `proposal`. Praise, concerns, and suggestions are just talk — no
+   ownership changes hands.
+
+A `note` carries no obligation: only a body is required, `--to <peer>` and
+`--re <event|path|commit>` are optional, it never gates `check`, and it
+never needs "resolving." When in doubt, a note is the right first move.
+
+```bash
+sh .context/core/bin/context-collab emit note --session <id> --agent <id> \
+  --issue <id> --to <peer> --re <path> --body "Taking web_acquisition; loop is yours."
+```
+
+### The escalation (genuine conflict only)
+
+The heavy `proposal → assessment → agreement` ceremony is the exception,
+reserved for a real conflict — the same paths with incompatible changes.
+It exists to resolve a disagreement fairly, not to review or to suggest;
+if you open it, you finish it.
+
+1. Emit a `claim` before editing, naming the issue, paths/logical scope,
+   hypothesis, evidence, and intended change. Claims are advisory, not
+   locks — re-read the latest events before editing.
+2. Non-overlapping claims may proceed in parallel. Treat shared
+   interfaces, migrations, generated files, and lockfiles as overlapping
+   even when their paths differ.
+3. For a genuine overlap, each option is a `proposal`; every involved
+   agent reads the alternatives and emits an `assessment` comparing
+   correctness, regression risk, compatibility, simplicity, and
+   verification evidence. Peers converge on the option with the strongest
+   total case, not the one proposed first — teammates picking the best
+   answer, not opponents.
+4. Do not apply a conflicting option until an `agreement` event records
+   the best-supported option, the reasoning, all accepting participants,
+   and exactly one implementation owner. There is no timestamp, priority,
+   or agent-ID tie-breaker. If evidence stays genuinely tied, record it in
+   an assessment, pause the conflicting edit, and ask the user.
+5. If an agent finds a mistake, emit a `correction` referencing the
+   relevant event or commit. State the observed symptom, evidence, likely
+   root cause, candidate repairs, and suggested owner. Peers assess it;
+   an agreement chooses the right cause/repair and who fixes it. The owner
+   emits a `release` after re-reading the result and running checks.
+6. Agents joining later reuse the same session/issue IDs, fetch the event
+   trail, and emit a new claim or `handoff` before continuing. They do not
+   overwrite another agent's notes or assume an old claim is still active.
+
+The vocabulary is eight event types: `note` (everyday) plus the seven
+formal ones — `claim`, `proposal`, `assessment`, `agreement`,
+`correction`, `handoff`, `release`. A `release`/`handoff` closes a claim
+when it cites the claim's event ID **or** simply shares the claim's
+session + issue and overlaps its paths — so citing only the commit SHA
+still closes the claim (cite the event ID when you can, but a SHA-only
+release never strands a claim as "active forever").
+
 ### Isolation and publication
 
 - Every collaborating agent works in a separate product worktree/clone
@@ -155,42 +230,37 @@ workflow and `tasks/current.md` lock remain in force.
   new immutable file, and a non-fast-forward push is rebased while
   preserving every event file. Publish event commits separately as
   `chore(context):`; never append live coordination state to a shared log.
-  Use `sh .context/core/bin/context-collab` to emit and inspect events.
 - Fetch before reading peer state and again before applying a conflicting
-  change. A claim exposes intent and scope; it is not a lock.
+  change. Read `status` first — it opens with a **Recent chatter** feed of
+  the notes, the way you'd skim a team channel — then emit and inspect
+  events with `sh .context/core/bin/context-collab`.
 - Before integrating product branches, run
   `sh .context/core/bin/context-collab check --session <id> --issue <id>`.
+  `check` is the fast integration-readiness gate, and notes never fail it.
   A failing check blocks integration until peers resolve the reported
   event-trail problem.
 
-### Peer decision lifecycle
+### Windows
 
-1. Emit a `claim` before editing, naming the issue, paths/logical scope,
-   hypothesis, evidence, and intended change.
-2. Non-overlapping claims may proceed in parallel. Treat shared
-   interfaces, migrations, generated files, and lockfiles as overlapping
-   even when their paths differ.
-3. For an overlap, each option is a `proposal`; every involved agent
-   reads the alternatives and emits an `assessment` comparing correctness,
-   regression risk, compatibility, simplicity, and verification evidence.
-4. Do not apply a conflicting option until an `agreement` event records
-   the best-supported option, the reasoning, all accepting participants,
-   and exactly one implementation owner. There is no timestamp, priority,
-   or agent-ID tie-breaker. If evidence remains tied, pause and ask the
-   user rather than silently selecting a winner.
-5. If an agent finds a mistake, emit a `correction` referencing the
-   relevant event or commit. State the observed symptom, evidence, likely
-   root cause, candidate repairs, and suggested owner. Peers assess it;
-   an agreement chooses the right cause/repair and who fixes it. The owner
-   emits a `release` after re-reading the result and running checks.
-6. Agents joining later reuse the same session/issue IDs, fetch the event
-   trail, and emit a new claim or `handoff` before continuing. They do not
-   overwrite another agent's notes or assume an old claim is still active.
+On Windows, use the PowerShell ports — `pwsh -File
+.context/core/bin/context-collab.ps1 emit note …`, and the `.ps1` ports of
+`context-sync` and `context-gates` (the earlier `context-gates.ps1`
+binding crash is fixed, so the gate now runs). Git Bash provides `sh` but
+may lack `sha256sum`; if `context-sync` reports it missing, switch to the
+`.ps1` port. The shipped `.context/.gitattributes` enforces `eol=lf`,
+which fixes the `context-sync verify` false-positive under `core.autocrlf`
+and keeps the append-only memory logs from showing phantom whole-file
+diffs.
 
-In collaboration mode, `tasks/current.md` is informational and is not a
-lock. Do not overwrite or clear a peer's current task. Normal durable
-files are updated by their named owner or after rebasing; event files are
-the live coordination channel.
+### Session identity
+
+`tasks/current.md` is informational in collaboration mode, not a lock —
+never overwrite or clear a peer's current task. Normal durable files are
+updated by their named owner or after rebasing; event files (including
+notes) are the live coordination channel. Don't trust "the last session
+was N" to number yourself: with peers running concurrently, two agents can
+both grab "Session 8" the same day. Announce your session in a `note` and
+disambiguate by agent + timestamp rather than assuming a free number.
 
 ## Explicit Gate Protocol — Commands, Not Prose
 

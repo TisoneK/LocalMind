@@ -114,7 +114,7 @@ File inventory, write modes, and scopes. **Write modes:**
 | `tasks/current.md` | overwrite | project | The one task in progress — a lock only in single-agent mode |
 | `tasks/backlog.md` | append-only | project | Open items for future sessions |
 | `collaboration/README.md` | generated | project | Peer collaboration rules and event contract |
-| `collaboration/events/<event-id>.md` | immutable new file | project | Claims, proposals, assessments, agreements, corrections, handoffs, releases |
+| `collaboration/events/<event-id>.md` | immutable new file | project | Notes (informal), claims, proposals, assessments, agreements, corrections, handoffs, releases |
 | `plans/decisions.md` | append-only | project | ADR-style decisions — respected, not relitigated |
 | `flaws/log.md` | append-only | project→package | Friction with the protocol/`.context/` system itself; flows upstream |
 | `flaws/README.md` | generated | project | The flaws-vs-inefficiencies split rule (pointer to this schema) |
@@ -159,23 +159,35 @@ wins.
 
 ## Peer collaboration
 
-Collaboration is opt-in for a shared `session` + `issue` identity. Each
-agent uses an isolated product git worktree/branch; product edits never
-happen in the same checkout. Live coordination is published on the shared
-`collab/<session-id>/coordination` ref as immutable, one-file-per-event
-records under `memory/collaboration/events/`, not in a shared append-only
-file. This makes simultaneous claims, proposals,
-assessments, agreements, corrections, handoffs, and releases mergeable.
+Collaboration is opt-in for a shared `session` + `issue` identity. Peers
+are one team with one goal, not rivals. Each agent uses an isolated product
+git worktree/branch; product edits never happen in the same checkout. Live
+coordination is published on the shared `collab/<session-id>/coordination`
+ref as immutable, one-file-per-event records under
+`memory/collaboration/events/`, not in a shared append-only file. This
+makes simultaneous notes, claims, proposals, assessments, agreements,
+corrections, handoffs, and releases mergeable.
 
-A claim makes scope visible but is not a lock. Overlapping claims require
-peer assessment and an explicit agreement selecting the best-supported
-option and one implementation owner. A correction names the evidence,
-likely cause, candidate repairs, and suggested owner; peers agree on the
-repair and owner before it is applied. There is no timestamp or agent-ID
-tie-breaker. If evidence remains tied, pause the conflicting work and ask
-the user. Use `.context/core/bin/context-collab` to emit events and inspect
-status; run `context-collab check` before integration. Event commits remain
-separate from product commits.
+The everyday event is a **note** — the informal office channel (a heads-up,
+a hand-off in plain words, a peer review). A note needs only a body, never
+gates the integration check, and never has to be "resolved"; optional
+`--to` addresses a peer and `--re` points at an event, path, or commit. The
+common lifecycle is a note plus `claim → release`. The formal
+`proposal → assessment → agreement` ceremony is the escalation for a
+genuine conflict (same paths, incompatible changes) only.
+
+A claim makes scope visible but is not a lock. A `release`/`handoff` closes
+a claim when it cites the claim's event ID **or** shares its session+issue
+and overlaps its paths — so a release citing only its commit SHA still
+closes the claim. Overlapping *active* claims require peers to compare the
+two changes and agree who takes it, via an explicit agreement selecting the
+best-supported option and one implementation owner. A correction names the
+evidence, likely cause, candidate repairs, and suggested owner; peers agree
+on the repair and owner before it is applied. There is no timestamp or
+agent-ID tie-breaker. If evidence remains tied, pause the conflicting work
+and ask the user. Use `.context/core/bin/context-collab` (or the `.ps1` port
+on Windows) to emit events and inspect status; run `context-collab check`
+before integration. Event commits remain separate from product commits.
 
 `tasks/current.md` remains the single-agent lock when collaboration is not
 enabled. In collaboration mode it is not a lock and must not be used to

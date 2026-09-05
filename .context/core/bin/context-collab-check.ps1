@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# context-collab-check.ps1 — Windows integration-readiness validator.
+# context-collab-check.ps1 -- Windows integration-readiness validator.
 
 [CmdletBinding()]
 param(
@@ -17,7 +17,10 @@ function Usage {
     'context-collab check [--session ID] [--issue ID]',
     '',
     'Validates event metadata, references, agreements, overlaps, resolutions, and releases.',
-    'Exit codes: 0 passed · 1 validation failure · 2 usage/error'
+    'Notes (type: note) are informal and never gate integration.',
+    'A claim counts as closed when a later release/handoff cites its event ID OR',
+    'shares its session+issue and overlaps its paths (weak-agent / SHA-only case).',
+    'Exit codes: 0 passed | 1 validation failure | 2 usage/error'
   ) | ForEach-Object { Say $_ }
   exit 2
 }
@@ -27,10 +30,25 @@ $coreDir = (Resolve-Path (Join-Path $scriptDir '..')).Path
 $contextDir = Split-Path -Parent $coreDir
 $eventDir = Join-Path $contextDir 'memory/collaboration/events'
 
+# Parse each event's frontmatter ONCE and cache it (keyed by full path).
+# The previous Get-Field re-read the whole file per field, which was very slow
+# on a large trail. TrimEnd("`r") keeps it correct on CRLF (Windows) checkouts.
+$script:FileFields = @{}
+function Get-Fields { param([IO.FileInfo]$File)
+  if ($script:FileFields.ContainsKey($File.FullName)) { return $script:FileFields[$File.FullName] }
+  $h = @{}
+  $dashes = 0
+  foreach ($raw in Get-Content -LiteralPath $File.FullName) {
+    $ln = $raw.TrimEnd("`r")
+    if ($ln -eq '---') { $dashes++; if ($dashes -ge 2) { break }; continue }
+    if ($dashes -eq 1 -and $ln -match '^([a-z]+): (.*)$') { $h[$matches[1]] = $matches[2] }
+  }
+  $script:FileFields[$File.FullName] = $h
+  return $h
+}
 function Get-Field { param([IO.FileInfo]$File, [string]$Name)
-  $pattern = "^${Name}: (.*)$"
-  $line = Get-Content -LiteralPath $File.FullName | Where-Object { $_ -match $pattern } | Select-Object -First 1
-  if ($null -eq $line) { return '' } else { return ($line -replace $pattern, '$1') }
+  $h = Get-Fields $File
+  if ($h.ContainsKey($Name)) { return $h[$Name] } else { return '' }
 }
 function Valid-Id { param([string]$Value) return ($Value -match '^[A-Za-z0-9._:-]+$') }
 function Valid-Sha { param([string]$Value) return ($Value -match '^[0-9A-Fa-f]{7,40}$') }
@@ -70,7 +88,37 @@ function Has-NonEventRef { param([IO.FileInfo]$File)
   return $false
 }
 function Claim-Closed { param([string]$Id)
-  return (Referenced-By-Type $Id 'release' -or Referenced-By-Type $Id 'handoff')
+  if (Referenced-By-Type $Id 'release' -or Referenced-By-Type $Id 'handoff') { return $true }
+  # weak-agent fallback: a release/handoff sharing this claim's session+issue
+  # and overlapping its paths closes it even when it cites only a commit SHA.
+  $target = @(Event-By-Id $Id)
+  if ($target.Count -eq 0) { return $false }
+  $ses = Get-Field $target[0] 'session'; $iss = Get-Field $target[0] 'issue'; $paths = Get-Field $target[0] 'paths'
+  foreach ($file in $script:Files) {
+    if ((Get-Field $file 'type') -notin @('release','handoff')) { continue }
+    if ((Get-Field $file 'session') -eq $ses -and (Get-Field $file 'issue') -eq $iss -and (Overlap $paths (Get-Field $file 'paths'))) { return $true }
+  }
+  return $false
+}
+# Does a claim exist that this release/handoff corresponds to (shared
+# session+issue + path overlap)? The SHA-only / weak-agent case.
+function Matches-Claim { param([IO.FileInfo]$File)
+  $ses = Get-Field $File 'session'; $iss = Get-Field $File 'issue'; $paths = Get-Field $File 'paths'
+  foreach ($f in $script:Files) {
+    if ((Get-Field $f 'type') -ne 'claim') { continue }
+    if ((Get-Field $f 'session') -eq $ses -and (Get-Field $f 'issue') -eq $iss -and (Overlap $paths (Get-Field $f 'paths'))) { return $true }
+  }
+  return $false
+}
+# Is this scope eventually released (by event-ID ref, or session+issue+paths)?
+function Has-Release-For { param([IO.FileInfo]$File)
+  if (Referenced-By-Type (Get-Field $File 'id') 'release') { return $true }
+  $ses = Get-Field $File 'session'; $iss = Get-Field $File 'issue'; $paths = Get-Field $File 'paths'
+  foreach ($f in $script:Files) {
+    if ((Get-Field $f 'type') -ne 'release') { continue }
+    if ((Get-Field $f 'session') -eq $ses -and (Get-Field $f 'issue') -eq $iss -and (Overlap $paths (Get-Field $f 'paths'))) { return $true }
+  }
+  return $false
 }
 function Csv-Contains { param([string]$Csv, [string]$Value)
   return ((',' + $Csv + ',') -like "*,$Value,*")
@@ -93,16 +141,20 @@ function Check-Event { param([IO.FileInfo]$File)
     if (-not (Get-Field $File $key)) { Fail "$($File.Name) is missing $key" }
   }
   if (-not (Valid-Id $id)) { Fail "$($File.Name) has invalid id '$id'" }
-  if ($type -notin @('claim','proposal','assessment','agreement','correction','handoff','release')) {
+  if ($type -notin @('note','claim','proposal','assessment','agreement','correction','handoff','release')) {
     Fail "$($File.Name) has unknown type '$type'"; return
   }
-  foreach ($ref in (Refs $File)) {
-    $target = @(Event-By-Id $ref)
-    if ($target.Count -gt 0) {
-      if ((Get-Field $target[0] 'session') -ne (Get-Field $File 'session')) { Fail "$id references event $ref from another session" }
-      if ((Get-Field $target[0] 'issue') -ne (Get-Field $File 'issue')) { Fail "$id references event $ref from another issue" }
-    } elseif (-not (Valid-Sha $ref)) {
-      Fail "$id has unknown reference '$ref' (expected an event ID or commit SHA)"
+  # Notes are informal -- their --re may be a path, URL, event, or commit, so
+  # they are exempt from reference validation (and carry no requirements).
+  if ($type -ne 'note') {
+    foreach ($ref in (Refs $File)) {
+      $target = @(Event-By-Id $ref)
+      if ($target.Count -gt 0) {
+        if ((Get-Field $target[0] 'session') -ne (Get-Field $File 'session')) { Fail "$id references event $ref from another session" }
+        if ((Get-Field $target[0] 'issue') -ne (Get-Field $File 'issue')) { Fail "$id references event $ref from another issue" }
+      } elseif (-not (Valid-Sha $ref)) {
+        Fail "$id has unknown reference '$ref' (expected an event ID or commit SHA)"
+      }
     }
   }
   switch ($type) {
@@ -127,11 +179,16 @@ function Check-Event { param([IO.FileInfo]$File)
     }
     'correction' { if (-not (Referenced-By-Type $id 'agreement')) { Fail "correction $id has no peer agreement" } }
     'handoff' {
-      if (-not (Has-Ref-Type $File 'agreement')) { Fail "handoff $id does not reference an agreement" }
       if ((Get-Field $File 'owner') -eq 'none') { Fail "handoff $id has no receiving owner" }
+      if (-not (Has-Ref-Type $File 'claim') -and -not (Has-Ref-Type $File 'handoff') -and
+          -not (Has-Ref-Type $File 'agreement') -and -not (Matches-Claim $File)) {
+        Fail "handoff $id does not reference the scope being handed off (a claim, prior handoff, or agreement)"
+      }
     }
     'release' {
-      if (-not (Has-Ref-Type $File 'claim') -and -not (Has-Ref-Type $File 'handoff')) { Fail "release $id does not reference a claim or handoff" }
+      if (-not (Has-Ref-Type $File 'claim') -and -not (Has-Ref-Type $File 'handoff') -and -not (Matches-Claim $File)) {
+        Fail "release $id does not correspond to a claim or handoff (reference it, or share its issue and paths)"
+      }
       if (-not (Has-NonEventRef $File)) { Fail "release $id does not reference a product commit" }
     }
   }
@@ -154,7 +211,7 @@ function Check-Overlaps {
       if ((Get-Field $claims[$i] 'session') -eq (Get-Field $claims[$j] 'session') -and
           (Get-Field $claims[$i] 'issue') -eq (Get-Field $claims[$j] 'issue') -and
           (Overlap (Get-Field $claims[$i] 'paths') (Get-Field $claims[$j] 'paths'))) {
-        Fail "active claims overlap: $(Get-Field $claims[$i] 'id') and $(Get-Field $claims[$j] 'id')"
+        Fail "active claims overlap: $(Get-Field $claims[$i] 'id') and $(Get-Field $claims[$j] 'id') -- talk it through and agree who takes it"
       }
     }
   }
@@ -166,7 +223,7 @@ function Check-Resolutions {
     switch ($type) {
       'claim' { if (-not (Claim-Closed $id)) { Fail "claim $id is not released or handed off" } }
       { $_ -in @('proposal','assessment') } { if (-not (Referenced-By-Type $id 'agreement')) { Fail "$type $id is not resolved by an agreement" } }
-      'handoff' { if (-not (Referenced-By-Type $id 'release')) { Fail "handoff $id is not released" } }
+      'handoff' { if (-not (Has-Release-For $file)) { Fail "handoff $id is not released" } }
     }
   }
 }
@@ -185,8 +242,8 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 if ($script:Session -and -not (Valid-Id $script:Session)) { Die "invalid session id: $($script:Session)" }
 if ($script:Issue -and -not (Valid-Id $script:Issue)) { Die "invalid issue id: $($script:Issue)" }
 
-$script:Files = @(Get-ChildItem -LiteralPath $eventDir -Filter '*.md' -File -ErrorAction SilentlyContinue)
-if ($script:Files.Count -eq 0) { Say 'collaboration check: no events (nothing to check)'; exit 0 }
+$script:Files = @(Get-ChildItem -LiteralPath $eventDir -Filter '*.md' -File -ErrorAction SilentlyContinue | Where-Object { $_ })
+if (-not $script:Files -or $script:Files.Count -eq 0) { Say 'collaboration check: no events (nothing to check)'; exit 0 }
 $script:Failures = 0
 foreach ($file in $script:Files) { Check-Event $file }
 Check-Duplicates

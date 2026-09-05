@@ -152,58 +152,76 @@ or am I editing the agent's memory of the project?"
 ## Peer Collaboration Mode — Concurrent Agents, Shared Issues
 
 Collaboration is opt-in. Declare a shared `session` ID and `issue` ID
-when two or more agents will work on the same issue, either concurrently
-or at different times. Without those IDs, the existing one-agent-per-repo
-workflow and `tasks/current.md` lock remain in force.
+when two or more agents will work on the same issue. Without those IDs,
+the normal one-agent workflow and `tasks/current.md` lock stay in force.
 
-### Isolation and publication
+**You and your peers are one team with one goal — the working product.**
+There is no race and no scoreboard. Work like coworkers in an office: say what
+you're doing, leave a note if it affects someone, look before you start.
 
-- Every collaborating agent works in a separate product worktree/clone
-  and branch named `collab/<session-id>/<agent-id>`. Never edit the same
-  checkout as another agent and never push product commits directly to
-  the shared integration branch while collaboration is active.
-- Publish coordination events to the shared event-only ref
-  `collab/<session-id>/coordination` (use a separate worktree when
-  possible). It is a bulletin board, not a coordinator: each event is a
-  new immutable file, and a non-fast-forward push is rebased while
-  preserving every event file. Publish event commits separately as
-  `chore(context):`; never append live coordination state to a shared log.
-  Use `sh .context/core/bin/context-collab` to emit and inspect events.
-- Fetch before reading peer state and again before applying a conflicting
-  change. A claim exposes intent and scope; it is not a lock.
-- Before integrating product branches, run
-  `sh .context/core/bin/context-collab check --session <id> --issue <id>`.
-  A failing check blocks integration until peers resolve the reported
-  event-trail problem.
+### The light path (do this by default)
 
-### Peer decision lifecycle
+1. **Say what you're on** — a `note`, the office channel. One line.
+2. **`claim` → work → `release`** (citing the commit). Same as
+   single-agent mode, plus visibility.
+3. **Reviewing a peer's diff?** That's a `note --re <their-claim>`, not a
+   `proposal`. It's just talk — nothing changes owner.
 
-1. Emit a `claim` before editing, naming the issue, paths/logical scope,
-   hypothesis, evidence, and intended change.
-2. Non-overlapping claims may proceed in parallel. Treat shared
-   interfaces, migrations, generated files, and lockfiles as overlapping
-   even when their paths differ.
-3. For an overlap, each option is a `proposal`; every involved agent
-   reads the alternatives and emits an `assessment` comparing correctness,
-   regression risk, compatibility, simplicity, and verification evidence.
-4. Do not apply a conflicting option until an `agreement` event records
-   the best-supported option, the reasoning, all accepting participants,
-   and exactly one implementation owner. There is no timestamp, priority,
-   or agent-ID tie-breaker. If evidence remains tied, pause and ask the
-   user rather than silently selecting a winner.
-5. If an agent finds a mistake, emit a `correction` referencing the
-   relevant event or commit. State the observed symptom, evidence, likely
-   root cause, candidate repairs, and suggested owner. Peers assess it;
-   an agreement chooses the right cause/repair and who fixes it. The owner
-   emits a `release` after re-reading the result and running checks.
-6. Agents joining later reuse the same session/issue IDs, fetch the event
-   trail, and emit a new claim or `handoff` before continuing. They do not
-   overwrite another agent's notes or assume an old claim is still active.
+A `note` needs only a body; `--to <peer>` and `--re <event|path|commit>`
+are optional. It never blocks `check` and never needs resolving.
 
-In collaboration mode, `tasks/current.md` is informational and is not a
-lock. Do not overwrite or clear a peer's current task. Normal durable
-files are updated by their named owner or after rebasing; event files are
-the live coordination channel.
+```bash
+sh .context/core/bin/context-collab emit note --session <id> --agent <id> \
+  --issue <id> --to <peer> --re <path> --body "On the web side; loop is yours."
+```
+On Windows: `pwsh -File .context/core/bin/context-collab.ps1 emit note …`.
+
+### The escalation (only for a real conflict)
+
+Same paths, incompatible changes — that's the only time you need the heavy
+path. If you open it, you finish it.
+
+1. Emit a `claim` before editing (issue, paths, intended change). Claims
+   are advisory, not locks — re-read events first.
+2. Non-overlapping claims run in parallel. Shared interfaces, migrations,
+   lockfiles, and generated files count as overlapping.
+3. For a real overlap, each option is a `proposal`; each involved agent
+   emits an `assessment` (correctness, risk, compatibility, simplicity,
+   evidence). Pick the strongest option together, not the first one.
+4. Don't apply a conflicting option until an `agreement` names the chosen
+   option and one owner. No timestamp or agent-ID tiebreak. If it's truly
+   tied, pause and ask the user.
+5. Found a mistake? Emit a `correction` (symptom, cause, repair, owner);
+   peers assess; an `agreement` picks the fix and owner; the owner
+   `release`s after re-checking.
+6. Joining later? Reuse the session/issue IDs, read the events, emit a new
+   `claim` or `handoff`. Don't overwrite a peer's notes.
+
+Eight event types: `note` (everyday) plus `claim`, `proposal`,
+`assessment`, `agreement`, `correction`, `handoff`, `release`. A
+`release`/`handoff` closes a claim by citing its event ID **or** by
+sharing its session + issue and overlapping its paths — so citing only the
+commit SHA still closes it.
+
+### Reading, gates, and Windows
+
+- Read `status` first — it opens with a **Recent chatter** feed of notes,
+  like a team channel. Fetch before reading peer state.
+- Before integrating branches, run `context-collab check` — it's fast and
+  notes never fail it. Push your own `collab/<session-id>/<agent-id>`
+  branch, never the shared one; never force-overwrite a peer.
+- On Windows, use the `.ps1` ports (`pwsh -File …context-collab.ps1`, and
+  `context-gates.ps1`, which now runs). Git Bash's `sh` may lack
+  `sha256sum`; if `context-sync` says so, use `.ps1`. The shipped
+  `.context/.gitattributes` (`eol=lf`) fixes a `context-sync verify`
+  false-positive and phantom log diffs.
+
+### One team, one session count
+
+`tasks/current.md` is not a lock here — don't clear a peer's task. Don't
+assume "last was N" gives you a free number: concurrent peers can both
+pick "Session 8" the same day. Announce your session in a `note` and tell
+sessions apart by agent + timestamp.
 
 ## Explicit Gate Protocol — Commands, Not Prose
 

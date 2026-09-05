@@ -37,7 +37,7 @@ Generation rules for the bootstrapping agent:
 >   and follow it."* Add a target description in the same message if you
 >   have one.
 > - **Cloud/sandbox agent** (empty workspace): *"Clone
->   `https://github.com/TisoneK/LocalMind.git`, read `.context/kickoff.md`, follow it."* If the
+>   https://github.com/TisoneK/LocalMind.git, read `.context/kickoff.md`, follow it."* If the
 >   project repo is private — or the session will push (it will) — paste
 >   a PAT for **this project repo** in that same chat message. That is
 >   the only credential any session needs: the protocol is already in
@@ -137,13 +137,77 @@ pwsh -File .context/core/bin/context-sync.ps1 status
 `README.md` (the zone map) → then, under `memory/`:
 `workflows/active.md` → `agents/sessions.md` (last 3–5 entries —
 if the active entry points to `sessions/<date>-N/notes.md`, skim it
-for the current state) → `tasks/current.md` → `tasks/backlog.md` →
+for the current state) → `collaboration/README.md` and relevant
+`collaboration/events/` when collaboration is enabled → `tasks/current.md` → `tasks/backlog.md` →
 `inefficiencies/log.md` → `flaws/log.md` → `plans/decisions.md` →
-`overrides/rules.md` → `system/` → `user/` → note what's in
+`overrides/rules.md` → `workflows/gates.conf` → `system/` → `user/` → note what's in
 `secrets/` (never print values).
 
-If `memory/tasks/current.md` shows another live session in progress,
-**do not start** — one agent per project repo at a time.
+If no collaboration `session` + `issue` was declared and
+`memory/tasks/current.md` shows another live session in progress,
+**do not start** — one agent per project repo at a time. If collaboration
+was declared, do not use `tasks/current.md` as a lock: create or join the
+shared session/issue event trail, use a separate worktree/branch, publish
+a claim, and inspect peer events before editing.
+
+Peers are one team, not rivals. The everyday move is a `note` — the office
+channel. Then `claim → work → release`. Reach for the
+`proposal → assessment → agreement` ceremony only for a genuine conflict.
+
+```bash
+# say what you're on (informal, never gates the check):
+sh .context/core/bin/context-collab emit note --session <SESSION_ID> \
+  --agent <AGENT_ID> --issue <ISSUE_ID> --to <PEER_ID> --re <path> \
+  --body "Taking the web side; leaving the loop to you."
+# claim scope, then release it citing the commit:
+sh .context/core/bin/context-collab emit claim --session <SESSION_ID> \
+  --agent <AGENT_ID> --issue <ISSUE_ID> --paths <path1,path2> \
+  --body-file <claim-notes-file>
+sh .context/core/bin/context-collab status --session <SESSION_ID> --issue <ISSUE_ID>
+sh .context/core/bin/context-collab check --session <SESSION_ID> --issue <ISSUE_ID>
+```
+
+`status` opens with a **Recent chatter** feed of notes — read it first. A
+`release`/`handoff` closes a claim by citing its event ID or by sharing its
+session+issue and overlapping paths, so citing only the commit SHA is fine.
+On Windows use `pwsh -File .context/core/bin/context-collab.ps1` with the
+same `emit`, `status`, and `check` arguments.
+
+Publish coordination events on the shared event-only branch
+`collab/<SESSION_ID>/coordination`; keep product changes on each agent's
+isolated `collab/<SESSION_ID>/<AGENT_ID>` branch/worktree. Overlapping
+claims are resolved by peer assessment and an agreement that selects the
+best-supported option and one implementation owner. There is no timestamp
+or agent-ID winner. A correction similarly records evidence, root cause,
+candidate repairs, and a suggested owner; peers agree on the repair and
+owner before it is applied.
+
+### Gate commands (every session)
+
+The project-owned registry is `.context/memory/workflows/gates.conf`.
+If it is missing, initialize it with:
+
+```bash
+sh .context/core/bin/context-gates init
+```
+
+Before the next agent action/turn, run the checkpoint:
+
+```bash
+sh .context/core/bin/context-gates checkpoint [--session <SESSION_ID> --issue <ISSUE_ID>]
+```
+
+Run the lifecycle gates at their boundaries:
+
+```bash
+sh .context/core/bin/context-gates run pre-commit
+sh .context/core/bin/context-gates run integration --session <SESSION_ID> --issue <ISSUE_ID>
+sh .context/core/bin/context-gates run exit
+```
+
+On Windows use `pwsh -File .context/core/bin/context-gates.ps1` with the
+same commands. A failing gate blocks the next lifecycle transition; record
+the exact failing command and output in the session notes or event trail.
 
 ### Step 3 — Load the protocol
 
@@ -166,8 +230,10 @@ is the instruction set for this session.
 ### Step 4 — Follow the protocol
 
 All steps, all phases, in order. Don't skip Phase 1 because the task
-seems small. Don't forget the Exit checklist: everything committed and
-pushed, session logged, `memory/tasks/current.md` cleared, chat summary
+seems small. In collaboration mode, follow the collaboration event
+lifecycle in addition to the normal phases. Don't forget the Exit
+checklist: everything committed and pushed, session logged,
+`memory/tasks/current.md` cleared when you own single-agent mode, chat summary
 delivered.
 
 ---
