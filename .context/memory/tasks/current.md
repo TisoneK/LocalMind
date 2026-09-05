@@ -1,6 +1,6 @@
 # Current Task
 
-**Status:** IDLE — Session 417 closed. Two user-reported transcript issues
+**Status:** IN PROGRESS — Session 418 (ZCode, local Windows): P0 Context Engineering **Step 2 — byte-stable system prefix** (addendum plan). Session 417 closed below. Two user-reported transcript issues
 fixed and pushed (`c9c18c0`, `df0f9b1`):
 1. **Search relevance/safety (B-2026-09-04-3):** `web_search` no longer
    surfaces off-topic fallback junk (dictionary defs / OnlyFans) — a held set

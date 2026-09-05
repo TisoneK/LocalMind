@@ -5996,3 +5996,16 @@ fallback now relevance-gated (`_fallback_is_on_topic`). 96 backend tests
 (3 news-feed + 2 Brave + updated); ruff clean (fixed a pre-existing I001/E501
 in the import block touched). Live: both transcript queries return Google News
 top stories via web_research. No frontend/agent-loop change.
+
+---
+
+## 2026-09-05 — Session 418 — P0 Context Engineering Step 2: byte-stable system prefix
+
+- **Agent:** ZCode (local) | **Model:** qwen3.8-flash-class (per system prompt ID 18ae0130; not user-stated) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** `p0-context-engineering` (preview) — Step 2 of the addendum plan. Coordinated with a parallel agent shipping UI work (TurnTimeline, ActionRow, Actions-tab redesign) — zero file overlap; pulled its commits mid-session.
+- **Task:** Byte-stabilize the agent system prompt: move per-intent/per-turn sections (skill fragment, expert persona, agent playbook, execution plan, routing hint, Current-intent line) out of the cached prefix into an intent tail.
+- **Commits:** 1 product (`05e365c`) — refactor(prompts): byte-stable system prefix + intent tail (5 files, +396/−158; NEW build_agent_intent_tail + 15-test stability suite + rewritten phase2/empty-agent pins)
+- **Outcome:** done. Baseline return = identity + tools + universal rules + safety (Session 32 contract kept); tail rides the trailing turn-context after the prefix. **Key honest finding from the live audit (prompt-audit hook, isolated 8765, bankofai/qwen3.8-flash): the HOT path (native parent turns) was ALREADY byte-stable** — constant system sizes across all calls; the per-intent variance lives on the delegated/planned agent branch (ADR-53 parked surface). A/B cache hit: 81% BEFORE == 81% AFTER (block-granular upstream cache rounds the divergence away on this provider). The win is structural: the prefix invariant is now guaranteed + tested instead of incidental, and the delegated branch stops busting the cache on every intent switch.
+- **Open items:** Step 2b (optional): fold the CHAT branch into the baseline+tail split (it is a separate byte-stable surface today, verified). Step 3 Memory Retrieval Gate next; standing: ~36 Windows backend failures + ruff baseline peer pass.
+- **Report:** none — recorded here + fail-on-old tests (per S417 convention; full detail in commit message)
+- **Notes:** (1) A/B null result is a PROVIDER property (block granularity), not a fix failure — do not re-run expecting a delta on bankofai; the delta exists on prefix-exact caches (Anthropic-style). (2) The audit hook's `.last-payload.json` only holds the LAST call — for multi-call verification read the JSONL sizes (constant = stable) rather than re-deriving from one dump. (3) Persona/skill tests in test_empty_agent_fix.py now call build_agent_intent_tail(intent=...) — no available_tools/memory_facts kwargs there anymore.
