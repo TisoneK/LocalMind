@@ -582,3 +582,33 @@ The two residuals noted on the B-2026-09-04-3 entry are now fixed (`73b5930`):
 - **Brave gate:** the Brave fallback now passes through `_fallback_is_on_topic`
   like the free tiers — off-topic paid results are discarded, not surfaced.
 - Also fixed a pre-existing I001 + E501 in the web_acquisition import block.
+
+---
+## 2026-09-05 — Session 421 — collab mode: shared working tree lets one agent's rebase capture another's uncommitted files
+
+- **Flaw:** Two agents ran concurrently against the SAME working tree/branch
+  (`main`) on one machine. While the UI-polish session (S421-a) had an
+  uncommitted `frontend/src/globals.css` edit mid-live-test, the parallel
+  Step-2b session (S421-b) did a stash/rebase during its closeout and **swept
+  that uncommitted file into its own commit** (`5e2b8e1`) — then again pulled the
+  UI session's uncommitted `.context/` edits (sessions.md entry + current.md
+  note) into a later commit (`6f995fc`). No work was lost, but authorship and
+  commit boundaries blurred, and the UI session had to reconstruct what landed
+  where after the fact.
+- **Root cause:** the local edition's Peer Collaboration Mode says concurrent
+  agents MUST use "isolated branches/worktrees" and coordinate via
+  `collaboration/events/`, but nothing enforces it — two agents sharing one
+  checkout is silently permitted, and git stash/rebase operate on the whole
+  working tree (they cannot tell which uncommitted hunks belong to which agent).
+- **Symptom of the gap:** duplicate session numbering (two "Session 421"
+  entries), a stale "in-flight/uncommitted" note describing a file that was
+  already committed, and cross-committed changes attributed to the wrong session.
+- **Upstream suggestion (flows to `TisoneK/.context`):** collab mode should
+  require a real git worktree per agent (not just a branch) OR a hard
+  pre-flight check that refuses to start a second agent on a working tree that
+  already has another agent's uncommitted changes. At minimum, the "claim"
+  event should be mandatory before ANY edit when a peer session is detectable,
+  and closeout should never `git add -A`/stash-rebase a working tree it does not
+  own end-to-end.
+- **Status:** OPEN (protocol gap — no code fix; recorded for upstream + as a
+  working-agreement reminder for this repo).
