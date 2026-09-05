@@ -181,7 +181,7 @@
   --brand-bg-vsc-hover: var(--t-faint);
 
   /* ── Graphite · dark (default anchors) ── */
-  --s-deep: #0a0c10; --s-0: #0e1218; --s-base: #12161d; --s-1: #191e26; --s-2: #1f2530; --s-3: #2a313d;
+  --s-deep: #07080b; --s-0: #0a0d11; --s-base: #0d0f14; --s-1: #12151b; --s-2: #161a22; --s-3: #1d222b;
   --t-primary: #e6edf3; --t-secondary: #9aa7b4; --t-muted: #6b7684; --t-faint: #4c5560;
   --line: #262d38; --line-soft: #1f2530; --line-strong: #38414e;
   --acc: #34d399; --acc-bright: #6ee7b7; --acc-soft: #a7f3d0; --acc-strong: #059669;
