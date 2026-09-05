@@ -1,6 +1,6 @@
 # Current Task
 
-**Status:** IDLE — Session 418 closed. P0 Step 2 (byte-stable system prefix) shipped in : new build_agent_intent_tail carries persona/skill/agent-ctx/plan/routing-hint after the cacheable prefix; hot path (native parent) verified already byte-stable. Session 417 closed below. Two user-reported transcript issues
+**Status:** IDLE — Session 418 closed. P0 Step 2 (byte-stable system prefix) shipped in commit 05e365c: new build_agent_intent_tail carries persona/skill/agent-ctx/plan/routing-hint after the cacheable prefix; hot path (native parent) verified already byte-stable. Session 417 closed below. Two user-reported transcript issues
 fixed and pushed (`c9c18c0`, `df0f9b1`):
 1. **Search relevance/safety (B-2026-09-04-3):** `web_search` no longer
    surfaces off-topic fallback junk (dictionary defs / OnlyFans) — a held set

@@ -67,3 +67,10 @@ Grounded in two research reports:
   before/after trace on real provider, isolated port 8765, never 8000.
 - bankofai/deepseek-v4-flash is now PAID (balance=0); use hy3 / glm-5.3-flash /
   qwen3.8-flash (free tier on bankofai).
+- **S418** (`05e365c`): **Step 2 DONE** — byte-stable system prefix. NEW
+  build_agent_intent_tail renders persona/skill/agent-ctx/plan/routing-hint/
+  current-intent AFTER the cacheable prefix (loop injects into turn-context,
+  non-native turns); baseline keeps safety (Session-32 contract). 15 new
+  stability tests; 147/147 prompt-context suites. HONEST FINDING: the hot
+  path (native parent) was already byte-stable — variance lived on the
+  delegated/planned branch; A/B on bankofai 81%=81% (block-granular cache).
