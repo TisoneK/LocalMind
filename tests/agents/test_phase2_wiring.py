@@ -3,8 +3,9 @@ Tests for ADR-8 Phase 2 (Session 34): wire build_context() into the agent
 loop, and honor agent_config caps.
 
 Locks in:
-    - build_agent_system_prompt() accepts an `agent_context` param and
-      injects it as an AGENT CONTEXT section in the prompt
+    - build_agent_intent_tail() accepts an `agent_context` param and
+      injects it as an AGENT CONTEXT section in the TAIL (P0 Step 2 — the
+      byte-stable system prompt no longer carries per-agent sections)
     - When agent_context is None, the AGENT CONTEXT section is omitted
       (no leak)
     - build_coding_context() loads agents/coding/playbook.md and returns
@@ -27,20 +28,45 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from agents import CodingAgent
-from core.agent.prompts import build_agent_system_prompt
+from core.agent.prompts import build_agent_intent_tail, build_agent_system_prompt
 from core.models import Intent
 
-# ── build_agent_system_prompt accepts + injects agent_context ──────────────
+# ── build_agent_system_prompt / intent tail: agent_context placement ───────
+# P0 Context Engineering Step 2: the system prompt is the byte-stable
+# cacheable prefix; per-agent/per-intent sections moved to the intent TAIL
+# (appended to the trailing turn-context). Native-bootstrap parent turns
+# keep their compact self-contained prompt (inline agent_context unchanged).
 
 
-def test_build_agent_system_prompt_injects_agent_context_section():
-    """When agent_context is provided, the AGENT CONTEXT section appears."""
+def test_agent_context_rides_the_intent_tail_not_the_cached_prefix():
+    """The agent playbook is per-agent content — it lands in the intent TAIL,
+    not the cached system prompt, so an agent/intent switch no longer busts
+    the provider's prefix cache."""
+    tail = build_agent_intent_tail(
+        intent=Intent.SHELL,
+        agent_context="## Coding Playbook\n\nRead before writing.",
+    )
+    assert "AGENT CONTEXT" in tail
+    assert "Coding Playbook" in tail
+    assert "Read before writing" in tail
+
+    system = build_agent_system_prompt(
+        intent=Intent.SHELL,
+        available_tools=[],
+        agent_context=None,
+    )
+    assert "AGENT CONTEXT" not in system
+
+
+def test_agent_context_stays_inline_for_native_bootstrap():
+    """Native parent turns use the compact self-contained bootstrap prompt —
+    its inline agent_context is unchanged by Step 2."""
     prompt = build_agent_system_prompt(
         intent=Intent.SHELL,
         available_tools=[],
         agent_context="## Coding Playbook\n\nRead before writing.",
+        native_bootstrap=True,
     )
-    assert "AGENT CONTEXT" in prompt
     assert "Coding Playbook" in prompt
     assert "Read before writing" in prompt
 
@@ -339,23 +365,23 @@ def test_agent_loop_honors_agent_config_caps_when_provided():
 # ── End-to-end: the coding playbook reaches build_agent_system_prompt ────
 
 
-def test_coding_playbook_reaches_system_prompt_via_agent_context():
+def test_coding_playbook_reaches_the_intent_tail_via_agent_context():
     """End-to-end: CodingAgent.build_context() output, when passed as
-    agent_context to build_agent_system_prompt(), appears in the prompt."""
+    agent_context to build_agent_intent_tail(), appears in the TAIL (P0
+    Step 2 — the playbook no longer rides the cached system prompt)."""
     agent = CodingAgent(adapter=None)
     agent_context_str = agent.build_context(
         messages=[{"role": "user", "content": "create hello.py"}],
         intent=Intent.SHELL,
     )
-    prompt = build_agent_system_prompt(
+    tail = build_agent_intent_tail(
         intent=Intent.SHELL,
-        available_tools=[],
         agent_context=agent_context_str,
     )
-    # The playbook constraints appear in the final prompt
-    assert "Read before writing" in prompt
-    assert "Verify after writing" in prompt
-    assert "Follow existing conventions" in prompt
-    assert "Small, verifiable changes" in prompt
+    # The playbook constraints appear in the tail
+    assert "Read before writing" in tail
+    assert "Verify after writing" in tail
+    assert "Follow existing conventions" in tail
+    assert "Small, verifiable changes" in tail
     # The AGENT CONTEXT section header is present
-    assert "AGENT CONTEXT" in prompt
+    assert "AGENT CONTEXT" in tail

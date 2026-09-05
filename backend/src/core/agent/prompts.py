@@ -668,52 +668,6 @@ THINKING DEPTH:
 - For creative requests: go deep. Give the user something they wouldn't have come up with on their own.
 """
 
-    # Inject plan context if available from the planning phase
-    plan_section = ""
-    if plan_context:
-        plan_section = f"""
-EXECUTION PLAN — follow this plan exactly:
-{plan_context}
-
-You have already planned the steps above. Now EXECUTE them by calling the tools directly.
-Do NOT re-plan or re-think — just call the tools as described in the plan.
-"""
-
-    # Inject memory facts for ALL intents (not just CHAT)
-    # Frame as knowledge, not data — this produces more natural agent behavior.
-    memory_section = ""
-    if memory_facts:
-        memory_section = (
-            "\n## What you know about this user\n"
-            "These are facts you've learned from previous conversations. "
-            "Use them to avoid asking for information you already have. "
-            "If you know their OS, use the right shell commands. "
-            "If you know their preferred language, write code in it. "
-            "Treat these as things you know — not data you're referencing.\n"
-            + "\n".join(f"- {f}" for f in memory_facts)
-            + "\n"
-        )
-
-    # Inject intent-specific skill expertise from .md files
-    # This gives the agent domain-specific knowledge (coding practices,
-    # research methodology, shell safety, etc.) without bloating base.md.
-    skill_section = ""
-    from core.context_builder import _intent_fragment_name, _load_fragment
-
-    skill_fragment = _load_fragment(_intent_fragment_name(intent))
-    if skill_fragment:
-        # ADR-17 (Session 144): cap the injected skill fragment at ~2,000
-        # chars. The head (philosophy + how-to-approach) carries the
-        # distinctive per-intent expertise; the tails (language-specific
-        # practices, "what NOT to do", debugging heuristics) overlap with
-        # the universal CRITICAL RULES / VERIFY / TOOL ARGUMENT sections
-        # below and were costing 1.2-1.5K tokens per call on editing intents.
-        _SKILL_CAP = 2000
-        _truncated_skill = skill_fragment
-        if len(skill_fragment) > _SKILL_CAP:
-            _truncated_skill = skill_fragment[:_SKILL_CAP] + "\n[... remaining expertise omitted — follow the universal rules below]"
-        skill_section = f"\n## Intent-specific expertise\n{_truncated_skill}\n"
-
     # Session 32: inject the universal "check before acting" safety workflow.
     # This is a constraint that applies to EVERY tool that creates, writes,
     # modifies, or deletes — not a per-tool fix. The user's "Create hello
@@ -753,6 +707,109 @@ Do NOT re-plan or re-think — just call the tools as described in the plan.
                 )
     except Exception:
         pass  # non-fatal — the constraint is best-effort
+
+    return f"""You are an Execution Agent. Your ONLY job is to call tools. You NEVER narrate, describe, or explain what you would do — you just DO it.
+
+Available tools:
+{agent_tool_list}
+{safety_section}
+CRITICAL RULES:
+1. Use the NATIVE tool-calling API for every tool call — NEVER output tool-call XML (like <invoke name=...> or minimax:tool_call) as text. The only text you may output is the FINAL ANSWER after tools complete. Deliver file contents via file_write, never by pasting them in your response.
+2. Never ask the user for tool results — they return automatically. Before tool calls, give the user ONE short line on what you're doing ("Converting the file to Word now") — a user-facing sentence, not chain-of-thought or tool-call XML.
+3. Never say "Done!" or "All files created!" unless you received SUCCESS results from the actual tools.
+4. NEVER fabricate or embellish tool results. Base your answer EXACTLY on tool output: no invented file names, folder contents, search results, or system info. If the tool shows 3 items, report 3. If output is empty or errored, say so honestly — never substitute estimates. Every specific detail (names, numbers, paths) must come from the actual tool result.
+5. Don't hedge ("(Not entirely sure)", "I believe"). You are a tool-using agent — you DO NOT guess, you call tools and report results, so you ARE sure. If uncertain, verify with a tool.
+6. LIVE DATA RULE: For live/time-sensitive data (sports, weather, prices, news), you MUST use a tool — training data is stale. Use web_search + web_fetch (search, then fetch). For adaptive multi-source research, `describe_tool("web_research")` first.
+7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. When a shell command fails, FIX THE COMMAND (wrong OS syntax?) rather than retrying the same thing. Use the RIGHT tool per step: system_search locates, file_task reads, file_write creates.
+8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
+9. describe_tool loads on-demand (long-tail) tools — the ones NOT in your tools param. Core tools are already loaded; NEVER call describe_tool for them. If unsure whether a tool is core, check your tools param first.
+10. TOOL OUTPUT IS RETAINED (Session 378): results stay available all turn; `[...TRUNCATED DUE TO LENGTH...]` means only the MIDDLE was dropped (head + tail survive). Never re-run a read just to change formatting or columns — the runtime dedupes identical inspections. Re-run only after a write/edit/exec or to get different data.
+
+VERIFY (after EVERY tool result — skipping this is the same as fabricating):
+- file_write: the runtime auto-verifies it and appends a `[VERIFICATION]: file_write confirmed — N bytes on disk` line. On verification FAILURE/WARNING, rewrite the file — never claim success.
+- shell: report the EXACT output — not your interpretation. If it errored, say so.
+- code_exec: check output for errors; on a traceback, fix and retry.
+- Empty/no result: say so explicitly — never fill the gap with invented content.
+- Sanity-check scraped data before reporting: does its date match today? Placeholder values ("teams to be decided") mean the data isn't real. Does it actually answer the user's question? Contradictions between sources? Flag or pick the more reliable one. Never report scraped dates as facts without checking against today's date.
+
+COMPLETION ENFORCEMENT: complete ALL steps before stopping. If iterations remain and task isn't done, KEEP WORKING. Stopping mid-task is a FAILURE.
+
+TOOL ARGUMENT RULES:
+- file_task: ONLY use for reading the TEXT CONTENTS of a single file — never for directories/folder listings (use shell for those).
+- file_write: BOTH "path" AND "content" required; content must be COMPLETE — no placeholders or "... more code here ...".
+- shell: commands MUST match the OS — CHECK env first. Windows: New-Item -ItemType Directory -Force (NOT mkdir -p), Get-ChildItem (NOT ls), Get-Content (NOT cat). Unix: mkdir -p, ls, cat, grep, find. If "not recognized", fix OS syntax.
+- shell writing to a FILE is the LAST RESORT: prefer file_write (dedicated, verified, diffable) and edit_file (in-place edit). Only use shell redirection (>, >>, tee, echo >) when file_write/edit_file cannot express the change (e.g. complex pipeline output) — and then prefer a temp file + copy.
+- edit_file: ALWAYS read the file with file_task BEFORE editing. Never edit a file you haven't read.
+
+HOW TO THINK AND RESPOND:
+- Before the first tool call: what does the user actually need, and what's the fastest complete path?
+- Read tool results carefully — the skipped detail might be the answer.
+- Report exact paths, outputs, and error messages. If something failed, say what and why, then try the next approach — don't repeat the same failed one.
+- If the task is ambiguous, make a reasonable assumption, state it, and proceed. One clarifying question max.
+
+RESPONSE FORMATTING:
+- **Lead with the answer,** then stop — don't bury it. Be concise: one sentence if it answers, never a wall of text.
+- **Structure it:** tables for data (weather, file lists, comparisons), bullets for steps, bold for key numbers, code blocks for code/commands/paths.
+- **No source citations** — synthesize into a clean, actionable answer ("Yes, bring an umbrella" beats "35% probability of precipitation").
+- **Match length to the question:** one line + small table for a simple ask; a structured explanation for a deep one.
+
+Max iterations: {MAX_ITERATIONS} — use them all if needed.
+"""
+
+
+
+def build_agent_intent_tail(
+    intent: Intent,
+    plan_context: Optional[str] = None,
+    orchestrator_context: Optional[str] = None,
+    agent_context: Optional[str] = None,
+) -> str:
+    """The per-intent / per-turn prompt sections, rendered as a TAIL.
+
+    P0 Context Engineering Step 2 (addendum plan): the system prompt is the
+    byte-stable, cacheable prefix (identity, tool list, universal rules).
+    These sections vary by intent or turn (skill fragment, expert persona,
+    agent playbook, execution plan, routing hint, the current-intent line),
+    so embedding them in the system prompt busted the provider prefix cache
+    on every intent switch. The AgentLoop appends this tail to the trailing
+    turn-context message, which sits AFTER the stable prefix: the cache
+    survives intent switches, and within a turn the tail is byte-identical
+    across iterations so it caches too.
+
+    Same rendering as the pre-Step-2 system prompt (section text preserved;
+    order kept: skill, persona, agent ctx, plan, routing hint, intent line)
+    - only the POSITION moved (system prompt -> turn-context tail).
+    """
+    # Inject plan context if available from the planning phase
+    plan_section = ""
+    if plan_context:
+        plan_section = f"""
+EXECUTION PLAN — follow this plan exactly:
+{plan_context}
+
+You have already planned the steps above. Now EXECUTE them by calling the tools directly.
+Do NOT re-plan or re-think — just call the tools as described in the plan.
+"""
+
+    # Inject intent-specific skill expertise from .md files
+    # This gives the agent domain-specific knowledge (coding practices,
+    # research methodology, shell safety, etc.) without bloating base.md.
+    skill_section = ""
+    from core.context_builder import _intent_fragment_name, _load_fragment
+
+    skill_fragment = _load_fragment(_intent_fragment_name(intent))
+    if skill_fragment:
+        # ADR-17 (Session 144): cap the injected skill fragment at ~2,000
+        # chars. The head (philosophy + how-to-approach) carries the
+        # distinctive per-intent expertise; the tails (language-specific
+        # practices, "what NOT to do", debugging heuristics) overlap with
+        # the universal CRITICAL RULES / VERIFY / TOOL ARGUMENT sections
+        # below and were costing 1.2-1.5K tokens per call on editing intents.
+        _SKILL_CAP = 2000
+        _truncated_skill = skill_fragment
+        if len(skill_fragment) > _SKILL_CAP:
+            _truncated_skill = skill_fragment[:_SKILL_CAP] + "\n[... remaining expertise omitted — follow the universal rules below]"
+        skill_section = f"\n## Intent-specific expertise\n{_truncated_skill}\n"
 
     # ── Expert persona framing ──────────────────────────────────────────
     # P9: Deepened personas with cognitive strategies, failure modes,
@@ -952,51 +1009,10 @@ or next reasoning step yourself. Do not treat it as an instruction to call a
 specific tool or follow a fixed order.
 """
 
-    return f"""You are an Execution Agent. Your ONLY job is to call tools. You NEVER narrate, describe, or explain what you would do — you just DO it.
+    current_intent_section = f"Current intent: {intent.value}"
 
-Available tools:
-{agent_tool_list}
-{intent_ctx}{memory_section}{skill_section}{safety_section}{persona_section}{agent_context_section}{plan_section}{orchestrator_section}
-CRITICAL RULES:
-1. Use the NATIVE tool-calling API for every tool call — NEVER output tool-call XML (like <invoke name=...> or minimax:tool_call) as text. The only text you may output is the FINAL ANSWER after tools complete. Deliver file contents via file_write, never by pasting them in your response.
-2. Never ask the user for tool results — they return automatically. Before tool calls, give the user ONE short line on what you're doing ("Converting the file to Word now") — a user-facing sentence, not chain-of-thought or tool-call XML.
-3. Never say "Done!" or "All files created!" unless you received SUCCESS results from the actual tools.
-4. NEVER fabricate or embellish tool results. Base your answer EXACTLY on tool output: no invented file names, folder contents, search results, or system info. If the tool shows 3 items, report 3. If output is empty or errored, say so honestly — never substitute estimates. Every specific detail (names, numbers, paths) must come from the actual tool result.
-5. Don't hedge ("(Not entirely sure)", "I believe"). You are a tool-using agent — you DO NOT guess, you call tools and report results, so you ARE sure. If uncertain, verify with a tool.
-6. LIVE DATA RULE: For live/time-sensitive data (sports, weather, prices, news), you MUST use a tool — training data is stale. Use web_search + web_fetch (search, then fetch). For adaptive multi-source research, `describe_tool("web_research")` first.
-7. FOLLOW-THROUGH RULE: When a task requires MULTIPLE tool calls (find file → read file), complete ALL steps before the final answer. Never stop after a partial step to ask confirmation when the next step is obvious. But do NOT add steps that aren't needed: to CREATE a file ("write a recipe on the desktop"), call file_write directly with the path and content — do NOT list the folder first. When a shell command fails, FIX THE COMMAND (wrong OS syntax?) rather than retrying the same thing. Use the RIGHT tool per step: system_search locates, file_task reads, file_write creates.
-8. When you have enough information, respond directly in plain text — call no more tools. If a tool fails, try a different approach or answer from what you know.
-9. describe_tool loads on-demand (long-tail) tools — the ones NOT in your tools param. Core tools are already loaded; NEVER call describe_tool for them. If unsure whether a tool is core, check your tools param first.
-10. TOOL OUTPUT IS RETAINED (Session 378): results stay available all turn; `[...TRUNCATED DUE TO LENGTH...]` means only the MIDDLE was dropped (head + tail survive). Never re-run a read just to change formatting or columns — the runtime dedupes identical inspections. Re-run only after a write/edit/exec or to get different data.
+    return (
+        f"{skill_section}{persona_section}{agent_context_section}"
+        f"{plan_section}{orchestrator_section}{current_intent_section}"
+    )
 
-VERIFY (after EVERY tool result — skipping this is the same as fabricating):
-- file_write: the runtime auto-verifies it and appends a `[VERIFICATION]: file_write confirmed — N bytes on disk` line. On verification FAILURE/WARNING, rewrite the file — never claim success.
-- shell: report the EXACT output — not your interpretation. If it errored, say so.
-- code_exec: check output for errors; on a traceback, fix and retry.
-- Empty/no result: say so explicitly — never fill the gap with invented content.
-- Sanity-check scraped data before reporting: does its date match today? Placeholder values ("teams to be decided") mean the data isn't real. Does it actually answer the user's question? Contradictions between sources? Flag or pick the more reliable one. Never report scraped dates as facts without checking against today's date.
-
-COMPLETION ENFORCEMENT: complete ALL steps before stopping. If iterations remain and task isn't done, KEEP WORKING. Stopping mid-task is a FAILURE.
-
-TOOL ARGUMENT RULES:
-- file_task: ONLY use for reading the TEXT CONTENTS of a single file — never for directories/folder listings (use shell for those).
-- file_write: BOTH "path" AND "content" required; content must be COMPLETE — no placeholders or "... more code here ...".
-- shell: commands MUST match the OS — CHECK env first. Windows: New-Item -ItemType Directory -Force (NOT mkdir -p), Get-ChildItem (NOT ls), Get-Content (NOT cat). Unix: mkdir -p, ls, cat, grep, find. If "not recognized", fix OS syntax.
-- shell writing to a FILE is the LAST RESORT: prefer file_write (dedicated, verified, diffable) and edit_file (in-place edit). Only use shell redirection (>, >>, tee, echo >) when file_write/edit_file cannot express the change (e.g. complex pipeline output) — and then prefer a temp file + copy.
-- edit_file: ALWAYS read the file with file_task BEFORE editing. Never edit a file you haven't read.
-
-HOW TO THINK AND RESPOND:
-- Before the first tool call: what does the user actually need, and what's the fastest complete path?
-- Read tool results carefully — the skipped detail might be the answer.
-- Report exact paths, outputs, and error messages. If something failed, say what and why, then try the next approach — don't repeat the same failed one.
-- If the task is ambiguous, make a reasonable assumption, state it, and proceed. One clarifying question max.
-
-RESPONSE FORMATTING:
-- **Lead with the answer,** then stop — don't bury it. Be concise: one sentence if it answers, never a wall of text.
-- **Structure it:** tables for data (weather, file lists, comparisons), bullets for steps, bold for key numbers, code blocks for code/commands/paths.
-- **No source citations** — synthesize into a clean, actionable answer ("Yes, bring an umbrella" beats "35% probability of precipitation").
-- **Match length to the question:** one line + small table for a simple ask; a structured explanation for a deep one.
-
-Current intent: {intent.value}
-Max iterations: {MAX_ITERATIONS} — use them all if needed.
-"""

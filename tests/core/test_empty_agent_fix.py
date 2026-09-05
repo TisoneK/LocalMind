@@ -141,16 +141,13 @@ class TestP6SkillInjection:
         assert "code" in content.lower() or "write" in content.lower()
 
     def test_skill_injected_into_agent_prompt(self):
-        from core.agent.prompts import build_agent_system_prompt
-        prompt = build_agent_system_prompt(
-            intent=Intent.CODE_EXEC,
-            available_tools=[],
-            memory_facts=[],
-        )
+        # P0 Step 2: the skill fragment rides the intent TAIL, not the
+        # byte-stable system prompt.
+        from core.agent.prompts import build_agent_intent_tail
+        tail = build_agent_intent_tail(intent=Intent.CODE_EXEC).lower()
         # CODE_EXEC intent should inject coding.md content
-        prompt_lower = prompt.lower()
         # The coding skill should mention something about code practices
-        assert "code" in prompt_lower or "debug" in prompt_lower or "function" in prompt_lower
+        assert "code" in tail or "debug" in tail or "function" in tail
 
     def test_all_intents_mapped_to_skills(self):
         from core.context_builder import _intent_fragment_name
@@ -268,73 +265,65 @@ class TestP9ReflectionLoop:
 # ── P10: Expert personas ──────────────────────────────────────────────────
 
 class TestP10ExpertPersonas:
-    """Verify intent-specific expert personas are injected into prompts."""
+    """Verify intent-specific expert personas are injected into prompts.
+
+    P0 Step 2: personas ride the intent TAIL (per-intent, after the
+    byte-stable system prefix), not the cached system prompt itself.
+    """
 
     def test_coder_persona_for_code_exec(self):
-        from core.agent.prompts import build_agent_system_prompt
-        prompt = build_agent_system_prompt(
+        from core.agent.prompts import build_agent_intent_tail
+        tail = build_agent_intent_tail(
             intent=Intent.CODE_EXEC,
-            available_tools=[],
-            memory_facts=[],
         )
-        prompt_lower = prompt.lower()
+        tail_lower = tail.lower()
         # Should have The Coder persona characteristics
-        assert "code" in prompt_lower or "coder" in prompt_lower or "engineer" in prompt_lower
+        assert "code" in tail_lower or "coder" in tail_lower or "engineer" in tail_lower
 
     def test_writer_persona_for_file_write(self):
-        from core.agent.prompts import build_agent_system_prompt
-        prompt = build_agent_system_prompt(
+        from core.agent.prompts import build_agent_intent_tail
+        tail = build_agent_intent_tail(
             intent=Intent.FILE_WRITE,
-            available_tools=[],
-            memory_facts=[],
         )
-        prompt_lower = prompt.lower()
+        tail_lower = tail.lower()
         # Should have The Writer persona characteristics
-        assert "write" in prompt_lower or "writer" in prompt_lower or "content" in prompt_lower
+        assert "write" in tail_lower or "writer" in tail_lower or "content" in tail_lower
 
     def test_debugger_persona_for_file_edit(self):
-        from core.agent.prompts import build_agent_system_prompt
-        prompt = build_agent_system_prompt(
+        from core.agent.prompts import build_agent_intent_tail
+        tail = build_agent_intent_tail(
             intent=Intent.FILE_EDIT,
-            available_tools=[],
-            memory_facts=[],
         )
-        prompt_lower = prompt.lower()
+        tail_lower = tail.lower()
         # Should have The Debugger persona characteristics
-        assert "debug" in prompt_lower or "fix" in prompt_lower or "diagnos" in prompt_lower
+        assert "debug" in tail_lower or "fix" in tail_lower or "diagnos" in tail_lower
 
     def test_researcher_persona_for_web_search(self):
-        from core.agent.prompts import build_agent_system_prompt
-        prompt = build_agent_system_prompt(
+        from core.agent.prompts import build_agent_intent_tail
+        tail = build_agent_intent_tail(
             intent=Intent.WEB_SEARCH,
-            available_tools=[],
-            memory_facts=[],
         )
-        prompt_lower = prompt.lower()
+        tail_lower = tail.lower()
         # Should have The Researcher persona characteristics
-        assert "research" in prompt_lower or "search" in prompt_lower or "fact" in prompt_lower
+        assert "research" in tail_lower or "search" in tail_lower or "fact" in tail_lower
 
     def test_operator_persona_for_shell(self):
-        from core.agent.prompts import build_agent_system_prompt
-        prompt = build_agent_system_prompt(
+        from core.agent.prompts import build_agent_intent_tail
+        tail = build_agent_intent_tail(
             intent=Intent.SHELL,
-            available_tools=[],
-            memory_facts=[],
         )
-        prompt_lower = prompt.lower()
+        tail_lower = tail.lower()
         # Should have The Operator persona characteristics
-        assert "shell" in prompt_lower or "command" in prompt_lower or "system" in prompt_lower
+        assert "shell" in tail_lower or "command" in tail_lower or "system" in tail_lower
 
     def test_archivist_persona_for_memory_op(self):
-        from core.agent.prompts import build_agent_system_prompt
-        prompt = build_agent_system_prompt(
+        from core.agent.prompts import build_agent_intent_tail
+        tail = build_agent_intent_tail(
             intent=Intent.MEMORY_OP,
-            available_tools=[],
-            memory_facts=[],
         )
-        prompt_lower = prompt.lower()
+        tail_lower = tail.lower()
         # Should have The Archivist persona characteristics
-        assert "memory" in prompt_lower or "fact" in prompt_lower or "store" in prompt_lower
+        assert "memory" in tail_lower or "fact" in tail_lower or "store" in tail_lower
 
 
 # ── ADR-8: Agent-owned delegation routing ─────────────────────────────────

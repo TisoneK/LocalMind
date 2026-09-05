@@ -102,7 +102,7 @@ from core.agent.initialization import (
     parse_initialization,
 )
 from core.agent.models import AgentStep, AgentTrace
-from core.agent.prompts import build_agent_system_prompt, build_planning_prompt
+from core.agent.prompts import build_agent_intent_tail, build_agent_system_prompt, build_planning_prompt
 from core.agent.turn_outcome import Recovery, TurnOutcome, classify_turn_outcome
 
 # Loop-discipline re-architecture: the four stacked recovery nudges
@@ -2742,14 +2742,38 @@ class AgentLoop:
             intent=intent,
             available_tools=scoped_available,
             intent_history=None,
-            plan_context=plan_context if plan_context else None,
+            # P0 Context Engineering Step 2: plan/routing-hint/agent-playbook
+            # are PER-TURN or PER-INTENT content — they now ride the trailing
+            # turn-context (via build_agent_intent_tail below) instead of the
+            # byte-stable system prefix. agent_context is passed through ONLY
+            # for the native-bootstrap branch (parent turns), which keeps its
+            # own self-contained prompt.
+            plan_context=None,
             memory_facts=None,
-            orchestrator_context=orchestrator_context,
-            agent_context=agent_context,
+            orchestrator_context=None,
+            agent_context=agent_context if _parent_native_turn else None,
             # ADR-40: render the in-prompt "Available tools" list from the SAME
             # scoped defs as the native tools param (single source of truth).
             tool_defs=filtered_tools,
             native_bootstrap=_parent_native_turn,
+        )
+        # P0 Context Engineering Step 2: the intent-varying sections (skill
+        # fragment, expert persona, agent playbook, execution plan, routing
+        # hint, current-intent line) used to live INSIDE the system prompt —
+        # an intent switch rewrote the cached prefix and every provider cache
+        # missed. They now ride the trailing turn-context message, which sits
+        # after the stable prefix. Native bootstrap turns keep their compact
+        # self-contained prompt (no tail — that surface never had these
+        # sections and its leanness is deliberate, B-2026-08-30-17).
+        intent_tail = (
+            ""
+            if _parent_native_turn
+            else build_agent_intent_tail(
+                intent=intent,
+                plan_context=plan_context or None,
+                orchestrator_context=orchestrator_context,
+                agent_context=agent_context,
+            )
         )
 
         # Session 245 (agent-loop token efficiency, Lever 1): the environment
@@ -2823,6 +2847,10 @@ class AgentLoop:
         # (Session 382 follow-up: free-tier models need the destination
         # repeated near the action, not just in the init call).
         turn_context_parts = [
+            # P0 Step 2: the intent tail leads the per-iteration context — it
+            # varies by intent/turn, so it lives entirely after the stable
+            # prefix (byte-identical within a turn, so it caches too).
+            *([intent_tail] if intent_tail else []),
             _build_environment_context(include_tool_list=False, session_id=session_id)
         ]
         # LocalMind Caching (2026-08-31): memory + intent history are DYNAMIC
