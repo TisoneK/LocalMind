@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { TerminalPanel } from './TerminalPanel';
 import type { TerminalLine } from '../../types';
 
@@ -41,5 +41,33 @@ describe('TerminalPanel realtime cues', () => {
   it('offers a Cancel control while running', () => {
     render(<TerminalPanel lines={[]} onExecute={noop} isRunning onAbort={() => {}} />);
     expect(screen.getByTitle(/Cancel/i)).toBeInTheDocument();
+  });
+});
+
+describe('TerminalPanel command grouping', () => {
+  it('collapses a command\'s output when its toggle is clicked', () => {
+    render(
+      <TerminalPanel
+        lines={[
+          line({ id: 'c1', type: 'command', content: 'ls' }),
+          line({ id: 'o1', type: 'output', content: 'file-a.txt' }),
+          line({ id: 'o2', type: 'output', content: 'file-b.txt' }),
+        ]}
+        onExecute={noop}
+      />,
+    );
+    // Output is visible by default (expanded), with a collapse toggle showing
+    // the child count (2).
+    expect(screen.getByText('file-a.txt')).toBeInTheDocument();
+    const toggle = screen.getByTitle('Collapse output');
+    expect(toggle).toHaveTextContent('2');
+    // Collapse → the two output lines are hidden; the command stays.
+    fireEvent.click(toggle);
+    expect(screen.queryByText('file-a.txt')).not.toBeInTheDocument();
+    expect(screen.queryByText('file-b.txt')).not.toBeInTheDocument();
+    expect(screen.getByText(/^ls$/)).toBeInTheDocument();
+    // Re-expand.
+    fireEvent.click(screen.getByTitle('Expand output'));
+    expect(screen.getByText('file-a.txt')).toBeInTheDocument();
   });
 });

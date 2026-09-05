@@ -407,11 +407,15 @@ export function ActionHistory({ actions }: ActionHistoryProps) {
 
   const groups = groupChainsByTodo(groupChains(actions));
 
-  // The most-recent action = the very last one rendered (last group → last
-  // chain → last action). It stays expanded until a newer action pushes it down.
+  // The most-recent action = the chronological last (last group → last chain →
+  // last action). It stays expanded until a newer action supersedes it.
   const lastGroup = groups[groups.length - 1];
   const lastChain = lastGroup?.chains[lastGroup.chains.length - 1];
   const mostRecentId = lastChain?.[lastChain.length - 1]?.id ?? null;
+
+  // Render newest-first: the most recent turn's actions sit at the TOP (steps
+  // within a turn stay chronological — a turn still reads 1 → 2 → 3).
+  const orderedGroups = [...groups].reverse();
 
   const stepLabel = (todoId: string) => {
     const m = todoId.match(/^plan-(\d+)$/);
@@ -420,7 +424,7 @@ export function ActionHistory({ actions }: ActionHistoryProps) {
 
   return (
     <div className="space-y-2 px-1">
-      {groups.map((group, gi) => (
+      {orderedGroups.map((group, gi) => (
         <div key={gi} className="space-y-2">
           {/* Todo header — the plan step this group of actions serves */}
           {group.todoId && (

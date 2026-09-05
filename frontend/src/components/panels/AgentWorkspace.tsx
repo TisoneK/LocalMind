@@ -351,9 +351,15 @@ export function AgentWorkspace({ runs, isStreaming = false }: AgentWorkspaceProp
 
       <div className="space-y-2">
         <AnimatePresence initial={false}>
-          {roots.map((root, i) => (
-            <RunNode key={root.id} run={root} children={childMap.get(root.id) ?? []} childMap={childMap} depth={0} turnIndex={i + 1} isLast={i === roots.length - 1} />
-          ))}
+          {/* Newest turn on top; the label keeps its chronological number. */}
+          {roots
+            .map((root, i) => ({ root, turnIndex: i + 1 }))
+            .reverse()
+            .map(({ root, turnIndex }) => (
+              // isLast = "newest turn → auto-expanded". Newest = max turnIndex,
+              // now rendered at the TOP; still the one that stays open.
+              <RunNode key={root.id} run={root} children={childMap.get(root.id) ?? []} childMap={childMap} depth={0} turnIndex={turnIndex} isLast={turnIndex === roots.length} />
+            ))}
         </AnimatePresence>
       </div>
 

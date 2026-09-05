@@ -11,6 +11,8 @@ import {
   RotateCcw,
   Maximize2,
   Minimize2,
+  ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 import { PackageInstaller } from './PackageInstaller';
 
@@ -88,6 +90,9 @@ export function TerminalPanel({
   const [savedInput, setSavedInput] = useState('');
   const [lineFilter, setLineFilter] = useState<TerminalFilter>('all');
   const [terminalDims, setTerminalDims] = useState('80x24');
+  // Collapsed command groups (by the command line's id): its following output
+  // is hidden until re-expanded — the terminal equivalent of the Actions rows.
+  const [collapsedCmds, setCollapsedCmds] = useState<Set<string>>(() => new Set());
 
   // ── Refs ──
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -394,6 +399,24 @@ export function TerminalPanel({
 
   const searchMatchCount = searchQuery ? filteredLines.length : 0;
 
+  // Group lines by command: each command "owns" the output lines that follow it
+  // until the next command. Drives the collapsible terminal groups.
+  const ownerOfLine: Record<string, string | null> = {};
+  const cmdChildCount: Record<string, number> = {};
+  {
+    let curCmd: string | null = null;
+    for (const l of filteredLines) {
+      if (l.type === 'command') {
+        curCmd = l.id;
+        ownerOfLine[l.id] = null;
+        cmdChildCount[l.id] = 0;
+      } else {
+        ownerOfLine[l.id] = curCmd;
+        if (curCmd) cmdChildCount[curCmd] = (cmdChildCount[curCmd] ?? 0) + 1;
+      }
+    }
+  }
+
   // ── Short CWD Display ──
   const shortCwd = cwd.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
 
@@ -566,13 +589,20 @@ export function TerminalPanel({
           const displayContent = stripAnsi(line.content);
           const isSearchMatch =
             searchQuery && displayContent.toLowerCase().includes(searchQuery.toLowerCase());
+          const isCmd = line.type === 'command';
+          const owner = ownerOfLine[line.id];
+          // Hide output belonging to a collapsed command group. (A live search
+          // shows everything — a match may live inside a collapsed group.)
+          if (!searchQuery && !isCmd && owner && collapsedCmds.has(owner)) return null;
+          const childCount = isCmd ? cmdChildCount[line.id] ?? 0 : 0;
+          const collapsed = isCmd && collapsedCmds.has(line.id);
 
           return (
             <div
               key={line.id}
               className={`group flex items-start hover:bg-brand-bg-panel-alt rounded-sm transition-colors ${
                 isSearchMatch ? 'bg-brand-border/50' : ''
-              }`}
+              } ${!isCmd && owner ? 'border-l border-brand-border/50' : ''}`}
             >
               <span className="text-[9px] text-brand-green-deleted w-16 shrink-0 select-none pt-px">
                 {line.timestamp}
@@ -584,9 +614,7 @@ export function TerminalPanel({
                 </span>
               )}
               <span className={`flex-1 break-all [overflow-wrap:anywhere] ${lineColors[line.type]}`}>
-                {line.type === 'command' && (
-                  <span className="text-brand-green mr-1.5 select-none">❯</span>
-                )}
+                {isCmd && <span className="text-brand-green mr-1.5 select-none">❯</span>}
                 {linePrefixes[line.type]}
                 {line.source === 'agent' && (
                   <span className="text-brand-gh-purple mr-1">&#9883;</span>
@@ -595,6 +623,27 @@ export function TerminalPanel({
                   ? highlightSearch(displayContent, searchQuery)
                   : displayContent}
               </span>
+              {/* Collapse toggle for a command with output (right side, like the
+                  Actions rows) — shows the hidden line count when collapsed. */}
+              {isCmd && childCount > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCollapsedCmds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(line.id)) next.delete(line.id);
+                      else next.add(line.id);
+                      return next;
+                    });
+                  }}
+                  className="ml-1 flex items-center gap-1 text-brand-green-faint hover:text-brand-green-muted transition-colors shrink-0"
+                  title={collapsed ? 'Expand output' : 'Collapse output'}
+                  aria-expanded={!collapsed}
+                >
+                  <span className="text-[9px] tabular-nums">{childCount}</span>
+                  {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+              )}
               {/* Copy button per line */}
               <button
                 onClick={(e) => {
