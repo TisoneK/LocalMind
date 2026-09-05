@@ -28,6 +28,7 @@ const PROVIDERS: ProviderDef[] = [
   { id: 'cohere', name: 'Cohere' },
   { id: 'deepinfra', name: 'DeepInfra' },
   { id: 'deepseek', name: 'DeepSeek' },
+  { id: 'experiential', name: 'Experiential Labs (gateway — BYOK or platform credits)' },
   { id: 'fireworks', name: 'Fireworks AI' },
   { id: 'gemini', name: 'Google Gemini' },
   { id: 'groq', name: 'Groq' },

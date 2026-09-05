@@ -275,7 +275,10 @@ async def list_models(provider: str | None = None):
         # Z.ai: api.z.ai/api/paas/v4/models (GLM-5.2, GLM-4.5-Flash, etc.)
         # OmniRoute: localhost:20128/v1/models (self-hosted gateway, 500+
         # models across 290+ upstreams — live-listing is its headline feature).
-        if adapter_name in ("zen", "cerebras", "gemini", "chutes", "zai", "bankofai", "omniroute"):
+        # Experiential: api.experientiallabs.ai/v1/models (key-gated; the
+        # KEYLESS public catalog lives at /api/models on the same host).
+        if adapter_name in ("zen", "cerebras", "gemini", "chutes", "zai", "bankofai", "omniroute",
+                            "experiential"):
             try:
                 available = await adapter.list_models()
                 for m in available:
