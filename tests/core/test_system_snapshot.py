@@ -96,10 +96,16 @@ def test_no_system_section_when_cache_unset():
     assert _system_env_line() == ""
 
 
-def test_cached_summary_injected_into_chat_prompt():
-    """A system question routed to conversation mode (Intent.CHAT) also carries
-    the system summary, so the agent answers from it without a tool."""
+def test_chat_prefix_is_byte_stable_env_rides_turn_context():
+    """P0 Step 2b: the CHAT system PREFIX no longer embeds the boot-cached
+    system summary (it varied per machine AND duplicated env — the loop already
+    re-sends env in the trailing turn-context). The prefix must stay byte-stable
+    across machines/sessions; machine-awareness for chat is delivered via the
+    loop's turn-context (``_build_environment_context``) instead."""
+    import platform
+
     from core.agent.prompts import build_agent_system_prompt
+    from core.context_builder import _build_environment_context
     from core.models import Intent
     from core.system_snapshot import set_cached_summary
     from tools import available_tools
@@ -109,6 +115,12 @@ def test_cached_summary_injected_into_chat_prompt():
         prompt = build_agent_system_prompt(
             intent=Intent.CHAT, available_tools=available_tools(), tool_defs=None,
         )
-        assert "16 GB RAM" in prompt and "TestOS 9" in prompt
+        # Byte-stable: the per-machine cached summary is NOT baked into the prefix.
+        assert "16 GB RAM" not in prompt and "TestOS 9" not in prompt
     finally:
         set_cached_summary("")
+
+    # Chat still gets machine-awareness — via the turn-context env the loop
+    # re-sends on every iteration (see loop.py turn_context_parts).
+    env = _build_environment_context(include_tool_list=False)
+    assert platform.system() in env

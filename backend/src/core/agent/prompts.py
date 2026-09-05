@@ -493,13 +493,9 @@ def build_agent_system_prompt(
     # message (see AgentLoop, build the turn context), keeping this system
     # prompt byte-stable so the system+tools prefix caches.
 
-    intent_ctx = ""
-    if intent_history:
-        intent_ctx = (
-            f"\nRecent intent history (most recent last): {', '.join(intent_history)}\n"
-            "Use this as a prior when interpreting follow-up messages.\n"
-        )
-
+    # P0 Step 2b: intent history is per-turn/dynamic and rides the trailing
+    # turn-context (loop.py), not the byte-stable prefix — no longer embedded in
+    # any branch of this builder.
 
     # Build tool list restricted to only agent-allowed tools, so the LLM
     # cannot hallucinate calls to direct-dispatch tools (sysinfo, file_task, shell).
@@ -589,26 +585,14 @@ in what tools actually returned. Do not emit XML tool calls or expose internal r
 
     # Chat mode: natural conversational response — rich, thoughtful, alive
     if intent == Intent.CHAT:
-        # Build memory section if facts are available
-        # Frame memory as things the model already knows — not data it's referencing.
-        # This produces more natural, less mechanical responses.
-        memory_section = ""
-        if memory_facts:
-            memory_section = (
-                "\n## What you know about this user\n"
-                "These are facts you've learned from previous conversations. "
-                "Don't say 'according to my memory' or 'I recall that...' — "
-                "just use them as things you know about this person. "
-                "If you know their language preference, use it. "
-                "If you know their OS, don't ask.\n"
-                + "\n".join(f"- {f}" for f in memory_facts)
-                + "\n"
-            )
+        # P0 Step 2b: byte-stable chat prefix. The env summary, memory facts, and
+        # intent history are per-turn / dynamic and are already delivered via the
+        # trailing turn-context message (loop.py) — embedding them here rewrote
+        # the cached prefix every turn AND sent the env summary twice (once here,
+        # once in turn-context). The chat prefix is now just identity + the
+        # response contract, matching the agent branch's baseline+tail split.
+        return """You are LocalMind — a local AI assistant running on the user's machine. You are thoughtful, direct, and genuinely helpful. You remember things about this user and use that knowledge to be more useful.
 
-        _sys_conv = _system_env_line()
-        system_section = f"\n{_sys_conv}\n" if _sys_conv else ""
-        return f"""You are LocalMind — a local AI assistant running on the user's machine. You are thoughtful, direct, and genuinely helpful. You remember things about this user and use that knowledge to be more useful.
-{system_section}{memory_section}{intent_ctx}
 HOW TO RESPOND:
 - Answer from your knowledge. Do NOT call any tools — you're in conversation mode.
 - Think before you write. If the question has depth, show your reasoning. If it's simple, be brief.

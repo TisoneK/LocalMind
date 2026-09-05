@@ -723,8 +723,9 @@ class TestToolRegistry:
     async def test_web_search_tool(self):
         from tools.web_search import web_search
         # Mock ALL three racing providers so the test is deterministic and never
-        # hits the real network — DDG is the only one with results, so it wins
-        # regardless of the relevance gate (its mock need not match the query).
+        # hits the real network — DDG is the only one with results, so it wins.
+        # B-2026-09-04-3: the result must cover the query term ("test") to clear
+        # the relevance floor (an off-topic set is now discarded, not surfaced).
         with patch(
             "tools.web_search._search_ddg", new_callable=AsyncMock
         ) as m, patch(
@@ -736,7 +737,7 @@ class TestToolRegistry:
             new_callable=AsyncMock,
             return_value=([], "network", "searxng empty (mocked)"),
         ):
-            m.return_value = ([{"title": "Result", "href": "https://ex.com", "body": "snippet"}], "", "")
+            m.return_value = ([{"title": "Result for test", "href": "https://ex.com", "body": "test snippet"}], "", "")
             result = await web_search("test")
         assert result.source == "web_search"
         assert "Result" in result.content
