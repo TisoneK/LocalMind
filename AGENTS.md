@@ -141,15 +141,27 @@ reintroduces the "Tools execution failure" bug:
    tasks (recon + work + verify) need the room. The wall-clock cap is the
    real safety net against a spinning model, not the iteration cap.
 
-2. **Fallback messages must say "iteration limit reached" when
-   `trace.hit_limit` is True.** Sessions 21-31 kept guessing "overload" /
-   "context overflow" / "tool output too large" when the actual cause was
-   the iteration cap. The misdiagnosis was worse than no diagnosis — it
-   sent the user down wrong paths. When `hit_limit` is True,
-   `_summarize_trace_for_user()` and the engine fallback MUST say
-   "iteration limit reached" explicitly and suggest "tell me to continue"
-   (NOT "switch to a larger model" — the model didn't fail, it ran out of
-   steps). If you add a new fallback path, check `trace.hit_limit` first.
+2. **Fallback messages must name the ACTUAL budget when `trace.hit_limit`
+   is True** (amended Session 420, 2026-09-05). Sessions 21-31 kept
+   guessing "overload" / "context overflow" / "tool output too large"
+   when the actual cause was a cap — the misdiagnosis was worse than no
+   diagnosis. Session 420 extended this: a wall-clock break is NOT an
+   iteration-cap break, and a repetition stop is neither. `trace.limit_kind`
+   (iteration_cap / wall_clock / repetition / hard_ceiling) records which
+   budget fired; `_summarize_trace_for_user()`, `classify_failure()`, and
+   the agent_runtime empty-response fallback MUST name the actual kind and
+   give the matching remedy (steps → "tell me to continue"; time →
+   smaller turns; repetition → rephrase with specifics) — never "switch
+   to a larger model". **And: a capped turn whose forced synthesis
+   delivered a real answer is NOT a failure** — `classify_failure()`
+   returns "" when `trace.final_response` is a real answer (the
+   "find my CV" transcript showed "✗ Agent loop failed" above a complete
+   answer). `_force_final_answer` sets `final_response` only on a real
+   model synthesis, never on the deterministic fallbacks — keep it that
+   way or failure memory will remember rescued turns as failures. The
+   identical-call stop (`identical_call_streak`, cap 3) hard-stops
+   same-tool+same-args loops the soft same-tool nudge can't catch.
+   Regression tests: `tests/e2e/test_identical_call_stop.py`.
 
 3. **"Check before acting" is a universal workflow constraint.**
    `backend/data/workflows/safety.md` defines the rule: every tool
