@@ -59,6 +59,54 @@ async def test_dispatch_natural_language_rejected_honestly():
     assert "couldn't find" in result.content
 
 
+# ── S422: unfenced code whose first line holds a raw-string Windows path ────
+# The transcript's wasted call:  path = r"C:\Users\...\CV-TisoneKironget.docx"
+# was rejected as "no executable Python code" because the expression heuristic's
+# char class lacked backslash/single-quote/braces/semicolon. It is assignment
+# code — it must run.
+RAW_WINDOWS_PATH_CODE = (
+    'path = r"C:\\Users\\tison\\OneDrive\\Documents\\CV.docx"\n'
+    'print("read-plan", len(path))'
+)
+
+
+@pytest.mark.asyncio
+async def test_dispatch_raw_code_with_windows_path_first_line_executes():
+    result = await dispatch(Intent.CODE_EXEC, RAW_WINDOWS_PATH_CODE)
+    assert result is not None
+    assert result.success, result.content
+    assert "read-plan" in result.content
+
+
+def test_extract_code_windows_path_assignment():
+    from tools.code_exec import _extract_code
+
+    code = _extract_code(RAW_WINDOWS_PATH_CODE)
+    assert code.startswith("path = "), f"assignment code must extract whole, got {code!r}"
+
+
+def test_validator_message_names_both_accepted_forms():
+    from tools.code_exec import _validate_code_exec
+
+    msg = _validate_code_exec(NL_PROSE)
+    assert msg is not None
+    # The loop contract sends UNFENCED code — the message must not claim a
+    # fence is required (pre-S422 it did).
+    assert "```python```" in msg
+    assert "verbatim" in msg
+
+
+@pytest.mark.asyncio
+async def test_dispatch_semicolon_chained_statements_execute():
+    """The widened char class also unblocks other real code the old class
+    rejected — e.g. semicolon-chained statements. Prose with NO code-ish
+    token is still rejected (NL_PROSE test above)."""
+    result = await dispatch(Intent.CODE_EXEC, "x = 21; print(x * 2)")
+    assert result is not None
+    assert result.success, result.content
+    assert "42" in result.content
+
+
 @pytest.mark.asyncio
 async def test_dispatch_word_only_prose_rejected():
     # "hello world" matches the old expression char-class but has no

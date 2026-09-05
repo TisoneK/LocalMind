@@ -125,12 +125,15 @@ def _extract_code(message: str) -> str:
         # Also check if it's a simple expression (e.g., "2 + 2" or "psutil.cpu_count()")
         # The char class alone would match plain prose like "hello world"
         # (word chars + spaces), so require at least one code-ish token
-        # (paren, bracket, operator, '=', ',' or ':') — otherwise the input
+        # (paren, bracket, operator, '=', ',', ':' etc.) — otherwise the input
         # is prose and gets rejected instead of spawning a confusing subprocess.
+        # S422: backslash, single-quote, braces and semicolon added — a first
+        # line like  path = r"C:\Users\...\CV.docx"  (raw-string Windows path)
+        # was rejected as prose pre-S422 and burned a turn on the CV task.
         looks_like_expr = (
-            bool(re.match(r'^[\w\s\.\(\)\[\]\+\-\*/%=<>!,":]+$', first_line))
+            bool(re.match(r'^[\w\s\.\(\)\[\]\{\}\\\+\-\*/%=<>!,;:"\']+$', first_line))
             and len(first_line) < 200
-            and any(ch in first_line for ch in "()[]=+-*/%<>,:")
+            and any(ch in first_line for ch in "()[]=+-*/%<>,:;{}")
         )
         if has_indicator or looks_like_expr:
             return message.strip()
@@ -318,8 +321,10 @@ def _validate_code_exec(message: str) -> str | None:
     """
     if not _extract_code(message):
         return (
-            "I couldn't find executable Python code in that input. "
-            "Please provide code in a ```python``` block."
+            "I couldn't find executable Python code in that input. Send the "
+            "code itself as the input — it runs verbatim (a ```python``` "
+            "block also works). To RUN an existing .py file, use the shell "
+            "tool instead."
         )
     return None
 
