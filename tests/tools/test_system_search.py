@@ -529,8 +529,8 @@ async def test_files_token_relaxation_on_noun_phrase(monkeypatch, tmp_path):
     )
     monkeypatch.setattr("pathlib.Path.home", classmethod(lambda cls: tree))
 
-    from tools import dispatch
     from core.models import Intent
+    from tools import dispatch
 
     r = await dispatch(Intent.SYSTEM_SEARCH, "LocalMind project")
     assert r.success
@@ -554,8 +554,8 @@ async def test_files_no_relaxation_when_exact_matches_exist(monkeypatch, tmp_pat
     )
     monkeypatch.setattr("pathlib.Path.home", classmethod(lambda cls: tree))
 
-    from tools import dispatch
     from core.models import Intent
+    from tools import dispatch
 
     r = await dispatch(
         Intent.SYSTEM_SEARCH, '{"operation": "files", "query": "project plan"}'
@@ -589,8 +589,8 @@ async def test_recent_minutes_window_parsed(monkeypatch, tmp_path):
     monkeypatch.setattr("core.config._allowed_user_folders", lambda: [str(tree)])
     monkeypatch.setattr("pathlib.Path.home", classmethod(lambda cls: tree))
 
-    from tools import dispatch
     from core.models import Intent
+    from tools import dispatch
 
     r = await dispatch(
         Intent.SYSTEM_SEARCH,
@@ -618,11 +618,60 @@ async def test_recent_days_still_default_without_minutes(monkeypatch, tmp_path):
     monkeypatch.setattr("core.config._allowed_user_folders", lambda: [str(tree)])
     monkeypatch.setattr("pathlib.Path.home", classmethod(lambda cls: tree))
 
-    from tools import dispatch
     from core.models import Intent
+    from tools import dispatch
 
     r = await dispatch(Intent.SYSTEM_SEARCH, json.dumps({"operation": "recent"}))
     assert r.success
     assert "last 7 day(s)" in r.content
     assert r.metadata["minutes"] is None
     assert r.metadata["days"] == 7
+
+
+# ── Session 419: relaxed-fallback quality gate ───────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_relaxed_fallback_skips_generic_tokens(tmp_path, monkeypatch):
+    """The CV transcript: a corrupted query whose only 3+ char candidates are
+    generic words ('files') must NOT relax to them — 'files' matches junk in
+    any catalog. The 2-char distinctive token ('cv') wins instead."""
+    _allow(monkeypatch, tmp_path)
+    (tmp_path / "CV-TisoneKironget.pdf").write_text("cv")
+    (tmp_path / "dll files").mkdir()
+    (tmp_path / "doc_files").mkdir()
+    result = await dispatch(
+        Intent.SYSTEM_SEARCH,
+        _payload(operation="files", query="30 files cv", root=str(tmp_path)),
+    )
+    meta = result.metadata
+    assert meta["total"] >= 1
+    names = {r["name"] for r in meta["results"]}
+    assert any("CV" in n.upper() for n in names)
+    # The relaxation note names the token actually used — 'cv', not 'files'.
+    assert "'cv'" in result.content
+
+
+@pytest.mark.asyncio
+async def test_relaxed_fallback_reduces_path_token_to_basename(tmp_path, monkeypatch):
+    """A path pasted as a query token reduces to its basename — no file is
+    NAMED an absolute path, but the segment the user means often is."""
+    _allow(monkeypatch, tmp_path)
+    tisone = tmp_path / "Tisone"
+    tisone.mkdir()
+    (tisone / "CV-TisoneKironget.pdf").write_text("cv")
+    inner_root = tmp_path / "catalog"
+    inner_root.mkdir()
+    result = await dispatch(
+        Intent.SYSTEM_SEARCH,
+        _payload(
+            operation="files",
+            query=f"30 files {tisone} *",
+            root=str(inner_root.parent),
+        ),
+    )
+    meta = result.metadata
+    assert meta["total"] >= 1
+    names = {r["name"] for r in meta["results"]}
+    assert "Tisone" in names or any("CV" in n.upper() for n in names)
+    assert "'Tisone'" in result.content

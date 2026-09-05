@@ -86,6 +86,17 @@ _HARD_DAYS = 365
 _MAX_DUP_GROUPS = 25              # duplicates: groups returned, hard cap
 _MAX_APPS_SHOWN = 25
 
+# Session 419: tokens that must never win the files-operation relaxed
+# fallback. They match huge junk sets in ANY catalog (the "find my CV"
+# transcript's fallback matched "files" and returned 46 unrelated entries
+# while never suggesting the Documents\Tisone folder). A model searching
+# FOR files doesn't mean a file named "files".
+_RELAXED_GENERIC_TOKENS = frozenset({
+    "files", "file", "folder", "folders", "dir", "directory", "docs",
+    "documents", "data", "find", "search", "my", "all", "the", "and",
+    "for", "with", "name", "named", "recent", "latest", "new", "old",
+})
+
 _OPERATIONS = ("files", "recent", "largest", "duplicates", "apps", "open_with")
 
 # B-2026-08-25-1: when the tool is called with a PLAIN string (not JSON) — which
@@ -344,12 +355,37 @@ def _op_files(args: dict) -> ToolResult:
         # matching finds 0 (no file is named that). Fall back to the
         # longest single token and SAY SO — never silently return nothing
         # when a relaxed match exists.
+        #
+        # Session 419 quality gate. The "find my CV" transcript passed
+        # corrupted queries ("30 files C:\\...\\Tisone *") and the old
+        # fallback matched the generic token "files" — 46 junk entries —
+        # while the real Documents\\Tisone folder was never suggested and
+        # "cv" was skipped by the len<3 floor. Three rules: (1) a
+        # path-like token is reduced to its basename (no file is NAMED an
+        # absolute path, but the segment the user means often is);
+        # (2) generic filesystem/stopword tokens never win the fallback —
+        # they match junk in every catalog; (3) a 2-char token ("cv") is
+        # allowed as a last resort when no longer candidate matched.
         relaxed_note = ""
         if total_matches == 0 and len(query.split()) > 1:
-            tokens = sorted(query.split(), key=len, reverse=True)
-            for tok in tokens:
-                if len(tok) < 3:
+            candidates: list[str] = []
+            two_char: list[str] = []
+            for tok in query.split():
+                if "/" in tok or "\\" in tok:
+                    tok = re.split(r"[\\/]", tok)[-1]
+                tok = tok.strip().strip("*").strip()
+                if not tok or tok.lower() in _RELAXED_GENERIC_TOKENS:
                     continue
+                if len(tok) >= 3:
+                    candidates.append(tok)
+                elif len(tok) == 2 and tok.isalpha():
+                    two_char.append(tok)
+            ordered = sorted(candidates, key=len, reverse=True) + two_char
+            seen: set[str] = set()
+            for tok in ordered:
+                if tok.lower() in seen:
+                    continue
+                seen.add(tok.lower())
                 m2, s2, c2, t2 = _walk_catalog(
                     root, tok, max_depth, budget_ms, _MAX_SCANNED
                 )
