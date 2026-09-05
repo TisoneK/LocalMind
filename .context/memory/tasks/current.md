@@ -18,10 +18,15 @@ hard-stop, system_search fallback gate.
 
 ## Notes for the next session
 
-- **In-flight (owner: UI-polish session):** `frontend/src/globals.css` has an
-  uncommitted graphite-dark `--s-*` ladder darken (~0.7×; app shell
-  `--brand-bg-app`=`--s-2` `#1f2530`→`#161a22`). Left dirty for its owner —
-  NOT part of the Step 2b commit. Needs live-test + screenshot before commit.
+- **Graphite-dark polish (committed `5e2b8e1`) — DONE + live-verified (S421):**
+  `frontend/src/globals.css` darkened the dark `--s-*` ladder (`--s-2`
+  `#1f2530`→`#161a22`, whole ladder ~0.7×) for more white-text contrast. It
+  rode into the current.md context commit via a working-tree/rebase collision
+  (not deliberately batched). Live-tested in the running app (Vite :3000 +
+  backend :8000): DOM-verified `--s-2`=`#161a22`, white `--t-primary` reads
+  strong on the shell; Settings + light/dark round-trip clean; contrast scan
+  found only 3 intentionally-faint `--t-muted` labels <AA and the darken
+  *raised* their contrast (no regression). CHANGELOG entry added. Closed.
 - **Live-verify Step 3 when a provider window is free:** run the prompt-audit
   harness (`scripts/live_test_prompt_audit.py --adapter bankofai --model hy3`)
   before/after on a memory-heavy session; confirm the injected "What you know
