@@ -69,6 +69,27 @@ def test_extract_windows_relative_prose_and_mixed_separators():
     assert _extract_path_candidates("read subdir/notes.txt")[0] == "subdir/notes.txt"
 
 
+# ── S422: .pub and image extensions resolve as path candidates ──────────────
+# The OCR parser existed, but a .jpg path in a message never resolved —
+# "No file found" — so image reading was unreachable by path reference.
+# Same trap pre-S422 for .pub (now routed to honest unsupported_format).
+def test_extract_image_paths():
+    # Full drive-absolute path must be the FIRST candidate (S264 style) —
+    # the bare-fallback pattern may add a secondary tail candidate.
+    got = _extract_path_candidates(r"read C:\Users\tison\Pictures\scan.jpg")
+    assert got[0] == r"C:\Users\tison\Pictures\scan.jpg"
+    assert _extract_path_candidates("describe /home/user/photo.PNG")[0] == (
+        "/home/user/photo.PNG"
+    )
+
+
+def test_extract_pub_path():
+    got = _extract_path_candidates(
+        r"read C:\Users\tison\OneDrive\Documents\CV-TisoneKironget.pub"
+    )
+    assert got[0] == r"C:\Users\tison\OneDrive\Documents\CV-TisoneKironget.pub"
+
+
 def test_chunk_text_basic():
     text = "Paragraph one.\n\nParagraph two.\n\nParagraph three."
     chunks = _chunk_text(text, chunk_size=50, overlap=10)

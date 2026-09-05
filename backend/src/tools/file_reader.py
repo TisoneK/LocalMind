@@ -826,7 +826,13 @@ async def parse_file(
 # S422: .pub added — a Publisher file in a user message must resolve to a
 # path so it can reach the honest unsupported_format result (previously it
 # was invisible to the extractor and reported not_found).
-_READ_EXTS = r"py|js|ts|txt|md|csv|pdf|docx|xlsx|json|yaml|yml|toml|html|sh|rs|go|log|cfg|ini|env|pub"
+# S422: image extensions added — the OCR parser existed but a .jpg path in a
+# message never resolved ("No file found"), so the capability was unreachable
+# by path reference.
+_READ_EXTS = (
+    r"py|js|ts|txt|md|csv|pdf|docx|xlsx|json|yaml|yml|toml|html|sh|rs|go|log"
+    r"|cfg|ini|env|pub|png|jpg|jpeg|gif|bmp|webp|tiff"
+)
 
 # Ordered path patterns for pulling a file reference out of a message.
 # Matches: "quoted path.ext", C:\Windows\path.ext, /unix/path.ext, ~/path, bare.ext
@@ -842,9 +848,9 @@ _READ_EXTS = r"py|js|ts|txt|md|csv|pdf|docx|xlsx|json|yaml|yml|toml|html|sh|rs|g
 # (dev\test-run\notes.txt) survive whole instead of truncating to notes.txt —
 # the read-back-after-write failure reproduced live on Windows (Session 325).
 _PATH_PATTERNS = [
-    re.compile(rf"""["']([^"'\n]+?\.(?:{_READ_EXTS}))["']"""),
-    re.compile(rf"""([A-Za-z]:[\\/][^\n\r"'<>|*?]+?\.(?:{_READ_EXTS}))"""),
-    re.compile(rf"((?:~/|\.{{0,2}}/)?[\w.\\\-/]+\.(?:{_READ_EXTS}))"),
+    re.compile(rf"""["']([^"'\n]+?\.(?:{_READ_EXTS}))["']""", re.IGNORECASE),
+    re.compile(rf"""([A-Za-z]:[\\/][^\n\r"'<>|*?]+?\.(?:{_READ_EXTS}))""", re.IGNORECASE),
+    re.compile(rf"((?:~/|\.{{0,2}}/)?[\w.\\\-/]+\.(?:{_READ_EXTS}))", re.IGNORECASE),
 ]
 
 
