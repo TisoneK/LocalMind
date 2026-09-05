@@ -64,9 +64,12 @@ interface ChatMessageProps {
   message: ChatMessageType;
   /** Whether this message is currently being streamed (affects ThinkingBlock expansion) */
   isStreaming?: boolean;
-  /** Re-send the user prompt that produced this assistant reply (regenerate).
-   *  Only provided for assistant messages that have a preceding user prompt. */
-  onRetry?: () => void;
+  /** The user prompt that produced this assistant reply (regenerate target).
+   *  Passed as a stable STRING (not an inline closure) so React.memo on
+   *  ChatMessage isn't defeated by a fresh callback identity per render. */
+  retryPrompt?: string;
+  /** Stable send callback used to build the retry action (B-2026-09-05-6). */
+  onSend?: (message: string) => void;
   /** B-2026-08-23-18: per-path diff hunks captured this turn (preview Diff mode). */
   fileDiffs?: Record<string, DiffData>;
 }
@@ -505,7 +508,54 @@ function MarkdownDel({ children, ...props }: React.ComponentPropsWithoutRef<'del
 
 // ── MarkdownContent — renders markdown via ReactMarkdown ────────────────────
 
-function MarkdownContent({ text }: { text: string }) {
+// B-2026-09-05-6: the components map used to be a fresh object literal on
+// every render, so ReactMarkdown's subtree never reconciled cheaply and every
+// streaming token re-rendered markdown for ALL messages in the transcript
+// (visible flicker on long conversations). The plugin list and every handler
+// here are module-scope constants; MarkdownContent itself is memoized below,
+// so a message whose text hasn't changed skips the re-parse entirely.
+const MARKDOWN_COMPONENTS = {
+  // Code handling: distinguish inline vs block
+  code: ({ node: _node, inline, className, children, ...props }: any) => {
+    const match = /language-(\w+)/.exec(className || '');
+    // If it has a language class or contains a newline, it's a block code
+    if (!inline && (match || String(children).includes('\n'))) {
+      return (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      );
+    }
+    // Inline code
+    return <MarkdownInlineCode {...props}>{children}</MarkdownInlineCode>;
+  },
+  pre: MarkdownPreBlock as any,
+  a: MarkdownLink,
+  table: MarkdownTable,
+  thead: MarkdownTableHead,
+  tr: MarkdownTableRow,
+  th: ({ children, ...props }: any) => <MarkdownTableCell isHeader {...props}>{children}</MarkdownTableCell>,
+  td: ({ children, ...props }: any) => <MarkdownTableCell {...props}>{children}</MarkdownTableCell>,
+  h1: ({ children, ...props }: any) => <MarkdownHeading level={1} {...props}>{children}</MarkdownHeading>,
+  h2: ({ children, ...props }: any) => <MarkdownHeading level={2} {...props}>{children}</MarkdownHeading>,
+  h3: ({ children, ...props }: any) => <MarkdownHeading level={3} {...props}>{children}</MarkdownHeading>,
+  h4: ({ children, ...props }: any) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
+  h5: ({ children, ...props }: any) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
+  h6: ({ children, ...props }: any) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
+  ul: MarkdownUl,
+  ol: MarkdownOl,
+  li: MarkdownLi,
+  p: MarkdownP,
+  blockquote: MarkdownBlockquote,
+  hr: MarkdownHr,
+  strong: MarkdownStrong,
+  em: MarkdownEm,
+  del: MarkdownDel,
+} as const;
+
+const MARKDOWN_REMARK_PLUGINS = [remarkGfm] as const;
+
+const MarkdownContent = React.memo(function MarkdownContent({ text }: { text: string }) {
   if (!text) return null;
 
   // B-2026-08-09-10: the model sometimes emits malformed markdown (unclosed
@@ -516,51 +566,14 @@ function MarkdownContent({ text }: { text: string }) {
   return (
     <div className="text-[12px] text-brand-green-soft leading-relaxed overflow-hidden max-w-full break-words">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          // Code handling: distinguish inline vs block
-          code: ({ node: _node, inline, className, children, ...props }: any) => {
-            const match = /language-(\w+)/.exec(className || '');
-            // If it has a language class or contains a newline, it's a block code
-            if (!inline && (match || String(children).includes('\n'))) {
-              return (
-                <code className={className} {...props}>
-                  {children}
-                </code>
-              );
-            }
-            // Inline code
-            return <MarkdownInlineCode {...props}>{children}</MarkdownInlineCode>;
-          },
-          pre: MarkdownPreBlock as any,
-          a: MarkdownLink,
-          table: MarkdownTable,
-          thead: MarkdownTableHead,
-          tr: MarkdownTableRow,
-          th: ({ children, ...props }: any) => <MarkdownTableCell isHeader {...props}>{children}</MarkdownTableCell>,
-          td: ({ children, ...props }: any) => <MarkdownTableCell {...props}>{children}</MarkdownTableCell>,
-          h1: ({ children, ...props }: any) => <MarkdownHeading level={1} {...props}>{children}</MarkdownHeading>,
-          h2: ({ children, ...props }: any) => <MarkdownHeading level={2} {...props}>{children}</MarkdownHeading>,
-          h3: ({ children, ...props }: any) => <MarkdownHeading level={3} {...props}>{children}</MarkdownHeading>,
-          h4: ({ children, ...props }: any) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
-          h5: ({ children, ...props }: any) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
-          h6: ({ children, ...props }: any) => <MarkdownHeading level={4} {...props}>{children}</MarkdownHeading>,
-          ul: MarkdownUl,
-          ol: MarkdownOl,
-          li: MarkdownLi,
-          p: MarkdownP,
-          blockquote: MarkdownBlockquote,
-          hr: MarkdownHr,
-          strong: MarkdownStrong,
-          em: MarkdownEm,
-          del: MarkdownDel,
-        }}
+        remarkPlugins={MARKDOWN_REMARK_PLUGINS as any}
+        components={MARKDOWN_COMPONENTS as any}
       >
         {repaired}
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 // ── MessageMetrics — per-message latency/token line (B-2026-08-09-3 / ADR-13) ──
 // Renders a small muted line under each assistant reply, e.g. `39.9s · 0/321 tok`.
@@ -756,7 +769,18 @@ function MessageActions({
   );
 }
 
-export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMessageProps) {
+// B-2026-09-05-6: memoized so a streaming token re-renders ONLY the streaming
+// message, not the whole transcript. The retry prompt is passed as a plain
+// string (retryPrompt) with a STABLE onSend callback — an inline
+// onRetry={() => onSend(prompt)} would give every message a new function
+// identity each render and defeat this memo entirely.
+export const ChatMessage = React.memo(function ChatMessage({
+  message,
+  isStreaming,
+  retryPrompt,
+  onSend,
+  fileDiffs,
+}: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   // B-2026-08-23-6: clickable file-result chips open an inline preview dialog
@@ -806,6 +830,13 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
     }
     return { additions, deletions };
   }, [diffHunks]);
+
+  // Stable identity across renders while retryPrompt/onSend are unchanged —
+  // keeps the memo comparison cheap and the action rows consistent.
+  const onRetry = useMemo(
+    () => (retryPrompt && onSend ? () => onSend(retryPrompt) : undefined),
+    [retryPrompt, onSend],
+  );
 
   return (
     <div className={`px-4 py-3 overflow-hidden group relative ${isUser ? 'justify-end' : 'justify-start border-l-2 border-l-brand-green/30'}`}>
@@ -988,4 +1019,4 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
       <FilePreviewDialog path={previewPath} onClose={() => setPreviewPath(null)} diffs={fileDiffs} />
     </div>
   );
-}
+});

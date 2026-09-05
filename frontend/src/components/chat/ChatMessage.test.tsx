@@ -26,7 +26,7 @@ describe('ChatMessage hover action row', () => {
   });
 
   it('renders Copy + Retry for assistant messages, hidden until hover', () => {
-    render(<ChatMessage message={makeMessage()} onRetry={() => {}} />);
+    render(<ChatMessage message={makeMessage()} retryPrompt="hello" onSend={() => {}} />);
 
     const actions = screen.getByTestId('message-actions');
     // Hidden by default; revealed only on group hover.
@@ -38,7 +38,7 @@ describe('ChatMessage hover action row', () => {
   });
 
   it('copies the message content to the clipboard', async () => {
-    render(<ChatMessage message={makeMessage()} onRetry={() => {}} />);
+    render(<ChatMessage message={makeMessage()} retryPrompt="hello" onSend={() => {}} />);
 
     fireEvent.click(screen.getByRole('button', { name: /copy/i }));
 
@@ -49,17 +49,17 @@ describe('ChatMessage hover action row', () => {
     expect(screen.getByRole('button', { name: /copied/i })).toBeInTheDocument();
   });
 
-  it('invokes onRetry when Retry is clicked', () => {
-    const onRetry = vi.fn();
-    render(<ChatMessage message={makeMessage()} isStreaming={false} onRetry={onRetry} />);
+  it('invokes onSend with the retryPrompt when Retry is clicked', () => {
+    const onSend = vi.fn();
+    render(<ChatMessage message={makeMessage()} isStreaming={false} retryPrompt="what is my disk space?" onSend={onSend} />);
 
     fireEvent.click(screen.getByRole('button', { name: /retry/i }));
 
-    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onSend).toHaveBeenCalledWith("what is my disk space?");
   });
 
   it('disables Retry while streaming', () => {
-    render(<ChatMessage message={makeMessage()} isStreaming onRetry={() => {}} />);
+    render(<ChatMessage message={makeMessage()} isStreaming retryPrompt="hello" onSend={() => {}} />);
 
     expect(screen.getByRole('button', { name: /retry/i })).toBeDisabled();
   });
@@ -99,7 +99,7 @@ describe('ChatMessage markdown table <br> handling', () => {
       '|---|---|',
       '| Temperature | 16-18°C<br>High: 23°C |',
     ].join('\n');
-    render(<ChatMessage message={makeMessage({ content })} onRetry={() => {}} />);
+    render(<ChatMessage message={makeMessage({ content })} retryPrompt="hello" onSend={() => {}} />);
     // The literal "<br>" must NOT appear as text …
     expect(screen.queryByText(/<br\s*\/?>/i)).not.toBeInTheDocument();
     // … and both values render (split across a real line break).
@@ -134,14 +134,14 @@ function makeDiffData() {
 
 describe('ChatMessage diff accept flow (B-2026-08-25-6)', () => {
   it('renders the full diff with an Accept bar while pending', () => {
-    render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} onRetry={() => {}} />);
+    render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} retryPrompt="hello" onSend={() => {}} />);
     expect(screen.getByRole('button', { name: /accept/i })).toBeTruthy();
     // A removed diff line is visible in the colored diff view.
     expect(screen.getByText('- milk')).toBeTruthy();
   });
 
   it('collapses to the compact applied card after Accept — no colored diff, no Accept bar', () => {
-    render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} onRetry={() => {}} />);
+    render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} retryPrompt="hello" onSend={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: /accept/i }));
     // Accept bar gone.
     expect(screen.queryByRole('button', { name: /accept/i })).toBeNull();
@@ -154,7 +154,7 @@ describe('ChatMessage diff accept flow (B-2026-08-25-6)', () => {
   });
 
   it('re-opens the diff read-only via View diff, and hides it again', () => {
-    render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} onRetry={() => {}} />);
+    render(<ChatMessage message={makeMessage({ diffData: makeDiffData() })} retryPrompt="hello" onSend={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: /accept/i }));
     // Re-open.
     fireEvent.click(screen.getByTestId('diff-applied-toggle'));
@@ -168,7 +168,7 @@ describe('ChatMessage diff accept flow (B-2026-08-25-6)', () => {
   });
 
   it('renders no diff UI when the message has no diffData', () => {
-    render(<ChatMessage message={makeMessage()} onRetry={() => {}} />);
+    render(<ChatMessage message={makeMessage()} retryPrompt="hello" onSend={() => {}} />);
     expect(screen.queryByTestId('diff-applied-toggle')).toBeNull();
     expect(screen.queryByRole('button', { name: /apply these changes/i })).toBeNull();
   });

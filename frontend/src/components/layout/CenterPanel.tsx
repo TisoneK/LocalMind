@@ -143,17 +143,23 @@ export function CenterPanel({
     }
   };
 
-  // Scroll only the transcript container on new messages. Calling
-  // scrollIntoView() on a nested marker can also scroll outer ancestors,
-  // which may move the entire workspace (including the header) in a flex
-  // layout. Targeting this container keeps the document viewport fixed.
+  // B-2026-09-05-6: follow the stream only while the user is already pinned
+  // near the bottom. The old effect scrolled smoothly on EVERY message-array
+  // change — i.e. every streamed token — so each new smooth-scroll cancelled
+  // the previous one mid-flight: the transcript visibly flickered and the
+  // user couldn't scroll up to read history during a stream. Instant follow
+  // (no animation) while pinned; hands off entirely when scrolled away.
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
 
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromBottom > 120) return;
+
     container.scrollTo({
       top: container.scrollHeight,
-      behavior: 'smooth',
+      behavior: 'auto',
     });
   }, [messages]);
 
@@ -361,13 +367,18 @@ export function CenterPanel({
           {messages.map((msg, i) => {
             // Retry = regenerate the response to the user message that
             // precedes this assistant reply (re-sends that exact prompt).
+            // Passed as a plain string + the stable onSend callback (NOT an
+            // inline closure) so the memoized ChatMessage can skip
+            // re-rendering historical messages while a stream updates the
+            // last one (B-2026-09-05-6).
             const prompt = findRetryPrompt(messages, i);
             return (
               <ChatMessage
                 key={msg.id}
                 message={msg}
                 isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'}
-                onRetry={prompt ? () => onSend(prompt) : undefined}
+                retryPrompt={prompt}
+                onSend={onSend}
                 fileDiffs={fileDiffs}
               />
             );
