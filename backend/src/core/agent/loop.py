@@ -1005,6 +1005,11 @@ _ERR_INPUT = frozenset({
     "missing_field", "parse_error", "binary_content", "construction_failed",
     "nl_command_rejected",
 })
+# S422: OneDrive/cloud placeholder that could not be hydrated (file bytes are
+# in the cloud, provider not serving them). NOT a plain io_error — every OS-
+# level read (zipfile/code_exec/shell included) fails identically, so the
+# directive must stop the model from improvising alternate readers.
+_ERR_CLOUDFILE = frozenset({"cloud_file_unavailable"})
 _ERR_NORESULT = frozenset({"not_found", "empty", "io_error", "http_error", "network", "challenge"})
 _ERR_TRANSIENT = frozenset({"timeout", "rate_limit"})
 _ERR_STOP = frozenset({"wall_clock_cap", "recursion_limit"})
@@ -1028,6 +1033,16 @@ def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
             f"The input to `{tool_name}` was rejected as invalid. Read the message above for what "
             f"it expects, then EITHER call `{tool_name}` again with corrected input, OR use the tool "
             "that actually fits this step. Do not repeat the identical call."
+        )
+    if et in _ERR_CLOUDFILE:
+        # The tool already started OneDrive and/or waited for hydration where
+        # possible; the message above carries the precise state and remedy.
+        return (
+            f"`{tool_name}` could not read a cloud (OneDrive) placeholder file whose content is not "
+            "downloaded. EVERY read of it fails at the OS level until OneDrive hydrates it — do NOT "
+            "retry with zipfile, code_exec, shell, or any other reader. Either re-ask for the same "
+            "file shortly (hydration may have finished after the tool's wait), or report the actual "
+            "state to the user with the remedy named above. Never fabricate the file's contents."
         )
     if et in _ERR_NORESULT:
         # B-2026-08-20-19: for web_fetch, the model usually has search results

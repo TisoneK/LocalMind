@@ -1,5 +1,7 @@
 """Tests for the file reader tool."""
 import pytest
+
+from tools import file_reader as fr
 from tools.file_reader import _chunk_text, _extract_path_candidates, parse_file
 
 
@@ -153,3 +155,239 @@ async def test_parse_file_unknown_extension():
     data = b"Some content in an unknown file type"
     attachment = await parse_file(data=data, filename="file.xyz", content_type="application/xyz")
     assert len(attachment.chunks) >= 1
+
+
+# ── Cloud-file (OneDrive Files-On-Demand) recovery (S422) ────────────────────
+# The "find my CV" transcript: a PINNED OneDrive placeholder with the cloud
+# provider down fails EVERY read with OSError EINVAL (Win32 362 "The cloud
+# file provider is not running"). Pre-S422 file_task surfaced a bare
+# "[Errno 22] Invalid argument" and the model burned turns improvising
+# zipfile / raw-byte / shell reads. The read path now classifies the
+# condition, nudges the provider, and reports a precise remedy.
+
+def _fake_attrs(monkeypatch, placeholder: bool):
+    """Force _windows_file_attrs to report a (non-)placeholder regardless of OS."""
+    attrs = 0x20 | (0x400000 if placeholder else 0)  # ARCHIVE (+ RECALL_ON_DATA_ACCESS)
+    monkeypatch.setattr(fr, "_windows_file_attrs", lambda p: attrs)
+
+
+def test_classify_cloud_error_by_winerror():
+    err = OSError(22, "Invalid argument")
+    err.winerror = 362  # ERROR_CLOUD_FILE_NOT_UNDER_CLOUD_ROOT family member
+    assert fr._classify_cloud_file_error(err, attrs=0) is True
+
+
+def test_classify_cloud_error_by_einval_plus_placeholder_attrs():
+    # Python's io layer raises OSError(errno=EINVAL) WITHOUT winerror for
+    # filter-driver failures (verified on the real S422 placeholder).
+    err = OSError(22, "Invalid argument")
+    assert fr._classify_cloud_file_error(err, attrs=0x400000 | 0x20) is True
+
+
+def test_classify_plain_einval_not_cloud():
+    # EINVAL on a NORMAL file (e.g. reading a directory) is NOT cloud —
+    # it must propagate as a generic failure, not the cloud path.
+    err = OSError(22, "Invalid argument")
+    assert fr._classify_cloud_file_error(err, attrs=0x20) is False
+
+
+def test_classify_other_oserror_not_cloud():
+    err = OSError(13, "Permission denied")
+    assert fr._classify_cloud_file_error(err, attrs=0x400000) is False
+
+
+@pytest.mark.asyncio
+async def test_cloud_recovery_hydrates_after_provider_start(monkeypatch, tmp_path):
+    """Read fails → provider started → probe succeeds → data returned."""
+    f = tmp_path / "cv.docx"
+    f.write_bytes(b"PK hydrated-bytes")
+    _fake_attrs(monkeypatch, placeholder=True)
+
+    state = {"fail": True, "started": 0}
+
+    def flaky_read(p):
+        if state["fail"]:
+            raise OSError(22, "Invalid argument")
+        return b"PK hydrated-bytes"
+
+    def fake_start(exe):
+        state["started"] += 1
+        state["fail"] = False  # the started provider hydrates the file
+        return True
+
+    monkeypatch.setattr(fr, "_cloud_provider_running", lambda: False)
+    monkeypatch.setattr(fr, "_find_cloud_provider_exe", lambda: tmp_path / "fake" / "OneDrive.exe")
+    monkeypatch.setattr(fr, "_start_cloud_provider", fake_start)
+    monkeypatch.setattr(fr, "_probe_cloud_file", lambda p: not state["fail"])
+    monkeypatch.setattr(fr, "_PROVIDER_START_WAIT_SECONDS", 0.05)
+    import asyncio as _aio
+
+    async def nosleep(_):
+        return None
+
+    monkeypatch.setattr(_aio, "sleep", nosleep)
+
+    data, diag = await fr._read_file_with_cloud_recovery(f, _read=flaky_read)
+    assert data == b"PK hydrated-bytes"
+    assert diag["cloud_placeholder"] is True
+    assert diag["provider_running"] is False
+    assert diag["provider_started"] is True
+    assert state["started"] == 1
+
+
+@pytest.mark.asyncio
+async def test_cloud_recovery_reports_unhydrated_when_provider_down(monkeypatch, tmp_path):
+    """Provider missing entirely → honest None + full diagnostics."""
+    f = tmp_path / "cv.docx"
+    f.write_bytes(b"PK never-readable")
+    _fake_attrs(monkeypatch, placeholder=True)
+
+    def always_fail(p):
+        raise OSError(22, "Invalid argument")
+
+    monkeypatch.setattr(fr, "_cloud_provider_running", lambda: False)
+    monkeypatch.setattr(fr, "_find_cloud_provider_exe", lambda: None)  # not installed
+    monkeypatch.setattr(fr, "_probe_cloud_file", lambda p: False)  # never hydrates
+    import asyncio as _aio
+
+    async def nosleep(_):
+        return None
+
+    monkeypatch.setattr(_aio, "sleep", nosleep)
+    monkeypatch.setattr(fr, "_PROVIDER_START_WAIT_SECONDS", 0.05)
+
+    data, diag = await fr._read_file_with_cloud_recovery(f, _read=always_fail)
+    assert data is None
+    assert diag["cloud_placeholder"] is True
+    assert diag["provider_running"] is False
+    assert diag["provider_started"] is False
+    assert diag["cloud_error"] == 22  # the original OS error is preserved
+
+
+@pytest.mark.asyncio
+async def test_cloud_recovery_provider_running_no_start(monkeypatch, tmp_path):
+    """Provider already running → never spawns a process; keeps waiting."""
+    f = tmp_path / "cv.docx"
+    f.write_bytes(b"PK slow-provider")
+    _fake_attrs(monkeypatch, placeholder=True)
+
+    def slow_read(p):
+        raise OSError(22, "Invalid argument")
+
+    monkeypatch.setattr(fr, "_cloud_provider_running", lambda: True)
+    started = {"n": 0}
+
+    def no_start(exe):
+        started["n"] += 1
+        return True
+
+    monkeypatch.setattr(fr, "_start_cloud_provider", no_start)
+    monkeypatch.setattr(fr, "_probe_cloud_file", lambda p: False)
+    import asyncio as _aio
+
+    async def nosleep(_):
+        return None
+
+    monkeypatch.setattr(_aio, "sleep", nosleep)
+    monkeypatch.setattr(fr, "_PROVIDER_START_WAIT_SECONDS", 0.05)
+
+    data, diag = await fr._read_file_with_cloud_recovery(f, _read=slow_read)
+    assert data is None
+    assert diag["provider_running"] is True
+    assert diag["provider_started"] is False
+    assert started["n"] == 0
+
+
+def test_cloud_unavailable_message_names_remedy(tmp_path):
+    diag = {"cloud_placeholder": True, "provider_running": False,
+            "provider_started": False, "cloud_error": 362}
+    msg = fr._cloud_file_unavailable_message(tmp_path / "cv.docx", diag)
+    assert "OneDrive" in msg
+    assert "Remedy" in msg
+    assert "Do NOT try zipfile/code_exec/shell" in msg
+    assert "Never fabricate" in msg
+
+
+@pytest.mark.asyncio
+async def test_file_task_cloud_placeholder_reports_cloud_file_unavailable(monkeypatch, tmp_path):
+    """End-to-end: file_task returns error_type=cloud_file_unavailable, with the
+    recovery-relevant metadata — the exact shape the transcript needed."""
+    from tools.file_reader import file_task
+
+    f = tmp_path / "CV-Test.docx"
+    f.write_bytes(b"PK placeholder")
+    from pathlib import Path as _P
+
+    monkeypatch.setattr(
+        "core.config._allowed_user_folders", lambda: [str(tmp_path), str(_P.home())]
+    )
+    _fake_attrs(monkeypatch, placeholder=True)
+
+    def always_fail(p):
+        raise OSError(22, "Invalid argument")
+
+    monkeypatch.setattr(fr, "_default_read", always_fail)
+    monkeypatch.setattr(fr, "_cloud_provider_running", lambda: False)
+    monkeypatch.setattr(fr, "_find_cloud_provider_exe", lambda: None)
+    monkeypatch.setattr(fr, "_probe_cloud_file", lambda p: False)  # never hydrates
+    import asyncio as _aio
+
+    async def nosleep(_):
+        return None
+
+    monkeypatch.setattr(_aio, "sleep", nosleep)
+    monkeypatch.setattr(fr, "_PROVIDER_START_WAIT_SECONDS", 0.05)
+
+    res = await file_task(str(f))
+    assert res.success is False
+    assert res.error_type == "cloud_file_unavailable"
+    assert res.metadata["cloud_placeholder"] is True
+    assert "Remedy" in res.content
+
+
+@pytest.mark.asyncio
+async def test_file_task_happy_path_unchanged(monkeypatch, tmp_path):
+    """Normal local file still reads through the same pipeline unchanged."""
+    from tools.file_reader import file_task
+
+    f = tmp_path / "notes.md"
+    f.write_bytes(b"# hello\nworld\n")
+    from pathlib import Path as _P
+
+    monkeypatch.setattr(
+        "core.config._allowed_user_folders", lambda: [str(tmp_path), str(_P.home())]
+    )
+
+    res = await file_task(str(f))
+    assert res.success is True
+    assert not res.error_type
+    assert "hello" in res.content
+
+
+@pytest.mark.asyncio
+async def test_file_task_plain_einval_stays_internal_error(monkeypatch, tmp_path):
+    """EINVAL on a normal file must NOT be classified as cloud — it keeps the
+    honest generic failure (e.g. read-a-directory edge)."""
+    from tools.file_reader import file_task
+
+    d = tmp_path / "not-a-file.docx"  # exists() is True, is_file() is False →
+    # file_task skips it; use a real file whose read raises plain EINVAL.
+    real = tmp_path / "weird.md"
+    real.write_bytes(b"x")
+    from pathlib import Path as _P
+
+    monkeypatch.setattr(
+        "core.config._allowed_user_folders", lambda: [str(tmp_path), str(_P.home())]
+    )
+    _fake_attrs(monkeypatch, placeholder=False)
+
+    def plain_einval(p):
+        raise OSError(22, "Invalid argument")  # no winerror, no placeholder attrs
+
+    monkeypatch.setattr(fr, "_default_read", plain_einval)
+
+    res = await file_task(str(real))
+    assert res.success is False
+    # NOT the cloud class — EINVAL on a normal file is a generic read failure.
+    assert res.error_type == "internal_error"
+    assert res.error_type != "cloud_file_unavailable"

@@ -25,7 +25,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
+import subprocess
+import time
 from pathlib import Path
 
 from core.agent.constants import FILE_OP_TIMEOUT_SECONDS, FILE_READ_MAX_BYTES
@@ -41,6 +44,227 @@ logger = logging.getLogger(__name__)
 # truncated at a clean line boundary with a precise line-count notice so the
 # model knows exactly how much is missing.
 _FULL_CONTENT_MAX_BYTES: int = 100 * 1024  # 100 KB
+
+# ── Cloud-file (OneDrive Files-On-Demand) handling (S422) ───────────────────
+# OneDrive "Files On-Demand" leaves placeholder entries on disk whose bytes
+# live in the cloud. Reading one is supposed to hydrate it transparently —
+# but when the cloud provider process (OneDrive.exe) is not running, EVERY
+# read fails with OSError EINVAL (Win32 ERROR_CLOUD_FILE_* family; observed
+# 362 "The cloud file provider is not running" on a real PINNED placeholder).
+# Before S422 this surfaced as a bare "[Errno 22] Invalid argument" that the
+# model misdiagnosed and worked around with zipfile / raw-byte / shell
+# attempts (the "find my CV" transcript). We now classify the condition and
+# give one bounded provider nudge; everything else is an honest, precise
+# error. NOTE: a pinned placeholder cannot be hydrated from the file side
+# while the provider is down — starting the provider is the only remedy.
+
+_FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x400000
+_FILE_ATTRIBUTE_OFFLINE = 0x1000
+
+# winnt.h ERROR_CLOUD_FILE_* family (362..410). 362 is the observed
+# "The cloud file provider is not running" code.
+_CLOUD_FILE_WINERROR_LO = 362
+_CLOUD_FILE_WINERROR_HI = 410
+
+_CLOUD_PROVIDER_NAME = "onedrive.exe"
+
+# Bounded hydration wait after the provider is (re)started — a small file
+# over a working sync connection downloads well inside this; a big one will
+# honestly report "not yet downloaded, retry shortly" instead of hanging.
+_PROVIDER_START_WAIT_SECONDS = 12.0
+_PROVIDER_POLL_INTERVAL_SECONDS = 1.0
+
+
+def _windows_file_attrs(p: Path) -> int:
+    """``st_file_attributes`` on Windows; 0 elsewhere (attribute is nt-only)."""
+    try:
+        return os.stat(p).st_file_attributes
+    except (AttributeError, OSError):
+        return 0
+
+
+def _attrs_say_cloud_placeholder(attrs: int) -> bool:
+    """RECALL_ON_DATA_ACCESS / OFFLINE mark a Files-On-Demand placeholder.
+
+    REPARSE_POINT alone is NOT cloud (plain symlinks/junctions carry it).
+    """
+    return bool(attrs & (_FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | _FILE_ATTRIBUTE_OFFLINE))
+
+
+def _safe_file_size(p: Path) -> int:
+    """st_size via stat, 0 when stat fails (metadata only — never fatal)."""
+    try:
+        return os.stat(p).st_size
+    except OSError:
+        return 0
+
+
+def _classify_cloud_file_error(e: OSError, attrs: int) -> bool:
+    """Is this OSError a cloud-file provider failure (not a plain EINVAL)?
+
+    Two accepted signals, either suffices:
+    - ``e.winerror`` inside the ERROR_CLOUD_FILE_* family (strong, OS-given);
+    - EINVAL + placeholder attributes (Python's io layer raises
+      OSError(errno=EINVAL) WITHOUT winerror for filter-driver failures —
+      verified on the real S422 placeholder, where GetLastError() held 362
+      but ``e.winerror`` was None).
+    """
+    winerr = getattr(e, "winerror", None)
+    if isinstance(winerr, int) and _CLOUD_FILE_WINERROR_LO <= winerr <= _CLOUD_FILE_WINERROR_HI:
+        return True
+    return e.errno == 22 and _attrs_say_cloud_placeholder(attrs)
+
+
+def _cloud_provider_running() -> bool | None:
+    """True/False by process scan; None when psutil is unavailable."""
+    try:
+        import psutil
+    except ImportError:
+        return None
+    try:
+        for proc in psutil.process_iter(["name"]):
+            name = (proc.info.get("name") or "").lower()
+            if name == _CLOUD_PROVIDER_NAME:
+                return True
+    except Exception as e:  # psutil can raise on access-restricted processes
+        logger.debug("[file_task] provider process scan failed: %s", e)
+        return None
+    return False
+
+
+def _find_cloud_provider_exe() -> Path | None:
+    """Locate the installed cloud-provider executable, or None."""
+    if os.name != "nt":
+        return None
+    candidates: list[Path] = []
+    local_app = os.environ.get("LOCALAPPDATA")
+    if local_app:
+        candidates.append(Path(local_app) / "Microsoft" / "OneDrive" / "OneDrive.exe")
+    candidates.extend([
+        Path("C:/Program Files/Microsoft OneDrive/OneDrive.exe"),
+        Path("C:/Program Files (x86)/Microsoft OneDrive/OneDrive.exe"),
+    ])
+    for c in candidates:
+        try:
+            if c.is_file():
+                return c
+        except OSError:
+            continue
+    return None
+
+
+def _start_cloud_provider(exe: Path) -> bool:
+    """Start the provider detached (no console, no output capture)."""
+    try:
+        flags = 0
+        if hasattr(subprocess, "DETACHED_PROCESS"):
+            flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        subprocess.Popen(  # noqa: S603 — fixed executable path, no shell
+            [str(exe), "/background"],
+            close_fds=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=flags,
+        )
+        return True
+    except Exception as e:
+        logger.warning("[file_task] failed to start cloud provider %s: %s", exe, e)
+        return False
+
+
+def _default_read(p: Path) -> bytes:
+    return p.read_bytes()
+
+
+def _probe_cloud_file(p: Path) -> bool:
+    """Short read to check hydration state; True when bytes are reachable."""
+    try:
+        with open(p, "rb") as f:
+            f.read(16)
+        return True
+    except OSError:
+        return False
+
+
+async def _read_file_with_cloud_recovery(
+    p: Path, _read=None
+) -> tuple[bytes | None, dict]:
+    """file_task's canonical byte read with cloud-placeholder recovery.
+
+    Returns ``(data, diagnostics)``. ``data`` is None when the file could
+    not be read; ``diagnostics`` records the cloud state for the result
+    metadata and the user-facing message. ``_read`` is injectable for tests.
+    """
+    read = _read or _default_read
+    diag: dict = {
+        "cloud_placeholder": False,
+        "provider_running": None,
+        "provider_started": False,
+        "cloud_error": None,
+    }
+    attrs = _windows_file_attrs(p)
+    diag["cloud_placeholder"] = _attrs_say_cloud_placeholder(attrs)
+    try:
+        # On a healthy provider this read IS the hydration trigger — the
+        # filter driver blocks until the bytes arrive.
+        return read(p), diag
+    except OSError as e:
+        if not _classify_cloud_file_error(e, attrs):
+            raise
+        diag["cloud_error"] = getattr(e, "winerror", None) or e.errno
+        logger.info("[file_task] cloud-file read failed for %s: %s", p, e)
+
+    running = _cloud_provider_running()
+    diag["provider_running"] = running
+    if running is False:
+        exe = _find_cloud_provider_exe()
+        if exe is not None and _start_cloud_provider(exe):
+            diag["provider_started"] = True
+            logger.info("[file_task] started cloud provider %s to hydrate %s", exe, p.name)
+
+    deadline = time.monotonic() + _PROVIDER_START_WAIT_SECONDS
+    while time.monotonic() < deadline:
+        await asyncio.sleep(_PROVIDER_POLL_INTERVAL_SECONDS)
+        # Probe read: succeeds the moment the filter can hydrate.
+        if _probe_cloud_file(p):
+            return read(p), diag
+    # data=None after this point ALWAYS means "timed out waiting for
+    # hydration" — cloud_error keeps the original OS error (the root cause).
+    return None, diag
+
+
+def _cloud_file_unavailable_message(p: Path, diag: dict) -> str:
+    """Precise, actionable failure text for an unhydrated cloud placeholder."""
+    lines = [
+        f"Could not read {p}: it is a OneDrive/cloud placeholder whose content is not on disk",
+        "(a normal read would download it, but the cloud file provider is not serving this file right now).",
+    ]
+    if diag.get("provider_started"):
+        lines.append(
+            f"I started OneDrive and waited {int(_PROVIDER_START_WAIT_SECONDS)}s, "
+            "but the file is still not downloaded."
+        )
+        lines.append(
+            "Remedy: give OneDrive a few more seconds to sync, then re-ask to read this file — "
+            "the read will then succeed. Do NOT try zipfile/code_exec/shell reads: the file is "
+            "unreadable at the OS level until OneDrive hydrates it."
+        )
+    elif diag.get("provider_running") is False:
+        lines.append("OneDrive.exe is not running and could not be started automatically (it may not be installed).")
+        lines.append(
+            "Remedy: ask the user to start OneDrive (or open the file in its app once), then re-ask. "
+            "Do NOT try zipfile/code_exec/shell reads: the file is unreadable at the OS level until "
+            "OneDrive hydrates it."
+        )
+    else:
+        lines.append("The OneDrive sync client is running but has not downloaded this file yet.")
+        lines.append(
+            "Remedy: wait a moment and re-ask, or have the user open the file in its app once. "
+            "Do NOT try zipfile/code_exec/shell reads for the same reason."
+        )
+    lines.append("Never fabricate the file's contents — report this state honestly.")
+    return "\n".join(lines)
+
 
 # Extensions handled by special parsers in parse_file() — these bypass the
 # line-numbered plain-text path and use the existing chunked pipeline.
@@ -527,7 +751,35 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                     error_message=f"Path not in allowed read paths: {p}",
                 )
             try:
-                data = p.read_bytes()
+                # S422: canonical read with cloud-placeholder recovery. A
+                # Files-On-Demand placeholder raises EINVAL when the cloud
+                # provider is down; without this the model burningly
+                # retried via zipfile / raw reads / shell (the "find my
+                # CV" transcript).
+                data, cloud_diag = await _read_file_with_cloud_recovery(p)
+                if data is None:
+                    logger.warning(
+                        "[file_task] cloud file unavailable: %s (provider_running=%s, started=%s)",
+                        p, cloud_diag.get("provider_running"), cloud_diag.get("provider_started"),
+                    )
+                    return ToolResult(
+                        content=_cloud_file_unavailable_message(p, cloud_diag),
+                        risk=RiskLevel.LOW,
+                        source="file_reader",
+                        success=False,
+                        error_type="cloud_file_unavailable",
+                        error_message=(
+                            f"Cloud placeholder not hydrated: {p} "
+                            f"(provider_running={cloud_diag.get('provider_running')}, "
+                            f"provider_started={cloud_diag.get('provider_started')})"
+                        ),
+                        metadata={
+                            "path": str(p),
+                            "filename": p.name,
+                            "size_bytes": _safe_file_size(p),
+                            **cloud_diag,
+                        },
+                    )
                 ext = p.suffix.lower()
 
                 # ── Plain text / code files: line-numbered output ────────
