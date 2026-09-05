@@ -6009,3 +6009,15 @@ top stories via web_research. No frontend/agent-loop change.
 - **Open items:** Step 2b (optional): fold the CHAT branch into the baseline+tail split (it is a separate byte-stable surface today, verified). Step 3 Memory Retrieval Gate next; standing: ~36 Windows backend failures + ruff baseline peer pass.
 - **Report:** none — recorded here + fail-on-old tests (per S417 convention; full detail in commit message)
 - **Notes:** (1) A/B null result is a PROVIDER property (block granularity), not a fix failure — do not re-run expecting a delta on bankofai; the delta exists on prefix-exact caches (Anthropic-style). (2) The audit hook's `.last-payload.json` only holds the LAST call — for multi-call verification read the JSONL sizes (constant = stable) rather than re-deriving from one dump. (3) Persona/skill tests in test_empty_agent_fix.py now call build_agent_intent_tail(intent=...) — no available_tools/memory_facts kwargs there anymore.
+
+---
+## 2026-09-05 — Session 419 — P0 Step 3 (Memory Retrieval Gate) + UI rework batch
+
+- **Agent:** claude-opus-4.8 | **Model:** claude-opus-4-8 | **Platform:** macOS (localmind-7c) | **Role:** engineer | **Core:** 0.8.0
+- **Feature:** `p0-context-engineering` — Step 3 done. Also a UI-rework batch (owner-driven).
+- **P0 Step 3 (`38739c5`):** Memory Retrieval Gate. Scoping finding — retrieval was ALREADY per-request, conditional (should_retrieve_memory), semantic top-K (_MAX_FACTS=6), relevance-thresholded (0.45/0.60); the "inject-all dump" the research assumed was already gone. Only missing Component-5 piece = the ~500-token budget cap (count cap ≠ size cap). Added `cap_facts_to_budget` (memory.py) applied at `_memory_facts` (agent_runtime). 5 cap tests + 50 memory regression pass; ruff clean. Behavior unchanged on normal turns (ceiling for long-fact sets). Live prompt-audit before/after still recommended. Claim 20260905T034836Z, release 20260905T035032Z.
+- **UI rework batch (earlier this session):** Turn Anatomy strip in chat (thinkMs/tool/answer segments, clickable) then REVERTED the expandable rows out of chat per owner feedback (ADR-34 B-11: chat stays compact chips; detail lives in the Actions tab) — ActionRow removed. Redesigned the **Actions tab** (calm rows, right caret, terminal/diff bodies — `fce41d5`), the **Terminal** (❯ prompt, larger type — `06d1d12`), and added **terminal command grouping + newest-first Actions & Workspace** (`9fa9827`). Also fixed the thinking-timer double-count (B-2026-09-04-4) + search relevance/safety (B-2026-09-04-3, news routing + Brave gate) earlier.
+- **Coordination:** confirmed no live session / active claim on Step 2b before taking Step 3 (scopes disjoint: memory vs prompts.py). Owner asked to pull-without-interfering — synced clean, held, then proceeded on Step 3 per owner direction.
+- **Open items:** P0 Steps 2b (CHAT-branch fold), 4 (tool-result index), 5 (budget manager), 6-8; ADR-57 slice 3 (concurrent Thinker) queued; a prompt-audit before/after for Step 3.
+- **Report:** none — feature + UI session (commits + tests are the record).
+- **Notes:** none
