@@ -616,3 +616,11 @@ The two residuals noted on the B-2026-09-04-3 entry are now fixed (`73b5930`):
 - **Root cause:** the main loop path streams thinking live (ADR-41); only the forced-synthesis path buffered it (comment said "Held with the text so the ThinkingBlock renders it before the answer" — but streaming thinking also precedes the text since synthesis yields text after reasoning arrives).
 - **Fix (06f0187):** yield thinking chunks live in `_force_final_answer`; text stays buffered for the work-report contract. Regression test consumes the stream with an exhaustion-tracking adapter and fails if the first thinking chunk arrives after the adapter stream is done.
 - **Status:** FIXED. LIVE-verified on the 8765 harness (bankofai): an iteration_limit trace produced 108 thinking_token events spanning 3709ms (scripts/s419_thinking_timing.py).
+
+---
+## 2026-09-05 — Session 419 — collab `check` gate ungreenable for single-agent trails (open, core/package)
+
+- **Flaw:** the integration-readiness gate (`context-collab check --issue X`) validates EVERY release/correction event in the trail. Two consequences: (1) a release that cited only event IDs (no product SHAs in `refs`) fails forever — events are immutable, and a re-issued release doesn't retire the old one; (2) a `correction` can only be closed by an `agreement`, which the gate requires to have ≥2 DISTINCT participants — impossible for a genuinely single-agent session, so a solo correction is a permanent gate failure. Also, the unfiltered `check` (no --session/--issue) crashes in the .ps1 with "The property 'Count' cannot be found" (context-collab.ps1:183 → context-collab-check.ps1) — pre-existing core bug.
+- **Impact:** my zcode-419 trail has exactly these two permanent ceremony findings; the substantive release (b4e8a6f0, with SHAs) is complete and the product branch is pushed. Integration should proceed on the release content; the two findings are bookkeeping, not verification gaps.
+- **Suggested fix (package):** gate should validate only the LATEST release per claim (or support a supersede ref), allow single-participant agreements for self-corrections, and fix the unfiltered-check crash.
+- **Status:** open (core-side).
