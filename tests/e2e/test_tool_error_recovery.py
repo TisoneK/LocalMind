@@ -51,6 +51,26 @@ def test_hard_limit_says_stop_and_answer():
     assert "stop calling tools" in d
 
 
+# ── S422: cloud-file + unsupported-format classes ────────────────────────────
+# Live evidence: an unhydrated OneDrive placeholder failed every reader, and a
+# .pub under the generic directive burned 10 code_exec calls on hand-parsing.
+# Both directives must forbid reader improvisation, not suggest "another tool".
+
+def test_cloudfile_class_forbids_reader_improvisation():
+    d = tool_error_recovery_directive("file_task", "cloud_file_unavailable").lower()
+    assert "cloud" in d
+    assert "do not" in d and ("zipfile" in d or "code_exec" in d)
+    assert "never fabricate" in d
+
+
+def test_unsupported_class_says_stop_and_convert():
+    d = tool_error_recovery_directive("file_task", "unsupported_format").lower()
+    assert "no other tool" in d
+    assert "do not" in d and ("zipfile" in d or "code_exec" in d or "shell" in d)
+    assert "re-save" in d or "conversion" in d
+    assert "never fabricate" in d
+
+
 @pytest.mark.parametrize("et", ["git_error", "internal_error", "", "totally_unknown"])
 def test_unknown_errors_still_get_an_actionable_directive(et):
     d = tool_error_recovery_directive("shell", et)

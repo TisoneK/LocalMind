@@ -1010,6 +1010,11 @@ _ERR_INPUT = frozenset({
 # level read (zipfile/code_exec/shell included) fails identically, so the
 # directive must stop the model from improvising alternate readers.
 _ERR_CLOUDFILE = frozenset({"cloud_file_unavailable"})
+# S422: format has NO parser (OLE2 .pub/.doc, ambiguous zip container). The
+# generic "try a different tool/approach" directive is actively harmful here —
+# the model obeyed it and burned 10 code_exec calls improvising OLE2 parsing
+# on the live trace. The only correct move: stop, ask for a converted file.
+_ERR_UNSUPPORTED = frozenset({"unsupported_format"})
 _ERR_NORESULT = frozenset({"not_found", "empty", "io_error", "http_error", "network", "challenge"})
 _ERR_TRANSIENT = frozenset({"timeout", "rate_limit"})
 _ERR_STOP = frozenset({"wall_clock_cap", "recursion_limit"})
@@ -1033,6 +1038,17 @@ def tool_error_recovery_directive(tool_name: str, error_type: str) -> str:
             f"The input to `{tool_name}` was rejected as invalid. Read the message above for what "
             f"it expects, then EITHER call `{tool_name}` again with corrected input, OR use the tool "
             "that actually fits this step. Do not repeat the identical call."
+        )
+    if et in _ERR_UNSUPPORTED:
+        # Live evidence (S422): under the generic directive a weak model spent
+        # 10 code_exec calls trying to hand-parse the OLE2 container. There is
+        # NO parser for this format — alternate tools cannot succeed.
+        return (
+            f"`{tool_name}` does not support this file format and NO other tool can parse it either — "
+            "do NOT attempt zipfile/code_exec/shell/manual byte parsing. Stop working on this file and "
+            "tell the user the format is unsupported, with the conversion suggestion from the result "
+            "above (e.g. re-save as .docx or .pdf). You may still answer from any metadata the result "
+            "provided. Never fabricate the file's contents."
         )
     if et in _ERR_CLOUDFILE:
         # The tool already started OneDrive and/or waited for hydration where
