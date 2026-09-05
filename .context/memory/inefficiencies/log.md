@@ -1170,3 +1170,12 @@ if literally nothing slowed you down.
 - **Cause:** (1) Chaining stash/rebase/push/pop in one block hides the intermediate `git status` — so a mid-flow conflict silently changed what was staged. (2) A malformed first attempt (`git stash push -u=false`, invalid flag) plus its `||` fallback muddied which stash actually existed. (3) I diagnosed "lost" from a clean working tree + empty stash list without first checking whether the change had already landed in a commit.
 - **Workaround / fix:** Recovered by confirming the polish was present at HEAD (`git show HEAD:...globals.css | grep`) and in the pushed commit (`git show --stat 5e2b8e1`); corrected current.md + session log to state it's committed, not dirty.
 - **Prevent next time:** Never chain `git stash`/`rebase`/`push`/`pop` in one command block — run the stash, then `git status` to verify the tree, THEN the commit/push, each as its own step. When something looks "lost," check `git log`/`git show` for it in a commit BEFORE reaching for fsck; a clean tree usually means "already committed," not "gone." Use valid flags (`git stash push --keep-index` etc.) — a failed stash command with a `||` fallback leaves ambiguous state.
+
+---
+## 2026-09-05 — ZCode / glm-5.3-flash (Session 422)
+
+- **Problem:** (1) gates.conf pre-commit command `backend/.venv/bin/ruff check backend/src` fails on Windows — a Windows venv has no `bin/`; ruff lives at `backend/.venv/Scripts/ruff.exe`. (2) `scripts/ci-check.sh` aborts at its venv guard (`backend/.venv/bin/python` not executable on Windows), so the exit gate's canonical CI cannot run as written on this box.
+- **Cost:** ~5 min to diagnose both; exit-gate CI had to be run as components.
+- **Cause:** both configs were written by/for the macOS box (`bin/` layout); Windows venvs use `Scripts/`.
+- **Workaround / fix:** (1) run `backend/.venv/Scripts/ruff.exe check backend/src` (32 findings 2026-09-05 vs the 34 documented 2026-09-04 baseline — compare sets, not just counts). (2) run the CI components directly with Windows paths: `backend/.venv/Scripts/python.exe -m pytest tests -q`, the Scripts ruff path, `cd frontend && npx tsc -b --noEmit`, eslint.
+- **Prevent next time:** make gates.conf/ci-check.sh venv-layout aware (detect `Scripts/` vs `bin/`), or document the Windows equivalents in gates.conf comments.

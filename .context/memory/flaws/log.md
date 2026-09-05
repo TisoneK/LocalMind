@@ -612,3 +612,10 @@ The two residuals noted on the B-2026-09-04-3 entry are now fixed (`73b5930`):
   own end-to-end.
 - **Status:** OPEN (protocol gap — no code fix; recorded for upstream + as a
   working-agreement reminder for this repo).
+
+---
+## 2026-09-05 — Session 422 — ZCode — B-2026-08-30-17 RESOLVED by core 0.9.1 (EOL-normalized verify)
+
+- **Flaw (tracked):** B-2026-08-30-17 + its S407 sh-port symptom — `context-sync verify` false-failed ALL core files on this autocrlf=true checkout (raw-byte hashing + CRLF manifest parse), and the advised `rollback` re-restored CRLF, an unfixable loop.
+- **Resolution:** package 0.9.1 (TisoneK/.context `9aa9758`) — verify hashes CR-stripped content, the sh manifest parse tolerates CR, update/bootstrap normalize staged copies to LF, PS rollback rewrites LF, and `.context/.gitattributes` forces eol=lf for core + memory logs. Applied here this session per the 0.8.x Windows migration (update run twice from the git-checkout source; commit `557b1fc`): `verify` → "core OK: every file matches MANIFEST.sha256 (0.9.1)" on the CRLF working tree.
+- **Status:** fixed in package 9aa9758 (2026-09-05); verified on this repo.

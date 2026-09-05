@@ -6057,3 +6057,17 @@ top stories via web_research. No frontend/agent-loop change.
 - **Open items:** P0 Steps 4 (tool-result FTS5+vec0 index), 5 (budget manager), 6-8; live prompt-audit before/after for Step 3; graphite-dark polish live-verification; ADR-57 slice 3 queued.
 - **Report:** none — feature session (commits + tests are the record).
 - **Notes:** (1) The unconditional turn_context is what makes 2b safe — verified at loop.py:2849 before stripping the prefix, not assumed. (2) Never batch `git stash push -- <paths>` with a rebase+push in one command block: the collision here silently swept an unrelated file into my commit. Stash, then verify `git status` before the commit that follows.
+
+---
+## 2026-09-05 — Session 422 — core update 0.8.0 → 0.9.1 (Windows)
+
+- **Agent:** ZCode (local) | **Model:** glm-5.3-flash (per system prompt: 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.9.1 (updated from 0.8.0 this session)
+- **Feature:** none (core sync, user-directed)
+- **Task:** "Sync context"; user confirmed 0.9.1 fixes the Windows core issues and directed the update + commit.
+- **Commits:** 2 context (`557b1fc` core 0.9.1 + entrypoint refresh; +1 bookkeeping commit)
+- **Outcome:** done. Followed the 0.8.x Windows migration: update from the git-checkout source (C:/Users/tison/Dev/context @ `9aa9758`) run TWICE under Git Bash → installed `.context/.gitattributes` (eol=lf for core + memory logs) + root CLAUDE.md pointer; `verify` green on this CRLF tree — closes the CRLF false-failure loop (B-2026-08-30-17; resolution logged in flaws). kickoff.md regenerated from the template (collab note-channel + gate commands in Step 2; facts refilled, placeholder scan clean); AGENTS.md digest refreshed (one-team collab framing, Windows .ps1 note; project-specific sections preserved). memory/core.lock → 0.9.1.
+- **Verification:** `context-sync verify` → core OK (0.9.1); `npx tsc -b --noEmit` → 0 errors; `Scripts/ruff.exe check backend/src` → 32 pre-existing findings (documented baseline; no session-owned code changed). ci-check.sh NOT run as-is (POSIX venv guard) — components run instead (inefficiencies entry). Live testing N/A (no product code touched).
+- **Open items:** none from this session. Standing: P0 Steps 4-8, ~56-failure backend baseline peer pass, Step 3 prompt-audit (per prior current.md).
+- **Coordination:** peer session live (code_exec.py + test_code_exec_dispatch.py modified mid-session, unclaimed; user confirmed it is theirs) + pre-existing unclaimed file_reader.py/test_file_reader.py changes — ALL untouched. Explicit-path staging only; note event `20260905T123714Z` announced scope.
+- **Report:** none — chore session (commit + this entry are the record)
+- **Notes:** (1) `.context/README.md` showed git-status M with an EMPTY diff — an EOL artifact cleared by `git add` under the new eol=lf attribute. (2) The old kickoff lacked the template's collab/gate sections entirely — regeneration brought them in rather than a patch.
