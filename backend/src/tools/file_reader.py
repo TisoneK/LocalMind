@@ -266,6 +266,111 @@ def _cloud_file_unavailable_message(p: Path, diag: dict) -> str:
     return "\n".join(lines)
 
 
+# ── Content-sniffed parser dispatch (S422) ──────────────────────────────────
+# Extension-based dispatch misreads mislabeled files (a renamed .pub served
+# line-numbered binary garbage; a text file named .docx died inside
+# python-docx). Dispatch is now content-first: magic bytes decide, and the
+# extension is trusted only when the content has no known signature.
+
+def _sniff_format(data: bytes) -> str:
+    """Magic-byte sniff. Returns a known format token or 'unknown'.
+
+    Only STRONG signatures are sniffed — 2-byte ones like BMP's 'BM' or
+    TIFF's 'II*'/'MM*' also prefix ordinary text, so they are left to the
+    extension + text-probe path below.
+    """
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    signature = (
+        (b"%PDF-", "pdf"),
+        (b"PK\x03\x04", "zip"),       # DOCX/XLSX/PPTX/any zip container
+        (b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1", "ole"),  # legacy .doc/.xls/.pub/.msi
+        (b"\x89PNG\r\n\x1a\n", "png"),
+        (b"\xFF\xD8\xFF", "jpeg"),
+        (b"GIF87a", "gif"),
+        (b"GIF89a", "gif"),
+    )
+    for sig, fmt in signature:
+        if data[: len(sig)] == sig:
+            return fmt
+    return "unknown"
+
+
+def _looks_like_text(data: bytes) -> bool:
+    """Cheap text probe: no NULs in the head and the head is valid UTF-8."""
+    sample = data[:4096]
+    if not sample:
+        return True
+    if b"\x00" in sample:
+        return False
+    try:
+        sample.decode("utf-8")
+        return True
+    except UnicodeDecodeError:
+        return False
+
+
+def _ole_unsupported_text(filename: str) -> str:
+    return (
+        f"[Unsupported format] {filename} is a legacy OLE2 compound document "
+        "(Microsoft Publisher .pub, Word .doc, Excel .xls, ...). This reader "
+        "supports PDF, DOCX, XLSX, CSV, images and text. Ask the user to "
+        "re-save it as .docx or .pdf, then read that."
+    )
+
+
+def _zip_ambiguous_text(filename: str) -> str:
+    return (
+        f"[Unsupported format] {filename} is a ZIP archive but not a DOCX or "
+        "XLSX document (could be .pptx, .zip, .jar, ...). It cannot be read "
+        "as a document; ask the user what the file actually is."
+    )
+
+
+def _resolve_read_kind(ext: str, sniff: str, data: bytes) -> tuple[str, str]:
+    """Content-first parser routing. Returns ``(kind, note)``.
+
+    ``kind``: pdf | docx | xlsx | csv | image | text | unsupported_ole |
+    zip_ambiguous. ``note`` is a human-readable explanation appended to the
+    tool output whenever the routing overrode the extension, so the model
+    knows the file's real nature.
+    """
+    if sniff == "ole":
+        return "unsupported_ole", ""
+    if sniff in ("png", "jpeg", "gif", "webp"):
+        note = "" if ext in (".png", ".jpg", ".jpeg", ".gif", ".webp") else (
+            f"content is an image though the extension is '{ext or 'missing'}' — dispatched by content"
+        )
+        return "image", note
+    if sniff == "pdf":
+        if ext == ".pdf":
+            return "pdf", ""
+        return "pdf", f"content is a PDF though the extension is '{ext or 'missing'}' — dispatched by content"
+    if sniff == "zip":
+        if ext == ".docx":
+            return "docx", ""
+        if ext == ".xlsx":
+            return "xlsx", ""
+        return "zip_ambiguous", ""
+    # sniff == "unknown": trust the extension unless the content is clearly text.
+    if ext == ".csv":
+        # CSV is text by nature — the text probe below must not mislabel it.
+        return "csv", ""
+    if ext in _SPECIAL_FORMAT_EXTS and _looks_like_text(data):
+        return "text", f"extension is '{ext}' but the content is plain text — read as text"
+    if ext == ".pdf":
+        return "pdf", ""
+    if ext == ".docx":
+        return "docx", ""
+    if ext == ".xlsx":
+        return "xlsx", ""
+    if ext == ".csv":
+        return "csv", ""
+    if ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff"):
+        return "image", ""
+    return "text", ""
+
+
 # Extensions handled by special parsers in parse_file() — these bypass the
 # line-numbered plain-text path and use the existing chunked pipeline.
 _SPECIAL_FORMAT_EXTS: frozenset[str] = frozenset({
@@ -403,7 +508,29 @@ async def _parse_docx(data: bytes) -> str:
             from docx import Document
 
             doc = Document(io.BytesIO(data))
-            return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            parts = [p.text for p in doc.paragraphs if p.text.strip()]
+            # Tables are NOT in doc.paragraphs — a docx built from table
+            # cells (common in CVs/forms) would otherwise read as empty.
+            # Order note: all paragraphs first, then all tables row-wise.
+            for table in doc.tables:
+                for row in table.rows:
+                    cells = [c.text.strip() for c in row.cells]
+                    if any(cells):
+                        parts.append(" | ".join(cells))
+            text = "\n".join(parts)
+            # Embedded images are invisible to text extraction — enumerate
+            # them honestly instead of silently dropping that channel.
+            try:
+                n_images = len(doc.inline_shapes)
+            except Exception:
+                n_images = 0
+            if n_images:
+                text += (
+                    f"\n\n[{n_images} embedded image(s) present in this DOCX — text extraction "
+                    "does not include them. If their content matters, extract them via code_exec "
+                    "(a DOCX is a zip; images live in word/media/) and OCR them.]"
+                )
+            return text
         except Exception as e:
             logger.error(f"[file_reader] DOCX parse error: {e}")
             return f"[DOCX parse error: {e}]"
@@ -452,25 +579,20 @@ async def _parse_image(data: bytes, filename: str) -> str:
         return f"[Image parse error: {e}]"
 
 
-async def _parse_csv_xlsx(data: bytes, filename: str) -> str:
+async def _parse_xlsx(data: bytes) -> str:
     def _do_parse() -> str:
         try:
             import io
 
             import pandas as pd
 
-            if filename.endswith(".xlsx"):
-                df = pd.read_excel(io.BytesIO(data), engine="openpyxl")
-            else:
-                df = pd.read_csv(io.BytesIO(data))
-
-            # Summary + first rows
+            df = pd.read_excel(io.BytesIO(data), engine="openpyxl")
             shape_info = f"Shape: {df.shape[0]} rows × {df.shape[1]} columns\nColumns: {', '.join(df.columns.tolist())}\n\n"  # noqa: E501
             preview = df.head(20).to_markdown(index=False)
             return shape_info + preview
         except Exception as e:
-            logger.error(f"[file_reader] CSV/XLSX parse error: {e}")
-            return f"[CSV/XLSX parse error: {e}]"
+            logger.error(f"[file_reader] XLSX parse error: {e}")
+            return f"[XLSX parse error: {e}]"
 
     try:
         return await asyncio.wait_for(
@@ -478,7 +600,31 @@ async def _parse_csv_xlsx(data: bytes, filename: str) -> str:
             timeout=FILE_OP_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        return f"[CSV/XLSX parse timed out after {FILE_OP_TIMEOUT_SECONDS}s]"
+        return f"[XLSX parse timed out after {FILE_OP_TIMEOUT_SECONDS}s]"
+
+
+async def _parse_csv(data: bytes) -> str:
+    def _do_parse() -> str:
+        try:
+            import io
+
+            import pandas as pd
+
+            df = pd.read_csv(io.BytesIO(data))
+            shape_info = f"Shape: {df.shape[0]} rows × {df.shape[1]} columns\nColumns: {', '.join(df.columns.tolist())}\n\n"  # noqa: E501
+            preview = df.head(20).to_markdown(index=False)
+            return shape_info + preview
+        except Exception as e:
+            logger.error(f"[file_reader] CSV parse error: {e}")
+            return f"[CSV parse error: {e}]"
+
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_do_parse),
+            timeout=FILE_OP_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        return f"[CSV parse timed out after {FILE_OP_TIMEOUT_SECONDS}s]"
 
 
 # Spreadsheet preview caps — keep the browser payload sane even for huge files.
@@ -599,14 +745,24 @@ async def parse_file(
 
     text = ""
     try:
-        if ext == ".pdf" or content_type == "application/pdf":
+        # S422: content-first dispatch — magic bytes decide the parser, the
+        # extension is trusted only when the content has no known signature.
+        sniff = _sniff_format(data)
+        kind, _note = _resolve_read_kind(ext, sniff, data)
+        if kind == "pdf":
             text = await _parse_pdf(data)
-        elif ext == ".docx":
+        elif kind == "docx":
             text = await _parse_docx(data)
-        elif ext in (".csv", ".xlsx"):
-            text = await _parse_csv_xlsx(data, filename)
-        elif ext in (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff"):
+        elif kind == "xlsx":
+            text = await _parse_xlsx(data)
+        elif kind == "csv":
+            text = await _parse_csv(data)
+        elif kind == "image":
             text = await _parse_image(data, filename)
+        elif kind == "unsupported_ole":
+            text = _ole_unsupported_text(filename)
+        elif kind == "zip_ambiguous":
+            text = _zip_ambiguous_text(filename)
         else:
             # Plain text / code — decode as UTF-8.  Truncation is
             # line-aware (never splits a multi-byte character mid-
@@ -667,7 +823,10 @@ async def parse_file(
 
 
 # Readable file extensions used by the path extractor below.
-_READ_EXTS = r"py|js|ts|txt|md|csv|pdf|docx|xlsx|json|yaml|yml|toml|html|sh|rs|go|log|cfg|ini|env"
+# S422: .pub added — a Publisher file in a user message must resolve to a
+# path so it can reach the honest unsupported_format result (previously it
+# was invisible to the extractor and reported not_found).
+_READ_EXTS = r"py|js|ts|txt|md|csv|pdf|docx|xlsx|json|yaml|yml|toml|html|sh|rs|go|log|cfg|ini|env|pub"
 
 # Ordered path patterns for pulling a file reference out of a message.
 # Matches: "quoted path.ext", C:\Windows\path.ext, /unix/path.ext, ~/path, bare.ext
@@ -781,12 +940,33 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                         },
                     )
                 ext = p.suffix.lower()
+                sniff = _sniff_format(data)
+                kind, note = _resolve_read_kind(ext, sniff, data)
+
+                # ── Honest unsupported-format results ─────────────────────
+                if kind in ("unsupported_ole", "zip_ambiguous"):
+                    body = _ole_unsupported_text(p.name) if kind == "unsupported_ole" else _zip_ambiguous_text(p.name)
+                    logger.info("[file_task] unsupported format (%s): %s", kind, p)
+                    return ToolResult(
+                        content=body,
+                        risk=RiskLevel.LOW,
+                        source="file_reader",
+                        success=False,
+                        error_type="unsupported_format",
+                        error_message=f"{kind}: {p}",
+                        metadata={
+                            "path": str(p),
+                            "filename": p.name,
+                            "size_bytes": len(data),
+                            "sniff": sniff,
+                        },
+                    )
 
                 # ── Plain text / code files: line-numbered output ────────
                 # Bypass the chunked parse_file() pipeline so the model
                 # sees exact content, line numbers, and original formatting
                 # that edit_file's search/replace can rely on.
-                if ext not in _SPECIAL_FORMAT_EXTS:
+                if kind == "text":
                     try:
                         raw_text = data.decode("utf-8")
                     except UnicodeDecodeError:
@@ -801,6 +981,8 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                     header = f"File: {p}\nSize: {len(data):,} bytes\nLines: {total_lines}"
                     if line_ending == "\r\n":
                         header += "\nLine endings: CRLF (\\r\\n)"
+                    if note:
+                        header += f"\nNote: {note}"
 
                     logger.info(
                         "[file_task] read text file: %s (%d bytes, %d lines, truncated=%s)",
@@ -818,10 +1000,12 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                             "shown_lines": shown_lines,
                             "truncated": truncated,
                             "line_ending": "\\r\\n" if line_ending == "\r\n" else "\\n",
+                            "sniff": sniff,
+                            "dispatch_note": note,
                         },
                     )
 
-                # ── Special formats (PDF, DOCX, XLSX, images): chunked pipeline ──
+                # ── Structured formats (PDF/DOCX/XLSX/CSV/images): chunked pipeline ──
                 attachment = await parse_file(
                     data=data,
                     filename=p.name,
@@ -831,6 +1015,8 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                 preview = attachment.chunks[0] if attachment.chunks else "[empty file]"
                 if len(attachment.chunks) > 1:
                     preview += f"\n\n[... {len(attachment.chunks) - 1} more chunks available]"
+                if note:
+                    preview = f"Note: {note}\n\n{preview}"
                 logger.info("[file_task] read file from disk: %s (%d bytes)", p, len(data))
                 return ToolResult(
                     content=f"File: {p}\nSize: {len(data):,} bytes\n\n{preview}",
@@ -841,6 +1027,8 @@ async def file_task(message: str, original_path: str = None) -> ToolResult:
                         "filename": p.name,
                         "chunks": len(attachment.chunks),
                         "size_bytes": len(data),
+                        "sniff": sniff,
+                        "dispatch_note": note,
                     },
                 )
             except Exception as e:

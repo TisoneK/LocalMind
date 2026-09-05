@@ -391,3 +391,132 @@ async def test_file_task_plain_einval_stays_internal_error(monkeypatch, tmp_path
     # NOT the cloud class — EINVAL on a normal file is a generic read failure.
     assert res.error_type == "internal_error"
     assert res.error_type != "cloud_file_unavailable"
+
+
+# ── Content-sniffed parser dispatch (S422) ───────────────────────────────────
+
+def test_sniff_format_known_signatures():
+    assert fr._sniff_format(b"%PDF-1.7\n...") == "pdf"
+    assert fr._sniff_format(b"PK\x03\x04rest") == "zip"
+    assert fr._sniff_format(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1...") == "ole"
+    assert fr._sniff_format(b"\x89PNG\r\n\x1a\n" + b"\x00" * 8) == "png"
+    assert fr._sniff_format(b"\xFF\xD8\xFF\xE0") == "jpeg"
+    assert fr._sniff_format(b"GIF89a" + b"\x00" * 4) == "gif"
+    assert fr._sniff_format(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "webp"
+
+
+def test_sniff_format_weak_signatures_not_sniffed():
+    # BMP ('BM') and TIFF ('II*'/'MM*') also prefix ordinary text — they must
+    # NOT be sniffed, or text files starting "BMW..." would route to the
+    # image parser.
+    assert fr._sniff_format(b"BMW is a car brand\n") == "unknown"
+    assert fr._sniff_format(b"II* and the order\n") == "unknown"
+
+
+def test_sniff_format_unknown():
+    assert fr._sniff_format(b"plain text file") == "unknown"
+    assert fr._sniff_format(b"") == "unknown"
+
+
+def test_looks_like_text():
+    assert fr._looks_like_text(b"# markdown\n- list\n")
+    assert not fr._looks_like_text(b"\x00\x01binary\x00")      # NUL bytes
+    assert not fr._looks_like_text(b"\xff\xfe\x00\x00")        # invalid UTF-8
+    assert fr._looks_like_text(b"")
+
+
+def test_resolve_kind_content_overrides_extension():
+    # Real PDF bytes under a .txt name → content wins.
+    kind, note = fr._resolve_read_kind(".txt", "pdf", b"%PDF-1.4")
+    assert kind == "pdf" and "dispatched by content" in note
+    # Text content under .docx → honest text fallback.
+    kind, note = fr._resolve_read_kind(".docx", "unknown", b"# actually markdown")
+    assert kind == "text" and "read as text" in note
+    # Binary content under a .bmp name → extension trusted (no weak sniff).
+    kind, _ = fr._resolve_read_kind(".bmp", "unknown", b"BM\x00\x00binary")
+    assert kind == "image"
+
+
+def test_resolve_kind_unsupported_families():
+    kind, _ = fr._resolve_read_kind(".pub", "ole", b"\xD0\xCF\x11\xE0" + b"\x00" * 4)
+    assert kind == "unsupported_ole"
+    # A zip that claims nothing recognized is ambiguous, not silently text.
+    kind, _ = fr._resolve_read_kind(".dat", "zip", b"PK\x03\x04")
+    assert kind == "zip_ambiguous"
+    # Right extensions keep their parsers.
+    assert fr._resolve_read_kind(".docx", "zip", b"PK\x03\x04")[0] == "docx"
+    assert fr._resolve_read_kind(".xlsx", "zip", b"PK\x03\x04")[0] == "xlsx"
+    assert fr._resolve_read_kind(".pdf", "pdf", b"%PDF-1.4")[0] == "pdf"
+    assert fr._resolve_read_kind(".csv", "unknown", b"a,b\n1,2")[0] == "csv"
+
+
+@pytest.mark.asyncio
+async def test_file_task_ole_pub_honest_unsupported(monkeypatch, tmp_path):
+    """A .pub (Publisher) file now gets an honest unsupported result instead of
+    line-numbered binary garbage (pre-S422 it fell through the text path)."""
+    from tools.file_reader import file_task
+
+    f = tmp_path / "old-cv.pub"
+    f.write_bytes(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1" + b"\x00" * 64)
+    from pathlib import Path as _P
+
+    monkeypatch.setattr(
+        "core.config._allowed_user_folders", lambda: [str(tmp_path), str(_P.home())]
+    )
+
+    res = await file_task(str(f))
+    assert res.success is False
+    assert res.error_type == "unsupported_format"
+    assert "re-save it as .docx or .pdf" in res.content
+    assert res.metadata["sniff"] == "ole"
+
+
+@pytest.mark.asyncio
+async def test_file_task_text_maslabeled_docx_reads_as_text(monkeypatch, tmp_path):
+    from tools.file_reader import file_task
+
+    f = tmp_path / "actually-text.docx"
+    f.write_bytes(b"# this is plain markdown\nnot a real docx\n")
+    from pathlib import Path as _P
+
+    monkeypatch.setattr(
+        "core.config._allowed_user_folders", lambda: [str(tmp_path), str(_P.home())]
+    )
+
+    res = await file_task(str(f))
+    assert res.success is True
+    assert "actually-text.docx" in res.content
+    assert "read as text" in res.content  # the mismatch note is surfaced
+
+
+@pytest.mark.asyncio
+async def test_file_task_pdf_bytes_txt_name_dispatches_by_content(monkeypatch, tmp_path):
+    from tools.file_reader import file_task
+
+    f = tmp_path / "mislabeled.txt"
+    f.write_bytes(b"%PDF-1.4\n(broken pdf body)")
+    from pathlib import Path as _P
+
+    monkeypatch.setattr(
+        "core.config._allowed_user_folders", lambda: [str(tmp_path), str(_P.home())]
+    )
+
+    res = await file_task(str(f))
+    assert res.success is True
+    # Routed into the PDF parser (which honestly reports the broken body) —
+    # NOT line-numbered text output.
+    assert "dispatched by content" in res.content
+    assert res.metadata["sniff"] == "pdf"
+
+
+@pytest.mark.asyncio
+async def test_parse_file_sniffed_dispatch_xyz_image(monkeypatch):
+    """Upload pipeline: PNG bytes under an unknown extension route to the
+    image parser instead of plain-text garbage."""
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+    attachment = await parse_file(data=png, filename="mystery.xyz", content_type="application/xyz")
+    # PIL is not installed in every env; both outcomes prove the ROUTE:
+    # image parser metadata line, or its honest missing-dependency error —
+    # never the "[File parse error]" of a misrouted text decode.
+    first = attachment.chunks[0] if attachment.chunks else ""
+    assert "Image" in first or "image" in first
