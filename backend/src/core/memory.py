@@ -56,6 +56,34 @@ _MAX_FACTS = 6
 _RECENCY_WINDOW_SECS = 3600 * 24 * 7  # 1 week
 _IMPORTANCE_DEFAULT = 0.5  # 0.0–1.0
 
+# P0 Context Engineering Step 3 — Memory Retrieval Gate. Retrieval is already
+# per-request + semantic top-K + relevance-thresholded; the missing piece was a
+# TOKEN budget on the assembled memory block (`_MAX_FACTS` bounds the COUNT, not
+# the size — a handful of long facts could still balloon the injected "What you
+# know about this user" section). This caps the block so memory never dominates
+# the prompt. ~500 tokens ≈ 2000 chars at the codebase's chars/4 estimate.
+_MEMORY_TOKEN_BUDGET = 500
+
+
+def cap_facts_to_budget(facts: list[str], budget_tokens: int = _MEMORY_TOKEN_BUDGET) -> list[str]:
+    """Trim a *priority-ordered* fact list to a token budget (chars/4 estimate).
+
+    Keeps the highest-priority facts (front of the list — the composer returns
+    them ranked, with warm-start/episode appended after) and drops the tail once
+    the budget is reached. Always keeps at least the first fact, so a single
+    over-budget fact is never silently dropped to nothing.
+    """
+    kept: list[str] = []
+    used = 0
+    for fact in facts:
+        # +1 token accounts for the "- " list-item framing at the injection site.
+        cost = max(1, len(fact) // 4) + 1
+        if kept and used + cost > budget_tokens:
+            break
+        kept.append(fact)
+        used += cost
+    return kept
+
 # ADR-19 P1 (Session 177): context-hierarchy levels. Every stored fact is
 # tagged with a `memory_level` so retrieval can be LEVEL-AWARE per task
 # type instead of always pulling the same global pool. Hierarchy:

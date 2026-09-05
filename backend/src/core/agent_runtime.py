@@ -40,7 +40,7 @@ from core.engine.stage_clock import _StageClock
 from core.episode_memory import EpisodeMemory, format_episode_hint
 from core.failure_memory import format_recall_hint
 from core.flywheel import FlywheelLogger
-from core.memory import MemoryComposer
+from core.memory import MemoryComposer, cap_facts_to_budget
 from core.metrics import MetricsStore
 from core.model_router import update_pulled_models
 from core.models import AgentAbortedError, Intent, Message, Role, StreamChunk
@@ -516,7 +516,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             )
             if episode:
                 facts.append(episode)
-            return facts
+            # P0 Step 3: cap the assembled block to the memory token budget
+            # (ranked facts first, warm-start/episode trimmed first if over).
+            return cap_facts_to_budget(facts)
         except Exception:
             logger.debug("[agent-runtime] memory retrieval skipped", exc_info=True)
             return []
