@@ -1529,11 +1529,24 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             usage.get("completion_tokens", 0) or _approx_tokens(response_text)
         )
         if not response_text:
-            hit_limit = any(
-                evt.type == "agent_loop_done" and bool(evt.data.get("hit_limit"))
-                for evt in collector.history()
+            # Session 419: name the budget that actually bound — a
+            # wall-clock break is NOT an iteration-cap break, and telling
+            # the user the wrong one sends them down the wrong remedy
+            # (the Session 32 misdiagnosis lesson).
+            _limit_evt = next(
+                (
+                    evt
+                    for evt in collector.history()
+                    if evt.type == "agent_loop_done" and bool(evt.data.get("hit_limit"))
+                ),
+                None,
             )
-            if hit_limit:
+            if _limit_evt is not None and _limit_evt.data.get("limit_kind") == "wall_clock":
+                response_text = (
+                    "I ran out of time before completing this request. "
+                    "Tell me to continue and I will pick up from the last verified step."
+                )
+            elif _limit_evt is not None:
                 response_text = (
                     "I hit the iteration limit before completing this request. "
                     "Tell me to continue and I will pick up from the last verified step."

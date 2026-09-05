@@ -1119,6 +1119,45 @@ def same_tool_repetition_streak(trace) -> tuple[int, str]:
     return streak, last_tool
 
 
+# Session 419 — identical-call no-progress bound. The B-2026-08-18-3 nudge
+# counts same-TOOL repetitions; a weak model can satisfy the letter of the
+# nudge by tweaking one character and still spin. This counts the trailing
+# run of calls with the SAME tool AND normalized-identical arguments — the
+# true "same command over and over" signature the user called out (the CV
+# transcript: three malformed system_search queries with materially the same
+# input, then a shell fallback that search itself should have handled).
+_IDENTICAL_CALL_STOP_CAP = 3
+_ARGS_NORMALIZE_MAX = 2000  # bound the signature string
+
+
+def _normalize_call_signature(tool_name: str, tool_input: str) -> str:
+    """A whitespace/case-insensitive signature of one tool call."""
+    return re.sub(r"\s+", " ", f"{tool_name}::{tool_input}".strip().lower())[:_ARGS_NORMALIZE_MAX]
+
+
+def identical_call_streak(trace) -> tuple[int, str]:
+    """Trailing run of consecutive same-tool, same-normalized-argument calls.
+
+    Returns (streak, signature). Unlike `same_tool_repetition_streak`, this
+    compares WHAT was called, not just which tool — a materially different
+    input breaks the streak (that is a strategy change and is allowed).
+    """
+    steps = getattr(trace, "steps", []) or []
+    streak = 0
+    last_sig = ""
+    for step in reversed(steps):
+        tool = getattr(step, "tool_name", "") or ""
+        if not tool:
+            continue
+        sig = _normalize_call_signature(tool, getattr(step, "tool_input", "") or "")
+        if not last_sig or sig == last_sig:
+            streak += 1
+            last_sig = sig
+        else:
+            break
+    return streak, last_sig
+
+
 def parent_completion_floor_note(trace) -> Optional[str]:
     """The parent's deterministic completion-verification FLOOR (B-2026-08-18-2,
     review-66): the missing VERIFY→DONE segment of the spec's wheel.
@@ -3175,6 +3214,12 @@ class AgentLoop:
             if _base_cap_reached(
                 iteration, len(loaded_tools), _effective_max_iter
             ) and not _iteration_budget_extendable(trace):
+                # Session 419: record WHICH budget broke the loop. The
+                # post-loop classification used to report every break as
+                # "iteration_limit" — including wall-clock breaks — which
+                # is exactly the misdiagnosis the Session 32 contract bans
+                # (the remedy for a step-count cap differs from a time cap).
+                trace.limit_kind = "iteration_cap"
                 logger.info(
                     "[agent_loop] base iteration cap %d reached and not progressing "
                     "(iter %d, describe_tool credits %d) — stopping",
@@ -3189,6 +3234,8 @@ class AgentLoop:
             # a small model from spinning forever on a task it can't solve.
             _elapsed = time.monotonic() - _loop_start_time
             if _elapsed > _effective_max_wall:
+                # Session 419: distinguish the time cap from the step cap.
+                trace.limit_kind = "wall_clock"
                 logger.warning(
                     "[agent_loop] wall-clock cap hit after %.1fs (iter %d/%d) — forcing final answer",
                     _elapsed,
@@ -3261,6 +3308,30 @@ class AgentLoop:
                             streak=_rep_streak,
                             iteration=iteration + 1,
                         )
+
+            # Session 419 — identical-call hard stop. Same tool + the same
+            # (normalized) arguments N+ times is the literal "running the
+            # same command over and over" loop: the nudge above is soft and
+            # fires on the tool name alone, so a model that tweaks one
+            # character and re-runs still burns the whole budget. Three
+            # identical calls is a no-progress loop regardless of outcome —
+            # stop honestly and answer from what was gathered.
+            _ident_streak, _ident_sig = identical_call_streak(trace)
+            if _ident_streak >= _IDENTICAL_CALL_STOP_CAP:
+                trace.limit_kind = "repetition"
+                logger.warning(
+                    "[agent_loop] identical-call stop: %s x%d — stopping as no-progress loop",
+                    _ident_sig[:120],
+                    _ident_streak,
+                )
+                if _obs:
+                    _obs.emit(
+                        "agent_loop_identical_call_stop",
+                        signature=_ident_sig[:200],
+                        streak=_ident_streak,
+                        iteration=iteration + 1,
+                    )
+                break
 
             # B-2026-08-21: divergent-tool budget. If the model has called many
             # real tools (excluding todo metadata ops) but never set criteria,
@@ -6554,21 +6625,33 @@ class AgentLoop:
                 yield StreamChunk(text="", done=True, usage=dict(_provider_usage))
                 return
 
-        # ── MAX_ITERATIONS hit (or wall-clock cap broke the loop) ──────
+        # ── MAX_ITERATIONS hit (or wall-clock cap / repetition stop) ──
         trace.hit_limit = True
-        logger.warning(f"[agent.loop] loop ended — {trace.summary()}")
+        if not trace.limit_kind:
+            trace.limit_kind = "hard_ceiling"
+        logger.warning(
+            "[agent.loop] loop ended — %s limit_kind=%s", trace.summary(), trace.limit_kind
+        )
         # Session 142: close out the current plan step's todo on the
         # hit-limit path too — the work for the current step may have
         # completed even though the loop was capped.
         _complete_current_plan_step()
-        self._emit_failure_memory(trace, intent, _obs)
         if _obs:
-            _obs.emit("agent_loop_done", intent=intent.value, iterations=trace.iterations_used, hit_limit=True)
+            _obs.emit(
+                "agent_loop_done",
+                intent=intent.value,
+                iterations=trace.iterations_used,
+                hit_limit=True,
+                limit_kind=trace.limit_kind,
+            )
 
         # Session 31: ALWAYS try to synthesize a final answer from what
         # we gathered. Wrap with a timeout so this doesn't hang too.
         # If it times out, yield the observation log directly — the user
-        # sees what happened instead of nothing.
+        # sees what happened instead of nothing. On the real-text path the
+        # synthesis sets trace.final_response itself (Session 419); the
+        # deterministic fallbacks (timeout / exception / empty stream)
+        # deliberately do not, so classification still reports the failure.
         try:
             async for chunk in self._force_final_answer(
                 loop_messages=loop_messages,
@@ -6590,6 +6673,13 @@ class AgentLoop:
                 text=self._synthesis_failure_fallback(trace, observation_log, timed_out=False),
                 done=True,
             )
+
+        # Session 419 — classify AFTER the rescue, not before. A capped turn
+        # whose forced synthesis delivered a real answer is a rescued turn,
+        # not a failure: the old order emitted `agent_loop_failure` before
+        # the synthesis ran, so the user saw "✗ Agent loop failed" ABOVE a
+        # complete answer (the "find my CV" transcript).
+        self._emit_failure_memory(trace, intent, _obs)
 
     # ------------------------------------------------------------------
     # ADR-18 P0 — acceptance gate at the final-answer point
@@ -8060,19 +8150,36 @@ class AgentLoop:
         if thinker_block:
             lines.append(thinker_block)
             lines.append("")
-        # Session 32: if the iteration limit was hit, say so explicitly.
-        # The previous fallback guessed "overload" — that was a wrong
-        # diagnosis. The real cause was almost always the iteration cap
-        # being too low (now fixed — raised from 3 to 8). When hit_limit
-        # is True, the user needs to know: the model didn't fail, it just
-        # ran out of iterations before finishing the task.
+        # Session 32: if a limit was hit, say WHICH one explicitly. The
+        # previous fallback guessed "overload" — that was a wrong
+        # diagnosis. Session 419: the wording now follows the actual
+        # break reason (limit_kind) — a wall-clock break is NOT an
+        # iteration-cap break, and the remedies differ. When hit_limit is
+        # True, the user needs to know: the model didn't fail, the run
+        # was stopped by a budget before finishing the task.
+        _limit_kind = (getattr(trace, "limit_kind", "") or "").strip()
         if getattr(trace, "hit_limit", False):
-            lines.insert(0, (
-                f"I hit my iteration limit ({trace.iterations_used} iterations) "
-                f"before completing the task. This is NOT a model overload or "
-                f"context-overflow issue — I simply ran out of steps. Here's "
-                f"what I managed to do before the cap:"
-            ))
+            if _limit_kind == "wall_clock":
+                lines.insert(0, (
+                    f"I ran out of time ({trace.iterations_used} iterations in) "
+                    f"before completing the task. This is NOT a model overload or "
+                    f"context-overflow issue — the turn hit its time budget. Here's "
+                    f"what I managed to do before the cap:"
+                ))
+            elif _limit_kind == "repetition":
+                lines.insert(0, (
+                    f"I stopped myself ({trace.iterations_used} iterations in) "
+                    f"because I was repeating the same call without new results. "
+                    f"This is NOT a model overload — it's a no-progress loop "
+                    f"guard. Here's what I did before stopping:"
+                ))
+            else:
+                lines.insert(0, (
+                    f"I hit my iteration limit ({trace.iterations_used} iterations) "
+                    f"before completing the task. This is NOT a model overload or "
+                    f"context-overflow issue — I simply ran out of steps. Here's "
+                    f"what I managed to do before the cap:"
+                ))
             # Remove the generic "couldn't summarize" line we just added —
             # it's misleading when the real cause is the iteration cap. Keep
             # the Thinker block (index >= 3) if present — it's real evidence.
@@ -8110,18 +8217,39 @@ class AgentLoop:
         lines.append("")
         # Session 32: tailor the "what to try" advice to the actual cause.
         # If hit_limit is True, the advice is "tell me to continue" or
-        # "raise the iteration limit" — NOT "switch to a larger model"
-        # (the model didn't fail, it just ran out of steps).
+        # "raise the limit" — NOT "switch to a larger model" (the model
+        # didn't fail, the run was stopped by a budget). Session 419: the
+        # advice now names the budget that actually bound (steps vs time
+        # vs the repetition guard).
         if getattr(trace, "hit_limit", False):
-            lines.append(
-                "What to try next:\n"
-                "  • Tell me to \"continue\" — I'll pick up where I left off\n"
-                "    and finish the remaining steps.\n"
-                "  • Or ask me to do one step at a time so each step gets\n"
-                "    its own iteration budget.\n"
-                "  • The iteration limit is configurable via the\n"
-                "    LOCALMIND_MAX_ITERATIONS env var (default: 8)."
-            )
+            if _limit_kind == "wall_clock":
+                lines.append(
+                    "What to try next:\n"
+                    "  • Tell me to \"continue\" — I'll pick up where I left off\n"
+                    "    and finish the remaining steps.\n"
+                    "  • Or split the task into smaller turns so each fits\n"
+                    "    the time budget.\n"
+                    "  • The time budget is configurable via the\n"
+                    "    LOCALMIND_MAX_WALL_CLOCK_SECS env var (default: 180)."
+                )
+            elif _limit_kind == "repetition":
+                lines.append(
+                    "What to try next:\n"
+                    "  • Rephrase the request with more specifics (a fuller\n"
+                    "    name, path, or clearer target) so the search doesn't\n"
+                    "    repeat the same failing query.\n"
+                    "  • Or ask me to do one step at a time."
+                )
+            else:
+                lines.append(
+                    "What to try next:\n"
+                    "  • Tell me to \"continue\" — I'll pick up where I left off\n"
+                    "    and finish the remaining steps.\n"
+                    "  • Or ask me to do one step at a time so each step gets\n"
+                    "    its own iteration budget.\n"
+                    "  • The iteration limit is configurable via the\n"
+                    "    LOCALMIND_MAX_ITERATIONS env var (default: 8)."
+                )
         else:
             lines.append(
                 "What to try next:\n"
@@ -8672,6 +8800,15 @@ class AgentLoop:
             return  # CRITICAL: return after yielding the exception fallback
 
         _final_text = "".join(_final_text_parts)
+        # Session 419: record that the rescue produced a REAL model answer
+        # (not a deterministic fallback) so post-loop failure classification
+        # can tell a rescued turn from a failed one — a capped run whose
+        # synthesis delivered is not a failure (the "find my CV" false
+        # banner). The deterministic fallbacks below (exception / empty
+        # stream) deliberately do NOT set final_response: those turns are
+        # still failures worth remembering in failure memory.
+        if _any_text_yielded and trace is not None and not getattr(trace, "final_response", ""):
+            trace.final_response = _final_text.strip()
         if (
             not suppress_report
             and trace is not None

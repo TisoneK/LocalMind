@@ -50,6 +50,24 @@ def classify_failure(trace: object) -> str:
     before classifying tool_failure.
     """
     if getattr(trace, "hit_limit", False):
+        # Session 419: a capped run whose forced synthesis delivered a real
+        # answer is a rescued turn, not a failure — same logic as the
+        # B-2026-08-20-18 tool_failure guard below. The old order classified
+        # the cap BEFORE the rescue ran, so "Agent loop failed" showed above
+        # a complete answer (the "find my CV" transcript).
+        final_response = (getattr(trace, "final_response", "") or "").strip()
+        if len(final_response) >= 20:
+            return ""
+        # Session 419: report WHICH budget ended the loop — the wall-clock
+        # break used to be classified as "iteration_limit". The remedies
+        # differ (time cap: smaller turns / faster provider; step cap:
+        # continue or raise the step budget), and the Session 32 fallback
+        # contract requires the stated cause to be the real one.
+        kind = (getattr(trace, "limit_kind", "") or "").strip()
+        if kind == "wall_clock":
+            return "wall_clock_limit"
+        if kind == "repetition":
+            return "repetition_loop"
         return "iteration_limit"
     if getattr(trace, "empty_response", False):
         return "empty_response"
@@ -76,6 +94,16 @@ def build_failure_summary(trace: object) -> str:
         return (
             f"Hit the iteration limit after {iterations} iteration(s); "
             f"the run was cut off before the objective was verified."
+        )
+    if failure_type == "wall_clock_limit":
+        return (
+            f"Hit the wall-clock cap after {iterations} iteration(s); "
+            f"the turn ran out of time before the objective was verified."
+        )
+    if failure_type == "repetition_loop":
+        return (
+            f"Repeated the same tool call with the same arguments and result "
+            f"{iterations} time(s); the run was stopped as a no-progress loop."
         )
     if failure_type == "empty_response":
         return "The model returned an empty response for this step; the turn ended with no usable synthesis."

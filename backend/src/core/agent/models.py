@@ -172,6 +172,13 @@ class AgentTrace:
     final_response: str = ""
     iterations_used: int = 0
     hit_limit: bool = False
+    limit_kind: str = ""
+    """Which budget actually ended the loop: 'iteration_cap' (base failsafe),
+    'wall_clock' (time cap), or 'hard_ceiling' (runaway guard). Empty when
+    hit_limit is False. Session 419: the wall-clock break used to be reported
+    as 'iteration_limit' — the same misdiagnosis class the Session 32
+    fallback-wording contract warns about (a time cap is NOT a step-count
+    cap; the remedies differ)."""
     clarification_issued: bool = False
     tool_talk_recoveries: int = 0  # how many times tool-talk was detected and suppressed
     tool_forced_recoveries: int = 0  # Session 238: forced-tool reprompts (empty/text-without-tool on iter-0)
