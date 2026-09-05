@@ -37,7 +37,10 @@ block (and its "last verified" date) every time you run on it again.
   - `sh .context/core/bin/context-sync verify` → core OK on 0.9.1 — CRLF-safe since the 0.9.1 update (557b1fc); update runs from the package checkout C:/Users/tison/Dev/context (2026-09-05)
   - `cd frontend && npx tsc -b --noEmit` → 0 errors (2026-09-04)
   - `cd frontend && npx vitest run` → 365 tests; **timeout-boundary tests flake under parallel local load** — a stashed baseline flaked 9 vs 1-2 on the changed tree; verify failures in isolation before believing them (2026-09-04)
-  - Isolated live harness: from `backend/`, `LOCALMIND_PORT=8765 LOCALMIND_HOME=<scratch>/home LOCALMIND_SHELL_ENABLED=true .venv/Scripts/python.exe server.py &` + curl `/api/chat` — the Session-330 one-command pattern works; env-var prefixes survive Git Bash (2026-09-04)
+  - Isolated live harness: from `backend/`, `LOCALMIND_PORT=8765 LOCALMIND_HOME=<scratch>/home LOCALMIND_SHELL_ENABLED=true .venv/Scripts/python.exe server.py &` + curl `/api/chat` — the Session-330 one-command pattern works; env-var prefixes survive Git Bash (2026-09-04). Script-based: copy `scripts/live_test_cybercafe.py`, swap PROMPTS — copy settings.json (WITH api_keys) into the scratch home so the isolated server authenticates; never print values (2026-09-05, S423)
+  - Live-test server on Windows: launch children with PLAIN Popen (no DETACHED_PROCESS) when the harness waits in `finally` — DETACHED_PROCESS + piped stdout killed the server mid-turn, no traceback, client saw WinError 10054 (2026-09-05, S423)
+  - OCR stack in backend/.venv: pillow + pytesseract installed (2026-09-05, S423); system Tesseract-OCR at `C:\Program Files\Tesseract-OCR\tesseract.exe`; image reads + .jpg path extraction live-verified (2026-09-05, S423)
+  - OneDrive Files-On-Demand on this machine: placeholders carry RECALL_ON_DATA_ACCESS (0x400000); with OneDrive.exe DOWN every read fails EINVAL/WinError 362 and does NOT auto-hydrate; file_task now auto-starts OneDrive and hydrates on sync (~30s+ for first file after cold start) (2026-09-05, S423)
 - **Quirks:**
   - Windows paths use backslashes; PowerShell handles both `/` and `\`
   - No `make` — use npm scripts or PowerShell equivalents

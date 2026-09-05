@@ -1186,3 +1186,13 @@ if literally nothing slowed you down.
 - **Observed (components of scripts/ci-check.sh, run directly):** tsc -b --noEmit → 0 errors; ruff (Scripts path) → 32 findings; pytest full suite → 41 failed / 2844 passed / 4 skipped (894s) vs the documented ~56 baseline (peer's code_exec/parser fixes landed mid-session; 3 of the 41 are network-dependent SSRF tests); eslint → **9 errors + 84 warnings** (ResponseBlockRenderer.tsx unused-vars + conditional useEnterMotion, MemoryTab.tsx unused-vars, PerformanceMetrics.tsx empty blocks + unused var).
 - **Why it matters:** `--max-warnings 71` is already exceeded (84) and errors fail independently — **the exit gate FAILS as-is on current main**, none of it from this session (commits touched .context/ + AGENTS.md + CLAUDE.md only; last frontend commits are the S421 UI batch).
 - **Cost / prevent:** ~10 min to disambiguate from a possible regression. Frontend lint debt = same category as the ~56-failure backend baseline: needs the deferred peer pass. Raised the ci-check.sh eslint allowance question for the owner (fix errors vs raise --max-warnings) — an owner call, not a chore-session side effect.
+
+---
+
+## 2026-09-05 — ZCode / glm-5.3-flash (Session 423)
+
+- **Problem:** (1) The live-test server died mid-turn with NO traceback and WinError 10054 on the client — cost one confused re-run. (2) Full-suite background runs only captured `tail -6`, losing the failure list; recovering it cost a second full --lf pass (~40s, avoidable). (3) Two parallel live-test attempts hit transient provider behavior (first attempt: server died; second: final synthesis rate-limited on cv_read — the model honestly said so and the raw evidence still proved the pipeline).
+- **Cost:** ~10 min across the three.
+- **Cause:** (1) DETACHED_PROCESS + piped stdout on Windows kills the child when the pipe closes — plain synchronous Popen is correct when the script waits in `finally`. (2) `tail -6` discarded pytest's FAILED summary lines. (3) bankofai free-tier variance (documented pattern).
+- **Workaround / fix:** (1) drop detach flags for synchronous harnesses. (2) capture full output to a file and grep it (`grep -oE "FAILED \S+" | sort -u`), or re-run `--lf -rf --tb=no` for the list. (3) re-run the same prompt; judge tool SELECTION + final-answer production, not iteration counts (S411 note).
+- **Prevent next time:** For Windows live harnesses: never combine DETACHED_PROCESS with captured pipes; for suite evidence: write full output to disk FIRST, then extract — never tail-filter the only copy.
