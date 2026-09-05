@@ -1179,3 +1179,10 @@ if literally nothing slowed you down.
 - **Cause:** both configs were written by/for the macOS box (`bin/` layout); Windows venvs use `Scripts/`.
 - **Workaround / fix:** (1) run `backend/.venv/Scripts/ruff.exe check backend/src` (32 findings 2026-09-05 vs the 34 documented 2026-09-04 baseline — compare sets, not just counts). (2) run the CI components directly with Windows paths: `backend/.venv/Scripts/python.exe -m pytest tests -q`, the Scripts ruff path, `cd frontend && npx tsc -b --noEmit`, eslint.
 - **Prevent next time:** make gates.conf/ci-check.sh venv-layout aware (detect `Scripts/` vs `bin/`), or document the Windows equivalents in gates.conf comments.
+
+---
+## 2026-09-05 — ZCode / glm-5.3-flash (Session 422 addendum) — exit-gate CI numbers on main, eslint drift
+
+- **Observed (components of scripts/ci-check.sh, run directly):** tsc -b --noEmit → 0 errors; ruff (Scripts path) → 32 findings; pytest full suite → 41 failed / 2844 passed / 4 skipped (894s) vs the documented ~56 baseline (peer's code_exec/parser fixes landed mid-session; 3 of the 41 are network-dependent SSRF tests); eslint → **9 errors + 84 warnings** (ResponseBlockRenderer.tsx unused-vars + conditional useEnterMotion, MemoryTab.tsx unused-vars, PerformanceMetrics.tsx empty blocks + unused var).
+- **Why it matters:** `--max-warnings 71` is already exceeded (84) and errors fail independently — **the exit gate FAILS as-is on current main**, none of it from this session (commits touched .context/ + AGENTS.md + CLAUDE.md only; last frontend commits are the S421 UI batch).
+- **Cost / prevent:** ~10 min to disambiguate from a possible regression. Frontend lint debt = same category as the ~56-failure backend baseline: needs the deferred peer pass. Raised the ci-check.sh eslint allowance question for the owner (fix errors vs raise --max-warnings) — an owner call, not a chore-session side effect.

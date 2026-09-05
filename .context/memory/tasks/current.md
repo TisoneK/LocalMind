@@ -28,5 +28,9 @@ environments/SUMMARY).
   run exit-gate CI as components until the scripts are venv-layout aware.
 - **Tooling:** commit messages via `git commit -F <file>`; python heredocs via
   the Bash tool must not contain backslash paths (use forward slashes).
-- **Standing:** ~56 pre-existing backend failures (incl. multipart collection
-  errors) + ruff baseline need the deferred peer pass; ADR-57 slice 3 queued.
+- **Standing:** backend baseline improved to 41 failed / 2844 passed (S422 run;
+  peer fixes landed) + ruff 32 findings; **frontend eslint now 9 errors + 84
+  warnings vs --max-warnings 71 — the exit gate FAILS as-is on main** (unused
+  vars / rules-of-hooks debt in ResponseBlockRenderer, MemoryTab,
+  PerformanceMetrics; pre-S422). Both need the deferred peer pass; ADR-57
+  slice 3 queued.
