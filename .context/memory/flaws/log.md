@@ -708,3 +708,47 @@ logged in inefficiencies/log.md — no product behavior was wrong.
   would also have missed.
 - **Status:** fixed in package `edf6920` (0.16.0, 2026-09-06); verified on
   this repo.
+
+## 2026-09-06 — ZCode / GLM-5.3-Flash (Session 432) — title-generator races SIGTERM teardown (adapter call after connections closed)
+
+- **Flaw:** on server shutdown the background title-generation task is not
+  cancelled before the adapters are torn down. Observed live (S432 smoke,
+  isolated 8765): the log sequence is `Received signal SIGTERM — shutting down
+  gracefully…` → `[shutdown] all adapter connections closed` → THEN
+  `ERROR adapters.openai_compat — Unexpected error calling bankofai: ` (empty
+  message) + `WARNING core.title_generator — [title] adapter error for
+  s332-apple_math-…`.
+- **Symptom:** every shutdown with an active chat logs a spurious adapter
+  ERROR/WARNING pair; the chat title for the last turn is silently not
+  generated. Benign to the user mid-session (the turn and its answer are
+  already complete) but it is a real ordering bug and it pollutes logs.
+- **Root cause:** the title task is fire-and-forget; the SIGTERM handler closes
+  adapter connections without awaiting/cancelling in-flight background tasks
+  first, so the task's provider call hits a closed client.
+- **Suggested fix:** in the shutdown path, cancel background tasks
+  (title generation, thinker consults) and await them (or shield + timeout)
+  BEFORE closing adapter connections; also give `openai_compat`'s
+  "Unexpected error" log the exception text — the empty message cost a
+  diagnosis round.
+- **Status:** open (found 2026-09-06, live trace `scratch/server-sync-check.log`).
+
+## 2026-09-06 — ZCode / GLM-5.3-Flash (Session 432) — merge `95c6400` committed unresolved conflict markers in tasks/current.md
+
+- **Flaw:** the S429–S431 merge commit `95c6400` ("append-only logs keep both
+  sides, current.md keeps S431 + S428 status") landed `tasks/current.md` WITH
+  its `<<<<<<< HEAD / ======= / >>>>>>> origin/main` markers unresolved — both
+  sides' content was kept, but the marker lines were committed as file content.
+- **Symptom:** every session that read current.md after the merge saw a
+  Status section wrapped in conflict markers; a careless `git checkout
+  --theirs`-style recovery or another merge on top could silently drop one
+  side's status.
+- **Root cause:** the merge resolution was verified by intent ("keep both
+  sides") not by re-reading the file; no gate greps memory files for marker
+  lines before commit.
+- **Suggested fix:** (1) add a pre-commit/exit-gate grep for
+  `^<{7}|^={7}$|^>{7}` across `.context/memory/**` (cheap, catches this class
+  permanently); (2) when hand-merging memory files, always re-read the merged
+  file before staging.
+- **Status:** resolved this session (markers resolved by merging both sides'
+  content into S432's closeout commit; the gate suggestion above remains
+  open).
