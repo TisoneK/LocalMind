@@ -710,7 +710,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 adapter=settings.localmind_adapter,
                 model=active_parent_model() or "(default)",
             )
-        if client_intent:
+        # S426: a 'chat' hint is not a routing hint the parent discards — it
+        # is the UI agreeing the turn is conversational, and the fast-path
+        # below HONORS it. Only explicit TOOL hints (the user picked a tool)
+        # are announced as ignored.
+        if client_intent and client_intent != "chat":
             collector.emit(
                 "routing_hint_ignored",
                 hint=client_intent,
@@ -862,12 +866,22 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         # (init + iter 1 + replan + iter 2) for a question that needs ONE call.
         #
         # Safety: never fast-path when (a) a file is attached, (b) the client
-        # sent a routing hint, (c) the message contains tool/realtime/
-        # system keywords (handled by is_conversational_question's blocked
-        # keyword guard), OR (d) the pre-init classifier returned an override
-        # mode (Session 337 — Cluster A/D overrides must reach the parent
-        # agent loop's direct-return path, not the fast-path's chat call).
-        if file is None and not client_intent and _pre_init_override.mode is None:
+        # sent an explicit TOOL hint (the user picked a tool — a 'chat' hint
+        # does NOT suppress the fast-path: it is the UI's own conversational
+        # classification from client.ts classifyClientIntent, and the
+        # deterministic detectors below remain the real gate), OR (c) the
+        # pre-init classifier returned an override mode (Session 337 —
+        # Cluster A/D overrides must reach the parent agent loop's
+        # direct-return path, not the fast-path's chat call).
+        #
+        # S426: the original `not client_intent` gate disabled the fast-path
+        # for the UI's OWN chat hint, so every greeting sent from the
+        # Electron app paid the full init+Thinker+iteration pipeline (live:
+        # 75.0s on bankofai for "Hi") — the exact regression S206 closed.
+        # The hint that was designed to cooperate with this path was the
+        # thing suppressing it.
+        _conversational_hint = client_intent in (None, "", "chat")
+        if file is None and _conversational_hint and _pre_init_override.mode is None:
             from core.trivial_input import (
                 _direct_chat_response,
                 conversational_response,

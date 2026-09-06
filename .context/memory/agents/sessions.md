@@ -6083,3 +6083,36 @@ top stories via web_research. No frontend/agent-loop change.
 - **Open items:** none new. Standing P0 Steps 4-8 + ~23-failure baseline peer pass (was ~56; some may be stale) remain. Deferred by design: OLE2 (.pub/.doc/.xls) parsing, screenshot-to-OCR fallback for unrenderable formats (needs the image-OCR foundation — now in place), PDF scanned-page OCR routing.
 - **Coordination:** peer core-update session (S422) went live mid-session on the shared tree; per the d727030 agreement I staged explicit paths only, never stashed/`add -A`'d, and pulled before each push — no collisions. Session number 423 (422 taken mid-flight; S420 lesson applied).
 - **Report:** none — feature session (commits + tests are the record); live artifacts in scratch/s422/ (gitignored).
+
+---
+## 2026-09-05 — Session 424 — add Experiential Labs provider (gateway)
+
+- **Agent:** ZCode (local) | **Model:** glm-5.3-flash (per system prompt ID 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0; not user-stated) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.9.1
+- **Task:** "We want to add a new model provider: Experiential Labs" + user's research notes (OpenAI-compatible gateway, xpl_ Bearer key, catalog+waterfall, BYOK/platform-credits lanes, 429 insufficient_quota non-transient).
+- **Commits:** 2 product+context (ec9b6b7 provider + changelog; this closeout). ADR-58 appended to plans/decisions.md.
+- **Outcome:** done (config-only, ADR-55 pattern). PROVIDER_CONFIGS entry (base https://api.experientiallabs.ai/v1, EXPERIENTIAL_API_KEY/EXPERIENTIAL_MODEL, settings field experiential_model, plain Bearer), Settings field + env-key map, SettingsModal entry, models.py live-list tuple, .env.example, MODEL_CONTEXT_WINDOWS["glm-5.3-flash"]=1310720 (provider-catalog-documented), 3 new registry tests. Keyless probe confirmed research: /v1/* needs key (401 invalid_key); /api/models public catalog = 500 slugs w/ ctx+pricing; glm-5.3-flash is the cheapest tool-capable leg (~$0.075/M input) → default. Non-transient-quota semantics needed NO code: _PERMANENT_QUOTA_MARKERS already covers insufficient_quota (verified, not assumed).
+- **Verification:** unit — 11/11 provider-registry (3 new), 13/13 config_adapter, 11/11 SettingsModal, tsc 0 errors, ruff baseline unchanged (32 findings, 0 in touched files). LIVE — NOT DONE: no xpl_ key on this machine; smoke test owed per ADR-58 (keyed GET /v1/models; isolated-8765 /api/chat LOCALMIND_ADAPTER=experiential; tools+streaming). HONEST USER-FACING STATUS: implemented, not yet live-verified.
+- **User incident (resolved):** after adding the key in the running app, save-key returned "Unknown provider. Valid: [...no experiential]" — the RUNNING backend predated the commit; every validation site derives from PROVIDER_CONFIGS (verified config.py:250, models.py:71, adapters __init__), so a restart fixes it. Instructed user; restart re-reads the registry.
+- **Open items:** smoke-test ADR-58 when key present (then mark tested); possible UX follow-up: keyless /api/models catalog as model-listing fallback (deferred, nested non-OpenAI shape). Standing: P0 Steps 4-8, ~23-failure baseline peer pass, eslint drift (9E/84W).
+- **Report:** none — config-add session (commit + ADR + tests are the record, per S417 convention)
+- **Notes:** (1) ProviderConfig comment block carries the full research caveats (billing lanes, waterfall, quota semantics, unverified starter credits) — read it before touching the provider. (2) The pre-commit gate's ruff line fails on Windows (backend/.venv/bin vs Scripts — known S422 inefficiency); components run green instead.
+
+### Session 424 addendum — provider REVERTED per owner directive (2026-09-06, commit 645b5c4)
+
+Owner (after a colleague live-session note): "I do not want that new provider
+implemented right now. Undo and just backlog the feature... do not mess other
+agent's current work just yours." Executed: forward-out `git revert ec9b6b7`
+(`645b5c4`, no history rewrite) — 7 files, verified 0 experiential references
+in code, registry tests back to 8/8, ruff clean. Feature backlogged as
+**B-2026-09-06-1** (full restore: `git revert 645b5c4` + owed smoke test,
+transferred there); ADR-58 amended (status: reverted-before-live-use, research
+preserved). Coordination (peer sessions went live mid-closeout): read S426
+claim (fastpath gate + tool catalog — "provider files" excluded = my scope) +
+S425 notes (ADR-57 slice-1, owns CHANGELOG.md); emitted claim
+`20260906T005255Z` BEFORE the revert, notes to both peers after (S425 flagged
+that the revert touched CHANGELOG — 1 deletion only, no hunks swept), release
+`20260906T005650Z` citing the commit. Explicit-path staging throughout; the
+peers' in-flight `tools.py` edit and untracked S425 event files untouched.
+Pre-revert full suite (36F/2856P) had ZERO failures outside the documented
+baseline families and none provider-related — the revert hides nothing.
+Post-revert suite captured in scratch/s424/pytest-post-revert.txt as evidence.
