@@ -2,15 +2,19 @@
 
 **Status:** IDLE — Sessions 425–427 closed (their records live in
 `agents/sessions.md` + `sessions/SUMMARY.md`; S427 shipped
-evidence-grounded memory writes, live-verified). **Session 429 closed:
-core updated 0.9.1 → 0.14.0** (`38d58c0` — source repo verified against
+evidence-grounded memory writes, live-verified). **Session 429 closed (two rounds):
+core updated 0.9.1 → 0.16.0** (`38d58c0` — source repo verified against
 its own manifest BEFORE updating, per the S426 lesson; the 0.13.1
 corruption had already been repaired upstream). Two package flaws found +
 logged: the `.ps1` update path skips the 0.13.0 zone migration
 (history/, archive/, history.conf, agents/GROUP — installed manually per
-the sh-port commands), and `context-mem lint` false-positives on the root
-AGENTS.md digest. AGENTS.md digest + kickoff `.cmd` invocations refreshed
-from the new templates; duplicate Super Z / GLM-5.2 registry row merged
+the sh-port commands; RESOLVED upstream the same day by 0.16.0 — the .ps1
+update now backfills all zones in one run via `migrate --backfill-only`,
+exercised live in round 2), and `context-mem lint` false-positives on the
+root AGENTS.md digest (still open). AGENTS.md digest + kickoff `.cmd`
+invocations refreshed from the new templates; `memory/agents/roster.md`
+installed (0.15.0 named-persona roster — current-group team board; S429's
+row: Ada | S429); duplicate Super Z / GLM-5.2 registry row merged
 (`context-mem check` passes). **S428 (thinker-concurrent) may still be in
 flight** in worktree `../LocalMind-zcode-s428` (branch
 `collab/localmind-thinker-concurrent/...`) — check the event trail before

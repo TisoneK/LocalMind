@@ -158,6 +158,7 @@ Reach for the lightest thing that works. For the common case —
 non-overlapping work, or work no one else has touched — the whole
 lifecycle is:
 
+0. **Pick a name.** Add your row to `memory/agents/roster.md` — a real name you choose (any human name), your codename `S<NNN>`, model, and what you're doing. Present yourself by that name everywhere (`--agent John`, "John (S427)" to the supervisor), never "peer" or a bare id. One name per group — `context-mem check` flags a clash.
 1. **Say what you're on** with a `note`, the office channel. One line
    ("taking the token-refresh path; leaving the session store to you")
    keeps peers from colliding with you.

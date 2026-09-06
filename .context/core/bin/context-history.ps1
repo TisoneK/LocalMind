@@ -38,6 +38,7 @@ $historyDir = Join-Path $contextDir 'history'
 $archiveDir = Join-Path $contextDir 'archive'
 $sessionsMd = Join-Path $memoryDir 'agents/sessions.md'
 $summaryMd = Join-Path $memoryDir 'sessions/SUMMARY.md'
+$rosterMd = Join-Path $memoryDir 'agents/roster.md'
 $groupState = Join-Path $memoryDir 'agents/GROUP'
 $configFile = Join-Path $memoryDir 'workflows/history.conf'
 
@@ -135,6 +136,24 @@ function Reset-Summary {
   ) -join "`n" | Set-Content -LiteralPath $summaryMd
 }
 
+function Reset-Roster {
+  if (-not (Test-Path -LiteralPath $rosterMd)) { return }
+  @(
+    '# Team Roster (current group - update in place)',
+    '',
+    'Pick a real name you like and add your row; present yourself by it',
+    '("John (S<NNN>)"). Your name and codename are each unique in this group.',
+    'The human is the supervisor. context-mem check flags a duplicate.',
+    '',
+    '<!-- TEMPLATE - one row per person in this group:',
+    '| <Name> | S<NNN> | <model id> | <what you are doing> |',
+    '-->',
+    '',
+    '| Name | Codename | Model | Doing |',
+    '|------|----------|-------|-------|'
+  ) -join "`n" | Set-Content -LiteralPath $rosterMd
+}
+
 function Show-PromotionChecklist {
   Say 'Before closing this group, confirm every open thread is captured in a'
   Say 'DURABLE file (it will NOT carry over implicitly - the new group starts clean):'
@@ -205,13 +224,15 @@ function Cmd-Close {
   $lines = @("# Session group $n (closed $(Today))", '',
     "- Opened: $opened", "- Closed: $(Today)", "- Sessions: $c")
   if ($milestone) { $lines += "- Milestone: $milestone" }
-  $lines += @('', 'Not read at session start - audit/lookback only.', '', '## Session registry', '')
+  $lines += @('', 'Not read at session start - audit/lookback only.', '')
+  if (Test-Path -LiteralPath $rosterMd) { $lines += @('## Team roster', ''); $lines += (Get-Content -LiteralPath $rosterMd); $lines += '' }
+  $lines += @('## Session registry', '')
   $lines += (Get-Content -LiteralPath $sessionsMd)
   if (Test-Path -LiteralPath $summaryMd) { $lines += @('', '## Summaries', ''); $lines += (Get-Content -LiteralPath $summaryMd) }
   $lines -join "`n" | Set-Content -LiteralPath $target
   Say "wrote $target"
 
-  Reset-Registry; Reset-Summary; Write-GroupState -N ($int + 1) -Opened (Today)
+  Reset-Registry; Reset-Summary; Reset-Roster; Write-GroupState -N ($int + 1) -Opened (Today)
   Say "started group-$next"
   Roll-OldestHistoryToArchive
   Say ''; Say "Commit as: chore(context): close session group-$n, open group-$next"

@@ -38,11 +38,13 @@ If you read nothing else, obey these rules:
    `.context/memory/sessions/`, skim them for current state.
 5. **Choose the mode explicitly.** Without a shared collaboration
    `session` + `issue`, `tasks/current.md` is the single-agent lock. In
-   collaboration mode you and your peers are one team, not rivals: use an
-   isolated git worktree/branch and the immutable event trail; do not block
-   peers on `tasks/current.md`. The everyday move is a `note` (the office
-   channel — say what you're on, flag a peer, review a diff); then
-   `claim → work → release`. Save the `proposal → assessment → agreement`
+   collaboration mode you and your teammates are one team, not rivals, and
+   the human is your supervisor: use an isolated git worktree/branch and the
+   immutable event trail; do not block teammates on `tasks/current.md`. Pick
+   a real name in `memory/agents/roster.md` (unique per group) and present
+   yourself by it — "John (S427)", never "peer". The everyday move is a
+   `note` (the office channel — say what you're on, flag a coworker, review a
+   diff); then `claim → work → release`. Save the `proposal → assessment → agreement`
    ceremony for a genuine conflict (same paths, incompatible changes).
    Before each next action run `context-gates checkpoint`; before commits,
    integration, and exit run the matching gate. On Windows, use the `.cmd`

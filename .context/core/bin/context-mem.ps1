@@ -94,6 +94,27 @@ function Check-Environments {
   return (-not $dup)
 }
 
+function Check-Roster {
+  $f = Join-Path $memoryDir 'agents/roster.md'
+  if (-not (Test-Path -LiteralPath $f)) { return $true }
+  $nseen = @{}; $nwhere = @{}; $cseen = @{}; $cwhere = @{}; $ln = 0
+  foreach ($raw in Get-Content -LiteralPath $f) {
+    $ln++
+    $line = $raw.TrimEnd("`r")
+    if ($line -notmatch '^\s*\|') { continue }
+    $cells = $line.Split('|')
+    if ($cells.Count -lt 4) { continue }
+    $name = $cells[1].Trim(); $code = $cells[2].Trim()
+    if ($code -notmatch '^[Ss][0-9]+$') { continue }
+    if ($nseen.ContainsKey($name)) { $nseen[$name]++; $nwhere[$name] += " $ln" } else { $nseen[$name] = 1; $nwhere[$name] = "$ln" }
+    if ($cseen.ContainsKey($code)) { $cseen[$code]++; $cwhere[$code] += " $ln" } else { $cseen[$code] = 1; $cwhere[$code] = "$ln" }
+  }
+  $dup = $false
+  foreach ($k in $nseen.Keys) { if ($nseen[$k] -gt 1) { ErrLine ('DUP roster.md: name "{0}" used by {1} rows (lines {2}) - one name per group; pick another, or edit your own row' -f $k, $nseen[$k], $nwhere[$k].Trim()); $dup = $true } }
+  foreach ($k in $cseen.Keys) { if ($cseen[$k] -gt 1) { ErrLine ('DUP roster.md: codename "{0}" on {1} rows (lines {2}) - one row per session codename; edit your row instead of adding a second' -f $k, $cseen[$k], $cwhere[$k].Trim()); $dup = $true } }
+  return (-not $dup)
+}
+
 function Invoke-Lint {
   if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Die 'lint needs git on PATH' }
   $root = (& git -C $projectDir rev-parse --show-toplevel 2>$null)
@@ -161,7 +182,8 @@ switch ($Command) {
     if (-not (Test-Path -LiteralPath $memoryDir)) { Say 'context-mem: no memory dir (nothing to check)'; exit 0 }
     $ok1 = Check-AiModels
     $ok2 = Check-Environments
-    if ($ok1 -and $ok2) { Say 'memory check passed: no duplicate keys in the update-in-place registries'; exit 0 }
+    $ok3 = Check-Roster
+    if ($ok1 -and $ok2 -and $ok3) { Say 'memory check passed: no duplicate keys in the update-in-place registries'; exit 0 }
     ErrLine 'memory check failed: a registry has more than one entry for a key - correct in place (edit the entry), do not append a duplicate'
     exit 1
   }

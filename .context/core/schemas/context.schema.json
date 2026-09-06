@@ -38,7 +38,8 @@
     }
   },
   "memoryFiles": {
-    "agents/sessions.md":      { "mode": "append-only",      "scope": "project" },
+    "agents/sessions.md":      { "mode": "append-only",      "scope": "project", "note": "current group's registry; rotated by context-history" },
+    "agents/roster.md":        { "mode": "update-in-place",  "scope": "project", "note": "team roster for the current group; one row per person (Name, codename S<NNN>, model, doing); Name and codename each unique; context-mem check enforces; context-history resets on group close" },
     "tasks/current.md":        { "mode": "overwrite",        "scope": "project", "note": "single-agent lock only; collaboration mode uses event claims" },
     "tasks/backlog.md":        { "mode": "append-only",      "scope": "project" },
     "collaboration/README.md": { "mode": "generated",         "scope": "project" },

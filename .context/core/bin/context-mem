@@ -104,12 +104,42 @@ check_environments() {
   ' "$_f"
 }
 
+# team roster: a row is | Name | Codename | Model | Doing |. Both the name and
+# the codename must be unique within the current group. A real row has an
+# S<NNN> codename in column 2 (this skips the header, separator, and template).
+check_roster() {
+  _f=$MEMORY_DIR/agents/roster.md
+  [ -f "$_f" ] || return 0
+  awk '
+    /^[[:space:]]*\|/ {
+      n = split($0, c, "|")
+      if (n < 4) next
+      name = c[2]; code = c[3]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", name); gsub(/^[[:space:]]+|[[:space:]]+$/, "", code)
+      if (code !~ /^[Ss][0-9]+$/) next
+      nseen[name]++; nwhere[name] = nwhere[name] " " FNR
+      cseen[code]++; cwhere[code] = cwhere[code] " " FNR
+    }
+    END {
+      d = 0
+      for (k in nseen) if (nseen[k] > 1) {
+        printf "DUP roster.md: name \"%s\" used by %d rows (lines%s) — one name per group; pick another, or edit your own row\n", k, nseen[k], nwhere[k] | "cat 1>&2"; d++
+      }
+      for (k in cseen) if (cseen[k] > 1) {
+        printf "DUP roster.md: codename \"%s\" on %d rows (lines%s) — one row per session codename; edit your row instead of adding a second\n", k, cseen[k], cwhere[k] | "cat 1>&2"; d++
+      }
+      exit (d > 0) ? 1 : 0
+    }
+  ' "$_f"
+}
+
 check() {
   [ $# -eq 0 ] || { case "$1" in -h|--help) usage ;; *) die "unknown argument '$1'" ;; esac; }
   [ -d "$MEMORY_DIR" ] || { say "context-mem: no memory dir (nothing to check)"; return 0; }
   _rc=0
   check_ai_models || _rc=1
   check_environments || _rc=1
+  check_roster || _rc=1
   if [ "$_rc" -eq 0 ]; then
     say "memory check passed: no duplicate keys in the update-in-place registries"
   else

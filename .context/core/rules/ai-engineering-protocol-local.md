@@ -161,6 +161,7 @@ you're doing, leave a note if it affects someone, look before you start.
 
 ### The light path (do this by default)
 
+0. **Pick a name.** Add your row to `memory/agents/roster.md` — a real name you choose (any human name), your codename `S<NNN>`, model, and what you're doing. Present yourself by that name everywhere (`--agent John`, "John (S427)" to the supervisor), never "peer" or a bare id. One name per group — `context-mem check` flags a clash.
 1. **Say what you're on** — a `note`, the office channel. One line.
 2. **`claim` → work → `release`** (citing the commit). Same as
    single-agent mode, plus visibility.

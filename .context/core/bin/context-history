@@ -40,6 +40,7 @@ HISTORY_DIR=$CONTEXT_DIR/history
 ARCHIVE_DIR=$CONTEXT_DIR/archive
 SESSIONS_MD=$MEMORY_DIR/agents/sessions.md
 SUMMARY_MD=$MEMORY_DIR/sessions/SUMMARY.md
+ROSTER_MD=$MEMORY_DIR/agents/roster.md
 GROUP_STATE=$MEMORY_DIR/agents/GROUP
 CONFIG=$MEMORY_DIR/workflows/history.conf
 
@@ -140,6 +141,24 @@ reset_summary() {
   } > "$SUMMARY_MD"
 }
 
+reset_roster() { # fresh empty team roster for the new group
+  [ -f "$ROSTER_MD" ] || return 0
+  {
+    echo "# Team Roster (current group — update in place)"
+    echo ""
+    echo "Pick a real name you like and add your row; present yourself by it"
+    echo "(\"John (S<NNN>)\"). Your name and codename are each unique in this group."
+    echo "The human is the supervisor. context-mem check flags a duplicate."
+    echo ""
+    echo "<!-- TEMPLATE — one row per person in this group:"
+    echo "| <Name> | S<NNN> | <model id> | <what you're doing> |"
+    echo "-->"
+    echo ""
+    echo "| Name | Codename | Model | Doing |"
+    echo "|------|----------|-------|-------|"
+  } > "$ROSTER_MD"
+}
+
 promotion_checklist() {
   say "Before closing this group, confirm every open thread is captured in a"
   say "DURABLE file (it will NOT carry over implicitly — the new group starts clean):"
@@ -206,6 +225,7 @@ cmd_close() {
     printf -- '- Opened: %s\n- Closed: %s\n- Sessions: %s\n' "$_opened" "$(today)" "$_c"
     [ -n "$_milestone" ] && printf -- '- Milestone: %s\n' "$_milestone"
     printf '\nNot read at session start — audit/lookback only.\n\n'
+    if [ -f "$ROSTER_MD" ]; then printf '## Team roster\n\n'; cat "$ROSTER_MD"; printf '\n'; fi
     printf '## Session registry\n\n'
     cat "$SESSIONS_MD"
     if [ -f "$SUMMARY_MD" ]; then printf '\n## Summaries\n\n'; cat "$SUMMARY_MD"; fi
@@ -214,6 +234,7 @@ cmd_close() {
 
   reset_registry
   reset_summary
+  reset_roster
   write_group_state "$(( _int + 1 ))" "$(today)"
   say "started group-$_next"
   roll_oldest_history_to_archive
