@@ -6096,3 +6096,23 @@ top stories via web_research. No frontend/agent-loop change.
 - **Open items:** smoke-test ADR-58 when key present (then mark tested); possible UX follow-up: keyless /api/models catalog as model-listing fallback (deferred, nested non-OpenAI shape). Standing: P0 Steps 4-8, ~23-failure baseline peer pass, eslint drift (9E/84W).
 - **Report:** none — config-add session (commit + ADR + tests are the record, per S417 convention)
 - **Notes:** (1) ProviderConfig comment block carries the full research caveats (billing lanes, waterfall, quota semantics, unverified starter credits) — read it before touching the provider. (2) The pre-commit gate's ruff line fails on Windows (backend/.venv/bin vs Scripts — known S422 inefficiency); components run green instead.
+
+### Session 424 addendum — provider REVERTED per owner directive (2026-09-06, commit 645b5c4)
+
+Owner (after a colleague live-session note): "I do not want that new provider
+implemented right now. Undo and just backlog the feature... do not mess other
+agent's current work just yours." Executed: forward-out `git revert ec9b6b7`
+(`645b5c4`, no history rewrite) — 7 files, verified 0 experiential references
+in code, registry tests back to 8/8, ruff clean. Feature backlogged as
+**B-2026-09-06-1** (full restore: `git revert 645b5c4` + owed smoke test,
+transferred there); ADR-58 amended (status: reverted-before-live-use, research
+preserved). Coordination (peer sessions went live mid-closeout): read S426
+claim (fastpath gate + tool catalog — "provider files" excluded = my scope) +
+S425 notes (ADR-57 slice-1, owns CHANGELOG.md); emitted claim
+`20260906T005255Z` BEFORE the revert, notes to both peers after (S425 flagged
+that the revert touched CHANGELOG — 1 deletion only, no hunks swept), release
+`20260906T005650Z` citing the commit. Explicit-path staging throughout; the
+peers' in-flight `tools.py` edit and untracked S425 event files untouched.
+Pre-revert full suite (36F/2856P) had ZERO failures outside the documented
+baseline families and none provider-related — the revert hides nothing.
+Post-revert suite captured in scratch/s424/pytest-post-revert.txt as evidence.
