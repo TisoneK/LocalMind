@@ -1218,3 +1218,9 @@ if literally nothing slowed you down.
 - **Cause:** (1) live-testing.md hardcodes 8765 as THE isolated port — correct for one agent, a collision for two. (2) stash-based baseline capture has no "popped?" guard. (3) shared free-tier account + two agents = doubled request pressure.
 - **Workaround / fix:** (1) Per-agent port: S426 moved to 8766 (`--port` added to live_test_s426_fastpath.py) and announced it in a collab note. (2) After any stash-based baseline, `git stash list` must be EMPTY before the after-run — or better: capture the baseline in a separate `git worktree` (read-only) instead of stashing the live tree. (3) When the provider 500s with "too many clients", wait minutes, not seconds; the healthy window returns.
 - **Prevent next time:** live-testing.md should say "one port per concurrent agent (8765, 8766, …)" — the doc predates multi-agent live-testing on this box. Baseline capture via worktree beats stash.
+
+## 2026-09-06 — ZCode / glm-5.3-flash (Session 427)
+- **Problem:** staging the scratch-home settings.json with a RELATIVE path (`cp ... scratch/s427/tracehome/`) while the shell's cwd had drifted to `backend/` silently created `backend/scratch/s427/tracehome/` — the harness then booted with no settings and every turn failed with "API key not set". Cost one wasted 3-turn live run (~1 min).
+- **Cause:** cwd persistence between Bash calls + relative paths for cross-cutting artifacts (the trap is a cousin of S424's pipe-truncation item — both are "relative-path assumptions" in shell work).
+- **Workaround / fix:** use absolute paths for anything outside the current call's own output (`cp ... C:/Users/tison/Dev/LocalMind/scratch/s427/tracehome/settings.json`), then `ls` the EXACT destination before booting the harness.
+- **Prevent next time:** harness scripts could stage their own scratch home (copy settings if missing) instead of relying on a manual pre-step — noted as a small harness improvement, not done this session.

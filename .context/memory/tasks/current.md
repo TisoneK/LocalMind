@@ -1,23 +1,44 @@
 # Current Task
 
-**Status:** IDLE — Sessions 425 + 426 closed (concurrent, coordinated via the
-event trail). **S425 (main `540792a`):** ADR-57 slice 1 shipped + LIVE-verified
-— Thinker consults stream their prose reasoning to the ThinkingBlock
-(surfacing stops at the JSON marker — the S324 leak class is prevented
-structurally), the post-tool consult builds on the turn's earlier analysis
-(`Evidence.prior_analysis`), and the prompt is rewritten for human-like,
-precise, decision-focused reasoning that never exposes agent machinery (owner
-directives). LIVE bankofai/qwen3.8-flash before/after: consults surfaced 0
-chars → 2189–2737 chars, machinery scan clean, no JSON leak, answers held.
-34 thinker/loop tests (7 new). **S426:** fast-path gate fix (`a2a3a48`, "Hi"
-75.0s → 0.3s zero provider calls, S206 boundary restored) + parent-only tool
-catalog cut (`f4f567e`, ADR-53; ADR-40 tool-selection bar held live). Full
-suite failure set = documented baseline families both sides.
+**Status:** IDLE — Sessions 425 + 426 + 427 closed (concurrent, coordinated
+via the event trail). **S425 (main `540792a`):** ADR-57 slice 1 shipped +
+LIVE-verified — Thinker consults stream their prose reasoning to the
+ThinkingBlock (surfacing stops at the JSON marker — the S324 leak class is
+prevented structurally), the post-tool consult builds on the turn's earlier
+analysis (`Evidence.prior_analysis`), and the prompt is rewritten for
+human-like, precise, decision-focused reasoning that never exposes agent
+machinery (owner directives). LIVE bankofai/qwen3.8-flash before/after:
+consults surfaced 0 chars → 2189–2737 chars, machinery scan clean, no JSON
+leak, answers held. 34 thinker/loop tests (7 new). **S426:** fast-path gate
+fix (`a2a3a48`, "Hi" 75.0s → 0.3s zero provider calls, S206 boundary
+restored) + parent-only tool catalog cut (`f4f567e`, ADR-53; ADR-40
+tool-selection bar held live). **S427 (`ed8dcf2`):** evidence-grounded
+memory writes — "Remember the source for EPL table" previously stored the
+literal phrase + fake-confirmed; now `needs_resolution()` classifies bare
+referents deterministically, referential writes get ONE bounded resolution
+call over the conversation evidence (core/memory_resolver.py), the
+confirmation echoes the RESOLVED fact, failure asks instead of writing, and
+the conversational fast path injects the 5 newest memories so "What's it?"
+resolves. LIVE: EPL transcript replay — stored a distilled self-contained
+fact, follow-up answered from memory, 0 tools. 22 new tests; suite
+failure-set diff = zero new.
 
 **Feature:** none
 
 ## Notes for the next session
 
+- **Memory follow-ups (S427, small):** (1) the resolution call's provider
+  usage is not folded into the turn's provider_usage accounting (minor
+  observability gap); (2) S356's "Got it — I'll keep that in mind." on
+  legacy-path write FAILURE is still a soft fake-confirm — owner call
+  whether to make it honest; (3) the resolution prompt could also consider
+  PRIOR stored memories as evidence (currently conversation-only).
+- **The thinking principle (S427 discussion, owner-articulated):** LocalMind
+  was restrained from thinking, and the restraint bit where reasoning IS the
+  mechanism — reference resolution. The fix re-placed the gate by
+  shape-of-input (self-contained vs referential) instead of turn class.
+  Worth an ADR when generalized beyond memory (e.g. other deterministic
+  fast paths that skip reasoning).
 - **ADR-57 slice 2 (concurrent consults) is the frequency lever.** Consults
   are still value-gated (failure / ≥2 sources, once/turn) — the latency fix
   stands. Streaming made them visible; concurrency would let them fire after
@@ -39,7 +60,9 @@ suite failure set = documented baseline families both sides.
   and the client silently measures OLD code). Before trusting any trace:
   verify the port was free, and grep the server log for "already in use" + a
   fresh "parent-kernel] ready" line. Candidate fix: add the check to
-  `scripts/live_test_cybercafe.py` boot_server.
+  `scripts/live_test_cybercafe.py` boot_server. **Also (S427): stage the
+  scratch-home settings with ABSOLUTE paths — a relative `cp` under drifted
+  cwd silently created `backend/scratch/` and cost a wasted live run.**
 - **context-collab.ps1:** use `--refs`, not `--re` (the alias breaks pwsh
   parameter binding).
 - **Measurement lesson (S426):** the parent's real per-turn static surface is
