@@ -422,6 +422,102 @@ def _thinker_user_summary(analysis) -> str:
     return "\n".join(parts)
 
 
+# ── ADR-57 slice 2: concurrent post-tool consults ────────────────────────────
+# A consult that runs while the NEXT model call is already in flight costs the
+# turn zero wall-clock (it overlaps model work instead of stacking on it) —
+# which is what lets it fire after every tool without re-creating the
+# S420-era "2-minute turn" serial latency. The data-dependency map (ADR-57
+# Open-Q1): the analysis of observation N BLOCKS the next action only when
+# the tool FAILED (recovery advice must shape the very next call — that
+# consult stays inline/blocking); after a success the model already sees the
+# raw observation, so the consult overlaps the next call and its analysis is
+# injected at the first iteration head after it completes.
+_THINKER_CONSULT_CAP = 5  # per turn — bounds token spend and provider pressure
+_THINKER_TOOL_SKIP = frozenset(
+    {"todo_write", "describe_tool", "create_plan", "add_subgoal", "update_subgoal"}
+)
+
+
+class _BackgroundConsult:
+    """A post-tool Thinker consult running as a background task.
+
+    Prose chunks queue while nobody drains; the loop drains at iteration
+    heads and tool boundaries (near-live: the consult usually finishes during
+    the model call it overlaps). When the task completes, `analysis` carries
+    the parsed ThinkerAnalysis. The task never raises — a failed consult
+    simply completes with an empty analysis (same contract as the inline
+    consult). A task still running at turn end finishes on its own, bounded
+    by the consult timeout; nothing consumes it and it is garbage-collected.
+    """
+
+    def __init__(self, evidence, adapter, timeout_secs: float) -> None:
+        from core.agent.thinker import Thinker
+
+        self._thinker = Thinker(timeout_secs=timeout_secs)
+        self._evidence = evidence
+        self._adapter = adapter
+        self.queue: asyncio.Queue = asyncio.Queue()
+        self.task: Optional[asyncio.Task] = None
+        self.iteration = evidence.iteration
+
+    def start(self) -> None:
+        self.task = asyncio.create_task(self._run())
+
+    async def _run(self) -> None:
+        try:
+            async for chunk in self._thinker.consult(self._evidence, self._adapter):
+                await self.queue.put(chunk)
+        except Exception as exc:  # never let a consult crash the turn
+            logger.warning("[agent.loop] background consult failed: %s", exc)
+        finally:
+            await self.queue.put(None)  # completion sentinel
+
+    @property
+    def analysis(self):
+        return self._thinker.last_analysis
+
+    def drain_nowait(self) -> tuple:
+        """Pull all queued chunks without blocking.
+
+        Returns (thinking_chunks, finished) — finished is True once the
+        consult completed (sentinel seen), in which case `analysis` is final.
+        """
+        chunks = []
+        finished = False
+        while True:
+            try:
+                chunk = self.queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            if chunk is None:
+                finished = True
+                continue
+            if isinstance(getattr(chunk, "thinking", None), str) and chunk.thinking:
+                chunks.append(chunk)
+        return chunks, finished
+
+
+def _absorb_thinker_analysis(loop_messages, trace, obs, analysis, iteration: int) -> None:
+    """Inject a completed Thinker analysis into the model context (shared by
+    the blocking and background consult paths). Mirrors the slice-1 contract:
+    context block for the model, user-facing summary on the trace for the
+    degraded fallback, lifecycle event for observability."""
+    if analysis and not analysis.is_empty:
+        loop_messages.append({"role": "user", "content": _thinker_context_block(analysis)})
+        # B-2026-08-16-12: preserve a user-facing rendering on the trace so the
+        # degraded-evidence fallback can surface the already-computed synthesis
+        # when the final model call fails (e.g. a provider 429).
+        trace.thinker_analysis = _thinker_user_summary(analysis)
+        if obs:
+            obs.emit(
+                "agent_thinker_done",
+                iteration=iteration,
+                next_step=analysis.next_step[:200],
+                facts=len(analysis.facts),
+                ambiguities=len(analysis.ambiguities),
+            )
+
+
 def _shell_tool_enabled() -> bool:
     """Whether the shell tool is currently enabled (B-2026-08-23-4).
 
@@ -3054,7 +3150,13 @@ class AgentLoop:
         consecutive_failures = 0
         fabrication_risk = 0  # Incremented on tool errors and fabrication-prone patterns
         # ADR-42: the Thinker consults ONCE, on the first real evidence.
-        _thinker_consulted = False
+        # ADR-57 slice 2: post-tool consults run CONCURRENTLY with the next
+        # model call — at most one in flight, capped per turn; each completed
+        # analysis is injected into loop_messages at the next iteration head
+        # (before the model call), so the reasoning shapes the next action
+        # without ever having blocked one. Failures keep the blocking path.
+        _consult_inflight = None
+        _consults_fired = 0
 
         if initial_tool_result:
             safe_initial = _filter_tool_injection(initial_tool_result.content)
@@ -3514,6 +3616,22 @@ class AgentLoop:
             # current tool finishes.
             if abort_signal is not None and abort_signal.is_set():
                 raise AgentAbortedError("aborted by user")
+
+            # ── ADR-57 slice 2: drain a completed background consult ───────
+            # The consult for a previous observation overlapped the last
+            # model call; its analysis is injected HERE — before the copy
+            # that feeds this iteration's model call — so it shapes the next
+            # action without ever having blocked one. Prose queued during
+            # the model call flushes to the ThinkingBlock now (near-live).
+            if _consult_inflight is not None:
+                _drain_chunks, _drain_done = _consult_inflight.drain_nowait()
+                for _tc in _drain_chunks:
+                    yield StreamChunk(text="", thinking=_filter_system_leaks(_tc.thinking), done=False)
+                if _drain_done:
+                    _absorb_thinker_analysis(
+                        loop_messages, trace, _obs, _consult_inflight.analysis, _consult_inflight.iteration
+                    )
+                    _consult_inflight = None
 
             # Build iteration-specific context hint
             failure_hint = ""
@@ -5016,49 +5134,45 @@ class AgentLoop:
                     }
                 )
 
-                # ── ADR-42: Thinker consult on the first real evidence ──────
-                # A SILENT, read-only reasoning pass on what was just GATHERED
-                # (not the raw request) — feeds a next-step/facts/ambiguities
-                # analysis forward to shape the next action. The Thinker's raw
-                # monologue is NEVER surfaced to the user (Session 324: no
-                # filter-before-render step existed, so the model's prompt
-                # echoes and JSON-format musing leaked into the ThinkingBlock
-                # on every model); the loop injects the structured analysis
-                # into the agent's context below and reports the lifecycle via
-                # the agent_thinker_* obs events. Gated: once per turn, only
-                # tool-capable intents, only when the model actually reasons
-                # (thinking enabled), only on a real successful observation. Any
-                # failure/timeout is swallowed — the Thinker never blocks a turn.
-                # B-2026-09-02: value-gate the post-tool Thinker. Session 350
-                # made it consult after EVERY tool, but on slow/reasoning
-                # providers each consult is a full LLM round-trip (up to the
-                # plan timeout) — the user saw ~2 min turns where the web fetch
-                # was 4.5s and the rest was these reasoning calls. The Thinker
-                # earns that cost in two cases: after a FAILURE (it can steer
-                # recovery — "that 403'd, try the next source") and when there
-                # are MULTIPLE sources to reconcile. After a single successful
-                # fetch it mostly just says "you have enough, synthesize" — which
-                # the (free) synthesis reminder already conveys — so skip it and
-                # let synthesis proceed directly.
-                _succ_tools = sum(
-                    1 for s in trace.steps
-                    if getattr(s, "tool_name", "") and not getattr(s, "tool_failed", False)
-                )
+                # ── ADR-42 + ADR-57 slice 2: post-tool Thinker consult ──────
+                # A read-only reasoning pass on what was just GATHERED (not
+                # the raw request). ADR-57 slice 1: its prose streams to the
+                # ThinkingBlock. Slice 2: after a SUCCESSFUL tool the consult
+                # no longer blocks the next model call — it runs in the
+                # background (overlapping the model work) and its analysis is
+                # injected at the next iteration head by the drain there;
+                # this is what lets the consult fire after EVERY tool without
+                # re-creating the S420-era serial latency. After a FAILURE
+                # the consult stays BLOCKING: recovery advice must shape the
+                # very next call or the model may repeat the failure.
+                # Throttling: at most one consult in flight and
+                # _THINKER_CONSULT_CAP per turn (token spend + provider rate
+                # limits); mechanical tools are skipped. Any failure is
+                # swallowed — the Thinker never blocks a turn.
                 _last_failed = bool(getattr(trace.steps[-1], "tool_failed", False)) if trace.steps else False
-                _thinker_worth_it = _last_failed or _succ_tools >= 2
-                if (
+                _consult_eligible = (
                     observation
                     and intent in AGENT_INTENTS
                     and getattr(active_adapter, "thinking_enabled", False)
-                    and _thinker_worth_it
-                    # ADR-57 slice 2 (B-2026-09-03): wire the once-per-turn guard
-                    # this site's own comment (line ~2926 "consults ONCE") always
-                    # documented but never checked — the value-gate could re-fire
-                    # every qualifying iteration (measured: iter 2 AND iter 3 on a
-                    # 3-source turn, the iter-3 call redundantly re-reconciling).
-                    and not _thinker_consulted
+                    and tool_name not in _THINKER_TOOL_SKIP
+                )
+                if _consult_eligible and _consult_inflight is not None:
+                    # Free the slot when the in-flight consult finished during
+                    # tool execution (same drain contract as the head).
+                    _drain_chunks, _drain_done = _consult_inflight.drain_nowait()
+                    for _tc in _drain_chunks:
+                        yield StreamChunk(text="", thinking=_filter_system_leaks(_tc.thinking), done=False)
+                    if _drain_done:
+                        _absorb_thinker_analysis(
+                            loop_messages, trace, _obs, _consult_inflight.analysis, _consult_inflight.iteration
+                        )
+                        _consult_inflight = None
+                if (
+                    _consult_eligible
+                    and _consults_fired < _THINKER_CONSULT_CAP
+                    and (_last_failed or _consult_inflight is None)
                 ):
-                    _thinker_consulted = True
+                    _consults_fired += 1
                     try:
                         from core.agent.thinker import Evidence, Thinker
 
@@ -5071,44 +5185,33 @@ class AgentLoop:
                             last_action=tool_name,
                             iteration=iteration + 1,
                             # S425 continuity: an earlier consult this turn (the
-                            # pre-tool pass) hands its summary forward so the
-                            # reasoning compounds instead of restarting.
+                            # pre-tool pass or a previous post-tool one) hands
+                            # its summary forward so the reasoning compounds
+                            # instead of restarting.
                             prior_analysis=trace.thinker_analysis or "",
                         )
                         if _ev.has_evidence:
                             if _obs:
                                 _obs.emit("agent_thinker_start", iteration=iteration + 1)
-                            _thinker = Thinker(
-                                timeout_secs=_reasoning_setting(
-                                    "localmind_reasoning_plan_timeout_secs", REASONING_PLAN_TIMEOUT_SECS
-                                )
+                            _consult_timeout = _reasoning_setting(
+                                "localmind_reasoning_plan_timeout_secs", REASONING_PLAN_TIMEOUT_SECS
                             )
-                            # ADR-57 slice 1: forward the consult's prose
-                            # reasoning to the ThinkingBlock (same contract as
-                            # the pre-tool site above).
-                            async for _tc in _thinker.consult(_ev, active_adapter):
-                                if isinstance(getattr(_tc, "thinking", None), str) and _tc.thinking:
-                                    yield StreamChunk(text="", thinking=_filter_system_leaks(_tc.thinking), done=False)
-                            _analysis = _thinker.last_analysis
-                            if _analysis and not _analysis.is_empty:
-                                loop_messages.append(
-                                    {"role": "user", "content": _thinker_context_block(_analysis)}
+                            if _last_failed:
+                                # BLOCKING — recovery advice shapes the very
+                                # next call (slice-1 forwarding contract).
+                                _thinker = Thinker(timeout_secs=_consult_timeout)
+                                async for _tc in _thinker.consult(_ev, active_adapter):
+                                    if isinstance(getattr(_tc, "thinking", None), str) and _tc.thinking:
+                                        yield StreamChunk(
+                                            text="", thinking=_filter_system_leaks(_tc.thinking), done=False
+                                        )
+                                _absorb_thinker_analysis(
+                                    loop_messages, trace, _obs, _thinker.last_analysis, iteration + 1
                                 )
-                                # B-2026-08-16-12: preserve a user-facing
-                                # rendering of the analysis on the trace so the
-                                # degraded-evidence fallback can surface the
-                                # already-computed synthesis instead of
-                                # discarding it when the final model call fails
-                                # (e.g. a provider 429 on the synthesis turn).
-                                trace.thinker_analysis = _thinker_user_summary(_analysis)
-                                if _obs:
-                                    _obs.emit(
-                                        "agent_thinker_done",
-                                        iteration=iteration + 1,
-                                        next_step=_analysis.next_step[:200],
-                                        facts=len(_analysis.facts),
-                                        ambiguities=len(_analysis.ambiguities),
-                                    )
+                            else:
+                                # BACKGROUND — overlap the next model call.
+                                _consult_inflight = _BackgroundConsult(_ev, active_adapter, _consult_timeout)
+                                _consult_inflight.start()
                     except Exception as _thx:  # never let the Thinker break a turn
                         logger.warning("[agent.loop] Thinker consult skipped: %s", _thx)
 

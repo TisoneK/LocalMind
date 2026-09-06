@@ -27,6 +27,7 @@ Contract under test:
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -384,10 +385,12 @@ async def test_vague_imperative_short_circuits_before_thinker():
     assert "clarify" in user_text.lower() or "could you" in user_text.lower(), user_text
 
 
-# ── ADR-57 slice 2 (B-2026-09-03): value-gate the reflexive Thinker ──────────
-# Two firings were measured on ONE research turn (pre-tool iter 0 + post-tool
-# iter 2 AND iter 3 = 3 calls). These pin the gates that cut the redundant
-# calls while keeping the Thinker's value.
+# ── ADR-57 slice 2: Thinker gating, then concurrency (B-2026-09-03 / S428) ──
+# B-2026-09-03 value-gated the reflexive consults (once per turn, failure /
+# >=2 sources) to kill the S420-era serial latency. S428 (owner-approved)
+# replaces that gate with CONCURRENCY: a consult after every successful tool
+# runs in the background (zero added latency), failures stay blocking, volume
+# is bounded by one-in-flight + a per-turn cap.
 
 
 @pytest.mark.asyncio
@@ -439,10 +442,11 @@ async def test_posttool_thinker_consults_once_across_many_tools():
 
     async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
         seen["calls"] += 1
+        await asyncio.sleep(0)  # yield: let the previous background consult task run
         if seen["calls"] <= 3:
             return ToolCallResult(
-                tool_name="web_search",
-                tool_args={"query": f"source {seen['calls']}"},
+                tool_name="shell",
+                tool_args={"command": f"echo source-{seen['calls']}"},
                 raw_content="",
             )
 
@@ -452,9 +456,9 @@ async def test_posttool_thinker_consults_once_across_many_tools():
 
         return _answer()
 
-    async def fake_dispatch(intent, raw_input, allowed_tool_names=None):
+    async def fake_dispatch(intent, raw_input, allowed_tool_names=None, adapter=None, **kwargs):
         return (
-            ToolResult(content="a real search result", risk=RiskLevel.LOW, source="web_search"),
+            ToolResult(content="file1.txt\nfile2.txt", risk=RiskLevel.LOW, source="shell"),
             False,  # not failed
             0,
         )
@@ -471,7 +475,7 @@ async def test_posttool_thinker_consults_once_across_many_tools():
          patch("core.agent.thinker.Thinker", _AnalysisThinker):
         async for _ in loop.run(
             messages=[{"role": "user", "content": "find the weather in three cities"}],
-            intent=Intent.WEB_SEARCH,
+            intent=Intent.SHELL,
             initial_tool_result=None,
             available_tools=[],
             adapter=mock_adapter,
@@ -480,8 +484,230 @@ async def test_posttool_thinker_consults_once_across_many_tools():
         ):
             pass
 
-    starts = [e for e in obs.history() if e.type == "agent_thinker_start"]
-    assert len(starts) == 1, f"post-tool consult must fire exactly once, got {len(starts)}"
+    # ADR-57 slice 2 (S428): the once-per-turn guard is GONE — a consult
+    # fires after every successful tool (bounded by the in-flight rule +
+    # per-turn cap) and each one completes and is absorbed. SHELL is not a
+    # direct-retrieval intent, so the pre-tool consult (iteration 0) also
+    # fires; count only the post-tool ones (iteration >= 1).
+    starts = [e for e in obs.history() if e.type == "agent_thinker_start" and e.data.get("iteration", 0) >= 1]
+    dones = [e for e in obs.history() if e.type == "agent_thinker_done" and e.data.get("iteration", 0) >= 1]
+    assert len(starts) == 3, f"a consult per successful tool expected, got {len(starts)}"
+    # The LAST consult may legitimately still be in flight when the model
+    # answers on the very next call — the loop ends without a further drain
+    # point (honest lifecycle: start without done). At least the first two
+    # must complete.
+    assert len(dones) >= 2, f"completed consults expected, got {len(dones)}"
+
+
+@pytest.mark.asyncio
+async def test_posttool_consults_capped_per_turn():
+    """ADR-57 slice 2: the per-turn cap (_THINKER_CONSULT_CAP) bounds consult
+    volume — a 7-tool turn consults at most 5 times even though every tool
+    succeeds."""
+    from core.agent.loop import _THINKER_CONSULT_CAP
+
+    loop = AgentLoop(adapter=MagicMock())
+    seen = {"calls": 0}
+
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        seen["calls"] += 1
+        await asyncio.sleep(0)  # yield: let the previous background consult task run
+        if seen["calls"] <= 7:
+            return ToolCallResult(
+                tool_name="shell",
+                tool_args={"command": f"echo source-{seen['calls']}"},
+                raw_content="",
+            )
+
+        async def _answer():
+            yield StreamChunk(text="Combined answer.", done=False)
+            yield StreamChunk(text="", done=True)
+
+        return _answer()
+
+    async def fake_dispatch(intent, raw_input, allowed_tool_names=None, adapter=None, **kwargs):
+        return (
+            ToolResult(content="file1.txt\nfile2.txt", risk=RiskLevel.LOW, source="shell"),
+            False,
+            0,
+        )
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat_with_tools = chat_with_tools
+    mock_adapter.chat = lambda *a, **k: iter(())
+    mock_adapter.thinking_enabled = True
+    obs = ObsCollector()
+
+    with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+         patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), \
+         patch("core.agent.loop.dispatch_with_retry", side_effect=fake_dispatch), \
+         patch("core.agent.thinker.Thinker", _AnalysisThinker):
+        async for _ in loop.run(
+            messages=[{"role": "user", "content": "find the weather in seven cities"}],
+            intent=Intent.SHELL,
+            initial_tool_result=None,
+            available_tools=[],
+            adapter=mock_adapter,
+            obs=obs,
+            skip_planning=True,
+        ):
+            pass
+
+    starts = [e for e in obs.history() if e.type == "agent_thinker_start" and e.data.get("iteration", 0) >= 1]
+    assert len(starts) == _THINKER_CONSULT_CAP, (
+        f"post-tool consult volume must be capped at {_THINKER_CONSULT_CAP}, got {len(starts)}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_background_consult_does_not_block_turn():
+    """ADR-57 slice 2 core property: a slow post-tool consult must NOT delay
+    the turn — the loop proceeds on the raw observation while the consult
+    overlaps the model work. The wall-clock of the turn must stay well under
+    the consult's own duration."""
+    import asyncio as _asyncio
+    import time as _time
+
+    # Warm the process with an IDENTICAL tool-bearing turn (instant thinker)
+    # so one-time lazy init (config disk load, skills, tool registry) is not
+    # counted as turn latency; only the consult's sleep differs below.
+    async def _run_turn(thinker_cls):
+        turn_loop = AgentLoop(adapter=MagicMock())
+        turn_calls = {"n": 0}
+
+        async def turn_chat(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+            turn_calls["n"] += 1
+            await asyncio.sleep(0)  # yield: let the background consult task run
+            if turn_calls["n"] == 1:
+                return ToolCallResult(
+                    tool_name="shell",
+                    tool_args={"command": "echo source-1"},
+                    raw_content="",
+                )
+
+            async def _answer():
+                yield StreamChunk(text="Here is the combined answer from the sources.", done=False)
+                yield StreamChunk(text="", done=True)
+
+            return _answer()
+
+        async def turn_dispatch(intent, raw_input, allowed_tool_names=None, adapter=None, **kwargs):
+            return (
+                ToolResult(content="file1.txt\nfile2.txt", risk=RiskLevel.LOW, source="shell"),
+                False,
+                0,
+            )
+
+        turn_adapter = MagicMock()
+        turn_adapter.chat_with_tools = turn_chat
+        turn_adapter.chat = lambda *a, **k: iter(())
+        turn_adapter.thinking_enabled = True
+        turn_obs = ObsCollector()
+        t_start = _time.monotonic()
+        with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x),              patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x),              patch("core.agent.loop.dispatch_with_retry", side_effect=turn_dispatch),              patch("core.agent.thinker.Thinker", thinker_cls):
+            turn_chunks = []
+            async for _chunk in turn_loop.run(
+                messages=[{"role": "user", "content": "find the weather"}],
+                intent=Intent.SHELL,
+                initial_tool_result=None,
+                available_tools=[],
+                adapter=turn_adapter,
+                obs=turn_obs,
+                skip_planning=True,
+            ):
+                turn_chunks.append(_chunk)
+        return _time.monotonic() - t_start, turn_obs, turn_chunks
+
+    class _SlowThinker(_AnalysisThinker):
+        async def consult(self, evidence, adapter, temperature=0.4):
+            # Sleep ONLY for the post-tool (background) consult — the pre-tool
+            # consult is blocking BY DESIGN (evidence.observations is empty
+            # there), and it must stay instant for this test.
+            if evidence.observations.strip():
+                await _asyncio.sleep(1.5)
+            yield StreamChunk(text="", done=True)
+
+    warm_elapsed, _, _ = await _run_turn(_AnalysisThinker)  # warm + baseline
+    elapsed, obs, chunks = await _run_turn(_SlowThinker)
+
+    assert any(e.type == "agent_thinker_start" for e in obs.history()), "consult fired"
+    # The turn carries ~0.9s of synchronous machine overhead unrelated to the
+    # consult (VectorStore/env construction) — the non-blocking property is
+    # the DELTA vs the identical warm turn. The consult sleeps 1.5s so the
+    # signal dwarfs machine jitter: a blocking consult adds >= 1.5s, while a
+    # non-blocking one shows only jitter (threshold 0.8s).
+    assert (elapsed - warm_elapsed) < 0.8, (
+        f"the turn must not wait for the background consult "
+        f"(delta {(elapsed - warm_elapsed):.2f}s: slow {elapsed:.2f}s vs warm {warm_elapsed:.2f}s)"
+    )
+    assert "Here is the combined answer" in "".join(c.text for c in chunks), "turn completed"
+    # Let the orphaned consult task finish so the event loop closes clean.
+    await _asyncio.sleep(0.4)
+
+
+@pytest.mark.asyncio
+async def test_failed_tool_consult_blocks_next_call():
+    """ADR-57 slice 2 exception: after a FAILED tool the consult stays
+    BLOCKING — its recovery advice must be in the VERY NEXT model call's
+    context, not one iteration late."""
+    loop = AgentLoop(adapter=MagicMock())
+    seen = {"calls": 0}
+    call_messages: list = []
+
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        seen["calls"] += 1
+        call_messages.append(list(messages))
+        if seen["calls"] == 1:
+            await asyncio.sleep(0)  # yield: let the background consult task run
+            return ToolCallResult(
+                tool_name="shell",
+                tool_args={"command": "echo source-1"},
+                raw_content="",
+            )
+
+        async def _answer():
+            yield StreamChunk(text="Recovered with the next source.", done=False)
+            yield StreamChunk(text="", done=True)
+
+        return _answer()
+
+    async def fake_dispatch(intent, raw_input, allowed_tool_names=None, adapter=None, **kwargs):
+        return (
+            ToolResult(content="403 forbidden", risk=RiskLevel.LOW, source="shell"),
+            True,  # FAILED — recovery steering must be immediate
+            0,
+        )
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat_with_tools = chat_with_tools
+    mock_adapter.chat = lambda *a, **k: iter(())
+    mock_adapter.thinking_enabled = True
+    obs = ObsCollector()
+
+    with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+         patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), \
+         patch("core.agent.loop.dispatch_with_retry", side_effect=fake_dispatch), \
+         patch("core.agent.thinker.Thinker", _AnalysisThinker):
+        async for _ in loop.run(
+            messages=[{"role": "user", "content": "find the weather"}],
+            intent=Intent.SHELL,
+            initial_tool_result=None,
+            available_tools=[],
+            adapter=mock_adapter,
+            obs=obs,
+            skip_planning=True,
+        ):
+            pass
+
+    assert any(e.type == "agent_thinker_start" for e in obs.history()), "consult fired on failure"
+    assert len(call_messages) >= 2
+    # The blocking consult's analysis is already in the SECOND model call.
+    second_call_text = " ".join(
+        str(m.get("content", "")) for m in call_messages[1]
+    )
+    assert "[THINKER ANALYSIS]" in second_call_text, (
+        "the failure consult's analysis must block until it shapes the next call"
+    )
 
 
 # ── S425: the consult's reasoning streams; the analysis compounds ───────────
@@ -537,6 +763,7 @@ async def test_posttool_consult_receives_pretool_analysis():
 
     async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
         seen["calls"] += 1
+        await asyncio.sleep(0)  # yield: let the previous background consult task run
         if seen["calls"] <= 2:
             return ToolCallResult(
                 tool_name="system_search",
@@ -550,7 +777,7 @@ async def test_posttool_consult_receives_pretool_analysis():
 
         return _answer()
 
-    async def fake_dispatch(intent, raw_input, allowed_tool_names=None):
+    async def fake_dispatch(intent, raw_input, allowed_tool_names=None, adapter=None, **kwargs):
         return (
             ToolResult(content="a real result", risk=RiskLevel.LOW, source="system_search"),
             False,  # not failed
@@ -579,9 +806,18 @@ async def test_posttool_consult_receives_pretool_analysis():
         ):
             pass
 
-    assert len(capturing.evidence_seen) == 2, "pre-tool + post-tool consults expected"
-    pre, post = capturing.evidence_seen
+    assert len(capturing.evidence_seen) >= 2, (
+        "pre-tool consult + post-tool consults per successful tool expected"
+    )
+    pre, post1, post2 = (
+        capturing.evidence_seen[0],
+        capturing.evidence_seen[1],
+        capturing.evidence_seen[-1],
+    )
     assert pre.prior_analysis == "", "the pre-tool consult has no earlier analysis"
-    assert "ask the user what project" in post.prior_analysis, \
-        "the post-tool consult must receive the pre-tool analysis (continuity)"
-    assert post.observations, "the post-tool consult must see the gathered evidence"
+    assert "ask the user what project" in post1.prior_analysis, \
+        "the first post-tool consult must receive the pre-tool analysis (continuity)"
+    assert "ask the user what project" in post2.prior_analysis, \
+        "the second post-tool consult must receive the earlier analysis too"
+    assert post1.observations and post2.observations, \
+        "the post-tool consults must see the gathered evidence"
