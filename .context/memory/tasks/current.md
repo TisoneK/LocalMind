@@ -2,8 +2,8 @@
 
 **Status:** IDLE — Sessions 425–427 closed (their records live in
 `agents/sessions.md` + `sessions/SUMMARY.md`; S427 shipped
-evidence-grounded memory writes, live-verified). **Session 429 closed (two rounds):
-core updated 0.9.1 → 0.16.0** (`38d58c0` — source repo verified against
+evidence-grounded memory writes, live-verified). **Sessions 429 + 430 closed:
+core updated 0.9.1 → 0.16.1** (430 = text-only patch, ports' help now shows the .cmd form) (`38d58c0` — source repo verified against
 its own manifest BEFORE updating, per the S426 lesson; the 0.13.1
 corruption had already been repaired upstream). Two package flaws found +
 logged: the `.ps1` update path skips the 0.13.0 zone migration

@@ -6183,3 +6183,16 @@ memory/collaboration/README.md refreshed (unmodified bootstrap content
 before). Commits: `fa0642f` claim, `d1f38d9` update, this closeout; release
 event follows. verify green (0.16.0). Next session starts per 0.15+: pick
 your name in the roster, present yourself by it.
+
+---
+## 2026-09-06 — Session 430 — core sync 0.16.0 → 0.16.1 (patch)
+
+- **Agent:** ZCode (local) | **Model:** glm-5.3-flash (per system prompt ID 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0; not user-stated) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.16.1
+- **Task:** "Start another migration session" — pick up the 0.16.1 delta that appeared after S429 closed (the package repo is under active development today).
+- **Commits:** 3 (`6c0bbb0` claim; `d020d15` update core to 0.16.1; this closeout) — branch `collab/localmind-core-update/zcode-glm-5.3-flash-win-s430`, merged to main.
+- **Outcome:** done. Source ca8b364 verified against its own manifest; one-run update + idempotent backfill; verify green. Change surface exactly as the changelog promised (two .ps1 help texts + bookkeeping — no templates, no migration steps owed). Patch substance live-verified: `context-sync.cmd` with no args now prints the `.cmd` launcher form. Roster row re-tagged Ada S429 → S430 (same person, new session tag).
+- **Verification:** verify green (0.16.1); `context-mem.cmd check` passes (roster uniqueness incl.); help text inspected. Context-only session — no product files touched, no full-CI re-run (baseline unchanged).
+- **Coordination:** S428 (thinker-concurrent) claim still unreleased — treated as live; worktree discipline + zero path overlap maintained.
+- **Open items:** none new (standing queue unchanged, see tasks/current.md).
+- **Notes:** none
+- **Report:** none — chore session (commit + this entry are the record)

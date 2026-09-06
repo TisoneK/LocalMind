@@ -10,6 +10,17 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 0.16.1 — 2026-09-06
+
+**The ports' self-referential help matches the `.cmd` convention.**
+`context-sync.ps1`'s printed help (what `context-sync.cmd` shows with no
+arguments) and `context-collab.ps1`'s header examples still told Windows
+agents to run `pwsh -File .context/core/bin/...ps1` — which an
+execution-policy-locked machine blocks. Both now show the documented
+no-setup form (`context-sync.cmd <cmd>`). Text-only change, line counts
+preserved (the sync help is sliced from the file header); manifest
+regenerated.
+
 ## 0.16.0 — 2026-09-06
 
 **Sync is one command and fill again.** Each release since 0.9.x added files

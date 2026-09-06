@@ -6,11 +6,11 @@
 # isolated branch/worktree and are never merged by this helper.
 #
 # Usage:
-#   pwsh -File .context/core/bin/context-collab.ps1 emit claim `
+#   .context/core/bin/context-collab.cmd emit claim `
 #     --session ID --agent ID --issue ID --paths src/a.py `
 #     --body-file C:\path\claim.md
-#   pwsh -File .context/core/bin/context-collab.ps1 status --session ID --issue ID
-#   pwsh -File .context/core/bin/context-collab.ps1 check --session ID --issue ID
+#   .context/core/bin/context-collab.cmd status --session ID --issue ID
+#   .context/core/bin/context-collab.cmd check --session ID --issue ID
 
 [CmdletBinding()]
 param(

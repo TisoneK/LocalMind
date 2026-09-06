@@ -10,8 +10,8 @@
 # Requires PowerShell 5.1+ (Windows PowerShell or PowerShell 7 `pwsh`) and,
 # for `rollback`, git on PATH.
 #
-# Commands (project mode -- run as:
-#     pwsh -File .context/core/bin/context-sync.ps1 <cmd>):
+# Commands (project mode -- run the launcher, no execution-policy setup:
+#     .context/core/bin/context-sync.cmd <cmd>):
 #   status               local core version + best reachable update source
 #   verify               check every core file against core/MANIFEST.sha256
 #   update [SOURCE]      replace core/ from SOURCE (package clone / unpacked

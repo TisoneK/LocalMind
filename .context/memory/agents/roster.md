@@ -32,4 +32,4 @@ is your stable session tag.
 `.context/history/`. Update your own row (don't append a second); when your
 work changes, edit the "Doing" cell.
 
-| Ada | S429 | glm-5.3-flash | core update 0.9.1 -> 0.16.0: sync, migration backfill, entry-point refresh (supervisor: rename me here if you like) |
+| Ada | S430 | glm-5.3-flash | core sync 0.16.0 -> 0.16.1 patch (same Ada as S429; supervisor: rename me here if you like) |
