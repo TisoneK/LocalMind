@@ -525,7 +525,19 @@ def build_agent_system_prompt(
         # blind to purpose (sysinfo picked for a weather query). Give a compact
         # per-tool purpose summary so selection is informed from turn 1, while
         # staying well below the full-schema kitchen sink.
-        compact_tool_list = compact_tool_summary()
+        compact_tool_list = compact_tool_summary(
+            # S426: scope the capability index to the SAME defs the native
+            # tools param is built from (single source of truth) so a scoped
+            # agent's bootstrap prompt never advertises tools outside its
+            # allowlist. describe_tool is always reachable (tool_defs_for_call
+            # adds it even when the raw scoped defs don't carry it).
+            allowed_names=(
+                {td.get("function", {}).get("name") for td in tool_defs}
+                | {"describe_tool"}
+                if tool_defs is not None
+                else None
+            )
+        )
         memory_section = ""
         if memory_facts:
             memory_section = (
@@ -548,8 +560,24 @@ def build_agent_system_prompt(
             LONG_TAIL_TOOL_NAMES,
         )
 
-        _core_names_inline = ", ".join(sorted(CORE_TOOL_NAMES))
-        _long_tail_names_inline = ", ".join(sorted(LONG_TAIL_TOOL_NAMES))
+        # S426: intersect the tier lists with the same allowed-name set the
+        # compact index and native param use, so the parked multi-agent tools
+        # (ADR-53) never appear in the on-demand instructions either.
+        _allowed_tier_names = (
+            {td.get("function", {}).get("name") for td in tool_defs} | {"describe_tool"}
+            if tool_defs is not None
+            else None
+        )
+        _core_scope = (
+            CORE_TOOL_NAMES if _allowed_tier_names is None
+            else CORE_TOOL_NAMES & _allowed_tier_names
+        )
+        _long_tail_scope = (
+            LONG_TAIL_TOOL_NAMES if _allowed_tier_names is None
+            else LONG_TAIL_TOOL_NAMES & _allowed_tier_names
+        )
+        _core_names_inline = ", ".join(sorted(_core_scope))
+        _long_tail_names_inline = ", ".join(sorted(_long_tail_scope))
         return f"""You are LocalMind, a general-purpose agent running locally on the user's machine. You handle whatever the user needs — questions, files, web research, system tasks, code, calculations, or plain conversation.
 
 {agent_context or ''}{system_section}{memory_section}
