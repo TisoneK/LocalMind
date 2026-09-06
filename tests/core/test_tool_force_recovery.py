@@ -208,12 +208,12 @@ class TestTextWithoutToolIter0Nudge:
 
 
 class TestThinkerStreamSilent:
-    """Session 324: the ADR-42 Thinker consult must never forward its raw
-    reasoning to the user-visible thinking stream. Live screenshots showed the
-    model's Thinker-prompt echoes ("You are the Thinker… SILENT and
-    READ-ONLY…") and JSON-format musing rendering into the ThinkingBlock on
-    every model — there was no filter-before-render step. The loop drains the
-    consult silently; only the parsed analysis feeds the agent's context."""
+    """Session 324 + ADR-57 slice 1 (S425): the ADR-42 Thinker consult streams
+    its PROSE reasoning to the user-visible thinking stream (no call runs
+    silent), but the JSON structure NEVER surfaces — the echo/JSON leak that
+    motivated Session 324 is cut structurally at the Thinker (surfacing stops
+    at the JSON marker) and the prompt forbids role echoes at the source. The
+    parsed analysis still feeds the agent's context."""
 
     @pytest.mark.asyncio
     async def test_thinker_reasoning_not_streamed_to_user(self):
@@ -232,11 +232,11 @@ class TestThinkerStreamSilent:
             return _text_stream("Done — the evidence is analyzed.")
 
         async def chat(messages, temperature=0.4, intent="analyze", **kwargs):
-            # The Thinker consult: prompt echo + reasoning + JSON tail.
+            # The Thinker consult: evidence-named prose + JSON tail.
             seen["thinker_ran"] = True
             yield StreamChunk(
-                text="You are the Thinker — SILENT and READ-ONLY... ",
-                thinking="You are the Thinker — SILENT and READ-ONLY... ",
+                text="file1.txt and notes/ are here; the ask targets the notes",
+                thinking="file1.txt and notes/ are here; the ask targets the notes",
                 done=False,
             )
             yield StreamChunk(
@@ -252,11 +252,13 @@ class TestThinkerStreamSilent:
 
         chunks = await _run(loop, mock_adapter, message="analyze the files")
 
-        leaked = [getattr(c, "thinking", "") for c in chunks if getattr(c, "thinking", None)]
+        thinking = "".join(getattr(c, "thinking", "") or "" for c in chunks)
         assert seen["thinker_ran"], "the Thinker consult must have run (evidence present)"
-        assert not leaked, (
-            "the Thinker's raw reasoning must not reach the user's thinking stream, "
-            f"got: {leaked!r}"
+        assert "the ask targets the notes" in thinking, (
+            "ADR-57 slice 1: consult prose must reach the thinking stream"
+        )
+        assert '"facts"' not in thinking and '"next_step"' not in thinking, (
+            f"the JSON structure must never leak, got: {thinking!r}"
         )
         assert "Done — the evidence is analyzed." in "".join(c.text for c in chunks)
 

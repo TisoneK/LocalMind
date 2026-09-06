@@ -49,6 +49,25 @@ def test_analysis_is_empty():
     assert ThinkerAnalysis(reasoning="hmm").is_empty is False
 
 
+# ── S425 continuity: prior analysis compounds instead of restarting ─────────
+def test_prompt_renders_prior_analysis_block():
+    ev = Evidence(
+        user_message="read my cv",
+        observations="found cv.pdf",
+        prior_analysis="  • cv.pdf is the newest\nNext step I was taking: read it",
+    )
+    msg = build_thinker_messages(ev)[1]["content"]
+    assert "YOUR EARLIER THINKING THIS TURN" in msg
+    assert "cv.pdf is the newest" in msg
+    assert "do not repeat it" in msg, "the block must demand the DELTA, not a repetition"
+
+
+def test_prompt_omits_prior_analysis_when_empty():
+    ev = Evidence(user_message="read my cv", observations="found cv.pdf")
+    msg = build_thinker_messages(ev)[1]["content"]
+    assert "YOUR EARLIER THINKING" not in msg
+
+
 # ── Parser ──────────────────────────────────────────────────────────────────
 def test_parse_prose_plus_json():
     text = (
@@ -102,17 +121,17 @@ class _MockAdapter:
 
 
 @pytest.mark.asyncio
-async def test_consult_is_silent_but_parses_analysis():
-    """Session 324: the Thinker is a SILENT analyst — its raw monologue must
-    never surface as user-visible thinking (the model's prompt echoes and
-    JSON-format musing used to leak into the ThinkingBlock on every model; no
-    filter-before-render step existed). The consult still parses the
-    structured analysis so the loop can inject it into the agent's context."""
+async def test_consult_streams_prose_but_never_the_json():
+    """ADR-57 slice 1 (S425): the consult's prose reasoning streams live as
+    `thinking` chunks — no call runs silent — but the JSON structure NEVER
+    surfaces (Session 324's leak, now enforced structurally: surfacing stops
+    at the JSON marker). The structured analysis still parses so the loop can
+    inject it into the agent's context."""
     chunks = [
-        StreamChunk(text="You are the Thinker... SILENT and READ-ONLY... ", done=False),
         StreamChunk(text="Found two files; ", done=False),
-        StreamChunk(text="the newer one matches. ", done=False),
-        StreamChunk(text='{"facts": ["f1"], "next_step": "read it", "confidence": 0.7}', done=False),
+        StreamChunk(text="the newer one matches the ask. ", done=False),
+        StreamChunk(text='{"facts": ["f1"], "next_step": "read it", ', done=False),
+        StreamChunk(text='"confidence": 0.7}', done=False),
         StreamChunk(text="", done=True),
     ]
     thinker = Thinker()
@@ -123,13 +142,51 @@ async def test_consult_is_silent_but_parses_analysis():
             surfaced.append(ch.thinking)
         if ch.done:
             final = ch
-    # Nothing — not the prose, not the prompt echo, not the JSON — is surfaced.
-    assert surfaced == [], f"Thinker reasoning must stay internal, got: {surfaced!r}"
+    # The prose streamed; the JSON (split across chunks) never did.
+    joined = "".join(surfaced)
+    assert "the newer one matches" in joined
+    assert '"facts"' not in joined and '"confidence"' not in joined and "{" not in joined
     # Structured analysis still parsed + attached for the agent's context.
     assert thinker.last_analysis.facts == ["f1"]
     assert thinker.last_analysis.next_step == "read it"
-    assert "You are the Thinker" in thinker.last_analysis.reasoning  # kept for context
     assert final.metadata["thinker_analysis"]["next_step"] == "read it"
+
+
+@pytest.mark.asyncio
+async def test_consult_fenced_json_never_surfaces():
+    """A ```json fence split across chunks must not leak either — the fence
+    itself is held back and cut at the JSON start."""
+    chunks = [
+        StreamChunk(text="The newest report matches. ", done=False),
+        StreamChunk(text="```json\n{\"next_step\": \"synthesize\"", done=False),
+        StreamChunk(text="}\n```", done=False),
+        StreamChunk(text="", done=True),
+    ]
+    thinker = Thinker()
+    joined = ""
+    async for ch in thinker.consult(Evidence(observations="x"), _MockAdapter(chunks)):
+        if ch.thinking:
+            joined += ch.thinking
+    assert "matches" in joined
+    assert "```" not in joined and '"next_step"' not in joined
+    assert thinker.last_analysis.next_step == "synthesize"
+
+
+@pytest.mark.asyncio
+async def test_consult_no_json_streams_all_prose():
+    """A JSON-less response is still useful reasoning — all of it streams."""
+    chunks = [
+        StreamChunk(text="Nothing conclusive here; ", done=False),
+        StreamChunk(text="ask the user for the missing year.", done=False),
+        StreamChunk(text="", done=True),
+    ]
+    thinker = Thinker()
+    joined = ""
+    async for ch in thinker.consult(Evidence(observations="x"), _MockAdapter(chunks)):
+        if ch.thinking:
+            joined += ch.thinking
+    assert joined.strip() == "Nothing conclusive here; ask the user for the missing year."
+    assert thinker.last_analysis.is_empty is False  # prose is the reasoning
 
 
 @pytest.mark.asyncio

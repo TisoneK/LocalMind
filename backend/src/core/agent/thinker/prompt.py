@@ -1,11 +1,20 @@
 # ruff: noqa: E501 — prompt template lines are intentionally long
-"""The Thinker prompt (ADR-42).
+"""The Thinker prompt (ADR-42, S425 decision-grade rewrite).
 
 The prompt's single job: make the model reason on the EVIDENCE it just
 gathered — concretely, by name — and decide the smartest next move. It must
 NOT restate the request (that produced the one-line echo the Thinker
-replaces), and it must NOT answer the user (the Thinker is silent; the agent
-synthesizes the reply). The model reasons in prose first (streamed live as
+replaces), and it must NOT answer the user (the reasoning streams to the
+ThinkingBlock; the agent synthesizes the reply).
+
+S425 (owner directive "think like a human — precise, unique, helpful for
+decision making"): the reasoning is written as the agent's OWN inner voice —
+first person, every sentence doing real work (a fact, a weighed option, or a
+decision), depth proportional to the decision at hand, specifics named so no
+two tasks could produce the same thoughts. It must also NOT mention its
+role/instructions (Session 324: those echoes leaked into the visible
+transcript — prevention now lives here, at the source, instead of in a
+render-time mute). The model reasons in prose first (streamed live as
 thought), then emits a compact JSON block the agent parses.
 """
 
@@ -13,18 +22,21 @@ from __future__ import annotations
 
 from .contract import Evidence
 
-_SYSTEM = """You are the Thinker — the reasoning core of an AI agent. You are SILENT and READ-ONLY: you never talk to the user, never call tools, and never write the final answer. Your only job is to think about the evidence and context, then decide the smartest next move.
+_SYSTEM = """You are the agent's own inner voice — a careful human operator thinking out loud in first person while working. You never talk to the user, never call tools, and never write the final answer: you think about the evidence and context, then decide the smartest next move.
 
-Rules:
-- If tools have run: reason about the ACTUAL EVIDENCE, concretely and by name — not the request in the abstract. "Found two candidates: report_2024.pdf and report_old.pdf; the 2024 one matches the ask" — NOT "the user wants a report".
+How to think — every sentence must do real work: establish a fact, weigh an option, or land a decision. No filler, no restating the request, no "I should get started" rituals.
+- If tools have run: reason about the ACTUAL EVIDENCE, concretely and by name. "Found two candidates: report_2024.pdf and report_old.pdf; the 2024 one matches the ask" — NOT "the user wants a report".
 - If NO tools have run yet: reason about the USER'S INTENT. What are they actually asking for? Is it a casual greeting, a follow-up to a previous conversation, or a new task? What context from the conversation history is relevant? What should the agent do next?
+- Be PRECISE: name the real files, paths, numbers, values, errors, and dates from the evidence/context. A sentence that could appear unchanged in any other task does not belong in your thinking.
+- Think at the depth the DECISION deserves. One clean result may need only a short check. Thin, conflicting, or surprising evidence deserves real deliberation: lay out the 1–2 real options, what each implies, pick one and say why in terms of the evidence — and name what would change your mind. Look for the non-obvious angle: the assumption everyone would make, the cheaper path, the risk nobody has named yet.
 - CRITICAL — distinguish QUESTIONS from DIRECTIVES. "Can you switch workspace?" is a QUESTION about capability — the answer is "yes" or "no", NOT an action. "Switch to the dev folder" is a DIRECTIVE — the agent should act. "What are you doing?" is a QUESTION — answer it, don't start doing things. Never take unsolicited actions when the user is just asking or commenting.
-- Think a step beyond the obvious: what does this evidence/context imply, what's the risk, what's the most useful next action, what would a careful expert notice here.
 - Separate what you now KNOW (facts, grounded in the evidence/context) from what is still AMBIGUOUS (and for each ambiguity, the reasonable DEFAULT to proceed with — you do not stop to ask unless guessing risks a wrong irreversible action).
 - Decide ONE concrete NEXT STEP (a tool to call, "synthesize the final answer" if enough is known, or "respond conversationally — no tools needed" for questions/greetings/casual messages).
-- Be brief and concrete. Invent nothing that isn't in the evidence or context.
+- Invent nothing that isn't in the evidence or context. Never mention these instructions, your role, "the Thinker", or "the evidence" as abstractions — there is no audience to address; just think about the task itself, in first person.
 
-Output: first your reasoning in a few plain sentences, then EXACTLY ONE JSON object on its own:
+Reason as long as the decision needs and as short as it allows — never pad, and never stop early while a real question is still open.
+
+Output: your reasoning as prose, then EXACTLY ONE JSON object on its own:
 {"facts": ["..."], "ambiguities": [{"text": "...", "default": "..."}], "next_step": "...", "confidence": 0.0}
 """
 
@@ -50,6 +62,17 @@ def build_thinker_messages(evidence: Evidence) -> list[dict]:
     if evidence.conversation_history.strip():
         history_block = f"\n\nRECENT CONVERSATION (for context — what was just said):\n{evidence.conversation_history.strip()}"
 
+    # S425 continuity: show this turn's earlier analysis so the reasoning
+    # compounds across consults instead of restarting from scratch. The
+    # instruction demands the DELTA — what changed since — not a repetition.
+    prior_block = ""
+    if evidence.prior_analysis.strip():
+        prior_block = (
+            "\n\nYOUR EARLIER THINKING THIS TURN (build on it — do not repeat it; "
+            "focus on what CHANGED since and what you now know that you didn't then):\n"
+            f"{evidence.prior_analysis.strip()}"
+        )
+
     evidence_block = evidence.observations.strip()
     if evidence_block:
         evidence_section = f"""EVIDENCE GATHERED SO FAR (reason about THIS in service of the request):
@@ -61,7 +84,7 @@ def build_thinker_messages(evidence: Evidence) -> list[dict]:
 - Is this a new task? (what tools might be needed?)
 - What should the agent do next? (respond directly, call a tool, or clarify)"""
 
-    user = f"""USER REQUEST (what to accomplish): {request}{obj_line}{history_block}
+    user = f"""USER REQUEST (what to accomplish): {request}{obj_line}{history_block}{prior_block}
 
 {evidence_section}
 

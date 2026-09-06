@@ -54,6 +54,20 @@ class _AnalysisThinker:
         yield StreamChunk(text="", done=True)
 
 
+class _StreamingThinker(_AnalysisThinker):
+    """S425: also streams prose reasoning as thinking chunks (the ADR-57
+    slice-1 consult contract) and records the Evidence it was handed."""
+
+    def __init__(self, timeout_secs=30.0):
+        super().__init__(timeout_secs)
+        self.evidence_seen: list = []
+
+    async def consult(self, evidence, adapter, temperature=0.4):
+        self.evidence_seen.append(evidence)
+        yield StreamChunk(text="", thinking="request is vague; the fix is to ask", done=False)
+        yield StreamChunk(text="", done=True)
+
+
 class _NoopThinker:
     def __init__(self, timeout_secs=30.0):
         self.last_analysis = None
@@ -468,3 +482,106 @@ async def test_posttool_thinker_consults_once_across_many_tools():
 
     starts = [e for e in obs.history() if e.type == "agent_thinker_start"]
     assert len(starts) == 1, f"post-tool consult must fire exactly once, got {len(starts)}"
+
+
+# ── S425: the consult's reasoning streams; the analysis compounds ───────────
+
+
+@pytest.mark.asyncio
+async def test_consult_reasoning_streams_to_user():
+    """ADR-57 slice 1 (S425): the pre-tool consult's prose reasoning reaches
+    the run() output as thinking chunks (the ThinkingBlock's channel) — the
+    consult is no longer a silent serial call. The structured JSON tail still
+    never appears (the Thinker stops at the marker)."""
+    loop = AgentLoop(adapter=MagicMock())
+
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        return _clarify_stream()
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat_with_tools = chat_with_tools
+    mock_adapter.chat = lambda *a, **k: iter(())
+    mock_adapter.thinking_enabled = True
+    obs = ObsCollector()
+
+    chunks = []
+    with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+         patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), \
+         patch("core.agent.thinker.Thinker", _StreamingThinker):
+        async for chunk in loop.run(
+            messages=[{"role": "user", "content": "add a notes.txt file"}],
+            intent=Intent.ANALYZE,
+            initial_tool_result=None,
+            available_tools=[],
+            adapter=mock_adapter,
+            obs=obs,
+            skip_planning=True,
+        ):
+            chunks.append(chunk)
+
+    thinking = "".join(c.thinking for c in chunks if c.thinking)
+    assert "the fix is to ask" in thinking, "consult prose must stream to the ThinkingBlock"
+    # The analysis JSON/structure still never leaks into either channel.
+    assert '"facts"' not in thinking
+    user_text = "".join(c.text for c in chunks)
+    assert "ask the user what project" not in user_text
+
+
+@pytest.mark.asyncio
+async def test_posttool_consult_receives_pretool_analysis():
+    """S425 continuity: when the pre-tool consult ran and tools then ran, the
+    post-tool consult's Evidence carries the earlier analysis so the reasoning
+    builds on itself instead of restarting."""
+    loop = AgentLoop(adapter=MagicMock())
+    seen = {"calls": 0}
+
+    async def chat_with_tools(messages, tools, temperature=0.3, intent=None, tool_choice=None):
+        seen["calls"] += 1
+        if seen["calls"] <= 2:
+            return ToolCallResult(
+                tool_name="system_search",
+                tool_args={"query": f"thing {seen['calls']}"},
+                raw_content="",
+            )
+
+        async def _answer():
+            yield StreamChunk(text="Done — here is the answer.", done=False)
+            yield StreamChunk(text="", done=True)
+
+        return _answer()
+
+    async def fake_dispatch(intent, raw_input, allowed_tool_names=None):
+        return (
+            ToolResult(content="a real result", risk=RiskLevel.LOW, source="system_search"),
+            False,  # not failed
+            0,
+        )
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat_with_tools = chat_with_tools
+    mock_adapter.chat = lambda *a, **k: iter(())
+    mock_adapter.thinking_enabled = True
+    obs = ObsCollector()
+
+    capturing = _StreamingThinker()
+    with patch("core.agent.loop._filter_tool_injection", side_effect=lambda x: x), \
+         patch("core.agent.loop._filter_system_leaks", side_effect=lambda x: x), \
+         patch("core.agent.loop.dispatch_with_retry", side_effect=fake_dispatch), \
+         patch("core.agent.thinker.Thinker", lambda **kw: capturing):
+        async for _ in loop.run(
+            messages=[{"role": "user", "content": "compare the two reports and pick one"}],
+            intent=Intent.ANALYZE,
+            initial_tool_result=None,
+            available_tools=[],
+            adapter=mock_adapter,
+            obs=obs,
+            skip_planning=True,
+        ):
+            pass
+
+    assert len(capturing.evidence_seen) == 2, "pre-tool + post-tool consults expected"
+    pre, post = capturing.evidence_seen
+    assert pre.prior_analysis == "", "the pre-tool consult has no earlier analysis"
+    assert "ask the user what project" in post.prior_analysis, \
+        "the post-tool consult must receive the pre-tool analysis (continuity)"
+    assert post.observations, "the post-tool consult must see the gathered evidence"

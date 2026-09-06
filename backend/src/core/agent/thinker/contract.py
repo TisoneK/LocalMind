@@ -31,6 +31,11 @@ class Evidence:
     iteration: int = 0           # which loop step this consult happens at
     # Session 354: conversation history for pre-tool understanding
     conversation_history: str = ""  # recent user/assistant turns for context
+    # S425 continuity: this turn's EARLIER Thinker analysis (the compact
+    # facts/next-step summary the loop already computed). Feeding it back is
+    # what makes the reasoning compound across consults instead of restarting
+    # from scratch — the owner's "thinking is isolated" fix.
+    prior_analysis: str = ""
 
     @property
     def has_evidence(self) -> bool:

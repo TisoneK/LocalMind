@@ -965,8 +965,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                             if collector:
                                 collector.emit("agent_thinker_start", iteration=0)
                             _thinker = Thinker(timeout_secs=15.0)
+                            # ADR-57 slice 1: forward the consult's prose
+                            # reasoning (the Thinker stops at the JSON marker
+                            # itself; filtered like every other thinking path).
+                            from core.filters import _filter_system_leaks as _fsl
                             async for _tc in _thinker.consult(_ev, _adapter):
-                                pass
+                                if isinstance(getattr(_tc, "thinking", None), str) and _tc.thinking:
+                                    yield StreamChunk(text="", thinking=_fsl(_tc.thinking), done=False)
                             _analysis = _thinker.last_analysis
                             if _analysis and not _analysis.is_empty:
                                 _thinker_context = _analysis.reasoning[:500]

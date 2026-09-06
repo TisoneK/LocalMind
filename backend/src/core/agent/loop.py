@@ -3020,11 +3020,14 @@ class AgentLoop:
                             REASONING_PLAN_TIMEOUT_SECS,
                         )
                     )
-                    # Drain the consult silently — the Thinker yields no
-                    # user-visible chunks by contract; only the parsed
-                    # analysis matters.
+                    # ADR-57 slice 1 ("no call runs silent"): forward the
+                    # consult's prose reasoning to the ThinkingBlock instead of
+                    # draining it. The Thinker itself stops surfacing at the
+                    # JSON marker, so the Session 324 structure leak can't
+                    # reappear; _filter_system_leaks stays the second layer.
                     async for _tc in _pre_thinker.consult(_ev, active_adapter):
-                        pass
+                        if isinstance(getattr(_tc, "thinking", None), str) and _tc.thinking:
+                            yield StreamChunk(text="", thinking=_filter_system_leaks(_tc.thinking), done=False)
                     _pre_analysis = _pre_thinker.last_analysis
                     if _pre_analysis and not _pre_analysis.is_empty:
                         loop_messages.append(
@@ -5067,6 +5070,10 @@ class AgentLoop:
                             ),
                             last_action=tool_name,
                             iteration=iteration + 1,
+                            # S425 continuity: an earlier consult this turn (the
+                            # pre-tool pass) hands its summary forward so the
+                            # reasoning compounds instead of restarting.
+                            prior_analysis=trace.thinker_analysis or "",
                         )
                         if _ev.has_evidence:
                             if _obs:
@@ -5076,11 +5083,12 @@ class AgentLoop:
                                     "localmind_reasoning_plan_timeout_secs", REASONING_PLAN_TIMEOUT_SECS
                                 )
                             )
-                            # Drain the consult silently — the Thinker yields
-                            # no user-visible chunks by contract; only the
-                            # parsed analysis matters.
+                            # ADR-57 slice 1: forward the consult's prose
+                            # reasoning to the ThinkingBlock (same contract as
+                            # the pre-tool site above).
                             async for _tc in _thinker.consult(_ev, active_adapter):
-                                pass
+                                if isinstance(getattr(_tc, "thinking", None), str) and _tc.thinking:
+                                    yield StreamChunk(text="", thinking=_filter_system_leaks(_tc.thinking), done=False)
                             _analysis = _thinker.last_analysis
                             if _analysis and not _analysis.is_empty:
                                 loop_messages.append(
