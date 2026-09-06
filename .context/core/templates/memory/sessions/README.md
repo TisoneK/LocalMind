@@ -6,8 +6,24 @@ from durable project knowledge. The three layers:
 | Layer | Location | Lifetime | Purpose |
 |---|---|---|---|
 | **Session detail** | `<date>-N/notes.md` | Disposable | Research, dead ends, exploration, reasoning |
-| **Session summary** | `SUMMARY.md` | Prunable | Compressed historical continuity (~1 line per session) |
-| **Permanent record** | `../agents/sessions.md` | Append-only, forever | Formal registry — one entry proves the session happened |
+| **Session summary** | `SUMMARY.md` | Prunable (current group) | Compressed continuity (~1 line per session) |
+| **Group registry** | `../agents/sessions.md` | Current group; rotated | Formal registry for the live group — one entry proves the session happened |
+
+## Session grouping (three-zone rotation)
+
+Session history is collected into **groups**. The current group's registry
+and summaries live here in `memory/`; when a group closes (at `group_size`
+sessions, or a milestone), `context-history` rotates it:
+
+```
+memory/ (live)  ->  history/ (closed, readable)  ->  archive/ (cold, zipped)  ->  gc
+```
+
+`.context/history/` and `.context/archive/` are **never read at session
+start**. A new group starts with no implicit carryover — anything from a
+closing group that still matters must already live in a durable domain file
+(promotion, below). This is what bounds session history: `memory/` only ever
+holds the live group. See `context-history status`.
 
 ## Core Principle: Session Data Is Disposable
 

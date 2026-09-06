@@ -70,6 +70,8 @@
     "machineBlocks": "apply only where the block's 'Identify by' matches",
     "credentialFlows": "agent-type facts; PAT steps exist only in the cloud edition",
     "appendOnly": "corrections are appended, never edited in; byte-identical duplicates may be removed with a note",
+    "updateInPlace": "one entry per key (ai-models.md keyed by Agent+Model, environments.md by its Identify-by line); correct an entry by editing it in place, never by appending a duplicate — the prior value survives in git history; context-mem check flags a duplicated key",
+    "oneWayLinkage": "memory may reference product code; product code must never reference memory — no ADR number, bug ID, or .context/ path in a product docstring/comment/doc, which would be a dangling pointer for anyone reading only the product repo; context-mem lint flags it in the staged product diff",
     "secrets": "values only under memory/secrets/, never in tracked files, never echoed",
     "coreReadOnly": "no agent writes under .context/core/ in a project repo, ever",
     "collaboration": "peers are one team, not rivals; isolated worktree/branch per agent; the everyday event is an informal note (body-only, non-gating); a release/handoff closes a claim by citing its event ID or by sharing session+issue and overlapping paths; overlapping ACTIVE claims escalate to peers comparing changes and an agreement naming the best-supported option and one owner; no timestamp or agent-ID tie-breaker",

@@ -16,7 +16,7 @@
 param(
   [Parameter(Position = 0)] [string] $Command = '',
   [Parameter(Position = 1)] [string] $Type = '',
-  [Parameter(Position = 2, ValueFromRemainingArguments = $true)] [string[]] $Rest
+  [Parameter(Position = 2, ValueFromRemainingArguments = $true)] [string[]] $Extra
 )
 
 Set-StrictMode -Version Latest
@@ -214,19 +214,19 @@ if ($Command -in @('', '-h', '--help', 'help')) { Usage }
 switch ($Command) {
   'emit' {
     $emitArgs = @()
-    if ($null -ne $Rest) { $emitArgs = @($Rest) }
+    if ($null -ne $Extra) { $emitArgs = @($Extra) }
     Emit $Type $emitArgs
   }
   'status' {
     $statusArgs = @()
     if ($Type) { $statusArgs += $Type }
-    if ($null -ne $Rest) { $statusArgs += $Rest }
+    if ($null -ne $Extra) { $statusArgs += $Extra }
     Status $statusArgs
   }
   'check' {
     $checkArgs = @()
     if ($Type) { $checkArgs += $Type }
-    if ($null -ne $Rest) { $checkArgs += $Rest }
+    if ($null -ne $Extra) { $checkArgs += $Extra }
     # A child .ps1's `exit N` does not reliably set $LASTEXITCODE on every
     # host (reading it unset trips StrictMode), so pre-seed it and fall
     # back to the child's success status.

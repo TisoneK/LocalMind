@@ -37,7 +37,7 @@ model, and what went wrong before.
 1. **Read `.context/` before touching anything; update it before ending.** (Steps 3, 15–17)
 2. **Two zones under `.context/`:** `core/` is the vendored protocol — **read-only, never write one byte there** (it updates only as a whole tree via `core/bin/context-sync`); `memory/` is this project's writable memory. Nothing needs to be cloned or fetched to run a session — the protocol travels inside the repo.
 3. **Two surfaces, never one commit:** project code and `.context/` memory are staged and committed separately — `git add .context/` for memory, explicit paths for project. Never `git add -A` with both dirty.
-4. **Append-only logs only grow.** Before committing one, its `git diff` must show no removed lines.
+4. **Know which kind of memory file you're in.** *Append-only* logs (`sessions.md`, `inefficiencies/log.md`, `backlog.md`, `decisions.md`, `flaws/log.md`) only grow — before committing one, its `git diff` shows no removed lines. *Update-in-place* registries (`system/ai-models.md`, `system/environments.md`) hold one entry per key — **correct them by editing the entry, never by appending a duplicate row/block** (the old value is safe in git history). Appending to an update-in-place file is the same mistake as editing an append-only one. `context-mem check` catches a duplicated key.
 5. **No secret values in any tracked file** — including inside recorded commands.
 6. **Commit each logical change, push after each commit, ask permission for neither.** (Pitfall #30)
 7. **A missing input only the user can supply — ask for it up front, not after the failure.** (Pitfall #34)
@@ -174,7 +174,7 @@ are optional. It never blocks `check` and never needs resolving.
 sh .context/core/bin/context-collab emit note --session <id> --agent <id> \
   --issue <id> --to <peer> --re <path> --body "On the web side; loop is yours."
 ```
-On Windows: `pwsh -File .context/core/bin/context-collab.ps1 emit note …`.
+On Windows: `.context/core/bin/context-collab.cmd emit note …`.
 
 ### The escalation (only for a real conflict)
 
@@ -210,9 +210,10 @@ commit SHA still closes it.
 - Before integrating branches, run `context-collab check` — it's fast and
   notes never fail it. Push your own `collab/<session-id>/<agent-id>`
   branch, never the shared one; never force-overwrite a peer.
-- On Windows, use the `.ps1` ports (`pwsh -File …context-collab.ps1`, and
-  `context-gates.ps1`, which now runs). Git Bash's `sh` may lack
-  `sha256sum`; if `context-sync` says so, use `.ps1`. The shipped
+- On Windows, use the `.cmd` launchers — they run the `.ps1` ports
+  (`context-collab.cmd`, `context-gates.cmd`, which now runs) with
+  `-ExecutionPolicy Bypass`. Git Bash's `sh` may lack
+  `sha256sum`; if `context-sync` says so, use the `.cmd` launcher. The shipped
   `.context/.gitattributes` (`eol=lf`) fixes a `context-sync verify`
   false-positive and phantom log diffs.
 
@@ -239,6 +240,11 @@ command and observed result before retrying.
   `sh .context/core/bin/context-gates run pre-commit`.
   It runs universal staged-diff checks plus explicit project commands;
   hybrid mode discovers conventional commands only when none are listed.
+  When the commit touches product code, also run
+  `sh .context/core/bin/context-mem lint` (Windows: the `.ps1`): it fails if
+  the staged product diff cites `.context` vocabulary (an ADR number, a bug
+  ID, a `.context/` path). Keep that vocabulary out of product artifacts —
+  see the one-way-linkage pitfall.
 - **Before branch integration:** run
   `sh .context/core/bin/context-gates run integration --session <id> --issue <id>`.
   This includes `context-collab check` and configured build/integration
@@ -481,7 +487,7 @@ git push origin main  # uses the user's existing credentials
 
 **Step 16 — Update `.context/memory/system/` + `.context/memory/user/` + `.context/memory/plans/`**
 - `.context/memory/system/environments.md`: add/update the block for this machine (OS + version, runtime versions, package manager, anything machine-specific the next agent should know — e.g., "no psql installed", "port 3000 usually taken"). Refresh its last-verified date and record the commands you verified work (install / test / lint / dev).
-- `.context/memory/system/ai-models.md`: add/update your row — agent name, model, first/last seen dates, sessions count. Add an Observations bullet for any concrete capability or limit this session demonstrated (yours or a prior agent's).
+- `.context/memory/system/ai-models.md`: update the row for your **(agent, model)** — bump the sessions count and last-seen date. If a row for your pair already exists, **edit it in place; do not add a second row** (a new row is only for a genuinely new agent+model pair). Add an Observations bullet for any concrete capability or limit this session demonstrated (yours or a prior agent's). Then run `sh .context/core/bin/context-mem check` (Windows: `.context/core/bin/context-mem.cmd check`) — it fails if a registry has a duplicated key.
 - `.context/memory/user/preferences.md`: record every standing preference this session revealed — corrections the user gave, patterns they approved, things they stated — with provenance + date, per the file's learning rules. One-off instructions don't count. Skip if none.
 - `.context/memory/plans/decisions.md`: append an ADR-style entry for every architectural decision made or confirmed this session (context → decision → consequences). Skip if none.
 
@@ -494,6 +500,8 @@ git push origin main  # uses the user's existing credentials
   - **Nothing worth keeping → no notes file needed.** A trivial session (typo fix, one-line config) that produced no research or exploration needs no `memory/sessions/` directory at all — the summary line in `agents/sessions.md` is the entire record.
   - After promotion, you may delete `notes.md` if its raw history is no longer useful. The summary line in `agents/sessions.md` is the permanent record that the session happened.
 - **SUMMARY.md pruning:** if `memory/sessions/SUMMARY.md` exceeds ~40 lines, prune entries older than the last 10. Distill any un-promoted key facts from pruned entries into the durable logs first. SUMMARY.md is prunable — never let it become another giant append-only history file. A pruned summary line MUST have a corresponding permanent entry in `agents/sessions.md`.
+- **Durable-log archiving:** `flaws/log.md` and `inefficiencies/log.md` are append-only, grow forever, and are read at startup. Once an entry is explicitly marked `RESOLVED` / `superseded` / fixed, it is cold history — move it **verbatim** (no edits) into a companion `flaws/archive.md` / `inefficiencies/archive.md`. Startup then reads only the active log; the archive stays in git, grep-able. This is a manual cut-and-paste, never automatic. Run `sh .context/core/bin/context-mem prune` (Windows: the `.ps1`) to see how large each log is and which entries are archive-eligible (`--list` names them). **Only an explicit closed marker makes an entry eligible — age alone never does.** An unresolved flaw stays in the active log; it's a live trap the next agent must see.
+- **Session grouping:** session history is grouped, not an endless stream. The current group's registry (`agents/sessions.md`) and summaries (`sessions/SUMMARY.md`) live in `memory/`; closed groups live in `.context/history/` (readable) and `.context/archive/` (zipped) and are **never read at session start**. When the group reaches `group_size` sessions (default 20) or hits a milestone, run `sh .context/core/bin/context-history close` (Windows: the `.ps1`) — a dry run prints the promotion checklist and plan; `--confirm` consolidates the group into `history/`, starts a fresh group, and rolls the oldest readable group into `archive/`. **Before closing, promote every open thread into its durable domain file** (`backlog.md`, `decisions.md`, `inefficiencies/log.md`, `flaws/log.md`, `user/preferences.md`) — the new group starts clean with no implicit carryover. `context-history gc --confirm` deletes the oldest `archive/` tarballs over the cap (git-recoverable). Run `context-history status` to see whether a close or gc is due.
 - **Session notes heuristic:** create a `memory/sessions/<date>-<N>/notes.md` if your session involved any of: more than one attempted approach, external research, a decision made after considering alternatives, a dead end you'd want the next agent to know about, or exploration that produced useful negative results. A truly trivial session (typo fix, one-line config change, docs correction with no research) needs no notes file.
 - Append every inefficiency you hit to `.context/memory/inefficiencies/log.md` (append-only): tool failures, flaky tests, misleading docs, commands that didn't work as documented, time wasted rediscovering something `.context/` should have told you. **Be honest — this log is how the protocol improves.** An empty inefficiency entry ("none this session") is valid only if literally nothing slowed you down.
 - Append every workflow/protocol flaw to `.context/memory/flaws/log.md` (append-only): ambiguous rules, missing steps, confusing templates — friction caused by the `.context` system itself, not the project. Suggest a concrete package fix in each entry (see `flaws/README.md`).
@@ -1053,6 +1061,7 @@ Save to `.context/memory/reviews/YYYY-MM-DD-review.md`. Commit and push it.
 41. **Don't write dates from memory** — run `date -u +%F` and use its output for session entries, reports, "last verified" fields, everything. Models autocomplete plausible-but-wrong dates (often from their training years); a wrong date in an append-only log is permanent and silently corrupts every "how stale is this?" judgment that later reads it.
 42. **Don't claim verification without the evidence** — "tests pass" in a report or session entry must carry the exact command and its observed result (test count, exit status). If you didn't run it this session on this environment, write "not verified" and say what would verify it. A confident unverified claim is worse than an honest gap: the next agent builds on it.
 43. **Don't absorb another agent type's identity from the project's memory** — `.context/` is shared by local AND cloud agents, so some of what it records is per-agent-type or per-machine, not per-project. Your edition comes from YOUR agent type at session start, never from whichever edition `workflows/active.md`'s last writer happened to be; `environments.md` blocks apply only to the machine you match by its "Identify by" line (never run another environment's verified commands or paths); PAT/token steps never apply to local agents no matter how many cloud sessions the logs show. The canonical failure: a cloud agent bootstraps a repo, the user pulls it locally, and the local agent starts doing PAT dances and re-cloning because it read the cloud agent's records as its own instructions.
+44. **Don't cite `.context` vocabulary in product artifacts (one-way linkage)** — a product file (anything outside `.context/`) must stand on its own for someone who cloned only the product repo. Never put an ADR number, a bug ID (`B-YYYY-MM-DD-N`), "per ADR", or a `.context/` path in a product docstring, comment, or user-facing doc — those are dangling pointers into a `.context/` the reader doesn't have. If the reason matters, say it in plain words; the ADR link lives in `plans/decisions.md`, which may reference the code — never the reverse. `context-mem lint` catches the leak in your staged diff.
 
 ---
 

@@ -18,12 +18,20 @@ schema change.
 ```text
 {project}/
 ├── AGENTS.md              # generated digest for agent discovery (see Translation layer)
+├── CLAUDE.md              # pointer so Claude Code (auto-loads CLAUDE.md) reaches the protocol
 └── .context/
     ├── README.md          # zone map — copied from core/templates at bootstrap/update
     ├── kickoff.md         # front door — generated at bootstrap, project-owned
+    ├── .gitattributes     # LF policy for core + memory (Windows CRLF guard)
     ├── core/              # ZONE 1 — package-owned, READ-ONLY, version-stamped
-    └── memory/            # ZONE 2 — project-owned, writable, never synced
+    ├── memory/            # ZONE 2 — project-owned, writable, never synced; holds the LIVE session group
+    ├── history/           # closed session groups, readable — NOT read at session start
+    └── archive/           # cold storage of old groups (zipped) — NOT read at session start
 ```
+
+`history/` and `archive/` hold closed session groups produced by
+`context-history` (see **Session grouping** below). They are never in the
+session-start reading order — only the live group in `memory/` is.
 
 | Zone | Owner | Agents may write? | How it changes |
 |---|---|---|---|
@@ -67,7 +75,14 @@ core/
 │   ├── context-collab-check # POSIX integration-readiness validator
 │   ├── context-collab-check.ps1 # PowerShell integration-readiness validator
 │   ├── context-gates        # POSIX lifecycle gates + checkpoint
-│   └── context-gates.ps1    # PowerShell lifecycle gates + checkpoint
+│   ├── context-gates.ps1    # PowerShell lifecycle gates + checkpoint
+│   ├── context-mem          # POSIX: check (registry dup keys) + lint (.context leak) + prune (log-archive advisory)
+│   ├── context-mem.ps1      # PowerShell port: same hygiene checks
+│   ├── context-history      # POSIX: group session history, rotate memory→history→archive→gc
+│   ├── context-history.ps1  # PowerShell port: session-group rotation
+│   └── context-*.cmd        # cmd.exe launchers, one per .ps1 port: each
+│                            #   runs it with -ExecutionPolicy Bypass -- no
+│                            #   Windows Set-ExecutionPolicy setup needed
 ├── rules/
 │   ├── ai-engineering-protocol-local.md   # LOCAL agents' edition
 │   └── ai-engineering-protocol.md         # CLOUD/SANDBOX agents' edition
@@ -84,7 +99,7 @@ core/
 
 Integrity: `sh .context/core/bin/context-sync verify` checks every core
 file against `MANIFEST.sha256` (on Windows:
-`pwsh -File .context/core/bin/context-sync.ps1 verify` — the port shares
+`.context/core/bin/context-sync.cmd verify` — the launcher shares
 the same manifest). A failed verify means core was
 hand-edited or corrupted — restore it (`context-sync rollback` or
 `git checkout` of the last good commit) and log a flaw. Never "fix"
@@ -101,8 +116,14 @@ File inventory, write modes, and scopes. **Write modes:**
   duplicate entries may be removed, leaving a one-line note in place.
 - **overwrite** — current-state only; replace the content, history
   lives in the append-only logs.
-- **update-in-place** — structured records updated where they stand
-  (a row, a block, a bullet); never wholesale replaced.
+- **update-in-place** — structured records with one entry per key,
+  updated where they stand (a row, a block, a bullet); never wholesale
+  replaced. **This is the opposite of append-only: you correct an entry by
+  editing it, not by appending a second one.** The prior value survives in
+  git history, so editing loses nothing. Appending a duplicate for a key
+  that already exists is the failure mode (two rows, conflicting counts);
+  `context-mem check` flags it. Keys: `ai-models.md` = (Agent, Model),
+  `environments.md` = the "Identify by:" line.
 - **generated** — created from a `core/templates/` file at bootstrap,
   then maintained as data (facts updated in place; regenerated only
   when the template materially changes).
@@ -154,6 +175,40 @@ wins.
 `memory/system/` → `memory/user/` → note what's in `memory/secrets/`
 (never print values).
 
+
+---
+
+## Session grouping
+
+Session history is collected into discrete **groups** so it never grows
+unbounded. A group is the session-history subtree only — `agents/sessions.md`
+entries, `sessions/SUMMARY.md` lines, `sessions/<date-N>/` notes. Durable
+facts (`user/`, `system/`, `plans/decisions.md`, `tasks/backlog.md`,
+`flaws/`, `inefficiencies/`) and collaboration events are **not** part of a
+group and never rotate.
+
+A group moves through three zones, and only the live one is read at session
+start:
+
+| Zone | Holds | Read at start? | Format |
+|---|---|---|---|
+| `memory/` | current live group | yes | working files |
+| `history/` | recently closed groups | no | `group-<NNN>.md` (condensed) |
+| `archive/` | older closed groups | no | `group-<NNN>.tar.gz` (cold) |
+
+`context-history` rotates them: `close` consolidates the live group into
+`history/` and starts a fresh one (default `group_size` = 20 sessions, or a
+milestone); when `history/` exceeds `history_keep` (default 3) the oldest
+group is zipped into `archive/`; `gc` deletes `archive/` tarballs over
+`archive_keep` (default 12), oldest-first, git-recoverable. Config lives in
+`memory/workflows/history.conf`; the current group number is in
+`memory/agents/GROUP`.
+
+**No implicit carryover:** a new group starts clean. Anything from a closing
+group that still matters must be promoted into its durable domain file before
+the close — the same promotion rule as session notes, applied at the group
+boundary. This is what lets a closed group be archived and eventually deleted
+without losing institutional knowledge.
 
 ---
 

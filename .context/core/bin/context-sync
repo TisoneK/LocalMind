@@ -223,6 +223,12 @@ cmd_update() {
   cp "$CORE_DIR/templates/context-README.md" "$CONTEXT_DIR/README.md" 2>/dev/null || true
   [ -f "$CONTEXT_DIR/.gitattributes" ] || cp "$CORE_DIR/templates/.gitattributes" "$CONTEXT_DIR/.gitattributes" 2>/dev/null || true
   [ -e "$PROJECT_DIR/CLAUDE.md" ] || cp "$CORE_DIR/templates/CLAUDE.md" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || true
+  # install the history/archive session-group zones + config if this project
+  # predates them (0.12.x and earlier); never clobber an existing zone.
+  [ -d "$CONTEXT_DIR/history" ] || cp -R "$CORE_DIR/templates/history" "$CONTEXT_DIR/history" 2>/dev/null || true
+  [ -d "$CONTEXT_DIR/archive" ] || cp -R "$CORE_DIR/templates/archive" "$CONTEXT_DIR/archive" 2>/dev/null || true
+  [ -f "$MEMORY_DIR/workflows/history.conf" ] || cp "$CORE_DIR/templates/memory/workflows/history.conf" "$MEMORY_DIR/workflows/history.conf" 2>/dev/null || true
+  [ -f "$MEMORY_DIR/agents/GROUP" ] || printf 'group=1\nopened=%s\n' "$(date +%Y-%m-%d)" > "$MEMORY_DIR/agents/GROUP" 2>/dev/null || true
   ALLOW_MAJOR=no; SRC_ARG=""
   for a in "$@"; do
     case "$a" in
@@ -306,6 +312,10 @@ cmd_bootstrap() {
   mkdir "$DEST/.context" || exit 1
   cp -R "$CORE_DIR" "$DEST/.context/core"                            || die "vendoring core failed"
   cp -R "$CORE_DIR/templates/memory" "$DEST/.context/memory"         || die "copying memory skeleton failed"
+  cp -R "$CORE_DIR/templates/history" "$DEST/.context/history"       || die "creating history/ zone failed"
+  cp -R "$CORE_DIR/templates/archive" "$DEST/.context/archive"       || die "creating archive/ zone failed"
+  # seed the current session group's opened date
+  printf '# Current session group — written by context-history. Do not hand-edit.\ngroup=1\nopened=%s\n' "$(date +%Y-%m-%d)" > "$DEST/.context/memory/agents/GROUP"
   # byte-identical vendored core + skeleton regardless of this checkout's
   # line endings (Windows CRLF) — verify/rollback then work out of the box.
   normalize_lf "$DEST/.context/core" "$DEST/.context/memory"
