@@ -633,3 +633,12 @@ logged in inefficiencies/log.md — no product behavior was wrong.
 - **Impact:** this repo stays on core 0.9.1 (verified clean). The 0.13.1 updates (incl. whatever changed in the collab/mem/history tooling) are NOT available until the source is repaired.
 - **Fix path (source repo, not this one):** in `C:\Users\tison\Dev\context`, either `git checkout -- core/bin/context-collab-check.ps1 core/bin/context-history.ps1 core/bin/context-mem.ps1` (if the edits were accidental) or regenerate MANIFEST.sha256 (if the edits were intentional) — then commit the source repo. Re-run `context-sync.ps1 status` here and update.
 - **Prevent next time:** core-update sessions should run `context-sync verify` against the SOURCE (or a full `update` dry-run) BEFORE announcing/promising the version bump; `status` only reports availability, not source health.
+
+---
+## 2026-09-06 — Session 425 — ZCode — context-collab.ps1 `--re` alias breaks pwsh argument binding
+
+- **Flaw:** the vendored `context-collab.ps1` documents/accepts `--re` as the refs alias, but passing it makes PowerShell abort with "A parameter cannot be found that matches parameter name '-session'" — the token shape defeats parameter binding before the script's own Parse-Options runs, so the error points at an unrelated flag.
+- **Symptom:** `emit note/claim/release ... --re <id> ...` fails reproducibly; the identical command without `--re` succeeds; the long name `--refs` also succeeds.
+- **Root cause:** PowerShell's ValueFromRemainingArguments binding chokes on this specific option token; the script never sees the args.
+- **Suggested fix (package):** drop or alias-safely quote `--re` in the .ps1 port (bind options after an explicit `--` separator, or parse $args manually before PowerShell binding).
+- **Status:** open (workaround in use: always pass `--refs`).
