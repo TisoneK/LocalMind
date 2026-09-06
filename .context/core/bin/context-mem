@@ -1,0 +1,235 @@
+#!/bin/sh
+# context-mem — hygiene checks that keep .context healthy and contained.
+#
+# check  flags duplicate keys in the update-in-place registries. Those files
+#        hold ONE entry per key: correct an entry by editing its row/block,
+#        never by appending a second one — its prior value already lives in
+#        git history. Agents reach for the loud append-only reflex here too
+#        and append a duplicate, which is how a registry ends up with two
+#        rows for one key and conflicting counts.
+#          system/ai-models.md    key = (Agent, Model)         — one row/pair
+#          system/environments.md key = the "Identify by:" line — one block/env
+#
+# lint   flags .context vocabulary leaking into product artifacts. A product
+#        file (anything outside .context/) must stand on its own: a docstring
+#        or comment must not cite ADR-N, a bug ID, "per ADR", or a .context/
+#        path — meaningless to someone reading only the product repo. Memory
+#        may reference code; code must never reference memory. Scans the
+#        STAGED diff (the new lines you are about to commit).
+#
+# Exit codes: 0 clean · 1 problem found · 2 usage/error
+
+set -u
+
+say() { printf '%s\n' "$*"; }
+err() { printf 'context-mem: %s\n' "$*" >&2; }
+die() { err "$*"; exit 2; }
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 2
+CORE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd) || exit 2
+CONTEXT_DIR=$(dirname -- "$CORE_DIR")
+PROJECT_DIR=$(dirname -- "$CONTEXT_DIR")
+MEMORY_DIR=$CONTEXT_DIR/memory
+
+usage() {
+  say "context-mem — .context hygiene checks"
+  say ""
+  say "  check   duplicate keys in the update-in-place registries"
+  say "          (ai-models.md by Agent+Model, environments.md by Identify-by)"
+  say "  lint    .context vocabulary (ADR-N, bug IDs, .context/ paths) leaking"
+  say "          into the staged product diff"
+  say "  prune   advise archiving resolved/superseded entries out of the"
+  say "          append-only durable logs (flaws, inefficiencies); --list"
+  say "          names them. Never moves or deletes — reports only."
+  say ""
+  say "Exit codes: check/lint 0 clean, 1 problem; prune always 0; 2 usage/error"
+  exit 2
+}
+
+# ai-models registry: a row is | Agent | Model | YYYY-MM-DD | YYYY-MM-DD | N |
+# Filtering on the date+count shape ignores the header, the separator, and any
+# illustrative tables in the Observations section — only real registry rows.
+check_ai_models() {
+  _f=$MEMORY_DIR/system/ai-models.md
+  [ -f "$_f" ] || return 0
+  awk '
+    /^[[:space:]]*\|/ {
+      n = split($0, c, "|")
+      if (n < 6) next
+      a = c[2]; m = c[3]; f = c[4]; l = c[5]; s = c[6]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", a); gsub(/^[[:space:]]+|[[:space:]]+$/, "", m)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", f); gsub(/^[[:space:]]+|[[:space:]]+$/, "", l)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+      if (f ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ &&
+          l ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ &&
+          s ~ /^[0-9]+$/) {
+        key = a "\t" m
+        seen[key]++
+        where[key] = where[key] " " FNR
+      }
+    }
+    END {
+      d = 0
+      for (k in seen) if (seen[k] > 1) {
+        split(k, kk, "\t")
+        printf "DUP ai-models.md: %d rows for agent=\"%s\" model=\"%s\" (lines%s) — merge into one row; sessions accumulate, old values are in git history\n", seen[k], kk[1], kk[2], where[k] | "cat 1>&2"
+        d++
+      }
+      exit (d > 0) ? 1 : 0
+    }
+  ' "$_f"
+}
+
+# environments registry: one block per env, keyed by the "Identify by:" line.
+check_environments() {
+  _f=$MEMORY_DIR/system/environments.md
+  [ -f "$_f" ] || return 0
+  awk '
+    /^[[:space:]]*-[[:space:]]*\*\*Identify by:\*\*/ {
+      v = $0
+      sub(/^[[:space:]]*-[[:space:]]*\*\*Identify by:\*\*[[:space:]]*/, "", v)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      if (v == "" || v ~ /^</) next   # skip the empty template placeholder
+      seen[v]++
+      where[v] = where[v] " " FNR
+    }
+    END {
+      d = 0
+      for (k in seen) if (seen[k] > 1) {
+        printf "DUP environments.md: %d blocks with Identify by=\"%s\" (lines%s) — merge into one block; keep the latest facts, old ones are in git history\n", seen[k], k, where[k] | "cat 1>&2"
+        d++
+      }
+      exit (d > 0) ? 1 : 0
+    }
+  ' "$_f"
+}
+
+# team roster: a row is | Name | Codename | Model | Doing |. Both the name and
+# the codename must be unique within the current group. A real row has an
+# S<NNN> codename in column 2 (this skips the header, separator, and template).
+check_roster() {
+  _f=$MEMORY_DIR/agents/roster.md
+  [ -f "$_f" ] || return 0
+  awk '
+    /^[[:space:]]*\|/ {
+      n = split($0, c, "|")
+      if (n < 4) next
+      name = c[2]; code = c[3]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", name); gsub(/^[[:space:]]+|[[:space:]]+$/, "", code)
+      if (code !~ /^[Ss][0-9]+$/) next
+      nseen[name]++; nwhere[name] = nwhere[name] " " FNR
+      cseen[code]++; cwhere[code] = cwhere[code] " " FNR
+    }
+    END {
+      d = 0
+      for (k in nseen) if (nseen[k] > 1) {
+        printf "DUP roster.md: name \"%s\" used by %d rows (lines%s) — one name per group; pick another, or edit your own row\n", k, nseen[k], nwhere[k] | "cat 1>&2"; d++
+      }
+      for (k in cseen) if (cseen[k] > 1) {
+        printf "DUP roster.md: codename \"%s\" on %d rows (lines%s) — one row per session codename; edit your row instead of adding a second\n", k, cseen[k], cwhere[k] | "cat 1>&2"; d++
+      }
+      exit (d > 0) ? 1 : 0
+    }
+  ' "$_f"
+}
+
+check() {
+  [ $# -eq 0 ] || { case "$1" in -h|--help) usage ;; *) die "unknown argument '$1'" ;; esac; }
+  [ -d "$MEMORY_DIR" ] || { say "context-mem: no memory dir (nothing to check)"; return 0; }
+  _rc=0
+  check_ai_models || _rc=1
+  check_environments || _rc=1
+  check_roster || _rc=1
+  if [ "$_rc" -eq 0 ]; then
+    say "memory check passed: no duplicate keys in the update-in-place registries"
+  else
+    err "memory check failed: a registry has more than one entry for a key — correct in place (edit the entry), do not append a duplicate"
+  fi
+  return "$_rc"
+}
+
+# prune — advise archiving resolved history out of the append-only durable
+# logs so startup stops re-reading cold, closed entries. It NEVER moves or
+# deletes anything (that stays a human/agent edit); it reports how large each
+# log is and which entries are explicitly marked resolved/superseded/fixed —
+# the archive-eligible ones. Move those to a companion archive.md (still
+# grep-able); the active log is what startup reads. Age alone is never a
+# reason to archive — only an explicit closed marker is.
+prune() {
+  _list=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --list) _list=1; shift ;;
+      -h|--help) usage ;;
+      *) die "unknown argument '$1'" ;;
+    esac
+  done
+  [ -d "$MEMORY_DIR" ] || { say "context-mem: no memory dir (nothing to prune)"; return 0; }
+  _eligible=0
+  for _rel in flaws/log.md inefficiencies/log.md; do
+    _f=$MEMORY_DIR/$_rel
+    [ -f "$_f" ] || continue
+    awk -v rel="$_rel" -v list="$_list" '
+      function flush() { if (inseg && closed) { c++; cand[c] = heading } }
+      /^## / { flush(); inseg = 1; closed = 0; heading = $0; total++; next }
+      inseg && /RESOLVED|[Ss]uperseded|[Ff]ixed in package|no longer (a )?(flaw|issue)/ { closed = 1 }
+      END {
+        flush()
+        printf "%s — %d entries (%d lines); %d marked resolved/superseded → archive-eligible.\n", rel, total, NR, c
+        if (c > 0) {
+          dir = rel; sub(/[^\/]*$/, "", dir)
+          printf "  move the resolved entries to %sarchive.md; startup then reads only the active log.\n", dir
+          if (list == 1) for (i = 1; i <= c; i++) printf "    - %s\n", cand[i]
+        }
+        exit (c > 0) ? 10 : 0
+      }
+    ' "$_f"
+    [ $? -eq 10 ] && _eligible=1
+  done
+  if [ "$_eligible" -eq 1 ]; then
+    say ""
+    say "memory prune: advisory only — nothing was moved. Archiving is a manual edit"
+    say "(cut the resolved entries into archive.md); they stay grep-able and out of the"
+    say "startup read. Re-run with --list to see the eligible entries."
+  else
+    say "memory prune: durable logs are lean — nothing archive-eligible."
+  fi
+  return 0
+}
+
+lint() {
+  [ $# -eq 0 ] || { case "$1" in -h|--help) usage ;; *) die "unknown argument '$1'" ;; esac; }
+  command -v git >/dev/null 2>&1 || die "lint needs git on PATH"
+  _root=$(git -C "$PROJECT_DIR" rev-parse --show-toplevel 2>/dev/null) \
+    || die "lint must run inside the project git repo"
+  git -C "$_root" diff --cached -U0 --no-color 2>/dev/null | awk '
+    /^\+\+\+ /{ f=$0; sub(/^\+\+\+ b\//, "", f); sub(/^\+\+\+ /, "", f); next }
+    /^\+/ && !/^\+\+\+/ {
+      if (f ~ /^\.context\// || f == "/dev/null") next
+      s = substr($0, 2)
+      pat = ""
+      if (s ~ /ADR-[0-9]/) pat = "an ADR reference"
+      else if (s ~ /B-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9]/) pat = "a bug-ID reference"
+      else if (s ~ /\.context\//) pat = "a .context/ path"
+      else if (tolower(s) ~ /per adr/) pat = "\"per ADR\""
+      if (pat != "") { printf "LEAK: %s cites %s: %s\n", f, pat, s | "cat 1>&2"; n++ }
+    }
+    END { exit (n > 0) ? 1 : 0 }
+  '
+  _rc=$?
+  if [ "$_rc" -eq 0 ]; then
+    say "lint passed: no .context vocabulary (ADR-N, bug IDs, .context/ paths) in the staged product diff"
+  else
+    err "lint failed: product code must stand on its own. State the reason in plain words in the docstring/comment; the ADR or bug-ID link belongs in .context/memory, not the source. Memory references code, never the reverse."
+  fi
+  return "$_rc"
+}
+
+CMD=${1:-}; [ $# -gt 0 ] && shift
+case "$CMD" in
+  check) check "$@" ;;
+  lint)  lint "$@" ;;
+  prune) prune "$@" ;;
+  ''|-h|--help|help) usage ;;
+  *) die "unknown command '$CMD' (try: context-mem help)" ;;
+esac

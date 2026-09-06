@@ -523,6 +523,30 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             logger.debug("[agent-runtime] memory retrieval skipped", exc_info=True)
             return []
 
+    async def _recent_memory_facts(self, limit: int = 5) -> list[str]:
+        """Newest-first recent facts — the primitive for referential
+        conversational follow-ups ("What's it?"), where recency beats
+        semantic similarity (S427: the fact was written one minute before
+        the follow-up and a semantic query for "What's it?" missed it)."""
+        try:
+            rows = await self._memory.list_all_with_metadata()
+        except Exception:
+            logger.debug("[agent-runtime] recent-memory load skipped", exc_info=True)
+            return []
+
+        def _ts(row: dict) -> float:
+            try:
+                return float(row.get("timestamp") or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        rows = sorted(rows, key=_ts, reverse=True)
+        return [
+            str(r.get("fact", "")).strip()
+            for r in rows[:limit]
+            if str(r.get("fact", "")).strip()
+        ]
+
     @staticmethod
     def _failure_source_intent(obs: ObsCollector, failure_evt) -> str:
         """Use the failed tool as the memory key when the parent is generic."""
@@ -764,6 +788,103 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 "stage_timing", stage="context_build", latency_ms=0, status="memory_write"
             )
             _gen_start = time.monotonic()
+
+            # S427 — evidence-grounded resolution for REFERENTIAL writes.
+            # "Remember the source for EPL table" stored the literal phrase
+            # and confirmed it; the URL the user meant was in the conversation
+            # and was never consulted. A bare referent cannot be persisted
+            # usefully without ONE reasoning step over the evidence: resolve
+            # it, distill a self-contained fact, store THAT, and confirm with
+            # the resolved content. On resolution failure: no write, no fake
+            # confirmation — ask the user.
+            _content_to_store = _memory_intent.content
+            if _memory_intent.needs_resolution:
+                from core.memory_resolver import resolve_memory_fact
+
+                try:
+                    _hist_mem = await asyncio.to_thread(
+                        self._store.get_history, session_id
+                    )
+                    _hist_dicts_mem = [
+                        {"role": h.role.value, "content": h.content}
+                        for h in _hist_mem[-8:]
+                        if h.content
+                    ]
+                except Exception:
+                    logger.debug("[agent-runtime] memory resolution history load skipped", exc_info=True)
+                    _hist_dicts_mem = []
+
+                _resolved = await resolve_memory_fact(
+                    kernel.adapter,
+                    _hist_dicts_mem,
+                    _memory_intent.content,
+                )
+                if _resolved:
+                    logger.info(
+                        "[agent-runtime] memory referent resolved: %r -> %.120r",
+                        _memory_intent.content, _resolved,
+                    )
+                    _content_to_store = _resolved
+                else:
+                    # NOT_FOUND / provider failure / timeout — never write the
+                    # echoed phrase, never fake-confirm. Ask for the concrete
+                    # fact instead.
+                    _gen_ms = round((time.monotonic() - _gen_start) * 1000)
+                    _clarify = (
+                        f"I want to remember this correctly, but I can't tell "
+                        f"from our conversation what \"{_memory_intent.content}\" "
+                        f"refers to. Give me the concrete detail — the URL, "
+                        f"name, or value — and I'll store it."
+                    )
+                    collector.emit(
+                        "stage_timing", stage="generate", latency_ms=_gen_ms, status="done"
+                    )
+                    collector.emit(
+                        "stage_timing", stage="execute", latency_ms=0, status="skipped"
+                    )
+                    self._persist_assistant(
+                        session_id,
+                        _clarify,
+                        thinking=None,
+                        acknowledgement=None,
+                        error=None,
+                        tool_calls=None,
+                        metrics={
+                            "prompt_tokens": 0,
+                            "completion_tokens": len(_clarify) // 4,
+                            "latency_ms": _gen_ms,
+                        },
+                    )
+                    collector.emit(
+                        "agent_runtime_done",
+                        agent="parent",
+                        elapsed_ms=_gen_ms,
+                        response_chars=len(_clarify),
+                    )
+                    collector.emit(
+                        "turn_complete",
+                        intent="memory_op",
+                        confidence=1.0,
+                        tokens_approx=len(_clarify) // 4,
+                        prompt_tokens_approx=0,
+                        total_latency_ms=_gen_ms,
+                        memory_facts=0,
+                        agent_mode=False,
+                        provider_usage={},
+                    )
+                    self._store_observation(
+                        session_id,
+                        collector,
+                        intent="memory_op",
+                        confidence=1.0,
+                        memory_hits=0,
+                        context_tokens=0,
+                        latency_ms=_gen_ms,
+                    )
+                    yield StreamChunk(text=_clarify, done=False)
+                    yield StreamChunk(text="", done=True)
+                    return
+
             _response_text = ""
             _memory_success = False
             try:
@@ -774,7 +895,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # stores "down my project") and always tags it "semantic".
                 _mem_result = await _mem_op(
                     message,
-                    content=_memory_intent.content or None,
+                    content=_content_to_store or None,
                     memory_type=_memory_intent.memory_type.value,
                 )
                 _memory_success = _mem_result.success
@@ -794,6 +915,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # ("I prefer concise answers") and getting a technical error
                 # breaks the conversation.
                 _response_text = "Got it — I'll keep that in mind."
+            elif _memory_intent.needs_resolution and _content_to_store:
+                # S427 false-confirmation guard: the confirmation must show
+                # the RESOLVED fact, not a bare "Remembered: <phrase>" — the
+                # user must be able to see what will actually be recalled.
+                _response_text = f"Remembered: {_content_to_store}"
 
             _gen_ms = round((time.monotonic() - _gen_start) * 1000)
             collector.emit(
@@ -897,6 +1023,9 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     from core.trivial_input import _render_conversational_todos
 
                     todo_block = _render_conversational_todos(current_todos)
+                from core.trivial_input import _render_conversational_memories
+
+                memory_block = _render_conversational_memories(_recent_memories)
                 from core.trivial_input import CAPABILITY_NOTE
 
                 sys_prompt = (
@@ -907,7 +1036,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     "do not repeat a previous answer when the user asks for more detail. "
                     "Give concrete examples when examples are requested. Do not output "
                     "your reasoning process — just give the response directly.\n\n"
-                    f"Context from reasoning: {thinker_ctx}\n{todo_block}"
+                    f"Context from reasoning: {thinker_ctx}\n{todo_block}{memory_block}"
                 )
                 async for chunk in _direct_chat_response(msg, adptr, hist, sys_prompt):
                     yield chunk
@@ -928,6 +1057,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 ]
             except Exception:
                 _hist_dicts = []
+
+            # S427: recent stored memories for referential follow-ups
+            # ("What's it?" after "Remember the source…"). Only needed on the
+            # conversational leg — trivial turns get canned replies.
+            _recent_memories: list[str] = []
+            if not is_trivial_input(message):
+                _recent_memories = await self._recent_memory_facts(limit=5)
 
             _adapter = kernel.adapter
             _is_trivial = is_trivial_input(message, _hist_dicts)
@@ -1014,7 +1150,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         )
                     else:
                         _stream = conversational_response(
-                            message, _adapter, _hist_dicts, todo_state=current_todos
+                            message,
+                            _adapter,
+                            _hist_dicts,
+                            todo_state=current_todos,
+                            memory_facts=_recent_memories,
                         )
                 async for _chunk in _stream:
                     if _chunk.usage:

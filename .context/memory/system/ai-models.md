@@ -14,7 +14,7 @@ accordingly).
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 | Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-15 | 10 |
 | opencode | deepseek-v4-flash (bankofai) · glm-5.3-flash (bankofai) · claude-opus-4.8 (per collab events) | 2026-08-31 | 2026-08-31 | 1 |
-| ZCode (zcode) | glm-5.3-flash (per system prompt: 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0) | 2026-08-31 | 2026-09-06 | 5 |
+| ZCode (zcode) | glm-5.3-flash (per system prompt: 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0) | 2026-08-31 | 2026-09-06 | 6 |
 
 ## Observations
 
@@ -64,7 +64,12 @@ as GLM-5.2 (or whatever the user confirms in Pre-Flight).
 
 Updated registry row:
 
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-07-15 | 10 |
+| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-08-02 | 30 |
+
+(Merged 2026-09-06, S429, per core 0.10.0 registry hygiene: this is the
+single Super Z / GLM-5.2 (Z.ai) row — sessions accumulate; the duplicate
+that used to sit at the end of the Observations section (last-seen
+2026-08-02, 30 sessions) was removed and its values folded in here.)
 
 Observations above attributed to "GLM-4.5" were produced by GLM-5.2.
 
@@ -130,10 +135,6 @@ Updated registry row:
 Updated registry row:
 
 - **Super Z / GLM-5.2:** Session 30 — replaced static "Thinking..." with real pipeline status feedback. The user's insight: "Thinking..." is system thinking (pipeline stages), not model thinking. Fix: added statusText field to ChatMessage, replaced hardcoded "Thinking..." in CenterPanel with lastMsg.statusText (real pipeline messages), added immediate acknowledgment ("Got it — working on your request..."). Only shows "Thinking" when model actually reasons. Baseline held: 378 tests pass, 0 real ruff bugs. (2026-07-27)
-
-Updated registry row:
-
-| Super Z | GLM-5.2 (Z.ai) | 2026-07-09 | 2026-08-02 | 30 |
 
 - **Buffy / openai/gpt-5.6-luna:** Completed a context-only LocalMind clone and vendored-core sync from 0.2.0 to 0.5.0; verified the core manifest and preserved project memory without changing product code (2026-07-31).
 - **Buffy / openai/gpt-5.6-luna:** Completed Project setup on local macOS: installed locked npm workspaces, created a Python 3.12.13 backend venv via uv because system Python is 3.9.6, and verified 497 backend tests plus frontend build/typecheck. (2026-07-31)

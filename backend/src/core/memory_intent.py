@@ -64,6 +64,12 @@ class MemoryWriteIntent:
 
     When `is_write` is True, the pre-init classifier should bypass the LLM
     and call memory_op directly with `content` and `memory_type`.
+
+    S427: `needs_resolution` is True when `content` is a BARE REFERENT
+    ("the source for EPL table", "the score", "it") — a phrase that cannot
+    be used later without the conversation's evidence. Such writes get ONE
+    evidence-grounded resolution step before persisting; the confirmation
+    must echo the RESOLVED fact, never the echoed phrase.
     """
 
     is_write: bool
@@ -74,6 +80,7 @@ class MemoryWriteIntent:
     source_url: Optional[str] = None  # extracted from conversation context
     source_domain: Optional[str] = None  # e.g. "weather", "sports", "news"
     raw_message: str = ""
+    needs_resolution: bool = False  # S427: bare referent → resolve against evidence first
 
     @property
     def is_read(self) -> bool:
@@ -211,6 +218,82 @@ def _extract_content(message: str) -> str:
     return content
 
 
+# ── Referential-content detection (S427) ─────────────────────────────────────
+# A memory write whose content is a BARE REFERENT ("the source for EPL table",
+# "the score", "it") cannot be used later — the fact only exists in the
+# conversation's evidence. Live proof (S427): "Remember the source for EPL
+# table" stored the literal phrase "source for EPL table" and confirmed it;
+# the URL the user meant was in the turn-1 context. Such writes MUST be
+# resolved against the conversation before persisting. Self-contained
+# content (URLs, paths, dates, quoted strings, complete statements) keeps
+# the zero-LLM deterministic write — the S342 speed win stays where it works.
+
+_CONCRETE_PAYLOAD_RE = re.compile(
+    r"https?://|www\."                                       # URLs
+    r"|\b[\w.+-]+@[\w-]+\.[\w.]+\b"                          # emails
+    r"|[/\\][\w.-]+(?:[/\\][\w.-]+)+"                        # filesystem paths
+    r"|\b\d{1,3}(?:\.\d{1,3}){3}\b"                          # IPv4 addresses
+    r"|\b\d+(?:[.,]\d+)?\s*(?:%|kb|mb|gb|tb|kg|km|mi|lbs?|usd|kes|eur|sh|\$)"  # number+unit
+    r"|\"[^\"]{3,}\"|'[^']{3,}'"                             # quoted strings
+    r"|\b\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\b",                 # numeric dates
+    re.IGNORECASE,
+)
+
+# Bare determiner openings and pronoun referents — "the source", "this site",
+# "that score", "it". First-person openers (I/we/my/our) are usually
+# self-contained statements and are handled by the verb check below.
+_BARE_REFERENT_RE = re.compile(
+    r"^(?:the|a|an|this|that|these|those)\b"
+    r"|\b(?:it|that one|this one|the above|the same)\b",
+    re.IGNORECASE,
+)
+
+_FIRST_PERSON_RE = re.compile(r"^(?:i|we|my|our)\b", re.IGNORECASE)
+
+# A statement verb marks complete, usable-on-its-own content ("I prefer
+# concise answers", "sites that give a lot of information") — S342's
+# original examples, which persist fine as the user's words.
+_STATEMENT_VERB_RE = re.compile(
+    r"\b(?:is|are|was|were|be|prefer|prefers|liked?|likes?|us(?:e|es|ed)|"
+    r"wants?|needs?|gives?|gave|provides?|provided|works?|worked|should|must|"
+    r"will|has|have|had|lives?|builds?|building|am|runs?|running)\b",
+    re.IGNORECASE,
+)
+
+
+def needs_resolution(content: str, is_source_knowledge: bool = False) -> bool:
+    """True when the extracted content is a bare referent that must be
+    resolved against conversation evidence before it is stored.
+
+    The contract (user directive, S427): memory should understand what the
+    user wants remembered, ground it in the conversation's evidence, and
+    distill it into a self-contained one-liner — never store the user's
+    words when those words only name a referent.
+    """
+    content = (content or "").strip()
+    if not content:
+        return False
+    # Concrete payload → usable as-is regardless of phrasing.
+    if _CONCRETE_PAYLOAD_RE.search(content):
+        return False
+    # Source-knowledge noun phrases ("the source for EPL table", "this
+    # site", "source for the youth program") always need evidence — the
+    # phrase names a referent, not a fact. General capability statements
+    # ("sites that give a lot of information") carry a verb and fall through
+    # to the statement check below (S342 behavior: they persist as the
+    # user's words).
+    if is_source_knowledge and not _STATEMENT_VERB_RE.search(content):
+        return True
+    # Complete statements persist as-is (S342 behavior preserved).
+    if _STATEMENT_VERB_RE.search(content):
+        return False
+    if _BARE_REFERENT_RE.search(content):
+        return True
+    # Short noun phrase with no verb and no payload — "my project folder",
+    # "the score" — unusable without its antecedent.
+    return len(content.split()) <= 6
+
+
 def _detect_source_domain(message: str) -> Optional[str]:
     """Detect what information domain the source knowledge is about.
 
@@ -284,6 +367,7 @@ def classify_memory_intent(message: str) -> MemoryWriteIntent:
             is_source_knowledge=is_source_knowledge,
             source_domain=source_domain,
             raw_message=message,
+            needs_resolution=needs_resolution(content, is_source_knowledge),
         )
 
     return MemoryWriteIntent(is_write=False, raw_message=message)

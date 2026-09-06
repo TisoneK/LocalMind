@@ -969,11 +969,33 @@ async def trivial_response(
         yield chunk
 
 
+def _render_conversational_memories(memory_facts: Optional[list[str]]) -> str:
+    """Render recent stored memories for the conversational fast-path.
+
+    S427: "What's it?" after "Remember the source…" died twice — the fast
+    path injected todos (S359) but never memories, so referential follow-ups
+    about remembered things had nothing to resolve against. Recency beats
+    semantic similarity for immediate follow-ups, so the caller supplies the
+    newest facts. Returns "" when there are none.
+    """
+    facts = [str(f).strip() for f in (memory_facts or []) if str(f).strip()]
+    if not facts:
+        return ""
+    lines = [
+        "\nThings you remember (most recent first — resolve references like "
+        "'it' or 'that' against these):"
+    ]
+    for fact in facts:
+        lines.append(f"  - {fact[:200]}")
+    return "\n".join(lines)
+
+
 async def conversational_response(
     message: str,
     adapter,
     history: Optional[list[dict]] = None,
     todo_state: Optional[list[dict]] = None,
+    memory_facts: Optional[list[str]] = None,
 ) -> AsyncIterator[StreamChunk]:
     """
     Stream a direct chat response for a conversational question.
@@ -984,17 +1006,21 @@ async def conversational_response(
     (ADR-11 / B-2026-08-09-1).
 
     Args:
-        message: the user's conversational question.
+        message: the user's message text.
         adapter: the model adapter (already configured with the right model).
-        history: optional chat history for context.
+        history: optional prior messages for context.
         todo_state: Session 359 — the session's current persisted todo list,
             rendered into the prompt so questions like "what todos are left?"
             are answered from the real checklist, not made up.
+        memory_facts: S427 — the session's most recent stored memories, so
+            referential follow-ups ("What's it?") resolve against what was
+            actually remembered.
 
     Yields:
         StreamChunk — the model's direct answer, streamed token by token.
     """
     todo_block = _render_conversational_todos(todo_state)
+    memory_block = _render_conversational_memories(memory_facts)
     async for chunk in _direct_chat_response(
         message,
         adapter,
@@ -1011,6 +1037,7 @@ async def conversational_response(
             "Use the recent conversation history as context. Resolve short follow-ups "
             "against what was just said. Be concise, warm, and direct.\n"
             f"{todo_block}"
+            f"{memory_block}"
         ),
     ):
         yield chunk

@@ -11,6 +11,12 @@ workflow itself made you slower and every project would hit it — mark it
 `flaws/`) into the package for an upstream fix. Unmarked entries are
 never harvested.
 
+Append-only, but prunable to cold storage: once an entry is explicitly
+marked `RESOLVED` / `superseded` / fixed, move it **verbatim** into
+`archive.md` in this directory so startup reads only the live entries.
+`context-mem prune` reports which entries are archive-eligible; age alone
+never makes an entry eligible.
+
 <!-- TEMPLATE — copy below the last entry:
 ---
 ## YYYY-MM-DD — <agent> / <model>

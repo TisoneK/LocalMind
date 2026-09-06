@@ -10,6 +10,12 @@
 #   update [SOURCE]      replace core/ from SOURCE (package clone / unpacked
 #                        archive). Same-MAJOR updates apply directly; a MAJOR
 #                        bump needs --major. Memory is never touched.
+#   migrate [SOURCE]     ONE-COMMAND bring-current: update core to the newest
+#                        reachable version, then backfill every missing zone/
+#                        file, LF-normalize, relock, and verify. Idempotent.
+#                        Leaves only "fill the project facts". Old projects
+#                        whose vendored script lacks this: run `update` once
+#                        (it installs a script that has it), then `migrate`.
 #   rollback [VERSION]   restore core/ from this project's git history
 #                        (default VERSION: the one in memory/core.lock)
 #   lock                 record the current verified core version in
@@ -214,15 +220,42 @@ cmd_verify() {
   return 3
 }
 
-cmd_update() {
-  need_project update
-  # refresh the core-owned root file and install the LF policy + CLAUDE.md
-  # pointer BEFORE any version logic: a 0.8.x project's first update runs the
-  # old script (which never installs these), so the post-update no-op run of
-  # the new script must still leave the project with them.
+# Install every current-version scaffolding file the project may be missing.
+# Idempotent: only creates what's absent, never clobbers existing files, safe
+# to run repeatedly. Reads the CURRENT (post-swap) core/templates, so it is
+# the single source of "what a fully-migrated project should contain" — the
+# `migrate` command and each future release both go through here, and adding a
+# new template file to the list is the only step to teach migration about it.
+backfill_project() {
   cp "$CORE_DIR/templates/context-README.md" "$CONTEXT_DIR/README.md" 2>/dev/null || true
   [ -f "$CONTEXT_DIR/.gitattributes" ] || cp "$CORE_DIR/templates/.gitattributes" "$CONTEXT_DIR/.gitattributes" 2>/dev/null || true
   [ -e "$PROJECT_DIR/CLAUDE.md" ] || cp "$CORE_DIR/templates/CLAUDE.md" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || true
+  [ -d "$CONTEXT_DIR/history" ] || cp -R "$CORE_DIR/templates/history" "$CONTEXT_DIR/history" 2>/dev/null || true
+  [ -d "$CONTEXT_DIR/archive" ] || cp -R "$CORE_DIR/templates/archive" "$CONTEXT_DIR/archive" 2>/dev/null || true
+  mkdir -p "$MEMORY_DIR/workflows" "$MEMORY_DIR/agents" 2>/dev/null || true
+  [ -f "$MEMORY_DIR/workflows/history.conf" ] || cp "$CORE_DIR/templates/memory/workflows/history.conf" "$MEMORY_DIR/workflows/history.conf" 2>/dev/null || true
+  [ -f "$MEMORY_DIR/agents/GROUP" ] || printf 'group=1\nopened=%s\n' "$(date +%Y-%m-%d)" > "$MEMORY_DIR/agents/GROUP" 2>/dev/null || true
+  [ -f "$MEMORY_DIR/agents/roster.md" ] || cp "$CORE_DIR/templates/memory/agents/roster.md" "$MEMORY_DIR/agents/roster.md" 2>/dev/null || true
+}
+
+# Replace .context/core with the source tree, LF-normalized and re-verified.
+# $1 = source core dir, $2 = its version. The running script keeps its open
+# inode across the swap, so it finishes cleanly.
+swap_core() {
+  _src=$1; _sv=$2
+  verify_tree "$_src" || die "update source fails its own manifest — refusing to install a corrupt core"
+  STAGE=$CONTEXT_DIR/core.new
+  rm -rf "$STAGE"
+  cp -R "$_src" "$STAGE" || die "staging copy failed"
+  normalize_lf "$STAGE"
+  verify_tree "$STAGE" || { rm -rf "$STAGE"; die "staged copy fails verify — aborting, core untouched"; }
+  rm -rf "$CORE_DIR" && mv "$STAGE" "$CORE_DIR" || die "swap failed — restore .context/core from git (git checkout -- .context/core)"
+  write_lock "$_sv"
+}
+
+cmd_update() {
+  need_project update
+  backfill_project   # repair missing files even on a same-version no-op
   ALLOW_MAJOR=no; SRC_ARG=""
   for a in "$@"; do
     case "$a" in
@@ -239,25 +272,57 @@ cmd_update() {
   if [ "$(ver_part "$SRC_V" 1)" != "$(ver_part "$LOCAL_V" 1)" ] && [ "$ALLOW_MAJOR" = no ]; then
     die "MAJOR version bump ($LOCAL_V -> $SRC_V): read CHANGELOG.md migration notes, get the user's go-ahead, re-run with --major"
   fi
-  verify_tree "$SRC" || die "update source fails its own manifest — refusing to install a corrupt core"
-
-  STAGE=$CONTEXT_DIR/core.new
-  rm -rf "$STAGE"
-  cp -R "$SRC" "$STAGE" || die "staging copy failed"
-  # rewrite the staged copy to LF so the vendored core is byte-identical to
-  # its manifest even when the source checkout was CRLF (Windows), then
-  # verify what is actually on disk.
-  normalize_lf "$STAGE"
-  verify_tree "$STAGE" || { rm -rf "$STAGE"; die "staged copy fails verify — aborting, core untouched"; }
-
-  # unlink-safe: this running script keeps its open inode
-  rm -rf "$CORE_DIR" && mv "$STAGE" "$CORE_DIR" || die "swap failed — restore .context/core from git (git checkout -- .context/core)"
-  write_lock "$SRC_V"
+  swap_core "$SRC" "$SRC_V"
   say "core updated: $LOCAL_V -> $SRC_V"
-  say "next: read the new entries in .context/core/CHANGELOG.md;"
-  say "      if templates/kickoff.md or templates/AGENTS.md changed materially,"
-  say "      regenerate .context/kickoff.md / AGENTS.md (facts from memory);"
-  say "      commit as: chore(context): update core to $SRC_V"
+  # Hand off to the JUST-INSTALLED script so backfill knows every file the new
+  # version introduced (the running old script cannot) — one update fully
+  # migrates. Old scripts (pre-0.16) lack this line; there, run `migrate` once.
+  exec sh "$CORE_DIR/bin/context-sync" migrate --backfill-only
+}
+
+# migrate — the one-command "bring this project fully current". Updates the
+# core to the newest reachable same-MAJOR version (if any), then backfills
+# every missing zone/file, LF-normalizes, relocks, and verifies. Idempotent.
+# Leaves exactly one manual step: fill the project facts.
+cmd_migrate() {
+  need_project migrate
+  _backfill_only=no; ALLOW_MAJOR=no; SRC_ARG=""
+  for a in "$@"; do
+    case "$a" in
+      --backfill-only) _backfill_only=yes ;;
+      --major) ALLOW_MAJOR=yes ;;
+      *) SRC_ARG=$a ;;
+    esac
+  done
+
+  if [ "$_backfill_only" = no ]; then
+    SRC=$(find_source "$SRC_ARG" 2>/dev/null || true)
+    if [ -n "${SRC:-}" ]; then
+      SRC_V=$(core_version "$SRC"); LOCAL_V=$(core_version "$CORE_DIR")
+      if [ "$(ver_cmp "$SRC_V" "$LOCAL_V")" = newer ]; then
+        if [ "$(ver_part "$SRC_V" 1)" != "$(ver_part "$LOCAL_V" 1)" ] && [ "$ALLOW_MAJOR" = no ]; then
+          die "MAJOR bump ($LOCAL_V -> $SRC_V): read CHANGELOG.md, then: context-sync migrate --major"
+        fi
+        say "updating core: $LOCAL_V -> $SRC_V"
+        swap_core "$SRC" "$SRC_V"
+        # re-exec the new script so its backfill knows all new files
+        exec sh "$CORE_DIR/bin/context-sync" migrate --backfill-only
+      fi
+    fi
+  fi
+
+  backfill_project
+  normalize_lf "$CORE_DIR" 2>/dev/null || true
+  write_lock "$(core_version "$CORE_DIR")"
+  _v=$(core_version "$CORE_DIR")
+  if verify_tree "$CORE_DIR" >/dev/null 2>&1; then _vs="core verified"; else _vs="core FAILED verify — run: context-sync rollback"; fi
+  say "migration complete — core $_v; all zones/files present; $_vs."
+  say ""
+  say "One step left — fill the project facts (facts from memory, no secrets):"
+  say "  .context/kickoff.md          — Project Facts (remote URL, default branch, name)"
+  say "  AGENTS.md                    — <PROJECT_NAME>"
+  say "  memory/workflows/active.md   — protocol 'by agent type', BOTH edition paths"
+  say "then commit + push: chore(context): migrate to core $_v"
 }
 
 cmd_rollback() {
@@ -306,6 +371,10 @@ cmd_bootstrap() {
   mkdir "$DEST/.context" || exit 1
   cp -R "$CORE_DIR" "$DEST/.context/core"                            || die "vendoring core failed"
   cp -R "$CORE_DIR/templates/memory" "$DEST/.context/memory"         || die "copying memory skeleton failed"
+  cp -R "$CORE_DIR/templates/history" "$DEST/.context/history"       || die "creating history/ zone failed"
+  cp -R "$CORE_DIR/templates/archive" "$DEST/.context/archive"       || die "creating archive/ zone failed"
+  # seed the current session group's opened date
+  printf '# Current session group — written by context-history. Do not hand-edit.\ngroup=1\nopened=%s\n' "$(date +%Y-%m-%d)" > "$DEST/.context/memory/agents/GROUP"
   # byte-identical vendored core + skeleton regardless of this checkout's
   # line endings (Windows CRLF) — verify/rollback then work out of the box.
   normalize_lf "$DEST/.context/core" "$DEST/.context/memory"
@@ -454,12 +523,13 @@ case "$CMD" in
   status)    cmd_status "$@" ;;
   verify)    cmd_verify "$@" ;;
   update)    cmd_update "$@" ;;
+  migrate)   cmd_migrate "$@" ;;
   rollback)  cmd_rollback "$@" ;;
   lock)      need_project lock; write_lock "$(core_version "$CORE_DIR")"; say "locked $(core_version "$CORE_DIR")" ;;
   manifest)  cmd_manifest "$@" ;;
   bootstrap) cmd_bootstrap "$@" ;;
   harvest)   cmd_harvest "$@" ;;
   ''|-h|--help|help)
-    sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
   *) die "unknown command: $CMD (try: context-sync help)" ;;
 esac

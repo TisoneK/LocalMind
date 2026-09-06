@@ -6155,3 +6155,68 @@ Post-revert suite captured in scratch/s424/pytest-post-revert.txt as evidence.
 - **Coordination:** fresh worktree + note/claim events (session localmind-thinker-concurrent); S427's untracked memory_resolver.py in the main checkout untouched.
 - **Report:** .context/memory/reviews/2026-09-06-review-2.md
 - **Notes:** (1) Test-fixture trap worth remembering: the loop passes `adapter=` to dispatch_with_retry — fake dispatches without that kwarg raise TypeError, the loop marks the tool FAILED, and success-path tests silently run the failure path (masked every prior test; only a timing assertion exposed it). (2) Instant async fakes never yield, so background tasks starve — tests need `await asyncio.sleep(0)` at yield points, and timing assertions must compare against an identical warm turn (the turn carries ~0.9s of synchronous machine overhead on this box).
+## 2026-09-06 — Session 427 — memory: evidence-grounded resolution for referential writes
+
+- **Agent:** ZCode (local) | **Model:** glm-5.3-flash (per system prompt ID 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0; not user-stated) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.9.1
+- **Task:** user live-report + directive — the EPL transcript ("Remember the source for EPL table" → stored the literal phrase + fake-confirmed it; "What's it?" → provider flap, memory_hits=0) and the principle: "memory should have evidence first and understand what user wants it to remember and summarize it as a one line or paragraph, not just user's words."
+- **Commits:** `ed8dcf2` feat(memory) + closeout.
+- **Root cause (verified in DB):** vector_facts contained `content='source for EPL table'` with fallback=true — the S342 deterministic write persisted the text-extracted phrase. A bare referent cannot be resolved without reasoning, and the path was built to skip reasoning. The module docstring even promised "extract the source from current-turn tool results" — never wired (source_url always None).
+- **Shipped:** (1) `memory_intent.needs_resolution()` — deterministic referent classification (source-knowledge noun phrases without a statement verb, bare determiners/pronouns, short verbless fragments); concrete payloads (URL/IP/path/date/quote) and complete statements keep the zero-LLM S342 write — 11/11 calibration cases. (2) `core/memory_resolver.py` — the ONE bounded resolution call over recent conversation evidence, NOT_FOUND sentinel, None = do-not-write. (3) runtime: referential writes resolve before persisting; confirmation echoes the RESOLVED fact; failure asks the user (no write, no fake confirm). (4) conversational fast path injects the 5 newest memories (recency > similarity for "What's it?"), symmetric with S359 todos.
+- **Verification:** unit — 22 new tests (`tests/core/test_memory_resolution.py`), 129 neighboring green. Full suite 36F/2892P — failure-set diff vs S426 run: ZERO new (one flaky gone). ruff: changed files clean (1 pre-existing E501 in untouched block). LIVE (bankofai/qwen3.8-flash, isolated 8766, user's 3-turn EPL transcript via `scripts/live_test_s427_memory.py`): turn 2 resolved + stored "The source for the EPL (Premier League) table is BBC Sport, showing the 2026/27 season standings after 3 matchdays, updated 6 Sep 2026." and echoed the resolved content; turn 3 "What's it?" answered from the injected memory, 0 tools. NOTE: this run's turn-1 fetch surfaced BBC (not Sky Sports as in the user's trace) — provider content variance, the resolver followed its evidence correctly.
+- **Coordination:** S427 note emitted (memory-evidence); S425's release event landed on the trail (was untracked in this checkout); S424 addendum had read the S426 claim mid-flight — mutual awareness worked again. Excluded: loop.py (untouched), thinker (untouched).
+- **Deferred / next:** resolution-call token usage is not yet in the turn's provider_usage accounting (minor observability gap); S356's "Got it — I'll keep that in mind." on legacy-path write FAILURE is still a soft fake-confirm (flagged, owner call); the user's thinking-principle ("restraint by shape-of-input, not turn class") is worth an ADR when generalized beyond memory.
+- **Report:** none — fix session (commits + tests + traces are the record); artifacts in scratch/s427/ (gitignored).
+
+## 2026-09-06 — Session 429 — core update 0.9.1 → 0.14.0 (+ 0.13.0 zone migration)
+
+- **Agent:** ZCode (local) | **Model:** glm-5.3-flash (per system prompt ID 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0; not user-stated) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.14.0 (was 0.9.1)
+- **Task:** "Update/sync context core" — complete the core update S426 had to refuse (0.13.1 source failed its own manifest).
+- **Commits:** 4 (`f8ee025` claim events; `38d58c0` update core to 0.14.0; `4de0f1a` ai-models registry merge; this closeout) — on branch `collab/localmind-core-update/zcode-glm-5.3-flash-win-s429` (worktree `../LocalMind-zcode-s429`), merged to main at closeout.
+- **Outcome:** done. Source repo (TisoneK/.context `0b7533e`) verified against its own manifest BEFORE updating (S426's lesson) — the 0.13.1 corruption was already repaired upstream; `context-sync.ps1 update` ran 0.9.1 → 0.14.0, verify green. Five releases landed: 0.10.0 registry hygiene, 0.11.0 vocabulary lint, 0.12.0 log pruning, 0.13.0 session groups, 0.14.0 Windows ports + .cmd launchers. Found + worked around: the .ps1 update path skips the 0.13.0 zone migration (flaws log; installed history/, archive/, history.conf, agents/GROUP manually with the sh port's exact commands) and `context-mem lint` false-positives on the root AGENTS.md digest (flaws log). AGENTS.md digest regenerated from the new template (project sections preserved); kickoff.md Windows invocations switched to `.cmd` form; merged the duplicate Super Z / GLM-5.2 ai-models row (context-mem check now passes). Validated the .cmd launcher end-to-end (context-mem.cmd check).
+- **Verification:** `context-sync verify` green post-update (CR-stripped, 0.14.0); `context-mem.cmd check` passes; staged-diff check + tsc green; ruff 32 = documented baseline (no product files touched). No live product testing — context-only session.
+- **Coordination:** collab mode with TWO live peers — S427 (memory-evidence, main checkout; its product commit `ed8dcf2` landed on origin/main mid-session) and S428 (thinker-concurrent, own worktree; claims loop.py/thinker/CHANGELOG.md). Zero path overlap with either claim. Note `20260906T031520Z` + claim `20260906T031635Z` emitted before work; release at closeout. Worked in my own worktree per the overrides mandate; explicit-path staging throughout; peers' files untouched.
+- **Open items:** none new. Standing P0 Steps 4-8; eslint drift; ~37F Windows baseline peer pass; future product commits must pass `context-mem lint` (rephrase any ADR/Bug-ID citations in docstrings — one-way linkage rule) and the registry check runs at exit.
+- **Notes:** none
+- **Report:** none — chore session (update commit + flaws/inefficiencies entries are the record)
+
+### Session 429 addendum — round 2: core 0.14.0 → 0.16.0 (2026-09-06, ~1 hour later)
+
+The package source moved again mid-session (0.15.0 named-persona roster,
+0.16.0 one-command migrate — landed while round 1 was being integrated).
+Source verified, then `context-sync.cmd update` ran 0.14.0 → 0.16.0 and the
+new one-run migration backfilled every zone/file in the same pass — including
+the ps1-migration flaw's missing installs, now fixed upstream (`edf6920`;
+resolution note appended to flaws/log.md, fixed path exercised live). New:
+`memory/agents/roster.md` (current-group team board) — added my row: **Ada |
+S429 | glm-5.3-flash** (supervisor can rename). AGENTS.md digest regenerated
+from the 0.16 template (rule 5: named coworkers, human as supervisor);
+memory/collaboration/README.md refreshed (unmodified bootstrap content
+before). Commits: `fa0642f` claim, `d1f38d9` update, this closeout; release
+event follows. verify green (0.16.0). Next session starts per 0.15+: pick
+your name in the roster, present yourself by it.
+
+---
+## 2026-09-06 — Session 430 — core sync 0.16.0 → 0.16.1 (patch)
+
+- **Agent:** ZCode (local) | **Model:** glm-5.3-flash (per system prompt ID 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0; not user-stated) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.16.1
+- **Task:** "Start another migration session" — pick up the 0.16.1 delta that appeared after S429 closed (the package repo is under active development today).
+- **Commits:** 3 (`6c0bbb0` claim; `d020d15` update core to 0.16.1; this closeout) — branch `collab/localmind-core-update/zcode-glm-5.3-flash-win-s430`, merged to main.
+- **Outcome:** done. Source ca8b364 verified against its own manifest; one-run update + idempotent backfill; verify green. Change surface exactly as the changelog promised (two .ps1 help texts + bookkeeping — no templates, no migration steps owed). Patch substance live-verified: `context-sync.cmd` with no args now prints the `.cmd` launcher form. Roster row re-tagged Ada S429 → S430 (same person, new session tag).
+- **Verification:** verify green (0.16.1); `context-mem.cmd check` passes (roster uniqueness incl.); help text inspected. Context-only session — no product files touched, no full-CI re-run (baseline unchanged).
+- **Coordination:** S428 (thinker-concurrent) claim still unreleased — treated as live; worktree discipline + zero path overlap maintained.
+- **Open items:** none new (standing queue unchanged, see tasks/current.md).
+- **Notes:** none
+- **Report:** none — chore session (commit + this entry are the record)
+
+---
+## 2026-09-06 — Session 431 — chat-hygiene triage: 6 live findings backlogged for collab fix agents
+
+- **Agent:** ZCode (local) | **Model:** glm-5.3-flash (per system prompt ID 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0; not user-stated) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.16.1
+- **Task:** owner's live findings from a chat JSON export + UI review (session-1788669567862: canned-greeting double reply, "missing" user messages), then "Start context session and backlog all the identified issues so that i can launch colab agents" + "the json export data it should capture everything".
+- **Commits:** 4 (`a2f6739` note+claim; `d076b6a` backlog B-2026-09-06-2..-7; `34b9964` roster (Kwame) + collab queue; this closeout) — branch `collab/localmind-chat-hygiene/zcode-glm-5.3-flash-win-s431`, merged to main.
+- **Outcome:** done, context-only. Six backlog entries from the live findings: **(-2, P1)** chat export drops user messages and the sidebar count is assistant-only — the 04:42Z export of the 07:39 chat holds 3 all-assistant messages vs 6 in the UI, and the auto-title proves user turns were persisted (exporter/API filter, not persistence); **(-3, P1, owner directive)** full-fidelity export schema v3 — add user messages, thinking blocks, model/provider identity, turn metadata, ISO-8601 dates, v2-readable; **(-4, P1)** the fast path answered "How are you?" with the verbatim canned greeting and fabricated provider metrics — promptTokens 5/8 = bare user text (no system prompt; a real turn in the same chat measured 432), 4ms/4250 tok/s, and the sidebar aggregates reconcile exactly (445 = 5+8+432, 121 = 17+17+87, 20.78 tok/s) — fix detector breadth (S206 zero-provider-call boundary stays for true "Hi") + honest synthetic-metric flagging; live-testing bar applies; **(-5, P1)** test/e2e runs pollute the REAL chat store (~40 e2e-style chats created 06:34–06:38 + 7 empty "0 msgs" chats) — force the isolated LOCALMIND_HOME harness + owner-approved delete-list cleanup; **(-6, P3)** sidebar previews render raw markdown (`**`, `|---|`); **(-7, P2)** Agent-Workspace "Parent loop and delegated work / Child agents…" copy contradicts the standing Parent-only decision (ADR-53).
+- **Verification:** context-only session — no product files touched; the metrics arithmetic was cross-checked from the export + sidebar and reconciles on all four aggregates (the canned-response fingerprint is user-text-only promptTokens). Pre-commit components run on the identical main-checkout tree (worktree lacks node_modules/.venv): tsc 0 errors, ruff 32 = documented baseline. `context-mem.cmd check` green at exit; append-only diffs verified (+ only).
+- **Coordination:** S428 (thinker-concurrent) claim still unreleased — treated as live; worktree discipline + zero path overlap. Events on session `localmind-chat-hygiene` (note `20260906T050721Z`, claim `20260906T050802Z`, issue `triage`); fix agents the owner launches will claim the backlog IDs as issues under the same session id.
+- **Open items:** the six new backlog items themselves (owner launching collab fix agents); standing queue unchanged (see tasks/current.md).
+- **Notes:** context-collab.cmd `--body-file -` (stdin) is unsupported — write a temp body file first (1 retry). The metrics-reconciliation pattern (do the per-message token/latency sums reproduce the sidebar aggregates?) is a reusable triage test for "was this reply canned?".
+- **Report:** none — triage session (backlog entries + this entry are the record)
