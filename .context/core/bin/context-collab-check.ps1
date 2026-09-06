@@ -229,14 +229,18 @@ function Check-Resolutions {
 }
 
 $script:Session = ''; $script:Issue = ''
-$args = if ($null -eq $Arguments) { @() } else { @($Arguments) }
-for ($i = 0; $i -lt $args.Count; $i++) {
-  switch ($args[$i]) {
-    '--session' { if ($i + 1 -ge $args.Count) { Die '--session needs a value' }; $script:Session = $args[++$i] }
-    '--issue' { if ($i + 1 -ge $args.Count) { Die '--issue needs a value' }; $script:Issue = $args[++$i] }
+# Not $args: assigning the automatic variable fails under StrictMode, and an
+# @() emitted by an if-expression unwraps to $null -- so build the array by
+# direct assignment and guard the read against .Count on $null.
+$positional = @()
+if ($null -ne $Arguments) { $positional = @($Arguments) }
+for ($i = 0; $i -lt $positional.Count; $i++) {
+  switch ($positional[$i]) {
+    '--session' { if ($i + 1 -ge $positional.Count) { Die '--session needs a value' }; $script:Session = $positional[++$i] }
+    '--issue' { if ($i + 1 -ge $positional.Count) { Die '--issue needs a value' }; $script:Issue = $positional[++$i] }
     '-h' { Usage }
     '--help' { Usage }
-    default { Die "unknown argument '$($args[$i])'" }
+    default { Die "unknown argument '$($positional[$i])'" }
   }
 }
 if ($script:Session -and -not (Valid-Id $script:Session)) { Die "invalid session id: $($script:Session)" }

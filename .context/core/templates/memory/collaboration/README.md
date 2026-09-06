@@ -126,12 +126,12 @@ cite a product commit.
 On Windows, use the PowerShell port:
 
 ```powershell
-pwsh -File .context/core/bin/context-collab.ps1 emit claim `
+.context/core/bin/context-collab.cmd emit claim `
   --session <session-id> --agent <agent-id> --issue <issue-id> `
   --paths src/auth.py,tests/test_auth.py --body-file C:\path\claim.md
-pwsh -File .context/core/bin/context-collab.ps1 status `
+.context/core/bin/context-collab.cmd status `
   --session <session-id> --issue <issue-id>
-pwsh -File .context/core/bin/context-collab.ps1 check `
+.context/core/bin/context-collab.cmd check `
   --session <session-id> --issue <issue-id>
 ```
 

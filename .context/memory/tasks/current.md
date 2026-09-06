@@ -1,32 +1,46 @@
 # Current Task
 
-**Status:** IDLE — Sessions 425 + 426 + 427 closed (concurrent, coordinated
-via the event trail). **S425 (main `540792a`):** ADR-57 slice 1 shipped +
-LIVE-verified — Thinker consults stream their prose reasoning to the
-ThinkingBlock (surfacing stops at the JSON marker — the S324 leak class is
-prevented structurally), the post-tool consult builds on the turn's earlier
-analysis (`Evidence.prior_analysis`), and the prompt is rewritten for
-human-like, precise, decision-focused reasoning that never exposes agent
-machinery (owner directives). LIVE bankofai/qwen3.8-flash before/after:
-consults surfaced 0 chars → 2189–2737 chars, machinery scan clean, no JSON
-leak, answers held. 34 thinker/loop tests (7 new). **S426:** fast-path gate
-fix (`a2a3a48`, "Hi" 75.0s → 0.3s zero provider calls, S206 boundary
-restored) + parent-only tool catalog cut (`f4f567e`, ADR-53; ADR-40
-tool-selection bar held live). **S427 (`ed8dcf2`):** evidence-grounded
-memory writes — "Remember the source for EPL table" previously stored the
-literal phrase + fake-confirmed; now `needs_resolution()` classifies bare
-referents deterministically, referential writes get ONE bounded resolution
-call over the conversation evidence (core/memory_resolver.py), the
-confirmation echoes the RESOLVED fact, failure asks instead of writing, and
-the conversational fast path injects the 5 newest memories so "What's it?"
-resolves. LIVE: EPL transcript replay — stored a distilled self-contained
-fact, follow-up answered from memory, 0 tools. 22 new tests; suite
-failure-set diff = zero new.
+**Status:** IDLE — Sessions 425–427 closed (their records live in
+`agents/sessions.md` + `sessions/SUMMARY.md`; S427 shipped
+evidence-grounded memory writes, live-verified). **Session 429 closed:
+core updated 0.9.1 → 0.14.0** (`38d58c0` — source repo verified against
+its own manifest BEFORE updating, per the S426 lesson; the 0.13.1
+corruption had already been repaired upstream). Two package flaws found +
+logged: the `.ps1` update path skips the 0.13.0 zone migration
+(history/, archive/, history.conf, agents/GROUP — installed manually per
+the sh-port commands), and `context-mem lint` false-positives on the root
+AGENTS.md digest. AGENTS.md digest + kickoff `.cmd` invocations refreshed
+from the new templates; duplicate Super Z / GLM-5.2 registry row merged
+(`context-mem check` passes). **S428 (thinker-concurrent) may still be in
+flight** in worktree `../LocalMind-zcode-s428` (branch
+`collab/localmind-thinker-concurrent/...`) — check the event trail before
+touching loop.py/thinker/CHANGELOG.md.
 
 **Feature:** none
 
 ## Notes for the next session
 
+- **NEW (core 0.14.0 session-start + exit habits):** Windows invocations
+  are now the `.cmd` launchers — e.g. `.context/core/bin/context-sync.cmd
+  verify|status`, `context-mem.cmd check`, `context-mem.cmd lint`,
+  `context-gates.cmd run pre-commit` — no `pwsh -File` or
+  execution-policy setup needed. At exit, `context-mem check` runs (flag:
+  duplicate registry keys — ai-models.md and environments.md are
+  UPDATE-IN-PLACE: EDIT rows, never append duplicates). Future product
+  commits must pass `context-mem lint`: no ADR-N / bug-ID / `.context/`
+  path citations in staged product lines — rephrase docstrings to stand
+  alone (one-way linkage; known false positive: root AGENTS.md itself).
+- **Session history rotation (core 0.13.0):** sessions.md is now the
+  CURRENT GROUP's registry (group_size=20 in
+  `workflows/history.conf`; zones installed by S429). `context-history
+  close --confirm` consolidates into `.context/history/group-001.md` and
+  starts a fresh group — promote open threads to durable files first
+  (close refuses without `--confirm` and prints the checklist). The first
+  close will sweep all ~430 legacy lines into group-001.
+- **Durable-log pruning (core 0.12.0):** `context-mem prune --list` names
+  explicitly-RESOLVED entries eligible to move verbatim into
+  `flaws/archive.md` / `inefficiencies/archive.md` — worth one bookkeeping
+  session soon (flaws ~686 lines / inefficiencies ~1260 lines).
 - **Memory follow-ups (S427, small):** (1) the resolution call's provider
   usage is not folded into the turn's provider_usage accounting (minor
   observability gap); (2) S356's "Got it — I'll keep that in mind." on
@@ -44,13 +58,14 @@ failure-set diff = zero new.
   stands. Streaming made them visible; concurrency would let them fire after
   every tool without wall-clock cost. Map the data dependencies first
   (ADR-57 Open-Q1). Do NOT re-add every-tool serial consults (S420-era
-  2-minute turns).
+  2-minute turns). **S428 is implementing this — coordinate.**
 - **S426 follow-ups (the latency roadmap, prioritized):** fix #3 =
   cache-prefix stability (39% cached — per-iteration prompt assembly +
   tool-schema prefix in loop.py — S425's loop.py claim is now RELEASED,
-  safe to touch); metrics honesty (panel shows last-call prompt + undercounts
-  llm_calls — surface `total_prompt_tokens`); init+Thinker skip for obviously-
-  simple turns (architectural, ADR-53-compliant).
+  safe to touch; coordinate with S428); metrics honesty (panel shows
+  last-call prompt + undercounts llm_calls — surface
+  `total_prompt_tokens`); init+Thinker skip for obviously-simple turns
+  (architectural, ADR-53-compliant).
 - **Watch the consult prose on live passes:** qwen3.8-flash occasionally
   restates the request ("The user is Tisone and wants me to...") — prompt-
   level, not structural.
@@ -65,11 +80,7 @@ failure-set diff = zero new.
   cwd silently created `backend/scratch/` and cost a wasted live run.**
 - **context-collab.ps1:** use `--refs`, not `--re` (the alias breaks pwsh
   parameter binding).
-- **Measurement lesson (S426):** the parent's real per-turn static surface is
-  the native-bootstrap branch (~1.4K prompt + intent-scoped defs), NOT the
-  5.4K/5.3K figures from the initial chat assessment. Verify which render a
-  measurement script hits before quoting sizes.
-- **Live-test providers (S426 update):** bankofai free = hy3 / glm-5.3-flash /
+- **Live-test providers:** bankofai free = hy3 / glm-5.3-flash /
   qwen3.8-flash; **deepseek-v4-flash is NOT free on this account** (400
   "credit insufficient balance=0" — live-testing.md's "fast AND free" is
   stale here); gemini-2.5-flash eats per-minute quota; zai 401; chutes/
@@ -97,4 +108,5 @@ failure-set diff = zero new.
   full pytest output to a file before filtering — `tail` on a pipe loses the
   FAILED list. **Stash-based baseline capture: `git stash list` must be EMPTY
   before the after-run (S426 mislabeled a trace set this way — prefer a
-  read-only worktree).**
+  read-only worktree). Session resumption: check `git log`/`status` before
+  re-running an interrupted commit chain (S429).**

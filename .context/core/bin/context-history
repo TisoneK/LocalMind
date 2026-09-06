@@ -1,0 +1,259 @@
+#!/bin/sh
+# context-history — group session history and rotate it through the zones:
+#   memory/ (live) -> history/ (closed, readable) -> archive/ (cold, zipped) -> gc
+#
+# A "group" is the session-history subtree only: agents/sessions.md entries,
+# sessions/SUMMARY.md lines, and sessions/<date-N>/ notes. Durable facts
+# (user/, system/, plans/decisions.md, tasks/backlog.md, flaws/,
+# inefficiencies/) live in memory/ across groups and never rotate — they have
+# their own hygiene (update-in-place; context-mem prune). Collaboration events
+# are a separate immutable trail and are never touched here.
+#
+# Commands:
+#   status                 current group, session count, zone sizes, due?
+#   close [--milestone L] [--confirm]
+#                          consolidate the live group into history/group-<NNN>.md,
+#                          start an empty group NNN+1, and roll the oldest
+#                          readable group into archive/ when history/ is full.
+#                          Prints the promotion checklist and a plan; only
+#                          --confirm executes. Non-destructive (moves + zips).
+#   gc [--confirm]         delete oldest archive/ tarballs over the cap
+#                          (oldest-first). The one destructive step; the files
+#                          remain recoverable in git history. --confirm executes.
+#
+# Config: memory/workflows/history.conf (key=value), absent = defaults:
+#   group_size=20     sessions per group before a close is due
+#   history_keep=3    closed groups kept readable in history/ before archiving
+#   archive_keep=12   tarballs kept in archive/ before gc deletes oldest-first
+
+set -u
+
+say() { printf '%s\n' "$*"; }
+err() { printf 'context-history: %s\n' "$*" >&2; }
+die() { err "$*"; exit 2; }
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 2
+CORE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd) || exit 2
+CONTEXT_DIR=$(dirname -- "$CORE_DIR")
+MEMORY_DIR=$CONTEXT_DIR/memory
+HISTORY_DIR=$CONTEXT_DIR/history
+ARCHIVE_DIR=$CONTEXT_DIR/archive
+SESSIONS_MD=$MEMORY_DIR/agents/sessions.md
+SUMMARY_MD=$MEMORY_DIR/sessions/SUMMARY.md
+GROUP_STATE=$MEMORY_DIR/agents/GROUP
+CONFIG=$MEMORY_DIR/workflows/history.conf
+
+usage() { sed -n '19,32p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+
+conf() { # $1 key, $2 default
+  _v=""
+  [ -f "$CONFIG" ] && _v=$(sed -n "s/^$1=//p" "$CONFIG" | tr -d '\r' | head -n1)
+  case "$_v" in ''|*[!0-9]*) printf '%s' "$2" ;; *) printf '%s' "$_v" ;; esac
+}
+
+group_num() { # current group number, zero-padded 3; init to 001 if unset
+  if [ -f "$GROUP_STATE" ]; then
+    _n=$(sed -n 's/^group=//p' "$GROUP_STATE" | tr -d '\r' | head -n1)
+    case "$_n" in ''|*[!0-9]*) _n=1 ;; esac
+  else
+    _n=1
+  fi
+  printf '%03d' "$_n"
+}
+
+group_opened() {
+  [ -f "$GROUP_STATE" ] && sed -n 's/^opened=//p' "$GROUP_STATE" | tr -d '\r' | head -n1
+}
+
+session_count() { # sessions logged in the current group's registry
+  [ -f "$SESSIONS_MD" ] || { echo 0; return; }
+  # real dated entries only — never the "## YYYY-MM-DD — Session N" template line.
+  # grep -c prints 0 on no match (with exit status 1); capture the value, ignore status.
+  _sc=$(grep -cE '^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*Session ' "$SESSIONS_MD" 2>/dev/null)
+  printf '%s' "${_sc:-0}"
+}
+
+strip_zeros() { # POSIX-safe base-10 int from a zero-padded string (dash has no 10#)
+  _s=$(printf '%s' "$1" | sed 's/^0*//'); [ -n "$_s" ] || _s=0; printf '%s' "$_s"
+}
+
+count_glob() { # $1 dir, $2 pattern — count matching files, 0 if none
+  set -- "$1"/$2
+  [ -e "$1" ] && { printf '%s\n' "$@" | wc -l | tr -d ' '; } || echo 0
+}
+
+today() { date -u +%Y-%m-%d; }
+
+write_group_state() { # $1 num(int) $2 opened
+  mkdir -p "$MEMORY_DIR/agents"
+  {
+    echo "# Current session group — written by context-history. Do not hand-edit."
+    printf 'group=%s\n' "$1"
+    printf 'opened=%s\n' "$2"
+  } > "$GROUP_STATE"
+}
+
+cmd_status() {
+  _n=$(group_num); _c=$(session_count); _gs=$(conf group_size 20)
+  _hk=$(conf history_keep 3); _ak=$(conf archive_keep 12)
+  _hc=$(count_glob "$HISTORY_DIR" 'group-*.md')
+  _acount=$(count_glob "$ARCHIVE_DIR" 'group-*.tar.gz')
+  say "Current group:   group-$_n (opened $(group_opened | grep . || echo '—'))"
+  say "Sessions in it:  $_c / $_gs"
+  say "history/:        $_hc closed group(s) readable (keep $_hk)"
+  say "archive/:        $_acount tarball(s) (cap $_ak)"
+  if [ "$_c" -ge "$_gs" ]; then
+    say ""
+    say "A close is DUE (>= group_size). Run: context-history close   (then --confirm)"
+  fi
+  [ "$_acount" -gt "$_ak" ] && say "gc is DUE: archive/ over cap. Run: context-history gc --confirm"
+  return 0
+}
+
+reset_registry() { # start a fresh empty registry for the new group
+  {
+    echo "# Agent Sessions (append-only within the current group)"
+    echo ""
+    echo "One entry per agent session in the CURRENT group, newest at the bottom."
+    echo "Closed groups live in .context/history/ and .context/archive/ (not read"
+    echo "at session start). Rotate with context-history."
+    echo ""
+    echo "<!-- TEMPLATE — copy below the last entry and FILL IN every placeholder:"
+    echo "---"
+    echo "## YYYY-MM-DD — Session N"
+    echo "- **Agent:** <name> | **Model:** <model id> | **Platform:** <machine/sandbox + OS> | **Role:** <engineer, or overlay from .context/core/roles/> | **Core:** <version>"
+    echo "- **Task:** <what this session set out to do>"
+    echo "- **Commits:** <count> (<first-sha>..<last-sha>)"
+    echo "- **Outcome:** <done / partial / blocked — one line>"
+    echo "- **Open items:** <pointers into tasks/backlog.md, or \"none\">"
+    echo "- **Notes:** .context/memory/sessions/<date>-<N>/notes.md  (or \"none\")"
+    echo "-->"
+  } > "$SESSIONS_MD"
+}
+
+reset_summary() {
+  {
+    echo "# Session Summary (current group — prunable)"
+    echo ""
+    echo "One line per session: date, agent, model, one-line outcome. Closed"
+    echo "groups are in .context/history/. Keep this small."
+  } > "$SUMMARY_MD"
+}
+
+promotion_checklist() {
+  say "Before closing this group, confirm every open thread is captured in a"
+  say "DURABLE file (it will NOT carry over implicitly — the new group starts clean):"
+  say "  - open work            -> tasks/backlog.md"
+  say "  - decisions in force    -> plans/decisions.md"
+  say "  - constraints/workarounds -> inefficiencies/log.md"
+  say "  - unresolved protocol traps -> flaws/log.md"
+  say "  - user preferences       -> user/preferences.md"
+  say "Durable files persist across the boundary; the session stream resets."
+}
+
+roll_oldest_history_to_archive() {
+  _hk=$(conf history_keep 3)
+  while :; do
+    _hc=$(count_glob "$HISTORY_DIR" 'group-*.md')
+    [ "$_hc" -gt "$_hk" ] || break
+    _oldest=$(ls "$HISTORY_DIR"/group-*.md 2>/dev/null | sort | head -n1)
+    [ -n "$_oldest" ] || break
+    _base=$(basename "$_oldest" .md)
+    mkdir -p "$ARCHIVE_DIR"
+    if command -v tar >/dev/null 2>&1; then
+      ( cd "$HISTORY_DIR" && tar czf "$ARCHIVE_DIR/$_base.tar.gz" "$_base.md" ) \
+        && rm -f "$_oldest" \
+        && say "archived $_base -> archive/$_base.tar.gz" \
+        || { err "could not archive $_base"; break; }
+    else
+      err "tar not found — leaving $_base in history/"; break
+    fi
+  done
+}
+
+cmd_close() {
+  _milestone=""; _confirm=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --milestone) [ $# -ge 2 ] || die "--milestone needs a label"; _milestone=$2; shift 2 ;;
+      --confirm) _confirm=1; shift ;;
+      -h|--help) usage ;;
+      *) die "unknown argument '$1'" ;;
+    esac
+  done
+  [ -f "$SESSIONS_MD" ] || die "no $SESSIONS_MD — is this a bootstrapped project?"
+  _n=$(group_num); _c=$(session_count); _opened=$(group_opened | grep . || today)
+  _int=$(strip_zeros "$_n"); _next=$(printf '%03d' "$(( _int + 1 ))")
+  _target=$HISTORY_DIR/group-$_n.md
+  say "== Closing group-$_n =="
+  say "sessions: $_c   opened: $_opened   closing: $(today)${_milestone:+   milestone: $_milestone}"
+  say ""
+  promotion_checklist
+  say ""
+  say "Plan:"
+  say "  - write $_target (condensed registry + summaries)"
+  say "  - reset the live registry + SUMMARY for a new group-$_next"
+  say "  - roll the oldest readable group into archive/ if history/ exceeds keep"
+  if [ "$_confirm" -ne 1 ]; then
+    say ""
+    say "Dry run — nothing changed. Re-run with --confirm once promotion is done."
+    return 0
+  fi
+
+  mkdir -p "$HISTORY_DIR"
+  {
+    printf '# Session group %s (closed %s)\n\n' "$_n" "$(today)"
+    printf -- '- Opened: %s\n- Closed: %s\n- Sessions: %s\n' "$_opened" "$(today)" "$_c"
+    [ -n "$_milestone" ] && printf -- '- Milestone: %s\n' "$_milestone"
+    printf '\nNot read at session start — audit/lookback only.\n\n'
+    printf '## Session registry\n\n'
+    cat "$SESSIONS_MD"
+    if [ -f "$SUMMARY_MD" ]; then printf '\n## Summaries\n\n'; cat "$SUMMARY_MD"; fi
+  } > "$_target" || die "could not write $_target"
+  say "wrote $_target"
+
+  reset_registry
+  reset_summary
+  write_group_state "$(( _int + 1 ))" "$(today)"
+  say "started group-$_next"
+  roll_oldest_history_to_archive
+  say ""
+  say "Commit as: chore(context): close session group-$_n, open group-$_next"
+}
+
+cmd_gc() {
+  _confirm=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --confirm) _confirm=1; shift ;;
+      -h|--help) usage ;;
+      *) die "unknown argument '$1'" ;;
+    esac
+  done
+  _ak=$(conf archive_keep 12)
+  _acount=$(count_glob "$ARCHIVE_DIR" 'group-*.tar.gz')
+  if [ "$_acount" -le "$_ak" ]; then
+    say "archive/ holds $_acount tarball(s), cap $_ak — nothing to delete."
+    return 0
+  fi
+  _over=$(( _acount - _ak ))
+  say "archive/ over cap ($_acount > $_ak). Oldest-first, $_over tarball(s) to delete:"
+  _list=$(ls "$ARCHIVE_DIR"/group-*.tar.gz 2>/dev/null | sort | head -n "$_over")
+  printf '%s\n' "$_list" | sed 's/^/  - /'
+  say "(recoverable from git history after deletion — this only bounds the working tree)"
+  if [ "$_confirm" -ne 1 ]; then
+    say "Dry run — nothing deleted. Re-run with --confirm to delete."
+    return 0
+  fi
+  printf '%s\n' "$_list" | while IFS= read -r _f; do [ -n "$_f" ] && rm -f "$_f" && say "deleted $(basename "$_f")"; done
+  say "Commit as: chore(context): gc archive/ to the $_ak-tarball cap"
+}
+
+CMD=${1:-}; [ $# -gt 0 ] && shift
+case "$CMD" in
+  status) cmd_status "$@" ;;
+  close)  cmd_close "$@" ;;
+  gc)     cmd_gc "$@" ;;
+  ''|-h|--help|help) usage ;;
+  *) die "unknown command '$CMD' (try: context-history help)" ;;
+esac

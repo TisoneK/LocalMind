@@ -1224,3 +1224,20 @@ if literally nothing slowed you down.
 - **Cause:** cwd persistence between Bash calls + relative paths for cross-cutting artifacts (the trap is a cousin of S424's pipe-truncation item — both are "relative-path assumptions" in shell work).
 - **Workaround / fix:** use absolute paths for anything outside the current call's own output (`cp ... C:/Users/tison/Dev/LocalMind/scratch/s427/tracehome/settings.json`), then `ls` the EXACT destination before booting the harness.
 - **Prevent next time:** harness scripts could stage their own scratch home (copy settings if missing) instead of relying on a manual pre-step — noted as a small harness improvement, not done this session.
+
+---
+## 2026-09-06 — ZCode / glm-5.3-flash (Session 429)
+
+- **Problem:** session was interrupted mid-closeout ("Continue" resumed later); the resumed turn
+  re-ran a commit chain whose first half had already executed — the re-run failed confusingly
+  ("diverged... nothing to commit") and left a stray commit-message file behind, costing a
+  state-reconstruction round-trip.
+- **Cost:** ~5 min (inspect branch state, confirm both commits intact, delete the stray file).
+- **Cause:** resuming an interrupted tool chain without first re-checking `git log`/`git status`;
+  `git commit` on an already-committed staged set reports its state through a confusing mix of
+  diverged-branch and clean-tree messages.
+- **Workaround / fix:** before re-running any mutating chain after an interruption, run
+  `git log --oneline -3 && git status --porcelain` and reconcile against intended state; only then
+  execute what is actually missing.
+- **Prevent next time:** idempotency check before closeout commit chains (status first, commit
+  second) — and prefer one commit per tool call during resumable closeouts.

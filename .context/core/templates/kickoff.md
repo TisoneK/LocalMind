@@ -111,21 +111,21 @@ sh .context/core/bin/context-sync verify    # integrity: core matches its MANIFE
 sh .context/core/bin/context-sync status    # drift: is a newer core available?
 ```
 
-On **Windows** (no POSIX shell) run the PowerShell port instead — same
-commands, same output:
+On **Windows** (no POSIX shell) run the `.cmd` launcher instead — it runs
+the `.ps1` port with `-ExecutionPolicy Bypass` (same commands, same output):
 
 ```powershell
-pwsh -File .context/core/bin/context-sync.ps1 verify
-pwsh -File .context/core/bin/context-sync.ps1 status
+.context/core/bin/context-sync.cmd verify
+.context/core/bin/context-sync.cmd status
 ```
 
 - `verify` fails → core was hand-edited or corrupted. Run
   `sh .context/core/bin/context-sync rollback` (Windows:
-  `pwsh -File .context/core/bin/context-sync.ps1 rollback`), log a flaw in
+  `.context/core/bin/context-sync.cmd rollback`), log a flaw in
   `memory/flaws/log.md`, continue on the restored core.
 - `status` reports a newer core with the **same MAJOR** → run
-  `sh .context/core/bin/context-sync update` (Windows: the `.ps1` with
-  `update`) — it replaces `core/` only,
+  `sh .context/core/bin/context-sync update` (Windows:
+  `.context/core/bin/context-sync.cmd update`) — it replaces `core/` only,
   memory is never touched — then commit as
   `chore(context): update core to <version>`, and read the new
   `core/CHANGELOG.md` entries.
@@ -170,7 +170,7 @@ sh .context/core/bin/context-collab check --session <SESSION_ID> --issue <ISSUE_
 `status` opens with a **Recent chatter** feed of notes — read it first. A
 `release`/`handoff` closes a claim by citing its event ID or by sharing its
 session+issue and overlapping paths, so citing only the commit SHA is fine.
-On Windows use `pwsh -File .context/core/bin/context-collab.ps1` with the
+On Windows use `.context/core/bin/context-collab.cmd` with the
 same `emit`, `status`, and `check` arguments.
 
 Publish coordination events on the shared event-only branch
@@ -205,7 +205,7 @@ sh .context/core/bin/context-gates run integration --session <SESSION_ID> --issu
 sh .context/core/bin/context-gates run exit
 ```
 
-On Windows use `pwsh -File .context/core/bin/context-gates.ps1` with the
+On Windows use `.context/core/bin/context-gates.cmd` with the
 same commands. A failing gate blocks the next lifecycle transition; record
 the exact failing command and output in the session notes or event trail.
 

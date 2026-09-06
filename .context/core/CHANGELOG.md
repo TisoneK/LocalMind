@@ -10,7 +10,182 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
----
+## 0.14.0 — 2026-09-06
+
+**Windows verified for real: three latent port bugs fixed, `.cmd`
+launchers remove the execution-policy hurdle.** 0.13.1 made the `.ps1`
+ports *parse* under Windows PowerShell 5.1; this release makes them *run*.
+Every port was executed end-to-end against a bootstrapped fixture project
+(registry hygiene, the full three-zone history lifecycle, the
+collaboration trail, the gates), which surfaced defects a parse-level fix
+cannot catch.
+
+- **`context-collab-check.ps1` crashed on every invocation.** It assigned
+  the automatic `$args` variable (a no-op under `Set-StrictMode`) and its
+  `if`-expression `@()` unwrapped to `$null`, so the argument loop died on
+  `$null.Count`. The array is now built by direct assignment. 0.9.1 had
+  shipped this file as "Windows-verified"; only its parse had ever been
+  exercised.
+- **`context-history.ps1 close` / `gc` crashed when run without flags.**
+  `$RestArgs.Count` on a `$null` `ValueFromRemainingArguments` parameter
+  is fatal under strict mode. Both such parameters now default to `@()`
+  (`context-mem.ps1` hardened the same way).
+- **`context-history.ps1` never archived anything.** It passed a
+  `C:\...` archive path to `tar`, which GNU tar (MSYS, often first on
+  PATH) parses as remote *host* `C` ("Cannot connect to C: resolve
+  failed"). The roll now runs tar from inside `history/` with a relative
+  `-f` path — the exact pattern the POSIX port already used — so bsdtar
+  (System32 `tar.exe`) and GNU tar behave identically.
+- **`context-collab.ps1` rejected its own documented `--re` flag.**
+  PowerShell parameter prefix-matching bound `--re` to the `$Rest`
+  parameter (re ⊂ Rest), consuming it and derailing binding of every
+  later flag ("parameter cannot be found '-session'"). The parameter is
+  renamed `$Extra`; `emit assessment --re <id>` and friends work.
+- **New `context-*.cmd` launchers**, one per `.ps1` port. A `.cmd` file is
+  executed by cmd.exe regardless of the PowerShell execution policy, and
+  starts its port with `powershell -NoProfile -ExecutionPolicy Bypass
+  -File`. The documented Windows invocation becomes e.g.
+  `.context/core/bin/context-mem.cmd check` — no `Set-ExecutionPolicy`
+  step. Windows PowerShell 5.1 is targeted deliberately: it ships with
+  every Windows 10+ install, while pwsh 7 is an optional add-on. All
+  docs (kickoff, both protocol editions, schema, README, QUICKSTART) now
+  show the `.cmd` form.
+
+**Migration from 0.13.x:** `update` installs the launchers with the rest
+of `core/`; no memory changes and no behavior change for POSIX. Windows
+agents should switch to the `.cmd` form; `pwsh -File` keeps working where
+the policy allows it.
+
+## 0.13.1 — 2026-09-06
+
+**ASCII-clean the new PowerShell ports.** `context-mem.ps1` and
+`context-history.ps1` (0.10.0–0.13.0) shipped with UTF-8 punctuation
+(em-dashes, arrows) in string literals. Windows PowerShell 5.1 decodes the
+`.ps1` as ANSI and fails to parse non-ASCII bytes — the same defect 0.9.1
+fixed for the other ports. Both files are now ASCII-only, matching the
+standing rule. POSIX ports unchanged (sh handles UTF-8). No behavior change;
+manifest regenerated.
+
+## 0.13.0 — 2026-09-06
+
+**Session history is grouped and bounded (three-zone lifecycle).**
+`agents/sessions.md` was append-only *forever* — session history grew without
+bound and sat in the startup read (LocalMind's registry alone spans dozens of
+sessions). This introduces session **groups** that rotate through three zones
+so `memory/` only ever holds the live group.
+
+- **New zones `history/` and `archive/`** under `.context/` (created by
+  bootstrap and installed by `update` for existing projects). Neither is read
+  at session start — the schema and both editions state this. `memory/`
+  (live) → `history/` (closed, readable `group-<NNN>.md`) → `archive/` (cold
+  `group-<NNN>.tar.gz`) → `gc`.
+- **New `context-history` + `context-history.ps1`:** `status` (current group,
+  session count, zone sizes, due?), `close [--milestone L] [--confirm]`
+  (consolidate the live group into `history/`, start a fresh group, roll the
+  oldest readable group into `archive/`), `gc [--confirm]` (delete oldest
+  `archive/` tarballs over the cap, oldest-first, git-recoverable). Destructive
+  steps are gated behind `--confirm` and print a dry-run plan first.
+- **A "group" is the session-history subtree only** — `agents/sessions.md`,
+  `sessions/SUMMARY.md`, `sessions/<date-N>/`. Durable facts (`user/`,
+  `system/`, decisions, backlog, flaws, inefficiencies) and collaboration
+  events never rotate; they persist in `memory/` with their own hygiene. This
+  scoping is deliberate: resetting all of `memory/` per group would break the
+  durable-facts spine (ADRs are respected, not relitigated).
+- **No implicit carryover.** `close` prints a promotion checklist and refuses
+  to execute without `--confirm`: every open thread must already live in its
+  durable domain file before the group closes, so the new group starts clean —
+  the spec's "no carryover" enforced at the boundary, not by wiping memory.
+- **Tunable, weak-agent-safe defaults** in `memory/workflows/history.conf`:
+  `group_size=20`, `history_keep=3`, `archive_keep=12`. `agents/sessions.md`
+  becomes the *current group's* registry (backward-compatible — rotation only
+  begins at the first `close`).
+
+**Migration from 0.12.x:** `update` creates `history/`, `archive/`,
+`history.conf`, and `agents/GROUP` if absent, and never clobbers an existing
+one. Existing `agents/sessions.md` keeps growing until the first
+`context-history close`, which starts the rotation. Archives are `.tar.gz` on
+both platforms (the `.ps1` uses `tar.exe`, shipped on Windows 10+).
+
+## 0.12.0 — 2026-09-05
+
+**Bound the durable logs (context pruning).** The append-only durable logs
+(`flaws/log.md`, `inefficiencies/log.md`) grow forever and sit in the
+mandatory startup reading order, so a mature project reads mostly resolved
+history every session (LocalMind: flaws 614 lines / 52 entries,
+inefficiencies 1172 lines / 108 entries). The session layer already had a
+cold-storage story (disposable notes, prunable SUMMARY.md); the durable
+layer had none.
+
+- **`context-mem prune`:** advises archiving resolved history out of the
+  durable logs. It reports each log's size and how many entries are
+  explicitly marked `RESOLVED` / `superseded` / fixed — the archive-eligible
+  ones — and `--list` names them. It **never moves or deletes anything**;
+  archiving stays a deliberate cut-and-paste into a companion `archive.md`
+  (which stays in git, grep-able). Conservative by design: **only an
+  explicit closed marker makes an entry eligible; age alone never does**, so
+  an unresolved flaw is never archived out from under the next agent.
+- **The archive convention** is documented in both editions (beside the
+  SUMMARY.md prune rule), the schema, and the `flaws/` and `inefficiencies/`
+  log templates: move a resolved entry verbatim into `archive.md`; startup
+  reads only the active log.
+
+**Migration from 0.11.x:** none — additive advisory + wording. Nothing is
+moved automatically; run `context-mem prune` when a log feels heavy and
+archive the entries it flags.
+
+## 0.11.0 — 2026-09-05
+
+**Keep `.context` vocabulary out of product code.** The protocol trains
+agents to think in ADRs, bug IDs, and session numbers — and that vocabulary
+leaks into product artifacts. Across the fleet, product source cites
+`.context`-internal terms in docstrings and comments
+(`/** ADR-34 B-8: bounded evidence entry */`, `"""ADR-11 one-time data
+copy..."""`) — dangling pointers into a `.context/` that anyone cloning only
+the product repo does not have.
+
+- **`context-mem lint`:** a new subcommand (POSIX + PowerShell). It scans the
+  **staged** product diff (everything outside `.context/`) and fails if an
+  added line cites an ADR number (`ADR-N`), a bug ID (`B-YYYY-MM-DD-N`),
+  `"per ADR"`, or a `.context/` path. `.context/` files are exempt — they
+  legitimately use the vocabulary. (`Session N` is deliberately *not*
+  flagged: apps have a legitimate "session" domain noun.)
+- **The one-way-linkage rule.** Memory may reference product code; product
+  code must never reference memory. Added as a pitfall in both editions, the
+  `AGENTS.md` "two surfaces" rule, and a schema invariant. If the reason for
+  a decision matters, state it in plain words in the docstring; the ADR link
+  lives in `plans/decisions.md`, which points at the code — never the
+  reverse. The pre-commit step runs `context-mem lint` for product commits.
+
+**Migration from 0.10.x:** none — additive subcommand + wording. Existing
+product code that already cites `.context` vocabulary will fail
+`context-mem lint` on the next edit to those lines; rephrase the docstring to
+stand alone and move the ADR link into `plans/decisions.md`.
+
+## 0.10.0 — 2026-09-05
+
+**Update-in-place registries stop duplicating.** `system/ai-models.md` and
+`system/environments.md` are update-in-place (one entry per key), but the
+append-only invariant is stated so loudly that agents apply it here too and
+*append* a corrected entry instead of editing the existing one — so a
+registry accumulates two rows for one key with conflicting counts (observed
+in the fleet: one agent+model registered three times, sessions 8/10/30).
+
+- **`context-mem` + `context-mem.ps1`:** a new helper. `context-mem check`
+  flags a duplicated key in the update-in-place registries —
+  `ai-models.md` keyed by (Agent, Model), `environments.md` by its
+  "Identify by:" line. It is the inverse of the append-only rule: for these
+  files, a *second* entry for an existing key is the defect. Different
+  models for one agent are separate rows (expected), not duplicates.
+- **The distinction is now stated as loudly as append-only.** Both protocol
+  editions' top rules, the `AGENTS.md` digest, the `ai-models.md` header,
+  and the schema now say: correct an update-in-place entry by *editing* it,
+  never by appending a duplicate — the prior value is safe in git history,
+  so editing loses nothing. The exit step runs `context-mem check`.
+
+**Migration from 0.9.x:** none — additive helper + wording. Existing
+registries that already have a duplicated key will fail `context-mem check`;
+merge the rows/blocks into one (sessions accumulate) and the old values
+remain in git history.
 
 ## 0.9.1 — 2026-09-05
 

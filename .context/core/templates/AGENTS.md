@@ -45,20 +45,28 @@ If you read nothing else, obey these rules:
    `claim → work → release`. Save the `proposal → assessment → agreement`
    ceremony for a genuine conflict (same paths, incompatible changes).
    Before each next action run `context-gates checkpoint`; before commits,
-   integration, and exit run the matching gate. On Windows, use the `.ps1`
-   ports.
-6. **Append-only files are append-only:** `agents/sessions.md`,
-   `tasks/backlog.md`, `plans/decisions.md`, `flaws/log.md`,
-   `inefficiencies/log.md`. Add at the bottom; never edit or delete
-   past entries. Collaboration event files are stronger: immutable,
-   one event per file; emit a correction instead of editing one.
+   integration, and exit run the matching gate. On Windows, use the `.cmd`
+   launchers (they run the `.ps1` ports; no execution-policy setup).
+6. **Know which kind of file you're in.** *Append-only* logs
+   (`agents/sessions.md`, `tasks/backlog.md`, `plans/decisions.md`,
+   `flaws/log.md`, `inefficiencies/log.md`) grow at the bottom — never edit
+   or delete past entries. *Update-in-place* registries
+   (`system/ai-models.md`, `system/environments.md`) have one entry per key:
+   correct them by **editing** the entry, never by appending a duplicate
+   (its old value is in git history). `context-mem check` flags a dup key.
+   Collaboration event files are stronger still: immutable, one event per
+   file; emit a correction instead of editing one.
 7. **No secrets in tracked files, ever.** Values go only in
    `.context/memory/secrets/` (self-gitignored). Never echo a secret or
    token in chat, logs, or commit messages.
 8. **Two surfaces, two prefixes:** editing product code = normal commit
    prefixes; editing `.context/` = `chore(context):` (reports:
    `docs(review):`). Never mix both surfaces in one commit. Collaboration
-   events are separate immutable context commits.
+   events are separate immutable context commits. And keep the surfaces
+   apart in *content* too: never cite `.context` vocabulary (an ADR number,
+   a bug ID, a `.context/` path) in a product docstring or comment — it's a
+   dangling pointer for anyone reading only the product repo. `context-mem
+   lint` flags it in your staged diff.
 9. **The session is not done until everything is committed AND pushed**,
    the session is logged in `.context/memory/agents/sessions.md`, and
    `.context/memory/tasks/current.md` is cleared. If the user has to
