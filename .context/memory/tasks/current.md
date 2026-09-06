@@ -1,24 +1,23 @@
 # Current Task
 
-**Status:** IDLE — Sessions 425–427 closed (their records live in
-`agents/sessions.md` + `sessions/SUMMARY.md`; S427 shipped
-evidence-grounded memory writes, live-verified). **Sessions 429 + 430 closed:
-core updated 0.9.1 → 0.16.1** (430 = text-only patch, ports' help now shows the .cmd form) (`38d58c0` — source repo verified against
-its own manifest BEFORE updating, per the S426 lesson; the 0.13.1
-corruption had already been repaired upstream). Two package flaws found +
-logged: the `.ps1` update path skips the 0.13.0 zone migration
-(history/, archive/, history.conf, agents/GROUP — installed manually per
-the sh-port commands; RESOLVED upstream the same day by 0.16.0 — the .ps1
-update now backfills all zones in one run via `migrate --backfill-only`,
-exercised live in round 2), and `context-mem lint` false-positives on the
-root AGENTS.md digest (still open). AGENTS.md digest + kickoff `.cmd`
-invocations refreshed from the new templates; `memory/agents/roster.md`
-installed (0.15.0 named-persona roster — current-group team board; S429's
-row: Ada | S429); duplicate Super Z / GLM-5.2 registry row merged
-(`context-mem check` passes). **S428 (thinker-concurrent) may still be in
-flight** in worktree `../LocalMind-zcode-s428` (branch
-`collab/localmind-thinker-concurrent/...`) — check the event trail before
-touching loop.py/thinker/CHANGELOG.md.
+**Status:** IDLE — **S431 (Kwame) chat-hygiene TRIAGE closed.** A live chat-export +
+UI review (session-1788669567862 + the sidebar) produced six new backlog items
+**B-2026-09-06-2 .. -7**: chat export drops user messages + assistant-only count
+(-2), full-fidelity export schema v3 per the owner's "capture everything" directive
+(-3), fast-path canned-greeting misfire on "How are you?" + fabricated provider
+metrics (-4), test runs polluting the real chat store (~40 residue chats, -5),
+raw-markdown sidebar previews (-6), and the Agent-Workspace "Child agents…" copy
+that contradicts ADR-53 Parent-only (-7). **Owner is launching collab fix agents
+next:** shared session `localmind-chat-hygiene`, one issue per backlog ID (e.g.
+`--issue B-2026-09-06-4`); pick a roster name, worktree per the 2026-09-05
+override, claim → work → release. -2/-3 share a surface (one agent can take
+both). -4 touches the agent-loop fast path → the live-testing bar applies.
+-5's cleanup needs an owner-approved delete list (real chats are interleaved).
+**S428 (thinker-concurrent) claim STILL unreleased** — loop.py/thinker/CHANGELOG.md
+remain its scope; check the event trail first. (Prior state: S429/S430 closed the
+core update 0.9.1 → 0.16.1, incl. the 0.13.0 zone-migration flaw resolved upstream
+in 0.16.0; `context-mem lint` false-positives on the root AGENTS.md digest remain
+open in flaws/log.md.)
 
 **Feature:** none
 
