@@ -54,3 +54,7 @@ Source verified against its own manifest BEFORE updating (S426 lesson; corruptio
 ## Session 430 (2026-09-06) — ZCode/local Windows — core sync 0.16.0 → 0.16.1 (text-only patch)
 
 Source verified (ca8b364), one-run update + backfill, verify green; help text now shows the .cmd form (live-checked); roster re-tagged Ada S430. No templates/migration owed. | key: when the package repo is mid-development, verify the source's own manifest before every round and re-check the CHANGELOG for the exact change surface.
+
+## Session 431 (2026-09-06) — ZCode/local Windows — chat-hygiene triage (6 findings backlogged for collab fix agents)
+
+Live chat-export + UI review became backlog **B-2026-09-06-2..-7**: export drops user messages + assistant-only count (-2); full-fidelity export schema v3, owner's "capture everything" directive (-3); fast-path canned-greeting misfire on "How are you?" + fabricated provider metrics (-4); test suites polluting the real chat store, ~40 residue chats (-5); raw-markdown previews (-6); Agent-Workspace copy vs ADR-53 Parent-only (-7). Collab fix agents will claim the IDs under session `localmind-chat-hygiene`. | key: fabricated fast-path stats are detectable by arithmetic — user-text-only promptTokens (5/8 vs a real 432) is the canned-response fingerprint, and the sidebar aggregates reconcile exactly; the exporter drops user turns the title generator clearly saw.

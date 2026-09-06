@@ -1241,3 +1241,17 @@ if literally nothing slowed you down.
   execute what is actually missing.
 - **Prevent next time:** idempotency check before closeout commit chains (status first, commit
   second) — and prefer one commit per tool call during resumable closeouts.
+
+## 2026-09-06 — ZCode / glm-5.3-flash (Session 431)
+
+- **Problem:** `context-collab.cmd emit claim --body-file -` (stdin/heredoc) exits code 2 with no
+  useful message; only a real file path works. Also: a fresh collab worktree has no
+  `node_modules`/`.venv`, so the pre-commit gate's tsc/ruff lines can't run in the worktree itself.
+- **Cost:** ~2 min (one failed emit + one relocated gate run).
+- **Cause:** the .cmd/.ps1 wrapper reads the body-file arg as a literal path (no stdin support);
+  venv/node_modules are machine-local and not checked out.
+- **Workaround / fix:** write the claim body to a temp file and pass its path; for context-only
+  diffs, run the gate components (tsc, ruff) in the main checkout at the identical commit and note
+  the substitution.
+- **Prevent next time:** document `--body-file <real-path>` in the collab README's Windows example
+  (package fix candidate — flaws log is the wrong surface; this is product-adjacent tooling).
