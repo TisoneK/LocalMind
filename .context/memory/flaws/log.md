@@ -693,3 +693,18 @@ logged in inefficiencies/log.md — no product behavior was wrong.
   `context-mem lint`, in both ports.
 - **Status:** open (worked around this session by documenting the false positive and running the
   remaining pre-commit components; the flagged line is the digest quoting its own rule).
+
+## 2026-09-06 — ZCode / glm-5.3-flash (Session 429) — ps1 update migration gap RESOLVED by package 0.16.0
+
+- **Resolution:** the flaw above (context-sync.ps1 update skips the 0.13.0
+  zone migration) is fixed upstream by core 0.16.0 (TisoneK/.context
+  `edf6920`, landed ~40 min after S429 logged it): "The PowerShell `update`
+  caught up" — it now installs history/, archive/, roster.md, GROUP, and
+  history.conf through the shared `backfill_project` factor, and `update`
+  re-execs the just-installed script's `migrate --backfill-only`, so one run
+  fully migrates. S429's second round (0.14.0 → 0.16.0) exercised the fixed
+  path: update + backfill completed in ONE run, "all zones/files present;
+  core verified" — including the new 0.15.0 roster.md, which the old .ps1
+  would also have missed.
+- **Status:** fixed in package `edf6920` (0.16.0, 2026-09-06); verified on
+  this repo.

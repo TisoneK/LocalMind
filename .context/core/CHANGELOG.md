@@ -10,6 +10,72 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 0.16.0 — 2026-09-06
+
+**Sync is one command and fill again.** Each release since 0.9.x added files
+or zones that only `update`'s versioned backfill installed — and because that
+backfill lived in the *old* script that runs first, migrating an old project
+meant running `update` twice, guessing about CRLF, and hand-creating new
+zones. This restores the old simplicity.
+
+- **New `context-sync migrate` (POSIX + PowerShell + `.cmd`):** the
+  one-command bring-current. It updates the core to the newest reachable
+  same-MAJOR version, then **backfills every missing zone/file** (`history/`,
+  `archive/`, `CLAUDE.md`, `.gitattributes`, `roster.md`, `history.conf`,
+  `GROUP`, …), LF-normalizes, relocks, and verifies — then prints the single
+  manual step: fill the project facts. Idempotent; safe to re-run; doubles as
+  a repair command for a project missing any current file.
+- **The backfill is factored out** (`backfill_project`) as the one definition
+  of "what a fully-migrated project contains" — adding a new template file to
+  that list is all it takes to teach migration about it. Both `update` and
+  `migrate` go through it.
+- **`update` now fully migrates in one run** (from this version on): after
+  the core swap it re-execs the *just-installed* script's `migrate
+  --backfill-only`, so the new script — which knows every new file — does the
+  backfill. No more "run update twice."
+- **The PowerShell `update` caught up:** it had only ever backfilled README /
+  `.gitattributes` / `CLAUDE.md`, missing the `history/`, `archive/`,
+  `roster.md`, `GROUP`, and `history.conf` a 0.13+ project needs. It now
+  installs all of them through the shared backfill.
+- **MIGRATION.md rewritten** to lead with the one-command path for any
+  0.2.0+ project (with the old-script fallback), keeping the pre-0.2.0
+  flat-layout `git mv` steps as a clearly-marked special case that ends in
+  the same `migrate`.
+
+**Migration to 0.16.0 itself:** from an older project, `update` once (installs
+this script) then `migrate` — or just `migrate` if the vendored script already
+has it. From 0.16.0 forward, one `update` (or one `migrate`) is enough.
+
+## 0.15.0 — 2026-09-06
+
+**Agents are named coworkers, not "peers".** Collaboration works, but agents
+identified as "peer" or a bare `S427`. Now each agent picks a real name and
+the team reads as people in a workplace — with the human as the supervisor.
+
+- **New `agents/roster.md`** (update-in-place, current-group-scoped): a team
+  board, one row per person — a chosen human **Name**, a **codename**
+  `S<NNN>` (session number), the **model**, and one line on what they're
+  doing. An agent adds its row at session start and presents itself by that
+  name everywhere ("John (S427)"), in events and when reporting to the
+  supervisor.
+- **Name and codename are each unique within the group.** `context-mem
+  check` now validates the roster and flags a duplicate name or codename
+  (there is only one John on the team at a time) — the same update-in-place
+  discipline as the other registries.
+- **The roster rotates with the group.** `context-history close` captures
+  the closed group's roster into `history/group-<NNN>.md` and resets a fresh
+  empty roster for the new group.
+- **Docs reframed to the workplace metaphor:** the collaboration README (new
+  "Who you are — pick a name" section), both protocol editions (a step 0 in
+  the light path), the AGENTS digest, and the schema now say: pick a name,
+  present yourself by it, the human is the supervisor. `--agent` takes your
+  name, so the chatter feed reads "John: ...".
+
+**Migration from 0.14.x:** `update` installs `agents/roster.md` if absent.
+Existing agents just start adding rows; nothing else changes. The `.ps1`
+port changes (roster check + roster reset) are ASCII-clean but owe the usual
+Windows runtime pass.
+
 ## 0.14.0 — 2026-09-06
 
 **Windows verified for real: three latent port bugs fixed, `.cmd`

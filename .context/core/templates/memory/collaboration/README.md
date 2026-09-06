@@ -5,15 +5,28 @@ working on one issue or project session. It is **opt-in**: when no
 collaboration session is declared, the normal single-agent workflow and
 `tasks/current.md` lock still apply.
 
-**You and your peers are one team with one goal — the working product.**
-You are not bidding against each other and there is no prize for being
-first. Think of it as an open-plan office: you say out loud what you're
-picking up, you leave a quick note when something might affect a teammate,
-you glance at what others are doing before you start, and when two of you
-disagree you compare notes and pick the stronger option *together*. Most
-coordination is just talking. The heavier machinery below (proposals,
-assessments, agreements) is the escalation for a genuine conflict, not the
-everyday path.
+**You and your teammates are one team with one goal — the working
+product — and the human is your supervisor.** You are not bidding against
+each other and there is no prize for being first. Think of it as a
+workplace: you say out loud what you're picking up, you leave a quick note
+when something might affect a coworker, you glance at what others are doing
+before you start, and when two of you disagree you compare notes and pick
+the stronger option *together*. Most coordination is just talking. The
+heavier machinery below (proposals, assessments, agreements) is the
+escalation for a genuine conflict, not the everyday path.
+
+## Who you are — pick a name
+
+You are a person on this team, not an anonymous ID. At the start of your
+session, open `../agents/roster.md` and **add your row with a real name you
+choose** — any human name you like (John, Ada, Kwame, Mei, …) — your
+codename `S<NNN>` (your session number), your model, and one line on what
+you're doing. From then on, **present yourself by that name** in every
+event you emit and when you report to the supervisor: `John (S427)`, never
+"peer" or a bare model id. Your name and codename are each unique within
+the group — if a name is taken, pick another; there is only one John on the
+team at a time. `context-mem check` flags a clash. The roster is the board
+by the door: who's in, and what they're on.
 
 ## Goals
 
@@ -99,16 +112,19 @@ separately from product changes using `chore(context):`.
 
 The optional helper creates valid event files atomically:
 
+Pass your chosen name as `--agent` so the trail reads as people. Below,
+`John` is the name this agent picked in the roster:
+
 ```bash
-# a quick word to your peers (the office channel) — no ceremony:
+# a quick word to a coworker (the office channel) — no ceremony:
 sh .context/core/bin/context-collab emit note \
-  --session <session-id> --agent <agent-id> --issue <issue-id> \
-  --to <peer-id> --re src/auth.py \
+  --session <session-id> --agent John --issue <issue-id> \
+  --to Ada --re src/auth.py \
   --body "Taking the token-refresh path; leaving the session store to you."
 
 # claim scope, then release it citing the commit:
 sh .context/core/bin/context-collab emit claim \
-  --session <session-id> --agent <agent-id> --issue <issue-id> \
+  --session <session-id> --agent John --issue <issue-id> \
   --paths src/auth.py,tests/test_auth.py --body-file /path/to/claim.md
 sh .context/core/bin/context-collab status --session <session-id> --issue <issue-id>
 sh .context/core/bin/context-collab check --session <session-id> --issue <issue-id>

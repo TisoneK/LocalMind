@@ -17,6 +17,9 @@
 #   update [SOURCE]      replace core/ from SOURCE (package clone / unpacked
 #                        archive). Same-MAJOR updates apply directly; a MAJOR
 #                        bump needs -Major. Memory is never touched.
+#   migrate [SOURCE]     ONE-COMMAND bring-current: update core to newest,
+#                        backfill every missing zone/file, normalize, relock,
+#                        verify. Idempotent. Leaves only "fill the facts".
 #   rollback [VERSION]   restore core/ from this project's git history
 #                        (default VERSION: the one in memory/core.lock)
 #   lock                 record the current verified core version in
@@ -251,29 +254,50 @@ function Cmd-Verify {
   exit 3
 }
 
+# Install every current-version scaffolding file the project may be missing.
+# Idempotent; never clobbers existing files. Reads the CURRENT core/templates,
+# so it is the single definition of what a fully-migrated project contains.
+function Backfill-Project {
+  $readme = Join-Path $CORE_DIR 'templates/context-README.md'
+  if (Test-Path -LiteralPath $readme) { Copy-Item -LiteralPath $readme -Destination (Join-Path $CONTEXT_DIR 'README.md') -Force -ErrorAction SilentlyContinue }
+  $attrs = Join-Path $CONTEXT_DIR '.gitattributes'
+  if (-not (Test-Path -LiteralPath $attrs)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/.gitattributes') -Destination $attrs -ErrorAction SilentlyContinue }
+  $claude = Join-Path $PROJECT_DIR 'CLAUDE.md'
+  if (-not (Test-Path -LiteralPath $claude)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/CLAUDE.md') -Destination $claude -ErrorAction SilentlyContinue }
+  $hist = Join-Path $CONTEXT_DIR 'history'
+  if (-not (Test-Path -LiteralPath $hist)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/history') -Destination $hist -Recurse -ErrorAction SilentlyContinue }
+  $arch = Join-Path $CONTEXT_DIR 'archive'
+  if (-not (Test-Path -LiteralPath $arch)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/archive') -Destination $arch -Recurse -ErrorAction SilentlyContinue }
+  $wf = Join-Path $MEMORY_DIR 'workflows'; $ag = Join-Path $MEMORY_DIR 'agents'
+  New-Item -ItemType Directory -Path $wf, $ag -Force -ErrorAction SilentlyContinue | Out-Null
+  $hc = Join-Path $wf 'history.conf'
+  if (-not (Test-Path -LiteralPath $hc)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/memory/workflows/history.conf') -Destination $hc -ErrorAction SilentlyContinue }
+  $grp = Join-Path $ag 'GROUP'
+  if (-not (Test-Path -LiteralPath $grp)) { "group=1`nopened=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))`n" | Set-Content -LiteralPath $grp -NoNewline }
+  $ros = Join-Path $ag 'roster.md'
+  if (-not (Test-Path -LiteralPath $ros)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/memory/agents/roster.md') -Destination $ros -ErrorAction SilentlyContinue }
+}
+
+# Replace .context/core with the source tree, LF-normalized and re-verified.
+function Swap-Core {
+  param([string]$src, [string]$srcV)
+  if (-not (Verify-Tree $src)) { Die 'update source fails its own manifest -- refusing to install a corrupt core' }
+  $stage = Join-Path $CONTEXT_DIR 'core.new'
+  if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+  Copy-Item -LiteralPath $src -Destination $stage -Recurse -Force
+  Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
+  if (-not (Verify-Tree $stage)) { Remove-Item -LiteralPath $stage -Recurse -Force; Die 'staged copy fails verify -- aborting, core untouched' }
+  try { Remove-Item -LiteralPath $CORE_DIR -Recurse -Force; Move-Item -LiteralPath $stage -Destination $CORE_DIR }
+  catch { Die 'swap failed -- restore .context/core from git (git checkout -- .context/core)' }
+  Write-Lock $srcV
+}
+
 function Cmd-Update {
   param([string[]]$uArgs)
   Need-Project 'update'
-  # refresh the core-owned root file and install the LF policy + CLAUDE.md
-  # pointer BEFORE any version logic: a 0.8.x project's first update runs the
-  # old script (which never installs these), so the post-update no-op run of
-  # the new script must still leave the project with them.
-  $readme = Join-Path $CORE_DIR 'templates/context-README.md'
-  if (Test-Path -LiteralPath $readme) {
-    Copy-Item -LiteralPath $readme -Destination (Join-Path $CONTEXT_DIR 'README.md') -Force -ErrorAction SilentlyContinue
-  }
-  $attrs = Join-Path $CONTEXT_DIR '.gitattributes'
-  if (-not (Test-Path -LiteralPath $attrs)) {
-    Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/.gitattributes') -Destination $attrs -ErrorAction SilentlyContinue
-  }
-  $claude = Join-Path $PROJECT_DIR 'CLAUDE.md'
-  if (-not (Test-Path -LiteralPath $claude)) {
-    Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/CLAUDE.md') -Destination $claude -ErrorAction SilentlyContinue
-  }
+  Backfill-Project
   $srcArg = ''
-  foreach ($a in $uArgs) {
-    if ($a -eq '--major') { $script:Major = $true } else { $srcArg = $a }
-  }
+  foreach ($a in $uArgs) { if ($a -eq '--major') { $script:Major = $true } else { $srcArg = $a } }
   $src = Find-Source $srcArg
   if (-not $src) { Die 'no update source found (sibling clone, CONTEXT_PKG, or a path argument)' }
   $srcV = Core-Version $src; $localV = Core-Version $CORE_DIR
@@ -284,32 +308,52 @@ function Cmd-Update {
   if (((Ver-Part $srcV 1) -ne (Ver-Part $localV 1)) -and (-not $Major)) {
     Die "MAJOR version bump ($localV -> $srcV): read CHANGELOG.md migration notes, get the user's go-ahead, re-run with -Major"
   }
-  if (-not (Verify-Tree $src)) { Die 'update source fails its own manifest -- refusing to install a corrupt core' }
-
-  $stage = Join-Path $CONTEXT_DIR 'core.new'
-  if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
-  Copy-Item -LiteralPath $src -Destination $stage -Recurse -Force
-  # rewrite the staged copy to LF so the vendored core is byte-identical to
-  # its manifest even when the source checkout was CRLF (Windows), then
-  # verify what is actually on disk.
-  Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
-  if (-not (Verify-Tree $stage)) {
-    Remove-Item -LiteralPath $stage -Recurse -Force
-    Die 'staged copy fails verify -- aborting, core untouched'
-  }
-
-  try {
-    Remove-Item -LiteralPath $CORE_DIR -Recurse -Force
-    Move-Item -LiteralPath $stage -Destination $CORE_DIR
-  } catch {
-    Die 'swap failed -- restore .context/core from git (git checkout -- .context/core)'
-  }
-  Write-Lock $srcV
+  Swap-Core $src $srcV
   Say "core updated: $localV -> $srcV"
-  Say 'next: read the new entries in .context/core/CHANGELOG.md;'
-  Say '      if templates/kickoff.md or templates/AGENTS.md changed materially,'
-  Say '      regenerate .context/kickoff.md / AGENTS.md (facts from memory);'
-  Say "      commit as: chore(context): update core to $srcV"
+  # hand off to the just-installed script so backfill knows every new file
+  & (Join-Path $CORE_DIR 'bin/context-sync.ps1') migrate --backfill-only
+  exit $LASTEXITCODE
+}
+
+# migrate -- one-command bring-current: update core to the newest reachable
+# version, then backfill every missing file, LF-normalize, relock, verify.
+# Idempotent. Leaves only "fill the project facts".
+function Cmd-Migrate {
+  param([string[]]$mArgs)
+  Need-Project 'migrate'
+  $backfillOnly = $false; $srcArg = ''
+  foreach ($a in $mArgs) {
+    if ($a -eq '--backfill-only') { $backfillOnly = $true }
+    elseif ($a -eq '--major') { $script:Major = $true }
+    else { $srcArg = $a }
+  }
+  if (-not $backfillOnly) {
+    $src = Find-Source $srcArg
+    if ($src) {
+      $srcV = Core-Version $src; $localV = Core-Version $CORE_DIR
+      if ((Ver-Cmp $srcV $localV) -eq 'newer') {
+        if (((Ver-Part $srcV 1) -ne (Ver-Part $localV 1)) -and (-not $Major)) {
+          Die "MAJOR bump ($localV -> $srcV): read CHANGELOG.md, then re-run with -Major"
+        }
+        Say "updating core: $localV -> $srcV"
+        Swap-Core $src $srcV
+        & (Join-Path $CORE_DIR 'bin/context-sync.ps1') migrate --backfill-only
+        exit $LASTEXITCODE
+      }
+    }
+  }
+  Backfill-Project
+  Get-ChildItem -LiteralPath $CORE_DIR -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
+  Write-Lock (Core-Version $CORE_DIR)
+  $v = Core-Version $CORE_DIR
+  if (Verify-Tree $CORE_DIR) { $vs = 'core verified' } else { $vs = 'core FAILED verify -- run: context-sync rollback' }
+  Say "migration complete -- core $v; all zones/files present; $vs."
+  Say ''
+  Say 'One step left -- fill the project facts (facts from memory, no secrets):'
+  Say '  .context/kickoff.md          -- Project Facts (remote URL, default branch, name)'
+  Say '  AGENTS.md                    -- <PROJECT_NAME>'
+  Say '  memory/workflows/active.md   -- protocol by agent type, BOTH edition paths'
+  Say "then commit + push: chore(context): migrate to core $v"
   exit 0
 }
 
@@ -348,6 +392,7 @@ switch ($Command) {
   'status'   { Cmd-Status ($argsRest | Select-Object -First 1); exit 0 }
   'verify'   { Cmd-Verify ($argsRest | Select-Object -First 1) }
   'update'   { Cmd-Update $argsRest }
+  'migrate'  { Cmd-Migrate $argsRest }
   'rollback' { Cmd-Rollback ($argsRest | Select-Object -First 1) }
   'lock' {
     Need-Project 'lock'
@@ -361,7 +406,7 @@ switch ($Command) {
   { $_ -in '', $null, '-h', '--help', 'help' } {
     # print the command-doc comment (lines 13..28) as help, stripping '# '
     $self = Get-Content -LiteralPath $PSCommandPath
-    $self[12..27] | ForEach-Object { Say ($_ -replace '^# ?', '') }
+    $self[12..30] | ForEach-Object { Say ($_ -replace '^# ?', '') }
     exit 2
   }
   default { Die "unknown command: $Command (try: context-sync.ps1 help)" }

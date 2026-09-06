@@ -68,7 +68,7 @@ core/
 ├── CHANGELOG.md         # one entry per release + migration notes
 ├── MANIFEST.sha256      # checksums of every core file — integrity check
 ├── bin/
-│   ├── context-sync     # POSIX-sh: status / verify / update / rollback / bootstrap
+│   ├── context-sync     # POSIX-sh: status / verify / update / migrate / rollback / bootstrap
 │   ├── context-sync.ps1   # PowerShell port (Windows): status / verify / update / rollback / lock
 │   ├── context-collab       # POSIX-sh: atomic collaboration events + status + check
 │   ├── context-collab.ps1   # PowerShell port (Windows): emit + status + check
@@ -131,7 +131,8 @@ File inventory, write modes, and scopes. **Write modes:**
 
 | Path (under `.context/memory/`) | Mode | Scope | Holds |
 |---|---|---|---|
-| `agents/sessions.md` | append-only | project | One entry per session: agent, model, platform, task, commits, outcome |
+| `agents/sessions.md` | append-only (current group) | project | One entry per session: agent, model, platform, task, commits, outcome |
+| `agents/roster.md` | update-in-place (current group) | project | Team roster — one row per person: chosen Name, codename `S<NNN>`, model, what they're doing. Name and codename each unique in the group; `context-mem check` enforces it |
 | `tasks/current.md` | overwrite | project | The one task in progress — a lock only in single-agent mode |
 | `tasks/backlog.md` | append-only | project | Open items for future sessions |
 | `collaboration/README.md` | generated | project | Peer collaboration rules and event contract |
@@ -182,10 +183,16 @@ wins.
 
 Session history is collected into discrete **groups** so it never grows
 unbounded. A group is the session-history subtree only — `agents/sessions.md`
-entries, `sessions/SUMMARY.md` lines, `sessions/<date-N>/` notes. Durable
-facts (`user/`, `system/`, `plans/decisions.md`, `tasks/backlog.md`,
-`flaws/`, `inefficiencies/`) and collaboration events are **not** part of a
-group and never rotate.
+entries, `sessions/SUMMARY.md` lines, `sessions/<date-N>/` notes, and the
+`agents/roster.md` team roster. Durable facts (`user/`, `system/`,
+`plans/decisions.md`, `tasks/backlog.md`, `flaws/`, `inefficiencies/`) and
+collaboration events are **not** part of a group and never rotate.
+
+The **roster** is the team board for the current group: each agent picks a
+human name and adds a row (Name, codename `S<NNN>`, model, what they're
+doing), presents itself by that name in events and to the supervisor, and
+name + codename are each unique in the group. `context-history close`
+resets it (the closed group's roster is kept in `history/`).
 
 A group moves through three zones, and only the live one is read at session
 start:
