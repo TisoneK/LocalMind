@@ -25,6 +25,11 @@ lint` false-positives on the root AGENTS.md digest remain open in flaws/log.md.)
 
 ## Notes for the next session
 
+- **S432 backlogged its two findings:** B-2026-09-06-10 (title-generator
+  races SIGTERM teardown — background tasks not cancelled before adapter
+  close; also log the real exception text) and B-2026-09-06-11 (gate grep
+  for committed conflict markers in memory files, after `95c6400` shipped
+  them in current.md).
 - **SECURITY: rotate the provider keys (bankofai, zen, cerebras, gemini, zai,
   deepseek, omniroute)** — they were visible in a session transcript (and in
   every pre-fix server log; config.py logged plaintext api_keys at INFO, fixed
