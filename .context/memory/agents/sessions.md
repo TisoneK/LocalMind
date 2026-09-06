@@ -6167,3 +6167,19 @@ Post-revert suite captured in scratch/s424/pytest-post-revert.txt as evidence.
 - **Open items:** none new. Standing P0 Steps 4-8; eslint drift; ~37F Windows baseline peer pass; future product commits must pass `context-mem lint` (rephrase any ADR/Bug-ID citations in docstrings — one-way linkage rule) and the registry check runs at exit.
 - **Notes:** none
 - **Report:** none — chore session (update commit + flaws/inefficiencies entries are the record)
+
+### Session 429 addendum — round 2: core 0.14.0 → 0.16.0 (2026-09-06, ~1 hour later)
+
+The package source moved again mid-session (0.15.0 named-persona roster,
+0.16.0 one-command migrate — landed while round 1 was being integrated).
+Source verified, then `context-sync.cmd update` ran 0.14.0 → 0.16.0 and the
+new one-run migration backfilled every zone/file in the same pass — including
+the ps1-migration flaw's missing installs, now fixed upstream (`edf6920`;
+resolution note appended to flaws/log.md, fixed path exercised live). New:
+`memory/agents/roster.md` (current-group team board) — added my row: **Ada |
+S429 | glm-5.3-flash** (supervisor can rename). AGENTS.md digest regenerated
+from the 0.16 template (rule 5: named coworkers, human as supervisor);
+memory/collaboration/README.md refreshed (unmodified bootstrap content
+before). Commits: `fa0642f` claim, `d1f38d9` update, this closeout; release
+event follows. verify green (0.16.0). Next session starts per 0.15+: pick
+your name in the roster, present yourself by it.
