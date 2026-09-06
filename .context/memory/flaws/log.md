@@ -619,3 +619,17 @@ The two residuals noted on the B-2026-09-04-3 entry are now fixed (`73b5930`):
 - **Flaw (tracked):** B-2026-08-30-17 + its S407 sh-port symptom — `context-sync verify` false-failed ALL core files on this autocrlf=true checkout (raw-byte hashing + CRLF manifest parse), and the advised `rollback` re-restored CRLF, an unfixable loop.
 - **Resolution:** package 0.9.1 (TisoneK/.context `9aa9758`) — verify hashes CR-stripped content, the sh manifest parse tolerates CR, update/bootstrap normalize staged copies to LF, PS rollback rewrites LF, and `.context/.gitattributes` forces eol=lf for core + memory logs. Applied here this session per the 0.8.x Windows migration (update run twice from the git-checkout source; commit `557b1fc`): `verify` → "core OK: every file matches MANIFEST.sha256 (0.9.1)" on the CRLF working tree.
 - **Status:** fixed in package 9aa9758 (2026-09-05); verified on this repo.
+
+## 2026-09-06 — ZCode / glm-5.3-flash (Session 426) — none this session
+
+No product flaws found or caused. The two process traps hit (shared-port
+8765 collision between concurrent live-test agents; stash-based baseline
+capture left un-popped before the after-run) are workflow inefficiencies,
+logged in inefficiencies/log.md — no product behavior was wrong.
+
+## 2026-09-06 — ZCode / glm-5.3-flash (Session 426) — core update source corrupt (0.13.1)
+- **Problem:** running the protocol-prescribed same-MAJOR core update (0.9.1 → 0.13.1, source `C:\Users\tison\Dev\context\core`) REFUSED to install: the source fails its own MANIFEST — `bin/context-collab-check.ps1`, `bin/context-history.ps1`, `bin/context-mem.ps1` all FAILED (3 files, hash mismatch vs the 0.13.1 manifest). context-sync refused with "update source fails its own manifest — refusing to install a corrupt core" (correct behavior — do not force or hand-patch).
+- **Cause:** the upstream source repo's 0.13.1 tree is out of sync with its own manifest — either those three scripts were edited after the manifest was generated, or the manifest wasn't regenerated on the last source commit.
+- **Impact:** this repo stays on core 0.9.1 (verified clean). The 0.13.1 updates (incl. whatever changed in the collab/mem/history tooling) are NOT available until the source is repaired.
+- **Fix path (source repo, not this one):** in `C:\Users\tison\Dev\context`, either `git checkout -- core/bin/context-collab-check.ps1 core/bin/context-history.ps1 core/bin/context-mem.ps1` (if the edits were accidental) or regenerate MANIFEST.sha256 (if the edits were intentional) — then commit the source repo. Re-run `context-sync.ps1 status` here and update.
+- **Prevent next time:** core-update sessions should run `context-sync verify` against the SOURCE (or a full `update` dry-run) BEFORE announcing/promising the version bump; `status` only reports availability, not source health.
