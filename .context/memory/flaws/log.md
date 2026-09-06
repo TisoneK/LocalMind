@@ -642,3 +642,54 @@ logged in inefficiencies/log.md — no product behavior was wrong.
 - **Root cause:** PowerShell's ValueFromRemainingArguments binding chokes on this specific option token; the script never sees the args.
 - **Suggested fix (package):** drop or alias-safely quote `--re` in the .ps1 port (bind options after an explicit `--` separator, or parse $args manually before PowerShell binding).
 - **Status:** open (workaround in use: always pass `--refs`).
+
+## 2026-09-06 — ZCode / glm-5.3-flash (Session 429) — 0.13.1 corrupt-source flaw RESOLVED upstream; update completed 0.9.1 → 0.14.0
+
+- **Resolution:** the S426 incident ("core update source corrupt (0.13.1)") is closed. The package
+  source (`C:\Users\tison\Dev\context`, TisoneK/.context) was repaired upstream by `6a7f7dd`
+  (ASCII-clean context-mem/context-history ports — 0.13.1) and `0b7533e` (runtime-verified ports +
+  .cmd launchers — 0.14.0); the source now passes its own MANIFEST. S429 verified the source BEFORE
+  updating (the flaw's own "prevent next time" rule), then ran `context-sync.ps1 update`
+  0.9.1 → 0.14.0; verify green post-update.
+- **Status:** fixed in package `6a7f7dd` + `0b7533e` (2026-09-06); verified on this repo.
+
+## 2026-09-06 — ZCode / glm-5.3-flash (Session 429) — context-sync.ps1 update skips the 0.13.0 zone migration
+
+- **Flaw:** the PowerShell port of `context-sync update` does not install the 0.13.0 session-group
+  zones. The POSIX port's update path (bin/context-sync lines 226-231) copies
+  `templates/history` → `.context/history`, `templates/archive` → `.context/archive`,
+  `templates/memory/workflows/history.conf` → memory, and writes `memory/agents/GROUP` — each
+  if-absent. The `.ps1` has no equivalent block (grep for history/GROUP/archive finds only the
+  rollback message), so a Windows `update` silently leaves the project without the three-zone
+  scaffolding the 0.13.0 CHANGELOG migration promises.
+- **Symptom:** after `context-sync.ps1 update` 0.9.1 → 0.14.0 on LocalMind's worktree, `.context/`
+  had no `history/` or `archive/`, and `memory/workflows/history.conf` + `memory/agents/GROUP` were
+  missing — discovered by post-update inspection, not by any tool warning.
+- **Root cause:** the 0.14.0 runtime-verification pass executed the ports end-to-end against a
+  freshly bootstrapped fixture — which already had the zones via *bootstrap*; the *update*-path
+  migration block was evidently only exercised through the POSIX port. Parse-level and fixture-based
+  verification both miss a migration branch that only runs on pre-0.13 projects.
+- **Suggested fix:** mirror the four if-absent installs into the `.ps1` update path (same guards as
+  the sh port), and add an update-path fixture (bootstrap with core 0.9.x, then update) to the
+  port-verification pass.
+- **Status:** worked around this session — performed the four installs manually with the sh port's
+  exact commands, then committed them inside the update commit (LocalMind `38d58c0`). Package fix
+  still owed upstream.
+
+## 2026-09-06 — ZCode / glm-5.3-flash (Session 429) — context-mem lint false-positives on the root AGENTS.md digest
+
+- **Flaw:** `context-mem lint` (0.11.0) scans "everything outside `.context/`" in the staged diff,
+  but the protocol's own generated entry-point digest `AGENTS.md` lives at the repo ROOT — outside
+  `.context/` — and cites `.context/` paths and the vocabulary rules *by design* (it is the
+  instructions about the protocol). Refreshing AGENTS.md from its template therefore fails lint
+  ("LEAK: AGENTS.md cites a .context/ path").
+- **Symptom:** S429's core-update commit (AGENTS.md digest regeneration) could not pass
+  `context-mem.cmd lint`; the flagged "leak" was rule 8 of the digest quoting the rule itself.
+- **Root cause:** lint has no exemption list; the two root-installed generated files (AGENTS.md,
+  CLAUDE.md) are context surface placed outside the `.context/` directory, which the lint's
+  scope heuristic ("everything outside .context/ = product") does not model.
+- **Suggested fix:** exempt the generated entry-point files (AGENTS.md, CLAUDE.md — or any file
+  whose header comment says "Generated at bootstrap from .context/core/templates/") from
+  `context-mem lint`, in both ports.
+- **Status:** open (worked around this session by documenting the false positive and running the
+  remaining pre-commit components; the flagged line is the digest quoting its own rule).
