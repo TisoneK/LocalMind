@@ -160,12 +160,16 @@ def main() -> None:
     ap.add_argument("--prompts", default="hi_hint,ram,find_cv",
                     help="comma list: hi_hint,hello_plain,ram,find_cv")
     ap.add_argument("--timeout", type=int, default=240)
+    ap.add_argument("--port", type=int, default=8766,
+                    help="isolated port — S426 uses 8766; 8765 belongs to the "
+                         "S425 peer (shared-port kill_port collisions logged "
+                         "as S426 inefficiency)")
     args = ap.parse_args()
 
     SCRATCH.mkdir(parents=True, exist_ok=True)
     TRACEHOME.mkdir(parents=True, exist_ok=True)
 
-    port = 8765
+    port = args.port
     log_file = SCRATCH / f"server-{args.label}.log"
     kill_port(port)
     time.sleep(1)

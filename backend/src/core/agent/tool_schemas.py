@@ -831,7 +831,9 @@ def long_tail_tool_summary() -> str:
     return ", ".join(sorted(LONG_TAIL_TOOL_NAMES))
 
 
-def compact_tool_summary() -> str:
+def compact_tool_summary(
+    allowed_names: frozenset[str] | set[str] | None = None,
+) -> str:
     """One short ``- name: purpose`` line per tool for the ENTIRE catalog (core
     AND long-tail), for the first-call / bootstrap prompt.
 
@@ -841,6 +843,11 @@ def compact_tool_summary() -> str:
     gives every tool's PURPOSE up front so selection is informed from turn 1,
     while staying far below the full-schema "kitchen sink" (first clause of each
     description, ~one line each; ~2.6k chars for the whole catalog).
+
+    S426: ``allowed_names`` optionally scopes the summary to an agent's
+    allowlist (e.g. PARENT_TOOLS) so a scoped agent's bootstrap prompt never
+    advertises tools it cannot reach (ADR-53: the parked delegation surface
+    must not appear in the parent's catalog).
     """
     import re as _re
 
@@ -849,6 +856,8 @@ def compact_tool_summary() -> str:
         fn = td.get("function", {})
         name = fn.get("name", "")
         if not name:
+            continue
+        if allowed_names is not None and name not in allowed_names:
             continue
         desc = str(fn.get("description", "")).strip()
         clause = _re.split(r"(?<=[.!?])\s|—|;\s", desc)[0]
