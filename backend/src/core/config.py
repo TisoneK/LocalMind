@@ -375,7 +375,13 @@ class Settings(BaseSettings):
             if not content.strip():
                 return
             data = json.loads(content)
-            logger.info(f"[config] Loaded runtime settings: {data}")
+            # S428 security fix: `data` contains api_keys with PLAINTEXT key
+            # values — logging the whole dict wrote every provider key to the
+            # server log in plaintext. Log the key NAMES only.
+            _api_keys = data.get("api_keys")
+            _safe = dict(data)
+            _safe["api_keys"] = sorted(_api_keys.keys()) if isinstance(_api_keys, dict) else _api_keys
+            logger.info(f"[config] Loaded runtime settings: {_safe}")
             # Apply runtime-persisted settings
             if "adapter" in data:
                 self.localmind_adapter = data["adapter"]
