@@ -50,3 +50,7 @@ Consults stream their prose to the ThinkingBlock (JSON cut at marker), post-tool
 ## Session 429 (2026-09-06) — ZCode/local Windows — core update 0.9.1 → 0.16.0 (two rounds: zones + roster/migrate)
 
 Source verified against its own manifest BEFORE updating (S426 lesson; corruption already repaired upstream); update + verify green. Found the .ps1 update path skips the 0.13.0 zone migration (flaws log — installed manually per sh-port commands) and context-mem lint false-positives on root AGENTS.md (flaws log); AGENTS digest + kickoff .cmd refresh; merged duplicate Super Z/GLM-5.2 registry row (check passes). Round 2 (same session, source moved mid-flight): 0.14.0 → 0.16.0 via the new one-run migration (exercised the just-fixed ps1 backfill live); roster.md installed + row added (Ada | S429); AGENTS/collab-README teammate framing. Worked in own worktree alongside live peers S427 (memory-evidence) + S428 (thinker-concurrent), zero path overlap. | key: verify the update SOURCE before updating; ps1 update ≠ sh update for migrations; future product commits must pass context-mem lint (no ADR/Bug-ID citations in docstrings).
+
+## Session 430 (2026-09-06) — ZCode/local Windows — core sync 0.16.0 → 0.16.1 (text-only patch)
+
+Source verified (ca8b364), one-run update + backfill, verify green; help text now shows the .cmd form (live-checked); roster re-tagged Ada S430. No templates/migration owed. | key: when the package repo is mid-development, verify the source's own manifest before every round and re-check the CHANGELOG for the exact change surface.
