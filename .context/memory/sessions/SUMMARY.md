@@ -46,3 +46,7 @@ Config-only OpenAI-compat provider (ADR-58, ADR-55 pattern): api.experientiallab
 ## Session 425 (2026-09-06) — ZCode/local Windows — visible decision-grade Thinker reasoning (ADR-57 slice 1)
 
 Consults stream their prose to the ThinkingBlock (JSON cut at marker), post-tool consult builds on the turn's earlier analysis, prompt rewritten first-person/precise/decision-focused with no agent machinery in visible prose (owner directives). LIVE bankofai/qwen3.8-flash before/after: 0 → 2189–2737 chars streamed, machinery scan clean, no JSON leak; 34 tests (7 new), suite failure set = baseline. | key: a stale server on the harness port silently measures the OLD code — validate the boot log for "already in use"; visible thinking must read as task thinking, never agent mechanics.
+
+## Session 428 (2026-09-06) — ZCode/local Windows — concurrent post-tool Thinker consults (ADR-57 slice 2)
+
+Post-tool consults fire after EVERY tool as background tasks (one-in-flight, cap 5/turn, prose streamed, analysis injected at the next call boundary); failures stay blocking. LIVE: consults 2→4, streamed reasoning 2223→7463 chars, latency 66.7→60.6s. Also fixed: config.py logged plaintext api_keys at INFO on every boot (rotate keys exposed in old logs/shared transcripts). | key: the loop passes `adapter=` to dispatch_with_retry — fixture fakes missing that kwarg silently test the failure path; instant async fakes starve background tasks without a cooperative yield.
