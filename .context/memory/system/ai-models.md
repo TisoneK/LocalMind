@@ -14,7 +14,7 @@ accordingly).
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 | Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-15 | 10 |
 | opencode | deepseek-v4-flash (bankofai) · glm-5.3-flash (bankofai) · claude-opus-4.8 (per collab events) | 2026-08-31 | 2026-08-31 | 1 |
-| ZCode (zcode) | glm-5.3-flash (per system prompt: 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0) | 2026-08-31 | 2026-09-05 | 4 |
+| ZCode (zcode) | glm-5.3-flash (per system prompt: 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0) | 2026-08-31 | 2026-09-06 | 5 |
 
 ## Observations
 
@@ -199,3 +199,4 @@ Updated registry row:
 - **ZCode / qwen3.8-flash-class model:** Session 416 — implemented P0 Context Engineering Step 1 (cache telemetry → UI) end-to-end on the local Windows box: data-path mapping (adapter→loop→runtime→SSE/poll→frontend), loop usage-accumulator with pinned last-call-vs-accumulate semantics, 14 new tests, live-verified SSE + /api/metrics on isolated 8765. Demonstrated: the frontend vitest suite flakes (timeout-boundary tests) under parallel local load — a stashed-baseline run flaked MORE (9) than the changed tree (1-2); verify suspect failures in isolation + via stash baseline before believing them. Frontend tsc (`npx tsc -b --noEmit`) is the fast gate; full vitest in background while continuing other work. (2026-09-04)
 
 - **ZCode model-naming drift (S422):** the same harness agent-ID prefix (18ae0130) was recorded as deepseek-v4-flash (S416 era), qwen3.8-flash-class (S418/S420), and glm-5.3-flash (S422) — the harness's model naming is inconsistent across sessions; the ID prefix is the stable part. Each session recorded what its system prompt stated. (2026-09-05)
+- **ZCode / glm-5.3-flash:** Session 425 — shipped ADR-57 slice 1 (visible decision-grade Thinker reasoning) end-to-end on the local Windows box: streaming consult surfacing with structural JSON-cut, decision-grade task-focused prompt, turn continuity; 7 new tests, live before/after on bankofai/qwen3.8-flash (0 → 2189–2737 chars streamed). Demonstrated: the worktree+claim collab protocol works under THREE concurrent peer sessions (S424 add→revert, S426 fastpath, this one) with zero cross-contamination; and the stale-server trap — a leftover listener on the harness port makes the client measure OLD code while health checks pass (validate the boot log). (2026-09-06)
