@@ -626,3 +626,10 @@ No product flaws found or caused. The two process traps hit (shared-port
 8765 collision between concurrent live-test agents; stash-based baseline
 capture left un-popped before the after-run) are workflow inefficiencies,
 logged in inefficiencies/log.md — no product behavior was wrong.
+
+## 2026-09-06 — ZCode / glm-5.3-flash (Session 426) — core update source corrupt (0.13.1)
+- **Problem:** running the protocol-prescribed same-MAJOR core update (0.9.1 → 0.13.1, source `C:\Users\tison\Dev\context\core`) REFUSED to install: the source fails its own MANIFEST — `bin/context-collab-check.ps1`, `bin/context-history.ps1`, `bin/context-mem.ps1` all FAILED (3 files, hash mismatch vs the 0.13.1 manifest). context-sync refused with "update source fails its own manifest — refusing to install a corrupt core" (correct behavior — do not force or hand-patch).
+- **Cause:** the upstream source repo's 0.13.1 tree is out of sync with its own manifest — either those three scripts were edited after the manifest was generated, or the manifest wasn't regenerated on the last source commit.
+- **Impact:** this repo stays on core 0.9.1 (verified clean). The 0.13.1 updates (incl. whatever changed in the collab/mem/history tooling) are NOT available until the source is repaired.
+- **Fix path (source repo, not this one):** in `C:\Users\tison\Dev\context`, either `git checkout -- core/bin/context-collab-check.ps1 core/bin/context-history.ps1 core/bin/context-mem.ps1` (if the edits were accidental) or regenerate MANIFEST.sha256 (if the edits were intentional) — then commit the source repo. Re-run `context-sync.ps1 status` here and update.
+- **Prevent next time:** core-update sessions should run `context-sync verify` against the SOURCE (or a full `update` dry-run) BEFORE announcing/promising the version bump; `status` only reports availability, not source health.
