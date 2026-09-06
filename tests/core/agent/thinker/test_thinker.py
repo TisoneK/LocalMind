@@ -68,6 +68,18 @@ def test_prompt_omits_prior_analysis_when_empty():
     assert "YOUR EARLIER THINKING" not in msg
 
 
+# ── S425: the visible prose stays on the task, free of agent machinery ──────
+def test_prompt_forbids_internals_in_visible_reasoning():
+    """Owner directive: the streamed thinking reads like a person thinking
+    about the TASK — no tool names, no 'tool', no steps/loops/iterations/
+    prompts/'synthesize'/'the system' in the prose. The JSON tail is exempt
+    (the agent's mechanics may name tools)."""
+    system = build_thinker_messages(Evidence(user_message="x"))[0]["content"]
+    assert "free of machinery" in system
+    assert "never name a tool" in system
+    assert "MAY name tools" in system, "the JSON exemption must be explicit"
+
+
 # ── Parser ──────────────────────────────────────────────────────────────────
 def test_parse_prose_plus_json():
     text = (

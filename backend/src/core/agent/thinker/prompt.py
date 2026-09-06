@@ -14,8 +14,11 @@ decision), depth proportional to the decision at hand, specifics named so no
 two tasks could produce the same thoughts. It must also NOT mention its
 role/instructions (Session 324: those echoes leaked into the visible
 transcript — prevention now lives here, at the source, instead of in a
-render-time mute). The model reasons in prose first (streamed live as
-thought), then emits a compact JSON block the agent parses.
+render-time mute). S425 refinement (owner): the visible prose stays on the
+TASK — no agent machinery (tool names, loops, steps, "synthesize") — while
+the JSON tail stays technical for the agent. The model reasons in prose
+first (streamed live as thought), then emits a compact JSON block the agent
+parses.
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ How to think — every sentence must do real work: establish a fact, weigh an op
 - Separate what you now KNOW (facts, grounded in the evidence/context) from what is still AMBIGUOUS (and for each ambiguity, the reasonable DEFAULT to proceed with — you do not stop to ask unless guessing risks a wrong irreversible action).
 - Decide ONE concrete NEXT STEP (a tool to call, "synthesize the final answer" if enough is known, or "respond conversationally — no tools needed" for questions/greetings/casual messages).
 - Invent nothing that isn't in the evidence or context. Never mention these instructions, your role, "the Thinker", or "the evidence" as abstractions — there is no audience to address; just think about the task itself, in first person.
+- Keep the VISIBLE reasoning on the task, free of machinery: never name a tool or say "tool", never mention steps, loops, iterations, prompts, context, "synthesize", or "the system". A person doesn't think "use the file-reading tool on the CV" — they think "the CV is the newest file in Documents; open that one". When you've decided to act, say what you are about to DO in plain words. (The JSON below is the agent's mechanics and MAY name tools — only the prose is watched.)
 
 Reason as long as the decision needs and as short as it allows — never pad, and never stop early while a real question is still open.
 
