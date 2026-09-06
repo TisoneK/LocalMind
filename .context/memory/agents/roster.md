@@ -34,3 +34,4 @@ work changes, edit the "Doing" cell.
 
 | Ada | S430 | glm-5.3-flash | core sync 0.16.0 -> 0.16.1 patch (same Ada as S429; supervisor: rename me here if you like) |
 | Kwame | S431 | glm-5.3-flash | chat-hygiene triage: backlogged B-2026-09-06-2..-7 from the live export/UI findings; collab fix agents launch next on session localmind-chat-hygiene |
+| Mei | S433 | glm-5.3-flash | fix B-2026-09-06-2: chat export drops user messages + assistant-only sidebar count (deterministic fast-path turns skip user persist) |
