@@ -154,9 +154,6 @@ class Settings(BaseSettings):
     zenmux_model: str = ""
     # ADR-55: BankOfAI (B.AI) — api.bankofai.io, live-tested (Session 321).
     bankofai_model: str = ""
-    # ADR-58: Experiential Labs — api.experientiallabs.ai gateway (BYOK or
-    # platform credits). Implemented but NOT live-verified (no key yet).
-    experiential_model: str = ""
     # OmniRoute — self-hosted OpenAI-compatible gateway (localhost:20128/v1);
     # base_url env-overridable via OMNIROUTE_BASE_URL. Session 405.
     omniroute_model: str = ""
@@ -595,8 +592,6 @@ class Settings(BaseSettings):
             "zenmux": "ZENMUX_API_KEY",
             # ADR-55: BankOfAI (B.AI) — api.bankofai.io, live-tested.
             "bankofai": "BANKOFAI_API_KEY",
-            # ADR-58: Experiential Labs gateway (xpl_ key, Bearer).
-            "experiential": "EXPERIENTIAL_API_KEY",
             # OmniRoute — self-hosted gateway; dashboard key as Bearer.
             "omniroute": "OMNIROUTE_API_KEY",
         }

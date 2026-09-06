@@ -140,11 +140,6 @@ MODEL_CONTEXT_WINDOWS: dict[str, int] = {
     # mode); max output 131,072. The table stores the advertised window
     # (the meter's capacity denominator); the input ceiling is 0.8% lower.
     "qwen3.8-flash": 1000000,
-    # glm-5.3-flash — provider-documented from Experiential Labs' public
-    # model catalog /api/models (fetched 2026-09-05): context_window
-    # 1,310,720; it is the Experiential provider's default_model. No
-    # conflicting entry exists for this slug on other providers.
-    "glm-5.3-flash": 1310720,
     # Default fallback
     "default": 32768,
 }
@@ -652,54 +647,6 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         key_env="BANKOFAI_API_KEY",
         model_env="BANKOFAI_MODEL",
         settings_field="bankofai_model",
-    ),
-    # Experiential Labs — an open-source (Apache-2.0), actively maintained
-    # model GATEWAY/ROUTER (not a single provider): one API key reaches many
-    # upstream providers (OpenAI, Anthropic, Gemini, Azure, Bedrock,
-    # Fireworks, OpenRouter, …) through one interface. The hosted gateway is
-    # api.experientiallabs.ai. Fully OpenAI-compatible: POST /v1/chat/
-    # completions with {"model": "<slug>", "messages": [...]} (it also serves
-    # /v1/responses and Anthropic-style /v1/messages, which this adapter
-    # never uses). Auth is a plain Bearer key formatted ``xpl_...`` (the
-    # same key for inference and management calls).
-    #
-    # Models are a CATALOG + ROUTER, not a fixed list: you call by slug
-    # (claude-opus-5, glm-5.3-flash, qwen3.8-27b, … — 500+ slugs, fetched
-    # keylessly 2026-09-05 from the public catalog at /api/models; the
-    # OpenAI-style /v1/models needs the key) and each slug resolves through
-    # an ordered "waterfall" of deployments that fails over automatically.
-    # The default below was catalog-verified 2026-09-05 (tools=true,
-    # context_window 1,310,720 — the cheapest tool-capable slug at ~$0.075/M
-    # input via the OpenRouter leg).
-    #
-    # Billing — two lanes, no markup on either: BYOK pass-through (your own
-    # upstream provider key connected through Experiential; that provider
-    # bills you) or platform-funded (Experiential credits, priced from their
-    # public catalog), chosen per model. Rate/spend controls: per-key daily
-    # platform-funded spend cap, RPM/TPM ceilings, team/model/key budgets.
-    # Exhausting a limit returns 429 ``insufficient_quota`` which is NOT
-    # transient — retrying will not help; raise the limit or switch lane/
-    # model. Bad/missing/expired keys are a uniform 401 ``invalid_key``.
-    #
-    # Key setup: account at platform.experientiallabs.ai → xpl_ key
-    # (documented agent-runnable SETUP.md flow in their repo). Whether new
-    # accounts get free starter credits is UNVERIFIED — check at signup.
-    #
-    # ADR-58 / Session 424: IMPLEMENTED BUT NOT LIVE-VERIFIED — no xpl_ key
-    # exists on this machine. Per the flaw-log rule, do NOT claim this works
-    # until the smoke test runs with a real key: (a) GET /v1/models with the
-    # key → confirm slug list + whether context metadata is exposed; (b) an
-    # isolated-8765 /api/chat trace with LOCALMIND_ADAPTER=experiential; (c)
-    # verify tool calls + streaming end-to-end. Then mark ADR-58 tested.
-    "experiential": ProviderConfig(
-        name="experiential",
-        display_name="Experiential Labs (gateway — BYOK or platform credits)",
-        base_url="https://api.experientiallabs.ai/v1",
-        api_key="",
-        default_model="glm-5.3-flash",
-        key_env="EXPERIENTIAL_API_KEY",
-        model_env="EXPERIENTIAL_MODEL",
-        settings_field="experiential_model",
     ),
     # OmniRoute — a SELF-HOSTED, OpenAI-compatible AI gateway the user runs
     # locally (`npm i -g omniroute && omniroute`, or the docker image). It
