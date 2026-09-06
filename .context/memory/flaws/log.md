@@ -619,3 +619,10 @@ The two residuals noted on the B-2026-09-04-3 entry are now fixed (`73b5930`):
 - **Flaw (tracked):** B-2026-08-30-17 + its S407 sh-port symptom — `context-sync verify` false-failed ALL core files on this autocrlf=true checkout (raw-byte hashing + CRLF manifest parse), and the advised `rollback` re-restored CRLF, an unfixable loop.
 - **Resolution:** package 0.9.1 (TisoneK/.context `9aa9758`) — verify hashes CR-stripped content, the sh manifest parse tolerates CR, update/bootstrap normalize staged copies to LF, PS rollback rewrites LF, and `.context/.gitattributes` forces eol=lf for core + memory logs. Applied here this session per the 0.8.x Windows migration (update run twice from the git-checkout source; commit `557b1fc`): `verify` → "core OK: every file matches MANIFEST.sha256 (0.9.1)" on the CRLF working tree.
 - **Status:** fixed in package 9aa9758 (2026-09-05); verified on this repo.
+
+## 2026-09-06 — ZCode / glm-5.3-flash (Session 426) — none this session
+
+No product flaws found or caused. The two process traps hit (shared-port
+8765 collision between concurrent live-test agents; stash-based baseline
+capture left un-popped before the after-run) are workflow inefficiencies,
+logged in inefficiencies/log.md — no product behavior was wrong.
