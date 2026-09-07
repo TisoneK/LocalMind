@@ -10,6 +10,7 @@ Pins:
 """
 
 import asyncio
+import os
 
 import pytest
 
@@ -52,6 +53,12 @@ class TestExtractContextWindow:
 
 class TestWindowSource:
     def _adapter(self, model: str) -> OpenAICompatAdapter:
+        # The adapter constructor refuses to build without a provider key.
+        # These tests exercise context-window SOURCE logic only (table hit /
+        # fetch probe / default) — no provider call — so a dummy env key
+        # keeps the suite hermetic instead of reading a real key from the
+        # app's settings in the user's home directory.
+        os.environ.setdefault("BANKOFAI_API_KEY", "test-key-not-real")
         return OpenAICompatAdapter(provider="bankofai", model_override=model)
 
     def test_table_hit_reports_table_source(self):
