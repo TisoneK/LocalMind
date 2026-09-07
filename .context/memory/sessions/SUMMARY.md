@@ -65,3 +65,7 @@ Live chat-export + UI review became backlog **B-2026-09-06-2..-7**: export drops
 ## Session 433 (2026-09-07) — ZCode/local Windows — fixed B-2026-09-06-2: chat export dropped user messages
 
 Root cause: the deterministic turn epilogs (canned/conversational fast path, direct memory write) returned before the user-message persist, so those turns left no user row — export and sidebar count were assistant-only. Fix: the epilogs now await the user persist before the reply (`agent_runtime.py`); 5 isolated-home regression tests fail pre-fix, pass post-fix; no frontend change. | key: an "export filter" bug can be a persistence gap — reconcile against every turn path, not just the serializer; and run any suite that constructs AgentRuntime with LOCALMIND_HOME=scratch or it writes the real chat store.
+
+## Session 434 (2026-09-07) — ZCode/local Windows — fixed B-2026-09-06-4 + -11
+
+"How are you?" left the canned GREETINGS list (falls to the conversational path = real model call); canned replies now persist honest synthetic-zero metrics instead of fabricated token counts (S431's 4250 tok/s fingerprint). LIVE before/after on bankofai/qwen3.8-flash: 0.3s canned {8,17} → 7.3s real answer {262,93}. Rider -11: conflict-marker gate script wired into gates.conf + ci-check.sh. | key: detector classes are the unit that must change (not the canned replies), and synthetic metrics need an explicit flag at the SOURCE (trivial_response), not just a filter downstream; the harness runs from a worktree via the sys.executable fallback.

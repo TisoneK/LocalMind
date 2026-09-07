@@ -3,32 +3,31 @@
 **Status:** ACTIVE — **collab fix phase live on session `localmind-chat-hygiene`.**
 **Kwame (S431) resumed by the owner** (his run was deleted mid-fix-phase;
 continuing as him, not a new session). Split agreed on the trail:
-- **Mei (S433) CLOSED -2** (claim `20260906T073036Z`, release
-  `20260906T194249Z`, product commit `ad4e3fc` merged to main): the
-  deterministic epilogs in `backend/src/core/agent_runtime.py` (trivial +
-  conversational fast paths + memory-write paths incl. the resolution-fail
-  ask) returned before the main path's fire-and-forget user-message persist —
-  those turns left no user row. They now await the user persist immediately
-  before the assistant persist (also guarantees timestamp order); 5
-  regression tests in `tests/core/test_fastpath_user_persist.py` fail
-  pre-fix / pass post-fix (isolated tmp home). Metrics lines stayed
-  untouched (that's -4's). No frontend change.
-- **Kwame owns -3 + -6 + -7** (claim `20260906T082235Z`): export schema v3 —
-  client preserves raw epoch as `timestampEpoch` (today's mapping reduces it
-  to HH:MM — the ISO-date gap), exporter emits ISO-8601 timestamps +
-  createdAt/lastActive per chat + model/provider per turn, every v2 key kept;
-  the agent_runtime additive pass (identity keys + fast-path Thinker-thinking
-  capture) rebases AFTER Mei's merge (now landed — `agent_runtime.py` is
-  free); -6 = strip markdown in LeftPanel previews at display time (stored
-  last_message stays raw for export fidelity; the "capabilities overview"
-  weather preview is the last message, not a selection bug); -7 = parent-only
-  copy in AgentWorkspace.tsx.
-- **-4 free** after Mei's -2 (detector fns in `trivial_input.py` + the
-  synthetic-metrics half of the finalize block). **-5 parked** on the
-  owner-approved delete-list. (Triage context: the six items
-  **B-2026-09-06-2 .. -7** came from S431's live chat-export + UI review;
-  full text in backlog.md. -4 touches the agent-loop fast path → the
-  live-testing bar applies.)
+- **Mei (S433/S434) CLOSED -2 AND -4.** -2: commit `ad4e3fc`, release
+  `20260906T194249Z` — the deterministic epilogs await the user persist
+  before the reply (5 tests, `test_fastpath_user_persist.py`). -4: commit
+  `613787a`, release `20260907T055937Z` — detector narrowed ("how are you" /
+  "how's it going" now take the conversational path with a real model call;
+  true greetings keep the S206 canned path) + canned leg persists
+  `{0, 0, real latency, synthetic: true}` and sends `provider_usage={}`
+  (fabricated 5/8-token "provider" stats are gone; Session 111 approx
+  display fields kept). LIVE-verified before/after on bankofai/qwen3.8-flash
+  (isolated 8765 + scratch tracehome): canned misfire 0.3s/fabricated {8,17}
+  → 7.3s real answer/real {262,93}; 7 new tests in
+  `test_fastpath_synthetic_metrics.py`. Mei also CLOSED -11 (rider): commits
+  `6faa315`+`487d485` — `scripts/check-conflict-markers.sh` wired into
+  gates.conf pre-commit + ci-check.sh.
+- **Kwame owns -3 + -6 + -7** (claim `20260906T082235Z`; his branch already
+  carries export v3 + the agent_runtime identity/thinking additive pass,
+  UNMERGED): exporter emits ISO-8601 timestamps + createdAt/lastActive +
+  model/provider per turn (his identity keys land in the SAME finalize
+  metrics dict Mei's -4 change touches — changes compose; whoever integrates
+  second rebases), -6 = strip markdown in LeftPanel previews at display
+  time, -7 = parent-only copy in AgentWorkspace.tsx.
+- **-5 parked** on the owner-approved delete-list (its unit-test half —
+  conftest-level LOCALMIND_HOME isolation — remains available). (Triage
+  context: the six items **B-2026-09-06-2 .. -7** came from S431's live
+  chat-export + UI review; full text in backlog.md.)
 **S428's thinker-concurrent claim WAS released** at its closeout (`38e743f`,
 event `20260906T053617Z`) — loop.py/thinker/CHANGELOG.md are free (earlier
 board states saying "STILL unreleased" were stale). (Prior state: S429/S430
