@@ -5,6 +5,7 @@ import {
   serializeSessions,
   exportFilename,
   exportSessions,
+  copySessionsToClipboard,
   type SessionExport,
 } from './exportChats';
 import type { Session, ChatMessage, TodoItem, ToolCall } from '@/types';
@@ -300,5 +301,62 @@ describe('exportSessions', () => {
     });
     const n = await exportSessions(sessions, ['a'], 'markdown', fetchHistory, fetchTodos);
     expect(n).toBe(1);
+  });
+});
+
+describe('copySessionsToClipboard', () => {
+  it('writes the same payload exportSessions would download, in the requested format', async () => {
+    const sessions = [session({ id: 'a', title: 'A' }), session({ id: 'b', title: 'B' })];
+    const fetchHistory = vi.fn(async (id: string) => [
+      { id: `${id}-1`, role: 'user', content: `msg ${id}`, timestamp: '10:00' } as ChatMessage,
+    ]);
+    const written: string[] = [];
+    const n = await copySessionsToClipboard(
+      sessions,
+      ['a'],
+      'json',
+      fetchHistory,
+      undefined,
+      async (text) => { written.push(text); },
+    );
+    expect(n).toBe(1);
+    expect(written).toHaveLength(1);
+    expect(written[0]).toContain('"kind": "chat-export"');
+    expect(written[0]).toContain('msg a');
+    // Nothing was downloaded — copy replaces the file write entirely.
+    expect(fetchHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes markdown payloads through the same builder', async () => {
+    const sessions = [session({ id: 'a', title: 'A' })];
+    const fetchHistory = vi.fn(async () => [
+      { id: 'a-1', role: 'user', content: 'hello', timestamp: '10:00' } as ChatMessage,
+    ]);
+    const written: string[] = [];
+    await copySessionsToClipboard(
+      sessions,
+      ['a'],
+      'markdown',
+      fetchHistory,
+      undefined,
+      async (text) => { written.push(text); },
+    );
+    expect(written[0]).toContain('# LocalMind chat export');
+    expect(written[0]).toContain('hello');
+  });
+
+  it('propagates clipboard failures so the UI can report them', async () => {
+    const sessions = [session({ id: 'a' })];
+    const fetchHistory = vi.fn(async () => [] as ChatMessage[]);
+    await expect(
+      copySessionsToClipboard(
+        sessions,
+        ['a'],
+        'markdown',
+        fetchHistory,
+        undefined,
+        async () => { throw new Error('denied'); },
+      ),
+    ).rejects.toThrow('denied');
   });
 });

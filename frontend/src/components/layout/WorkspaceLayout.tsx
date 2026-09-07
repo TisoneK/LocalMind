@@ -21,7 +21,7 @@ import {
 } from '@/hooks/useLocalMind';
 import { localmindClient, getPersistedSettings } from '@/lib/localmind/client';
 import { isActiveToolStatus } from '@/lib/localmind/progress';
-import { exportSessions, type ExportFormat } from '@/lib/localmind/exportChats';
+import { exportSessions, copySessionsToClipboard, type ExportFormat } from '@/lib/localmind/exportChats';
 
 export function WorkspaceLayout() {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -380,6 +380,21 @@ export function WorkspaceLayout() {
     [sessions]
   );
 
+  // Copy-to-clipboard bulk action: the same export payload, written to the
+  // clipboard. Rejections propagate so the sidebar can flash the failure.
+  const handleCopySessions = useCallback(
+    async (sessionIds: string[], format: ExportFormat) => {
+      await copySessionsToClipboard(
+        sessions,
+        sessionIds,
+        format,
+        (id) => localmindClient.getSessionHistory(id),
+        (id) => localmindClient.getTodos(id),
+      );
+    },
+    [sessions]
+  );
+
   // Handle model change
   const handleModelChange = useCallback(
     async (modelId: string) => {
@@ -455,6 +470,7 @@ export function WorkspaceLayout() {
           onDeleteSession={handleDeleteSession}
           onDeleteSessions={handleDeleteSessions}
           onExportSessions={handleExportSessions}
+          onCopySessions={handleCopySessions}
           onToggleTodo={toggleTodo}
           onAddTodo={addTodo}
           onAbort={abort}

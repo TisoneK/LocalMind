@@ -301,8 +301,21 @@ export async function exportSessions(
   fetchHistory: (id: string) => Promise<ChatMessage[]>,
   fetchTodos?: (id: string) => Promise<TodoItem[]>,
 ): Promise<number> {
+  const entries = await buildExportEntries(sessions, ids, fetchHistory, fetchTodos);
+  const content = serializeSessions(entries, format);
+  downloadTextFile(exportFilename(format, entries.length), content, MIME[format]);
+  return entries.length;
+}
+
+/** Shared fetch step for the bulk-export actions (download and copy). */
+async function buildExportEntries(
+  sessions: Session[],
+  ids: string[],
+  fetchHistory: (id: string) => Promise<ChatMessage[]>,
+  fetchTodos?: (id: string) => Promise<TodoItem[]>,
+): Promise<SessionExport[]> {
   const chosen = sessions.filter((s) => ids.includes(s.id));
-  const entries: SessionExport[] = await Promise.all(
+  return Promise.all(
     chosen.map(async (session) => {
       let history: ChatMessage[] = [];
       try {
@@ -321,7 +334,25 @@ export async function exportSessions(
       return { session, history, todos };
     }),
   );
+}
+
+/**
+ * Serialize the selected sessions in the requested format and write the result
+ * to the clipboard instead of downloading a file. The clipboard writer is
+ * injected so this stays testable; it defaults to the Web Clipboard API,
+ * which may be unavailable outside secure contexts. Returns the number of
+ * sessions copied.
+ */
+export async function copySessionsToClipboard(
+  sessions: Session[],
+  ids: string[],
+  format: ExportFormat,
+  fetchHistory: (id: string) => Promise<ChatMessage[]>,
+  fetchTodos?: (id: string) => Promise<TodoItem[]>,
+  writeClipboard: (text: string) => Promise<void> = (text) => navigator.clipboard.writeText(text),
+): Promise<number> {
+  const entries = await buildExportEntries(sessions, ids, fetchHistory, fetchTodos);
   const content = serializeSessions(entries, format);
-  downloadTextFile(exportFilename(format, entries.length), content, MIME[format]);
+  await writeClipboard(content);
   return entries.length;
 }

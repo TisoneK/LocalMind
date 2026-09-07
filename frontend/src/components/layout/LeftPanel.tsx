@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks, ChevronRight, ChevronDown, File as FileIcon, Folder as FolderIcon, MoreVertical, Settings, LayoutDashboard } from 'lucide-react';
+import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks, ChevronRight, ChevronDown, File as FileIcon, Folder as FolderIcon, MoreVertical, Settings, LayoutDashboard, ClipboardCopy } from 'lucide-react';
 import { Session, ActionItem, FileNode, SessionFileEntry, TodoItem, ModelOption, ToolCall, DiffData } from '@/types';
 import type { ExportFormat } from '@/lib/localmind/exportChats';
 import { stripMarkdownToPreview } from '@/lib/previewText';
@@ -39,6 +39,7 @@ interface LeftPanelProps {
   onDeleteSession: (sessionId: string) => void;
   onDeleteSessions: (sessionIds: string[]) => void | Promise<void>;
   onExportSessions: (sessionIds: string[], format: ExportFormat) => void | Promise<void>;
+  onCopySessions: (sessionIds: string[], format: ExportFormat) => void | Promise<void>;
   onToggleTodo: (id: string, completed: boolean) => void;
   onAddTodo: (text: string) => void;
   onAbort?: () => void;
@@ -70,6 +71,7 @@ export function LeftPanel({
   onDeleteSession,
   onDeleteSessions,
   onExportSessions,
+  onCopySessions,
   onToggleTodo,
   onAddTodo,
   onAbort,
@@ -91,6 +93,7 @@ export function LeftPanel({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [copyMenuOpen, setCopyMenuOpen] = useState(false);
   const isCompact = width < 220;
 
   const sessionList = Array.isArray(sessions) ? sessions : [];
@@ -102,6 +105,7 @@ export function LeftPanel({
     setSelectedIds(new Set());
     setConfirmBulkDelete(false);
     setExportMenuOpen(false);
+    setCopyMenuOpen(false);
   };
 
   const toggleSelected = (id: string) => {
@@ -129,6 +133,23 @@ export function LeftPanel({
     if (selectedCount === 0) return;
     onExportSessions(Array.from(selectedIds), format);
     setExportMenuOpen(false);
+  };
+
+  // Copy-to-clipboard bulk action: the same export payload, written to the
+  // clipboard instead of downloaded. A transient state on the button tells
+  // the user whether the write succeeded (the menu closes either way).
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  const handleCopy = async (format: ExportFormat) => {
+    if (selectedCount === 0) return;
+    setCopyMenuOpen(false);
+    try {
+      await onCopySessions(Array.from(selectedIds), format);
+      setCopyState('copied');
+    } catch {
+      setCopyState('failed');
+    }
+    window.setTimeout(() => setCopyState('idle'), 1800);
   };
 
   // B-2026-08-23: toggle a session's workspace-artifact listing. Files are
@@ -355,6 +376,15 @@ export function LeftPanel({
                     <span className="text-[10px] text-brand-green-muted" data-testid="selected-count">
                       {selectedCount} selected
                     </span>
+                    {/* Copy-action feedback flash (copy happens async; the menu closes immediately) */}
+                    {copyState !== 'idle' && (
+                      <span
+                        data-testid="copy-feedback"
+                        className={`text-[10px] ${copyState === 'copied' ? 'text-brand-green' : 'text-brand-red'}`}
+                      >
+                        {copyState === 'copied' ? '✓ Copied' : '✗ Clipboard blocked'}
+                      </span>
+                    )}
                     <button
                       onClick={exitSelection}
                       className="ml-auto p-1 rounded text-brand-green-muted hover:text-brand-green-soft hover:bg-brand-border/50 transition-colors"
@@ -378,6 +408,33 @@ export function LeftPanel({
                 >
                   <Trash2 className="h-3 w-3" /> Delete
                 </button>
+                <div className="relative">
+                  <button
+                    onClick={() => { setCopyMenuOpen((o) => !o); setExportMenuOpen(false); }}
+                    className="flex items-center gap-1 px-2 py-1 rounded text-[10px] bg-brand-green/10 text-brand-green hover:bg-brand-green/20 transition-colors"
+                    data-testid="bulk-copy"
+                  >
+                    <ClipboardCopy className="h-3 w-3" /> Copy
+                  </button>
+                  {copyMenuOpen && (
+                    <div className="absolute left-0 top-full mt-1 z-10 min-w-[120px] rounded-md border border-brand-border bg-brand-bg-panel shadow-lg overflow-hidden">
+                      <button
+                        onClick={() => handleCopy('markdown')}
+                        className="block w-full text-left px-3 py-1.5 text-[10px] text-brand-green-soft hover:bg-brand-border/60 transition-colors"
+                        data-testid="copy-markdown"
+                      >
+                        Markdown
+                      </button>
+                      <button
+                        onClick={() => handleCopy('json')}
+                        className="block w-full text-left px-3 py-1.5 text-[10px] text-brand-green-soft hover:bg-brand-border/60 transition-colors"
+                        data-testid="copy-json"
+                      >
+                        JSON
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="relative">
                   <button
                     onClick={() => setExportMenuOpen((o) => !o)}

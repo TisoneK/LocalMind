@@ -30,6 +30,7 @@ function renderPanel(over: Partial<React.ComponentProps<typeof LeftPanel>> = {})
     onDeleteSession: vi.fn(),
     onDeleteSessions: vi.fn(),
     onExportSessions: vi.fn(),
+    onCopySessions: vi.fn(),
     onToggleTodo: vi.fn(),
     onAddTodo: vi.fn(),
     ...over,
@@ -77,6 +78,39 @@ describe('LeftPanel multi-select', () => {
     expect(props.onExportSessions).toHaveBeenCalledWith(['a', 'b', 'c'], 'markdown');
   });
 
+  it('copy menu triggers onCopySessions with the chosen format', async () => {
+    const props = renderPanel();
+    fireEvent.click(screen.getByTestId('select-chats'));
+    fireEvent.click(screen.getByTitle('Select all'));
+    fireEvent.click(screen.getByTestId('bulk-copy'));
+    fireEvent.click(screen.getByTestId('copy-json'));
+    await vi.waitFor(() => expect(props.onCopySessions).toHaveBeenCalledWith(['a', 'b', 'c'], 'json'));
+  });
+
+  it('copy success flashes the copied feedback', async () => {
+    const ok = vi.fn().mockResolvedValue(undefined);
+    renderPanel({ onCopySessions: ok });
+    fireEvent.click(screen.getByTestId('select-chats'));
+    fireEvent.click(screen.getByTitle('Select all'));
+    fireEvent.click(screen.getByTestId('bulk-copy'));
+    fireEvent.click(screen.getByTestId('copy-markdown'));
+    const flash = await screen.findByTestId('copy-feedback');
+    expect(flash).toHaveTextContent('✓ Copied');
+  });
+
+  it('copy rejection surfaces the clipboard-blocked flash instead of throwing', async () => {
+    const failing = vi.fn().mockRejectedValue(new Error('denied'));
+    renderPanel({ onCopySessions: failing });
+    fireEvent.click(screen.getByTestId('select-chats'));
+    fireEvent.click(screen.getByTitle('Select all'));
+    fireEvent.click(screen.getByTestId('bulk-copy'));
+    fireEvent.click(screen.getByTestId('copy-json'));
+    const flash = await screen.findByTestId('copy-feedback');
+    expect(flash).toHaveTextContent('✗ Clipboard blocked');
+    // The panel survives — this is a user-facing notice, not a crash.
+    expect(screen.getByTestId('bulk-copy')).toBeInTheDocument();
+  });
+
   it('individual delete controls are hidden while selecting', () => {
     renderPanel();
     // Before selection mode, per-row delete buttons exist (hover-revealed).
@@ -112,6 +146,7 @@ describe('LeftPanel multi-select', () => {
       onDeleteSession: vi.fn(),
       onDeleteSessions: vi.fn(),
       onExportSessions: vi.fn(),
+      onCopySessions: vi.fn(),
       onToggleTodo: vi.fn(),
       onAddTodo: vi.fn(),
     };
@@ -154,6 +189,7 @@ describe('LeftPanel multi-select', () => {
       onDeleteSession: vi.fn(),
       onDeleteSessions: vi.fn(),
       onExportSessions: vi.fn(),
+      onCopySessions: vi.fn(),
       onToggleTodo: vi.fn(),
       onAddTodo: vi.fn(),
     };
