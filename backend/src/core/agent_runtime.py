@@ -445,6 +445,35 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         except Exception:
             logger.debug("[agent-runtime] fire-and-forget user persist failed", exc_info=True)
 
+    async def _persist_user_before_reply(
+        self,
+        session_id: str,
+        message: str,
+        *,
+        filename: Optional[str] = None,
+        original_path: Optional[str] = None,
+        file: Optional[bytes] = None,
+        content_type: Optional[str] = None,
+    ) -> None:
+        """Persist the user's turn ahead of the reply on a deterministic path.
+
+        The canned-reply epilogs (trivial/conversational fast path, direct
+        memory write) return before the main agent-loop path schedules its
+        fire-and-forget user persist — those turns used to leave no user row
+        behind, so the chat export and the sidebar's message count showed
+        assistant-only history. Awaiting here instead of fire-and-forget also
+        guarantees the user row's timestamp sorts before the reply's (history
+        reads order by timestamp ASC).
+        """
+        await self._persist_user_safe(
+            session_id,
+            message,
+            file_name=filename,
+            file_path=original_path,
+            file_size=len(file) if file else None,
+            file_type=content_type,
+        )
+
     def _persist_assistant(
         self,
         session_id: str,
@@ -842,6 +871,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     collector.emit(
                         "stage_timing", stage="execute", latency_ms=0, status="skipped"
                     )
+                    await self._persist_user_before_reply(
+                        session_id,
+                        message,
+                        filename=filename,
+                        original_path=original_path,
+                        file=file,
+                        content_type=content_type,
+                    )
                     self._persist_assistant(
                         session_id,
                         _clarify,
@@ -927,6 +964,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
             )
             collector.emit(
                 "stage_timing", stage="execute", latency_ms=0, status="skipped"
+            )
+            await self._persist_user_before_reply(
+                session_id,
+                message,
+                filename=filename,
+                original_path=original_path,
+                file=file,
+                content_type=content_type,
             )
             self._persist_assistant(
                 session_id,
@@ -1196,6 +1241,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 )
                 _completion_tokens = int(
                     _fast_usage.get("completion_tokens", 0) or _approx_tokens(_response_text)
+                )
+                await self._persist_user_before_reply(
+                    session_id,
+                    message,
+                    filename=filename,
+                    original_path=original_path,
+                    file=file,
+                    content_type=content_type,
                 )
                 self._persist_assistant(
                     session_id,

@@ -752,3 +752,11 @@ logged in inefficiencies/log.md — no product behavior was wrong.
 - **Status:** resolved this session (markers resolved by merging both sides'
   content into S432's closeout commit; the gate suggestion above remains
   open).
+
+---
+## 2026-09-07 — ZCode / glm-5.3-flash (Session 433)
+- **Flaw:** `context-collab check` counts ANY unreleased claim as an integration failure — including a peer's actively-open claim — so during a live multi-agent fix phase the integration gate can never pass until every peer releases, even when the integrating agent's own scope is fully released and the peer's claim body documents the sequencing.
+- **Symptom:** at S433 integration time the check failed twice with "claim 20260906T081356Z/082235Z (Kwame) is not released or handed off"; Kwame's claim text explicitly planned his agent_runtime additive pass to rebase AFTER Mei's merge — integrating per that documented sequence still showed a red gate.
+- **Root cause:** the check has no scoping of open-claim failures to the calling agent, and no way to mark a peer's claim as "sequenced after this merge" without releasing it.
+- **Suggested fix (package):** `check --agent <me>` scopes unreleased-claim failures to the calling agent's own claims (peer claims become informational), or an explicit `--expect-open <event-id>` escape whose use is recorded in the check output.
+- **Status:** open

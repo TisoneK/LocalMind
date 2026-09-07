@@ -1263,3 +1263,11 @@ if literally nothing slowed you down.
   the substitution.
 - **Prevent next time:** document `--body-file <real-path>` in the collab README's Windows example
   (package fix candidate — flaws log is the wrong surface; this is product-adjacent tooling).
+
+---
+## 2026-09-07 — ZCode / glm-5.3-flash (Session 433)
+- **Problem:** any pytest that constructs AgentRuntime (or Engine) writes into the REAL user chat store — turn paths persist messages to `settings.localmind_db_path` (default `~/LocalMind/localmind.db`) and create session workspace folders under `~/LocalMind/sessions`. The unit-test half of backlog item B-2026-09-06-5: ~40 residue chats in the live sidebar were test-created. This session's first fast-path test run would have polluted the real store had the fixture not patched settings BEFORE constructing the runtime.
+- **Cost:** every backend test that exercises a turn path silently pollutes user data; diagnosing "where did these chats come from" cost S431 a triage session.
+- **Cause:** AgentRuntime builds `SessionStore(settings.localmind_db_path)` at construction (agent_runtime.py:171) and `resolve_paths()` defaults `localmind_home` to `~/LocalMind`; conftest's `isolate_env` never pins either.
+- **Workaround / fix:** in test fixtures, monkeypatch `config.settings.localmind_home` AND `localmind_db_path` to a tmp dir BEFORE constructing AgentRuntime, then swap `rt._store = SessionStore(tmp_db)`; for whole-suite runs set `LOCALMIND_HOME=<scratch>`. Applied in `tests/core/test_fastpath_user_persist.py` (fixture `runtime`). The durable fix — pin the home in conftest's `isolate_env` — belongs to backlog item -5.
+- **Prevent next time:** conftest-level `LOCALMIND_HOME` isolation (item -5); until then, never run a turn-path suite without it.
