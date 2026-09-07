@@ -330,7 +330,7 @@ export function AgentWorkspace({ runs, isStreaming = false }: AgentWorkspaceProp
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase tracking-wider text-brand-green-muted font-medium">Agent Workspace</div>
-          <div className="text-[9px] text-brand-green-faint mt-0.5">Parent loop and delegated work</div>
+          <div className="text-[9px] text-brand-green-faint mt-0.5">Parent loop — turns and tool steps</div>
         </div>
         <div className={`inline-flex items-center gap-1 text-[9px] font-mono ${activeRuns > 0 || isStreaming ? 'text-brand-amber' : 'text-brand-green'}`}>
           {activeRuns > 0 || isStreaming ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <CheckCircle2 className="h-2.5 w-2.5" />}
@@ -364,7 +364,7 @@ export function AgentWorkspace({ runs, isStreaming = false }: AgentWorkspaceProp
       </div>
 
       <div className="flex items-center gap-2 text-[9px] text-brand-green-faint border-t border-brand-border pt-2">
-        <Clock className="h-2.5 w-2.5" /> Child agents receive an isolated task and report back to the parent.
+        <Clock className="h-2.5 w-2.5" /> One active agent: the Parent runs every turn and tool step itself.
       </div>
     </div>
   );

@@ -109,6 +109,10 @@ export interface ChatMessage {
   role: MessageRole;
   content: string;
   timestamp: string;
+  /** Raw epoch seconds from the store, preserved for the v3 chat export and
+   *  real dates. The display `timestamp` is reduced to HH:MM and must not be
+   *  re-parsed — always prefer this field when an absolute time is needed. */
+  timestampEpoch?: number;
   /** ADR-20: canonical error object when this reply failed — rendered as a
    *  friendly card (never the raw provider payload). Mutually exclusive with
    *  normal content (error replies stream no tokens). */
@@ -150,6 +154,10 @@ export interface ChatMessage {
     cachedTokens?: number;
     /** LLM calls that reported usage this turn. */
     llmCalls?: number;
+    /** Which model + provider answered this turn (persisted with the reply;
+     *  a chat may switch models mid-way, so identity is per turn). */
+    model?: string;
+    provider?: string;
   };
   /** Best-of-N editor candidates (B-2026-08-09-12 / C2 spec step 7), rendered
    * as an expandable section in the message. Populated from the tool result
@@ -308,6 +316,11 @@ export interface Session {
   workspacePath?: string;
   /** Human-readable date from the backend (e.g. "14:30" or "Jan 05") */
   formattedDate?: string;
+  /** Raw epoch seconds (v3 export + real dates): the list endpoint's merged
+   *  timestamp (last_active ?? created_at), plus the explicit bounds. */
+  timestampEpoch?: number;
+  createdAtEpoch?: number;
+  lastActiveEpoch?: number;
 }
 
 export interface ActionItem {

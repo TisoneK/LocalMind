@@ -136,7 +136,9 @@ class TestListSessionFiles:
         from api.routes.sessions import list_session_files
 
         result = await list_session_files("sess-files-1")
-        assert result["workspacePath"] == str(ws)
+        # The endpoint normalizes workspacePath to forward slashes — a
+        # platform-stable contract for the frontend tree/preview.
+        assert result["workspacePath"] == str(ws).replace("\\", "/")
         rels = {f["relPath"]: f for f in result["files"]}
         assert rels["alpha.txt"]["type"] == "file"
         assert rels["alpha.txt"]["size"] == 5

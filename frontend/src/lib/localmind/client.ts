@@ -396,6 +396,11 @@ class LocalMindClient {
       messageCount: s.messageCount ?? s.message_count ?? 0,
       active: false,
       workspacePath: s.workspacePath || s.workspace_path || '',
+      // Raw epochs preserved for the v3 export + real dates (the display
+      // `timestamp` above is a formatted string and must not be re-parsed).
+      timestampEpoch: typeof s.timestamp === 'number' ? s.timestamp : undefined,
+      createdAtEpoch: typeof s.createdAt === 'number' ? s.createdAt : undefined,
+      lastActiveEpoch: typeof s.lastActive === 'number' ? s.lastActive : undefined,
     }));
   }
 
@@ -424,10 +429,13 @@ class LocalMindClient {
         content: m.content,
 
       // Backend stores timestamps as raw epoch floats (e.g. 1783586329.77).
-      // Format to HH:MM for display — same format as live messages.
+      // Format to HH:MM for display — same format as live messages. The raw
+      // value is preserved alongside (timestampEpoch) for the v3 export and
+      // any consumer needing an absolute time.
       timestamp: typeof m.timestamp === 'number'
         ? new Date(m.timestamp * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
         : m.timestamp || '',
+      timestampEpoch: typeof m.timestamp === 'number' ? m.timestamp : undefined,
       // Session 266: the persisted tool timeline comes back in the backend's
       // snake_case shape (same as the live SSE tool_call payload) — map it to
       // the frontend ToolCall type so the pills render identically after reload.

@@ -29,7 +29,7 @@ The agent doesn't decide CSS. It decides the semantic presentation type.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Optional
 
@@ -197,7 +197,6 @@ def classify_presentation(
     - Definition / explanation → TEXT
     """
     lower_msg = user_message.lower() if user_message else ""
-    lower_resp = response_text.lower() if response_text else ""
 
     # Comparison cues
     if any(w in lower_msg for w in ["compare", "vs", "versus", "difference between", "contrast"]):

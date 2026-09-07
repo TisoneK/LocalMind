@@ -120,6 +120,10 @@ async def list_sessions():
                 "messageCount": session.get("message_count", 0),
                 "last_message": (session.get("last_message") or "")[:120],
                 "workspacePath": workspace,
+                # Raw epoch bounds (v3 export + real dates): `timestamp` stays
+                # the merged last_active??created_at value for back-compat.
+                "createdAt": session.get("created_at"),
+                "lastActive": session.get("last_active"),
             }
         )
 
@@ -180,6 +184,10 @@ async def get_history(session_id: str):
                     if latency_ms > 0 and completion > 0
                     else None
                 ),
+                # Turn identity (v3 export): which model + provider answered
+                # this turn, persisted with the reply's metrics.
+                "model": metrics.get("model") or None,
+                "provider": metrics.get("provider") or None,
             }
         # Session 267: restore the Agent Workspace run tree + phase strip
         # (frontend AgentRun[] / AgentPhase[] shapes — already camelCase).
@@ -254,7 +262,10 @@ async def list_session_files(session_id: str):
             raise HTTPException(status_code=400, detail="Invalid session id")
 
         if not ws_resolved.exists() or not ws_resolved.is_dir():
-            return {"files": [], "workspacePath": str(ws)}
+            # Forward slashes in the UI-facing paths: the workspace path and
+            # relPaths are consumed by the frontend tree/preview and by tests
+            # as a platform-stable contract, not as OS-native strings.
+            return {"files": [], "workspacePath": str(ws).replace("\\", "/")}
 
         import datetime
         import os
@@ -269,7 +280,7 @@ async def list_session_files(session_id: str):
                     st = os.stat(full)
                 except OSError:
                     continue
-                rel = os.path.relpath(full, ws_resolved)
+                rel = os.path.relpath(full, ws_resolved).replace("\\", "/")
                 file_rel_paths.add(rel)
                 entries.append(
                     {
@@ -285,14 +296,16 @@ async def list_session_files(session_id: str):
         # on disk — so the tree reflects the workspace layout.
         dir_rel_paths: set[str] = set()
         for rel in file_rel_paths:
-            parts = rel.split(os.sep)
+            parts = rel.split("/")
             for i in range(1, len(parts)):
-                dir_rel_paths.add(os.sep.join(parts[:i]))
+                dir_rel_paths.add("/".join(parts[:i]))
         for dirpath, dirnames, _filenames in os.walk(ws_resolved):
             for name in sorted(dirnames):
-                dir_rel_paths.add(os.path.relpath(os.path.join(dirpath, name), ws_resolved))
+                dir_rel_paths.add(
+                    os.path.relpath(os.path.join(dirpath, name), ws_resolved).replace("\\", "/")
+                )
         for rel in sorted(dir_rel_paths):
-            full = os.path.join(ws_resolved, *rel.split(os.sep))
+            full = os.path.join(ws_resolved, *rel.split("/"))
             try:
                 st = os.stat(full)
             except OSError:
@@ -308,7 +321,7 @@ async def list_session_files(session_id: str):
                 }
             )
         entries.sort(key=lambda e: (e["type"] != "folder", e["relPath"].lower()))
-        return {"files": entries, "workspacePath": str(ws)}
+        return {"files": entries, "workspacePath": str(ws).replace("\\", "/")}
     except HTTPException:
         raise
     except Exception as exc:

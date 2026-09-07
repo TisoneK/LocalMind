@@ -153,7 +153,10 @@ async def dispatch_with_retry(
                 )
                 return (
                     ToolResult(
-                        content=f"The '{label}' operation is currently disabled in Settings. Enable it to use this tool.",
+                        content=(
+                            f"The '{label}' operation is currently disabled in "
+                            "Settings. Enable it to use this tool."
+                        ),
                         source=tool_intent.value,
                         success=False,
                         error_type="permission",

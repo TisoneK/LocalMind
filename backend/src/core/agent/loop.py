@@ -790,8 +790,8 @@ def _log_session_write(
     if not session_id or not path:
         return
     try:
-        from storage.db import get_shared_store
         from core.config import settings
+        from storage.db import get_shared_store
 
         get_shared_store(settings.localmind_db_path).log_write(
             session_id, path=path, tool=tool,
@@ -2979,7 +2979,11 @@ class AgentLoop:
         # message as "analyze-only" (do not write code yet / first analyze),
         # skip workspace_state injection. The user wants abstract analysis,
         # not inspection of the on-disk repo.
-        if WORKSPACE_STATE_ENABLED and _message_implies_tool_action(_user_msg) and not _should_skip_workspace_state(_user_msg):
+        if (
+            WORKSPACE_STATE_ENABLED
+            and _message_implies_tool_action(_user_msg)
+            and not _should_skip_workspace_state(_user_msg)
+        ):
             try:
                 mark_turn_start()
                 ws_snap = workspace_snapshot()
@@ -4845,7 +4849,12 @@ class AgentLoop:
                         )
 
                     # B-2026-08-23-37: log write stat for apply_proposed_edit (single-tool path)
-                    if tool_name == "apply_proposed_edit" and tool_result and tool_result.success and tool_result.metadata:
+                    if (
+                        tool_name == "apply_proposed_edit"
+                        and tool_result
+                        and tool_result.success
+                        and tool_result.metadata
+                    ):
                         if tool_result.metadata.get("applied", False):
                             _log_session_write(
                                 session_id,
@@ -6473,7 +6482,8 @@ class AgentLoop:
                 # gate confirms is_final=True. If the gate fails, the buffered
                 # text is discarded so the user doesn't see a duplicate answer
                 # from a doomed iteration.
-                # (Previously: `if _stripped_buffer.strip(): yield StreamChunk(text=_stripped_buffer, done=False)` here.)
+                # (Previously the buffer was re-yielded here unconditionally,
+                # duplicating the answer.)
 
                 # If the stream already ended (short response), we're done
                 if stream_ended_early:

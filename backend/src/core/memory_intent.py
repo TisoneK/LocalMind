@@ -520,7 +520,10 @@ def extract_memory_candidates(
                     domain_match = re.search(r"https?://(?:www\.)?([^/]+)", url)
                     domain = domain_match.group(1) if domain_match else "unknown"
                     candidates.append(MemoryCandidate(
-                        content=f"Source {domain} ({url}) provided useful information. Consider this source for future queries in the same domain.",
+                        content=(
+                            f"Source {domain} ({url}) provided useful information. "
+                            "Consider this source for future queries in the same domain."
+                        ),
                         memory_type=MemoryType.SOURCE_KNOWLEDGE,
                         confidence=0.6,
                         durability="persistent",

@@ -27,6 +27,16 @@ from core.models import Intent, StreamChunk
 _SHELL_FAIL_OBS = "Command failed:\ncat: /nonexistent_xyz.txt: No such file or directory"
 _SHELL_OK_OBS = "floor-smoke-ok"
 
+# Realistic model answers per (tool, observation) — what a parent would say
+# before claiming done, so the turn-outcome classifier sees the same input
+# the production gate does.
+_FINAL_RESPONSES = {
+    ("shell", _SHELL_OK_OBS): "Done — the command ran and floor-smoke-ok is in its output.",
+    ("file_task", "error: file not found"): (
+        "I checked for the file and it does not exist — nothing to report from it."
+    ),
+}
+
 
 class _ReplanAdapter:
     """Captures the gate's replan LLM call and returns a revised plan."""
@@ -56,6 +66,14 @@ def _trace(*steps):
                 tool_failed=failed,
             )
         )
+    # The real loop always carries the model's streamed answer into the gate;
+    # an empty final_response reads as "empty response" to the turn-outcome
+    # classifier and would misroute these floor tests before they exercise
+    # what they exist to test.
+    trace.final_response = _FINAL_RESPONSES.get(
+        (steps[-1][0], steps[-1][1]),
+        "Done — I ran the command and here is the report.",
+    )
     return trace
 
 

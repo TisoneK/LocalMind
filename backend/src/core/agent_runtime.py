@@ -1142,6 +1142,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # Only for the CONVERSATIONAL path (not trivial — trivial gets
                 # a canned reply with zero LLM calls).
                 _thinker_context = ""
+                # v3 export: the reasoning the fast path streams (Thinker
+                # consult + the conversational model's own thinking) is part
+                # of the turn — collect it so the persisted assistant message
+                # carries what the UI showed live.
+                _fast_thinking_parts: list[str] = []
                 if not _is_trivial:
                     try:
                         from core.agent.thinker import Evidence, Thinker
@@ -1166,7 +1171,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                             from core.filters import _filter_system_leaks as _fsl
                             async for _tc in _thinker.consult(_ev, _adapter):
                                 if isinstance(getattr(_tc, "thinking", None), str) and _tc.thinking:
-                                    yield StreamChunk(text="", thinking=_fsl(_tc.thinking), done=False)
+                                    _piece = _fsl(_tc.thinking)
+                                    if _piece:
+                                        yield StreamChunk(text="", thinking=_piece, done=False)
+                                        _fast_thinking_parts.append(_piece)
                             _analysis = _thinker.last_analysis
                             if _analysis and not _analysis.is_empty:
                                 _thinker_context = _analysis.reasoning[:500]
@@ -1204,6 +1212,8 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 async for _chunk in _stream:
                     if _chunk.usage:
                         _fast_usage.update(_chunk.usage)
+                    if _chunk.thinking:
+                        _fast_thinking_parts.append(_chunk.thinking)
                     if _chunk.text:
                         _response_chunks.append(_chunk.text)
                         if _chunk.done:
@@ -1277,7 +1287,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 self._persist_assistant(
                     session_id,
                     _response_text,
-                    thinking=None,
+                    # The conversational leg streams the model's own thinking;
+                    # the trivial leg is a canned string (no thinking, no model
+                    # call) and stays metric-free except for honest estimates.
+                    thinking="".join(_fast_thinking_parts) or None,
                     acknowledgement=None,
                     error=None,
                     tool_calls=None,
@@ -1293,6 +1306,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                             "prompt_tokens": _prompt_tokens,
                             "completion_tokens": _completion_tokens,
                             "latency_ms": _total_ms,
+                            # Turn identity (v3 export): which model +
+                            # provider answered this real (non-canned) turn.
+                            "model": active_parent_model() or "(default)",
+                            "provider": settings.localmind_adapter,
                         }
                     ),
                 )
@@ -1878,6 +1895,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 "latency_ms": total_ms,
                 "cached_tokens": int(usage.get("cached_tokens", 0) or 0),
                 "llm_calls": int(usage.get("llm_calls", 0) or 0),
+                # Turn identity (v3 export): which model + provider answered
+                # this turn (same source the kernel ready log records).
+                "model": active_parent_model() or "(default)",
+                "provider": settings.localmind_adapter,
             },
             agent_runs=agent_runs,
             agent_phases=agent_phases,

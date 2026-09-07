@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Plus, MessageSquare, Zap, FolderTree, CheckSquare, Square, Cpu, Trash2, Loader2, Terminal, Globe, FileEdit, Brain, Download, X, ListChecks, ChevronRight, ChevronDown, File as FileIcon, Folder as FolderIcon, MoreVertical, Settings, LayoutDashboard } from 'lucide-react';
 import { Session, ActionItem, FileNode, SessionFileEntry, TodoItem, ModelOption, ToolCall, DiffData } from '@/types';
 import type { ExportFormat } from '@/lib/localmind/exportChats';
+import { stripMarkdownToPreview } from '@/lib/previewText';
 import { ActionHistory } from '@/components/panels/ActionHistory';
 import { FileExplorer } from '@/components/panels/FileExplorer';
 import { TodoList } from '@/components/panels/TodoList';
@@ -504,8 +505,11 @@ export function LeftPanel({
                   </div>
                 )}
                 <div className="pl-5 flex items-center gap-2">
-                  <span className="text-[10px] text-brand-green-muted truncate flex-1 min-w-0" title={session.lastMessage}>
-                    {session.lastMessage}
+                  <span
+                    className="text-[10px] text-brand-green-muted truncate flex-1 min-w-0"
+                    title={stripMarkdownToPreview(session.lastMessage)}
+                  >
+                    {stripMarkdownToPreview(session.lastMessage)}
                   </span>
                   <span className="text-[9px] text-brand-green-muted shrink-0">{formatTimestamp(session.timestamp, session.formattedDate)}</span>
                 </div>

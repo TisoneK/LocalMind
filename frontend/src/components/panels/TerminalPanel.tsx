@@ -17,24 +17,62 @@ import {
 import { PackageInstaller } from './PackageInstaller';
 
 // ─── Color Map ─────────────────────────────────────────────────────────
+//
+// Raw command output is deliberately DIMMED (brand-green-faint) so the eye
+// scans the bright command headers first and reads output only when needed —
+// the fix for the flat "everything is the same weight" hierarchy. Status
+// colors each mean exactly ONE thing: amber = running, green = success,
+// red = error, purple = agent. Blue is reserved for interactive affordances
+// (copy, input focus) so interactivity is never mistaken for a status.
 
 const lineColors: Record<TerminalLine['type'], string> = {
-  command: 'text-brand-green',
-  output: 'text-brand-gh-text',
+  command: 'text-brand-green-soft',
+  output: 'text-brand-green-faint',
   error: 'text-brand-gh-red',
   info: 'text-brand-gh-amber',
-  system: 'text-brand-gh-blue',
+  system: 'text-brand-green-muted',
   success: 'text-brand-gh-green',
 };
 
+// Keep the glyph set tiny and non-emoji: a red ✗, a green ✓, and a yellow !
+// for warnings. Everything else leans on color + dimming, not a symbol —
+// glyphs like ⓘ / ⚛ render as coloured emoji on some platforms and read as
+// noise in a terminal.
 const linePrefixes: Record<TerminalLine['type'], string> = {
   command: '',
-  output: '  ',
+  output: '',
   error: '✗ ',
-  info: 'ℹ ',
-  system: '● ',
+  info: '! ',
+  system: '',
   success: '✓ ',
 };
+
+// ─── Command block status ──────────────────────────────────────────────
+
+type CmdStatus = 'running' | 'success' | 'error';
+
+/** Honest per-command status: prefer the real exit code, then error output;
+ *  never fabricate. A running command is only the last one while isRunning. */
+function commandStatus(
+  cmd: TerminalLine,
+  children: TerminalLine[],
+  isLastCommand: boolean,
+  isRunning: boolean,
+): CmdStatus {
+  if (isLastCommand && isRunning) return 'running';
+  if (typeof cmd.exitCode === 'number') return cmd.exitCode === 0 ? 'success' : 'error';
+  if (children.some((c) => c.type === 'error')) return 'error';
+  return 'success';
+}
+
+/** Format a real duration (ms). Returns '' when no duration was recorded —
+ *  we show nothing rather than invent a number. */
+function formatDuration(ms?: number): string {
+  if (ms == null || !isFinite(ms) || ms < 0) return '';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const s = ms / 1000;
+  return `${s < 10 ? s.toFixed(1) : Math.round(s)}s`;
+}
 
 // ─── ANSI Stripping (for display safety) ───────────────────────────────
 
@@ -399,23 +437,45 @@ export function TerminalPanel({
 
   const searchMatchCount = searchQuery ? filteredLines.length : 0;
 
-  // Group lines by command: each command "owns" the output lines that follow it
-  // until the next command. Drives the collapsible terminal groups.
-  const ownerOfLine: Record<string, string | null> = {};
-  const cmdChildCount: Record<string, number> = {};
+  // Group lines into command BLOCKS: each command owns the output lines that
+  // follow it until the next command. Output that precedes any command (agent
+  // tool output, standalone system lines) collects into a "loose" block. One
+  // header per command replaces the old one-timestamp-per-line repetition.
+  type CmdBlock = { kind: 'command'; cmd: TerminalLine; children: TerminalLine[] };
+  type LooseBlock = { kind: 'loose'; lines: TerminalLine[] };
+  type TermBlock = CmdBlock | LooseBlock;
+
+  const blocks: TermBlock[] = [];
   {
-    let curCmd: string | null = null;
+    let cur: CmdBlock | null = null;
+    let loose: TerminalLine[] = [];
+    const flushLoose = () => {
+      if (loose.length) {
+        blocks.push({ kind: 'loose', lines: loose });
+        loose = [];
+      }
+    };
     for (const l of filteredLines) {
       if (l.type === 'command') {
-        curCmd = l.id;
-        ownerOfLine[l.id] = null;
-        cmdChildCount[l.id] = 0;
+        flushLoose();
+        cur = { kind: 'command', cmd: l, children: [] };
+        blocks.push(cur);
+      } else if (cur) {
+        cur.children.push(l);
       } else {
-        ownerOfLine[l.id] = curCmd;
-        if (curCmd) cmdChildCount[curCmd] = (cmdChildCount[curCmd] ?? 0) + 1;
+        loose.push(l);
       }
     }
+    flushLoose();
   }
+
+  // A live search reveals everything (a match may sit inside a collapsed group).
+  const forceExpand = !!searchQuery;
+
+  const renderContent = (content: string) =>
+    searchQuery && content.toLowerCase().includes(searchQuery.toLowerCase())
+      ? highlightSearch(content, searchQuery)
+      : content;
 
   // ── Short CWD Display ──
   const shortCwd = cwd.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
@@ -554,8 +614,8 @@ export function TerminalPanel({
         </div>
         {isRunning && (
           <div className="flex items-center gap-1 ml-auto">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse" />
-            <span className="text-[9px] text-brand-green">running</span>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-gh-amber animate-pulse" />
+            <span className="text-[9px] text-brand-gh-amber">running</span>
           </div>
         )}
       </div>
@@ -585,90 +645,165 @@ export function TerminalPanel({
             </div>
           </div>
         )}
-        {filteredLines.map((line) => {
-          const displayContent = stripAnsi(line.content);
-          const isSearchMatch =
-            searchQuery && displayContent.toLowerCase().includes(searchQuery.toLowerCase());
-          const isCmd = line.type === 'command';
-          const owner = ownerOfLine[line.id];
-          // Hide output belonging to a collapsed command group. (A live search
-          // shows everything — a match may live inside a collapsed group.)
-          if (!searchQuery && !isCmd && owner && collapsedCmds.has(owner)) return null;
-          const childCount = isCmd ? cmdChildCount[line.id] ?? 0 : 0;
-          const collapsed = isCmd && collapsedCmds.has(line.id);
+        {(() => {
+          // The last command in the stream is the only one that can be "running".
+          let lastCommandId: string | null = null;
+          for (const b of blocks) if (b.kind === 'command') lastCommandId = b.cmd.id;
 
-          return (
-            <div
-              key={line.id}
-              className={`group flex items-start hover:bg-brand-bg-panel-alt rounded-sm transition-colors ${
-                isSearchMatch ? 'bg-brand-border/50' : ''
-              } ${!isCmd && owner ? 'border-l border-brand-border/50' : ''}`}
-            >
-              <span className="text-[9px] text-brand-green-deleted w-16 shrink-0 select-none pt-px">
-                {line.timestamp}
-              </span>
-              {/* Tool badge for agent lines */}
-              {line.source === 'agent' && line.toolName && (
-                <span className="text-[8px] px-1 rounded bg-brand-border text-brand-gh-blue shrink-0 select-none mr-1">
-                  {line.toolName}
-                </span>
-              )}
-              <span className={`flex-1 break-all [overflow-wrap:anywhere] ${lineColors[line.type]}`}>
-                {isCmd && <span className="text-brand-green mr-1.5 select-none">❯</span>}
-                {linePrefixes[line.type]}
+          // A single dimmed output row (used inside command blocks and loose
+          // blocks). No per-row timestamp — the block header carries the time.
+          const outputRow = (line: TerminalLine) => {
+            const displayContent = stripAnsi(line.content);
+            const isMatch =
+              searchQuery && displayContent.toLowerCase().includes(searchQuery.toLowerCase());
+            return (
+              <div
+                key={line.id}
+                className={`group flex items-start gap-1.5 px-1 rounded-sm hover:bg-brand-bg-panel-alt transition-colors ${
+                  isMatch ? 'bg-brand-border/50' : ''
+                }`}
+              >
                 {line.source === 'agent' && (
-                  <span className="text-brand-gh-purple mr-1">&#9883;</span>
+                  <span className="mt-[5px] w-1 h-1 rounded-full bg-brand-gh-purple shrink-0" title="agent" />
                 )}
-                {isSearchMatch
-                  ? highlightSearch(displayContent, searchQuery)
-                  : displayContent}
-              </span>
-              {/* Collapse toggle for a command with output (right side, like the
-                  Actions rows) — shows the hidden line count when collapsed. */}
-              {isCmd && childCount > 0 && (
+                {line.source === 'agent' && line.toolName && (
+                  <span className="text-[8px] px-1 rounded bg-brand-border text-brand-green-muted shrink-0 select-none mt-px">
+                    {line.toolName}
+                  </span>
+                )}
+                <span className={`flex-1 min-w-0 break-all [overflow-wrap:anywhere] ${lineColors[line.type]}`}>
+                  {linePrefixes[line.type]}
+                  {renderContent(displayContent)}
+                </span>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setCollapsedCmds((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(line.id)) next.delete(line.id);
-                      else next.add(line.id);
-                      return next;
-                    });
+                    copyLine(line.id, line.content);
                   }}
-                  className="ml-1 flex items-center gap-1 text-brand-green-faint hover:text-brand-green-muted transition-colors shrink-0"
-                  title={collapsed ? 'Expand output' : 'Collapse output'}
-                  aria-expanded={!collapsed}
+                  className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 text-brand-green-deleted hover:text-brand-gh-blue transition-all shrink-0"
+                  title="Copy line"
                 >
-                  <span className="text-[9px] tabular-nums">{childCount}</span>
-                  {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  <Copy className="h-2.5 w-2.5" />
                 </button>
-              )}
-              {/* Copy button per line */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  copyLine(line.id, line.content);
-                }}
-                className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 text-brand-green-deleted hover:text-brand-green-muted transition-opacity shrink-0"
-                title="Copy line"
-              >
-                <Copy className="h-2.5 w-2.5" />
-              </button>
-              {/* Copied indicator */}
-              {copiedLineId === line.id && (
-                <span className="text-[8px] text-brand-gh-green ml-1 shrink-0">Copied!</span>
-              )}
-            </div>
-          );
-        })}
+                {copiedLineId === line.id && (
+                  <span className="text-[8px] text-brand-gh-green ml-1 shrink-0">Copied!</span>
+                )}
+              </div>
+            );
+          };
+
+          return blocks.map((block) => {
+            // Loose output (agent tool output or system lines with no owning
+            // command) renders as a plain dimmed group.
+            if (block.kind === 'loose') {
+              return (
+                <div key={`loose-${block.lines[0].id}`} className="py-0.5">
+                  {block.lines.map(outputRow)}
+                </div>
+              );
+            }
+
+            // Command block: one bright header (status dot · time · ❯ command ·
+            // duration · collapse · copy) with its output dimmed underneath.
+            const { cmd, children } = block;
+            const status = commandStatus(cmd, children, cmd.id === lastCommandId, !!isRunning);
+            const collapsed = !forceExpand && collapsedCmds.has(cmd.id);
+            const childCount = children.length;
+            const dur = formatDuration(cmd.duration);
+            const displayCmd = stripAnsi(cmd.content);
+            const isMatch =
+              searchQuery && displayCmd.toLowerCase().includes(searchQuery.toLowerCase());
+
+            const dotClass =
+              status === 'running'
+                ? 'bg-brand-gh-amber shadow-[0_0_0_3px] shadow-brand-gh-amber/20 animate-pulse'
+                : status === 'error'
+                ? 'bg-brand-gh-red'
+                : 'bg-brand-gh-green';
+            const metaClass =
+              status === 'running'
+                ? 'text-brand-gh-amber'
+                : status === 'error'
+                ? 'text-brand-gh-red'
+                : 'text-brand-green-faint';
+            const metaText =
+              status === 'running' ? 'running' : dur || (status === 'error' ? 'error' : '');
+
+            return (
+              <div key={cmd.id} className="mb-0.5">
+                <div
+                  className={`group flex items-center gap-2 px-1 py-0.5 rounded-sm hover:bg-brand-bg-panel-alt transition-colors ${
+                    isMatch ? 'bg-brand-border/50' : ''
+                  }`}
+                >
+                  <span className={`w-[7px] h-[7px] rounded-full shrink-0 ${dotClass}`} />
+                  <span className="text-[9px] text-brand-green-deleted shrink-0 select-none tabular-nums">
+                    {cmd.timestamp}
+                  </span>
+                  {cmd.source === 'agent' && (
+                    <span className="w-1 h-1 rounded-full bg-brand-gh-purple shrink-0" title="agent" />
+                  )}
+                  {cmd.source === 'agent' && cmd.toolName && (
+                    <span className="text-[8px] px-1 rounded bg-brand-border text-brand-green-muted shrink-0 select-none">
+                      {cmd.toolName}
+                    </span>
+                  )}
+                  <span className="text-brand-green shrink-0 select-none">❯</span>
+                  <span className="flex-1 min-w-0 truncate text-brand-green-soft" title={displayCmd}>
+                    {renderContent(displayCmd)}
+                  </span>
+                  {metaText && (
+                    <span className={`text-[10px] shrink-0 tabular-nums ${metaClass}`}>{metaText}</span>
+                  )}
+                  {childCount > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCollapsedCmds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(cmd.id)) next.delete(cmd.id);
+                          else next.add(cmd.id);
+                          return next;
+                        });
+                      }}
+                      className="flex items-center gap-1 text-brand-green-faint hover:text-brand-green-muted transition-colors shrink-0"
+                      title={collapsed ? 'Expand output' : 'Collapse output'}
+                      aria-expanded={!collapsed}
+                    >
+                      <span className="text-[9px] tabular-nums">{childCount}</span>
+                      {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      copyLine(cmd.id, cmd.content);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-0.5 text-brand-green-deleted hover:text-brand-gh-blue transition-all shrink-0"
+                    title="Copy line"
+                  >
+                    <Copy className="h-2.5 w-2.5" />
+                  </button>
+                  {copiedLineId === cmd.id && (
+                    <span className="text-[8px] text-brand-gh-green shrink-0">Copied!</span>
+                  )}
+                </div>
+                {!collapsed && childCount > 0 && (
+                  <div className="ml-[7px] pl-3 border-l border-brand-border/50">
+                    {children.map(outputRow)}
+                  </div>
+                )}
+              </div>
+            );
+          });
+        })()}
         {/* Live execution cursor — a blinking block + "executing…" while a
             command runs, so the panel shows the shell working in realtime
             even before the first output line lands. */}
         {isRunning && (
           <div className="flex items-center gap-1.5 px-1 pt-1" data-testid="terminal-executing">
-            <span className="terminal-cursor inline-block w-[7px] h-[13px] bg-brand-green align-middle" />
-            <span className="text-[10px] text-brand-green-muted">executing…</span>
+            <span className="terminal-cursor inline-block w-[7px] h-[13px] bg-brand-gh-amber align-middle" />
+            <span className="text-[10px] text-brand-gh-amber">executing…</span>
           </div>
         )}
       </div>
@@ -706,44 +841,48 @@ export function TerminalPanel({
       )}
 
       {/* ── Command Input ── */}
+      {/* The focus ring is BLUE (the interactive accent), never green — so an
+          active prompt is never confused with a green "success" above it. */}
       {onExecute && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-brand-bg-dark border-t border-brand-border">
-          <span className="text-brand-green text-[13px] shrink-0">❯</span>
-          <div className="relative flex-1">
-            {/* Idle prompt cursor — a blinking block at the start of an empty
-                prompt so the terminal looks live and ready to type. Hidden
-                once the user types (the native caret takes over) or while a
-                command is running. */}
-            {!isRunning && input === '' && (
-              <span className="terminal-cursor pointer-events-none absolute left-0 top-1/2 h-[12px] w-[6px] -translate-y-1/2 bg-brand-green/70" />
+        <div className="px-2 py-1.5 bg-brand-bg-dark border-t border-brand-border">
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-brand-bg-panel-alt border border-brand-border focus-within:border-brand-gh-blue/70 focus-within:ring-2 focus-within:ring-brand-gh-blue/15 transition-colors">
+            <span className="text-brand-gh-blue text-[13px] shrink-0">❯</span>
+            <div className="relative flex-1">
+              {/* Idle prompt cursor — a blinking block at the start of an empty
+                  prompt so the terminal looks live and ready to type. Hidden
+                  once the user types (the native caret takes over) or while a
+                  command is running. */}
+              {!isRunning && input === '' && (
+                <span className="terminal-cursor pointer-events-none absolute left-0 top-1/2 h-[12px] w-[6px] -translate-y-1/2 bg-brand-gh-blue/70" />
+              )}
+              <input
+                ref={inputRef}
+                type="text"
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  setCommandHistoryIndex(-1);
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder={isRunning ? 'Running...' : 'Enter command… (↑ history · Tab autocomplete)'}
+                disabled={isRunning}
+                className="w-full bg-transparent text-[12px] text-brand-green-soft placeholder:text-brand-green-faint outline-none font-mono caret-brand-gh-blue"
+                spellCheck={false}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+              />
+            </div>
+            {isRunning && (
+              <button
+                onClick={() => onAbort?.()}
+                className="px-1.5 py-0.5 text-[9px] text-brand-gh-red hover:bg-brand-border rounded transition-colors shrink-0"
+                title="Cancel (Ctrl+C)"
+              >
+                Cancel
+              </button>
             )}
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                setCommandHistoryIndex(-1);
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={isRunning ? 'Running...' : 'Enter command... (↑ history, Tab autocomplete)'}
-              disabled={isRunning}
-              className="w-full bg-transparent text-[12px] text-brand-green-soft placeholder:text-brand-green-faint outline-none font-mono caret-brand-green"
-              spellCheck={false}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-            />
           </div>
-          {isRunning && (
-            <button
-              onClick={() => onAbort?.()}
-              className="px-1.5 py-0.5 text-[9px] text-brand-gh-red hover:bg-brand-border rounded transition-colors shrink-0"
-              title="Cancel (Ctrl+C)"
-            >
-              Cancel
-            </button>
-          )}
         </div>
       )}
 

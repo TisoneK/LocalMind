@@ -224,3 +224,50 @@ def patch_adapter(adapter: MagicMock):
     import unittest.mock as mock
 
     return mock.patch("core.engine.get_adapter", return_value=adapter)
+
+
+class TestTurnIdentityInMetrics:
+    """The v3 export lifts per-turn model/provider identity out of the
+    persisted metrics — stamp it where a model actually produced the reply
+    (conversational leg, agent finalize), never on the canned trivial leg,
+    where stamping would fabricate the identity of a reply no model gave."""
+
+    @pytest.mark.asyncio
+    async def test_conversational_turn_stamps_model_and_provider(self, runtime, monkeypatch):
+        from core.config import settings
+        from core.obs import ObsCollector
+
+        monkeypatch.setattr(settings, "localmind_adapter", "zai", raising=False)
+        monkeypatch.setattr(
+            "core.agent_runtime.active_parent_model", lambda: "glm-4.5-flash"
+        )
+        sid = "sess-identity-conv"
+        with patch_adapter(_chat_adapter("Files, research, code.")):
+            await _collect(
+                runtime.process(
+                    "What can you do?", sid, obs=ObsCollector(), client_intent="chat"
+                )
+            )
+
+        history = _history(runtime, sid)
+        metrics = history[1].metrics or {}
+        assert metrics.get("model") == "glm-4.5-flash"
+        assert metrics.get("provider") == "zai"
+
+    @pytest.mark.asyncio
+    async def test_trivial_canned_turn_stamps_no_identity(self, runtime, monkeypatch):
+        from core.config import settings
+        from core.obs import ObsCollector
+
+        monkeypatch.setattr(settings, "localmind_adapter", "zai", raising=False)
+        monkeypatch.setattr(
+            "core.agent_runtime.active_parent_model", lambda: "glm-4.5-flash"
+        )
+        sid = "sess-identity-trivial"
+        with patch_adapter(_llm_forbidden_adapter()):
+            await _collect(runtime.process("Hi", sid, obs=ObsCollector()))
+
+        history = _history(runtime, sid)
+        metrics = history[1].metrics or {}
+        assert "model" not in metrics
+        assert "provider" not in metrics

@@ -696,10 +696,16 @@ async def pull_embed_model():
                             if data.get("total") and data.get("completed") is not None:
                                 pct = round(data["completed"] / data["total"] * 100, 1)
                             if status == "success":
-                                yield f"event: done\ndata: {json.dumps({'status': 'done', 'detail': f'{model} downloaded successfully'})}\n\n"
+                                done = {"status": "done", "detail": f"{model} downloaded successfully"}
+                                yield f"event: done\ndata: {json.dumps(done)}\n\n"
                                 break
                             else:
-                                yield f"event: progress\ndata: {json.dumps({'status': 'pulling', 'progress': pct, 'detail': status})}\n\n"
+                                pulling = {
+                                    "status": "pulling",
+                                    "progress": pct,
+                                    "detail": status,
+                                }
+                                yield f"event: progress\ndata: {json.dumps(pulling)}\n\n"
                         except json.JSONDecodeError:
                             continue
         except Exception as e:

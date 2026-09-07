@@ -32,6 +32,7 @@ from typing import Optional
 
 from core.agent.constants import MAX_ITERATIONS
 from core.agent.tool_schemas import compact_tool_summary, render_tool_list
+from core.models import Intent
 from core.system_snapshot import get_cached_summary
 
 
@@ -46,7 +47,6 @@ def _system_env_line() -> str:
         "hostname questions directly from it; only call sysinfo for details not "
         "listed, e.g. processes, network, or a live re-read.)"
     )
-from core.models import Intent
 
 
 def build_planning_prompt(
@@ -619,7 +619,7 @@ in what tools actually returned. Do not emit XML tool calls or expose internal r
         # the cached prefix every turn AND sent the env summary twice (once here,
         # once in turn-context). The chat prefix is now just identity + the
         # response contract, matching the agent branch's baseline+tail split.
-        return """You are LocalMind — a local AI assistant running on the user's machine. You are thoughtful, direct, and genuinely helpful. You remember things about this user and use that knowledge to be more useful.
+        chat_prompt = """You are LocalMind — a local AI assistant running on the user's machine. You are thoughtful, direct, and genuinely helpful. You remember things about this user and use that knowledge to be more useful.
 
 HOW TO RESPOND:
 - Answer from your knowledge. Do NOT call any tools — you're in conversation mode.
@@ -679,6 +679,21 @@ THINKING DEPTH:
 - For design/architecture questions: present your recommendation with the trade-offs that led you there.
 - For creative requests: go deep. Give the user something they wouldn't have come up with on their own.
 """
+
+        # The chat branch above is a byte-stable prefix (cache-prefix
+        # discipline), but it claims "You remember things about this user" —
+        # without the facts it promises, the model can only impute or invent
+        # them. Append the facts AFTER the static block so the prefix's bytes
+        # are unchanged and the memory weave is real.
+        if memory_facts:
+            chat_prompt = (
+                chat_prompt
+                + "\nWHAT YOU KNOW ABOUT THIS USER (use naturally — never say "
+                + '"based on my memory"):\n'
+                + "\n".join(f"- {fact}" for fact in memory_facts[:10])
+                + "\n"
+            )
+        return chat_prompt
 
     # Session 32: inject the universal "check before acting" safety workflow.
     # This is a constraint that applies to EVERY tool that creates, writes,

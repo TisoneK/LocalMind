@@ -5,11 +5,10 @@ Searches file contents for a pattern (regex or literal) without needing shell ac
 Works even when the shell tool is disabled.
 """
 
-import re
-import os
 import logging
+import os
+import re
 from pathlib import Path
-from typing import Optional
 
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
@@ -21,7 +20,8 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB — skip files larger than this
 DEFAULT_ROOTS = [Path.home()]
 
 _SKIP_DIRS = frozenset({
-    ".git", ".venv", "venv", "node_modules", "__pycache__", ".next", ".cache", ".localmind", "LocalMind", "dist", "build",
+    ".git", ".venv", "venv", "node_modules", "__pycache__", ".next", ".cache",
+    ".localmind", "LocalMind", "dist", "build",
     ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache",
 })
 
@@ -172,7 +172,11 @@ async def grep_search(message: str) -> ToolResult:
         )
 
     # Format results
-    lines = [f"Found {len(results)} match{'es' if len(results) != 1 else ''} for '{pattern}' in {total_files_scanned} files:"]
+    match_word = "es" if len(results) != 1 else ""
+    lines = [
+        f"Found {len(results)} match{match_word} for '{pattern}' "
+        f"in {total_files_scanned} files:"
+    ]
     current_file = None
     for fpath, line_no, line_text in results:
         rel = fpath
@@ -214,7 +218,12 @@ def _search_file(fpath: Path, pattern: re.Pattern, remaining: int, results: list
 register_tool(
     Intent.GREP_SEARCH,
     grep_search,
-    description="Search file contents for a text pattern (regex supported). Works without shell. Format: \"<pattern>\" or \"<pattern> in <path>\". Options: case:i (insensitive), max:N (limit results), glob:*.py (file filter). Returns matching lines with file paths and line numbers.",
+    description=(
+        'Search file contents for a text pattern (regex supported). Works without shell. '
+        'Format: "<pattern>" or "<pattern> in <path>". Options: case:i (insensitive), '
+        "max:N (limit results), glob:*.py (file filter). Returns matching lines with "
+        "file paths and line numbers."
+    ),
     cost=0.02,
     latency_ms=500,
     parallelizable=False,

@@ -150,7 +150,95 @@ describe('sessionsToJson', () => {
 
   it('bumps the schema version when the shape grows', () => {
     const doc = JSON.parse(sessionsToJson([{ session: session(), history }]));
-    expect(doc.version).toBe(2);
+    expect(doc.version).toBe(3);
+  });
+});
+
+describe('sessionsToJson v3 — full-fidelity export', () => {
+  // Live finding behind this regression: a chat whose replies were all
+  // persisted without their user turns exported as assistant-only. The
+  // exporter must carry whatever roles the history holds, in original order —
+  // restoring the user rows is the persistence layer's job; this asserts the
+  // export never filters.
+  it('exports a mixed-role session 1:1 against the transcript, in order', () => {
+    const mixed: ChatMessage[] = [
+      { id: 'm1', role: 'user', content: 'Hi', timestamp: '07:39' },
+      { id: 'm2', role: 'assistant', content: "Hi! I'm LocalMind.", timestamp: '07:39' },
+      { id: 'm3', role: 'user', content: 'How are you?', timestamp: '07:39' },
+      { id: 'm4', role: 'assistant', content: 'Going great — what can I do for you?', timestamp: '07:40' },
+    ];
+    const doc = JSON.parse(sessionsToJson([{ session: session({ messageCount: 4 }), history: mixed }]));
+    expect(doc.chats[0].messages.map((m: ChatMessage) => m.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+    ]);
+    expect(doc.chats[0].messages.map((m: ChatMessage) => m.content)).toEqual(mixed.map((m) => m.content));
+    expect(doc.chats[0].messageCount).toBe(4);
+  });
+
+  it('keeps every v2 key present (v2 consumers stay readable)', () => {
+    const doc = JSON.parse(sessionsToJson([{ session: session(), history: richHistory, todos }]));
+    const chat = doc.chats[0];
+    // Chat-level v2 keys.
+    for (const key of ['id', 'title', 'timestamp', 'formattedDate', 'messageCount', 'todos', 'messages']) {
+      expect(chat).toHaveProperty(key);
+    }
+    // Message-level v2 keys (present even when empty for optional ones).
+    const msg = chat.messages[1];
+    for (const key of ['id', 'role', 'content', 'timestamp', 'thinking', 'acknowledgement', 'toolCalls', 'performance', 'agentPhases', 'fileResults']) {
+      expect(msg).toHaveProperty(key);
+    }
+  });
+
+  it('emits ISO-8601 timestamps from the preserved raw epochs', () => {
+    const s = session({
+      timestampEpoch: 1788669567.862,
+      createdAtEpoch: 1788669567.0,
+      lastActiveEpoch: 1788669603.674,
+    });
+    const msgs: ChatMessage[] = [
+      { id: 'm1', role: 'user', content: 'How are you?', timestamp: '07:39', timestampEpoch: 1788669571.5 },
+    ];
+    const doc = JSON.parse(sessionsToJson([{ session: s, history: msgs }]));
+    const chat = doc.chats[0];
+    expect(chat.createdAt).toBe('2026-09-06T04:39:27.000Z');
+    expect(chat.lastActive).toBe('2026-09-06T04:40:03.674Z');
+    expect(chat.messages[0].timestamp).toBe('2026-09-06T04:39:31.500Z');
+    expect(chat.messages[0].timestampDisplay).toBe('07:39');
+  });
+
+  it('falls back to the display string and null dates when epochs are absent', () => {
+    const doc = JSON.parse(sessionsToJson([{ session: session(), history }]));
+    const chat = doc.chats[0];
+    expect(chat.createdAt).toBeNull();
+    expect(chat.lastActive).toBeNull();
+    expect(chat.messages[0].timestamp).toBe('10:00');
+    expect(chat.messages[0].timestampDisplay).toBe('10:00');
+  });
+
+  it('lifts per-turn model/provider identity from the persisted metrics', () => {
+    const msgs: ChatMessage[] = [
+      {
+        id: 'm1',
+        role: 'assistant',
+        content: 'real answer',
+        timestamp: '07:40',
+        performance: { latencyMs: 900, promptTokens: 432, completionTokens: 87, model: 'qwen3.8-flash', provider: 'bankofai' },
+      },
+    ];
+    const doc = JSON.parse(sessionsToJson([{ session: session(), history: msgs }]));
+    const msg = doc.chats[0].messages[0];
+    expect(msg.model).toBe('qwen3.8-flash');
+    expect(msg.provider).toBe('bankofai');
+    expect(msg.performance.model).toBe('qwen3.8-flash');
+  });
+
+  it('adds the absolute date to the markdown meta line when the epoch is known', () => {
+    const s = session({ lastActiveEpoch: 1788669603.674 });
+    const md = sessionsToMarkdown([{ session: s, history }]);
+    expect(md).toContain('2026-09-06T04:40:03.674Z');
   });
 });
 

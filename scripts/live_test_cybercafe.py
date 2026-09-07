@@ -12,16 +12,16 @@ import argparse
 import json
 import os
 import re
-import signal
 import subprocess
-import sys
 import time
 import urllib.request
 from pathlib import Path
 
+# Resolvable because running the script puts scripts/ on sys.path[0].
+from harness_common import kill_port, kill_process_tree, server_popen_kwargs, venv_python
+
 REPO = Path(__file__).resolve().parent.parent
 BACKEND = REPO / "backend"
-from harness_common import kill_port, kill_process_tree, server_popen_kwargs, venv_python
 
 VENV_PY = venv_python(BACKEND)
 SCRATCH = REPO / "scratch"
@@ -31,6 +31,9 @@ SETTINGS = TRACEHOME / "settings.json"
 PROMPTS = [
     ("cybercafe", "Give me three ideas for improving a cyber café business."),
     ("hello", "Hello"),
+    # The greeting-adjacent conversational case: must take the real model
+    # path (not the canned greeting), so it carries real metrics/identity.
+    ("how_are_you", "How are you?"),
     ("weather_simple", "What is the capital of France?"),
     ("branch_count", "We have three branches. Actually, one branch closed last month. We opened two new branches. How many branches do we currently have?"),
     ("apple_math", "I have 10 apples. I gave 3 to my friend. How many do I have left?"),
