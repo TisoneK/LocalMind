@@ -1279,3 +1279,11 @@ if literally nothing slowed you down.
 - **Cause:** gates.conf is project-owned but written POSIX-only; context-gates.cmd passes each line to PowerShell verbatim.
 - **Workaround / fix:** run the components manually (`cd frontend; npx tsc -b --noEmit` / `backend/.venv/Scripts/ruff.exe check backend/src`). Durable fix candidate: write gates.conf commands in a PowerShell-compatible form or per-OS sections.
 - **Prevent next time:** normalize gates.conf for Windows (PowerShell-legal separators + `.venv/Scripts/*` paths), or have context-gates.cmd translate known POSIX forms.
+
+---
+## 2026-09-07 — Amina / glm-5.3-flash (S437)
+- **Problem:** (1) The Windows dev stack can hold three backend processes at once — `npm run dev` (concurrently) spawned two `server.py` processes that both bound port 8000 "successfully" while an older process kept receiving the connections; the app silently served pre-merge code (old fabricated canned metrics) for hours after the fixes merged. Diagnosing "the app is broken after the merges" cost a full evidence pass (db metrics formats vs commit timeline vs process tables). (2) pytest had NO enforced data-home isolation: only a note told agents to set LOCALMIND_HOME manually, so suites kept writing residue chats into the real store (again on 2026-09-07 08:28-10:01), and two tests had come to DEPEND on that residue (one asserted against its own leaked history; another read the user's real provider key from the app home).
+- **Cost:** ~45 min diagnosis on (1); recurring silent pollution since at least 2026-09-06 on (2).
+- **Cause:** (1) Windows SO_REUSEADDR-style double-bind semantics let multiple servers bind 8000; no zombie detection on dev boot. (2) isolation was a documented habit, not a mechanism.
+- **Workaround / fix:** (2) is now fixed at the source — tests/conftest.py stages a temp LOCALMIND_HOME at import time (759e67a) with a guard test; hermetic key for the discovery tests (ed770d6). (1) workaround: before trusting the running app, check `netstat -ano | grep :8000` for MULTIPLE server.py PIDs and restart the dev stack cleanly; product fix (boot-time port ownership assertion) is a candidate backlog item.
+- **Prevent next time:** the conftest guard makes pollution impossible for pytest; the dev-stack trap needs a boot-time check or a documented one-liner in the app README (not done this session).

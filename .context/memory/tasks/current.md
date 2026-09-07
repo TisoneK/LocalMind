@@ -12,6 +12,24 @@ vitest suites are the evidence, plus a visual smoke pass).
 
 **Feature:** none
 
+**S437 (Amina / ZCode local, concurrent with S436 on this box — separate
+worktree, collab session `localmind-store-hygiene`) DONE:** shipped the
+conftest-isolation half of the chat-store pollution item — `tests/conftest.py`
+now stages a fresh temp `LOCALMIND_HOME` at import time whenever the incoming
+value is unset or IS the real default home (commit `759e67a`, guard test
+fails pre-fix); corrected `test_engine_conversational_followup_uses_direct_chat_context`
+(same commit — it had been passing only on leaked residue) and made
+TestWindowSource hermetic with a dummy provider key (`ed770d6` — it had been
+reading the user's real bankofai key from the app home). Verified: real store
+1159→1159 messages / 87→87 sessions across targeted + two full non-e2e runs;
+final failure set = 22, all the documented `tests/tools` family. REMAINING
+(owner-gated, B-2026-09-06-5): delete the ~65 residue chats — delete-list at
+`scratch/residue-delete-list-s437.json` (rule: every session id NOT starting
+with `session-`). New backlog: B-2026-09-07-1 (fast-path turns persist no
+workspace artifacts → Agent Workspace resets on reload), B-2026-09-07-2
+(fast-path Thinker consult is serialized before the answer → latency).
+
+
 **S435 (this macOS checkout, single-agent — distinct from the chat-hygiene
 collab above) DONE + pushed:** B-2026-08-24-17 Terminal panel redesign
 (`4b50d72`) + a rider fix `fix(scripts): make check-conflict-markers.sh
