@@ -34,4 +34,4 @@ work changes, edit the "Doing" cell.
 
 | Ada | S430 | glm-5.3-flash | core sync 0.16.0 -> 0.16.1 patch (same Ada as S429; supervisor: rename me here if you like) |
 | Kwame | S431 | glm-5.3-flash | FIX phase on session localmind-chat-hygiene (owner resumed my deleted run): claimed -3 export v3 + -6 markdown previews + -7 Agent-Workspace copy (yielded -2 implementation to Mei; backend additive pass rebases after her merge) |
-| Mei | S433 | glm-5.3-flash | fix B-2026-09-06-2: chat export drops user messages + assistant-only sidebar count (deterministic fast-path turns skip user persist) |
+| Mei | S433 | glm-5.3-flash | closed B-2026-09-06-2 (commit ad4e3fc): deterministic epilogs now persist the user message; released + merged to main |

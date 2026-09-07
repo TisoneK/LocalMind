@@ -3,46 +3,39 @@
 **Status:** ACTIVE — **collab fix phase live on session `localmind-chat-hygiene`.**
 **Kwame (S431) resumed by the owner** (his run was deleted mid-fix-phase;
 continuing as him, not a new session). Split agreed on the trail:
-- **Mei (S433) owns -2** (claim `20260906T073036Z`, mid-edit in worktree
-  `LocalMind-mei-s433`): the deterministic epilogs in
-  `backend/src/core/agent_runtime.py` (trivial + conversational fast paths +
-  memory-write paths) persist only the assistant reply and return before the
-  `_persist_user_safe` call (1272) — those turns leave no user row in the
-  store. Verified against a read-only db+wal copy: the 07:39 session holds
-  u=0/a=3; agent-path sessions hold u=1. She persists the user row before the
-  assistant row in each epilog; metrics lines (~1194-1212) stay untouched
-  (that's -4's).
+- **Mei (S433) CLOSED -2** (claim `20260906T073036Z`, release
+  `20260906T194249Z`, product commit `ad4e3fc` merged to main): the
+  deterministic epilogs in `backend/src/core/agent_runtime.py` (trivial +
+  conversational fast paths + memory-write paths incl. the resolution-fail
+  ask) returned before the main path's fire-and-forget user-message persist —
+  those turns left no user row. They now await the user persist immediately
+  before the assistant persist (also guarantees timestamp order); 5
+  regression tests in `tests/core/test_fastpath_user_persist.py` fail
+  pre-fix / pass post-fix (isolated tmp home). Metrics lines stayed
+  untouched (that's -4's). No frontend change.
 - **Kwame owns -3 + -6 + -7** (claim `20260906T082235Z`): export schema v3 —
   client preserves raw epoch as `timestampEpoch` (today's mapping reduces it
   to HH:MM — the ISO-date gap), exporter emits ISO-8601 timestamps +
   createdAt/lastActive per chat + model/provider per turn, every v2 key kept;
   the agent_runtime additive pass (identity keys + fast-path Thinker-thinking
-  capture) rebases AFTER Mei's merge; -6 = strip markdown in LeftPanel
-  previews at display time (stored last_message stays raw for export
-  fidelity; the "capabilities overview" weather preview is the last message,
-  not a selection bug); -7 = parent-only copy in AgentWorkspace.tsx.
+  capture) rebases AFTER Mei's merge (now landed — `agent_runtime.py` is
+  free); -6 = strip markdown in LeftPanel previews at display time (stored
+  last_message stays raw for export fidelity; the "capabilities overview"
+  weather preview is the last message, not a selection bug); -7 = parent-only
+  copy in AgentWorkspace.tsx.
 - **-4 free** after Mei's -2 (detector fns in `trivial_input.py` + the
   synthetic-metrics half of the finalize block). **-5 parked** on the
-  owner-approved delete-list. (Triage context: a live chat-export + UI
-  review (session-1788669567862 + the sidebar) produced six new backlog items
-**B-2026-09-06-2 .. -7**: chat export drops user messages + assistant-only count
-(-2), full-fidelity export schema v3 per the owner's "capture everything" directive
-(-3), fast-path canned-greeting misfire on "How are you?" + fabricated provider
-metrics (-4), test runs polluting the real chat store (~40 residue chats, -5),
-raw-markdown sidebar previews (-6), and the Agent-Workspace "Child agents…" copy
-that contradicts ADR-53 Parent-only (-7). **Owner is launching collab fix agents
-next:** shared session `localmind-chat-hygiene`, one issue per backlog ID (e.g.
-`--issue B-2026-09-06-4`); pick a roster name, worktree per the 2026-09-05
-override, claim → work → release. -2/-3 share a surface (one agent can take
-both). -4 touches the agent-loop fast path → the live-testing bar applies.
--5's cleanup needs an owner-approved delete list (real chats are interleaved).
-**S428 (thinker-concurrent) claim STILL unreleased** — loop.py/thinker/CHANGELOG.md
-remain its scope; check the event trail first. (Prior state: S428 closed ADR-57
-slice 2 — concurrent post-tool Thinker consults, LIVE-verified on
-bankofai/qwen3.8-flash; S429/S430 closed the core update 0.9.1 → 0.16.1, incl.
-the 0.13.0 zone-migration flaw resolved upstream in 0.16.0; S432 synced macOS to
-ac1daad and live-smoke-tested the pulled code — see sessions.md. `context-mem
-lint` false-positives on the root AGENTS.md digest remain open in flaws/log.md.)
+  owner-approved delete-list. (Triage context: the six items
+  **B-2026-09-06-2 .. -7** came from S431's live chat-export + UI review;
+  full text in backlog.md. -4 touches the agent-loop fast path → the
+  live-testing bar applies.)
+**S428's thinker-concurrent claim WAS released** at its closeout (`38e743f`,
+event `20260906T053617Z`) — loop.py/thinker/CHANGELOG.md are free (earlier
+board states saying "STILL unreleased" were stale). (Prior state: S429/S430
+closed the core update 0.9.1 → 0.16.1, incl. the 0.13.0 zone-migration flaw
+resolved upstream in 0.16.0; S432 synced macOS to ac1daad and
+live-smoke-tested the pulled code — see sessions.md. `context-mem lint`
+false-positives on the root AGENTS.md digest remain open in flaws/log.md.)
 
 **Feature:** none
 
