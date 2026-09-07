@@ -35,5 +35,5 @@ work changes, edit the "Doing" cell.
 | Ada | S430 | glm-5.3-flash | core sync 0.16.0 -> 0.16.1 patch (same Ada as S429; supervisor: rename me here if you like) |
 | Kwame | S431 | glm-5.3-flash | fix phase RELEASED (-3/-6/-7 shipped + ruff-zero + 14-failure clearance, merged 02b42e0); IDLE — awaiting next assignment |
 | Mei | S434 | glm-5.3-flash | (same Mei as S433) closed B-2026-09-06-4 (live-verified) + rider -11 conflict-marker gate; released, merging to main |
-| Noah | S436 | glm-5.3-flash | S436a right-click menus LANDED (fbffcac; S436b: export chat → add copy-to-clipboard option (Markdown/JSON) beside save-file |
+| Noah | S436 | glm-5.3-flash | S436a right-click menus + S436b export copy-to-clipboard LANDED (fbffcac/e89c3dc/3403e61); live-verified; session closed |
 | Amina | S437 | glm-5.3-flash | store hygiene: pytest LOCALMIND_HOME isolation shipped (conftest isolation half of the chat-store pollution item); residue delete-list staged for owner sign-off; released |

@@ -1,21 +1,32 @@
 # Current Task
 
-**Status:** ACTIVE — Session 436 (Noah / ZCode local, glm-5.3-flash, Windows).
-Part 1 LANDED (`fbffcac`, pushed): **selected-text right-click menus on the chat
-surface** — transcript (Copy selection / Copy message / Select all) + input
-(Cut / Copy / Paste / Select all): 20 new vitest tests, full frontend 416/416 green,
-tsc clean, eslint 0 errors on the touched files.
+**Status:** IDLE — **Session 436 (Noah / ZCode local, glm-5.3-flash, Windows)
+COMPLETE (2026-09-07), both parts landed and pushed.**
 
-Part 2 (new chat-message target): **export chat feature — offer users the
-option to EITHER copy the export data to the clipboard (in both available
-formats, Markdown and JSON) OR save it as a file (existing download)**.
-Plan: a pure `copySessionsToClipboard()` in the export util (mirrors
-`exportSessions`, with an injected clipboard writer),, a second dropdown
-"Copy" button next to "Export" in LeftPanel's bulk-action row, wired
-through WorkspaceLayout; vitest coverage in both suites. Frontend-only —
-no agent-loop/tool/provider surface, so the live-MODEL bar does not apply.
+**Part 1 — selected-text right-click menus (the session's chat-message
+target) LANDED:** transcript menu (Copy selection / Copy message via
+per-message data attribute / Select all scoped to the transcript) in
+`TranscriptContextMenu.tsx` + `CenterPanel`; input edit menu (Cut / Copy /
+Paste / Select all) in `InputContextMenu.tsx` + `ChatInput`. Commits
+`fbffcac` (feature; landed by the S437 coordination pass from the shared
+tree mid-verification — content verified), `e89c3dc` (live-found fix:
+edit target captured at menu-open + dual setTimeout/rAF caret restore —
+rAF never fires in hidden/throttled documents, so Cut→Paste pasted at the
+end on live traces), `acc856b` (changelog). 20 new vitest tests; live
+browser-verified (transcript menu states, Select all → 151-char copy,
+cut→paste round-trip).
 
-
+**Part 2 — bulk export copy-to-clipboard (S436b, target set by the S437
+pass on this board) LANDED:** `copySessionsToClipboard()` in exportChats
+(plus its extracted `buildExportEntries` helper, from Amina's WIP),
+Copy menu button beside Export in LeftPanel's bulk-action row with
+✓ Copied / ✗ Clipboard blocked feedback flash, wired through
+WorkspaceLayout. Commits `3403e61` + `1b3ce0d` (changelog rider). 9 new
+tests (6 exportChats + 4 LeftPanel incl. failure-flash). Full frontend
+suite green modulo the documented SettingsModal timeout flake (passes in
+isolation); tsc clean; eslint baseline unchanged (9/84 pre-existing);
+vite build green. Frontend-only — live-MODEL bar assessed, does not
+apply; live checks were browser traces on the dev build.
 
 **Feature:** none
 
