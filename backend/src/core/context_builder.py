@@ -141,7 +141,11 @@ def _build_environment_context(
     # ── OS-specific guidance ──
     if system == "Windows":
         os_guidance = (
-            "CRITICAL: You are on WINDOWS with PowerShell. NEVER use Unix commands (mkdir -p, ls, cat, rm -rf, grep, find). Use ONLY PowerShell: New-Item -ItemType Directory -Force, Get-ChildItem, Get-Content, Set-Content, Remove-Item, Select-String. Use backslash `\\\\` for paths."
+            "CRITICAL: You are on WINDOWS with PowerShell. NEVER use Unix "
+            "commands (mkdir -p, ls, cat, rm -rf, grep, find). Use ONLY "
+            "PowerShell: New-Item -ItemType Directory -Force, Get-ChildItem, "
+            "Get-Content, Set-Content, Remove-Item, Select-String. Use "
+            "backslash `\\\\` for paths."
         )
         common_cmds = (
             "Windows PowerShell commands — USE THESE ONLY:\n"
@@ -309,7 +313,8 @@ You have access to these tools: {tool_summary}
 
 ## What You Know
 - Today is {date_str}. Use this to ground all time-sensitive queries.
-- You are running on {system} {release}. Use {shell_name}-compatible commands ONLY. If Windows, NEVER use mkdir -p, ls, cat, grep — use PowerShell equivalents.
+- You are running on {system} {release}. Use {shell_name}-compatible commands ONLY.
+  If Windows, NEVER use mkdir -p, ls, cat, grep — use PowerShell equivalents.
 - The user's home directory is {home}. Default file operations should be relative to here.
 - {shell_guidance}
 - You have {memory_count} facts in memory about this user."""
@@ -646,7 +651,8 @@ Tools available (the engine routes automatically — do not call tools yourself)
 - FILE_WRITE: create/save files to disk
 - CODE_EXEC: run Python code (must be in ```python``` block)
 - SHELL: run system commands
-- SYSINFO: system info — time, date, OS, CPU, RAM, disk, network, GPU, processes, env, uptime, users, ports (never guess these)
+- SYSINFO: system info — time, date, OS, CPU, RAM, disk, network, GPU,
+  processes, env, uptime, users, ports (never guess these)
 - MEMORY_OP: remember/forget/recall facts ("remember that...")
 
 Rules: never fabricate tool output. Short answers unless detail is needed. \

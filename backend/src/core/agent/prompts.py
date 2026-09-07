@@ -32,6 +32,7 @@ from typing import Optional
 
 from core.agent.constants import MAX_ITERATIONS
 from core.agent.tool_schemas import compact_tool_summary, render_tool_list
+from core.models import Intent
 from core.system_snapshot import get_cached_summary
 
 
@@ -46,7 +47,6 @@ def _system_env_line() -> str:
         "hostname questions directly from it; only call sysinfo for details not "
         "listed, e.g. processes, network, or a live re-read.)"
     )
-from core.models import Intent
 
 
 def build_planning_prompt(

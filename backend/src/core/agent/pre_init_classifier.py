@@ -232,10 +232,18 @@ def _detect_impossible_constraint(message: str) -> Optional[str]:
     impossible/contradictory constraint pair, else None."""
     for neg_re, req_re in _IMPOSSIBLE_CONSTRAINT_PAIRS:
         if neg_re.search(message) and req_re.search(message):
+            # Backslash escapes are not allowed inside f-string expressions
+            # on the project's declared Python floor (3.12 lifted the
+            # restriction), so resolve the display patterns first.
+            def _keyword(pattern: str) -> str:
+                return pattern.split(r"\b")[1] if r"\b" in pattern else pattern
+
+            neg_kw = _keyword(neg_re.pattern)
+            req_kw = _keyword(req_re.pattern)
             return (
                 "Your request contains conflicting constraints: "
-                f"'{neg_re.pattern.split(r'\b')[1] if '\\b' in neg_re.pattern else neg_re.pattern}' "
-                f"and '{req_re.pattern.split(r'\b')[1] if '\\b' in req_re.pattern else req_re.pattern}'. "
+                f"'{neg_kw}' "
+                f"and '{req_kw}'. "
                 "Which constraint should I prioritize, or would you like to revise the request?"
             )
     return None
@@ -591,8 +599,8 @@ def classify_pre_init(message: str, history: Optional[list[dict]] = None) -> Pre
     # must select the tool autonomously and NEVER expose tool names/schemas.
     # This prevents the "which tool should I use?" abstraction leak.
     from core.conversation_state import (
-        should_inject_tool_abstraction_reminder,
         get_tool_abstraction_reminder,
+        should_inject_tool_abstraction_reminder,
     )
 
     if should_inject_tool_abstraction_reminder(message):

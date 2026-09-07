@@ -268,9 +268,10 @@ async def memory_op(
     if not success:
         try:
             import json as _json
-            import sqlite3 as _sqlite3
-            from core.config import settings
             import os as _os
+            import sqlite3 as _sqlite3
+
+            from core.config import settings
 
             db_path = _os.path.join(
                 str(settings.localmind_home or _os.path.expanduser("~/LocalMind")),

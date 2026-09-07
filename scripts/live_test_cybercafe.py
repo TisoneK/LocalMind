@@ -12,16 +12,16 @@ import argparse
 import json
 import os
 import re
-import signal
 import subprocess
-import sys
 import time
 import urllib.request
 from pathlib import Path
 
+# Resolvable because running the script puts scripts/ on sys.path[0].
+from harness_common import kill_port, kill_process_tree, server_popen_kwargs, venv_python
+
 REPO = Path(__file__).resolve().parent.parent
 BACKEND = REPO / "backend"
-from harness_common import kill_port, kill_process_tree, server_popen_kwargs, venv_python
 
 VENV_PY = venv_python(BACKEND)
 SCRATCH = REPO / "scratch"

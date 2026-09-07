@@ -43,7 +43,8 @@ class Role(str, Enum):
 class Intent(str, Enum):
     FILE_TASK = "file_task"
     FIND_PATH = "find_path"  # Session 125: name-match search for files/folders (path-only, capped)
-    SYSTEM_SEARCH = "system_search"  # Session 400: unified local search (files/recent/largest/duplicates/apps/open_with)
+    # Session 400: unified local search (files/recent/largest/duplicates/apps/open_with)
+    SYSTEM_SEARCH = "system_search"
     WEB_SEARCH = "web_search"
     WEB_FETCH = "web_fetch"
     CODE_EXEC = "code_exec"

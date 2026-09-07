@@ -111,7 +111,10 @@ _CAPABILITY_CATALOG: dict[Capability, CapabilityMetadata] = {
     Capability.SYSINFO: CapabilityMetadata(
         capability=Capability.SYSINFO,
         family=CapabilityFamily.COMPUTER,
-        description="Inspect system state: hardware, OS, network, GPU, processes, environment, uptime, users, services, installed programs, and time.",
+        description=(
+            "Inspect system state: hardware, OS, network, GPU, processes, "
+            "environment, uptime, users, services, installed programs, and time."
+        ),
         tool_names=("sysinfo",),
     ),
     Capability.OBSERVE: CapabilityMetadata(
