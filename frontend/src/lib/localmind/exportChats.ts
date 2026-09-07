@@ -129,6 +129,12 @@ function messageToMarkdown(m: ChatMessage): string[] {
   return lines;
 }
 
+/** ISO-8601 from raw epoch seconds, or null when the epoch is unknown. */
+function isoFromEpoch(epoch?: number): string | null {
+  if (typeof epoch !== 'number' || !Number.isFinite(epoch)) return null;
+  return new Date(epoch * 1000).toISOString();
+}
+
 /** Render selected sessions as a full readable Markdown transcript. */
 export function sessionsToMarkdown(entries: SessionExport[]): string {
   const parts: string[] = [];
@@ -142,6 +148,8 @@ export function sessionsToMarkdown(entries: SessionExport[]): string {
     parts.push(`## ${session.title || 'Untitled chat'}`);
     const meta = [
       session.formattedDate || session.timestamp,
+      // v3: the absolute date, not just the time-only "07:39" display form.
+      isoFromEpoch(session.lastActiveEpoch ?? session.createdAtEpoch) || '',
       `${session.messageCount} message${session.messageCount === 1 ? '' : 's'}`,
     ]
       .filter(Boolean)
@@ -169,7 +177,10 @@ export function sessionsToJson(entries: SessionExport[]): string {
   const doc = {
     app: 'LocalMind',
     kind: 'chat-export',
-    version: 2,
+    // v3: real dates (ISO-8601), per-turn model/provider identity, and the
+    // raw epochs preserved end-to-end. Every v2 key stays present, so v2
+    // consumers keep reading the document unchanged.
+    version: 3,
     exportedAt: new Date().toISOString(),
     count: entries.length,
     chats: entries.map(({ session, history, todos }) => ({
@@ -177,6 +188,9 @@ export function sessionsToJson(entries: SessionExport[]): string {
       title: session.title,
       timestamp: session.timestamp,
       formattedDate: session.formattedDate ?? null,
+      // v3: absolute ISO-8601 bounds for the chat (null when unknown).
+      createdAt: isoFromEpoch(session.createdAtEpoch),
+      lastActive: isoFromEpoch(session.lastActiveEpoch ?? session.timestampEpoch),
       messageCount: session.messageCount,
       // B-2026-08-23-3: the session's task checklist now travels with the chat.
       todos: (todos ?? []).map((t) => ({
@@ -190,7 +204,15 @@ export function sessionsToJson(entries: SessionExport[]): string {
         id: m.id,
         role: m.role,
         content: m.content,
-        timestamp: m.timestamp,
+        // v3: absolute ISO-8601 time when the raw epoch survived the client
+        // mapping; `timestampDisplay` keeps the HH:MM string v2 carried, so
+        // no consumer loses the old shape.
+        timestamp: isoFromEpoch(m.timestampEpoch) ?? m.timestamp,
+        timestampDisplay: m.timestamp,
+        // v3: which model + provider answered this turn (persisted with the
+        // reply's metrics; a chat may switch models mid-way).
+        model: m.performance?.model ?? undefined,
+        provider: m.performance?.provider ?? undefined,
         // Full tool-call timeline: args, output, reasoning, provider, duration.
         toolCalls: m.toolCalls?.map((t) => ({
           id: t.id,

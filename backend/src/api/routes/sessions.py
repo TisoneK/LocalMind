@@ -120,6 +120,10 @@ async def list_sessions():
                 "messageCount": session.get("message_count", 0),
                 "last_message": (session.get("last_message") or "")[:120],
                 "workspacePath": workspace,
+                # Raw epoch bounds (v3 export + real dates): `timestamp` stays
+                # the merged last_active??created_at value for back-compat.
+                "createdAt": session.get("created_at"),
+                "lastActive": session.get("last_active"),
             }
         )
 
@@ -180,6 +184,10 @@ async def get_history(session_id: str):
                     if latency_ms > 0 and completion > 0
                     else None
                 ),
+                # Turn identity (v3 export): which model + provider answered
+                # this turn, persisted with the reply's metrics.
+                "model": metrics.get("model") or None,
+                "provider": metrics.get("provider") or None,
             }
         # Session 267: restore the Agent Workspace run tree + phase strip
         # (frontend AgentRun[] / AgentPhase[] shapes — already camelCase).
