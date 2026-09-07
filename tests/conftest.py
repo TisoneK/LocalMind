@@ -3,10 +3,31 @@ Shared pytest fixtures for all LocalMind tests.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+# ---------------------------------------------------------------------------
+# Data-home isolation — MUST run before any backend/src import.
+#
+# The app resolves its data directory from LOCALMIND_HOME, defaulting to
+# <user home>/LocalMind — the REAL application home with the user's chats.
+# Engine/store tests read that home and write test sessions into the
+# production database. Stage a fresh temp home here, at conftest import
+# time, whenever the incoming value is unset or IS the real home; a home
+# staged deliberately by a live-test harness or a developer is respected.
+if sys.platform == "win32":
+    _home_base = Path(os.environ.get("USERPROFILE", Path.home()))
+else:
+    _home_base = Path.home()
+_staged_home = os.environ.get("LOCALMIND_HOME", "")
+if not _staged_home or Path(_staged_home).expanduser().resolve() == (_home_base / "LocalMind").resolve():
+    import tempfile
+
+    os.environ["LOCALMIND_HOME"] = tempfile.mkdtemp(prefix="localmind-test-home-")
+# ---------------------------------------------------------------------------
 
 # Ensure backend/src/ is on sys.path so test modules can import
 # `from tools.file_reader import ...`, `from adapters.ollama import ...`, etc.

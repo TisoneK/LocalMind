@@ -781,9 +781,20 @@ async def test_engine_conversational_followup_uses_direct_chat_context():
     # Session 354: the Thinker now runs on the conversational fast-path,
     # adding 1 extra LLM call per conversational turn. 2 turns × (Thinker + response) = 4 calls.
     assert len(calls) == 4
+    # Turn 1 = Thinker consult, turn 2 = the response call. The response
+    # request must carry THIS run's user message — not residue from prior
+    # runs leaked through a shared data home (the old assertion matched the
+    # assistant reply inside calls[1], which only passed when history from
+    # earlier contaminated runs was present).
     assert any(
-        message.get("content") == "I can help with coding, files, and research."
+        message.get("role") == "user" and message.get("content") == "What can you do?"
         for message in calls[1]
+    )
+    # The follow-up call must carry the prior exchange from this same run
+    # as conversation context.
+    assert any(
+        message.get("role") == "assistant" and message.get("content") == "I can help with coding, files, and research."
+        for message in calls[3]
     )
     assert all(event.data.get("fast_path") for event in obs.history() if event.type == "agent_initialization_done")
 
