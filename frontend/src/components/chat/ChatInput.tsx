@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Bot,
 } from 'lucide-react';
+import { InputContextMenu } from './InputContextMenu';
 
 // B-2026-08-23-34: Chat mode options.
 const chatModeOptions = [
@@ -121,22 +122,25 @@ export function ChatInput({ onSend, onAbort, onSteer, isStreaming, modelName, mo
           {/* Prompt symbol */}
           <span className="text-brand-green text-sm font-mono pb-0.5 shrink-0">&gt;</span>
 
-          {/* Textarea */}
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={chatMode === 'direct' ? 'Ask LocalMind anything (Chat mode — no tools)...' : 'Ask LocalMind to build, debug, or explain...'}
-            className="flex-1 bg-transparent text-[12px] text-brand-green-soft placeholder:text-brand-green-muted resize-none outline-none min-h-[20px] max-h-[120px] font-mono leading-relaxed"
-            rows={1}
-            disabled={isStreaming}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-          />
+          {/* Textarea — wrapped in the right-click edit menu
+              (Cut / Copy / Paste / Select all) */}
+          <InputContextMenu textareaRef={textareaRef} value={input} onChange={setInput}>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={chatMode === 'direct' ? 'Ask LocalMind anything (Chat mode — no tools)...' : 'Ask LocalMind to build, debug, or explain...'}
+              className="flex-1 bg-transparent text-[12px] text-brand-green-soft placeholder:text-brand-green-muted resize-none outline-none min-h-[20px] max-h-[120px] font-mono leading-relaxed"
+              rows={1}
+              disabled={isStreaming}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+            />
+          </InputContextMenu>
 
           {/* Action buttons */}
           <div className="flex items-center gap-1 shrink-0 pb-0.5">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import {
   Cpu,
   Brain,
@@ -13,6 +13,7 @@ import {
 import { ChatMessage as ChatMessageType, ModelOption, DiffData } from '@/types';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { TranscriptContextMenu } from '@/components/chat/TranscriptContextMenu';
 import { localmindClient } from '@/lib/localmind/client';
 
 // ADR-34 B-10: the intent badge and INTENT_LABELS map are retired.
@@ -156,6 +157,26 @@ export function CenterPanel({
       behavior: 'smooth',
     });
   }, [messages]);
+
+  // Right-click menu: full text of the message under the pointer ("Copy
+  // message" copies the stored source — markdown for assistant replies —
+  // the same text the hover Copy chip uses).
+  const getMessageText = useCallback(
+    (messageId: string) => messages.find((m) => m.id === messageId)?.content,
+    [messages],
+  );
+
+  // Select all text within the transcript (not the whole document — a
+  // document-wide Ctrl+A would sweep in the side panels and chrome).
+  const selectAllTranscript = useCallback(() => {
+    const container = messagesContainerRef.current;
+    const selection = window.getSelection();
+    if (!container || !selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(container);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, []);
 
 
   const isOnline = health.status === 'online';
@@ -348,41 +369,43 @@ export function CenterPanel({
         </div>
       )}
 
-      {/* Messages area */}
-      <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar min-w-0">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
-            <div className="w-12 h-12 rounded-xl bg-brand-green/10 flex items-center justify-center">
-              <Cpu className="h-6 w-6 text-brand-green" />
+      {/* Messages area — wrapped in the right-click menu (copy selection /
+          copy message / select all) */}
+      <TranscriptContextMenu getMessageText={getMessageText} onSelectAll={selectAllTranscript}>
+        <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar min-w-0">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
+              <div className="w-12 h-12 rounded-xl bg-brand-green/10 flex items-center justify-center">
+                <Cpu className="h-6 w-6 text-brand-green" />
+              </div>
+              <div>
+                <h2 className="text-sm font-medium text-brand-green-soft mb-1">
+                  Welcome to LocalMind
+                </h2>
+                <p className="text-[11px] text-brand-green-muted max-w-sm">
+                  Your local AI assistant. Ask me to build, debug, explain, or refactor code.
+                  I can read files, run commands, search code, and more.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-sm font-medium text-brand-green-soft mb-1">
-                Welcome to LocalMind
-              </h2>
-              <p className="text-[11px] text-brand-green-muted max-w-sm">
-                Your local AI assistant. Ask me to build, debug, explain, or refactor code.
-                I can read files, run commands, search code, and more.
-              </p>
-            </div>
-          </div>
-        )}
+          )}
 
-        <div className="divide-y divide-brand-border/50 overflow-hidden">
-          {messages.map((msg, i) => {
-            // Retry = regenerate the response to the user message that
-            // precedes this assistant reply (re-sends that exact prompt).
-            const prompt = findRetryPrompt(messages, i);
-            return (
-              <ChatMessage
-                key={msg.id}
-                message={msg}
-                isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'}
-                onRetry={prompt ? () => onSend(prompt) : undefined}
-                fileDiffs={fileDiffs}
-              />
-            );
-          })}
-        </div>
+          <div className="divide-y divide-brand-border/50 overflow-hidden">
+            {messages.map((msg, i) => {
+              // Retry = regenerate the response to the user message that
+              // precedes this assistant reply (re-sends that exact prompt).
+              const prompt = findRetryPrompt(messages, i);
+              return (
+                <ChatMessage
+                  key={msg.id}
+                  message={msg}
+                  isStreaming={isStreaming && msg === messages[messages.length - 1] && msg.role === 'assistant'}
+                  onRetry={prompt ? () => onSend(prompt) : undefined}
+                  fileDiffs={fileDiffs}
+                />
+              );
+            })}
+          </div>
 
         {/* Streaming indicator — only show when assistant content is still empty */}
         {/* Session 30: replace static "Thinking..." with real pipeline status. */}
@@ -390,43 +413,44 @@ export function CenterPanel({
         {/* "Understanding your request...", etc.) — show those instead of a */}
         {/* dead "Thinking..." label. Only show "Thinking" when the model is */}
         {/* actually reasoning (thinking_token events fill message.thinking). */}
-        {isStreaming && (() => {
-          const lastMsg = messages[messages.length - 1];
-          const hasContent = lastMsg && lastMsg.role === 'assistant' && lastMsg.content && lastMsg.content.trim().length > 0;
-          const hasThinking = lastMsg && lastMsg.role === 'assistant' && lastMsg.thinking && lastMsg.thinking.trim().length > 0;
-          // Session 352: only hide the status indicator when the FINAL ANSWER
-          // (content) is being streamed — not when thinking text is visible.
-          // The old check (hasContent || hasToolCalls) hid the status as soon
-          // as thinking started, leaving the user in the dark for the entire
-          // tool execution phase. Tool calls should NOT hide the status —
-          // the status shows "Searching..." / "Fetching..." alongside the
-          // tool cards in the Actions panel.
-          if (hasContent) return null;
-          // Get the status text — prefer the real pipeline status, fall back
-          // to "Thinking" only if the model is actually reasoning, otherwise
-          // "Working on it..." as the initial acknowledgment.
-          const statusText = lastMsg?.statusText || (hasThinking ? 'Thinking' : 'Working on it...');
-          return (
-            <div className="px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-3 w-3 text-brand-green animate-spin" />
-                <span className="text-[10px] text-brand-green-muted">{statusText}</span>
-                <span className="flex gap-0.5">
-                  <span className="w-1 h-1 bg-brand-green rounded-full animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1 h-1 bg-brand-green rounded-full animate-bounce [animation-delay:150ms]" />
-                  <span className="w-1 h-1 bg-brand-green rounded-full animate-bounce [animation-delay:300ms]" />
-                </span>
+          {isStreaming && (() => {
+            const lastMsg = messages[messages.length - 1];
+            const hasContent = lastMsg && lastMsg.role === 'assistant' && lastMsg.content && lastMsg.content.trim().length > 0;
+            const hasThinking = lastMsg && lastMsg.role === 'assistant' && lastMsg.thinking && lastMsg.thinking.trim().length > 0;
+            // Session 352: only hide the status indicator when the FINAL ANSWER
+            // (content) is being streamed — not when thinking text is visible.
+            // The old check (hasContent || hasToolCalls) hid the status as soon
+            // as thinking started, leaving the user in the dark for the entire
+            // tool execution phase. Tool calls should NOT hide the status —
+            // the status shows "Searching..." / "Fetching..." alongside the
+            // tool cards in the Actions panel.
+            if (hasContent) return null;
+            // Get the status text — prefer the real pipeline status, fall back
+            // to "Thinking" only if the model is actually reasoning, otherwise
+            // "Working on it..." as the initial acknowledgment.
+            const statusText = lastMsg?.statusText || (hasThinking ? 'Thinking' : 'Working on it...');
+            return (
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-3 w-3 text-brand-green animate-spin" />
+                  <span className="text-[10px] text-brand-green-muted">{statusText}</span>
+                  <span className="flex gap-0.5">
+                    <span className="w-1 h-1 bg-brand-green rounded-full animate-bounce [animation-delay:0ms]" />
+                    <span className="w-1 h-1 bg-brand-green rounded-full animate-bounce [animation-delay:150ms]" />
+                    <span className="w-1 h-1 bg-brand-green rounded-full animate-bounce [animation-delay:300ms]" />
+                  </span>
+                </div>
+                {/* Session 118: animated activity bar — the agent is working */}
+                <div className="mt-2 h-0.5 w-full max-w-[260px] rounded-full bg-brand-border/60 overflow-hidden">
+                  <div className="h-full w-1/3 rounded-full bg-brand-green animate-[slide-x_1.2s_ease-in-out_infinite]" />
+                </div>
               </div>
-              {/* Session 118: animated activity bar — the agent is working */}
-              <div className="mt-2 h-0.5 w-full max-w-[260px] rounded-full bg-brand-border/60 overflow-hidden">
-                <div className="h-full w-1/3 rounded-full bg-brand-green animate-[slide-x_1.2s_ease-in-out_infinite]" />
-              </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
 
 
-      </div>
+        </div>
+      </TranscriptContextMenu>
 
       {/* Input */}
       <ChatInput

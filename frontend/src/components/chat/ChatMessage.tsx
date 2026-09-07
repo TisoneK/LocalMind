@@ -808,7 +808,10 @@ export function ChatMessage({ message, isStreaming, onRetry, fileDiffs }: ChatMe
   }, [diffHunks]);
 
   return (
-    <div className={`px-4 py-3 overflow-hidden group relative ${isUser ? 'justify-end' : 'justify-start border-l-2 border-l-brand-green/30'}`}>
+    <div
+      data-message-content-id={message.id}
+      className={`px-4 py-3 overflow-hidden group relative ${isUser ? 'justify-end' : 'justify-start border-l-2 border-l-brand-green/30'}`}
+    >
       {/* Hover action row — auto-hides, revealed on message hover */}
       <MessageActions isUser={isUser} content={message.content || ''} isStreaming={!!isStreaming} onRetry={onRetry} />
       <div className={`flex items-start gap-3 max-w-full ${isUser ? 'flex-row-reverse' : ''}`}>
