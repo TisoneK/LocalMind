@@ -1585,6 +1585,42 @@ _POST_EVIDENCE_NARRATION_PHRASES: tuple[str, ...] = (
     "now i'll use",
 )
 
+# Session 438 — evidence-sufficient → answer-only call.
+# Live baseline (bankofai/qwen3.8-flash, weather turn): after the page fetch
+# landed, the loop still spent a full tool-schema-bearing reasoning call
+# (38s) deciding to answer, plus two more acquisition iterations the evidence
+# already covered. When a fetch tool has put substantive page content in the
+# transcript, the NEXT model call is made answer-only: no tool schemas (the
+# adapter omits the tools key entirely, so a native tool call is impossible)
+# plus a one-shot user directive. The normal buffered final-answer path and
+# the acceptance gate run unchanged on that reply; if the model instead
+# narrates a further action, the turn-outcome seam maps that to FORCE_TOOL
+# (tools_withheld=True) so a genuinely multi-step request gets its tools back.
+_EVIDENCE_COMPLETE_TOOLS: frozenset[str] = frozenset(
+    {"web_fetch", "web_research", "browse"}
+)
+# NOTE: the trigger is deliberately TOOL-based, not intent-based — the parent
+# path enters the loop with a fixed generic intent, so the declared intent
+# carries no signal. What matters is what the trace shows: the last successful
+# real tool put substantive page content in the transcript.
+# A fetch returning less than this is an error page / redirect stub, not
+# evidence — the model should stay free to retry another source.
+_EVIDENCE_MIN_CHARS = 200
+# Requests that continue past the answer (save/write/export the fetched
+# data somewhere) must NOT be short-circuited — the fetch is a mid-task step.
+_EVIDENCE_EXCLUDE_ACTION_RE = re.compile(
+    r"\b(?:save|write|store|create|update|delete|remove|append|insert|download"
+    r"|upload|export|convert|send|email|post|tweet|commit|push)\b",
+    re.IGNORECASE,
+)
+_EVIDENCE_ANSWER_DIRECTIVE = (
+    "\n[EVIDENCE SUFFICIENT] The tool results above already contain the "
+    "information this request needs. Give your final answer to the user NOW, "
+    "using that data — do not announce or plan further tool calls. If a "
+    "specific required detail is genuinely missing from the results, say "
+    "exactly what is missing instead of guessing.\n"
+)
+
 # B-2026-08-25-11 (Session 405): pending-ACTION narration. Distinct from
 # post-evidence narration (which wants the model to SYNTHESIZE): here the
 # model narrates a concrete STATE-CHANGING action it is ABOUT to take
@@ -2862,6 +2898,15 @@ class AgentLoop:
         # tool_choice="required". Single-element list for mutability
         # across the gate call boundary.
         _gate_force_tool: list[bool] = [False]
+        # Session 438: evidence-sufficient answer-only call. Set after a
+        # substantive page fetch lands in the transcript; consumed by the
+        # NEXT model call, which then runs without tool schemas (answer
+        # only) so the model synthesizes instead of re-planning acquisition.
+        _evidence_answer_ready: bool = False
+        # True for exactly the iteration whose reply came from an
+        # answer-only call — read by the acceptance gate to flip the
+        # post-evidence-narration recovery from SYNTHESIZE to FORCE_TOOL.
+        _answer_only_call_used: bool = False
         _SYNTH_TODO_MAX = 12
 
         def _synth_begin(tool_name: str, tool_input: str) -> Optional[str]:
@@ -3759,11 +3804,45 @@ class AgentLoop:
             # force ONE iteration, then let the model respond normally.
             if _gate_force_tool[0]:
                 _gate_force_tool[0] = False
+            # Session 438: evidence-sufficient → answer-only call. When the
+            # previous iteration's tool already put the requested page
+            # content in the transcript, this call runs WITHOUT tool schemas
+            # (the adapter omits the tools key, so a native tool call is
+            # impossible) plus a one-shot answer directive — the model
+            # synthesizes instead of re-reasoning over the tool roster. The
+            # normal buffered final-answer path + acceptance gate apply to
+            # the reply; if it narrates a further action, the gate maps
+            # that to FORCE_TOOL (tools restored) via tools_withheld.
+            _answer_only_call_used = False
+            _iter_tools = _current_tool_defs()
+            if (
+                _evidence_answer_ready
+                and not _force_tool_choice
+                and not last_tool_failed
+                and iteration >= 1
+            ):
+                _evidence_answer_ready = False
+                _answer_only_call_used = True
+                _iter_tools = []
+                iteration_messages.append(
+                    {"role": "user", "content": _EVIDENCE_ANSWER_DIRECTIVE}
+                )
+                if _obs:
+                    _obs.emit(
+                        "agent_loop_evidence_answer_call",
+                        intent=intent.value,
+                        iteration=iteration + 1,
+                    )
+                logger.info(
+                    "[agent.loop] iter=%d evidence-sufficient — answer-only call "
+                    "(tool schemas withheld)",
+                    iteration + 1,
+                )
             try:
                 result = await asyncio.wait_for(
                     active_adapter.chat_with_tools(
                         messages=iteration_messages,
-                        tools=_current_tool_defs(),
+                        tools=_iter_tools,
                         temperature=0.3,
                         intent=intent.value,
                         tool_choice="required" if _force_tool_choice else None,
@@ -3817,6 +3896,10 @@ class AgentLoop:
             # This is safe because independent tool calls (e.g., file_task + sysinfo)
             # have no side-effect dependencies between them.
             if isinstance(result, MultiToolCallResult):
+                # Session 438: batches can mix a fetch with follow-on work —
+                # the answer-only optimization applies only to the clean
+                # single-tool fetch shape, so reset the flag here.
+                _evidence_answer_ready = False
                 # The model's content alongside a tool call is user-facing
                 # NARRATION (its chain-of-thought arrives separately on the
                 # thinking channel and is filtered). Stream that one-line progress
@@ -5076,6 +5159,31 @@ class AgentLoop:
                                         )
 
                 _synth_end(_syn_todo_id, tool_failed)
+                # Session 438: evidence-sufficient detection — the flag says
+                # "the last successful real tool put substantive page content
+                # in the transcript" (web intent only). The mid-task exclusion
+                # (save/write/… in the request) keeps multi-step work free to
+                # continue; a failed or stub-sized fetch leaves the flag off
+                # so the model can pick another source.
+                if not tool_failed and tool_name not in ("todo_write", "describe_tool"):
+                    _evidence_answer_ready = (
+                        tool_name in _EVIDENCE_COMPLETE_TOOLS
+                        and isinstance(observation, str)
+                        and len(observation) >= _EVIDENCE_MIN_CHARS
+                        and not _EVIDENCE_EXCLUDE_ACTION_RE.search(
+                            reformulated_message or ""
+                        )
+                        and not _EVIDENCE_EXCLUDE_ACTION_RE.search(
+                            _user_message_text(loop_messages) or ""
+                        )
+                    )
+                    if _evidence_answer_ready:
+                        logger.info(
+                            "[agent.loop] evidence-sufficient after %s (%d chars) — "
+                            "next call is answer-only",
+                            tool_name,
+                            len(observation),
+                        )
                 trace.steps.append(
                     AgentStep(
                         iteration=iteration + 1,
@@ -5322,6 +5430,11 @@ class AgentLoop:
                     and bool(_last_tool_name)
                     and not is_high_stakes_intent(_last_tool_name)
                     and not getattr(trace, "success_criteria", None)
+                    # Session 438: an answer-only reply must stay buffered —
+                    # if it turns out to narrate a further action, the gate
+                    # withholds it entirely (FORCE_TOOL replan); live-streamed
+                    # text could never be taken back.
+                    and not _answer_only_call_used
                 )
                 _streamed_live = False
                 _streamed_live_text: list[str] = []
@@ -5924,6 +6037,12 @@ class AgentLoop:
                     intent in AGENT_INTENTS
                     and _is_tool_talk(initial_buffer)
                     and trace.tool_talk_recoveries < _MAX_TOOL_TALK_RECOVERIES
+                    # Session 438: on an answer-only call (tool schemas
+                    # withheld) the narration IS the signal that the model
+                    # needs a tool — nudging it to "call the tool now" is
+                    # impossible (no schemas) and burns the recovery budget
+                    # before the acceptance gate can FORCE_TOOL properly.
+                    and not _answer_only_call_used
                 ):
                     trace.tool_talk_recoveries += 1
                     logger.warning(
@@ -6517,6 +6636,7 @@ class AgentLoop:
                         plan_steps=_plan_steps,
                         gate_replan_count=_gate_replan_count,
                         gate_force_tool=_gate_force_tool,
+                        tools_withheld=_answer_only_call_used,
                     )
                     if not _gate_final:
                         _gate_replan_count += 1
@@ -6674,6 +6794,7 @@ class AgentLoop:
                     plan_steps=_plan_steps,
                     gate_replan_count=_gate_replan_count,
                     gate_force_tool=_gate_force_tool,
+                    tools_withheld=_answer_only_call_used,
                 )
                 if not _gate_final:
                     _gate_replan_count += 1
@@ -6954,6 +7075,10 @@ class AgentLoop:
         gate_replan_count: int = 0,
         # B-2026-08-21: mutable flag for gate→loop zero-tool force signal
         gate_force_tool: list[bool] | None = None,
+        # Session 438: True when the reply being gated came from an
+        # answer-only call (tool schemas withheld). Changes the recovery
+        # for post-evidence narration from SYNTHESIZE to FORCE_TOOL.
+        tools_withheld: bool = False,
     ) -> tuple[str, bool]:
         """Gate the model's "done" claim against the success criteria.
 
@@ -7131,6 +7256,12 @@ class AgentLoop:
                         is_internal_scaffold_text=answer_is_internal_scaffold(_ft),
                         is_post_evidence_narration=(_tools_ran and narrates_after_evidence(_ft)),
                         is_hedge_after_evidence=(_tools_ran and answer_hedges_after_evidence(_ft)),
+                        # Session 438: when this reply came from an
+                        # answer-only call (tool schemas deliberately
+                        # withheld), narrating a further action means the
+                        # model NEEDS a tool (e.g. a second fetch) — give
+                        # the tools back instead of pushing synthesis.
+                        tools_withheld=bool(tools_withheld),
                     )
                     logger.info(
                         "[agent.loop] turn outcome=%s recovery=%s (%s)",

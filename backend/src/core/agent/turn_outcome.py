@@ -57,6 +57,7 @@ def classify_turn_outcome(
     is_internal_scaffold_text: bool = False,
     is_post_evidence_narration: bool = False,
     is_hedge_after_evidence: bool = False,
+    tools_withheld: bool = False,
 ) -> TurnAssessment:
     """Classify a completed model turn as ACT / ANSWER / INCOMPLETE.
 
@@ -88,6 +89,11 @@ def classify_turn_outcome(
             synthesizing already-gathered evidence.
         is_hedge_after_evidence: text asks the user to choose/confirm instead of
             answering from the evidence already gathered.
+        tools_withheld: the loop deliberately withheld tool schemas on this
+            call (the evidence-sufficient answer-only call). Post-evidence
+            narration under this mode means the model is asking for a tool it
+            was not given (e.g. a genuinely needed second fetch) — FORCE_TOOL
+            (restore the schemas), not SYNTHESIZE.
     """
     if has_tool_calls:
         return TurnAssessment(TurnOutcome.ACT, "emitted tool call(s)")
@@ -130,11 +136,16 @@ def classify_turn_outcome(
         )
 
     # SYNTHESIZE: evidence exists but the model narrated/hedged instead of answering.
+    # Session 438: under the evidence-sufficient answer-only call, tool
+    # schemas were deliberately withheld — narration of a further action
+    # therefore means the model NEEDS a tool (e.g. a genuinely required
+    # second fetch), so the recovery is FORCE_TOOL (schemas restored), the
+    # opposite of the normal post-evidence direction.
     if tools_ran_this_turn and is_post_evidence_narration:
         return TurnAssessment(
             TurnOutcome.INCOMPLETE,
             "narrated the next action instead of synthesizing evidence",
-            Recovery.SYNTHESIZE,
+            Recovery.FORCE_TOOL if tools_withheld else Recovery.SYNTHESIZE,
         )
     if tools_ran_this_turn and is_hedge_after_evidence:
         return TurnAssessment(
