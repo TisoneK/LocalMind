@@ -126,9 +126,22 @@ def _evidence(trace: AgentTrace) -> list[dict]:
 def _cmd_for(criterion: str) -> Optional[str]:
     lowered = criterion.lower()
     for cmd in _TEST_CMDS:
-        if cmd in lowered:
+        # Standalone trigger word only: "pytest-of-tison" inside a file path
+        # must not route a "file exists at ..." criterion to the test-domain
+        # checker (the hyphen/negative-lookahead keeps path fragments from
+        # counting as a command mention).
+        if re.search(rf"\b{re.escape(cmd)}(?![\w-])", lowered):
             return cmd
     return None
+
+
+def _looks_like_file_criterion(criterion: str) -> bool:
+    """A criterion that names a file's existence/content belongs to the file
+    domain, even when its path happens to contain a test-command word."""
+    lowered = criterion.lower()
+    return ("exists" in lowered or "with content" in lowered) and bool(
+        _PATH_RE.search(criterion)
+    )
 
 
 # ── Domain checkers (None = criterion not in this domain) ───────────────────
@@ -141,6 +154,8 @@ def _check_tests(
 ) -> Optional[tuple[bool, str]]:
     """'pytest passes' / 'tsc has no errors' / 'build succeeds' → parse the
     matching tool observation for pass/fail markers."""
+    if _looks_like_file_criterion(criterion):
+        return None  # file domain wins when the command word is inside a path
     cmd = _cmd_for(criterion)
     if cmd is None:
         return None

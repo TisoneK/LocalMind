@@ -141,7 +141,11 @@ async def test_loop_sends_intent_scoped_tools_to_adapter():
             captured_tools["tools"] = tools
             names = [t["function"]["name"] for t in tools]
             assert "shell" in names
-            assert "git" in names
+            # S411 tier split: git is LONG_TAIL — the wire carries core +
+            # describe_tool; the model loads git on demand. (The scope still
+            # contains it — pinned by test_shell_scope_excludes_web_and_browse_tools.)
+            assert "git" not in names
+            assert "describe_tool" in names
             assert "web_search" not in names  # the Session 124 fix
             assert "browse" not in names
             # Yield a plain final answer so the loop terminates quickly.
@@ -206,9 +210,13 @@ async def test_loop_respects_explicit_caller_scope_over_intent_scope():
     names = {t["function"]["name"] for t in captured_tools["tools"]}
     # web_search survives even though SHELL intent would normally exclude it
     assert "web_search" in names
-    # ADR-40 option C: the explicit scope's core tools + describe_tool (the
-    # meta-tool that loads on-demand tools).
-    assert names == explicit_scope | {"describe_tool"}, names
+    # ADR-40 option C: the explicit scope's CORE surface + describe_tool.
+    # Long-tail names inside the scope (git) are NOT pre-loaded — the model
+    # loads them via describe_tool; the caller-scope property under test is
+    # that a non-SHELL tool (web_search) survived the SHELL intent.
+    from core.agent.tool_schemas import CORE_TOOL_NAMES
+
+    assert names == (explicit_scope & CORE_TOOL_NAMES) | {"describe_tool"}, names
 
 
 class _FinalAnswerStream:

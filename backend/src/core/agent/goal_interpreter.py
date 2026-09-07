@@ -323,7 +323,11 @@ def _resolve_against(
     token = (token or "").strip()
     if not token or not base_dir or _ABS_PATH_RE.match(token):
         return token
-    return os.path.normpath(os.path.join(base_dir, token))
+    # Forward slashes in the agent-facing goal contract: these strings go
+    # into prompts and gate criteria, where a platform-stable form is the
+    # contract (os.path.join/backslashes made the text OS-flavored and broke
+    # the criteria's cross-platform tests).
+    return os.path.normpath(os.path.join(base_dir, token)).replace("\\", "/")
 
 
 def derive_goal_items(

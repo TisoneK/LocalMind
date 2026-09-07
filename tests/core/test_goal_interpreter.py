@@ -15,6 +15,7 @@ the gate's evidence matchers where relevant.
 
 from __future__ import annotations
 
+import json
 import os
 from unittest import mock
 
@@ -290,24 +291,28 @@ def test_every_non_excluded_intent_has_a_template():
 # ── Derived criteria are checkable by criteria_gate (contract test) ─────────
 
 
-def test_derived_file_write_criterion_is_checkable_by_gate():
+def test_derived_file_write_criterion_is_checkable_by_gate(tmp_path):
     """The criterion text MUST be a form criteria_gate recognizes. Cross-check
     that the gate's evidence matchers would accept the derived text."""
     from core.agent.models import AgentStep, AgentTrace
     from core.agent.verify import criteria_gate
 
+    # Cross-platform scratch path — "/tmp" is POSIX-only and made this
+    # contract test fail before it could even run on Windows.
+    hello_path = tmp_path / "lm_goal_interp_test_hello.py"
+    hello_path_str = str(hello_path)
+
     interp = GoalInterpreter()
     result = interp.interpret(
         message="create hello.py",
         intent=Intent.FILE_WRITE,
-        first_tool_args={"path": "/tmp/lm_goal_interp_test_hello.py"},
+        first_tool_args={"path": hello_path_str},
     )
     assert result.source == "deterministic"
     assert result.criteria
 
     # Create the file so the gate's file-exists check passes.
-    with open("/tmp/lm_goal_interp_test_hello.py", "w") as f:
-        f.write("print('hi')\n")
+    hello_path.write_text("print('hi')\n", encoding="utf-8")
 
     trace = AgentTrace(
         success_criteria=result.criteria,
@@ -316,13 +321,10 @@ def test_derived_file_write_criterion_is_checkable_by_gate():
                 iteration=0,
                 thought="writing hello.py",
                 tool_name="file_write",
-                tool_input='{"path": "/tmp/lm_goal_interp_test_hello.py"}',
+                tool_input='{"path": ' + json.dumps(hello_path_str) + '}',
                 observation="wrote 14 bytes",
             ),
         ],
     )
     done, _unmet = criteria_gate(trace, unmet_label="test")
     assert done is True
-
-    # Cleanup
-    os.remove("/tmp/lm_goal_interp_test_hello.py")
