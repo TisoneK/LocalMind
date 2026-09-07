@@ -21,72 +21,77 @@ interface InputContextMenuProps {
   onChange: (next: string) => void;
 }
 
+interface EditTarget {
+  start: number;
+  end: number;
+  value: string;
+}
+
 /**
  * Right-click edit menu for the message input: Cut / Copy / Paste /
- * Select all, mirroring a native text-field menu. Selection bounds are
- * read from the textarea at action time (they survive the menu taking
- * focus in Chromium), while the disabled flags come from a snapshot
- * taken when the menu opens. Cut/Paste apply their edit through the
- * owner's controlled state, so the input stays the single source of
- * truth; the caret is restored once the new value lands.
+ * Select all, mirroring a native text-field menu. The selection bounds
+ * are captured once when the menu opens and every action applies to that
+ * captured range — re-reading the caret at click time is unreliable,
+ * because opening the menu and returning focus moves it. Cut/Paste apply
+ * their edit through the owner's controlled state, so the input stays
+ * the single source of truth; the caret is restored onto the captured
+ * position once the new value lands.
  */
 export function InputContextMenu({ children, textareaRef, value, onChange }: InputContextMenuProps) {
-  const [snapshot, setSnapshot] = useState({ hasSelection: false, hasValue: false });
+  // Captured at open; also drives the disabled flags.
+  const [target, setTarget] = useState<EditTarget | null>(null);
+  const hasSelection = target ? target.end > target.start : false;
+
+  const captureTarget = useCallback((): EditTarget | null => {
+    const el = textareaRef.current;
+    if (!el) return null;
+    return { start: el.selectionStart, end: el.selectionEnd, value: el.value };
+  }, [textareaRef]);
 
   const handleOpenChange = useCallback((open: boolean) => {
     if (!open) return;
-    const el = textareaRef.current;
-    if (!el) return;
-    setSnapshot({
-      hasSelection: el.selectionEnd > el.selectionStart,
-      hasValue: el.value.length > 0,
-    });
-  }, [textareaRef]);
+    setTarget(captureTarget());
+  }, [captureTarget]);
 
   const restoreCaret = useCallback((caret: number) => {
     const el = textareaRef.current;
     if (!el) return;
-    // The controlled value lands on the next render; place the caret
-    // where the edit finished once it does.
-    requestAnimationFrame(() => {
+    const place = () => {
       el.focus();
       try {
         el.setSelectionRange(caret, caret);
       } catch {
         // Element detached between frames — nothing to restore.
       }
-    });
+    };
+    // The controlled value lands on the next render. A timer alone can
+    // land before React's commit; rAF alone never fires in a hidden or
+    // throttled document — schedule both, they are idempotent.
+    setTimeout(place, 0);
+    requestAnimationFrame(place);
   }, [textareaRef]);
 
   const handleCut = useCallback(async () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    if (end <= start) return;
+    if (!target || target.end <= target.start) return;
     try {
       // Copy first — if the clipboard is unavailable, leave the text in
       // place rather than "cutting" it into nothing.
-      await navigator.clipboard.writeText(value.slice(start, end));
+      await navigator.clipboard.writeText(target.value.slice(target.start, target.end));
     } catch {
       return;
     }
-    onChange(value.slice(0, start) + value.slice(end));
-    restoreCaret(start);
-  }, [textareaRef, value, onChange, restoreCaret]);
+    onChange(target.value.slice(0, target.start) + target.value.slice(target.end));
+    restoreCaret(target.start);
+  }, [target, onChange, restoreCaret]);
 
   const handleCopy = useCallback(async () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    if (end <= start) return;
+    if (!target || target.end <= target.start) return;
     try {
-      await navigator.clipboard.writeText(value.slice(start, end));
+      await navigator.clipboard.writeText(target.value.slice(target.start, target.end));
     } catch {
       // Clipboard unavailable — stay quiet.
     }
-  }, [textareaRef, value]);
+  }, [target]);
 
   const handlePaste = useCallback(async () => {
     let text = '';
@@ -96,12 +101,15 @@ export function InputContextMenu({ children, textareaRef, value, onChange }: Inp
       return; // Clipboard read denied or unavailable — nothing to insert.
     }
     if (!text) return;
-    const el = textareaRef.current;
-    const start = el?.selectionStart ?? value.length;
-    const end = el?.selectionEnd ?? value.length;
+    // The target captured at menu-open is authoritative, but if the user
+    // re-opened the menu elsewhere mid-flight, prefer the live caret.
+    const live = captureTarget();
+    const base = live && live.value === target?.value ? live : target;
+    const start = base?.start ?? value.length;
+    const end = base?.end ?? value.length;
     onChange(value.slice(0, start) + text + value.slice(end));
     restoreCaret(start + text.length);
-  }, [textareaRef, value, onChange, restoreCaret]);
+  }, [captureTarget, target, value, onChange, restoreCaret]);
 
   const handleSelectAll = useCallback(() => {
     const el = textareaRef.current;
@@ -114,11 +122,11 @@ export function InputContextMenu({ children, textareaRef, value, onChange }: Inp
     <ContextMenu onOpenChange={handleOpenChange}>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem data-testid="ctx-cut" disabled={!snapshot.hasSelection} onSelect={handleCut}>
+        <ContextMenuItem data-testid="ctx-cut" disabled={!hasSelection} onSelect={handleCut}>
           <Scissors />
           Cut
         </ContextMenuItem>
-        <ContextMenuItem data-testid="ctx-copy" disabled={!snapshot.hasSelection} onSelect={handleCopy}>
+        <ContextMenuItem data-testid="ctx-copy" disabled={!hasSelection} onSelect={handleCopy}>
           <Copy />
           Copy
         </ContextMenuItem>
@@ -127,7 +135,11 @@ export function InputContextMenu({ children, textareaRef, value, onChange }: Inp
           Paste
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem data-testid="ctx-select-all" disabled={!snapshot.hasValue} onSelect={handleSelectAll}>
+        <ContextMenuItem
+          data-testid="ctx-select-all"
+          disabled={!target || target.value.length === 0}
+          onSelect={handleSelectAll}
+        >
           <ScanText />
           Select all
         </ContextMenuItem>

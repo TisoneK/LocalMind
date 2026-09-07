@@ -1,14 +1,21 @@
 # Current Task
 
 **Status:** ACTIVE — Session 436 (Noah / ZCode local, glm-5.3-flash, Windows).
-Feature target (from chat message): **selected-text right-click options (copy
-etc.) on the chat surface.** Plan: Radix context-menu primitives (already in
-package.json, unused) — (1) transcript menu in CenterPanel: Copy selection /
-Copy message (via per-message data attribute + content lookup) / Select all
-(scoped to the transcript container); (2) edit menu on the ChatInput textarea:
-Cut / Copy / Paste / Select all. Frontend-only — no agent-loop/tool/provider
-surface, so the live-MODEL bar does not apply (assessed; frontend gates + new
-vitest suites are the evidence, plus a visual smoke pass).
+Part 1 LANDED (`fbffcac`, pushed): **selected-text right-click menus on the chat
+surface** — transcript (Copy selection / Copy message / Select all) + input
+(Cut / Copy / Paste / Select all): 20 new vitest tests, full frontend 416/416 green,
+tsc clean, eslint 0 errors on the touched files.
+
+Part 2 (new chat-message target): **export chat feature — offer users the
+option to EITHER copy the export data to the clipboard (in both available
+formats, Markdown and JSON) OR save it as a file (existing download)**.
+Plan: a pure `copySessionsToClipboard()` in the export util (mirrors
+`exportSessions`, with an injected clipboard writer),, a second dropdown
+"Copy" button next to "Export" in LeftPanel's bulk-action row, wired
+through WorkspaceLayout; vitest coverage in both suites. Frontend-only —
+no agent-loop/tool/provider surface, so the live-MODEL bar does not apply.
+
+
 
 **Feature:** none
 
