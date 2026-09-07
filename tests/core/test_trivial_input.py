@@ -54,7 +54,22 @@ def test_greeting_good_morning():
 def test_greeting_whats_up():
     assert is_trivial_input("what's up") is True
     assert is_trivial_input("whats up") is True
-    assert is_trivial_input("how are you") is True
+
+
+def test_wellbeing_questions_not_trivial():
+    """'How are you?' is a wellbeing question, not a greeting gesture.
+
+    A canned "Hi! I'm LocalMind" answer to it is a WRONG reply, not a fast
+    one — it must fall to the conversational path (a real model answer
+    with conversation context). Same for 'how's it going'.
+    """
+    assert is_trivial_input("how are you") is False
+    assert is_trivial_input("how are you?") is False
+    assert is_trivial_input("how's it going") is False
+    assert is_trivial_input("hows it going?") is False
+    # They remain conversational questions (fast path WITH a model call).
+    assert is_conversational_question("how are you") is True
+    assert is_conversational_question("how's it going") is True
 
 
 # ── Farewells ────────────────────────────────────────────────────────────────
@@ -571,11 +586,12 @@ async def test_greeting_is_deterministic_no_llm_call():
     assert "help" in text.lower()
     assert any(getattr(c, "done", False) for c in chunks)
     mock_adapter.chat.assert_not_called()
-    # Session 111 accounting: the zero-LLM turn still reports a nonzero
-    # prompt estimate so Context Tokens isn't a misleading 0.
+    # The zero-LLM turn must NOT dress estimates up as provider usage — the
+    # chunks carry the synthetic flag instead of token numbers. The Session
+    # 111 display contract (nonzero prompt estimate on the Observe panel) is
+    # served by the runtime epilog's labeled tokens_approx fields, not here.
     done = next(c for c in chunks if getattr(c, "done", False))
-    assert done.usage.get("prompt_tokens", 0) > 0
-    assert done.usage.get("completion_tokens", 0) > 0
+    assert done.usage == {"synthetic": True}
 
 
 @pytest.mark.asyncio

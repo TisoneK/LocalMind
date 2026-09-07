@@ -1233,15 +1233,39 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
                 # Finalize: persist + emit turn_complete (mirror the parent-
                 # agent path's epilog so observability and history survive
-                # reload).
+                # reload). A canned (synthetic) turn made NO provider call:
+                # its persisted metrics must say so explicitly (zeros +
+                # synthetic flag) rather than dressing string-lookup
+                # estimates up as provider token counts — the sidebar's
+                # tok/s and latency aggregates read these numbers, and the
+                # S431 export proved fabricated 5/8-token "provider" calls
+                # reconcile into polluting averages. The display contract
+                # (nonzero prompt estimate on the Observe panel) is kept by
+                # tokens_approx/prompt_tokens_approx, which stay labeled
+                # estimates.
                 _response_text = "".join(_response_chunks)
                 _total_ms = round((time.monotonic() - started) * 1000)
-                _prompt_tokens = int(_fast_usage.get("prompt_tokens", 0) or 0) or _approx_tokens(
-                    f"You are LocalMind.\n{message}"
-                )
-                _completion_tokens = int(
-                    _fast_usage.get("completion_tokens", 0) or _approx_tokens(_response_text)
-                )
+                _is_canned = bool(_fast_usage.get("synthetic"))
+                if _is_canned:
+                    # Zero provider tokens: nothing was sent to a model.
+                    _prompt_tokens = 0
+                    _completion_tokens = 0
+                    # Session 111 display contract — the Observe panel keeps
+                    # a nonzero prompt estimate on greeting turns. These are
+                    # clearly-labeled approx fields for display; the
+                    # persisted metrics and provider aggregates above stay
+                    # at honest zeros.
+                    _tokens_approx = _approx_tokens(_response_text)
+                    _prompt_approx = _approx_tokens(f"You are LocalMind.\n{message}")
+                else:
+                    _prompt_tokens = int(_fast_usage.get("prompt_tokens", 0) or 0) or _approx_tokens(
+                        f"You are LocalMind.\n{message}"
+                    )
+                    _completion_tokens = int(
+                        _fast_usage.get("completion_tokens", 0) or _approx_tokens(_response_text)
+                    )
+                    _tokens_approx = _completion_tokens
+                    _prompt_approx = _prompt_tokens
                 await self._persist_user_before_reply(
                     session_id,
                     message,
@@ -1257,11 +1281,20 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     acknowledgement=None,
                     error=None,
                     tool_calls=None,
-                    metrics={
-                        "prompt_tokens": _prompt_tokens,
-                        "completion_tokens": _completion_tokens,
-                        "latency_ms": _total_ms,
-                    },
+                    metrics=(
+                        {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "latency_ms": _total_ms,
+                            "synthetic": True,
+                        }
+                        if _is_canned
+                        else {
+                            "prompt_tokens": _prompt_tokens,
+                            "completion_tokens": _completion_tokens,
+                            "latency_ms": _total_ms,
+                        }
+                    ),
                 )
                 collector.emit(
                     "agent_runtime_done",
@@ -1273,12 +1306,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                     "turn_complete",
                     intent="chat",
                     confidence=1.0,
-                    tokens_approx=_completion_tokens,
-                    prompt_tokens_approx=_prompt_tokens,
+                    tokens_approx=_tokens_approx,
+                    prompt_tokens_approx=_prompt_approx,
                     total_latency_ms=_total_ms,
                     memory_facts=0,
                     agent_mode=False,
-                    provider_usage=_fast_usage,
+                    provider_usage=({} if _is_canned else _fast_usage),
                 )
                 self._store_observation(
                     session_id,
