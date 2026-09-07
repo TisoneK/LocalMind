@@ -20,7 +20,7 @@ block (and its "last verified" date) every time you run on it again.
 
 ---
 ---
-## Tison's local Windows machine (last verified 2026-09-05)
+## Tison's local Windows machine (last verified 2026-09-07)
 
 - **Identify by:** hostname matches `Tison`; OS is Windows; user home is `C:\Users\tison`; Dev root is `C:\Users\tison\Dev`
 - **OS:** Windows 11 (PowerShell, Git Bash available)

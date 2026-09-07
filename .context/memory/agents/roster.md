@@ -37,3 +37,4 @@ work changes, edit the "Doing" cell.
 | Mei | S434 | glm-5.3-flash | (same Mei as S433) closed B-2026-09-06-4 (live-verified) + rider -11 conflict-marker gate; released, merging to main |
 | Noah | S436 | glm-5.3-flash | S436a right-click menus + S436b export copy-to-clipboard LANDED (fbffcac/e89c3dc/3403e61); live-verified; session closed |
 | Amina | S437 | glm-5.3-flash | store hygiene: pytest LOCALMIND_HOME isolation shipped (conftest isolation half of the chat-store pollution item); residue delete-list staged for owner sign-off; released |
+| Zuri | S438 | glm-5.3-flash | B-2026-08-30-8 over-thinker: evidence-sufficient answer-only call shipped (live-verified 184.8s→14.1s weather turn); released |
