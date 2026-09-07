@@ -38,6 +38,13 @@ false-positives on the root AGENTS.md digest remain open in flaws/log.md.)
 
 **Feature:** none
 
+**S435 (this macOS checkout, single-agent — distinct from the chat-hygiene
+collab above) DONE + pushed:** B-2026-08-24-17 Terminal panel redesign
+(`4b50d72`) + a rider fix `fix(scripts): make check-conflict-markers.sh
+POSIX-sh compatible` (`aa8ef68`) — Mei's S434 script used bash `< <(...)`
+process substitution but gates.conf runs it via `sh`, so pre-commit could not
+run on macOS. No overlap with Kwame's still-unmerged -6/-7.
+
 ## Notes for the next session
 
 - **S432 backlogged its two findings:** B-2026-09-06-10 (title-generator
