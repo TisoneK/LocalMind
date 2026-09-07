@@ -31,6 +31,9 @@ SETTINGS = TRACEHOME / "settings.json"
 PROMPTS = [
     ("cybercafe", "Give me three ideas for improving a cyber café business."),
     ("hello", "Hello"),
+    # The greeting-adjacent conversational case: must take the real model
+    # path (not the canned greeting), so it carries real metrics/identity.
+    ("how_are_you", "How are you?"),
     ("weather_simple", "What is the capital of France?"),
     ("branch_count", "We have three branches. Actually, one branch closed last month. We opened two new branches. How many branches do we currently have?"),
     ("apple_math", "I have 10 apples. I gave 3 to my friend. How many do I have left?"),
