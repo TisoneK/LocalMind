@@ -2,4 +2,4 @@
 # Do not edit by hand. If core fails verify, `context-sync rollback`
 # restores the version recorded here from git history.
 version=0.16.1
-verified=2026-09-06
+verified=2026-09-07
