@@ -1,33 +1,14 @@
 # Current Task
 
-**Status:** ACTIVE — **collab fix phase live on session `localmind-chat-hygiene`.**
-**Kwame (S431) resumed by the owner** (his run was deleted mid-fix-phase;
-continuing as him, not a new session). Split agreed on the trail:
-- **Mei (S433/S434) CLOSED -2 AND -4.** -2: commit `ad4e3fc`, release
-  `20260906T194249Z` — the deterministic epilogs await the user persist
-  before the reply (5 tests, `test_fastpath_user_persist.py`). -4: commit
-  `613787a`, release `20260907T055937Z` — detector narrowed ("how are you" /
-  "how's it going" now take the conversational path with a real model call;
-  true greetings keep the S206 canned path) + canned leg persists
-  `{0, 0, real latency, synthetic: true}` and sends `provider_usage={}`
-  (fabricated 5/8-token "provider" stats are gone; Session 111 approx
-  display fields kept). LIVE-verified before/after on bankofai/qwen3.8-flash
-  (isolated 8765 + scratch tracehome): canned misfire 0.3s/fabricated {8,17}
-  → 7.3s real answer/real {262,93}; 7 new tests in
-  `test_fastpath_synthetic_metrics.py`. Mei also CLOSED -11 (rider): commits
-  `6faa315`+`487d485` — `scripts/check-conflict-markers.sh` wired into
-  gates.conf pre-commit + ci-check.sh.
-- **Kwame owns -3 + -6 + -7** (claim `20260906T082235Z`; his branch already
-  carries export v3 + the agent_runtime identity/thinking additive pass,
-  UNMERGED): exporter emits ISO-8601 timestamps + createdAt/lastActive +
-  model/provider per turn (his identity keys land in the SAME finalize
-  metrics dict Mei's -4 change touches — changes compose; whoever integrates
-  second rebases), -6 = strip markdown in LeftPanel previews at display
-  time, -7 = parent-only copy in AgentWorkspace.tsx.
-- **-5 parked** on the owner-approved delete-list (its unit-test half —
-  conftest-level LOCALMIND_HOME isolation — remains available). (Triage
-  context: the six items **B-2026-09-06-2 .. -7** came from S431's live
-  chat-export + UI review; full text in backlog.md.)
+**Status:** IDLE — **chat-hygiene fix phase COMPLETE (2026-09-07).** All fixable backlog items resolved and
+merged to main (integration merge `02b42e0`): -2 (Mei/S433), -4 + -11 (Mei/S434), -3 + -6 + -7 (Kwame/S431,
+release event `20260907T072338Z`), terminal redesign (S435). Owner-directed debt clearance in the same pass:
+backend/src ruff 32→0 (6 were real py3.10-fatal f-string syntax errors) and the 14-failure Windows test
+baseline fixed — **4 genuine product bugs**: criteria-gate misrouting "pytest"-containing paths to the test
+checker; Windows port-probe binding over live listeners (SO_REUSEADDR semantics); chat-mode memory_facts
+dropped from the byte-stable prompt; os.sep leaking into the files-listing contract. Backend suite now
+**2305 passed / 0 failed**; frontend 393/393. (Triage context: the six items **B-2026-09-06-2 .. -7** came
+from S431's live chat-export + UI review; full text in backlog.md.)
 **S428's thinker-concurrent claim WAS released** at its closeout (`38e743f`,
 event `20260906T053617Z`) — loop.py/thinker/CHANGELOG.md are free (earlier
 board states saying "STILL unreleased" were stale). (Prior state: S429/S430
