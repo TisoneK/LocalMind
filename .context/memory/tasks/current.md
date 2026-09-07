@@ -1,21 +1,14 @@
 # Current Task
 
-**Status:** IDLE — **chat-hygiene fix phase COMPLETE (2026-09-07).** All fixable backlog items resolved and
-merged to main (integration merge `02b42e0`): -2 (Mei/S433), -4 + -11 (Mei/S434), -3 + -6 + -7 (Kwame/S431,
-release event `20260907T072338Z`), terminal redesign (S435). Owner-directed debt clearance in the same pass:
-backend/src ruff 32→0 (6 were real py3.10-fatal f-string syntax errors) and the 14-failure Windows test
-baseline fixed — **4 genuine product bugs**: criteria-gate misrouting "pytest"-containing paths to the test
-checker; Windows port-probe binding over live listeners (SO_REUSEADDR semantics); chat-mode memory_facts
-dropped from the byte-stable prompt; os.sep leaking into the files-listing contract. Backend suite now
-**2305 passed / 0 failed**; frontend 393/393. (Triage context: the six items **B-2026-09-06-2 .. -7** came
-from S431's live chat-export + UI review; full text in backlog.md.)
-**S428's thinker-concurrent claim WAS released** at its closeout (`38e743f`,
-event `20260906T053617Z`) — loop.py/thinker/CHANGELOG.md are free (earlier
-board states saying "STILL unreleased" were stale). (Prior state: S429/S430
-closed the core update 0.9.1 → 0.16.1, incl. the 0.13.0 zone-migration flaw
-resolved upstream in 0.16.0; S432 synced macOS to ac1daad and
-live-smoke-tested the pulled code — see sessions.md. `context-mem lint`
-false-positives on the root AGENTS.md digest remain open in flaws/log.md.)
+**Status:** ACTIVE — Session 436 (Noah / ZCode local, glm-5.3-flash, Windows).
+Feature target (from chat message): **selected-text right-click options (copy
+etc.) on the chat surface.** Plan: Radix context-menu primitives (already in
+package.json, unused) — (1) transcript menu in CenterPanel: Copy selection /
+Copy message (via per-message data attribute + content lookup) / Select all
+(scoped to the transcript container); (2) edit menu on the ChatInput textarea:
+Cut / Copy / Paste / Select all. Frontend-only — no agent-loop/tool/provider
+surface, so the live-MODEL bar does not apply (assessed; frontend gates + new
+vitest suites are the evidence, plus a visual smoke pass).
 
 **Feature:** none
 
