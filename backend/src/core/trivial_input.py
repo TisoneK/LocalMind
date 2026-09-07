@@ -83,6 +83,12 @@ CAPABILITY_NOTE = (
 # Anything ambiguous falls through to the normal pipeline.
 
 # Greetings — "hi", "hello", "hey", "good morning", etc.
+# "how are you" / "how's it going" are deliberately NOT here: they are
+# wellbeing QUESTIONS, not greeting gestures — a canned "Hi! I'm LocalMind"
+# answer to "How are you?" is a wrong reply, not a fast one. They fall to
+# is_conversational_question (opener "how", no blocked keywords) and get a
+# real model answer with conversation context. True greeting gestures
+# ("hi", "hello", "what's up", "sup") keep the zero-provider canned path.
 _GREETINGS = [
     r"hi+",
     r"hello+",
@@ -98,8 +104,6 @@ _GREETINGS = [
     r"greetings",
     r"nice to (meet you|see you)",
     r"what'?s up",
-    r"how'?s it going",
-    r"how are you",
 ]
 
 # Farewells — "bye", "goodbye", "see you", etc.
@@ -944,16 +948,19 @@ async def trivial_response(
             message[:40],
             _kind,
         )
-        # Session 111 accounting: even a zero-LLM turn must report a nonzero
-        # prompt estimate (system+user prompt) so the Observe panel Context
-        # Tokens and the bottom-bar prompt count don't drop to a misleading 0
-        # on greeting turns (the reviewer flagged this gap).
-        _est = _approx_tokens(f"You are LocalMind.\n{message}")
-        yield StreamChunk(text=_canned, done=False, usage={"prompt_tokens": _est})
+        # The canned reply is a string lookup — no provider call, so the
+        # usage here is NOT provider data and must never be persisted or
+        # aggregated as if it were (it previously showed up as fabricated
+        # promptTokens / 4250 tok/s in the stats). The chunks carry no
+        # token numbers at all; the Session 111 display contract (a
+        # nonzero prompt estimate on the Observe panel) is served by the
+        # runtime's OWN labeled estimate (tokens_approx), not by fake
+        # provider usage.
+        yield StreamChunk(text=_canned, done=False, usage={"synthetic": True})
         yield StreamChunk(
             text="",
             done=True,
-            usage={"prompt_tokens": _est, "completion_tokens": len(_canned) // 4},
+            usage={"synthetic": True},
         )
         return
     async for chunk in _direct_chat_response(

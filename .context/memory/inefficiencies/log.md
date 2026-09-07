@@ -1271,3 +1271,11 @@ if literally nothing slowed you down.
 - **Cause:** AgentRuntime builds `SessionStore(settings.localmind_db_path)` at construction (agent_runtime.py:171) and `resolve_paths()` defaults `localmind_home` to `~/LocalMind`; conftest's `isolate_env` never pins either.
 - **Workaround / fix:** in test fixtures, monkeypatch `config.settings.localmind_home` AND `localmind_db_path` to a tmp dir BEFORE constructing AgentRuntime, then swap `rt._store = SessionStore(tmp_db)`; for whole-suite runs set `LOCALMIND_HOME=<scratch>`. Applied in `tests/core/test_fastpath_user_persist.py` (fixture `runtime`). The durable fix — pin the home in conftest's `isolate_env` — belongs to backlog item -5.
 - **Prevent next time:** conftest-level `LOCALMIND_HOME` isolation (item -5); until then, never run a turn-path suite without it.
+
+---
+## 2026-09-07 — ZCode / glm-5.3-flash (Session 434)
+- **Problem:** `context-gates.cmd run pre-commit` fails on Windows because gates.conf's commands assume the macOS/Linux layout (`cd frontend && npx tsc` breaks the PowerShell parser's `&&` handling; `backend/.venv/bin/ruff` doesn't exist — Windows uses `.venv/Scripts/ruff.exe`). Every Windows session has re-run the components by hand (documented workaround since S422).
+- **Cost:** ~2 minutes per commit ceremony + risk of a component being skipped under time pressure (the check effectively doesn't protect Windows sessions).
+- **Cause:** gates.conf is project-owned but written POSIX-only; context-gates.cmd passes each line to PowerShell verbatim.
+- **Workaround / fix:** run the components manually (`cd frontend; npx tsc -b --noEmit` / `backend/.venv/Scripts/ruff.exe check backend/src`). Durable fix candidate: write gates.conf commands in a PowerShell-compatible form or per-OS sections.
+- **Prevent next time:** normalize gates.conf for Windows (PowerShell-legal separators + `.venv/Scripts/*` paths), or have context-gates.cmd translate known POSIX forms.

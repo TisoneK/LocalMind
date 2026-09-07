@@ -35,6 +35,11 @@ fi
 echo "── ruff (backend) ──────────────────────────────────────────────"
 backend/.venv/bin/ruff check backend/src
 
+echo "── conflict markers (memory files) ────────────────────────────"
+# Merge 95c6400 shipped tasks/current.md with its conflict markers still
+# committed; this gate catches the class before it lands again.
+sh scripts/check-conflict-markers.sh
+
 echo "── pytest (backend) ────────────────────────────────────────────"
 backend/.venv/bin/python -m pytest tests -q
 

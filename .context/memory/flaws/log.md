@@ -760,3 +760,11 @@ logged in inefficiencies/log.md — no product behavior was wrong.
 - **Root cause:** the check has no scoping of open-claim failures to the calling agent, and no way to mark a peer's claim as "sequenced after this merge" without releasing it.
 - **Suggested fix (package):** `check --agent <me>` scopes unreleased-claim failures to the calling agent's own claims (peer claims become informational), or an explicit `--expect-open <event-id>` escape whose use is recorded in the check output.
 - **Status:** open
+
+---
+## 2026-09-06 — Claude Opus 4.8 (Session 435)
+- **Flaw:** `scripts/check-conflict-markers.sh` (added S434, B-2026-09-06-11) carried a `#!/usr/bin/env bash` shebang but is invoked as `sh <script>` by both `gates.conf` pre-commit and `ci-check.sh`; its `done < <(find …)` process substitution is a bash-ism that dash/POSIX-sh rejects.
+- **Symptom:** on macOS (where `/bin/sh` is not bash) the S435 pre-commit gate died with `check-conflict-markers.sh: line 23: syntax error near unexpected token '<'` — the conflict-marker check could not run at all, so the gate was unrunnable on this platform (it had only ever been exercised on the Windows `.cmd`/git-bash path).
+- **Root cause:** shebang ignored under `sh <script>` invocation; process substitution assumed a bash interpreter. No POSIX-sh smoke of the script before wiring it into the gate.
+- **Suggested fix / done:** rewrote POSIX-sh (`find -exec grep -lE … {} +`, dropped `pipefail`); verified clean→exit 0, planted marker→exit 1 under `sh`. Commit `aa8ef68`. General lesson: any script wired into a gate that invokes it via `sh` must be POSIX-sh, not merely bash-shebanged.
+- **Status:** resolved this session (`aa8ef68`).

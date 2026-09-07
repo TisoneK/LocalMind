@@ -34,4 +34,4 @@ work changes, edit the "Doing" cell.
 
 | Ada | S430 | glm-5.3-flash | core sync 0.16.0 -> 0.16.1 patch (same Ada as S429; supervisor: rename me here if you like) |
 | Kwame | S431 | glm-5.3-flash | FIX phase on session localmind-chat-hygiene (owner resumed my deleted run): claimed -3 export v3 + -6 markdown previews + -7 Agent-Workspace copy (yielded -2 implementation to Mei; backend additive pass rebases after her merge) |
-| Mei | S434 | glm-5.3-flash | (same Mei as S433) taking B-2026-09-06-4: fast-path detector breadth + honest synthetic metrics; rider: B-2026-09-06-11 conflict-marker gate |
+| Mei | S434 | glm-5.3-flash | (same Mei as S433) closed B-2026-09-06-4 (live-verified) + rider -11 conflict-marker gate; released, merging to main |

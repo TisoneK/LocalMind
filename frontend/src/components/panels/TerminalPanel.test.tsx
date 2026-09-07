@@ -44,6 +44,43 @@ describe('TerminalPanel realtime cues', () => {
   });
 });
 
+describe('TerminalPanel command blocks', () => {
+  it('shows a real recorded duration in the command header, formatted', () => {
+    render(
+      <TerminalPanel
+        lines={[
+          line({ id: 'c1', type: 'command', content: 'rm -f desktop.ini', duration: 370, exitCode: 0 }),
+          line({ id: 'c2', type: 'command', content: 'pytest', duration: 7300, exitCode: 0 }),
+        ]}
+        onExecute={noop}
+      />,
+    );
+    // Sub-second durations render as ms; multi-second as one-decimal seconds.
+    expect(screen.getByText('370ms')).toBeInTheDocument();
+    expect(screen.getByText('7.3s')).toBeInTheDocument();
+  });
+
+  it('does not invent a duration when none was recorded', () => {
+    render(
+      <TerminalPanel lines={[line({ id: 'c1', type: 'command', content: 'ls' })]} onExecute={noop} />,
+    );
+    // No duration, no error, not running → no meta readout at all (honest).
+    expect(screen.queryByText(/\d+ms/)).not.toBeInTheDocument();
+    expect(screen.queryByText('error')).not.toBeInTheDocument();
+    expect(screen.getByText(/^ls$/)).toBeInTheDocument();
+  });
+
+  it('renders loose output that precedes any command', () => {
+    render(
+      <TerminalPanel
+        lines={[line({ id: 'o0', type: 'output', content: 'boot log line' })]}
+        onExecute={noop}
+      />,
+    );
+    expect(screen.getByText('boot log line')).toBeInTheDocument();
+  });
+});
+
 describe('TerminalPanel command grouping', () => {
   it('collapses a command\'s output when its toggle is clicked', () => {
     render(
