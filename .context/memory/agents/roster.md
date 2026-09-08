@@ -25,7 +25,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Iris | S443 | glm-5.3-flash | B-2026-09-08-2 — cross-platform gate paths (gates.conf ruff line + ci-check.sh venv check) |
 
 `context-mem check` flags a duplicate name or codename. This roster is the
 **current group's** only — it resets when the group closes

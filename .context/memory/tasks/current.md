@@ -1,34 +1,36 @@
 # Current Task
 
-**Status:** IDLE — **Session 442 (Nadia / ZCode local, glm-5.3-flash, Windows)
-COMPLETE (2026-09-08): core sync 0.16.1 → 0.17.0 SHIPPED.**
+**Status:** IDLE — **Session 443 (Iris / ZCode local, glm-5.3-flash, Windows)
+COMPLETE (2026-09-08): B-2026-09-08-2 cross-platform gate portability SHIPPED
+(product `4e114cd`, registry `202d81e`, logs `5fe0258`).**
 
-**What landed (commit 278d80f):** vendored core updated 0.16.1 → 0.17.0 via
-`context-sync update` (same-MAJOR, verify clean before and after). Headline
-change: check-in is universal — every session (solo included) adds/updates a
-roster row and pushes it BEFORE product work; solo-mode decision now requires
-no live foreign roster row; clock-out (row removal) joins the closing memory
-commit; `context-mem check` audits board-vs-duty-log. kickoff.md regenerated
-from the 0.17.0 template and refilled (all facts verified — repo URL,
-public, main, git identity); AGENTS.md regenerated from the new template with
-all project addenda re-attached (Sessions 12–303 sections intact).
+**What landed:** the Windows gate path is fully portable and formally
+verified end-to-end — ci-check.sh resolves the backend venv across
+Scripts//bin layouts and runs tools via `python -m`; every gates.conf line
+is a plain `sh scripts/...` invocation (new shims scripts/run-in.sh +
+scripts/venv-run.sh) that parses under BOTH the POSIX runner and the
+PowerShell 5.1 runner (the old `cd frontend && ...` tsc line was a PS parse
+error — pre-commit could never pass here); pytest is baseline-aware against
+scripts/pytest-baseline.txt (the documented 22 Windows failures, verified
+this session; failure-SET compare, never-add/ratchet-down); bash-only
+pipefail/`\<` removed from ci-check.sh + check-bookkeeping.sh; root
+.gitattributes pins *.sh to LF.
 
-**Board hygiene (first use of the new audit):** `context-mem check` flagged
-all nine S430–S441 rows as logged-done-without-clocking-out; rows removed
-(duty record stays in sessions.md + roster git history). Board now: Nadia
-S442 only at time of writing; Nadia clocked out in this session's closeout.
-
-**Findings filed:** B-2026-09-08-2 — gates.conf pre-commit ruff entry
-(`backend/.venv/bin/ruff`) is POSIX-only; on Windows it must be
-`backend/.venv/Scripts/ruff.exe`. Gate currently fails that one command
-every Windows session (substance passes: ruff + tsc verified clean by hand).
-Also noted in inefficiencies: `context-mem lint` false-positives on
-AGENTS.md (entrypoint digest cites `.context/` by design; exempt-list
-candidate for the upstream core).
+**Verified on this box:** pre-commit gate 5/5 via context-gates.cmd; full CI
+green direct (ruff clean, pytest 2939 passed / 22 = exactly the documented
+baseline, tsc clean, eslint 0 err/53 warn, exit 0); formal exit gate GATE
+PASSED via the POSIX runner. **Windows caveat until a core patch lands:** the
+PS gate runner's aggregate verdict is untrusted (flaw filed S443 —
+`Run-One` stdout swallow can report a failing command as GATE PASSED; patch
+ready in flaws/log.md, blocked by an upstream package refactor mid-flight —
+a peer was live there; tree left untouched). Use the POSIX runner for formal
+gates meanwhile: `sh .context/core/bin/context-gates run <gate>`.
 
 **Feature:** none
 
-**Next up for the owner:** the standing queue is unchanged; B-2026-09-08-1
-(eslint ratchet tranche below 53) and B-2026-09-08-2 (gate path fix) are the
-newest items. Residue delete-list (B-2026-09-06-5) still awaits owner
-confirmation.
+**Next up for the owner:** apply the documented Run-One patch upstream after
+the ledger refactor settles → core release → `context-sync update` locally;
+B-2026-09-08-1 (next eslint tranche below 53) and B-2026-09-05-4 (the 22
+tests/tools Windows failures — the new baseline file gives the gate a green
+path meanwhile) remain open. Residue delete-list (B-2026-09-06-5) still
+awaits owner confirmation.
