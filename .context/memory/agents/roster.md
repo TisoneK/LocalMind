@@ -25,6 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Vera | S444 | glm-5.3-flash | core sync 0.17.0 → 0.18.0 + ledger rename (.context → .context_ledger) |
 
 `context-mem check` flags a duplicate name or codename. This roster is the
 **current group's** only — it resets when the group closes
