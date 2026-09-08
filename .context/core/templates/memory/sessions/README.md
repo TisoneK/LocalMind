@@ -13,17 +13,17 @@ from durable project knowledge. The three layers:
 
 Session history is collected into **groups**. The current group's registry
 and summaries live here in `memory/`; when a group closes (at `group_size`
-sessions, or a milestone), `context-history` rotates it:
+sessions, or a milestone), `ledger-history` rotates it:
 
 ```
 memory/ (live)  ->  history/ (closed, readable)  ->  archive/ (cold, zipped)  ->  gc
 ```
 
-`.context/history/` and `.context/archive/` are **never read at session
+`.context_ledger/history/` and `.context_ledger/archive/` are **never read at session
 start**. A new group starts with no implicit carryover — anything from a
 closing group that still matters must already live in a durable domain file
 (promotion, below). This is what bounds session history: `memory/` only ever
-holds the live group. See `context-history status`.
+holds the live group. See `ledger-history status`.
 
 ## Core Principle: Session Data Is Disposable
 
@@ -104,4 +104,4 @@ belong only here — promote it.
 
 <!-- The templates for SUMMARY.md and notes.md live in this directory.
 In a running project, copy the template comments from
-.context/core/templates/memory/sessions/. -->
+.context_ledger/core/templates/memory/sessions/. -->

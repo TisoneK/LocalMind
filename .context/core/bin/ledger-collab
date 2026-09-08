@@ -1,8 +1,8 @@
 #!/bin/sh
-# context-collab — peer-to-peer coordination for concurrent agents.
+# ledger-collab — peer-to-peer coordination for concurrent agents.
 #
 # Project mode only. Coordination state is immutable, one-file-per-event
-# under .context/memory/collaboration/events/, so concurrent agents do not
+# under .context_ledger/memory/collaboration/events/, so concurrent agents do not
 # append to a shared log. Product work still belongs on isolated branches or
 # worktrees; this tool does not merge or force-push product code.
 #
@@ -33,14 +33,14 @@
 set -u
 
 say() { printf '%s\n' "$*"; }
-err() { printf 'context-collab: %s\n' "$*" >&2; }
+err() { printf 'ledger-collab: %s\n' "$*" >&2; }
 die() { err "$*"; exit 1; }
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 1
 CORE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd) || exit 1
-CONTEXT_DIR=$(dirname -- "$CORE_DIR")
-PROJECT_DIR=$(dirname -- "$CONTEXT_DIR")
-MEMORY_DIR=$CONTEXT_DIR/memory
+LEDGER_DIR=$(dirname -- "$CORE_DIR")
+PROJECT_DIR=$(dirname -- "$LEDGER_DIR")
+MEMORY_DIR=$LEDGER_DIR/memory
 COLLAB_DIR=$MEMORY_DIR/collaboration
 EVENT_DIR=$COLLAB_DIR/events
 
@@ -101,7 +101,7 @@ emit() {
       --body)          [ $# -ge 2 ] || die "--body needs a value"; BODY=$2; shift 2 ;;
       --body-file)     [ $# -ge 2 ] || die "--body-file needs a value"; BODY_FILE=$2; shift 2 ;;
       -h|--help) usage ;;
-      *) die "unknown argument '$1' (try: context-collab help)" ;;
+      *) die "unknown argument '$1' (try: ledger-collab help)" ;;
     esac
   done
 
@@ -171,11 +171,11 @@ emit() {
     printf '\n'
   } > "$TMP" || { rm -f "$TMP"; die "could not write event"; }
   mv "$TMP" "$TARGET" || { rm -f "$TMP"; die "could not publish event"; }
-  say "created collaboration event: .context/memory/collaboration/events/$ID.md"
+  say "created collaboration event: .context_ledger/memory/collaboration/events/$ID.md"
   if [ "$TYPE" = note ]; then
-    say "publish it in a chore(context): commit so your peers see it — a note carries no obligation"
+    say "publish it in a chore(ledger): commit so your peers see it — a note carries no obligation"
   else
-    say "publish it in a separate chore(context): commit before changing the claimed product scope"
+    say "publish it in a separate chore(ledger): commit before changing the claimed product scope"
   fi
 }
 
@@ -280,7 +280,7 @@ CMD=${1:-}; [ $# -gt 0 ] && shift
 case "$CMD" in
   emit)   emit "$@" ;;
   status) status "$@" ;;
-  check)  sh "$SCRIPT_DIR/context-collab-check" check "$@" ;;
+  check)  sh "$SCRIPT_DIR/ledger-collab-check" check "$@" ;;
   ''|-h|--help|help) usage ;;
-  *) die "unknown command '$CMD' (try: context-collab help)" ;;
+  *) die "unknown command '$CMD' (try: ledger-collab help)" ;;
 esac

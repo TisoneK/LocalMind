@@ -27,7 +27,7 @@ remove the row (clock out) in your closing memory commit. From then on,
 event you emit and when you report to the supervisor: `John (S427)`, never
 "peer" or a bare model id. Your name and codename are each unique within
 the group — if a name is taken, pick another; there is only one John on the
-team at a time. `context-mem check` flags a clash. The roster is the board
+team at a time. `ledger-mem check` flags a clash. The roster is the board
 by the door: who's in, and what they're on.
 
 ## Goals
@@ -110,7 +110,7 @@ Never edit an event after publishing it. If it is wrong, emit a new
 `correction` event that references it. One file per event is deliberate:
 two agents can publish at the same time without appending to one shared
 log and creating an EOF merge conflict. Commit and push event files
-separately from product changes using `chore(context):`.
+separately from product changes using `chore(ledger):`.
 
 The optional helper creates valid event files atomically:
 
@@ -119,17 +119,17 @@ Pass your chosen name as `--agent` so the trail reads as people. Below,
 
 ```bash
 # a quick word to a coworker (the office channel) — no ceremony:
-sh .context/core/bin/context-collab emit note \
+sh .context_ledger/core/bin/ledger-collab emit note \
   --session <session-id> --agent John --issue <issue-id> \
   --to Ada --re src/auth.py \
   --body "Taking the token-refresh path; leaving the session store to you."
 
 # claim scope, then release it citing the commit:
-sh .context/core/bin/context-collab emit claim \
+sh .context_ledger/core/bin/ledger-collab emit claim \
   --session <session-id> --agent John --issue <issue-id> \
   --paths src/auth.py,tests/test_auth.py --body-file /path/to/claim.md
-sh .context/core/bin/context-collab status --session <session-id> --issue <issue-id>
-sh .context/core/bin/context-collab check --session <session-id> --issue <issue-id>
+sh .context_ledger/core/bin/ledger-collab status --session <session-id> --issue <issue-id>
+sh .context_ledger/core/bin/ledger-collab check --session <session-id> --issue <issue-id>
 ```
 
 `status` opens with a **Recent chatter** feed of the notes — read it first
@@ -144,12 +144,12 @@ cite a product commit.
 On Windows, use the PowerShell port:
 
 ```powershell
-.context/core/bin/context-collab.cmd emit claim `
+.context_ledger/core/bin/ledger-collab.cmd emit claim `
   --session <session-id> --agent <agent-id> --issue <issue-id> `
   --paths src/auth.py,tests/test_auth.py --body-file C:\path\claim.md
-.context/core/bin/context-collab.cmd status `
+.context_ledger/core/bin/ledger-collab.cmd status `
   --session <session-id> --issue <issue-id>
-.context/core/bin/context-collab.cmd check `
+.context_ledger/core/bin/ledger-collab.cmd check `
   --session <session-id> --issue <issue-id>
 ```
 
@@ -257,7 +257,7 @@ checks.
   event ID when you can (it makes the trail explicit), but you won't strand
   a claim as "active forever" by citing only the commit.
 - Coordination event files (including notes) are parsed line by line by the
-  helpers. Keep them LF: the shipped `.context/.gitattributes` enforces
+  helpers. Keep them LF: the shipped `.context_ledger/.gitattributes` enforces
   `eol=lf`, which also keeps the append-only memory logs from showing
   phantom whole-file diffs on Windows.
 - Non-overlapping scopes may proceed concurrently. Overlapping paths,

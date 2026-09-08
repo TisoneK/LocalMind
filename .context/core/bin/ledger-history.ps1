@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# context-history.ps1 - Windows port of context-history (session-group rotation).
+# ledger-history.ps1 - Windows port of ledger-history (session-group rotation).
 #
 # Groups the session-history subtree (agents/sessions.md, sessions/SUMMARY.md,
 # sessions/<date-N>/) and rotates it memory/ -> history/ -> archive/ -> gc.
@@ -28,14 +28,14 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Say { param([string]$Message) Write-Output $Message }
-function Die { param([string]$Message) [Console]::Error.WriteLine("context-history: $Message"); exit 2 }
+function Die { param([string]$Message) [Console]::Error.WriteLine("ledger-history: $Message"); exit 2 }
 
 $scriptDir = $PSScriptRoot
 $coreDir = (Resolve-Path (Join-Path $scriptDir '..')).Path
-$contextDir = Split-Path -Parent $coreDir
-$memoryDir = Join-Path $contextDir 'memory'
-$historyDir = Join-Path $contextDir 'history'
-$archiveDir = Join-Path $contextDir 'archive'
+$ledgerDir = Split-Path -Parent $coreDir
+$memoryDir = Join-Path $ledgerDir 'memory'
+$historyDir = Join-Path $ledgerDir 'history'
+$archiveDir = Join-Path $ledgerDir 'archive'
 $sessionsMd = Join-Path $memoryDir 'agents/sessions.md'
 $summaryMd = Join-Path $memoryDir 'sessions/SUMMARY.md'
 $rosterMd = Join-Path $memoryDir 'agents/roster.md'
@@ -44,7 +44,7 @@ $configFile = Join-Path $memoryDir 'workflows/history.conf'
 
 function Usage {
   @(
-    'context-history - group and rotate session history',
+    'ledger-history - group and rotate session history',
     '  status                 current group, session count, zone sizes, due?',
     '  close [--milestone L] [--confirm]   close the live group into history/',
     '  gc [--confirm]         delete oldest archive/ tarballs over the cap',
@@ -100,7 +100,7 @@ function Pad { param([int]$N) '{0:000}' -f $N }
 function Write-GroupState { param([int]$N, [string]$Opened)
   New-Item -ItemType Directory -Path (Split-Path -Parent $groupState) -Force | Out-Null
   @(
-    '# Current session group - written by context-history. Do not hand-edit.',
+    '# Current session group - written by ledger-history. Do not hand-edit.',
     "group=$N",
     "opened=$Opened"
   ) -join "`n" | Set-Content -LiteralPath $groupState -NoNewline
@@ -111,8 +111,8 @@ function Reset-Registry {
     '# Agent Sessions (append-only within the current group)',
     '',
     'One entry per agent session in the CURRENT group, newest at the bottom.',
-    'Closed groups live in .context/history/ and .context/archive/ (not read',
-    'at session start). Rotate with context-history.',
+    'Closed groups live in .context_ledger/history/ and .context_ledger/archive/ (not read',
+    'at session start). Rotate with ledger-history.',
     '',
     '<!-- TEMPLATE - copy below the last entry and FILL IN every placeholder:',
     '---',
@@ -122,7 +122,7 @@ function Reset-Registry {
     '- **Commits:** <count> (<first-sha>..<last-sha>)',
     '- **Outcome:** <done / partial / blocked>',
     '- **Open items:** <pointers into tasks/backlog.md, or "none">',
-    '- **Notes:** .context/memory/sessions/<date>-<N>/notes.md  (or "none")',
+    '- **Notes:** .context_ledger/memory/sessions/<date>-<N>/notes.md  (or "none")',
     '-->'
   ) -join "`n" | Set-Content -LiteralPath $sessionsMd
 }
@@ -132,7 +132,7 @@ function Reset-Summary {
     '# Session Summary (current group - prunable)',
     '',
     'One line per session: date, agent, model, one-line outcome. Closed groups',
-    'are in .context/history/. Keep this small.'
+    'are in .context_ledger/history/. Keep this small.'
   ) -join "`n" | Set-Content -LiteralPath $summaryMd
 }
 
@@ -143,7 +143,7 @@ function Reset-Roster {
     '',
     'Pick a real name you like and add your row; present yourself by it',
     '("John (S<NNN>)"). Your name and codename are each unique in this group.',
-    'The human is the supervisor. context-mem check flags a duplicate.',
+    'The human is the supervisor. ledger-mem check flags a duplicate.',
     '',
     '<!-- TEMPLATE - one row per person in this group:',
     '| <Name> | S<NNN> | <model id> | <what you are doing> |',
@@ -175,11 +175,11 @@ function Roll-OldestHistoryToArchive {
     # tar runs with the CWD inside history/ and a relative -f path: GNU tar
     # (MSYS, often first on PATH) parses "C:\..." in -f as remote host "C"
     # and dies; bsdtar (System32 tar.exe) and GNU tar both accept a relative
-    # name. archive/ is always a sibling of history/ under .context/.
+    # name. archive/ is always a sibling of history/ under .context_ledger/.
     Push-Location $historyDir
     try {
       & tar -czf ("../{0}/{1}.tar.gz" -f (Split-Path -Leaf $archiveDir), $base) "$($oldest.Name)"
-      if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("context-history: could not archive $base (need tar.exe)"); break }
+      if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("ledger-history: could not archive $base (need tar.exe)"); break }
       Remove-Item -LiteralPath $oldest.FullName -Force
       Say "archived $base -> archive/$base.tar.gz"
     } finally { Pop-Location }
@@ -194,8 +194,8 @@ function Cmd-Status {
   Say "Sessions in it:  $c / $gs"
   Say "history/:        $(Count-History) closed group(s) readable (keep $hk)"
   Say "archive/:        $(Count-Archives) tarball(s) (cap $ak)"
-  if ($c -ge $gs) { Say ''; Say 'A close is DUE (>= group_size). Run: context-history close   (then --confirm)' }
-  if ((Count-Archives) -gt $ak) { Say 'gc is DUE: archive/ over cap. Run: context-history gc --confirm' }
+  if ($c -ge $gs) { Say ''; Say 'A close is DUE (>= group_size). Run: ledger-history close   (then --confirm)' }
+  if ((Count-Archives) -gt $ak) { Say 'gc is DUE: archive/ over cap. Run: ledger-history gc --confirm' }
 }
 
 function Cmd-Close {
@@ -235,7 +235,7 @@ function Cmd-Close {
   Reset-Registry; Reset-Summary; Reset-Roster; Write-GroupState -N ($int + 1) -Opened (Today)
   Say "started group-$next"
   Roll-OldestHistoryToArchive
-  Say ''; Say "Commit as: chore(context): close session group-$n, open group-$next"
+  Say ''; Say "Commit as: chore(ledger): close session group-$n, open group-$next"
 }
 
 function Cmd-Gc {
@@ -250,7 +250,7 @@ function Cmd-Gc {
   Say '(recoverable from git history after deletion - this only bounds the working tree)'
   if (-not $confirm) { Say 'Dry run - nothing deleted. Re-run with --confirm to delete.'; return }
   $doomed | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force; Say "deleted $($_.Name)" }
-  Say "Commit as: chore(context): gc archive/ to the $ak-tarball cap"
+  Say "Commit as: chore(ledger): gc archive/ to the $ak-tarball cap"
 }
 
 switch ($Command) {
@@ -258,5 +258,5 @@ switch ($Command) {
   'close' { Cmd-Close; exit 0 }
   'gc' { Cmd-Gc; exit 0 }
   { $_ -in @('', '-h', '--help', 'help') } { Usage }
-  default { Die "unknown command '$Command' (try: context-history.ps1 help)" }
+  default { Die "unknown command '$Command' (try: ledger-history.ps1 help)" }
 }

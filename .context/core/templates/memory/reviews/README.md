@@ -2,7 +2,7 @@
 
 Session review reports. One file per session, named `YYYY-MM-DD-review.md`
 so they sort chronologically. Role-overlay sessions (see
-`.context/core/roles/`) use `YYYY-MM-DD-<role>-review.md`, e.g.
+`.context_ledger/core/roles/`) use `YYYY-MM-DD-<role>-review.md`, e.g.
 `2026-07-11-security-review.md` — except the reviewer role, which keeps
 the plain name (its report *is* the review). If two same-named sessions
 land on the same day, suffix the later one: `YYYY-MM-DD-review-2.md`.

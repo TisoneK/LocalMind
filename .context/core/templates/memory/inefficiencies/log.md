@@ -7,14 +7,14 @@ if literally nothing slowed you down.
 Most inefficiencies are project-local (an environment quirk, a one-off
 cost) and stay here. When one is actually **protocol-level** — the core
 workflow itself made you slower and every project would hit it — mark it
-`Upstream: candidate`. `context-sync harvest` collects those (and open
+`Upstream: candidate`. `ledger-sync harvest` collects those (and open
 `flaws/`) into the package for an upstream fix. Unmarked entries are
 never harvested.
 
 Append-only, but prunable to cold storage: once an entry is explicitly
 marked `RESOLVED` / `superseded` / fixed, move it **verbatim** into
 `archive.md` in this directory so startup reads only the live entries.
-`context-mem prune` reports which entries are archive-eligible; age alone
+`ledger-mem prune` reports which entries are archive-eligible; age alone
 never makes an entry eligible.
 
 <!-- TEMPLATE — copy below the last entry:

@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# context-gates.ps1 -- Windows lifecycle gates for project agents.
+# ledger-gates.ps1 -- Windows lifecycle gates for project agents.
 #
 # Commands:
 #   init
@@ -24,7 +24,7 @@ function Say { param([string]$Message) Write-Output $Message }
 # ARRAY (Say lines + the bool) and -not on a non-empty array is always
 # $false -- every gate failure would read as a pass.
 function Log { param([string]$Message) Write-Host $Message }
-function Die { param([string]$Message) [Console]::Error.WriteLine("context-gates: $Message"); exit 2 }
+function Die { param([string]$Message) [Console]::Error.WriteLine("ledger-gates: $Message"); exit 2 }
 function Usage {
   @(
     'Commands:',
@@ -34,16 +34,17 @@ function Usage {
     '  run integration --session ID --issue ID',
     '  run exit',
     '',
-    'Explicit commands live in .context/memory/workflows/gates.conf.'
+    'Explicit commands live in .context_ledger/memory/workflows/gates.conf.'
   ) | ForEach-Object { Say $_ }
   exit 2
 }
 
 $scriptDir = $PSScriptRoot
 $coreDir = (Resolve-Path (Join-Path $scriptDir '..')).Path
-$contextDir = Split-Path -Parent $coreDir
-if ((Split-Path -Leaf $contextDir) -eq '.context') { $projectDir = Split-Path -Parent $contextDir } else { $projectDir = $contextDir }
-$memoryDir = Join-Path $contextDir 'memory'
+$ledgerDir = Split-Path -Parent $coreDir
+$leaf = Split-Path -Leaf $ledgerDir
+if ($leaf -eq '.context_ledger' -or $leaf -eq '.context') { $projectDir = Split-Path -Parent $ledgerDir } else { $projectDir = $ledgerDir }
+$memoryDir = Join-Path $ledgerDir 'memory'
 $config = Join-Path $memoryDir 'workflows/gates.conf'
 
 function Valid-Id { param([string]$Value) return ($Value -match '^[A-Za-z0-9._:-]+$') }
@@ -74,9 +75,9 @@ function Run-One { param([string]$Label, [string]$Text)
     elseif (-not $?) { $status = 1 }
   } catch {
     $status = 1
-    [Console]::Error.WriteLine("context-gates: ERROR: $($_.Exception.Message)")
+    [Console]::Error.WriteLine("ledger-gates: ERROR: $($_.Exception.Message)")
   } finally { Pop-Location }
-  if ($status -ne 0) { [Console]::Error.WriteLine("context-gates: FAILED ($status): $Text"); return $false }
+  if ($status -ne 0) { [Console]::Error.WriteLine("ledger-gates: FAILED ($status): $Text"); return $false }
   Log "PASSED: $Text"; return $true
 }
 function Config-Mode {
@@ -142,7 +143,7 @@ function Run-ProjectCommands { param([string]$RequestedGate)
   # @() wraps the whole if-statement: a branch's @() alone does not survive
   # the pipeline unroll, and zero commands would leave $commands = $null.
   $commands = @(if ($explicit.Count -gt 0) { $explicit } elseif ((Config-Mode) -eq 'hybrid') { Discovered-Commands $RequestedGate })
-  if ($explicit.Count -eq 0 -and (Config-Mode) -eq 'explicit' -and $commands.Count -eq 0) { [Console]::Error.WriteLine("context-gates: $RequestedGate has no explicit commands in $config"); return $false }
+  if ($explicit.Count -eq 0 -and (Config-Mode) -eq 'explicit' -and $commands.Count -eq 0) { [Console]::Error.WriteLine("ledger-gates: $RequestedGate has no explicit commands in $config"); return $false }
   $failed = $false
   foreach ($text in $commands) { if (-not (Run-One "$RequestedGate (configured/discovered)" $text)) { $failed = $true } }
   if ($commands.Count -eq 0) { Log "NOTICE: no project commands discovered for $RequestedGate; configure $config for a mandatory project check" }
@@ -152,7 +153,7 @@ function Checkpoint { param([string[]]$CheckpointArgs)
   $scope = Parse-Scope $CheckpointArgs
   Say "GATE checkpoint: $([DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"))"
   Say 'Working tree:'; & git -C $projectDir status --short
-  if ($scope.Session -and $scope.Issue) { & (Join-Path $coreDir 'bin/context-collab.ps1') status --session $scope.Session --issue $scope.Issue }
+  if ($scope.Session -and $scope.Issue) { & (Join-Path $coreDir 'bin/ledger-collab.ps1') status --session $scope.Session --issue $scope.Issue }
   Say 'CHECKPOINT PASSED: re-read the latest state before the next action'
 }
 function Run-Gate { param([string]$RequestedGate, [string[]]$GateArgs)
@@ -164,13 +165,13 @@ function Run-Gate { param([string]$RequestedGate, [string[]]$GateArgs)
   } elseif ($RequestedGate -eq 'integration') {
     if (-not (Run-One 'integration (universal)' 'git diff --check')) { $failed = $true }
     if ($scope.Session -and $scope.Issue) {
-      Invoke-ChildScript (Join-Path $coreDir 'bin/context-collab.ps1') @('check','--session',$scope.Session,'--issue',$scope.Issue)
+      Invoke-ChildScript (Join-Path $coreDir 'bin/ledger-collab.ps1') @('check','--session',$scope.Session,'--issue',$scope.Issue)
       if ($script:ChildExit -ne 0) { $failed = $true }
     }
-    else { Say 'NOTICE: no collaboration scope supplied; skipping context-collab check' }
+    else { Say 'NOTICE: no collaboration scope supplied; skipping ledger-collab check' }
     if (-not (Run-ProjectCommands 'integration')) { $failed = $true }
   } else {
-    Invoke-ChildScript (Join-Path $coreDir 'bin/context-sync.ps1') @('verify')
+    Invoke-ChildScript (Join-Path $coreDir 'bin/ledger-sync.ps1') @('verify')
     if ($script:ChildExit -ne 0) { $failed = $true }
     if (-not (Run-One 'exit (universal)' 'git diff --check')) { $failed = $true }
     if (-not (Run-ProjectCommands 'exit')) { $failed = $true }
@@ -182,7 +183,7 @@ function Init-Config {
   if (Test-Path -LiteralPath $config) { Die "gate config already exists: $config" }
   New-Item -ItemType Directory -Path (Split-Path -Parent $config) -Force | Out-Null
   Copy-Item -LiteralPath (Join-Path $coreDir 'templates/memory/workflows/gates.conf') -Destination $config
-  Say 'created .context/memory/workflows/gates.conf'; Say 'fill explicit project commands, then run context-gates checkpoint'
+  Say 'created .context_ledger/memory/workflows/gates.conf'; Say 'fill explicit project commands, then run ledger-gates checkpoint'
 }
 
 if ($Command -in @('', '-h', '--help', 'help')) { Usage }
@@ -190,5 +191,5 @@ switch ($Command) {
   'init' { Init-Config }
   'checkpoint' { $cmdArgs = @(); if ($Gate) { $cmdArgs += $Gate }; if ($null -ne $Rest) { $cmdArgs += $Rest }; Checkpoint $cmdArgs }
   'run' { $cmdArgs = @(); if ($null -ne $Rest) { $cmdArgs += $Rest }; Run-Gate $Gate $cmdArgs }
-  default { Die "unknown command '$Command' (try: context-gates.ps1 help)" }
+  default { Die "unknown command '$Command' (try: ledger-gates.ps1 help)" }
 }

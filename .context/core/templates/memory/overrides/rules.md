@@ -15,7 +15,7 @@ diverged from a core that was later fixed — or diverged from a core that
 is *still* broken everywhere else. So tag every override by kind:
 
 - **`[core-defect]`** — core is wrong/broken here and this bullet is a
-  local patch. `context-sync harvest` collects these into the package so
+  local patch. `ledger-sync harvest` collects these into the package so
   the fix ships in a future core and the next project bootstrapped from
   it never rediscovers the workaround.
 - **`[project-local]`** — core is fine; this project just works
@@ -28,7 +28,7 @@ is *still* broken everywhere else. So tag every override by kind:
   <why this project differs> (set by <user/agent>, YYYY-MM-DD)
 
 Examples:
-- **[core-defect]** context-sync verify hashes with `sha256sum` → use
+- **[core-defect]** ledger-sync verify hashes with `sha256sum` → use
   `certutil -hashfile <file> SHA256`; `sha256sum` isn't on stock Windows
   PATH — core assumes POSIX coreutils (set by agent, 2026-07-20)
 - **[project-local]** Push to main after each commit → push to the

@@ -13,7 +13,7 @@ its work accordingly).
 > is safe in git history, so you lose nothing. Never add a second row for a
 > pair that already exists (that is how a registry ends up with two rows
 > and conflicting counts). Different models for the same agent are separate
-> rows — that is expected, not a duplicate. `sh .context/core/bin/context-mem
+> rows — that is expected, not a duplicate. `sh .context_ledger/core/bin/ledger-mem
 > check` (Windows: the `.ps1`) flags a duplicated (agent, model) key.
 
 <!-- TEMPLATE — one row per agent+model pair:

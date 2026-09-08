@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# context-collab-check.ps1 -- Windows integration-readiness validator.
+# ledger-collab-check.ps1 -- Windows integration-readiness validator.
 
 [CmdletBinding()]
 param(
@@ -10,11 +10,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Say { param([string]$Message) Write-Output $Message }
-function Fail { param([string]$Message) $script:Failures++; [Console]::Error.WriteLine("context-collab: check: $Message") }
-function Die { param([string]$Message) [Console]::Error.WriteLine("context-collab: $Message"); exit 2 }
+function Fail { param([string]$Message) $script:Failures++; [Console]::Error.WriteLine("ledger-collab: check: $Message") }
+function Die { param([string]$Message) [Console]::Error.WriteLine("ledger-collab: $Message"); exit 2 }
 function Usage {
   @(
-    'context-collab check [--session ID] [--issue ID]',
+    'ledger-collab check [--session ID] [--issue ID]',
     '',
     'Validates event metadata, references, agreements, overlaps, resolutions, and releases.',
     'Notes (type: note) are informal and never gate integration.',
@@ -27,8 +27,8 @@ function Usage {
 
 $scriptDir = $PSScriptRoot
 $coreDir = (Resolve-Path (Join-Path $scriptDir '..')).Path
-$contextDir = Split-Path -Parent $coreDir
-$eventDir = Join-Path $contextDir 'memory/collaboration/events'
+$ledgerDir = Split-Path -Parent $coreDir
+$eventDir = Join-Path $ledgerDir 'memory/collaboration/events'
 
 # Parse each event's frontmatter ONCE and cache it (keyed by full path).
 # The previous Get-Field re-read the whole file per field, which was very slow
@@ -254,7 +254,7 @@ Check-Duplicates
 Check-Overlaps
 Check-Resolutions
 if ($script:Failures -gt 0) {
-  [Console]::Error.WriteLine("context-collab: collaboration check failed: $($script:Failures) problem(s)")
+  [Console]::Error.WriteLine("ledger-collab: collaboration check failed: $($script:Failures) problem(s)")
   exit 1
 }
 Say "collaboration check passed: $($script:Files.Count) event(s), all claims resolved and agreements/releases complete"

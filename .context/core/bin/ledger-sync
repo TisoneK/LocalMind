@@ -1,10 +1,10 @@
 #!/bin/sh
-# context-sync — manage the vendored protocol core (.context/core/)
+# ledger-sync — manage the vendored protocol core (.context_ledger/core/)
 #
 # POSIX sh; runs on macOS (shasum) and Linux (sha256sum). Never touches
-# .context/memory/ except the single file memory/core.lock.
+# .context_ledger/memory/ except the single file memory/core.lock.
 #
-# Commands (project mode — run as: sh .context/core/bin/context-sync <cmd>):
+# Commands (project mode — run as: sh .context_ledger/core/bin/ledger-sync <cmd>):
 #   status               local core version + best reachable update source
 #   verify               check every core file against core/MANIFEST.sha256
 #   update [SOURCE]      replace core/ from SOURCE (package clone / unpacked
@@ -20,10 +20,13 @@
 #                        (default VERSION: the one in memory/core.lock)
 #   lock                 record the current verified core version in
 #                        memory/core.lock (update/verify call this for you)
+#   rename               one-time 0.18 migration: git mv a legacy .context/
+#                        project directory to .context_ledger/ and update
+#                        the generated entry points. Requires a clean tree.
 #
 # Commands (package mode — run from a clone of the protocol package):
 #   manifest             regenerate core/MANIFEST.sha256 (maintainers, per release)
-#   bootstrap DEST       initialize DEST project repo with .context/ (vendored
+#   bootstrap DEST       initialize DEST project repo with .context_ledger/ (vendored
 #                        core + memory skeleton + root files); also registers
 #                        DEST's origin remote in the package's fleet.md
 #   harvest [FLEET]      collect open flaws, Upstream:candidate inefficiencies,
@@ -37,7 +40,7 @@
 set -u
 
 say()  { printf '%s\n' "$*"; }
-err()  { printf 'context-sync: %s\n' "$*" >&2; }
+err()  { printf 'ledger-sync: %s\n' "$*" >&2; }
 die()  { err "$*"; exit 1; }
 
 # --- locate ourselves -------------------------------------------------------
@@ -45,21 +48,26 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 1
 CORE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd) || exit 1
 PARENT_DIR=$(dirname -- "$CORE_DIR")
 
-if [ "$(basename -- "$PARENT_DIR")" = ".context" ]; then
+# Mode detection accepts both layouts: .context_ledger/ (1.0+) and the
+# legacy .context/ (pre-1.0 projects mid-migration — finish with `rename`).
+case "$(basename -- "$PARENT_DIR")" in
+  .context_ledger|.context)
   MODE=project
-  CONTEXT_DIR=$PARENT_DIR
-  PROJECT_DIR=$(dirname -- "$CONTEXT_DIR")
-  MEMORY_DIR=$CONTEXT_DIR/memory
-else
+  LEDGER_DIR=$PARENT_DIR
+  PROJECT_DIR=$(dirname -- "$LEDGER_DIR")
+  MEMORY_DIR=$LEDGER_DIR/memory
+  ;;
+*)
   MODE=package                     # running from a package clone
   PACKAGE_DIR=$PARENT_DIR
-fi
+  ;;
+esac
 
 # --- helpers ----------------------------------------------------------------
 sha_cmd() {
   if command -v sha256sum >/dev/null 2>&1; then echo "sha256sum"
   elif command -v shasum >/dev/null 2>&1; then echo "shasum -a 256"
-  else die "need sha256sum or shasum on PATH — on Windows without them, use the PowerShell port instead: pwsh -File .context/core/bin/context-sync.ps1 ${CMD:-verify}"; fi
+  else die "need sha256sum or shasum on PATH — on Windows without them, use the PowerShell port instead: pwsh -File .context_ledger/core/bin/ledger-sync.ps1 ${CMD:-verify}"; fi
 }
 
 core_version() { # $1 = a core dir
@@ -92,8 +100,8 @@ find_source() { # echoes a core dir, or nothing. $1 = optional explicit source
     source_core_dir "$1" || die "not a package clone or core tree: $1"
     return
   fi
-  [ -n "${CONTEXT_PKG:-}" ] && source_core_dir "$CONTEXT_PKG" && return
-  for d in "$PROJECT_DIR/../context" "$PROJECT_DIR/../.context"; do
+  [ -n "${LEDGER_PKG:-}" ] && source_core_dir "$LEDGER_PKG" && return
+  for d in "$PROJECT_DIR/../context-ledger" "$PROJECT_DIR/../context" "$PROJECT_DIR/../.context"; do
     source_core_dir "$d" 2>/dev/null && return
   done
   return 1
@@ -146,8 +154,8 @@ write_lock() { # $1 = version
   [ "$MODE" = project ] || return 0
   mkdir -p "$MEMORY_DIR"
   {
-    echo "# written by context-sync — the last-known-good core version."
-    echo "# Do not edit by hand. If core fails verify, \`context-sync rollback\`"
+    echo "# written by ledger-sync — the last-known-good core version."
+    echo "# Do not edit by hand. If core fails verify, \`ledger-sync rollback\`"
     echo "# restores the version recorded here from git history."
     echo "version=$1"
     echo "verified=$(date +%Y-%m-%d)"
@@ -161,7 +169,7 @@ lock_version() {
   sed -n 's/^version=//p' "$MEMORY_DIR/core.lock" | head -n1 | tr -d '\r'
 }
 
-fleet_file() { echo "${CONTEXT_FLEET:-$PACKAGE_DIR/fleet.md}"; }
+fleet_file() { echo "${LEDGER_FLEET:-$PACKAGE_DIR/fleet.md}"; }
 
 # record a project in the package's fleet registry (package mode). idempotent
 # on the remote URL. $1 = git remote url, $2 = core version at bootstrap.
@@ -170,7 +178,7 @@ fleet_register() {
   if [ ! -f "$FF" ]; then
     {
       echo "# Fleet registry — every project bootstrapped from this protocol package."
-      echo "# Appended by 'context-sync bootstrap'; read by 'context-sync harvest'."
+      echo "# Appended by 'ledger-sync bootstrap'; read by 'ledger-sync harvest'."
       echo "# One project per line:  <git-remote-url>  bootstrapped=<date>  core=<version>"
       echo "# Append-only. Edit by hand only to correct a URL or add a repo bootstrapped"
       echo "# elsewhere. A '#' comment or blank line is ignored by harvest."
@@ -181,14 +189,14 @@ fleet_register() {
   printf '%s  bootstrapped=%s  core=%s\n' "$1" "$(date +%Y-%m-%d)" "$2" >> "$FF"
 }
 
-need_project() { [ "$MODE" = project ] || die "'$1' runs inside a project (.context/core/bin/context-sync), not the package clone"; }
+need_project() { [ "$MODE" = project ] || die "'$1' runs inside a project (.context_ledger/core/bin/ledger-sync), not the package clone"; }
 need_package() { [ "$MODE" = package ] || die "'$1' runs from a package clone, not inside a project"; }
 
 # --- commands ----------------------------------------------------------------
 cmd_status() {
   need_project status
   LOCAL_V=$(core_version "$CORE_DIR")
-  say "core:   $LOCAL_V  (.context/core)"
+  say "core:   $LOCAL_V  ($LEDGER_DIR/core)"
   say "locked: $(lock_version | grep . || echo '(no core.lock yet)')"
   if SRC=$(find_source "${1:-}"); then
     SRC_V=$(core_version "$SRC")
@@ -203,7 +211,7 @@ cmd_status() {
       older) say "source: $SRC_V  ($SRC) — source is OLDER than local; nothing to do" ;;
     esac
   else
-    say "source: none reachable (no sibling package clone; set CONTEXT_PKG or pass a path) — skipping, this is fine"
+    say "source: none reachable (no sibling package clone; set LEDGER_PKG or pass a path) — skipping, this is fine"
   fi
 }
 
@@ -215,7 +223,7 @@ cmd_verify() {
     return 0
   fi
   err "CORE INTEGRITY FAILURE — core/ does not match its manifest."
-  err "Do not 'fix' core in place. Run: context-sync rollback"
+  err "Do not 'fix' core in place. Run: ledger-sync rollback"
   err "Then log the incident in memory/flaws/log.md and continue."
   return 3
 }
@@ -227,29 +235,29 @@ cmd_verify() {
 # `migrate` command and each future release both go through here, and adding a
 # new template file to the list is the only step to teach migration about it.
 backfill_project() {
-  cp "$CORE_DIR/templates/context-README.md" "$CONTEXT_DIR/README.md" 2>/dev/null || true
-  [ -f "$CONTEXT_DIR/.gitattributes" ] || cp "$CORE_DIR/templates/.gitattributes" "$CONTEXT_DIR/.gitattributes" 2>/dev/null || true
+  cp "$CORE_DIR/templates/ledger-README.md" "$LEDGER_DIR/README.md" 2>/dev/null || true
+  [ -f "$LEDGER_DIR/.gitattributes" ] || cp "$CORE_DIR/templates/.gitattributes" "$LEDGER_DIR/.gitattributes" 2>/dev/null || true
   [ -e "$PROJECT_DIR/CLAUDE.md" ] || cp "$CORE_DIR/templates/CLAUDE.md" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || true
-  [ -d "$CONTEXT_DIR/history" ] || cp -R "$CORE_DIR/templates/history" "$CONTEXT_DIR/history" 2>/dev/null || true
-  [ -d "$CONTEXT_DIR/archive" ] || cp -R "$CORE_DIR/templates/archive" "$CONTEXT_DIR/archive" 2>/dev/null || true
+  [ -d "$LEDGER_DIR/history" ] || cp -R "$CORE_DIR/templates/history" "$LEDGER_DIR/history" 2>/dev/null || true
+  [ -d "$LEDGER_DIR/archive" ] || cp -R "$CORE_DIR/templates/archive" "$LEDGER_DIR/archive" 2>/dev/null || true
   mkdir -p "$MEMORY_DIR/workflows" "$MEMORY_DIR/agents" 2>/dev/null || true
   [ -f "$MEMORY_DIR/workflows/history.conf" ] || cp "$CORE_DIR/templates/memory/workflows/history.conf" "$MEMORY_DIR/workflows/history.conf" 2>/dev/null || true
   [ -f "$MEMORY_DIR/agents/GROUP" ] || printf 'group=1\nopened=%s\n' "$(date +%Y-%m-%d)" > "$MEMORY_DIR/agents/GROUP" 2>/dev/null || true
   [ -f "$MEMORY_DIR/agents/roster.md" ] || cp "$CORE_DIR/templates/memory/agents/roster.md" "$MEMORY_DIR/agents/roster.md" 2>/dev/null || true
 }
 
-# Replace .context/core with the source tree, LF-normalized and re-verified.
+# Replace .context_ledger/core with the source tree, LF-normalized and re-verified.
 # $1 = source core dir, $2 = its version. The running script keeps its open
 # inode across the swap, so it finishes cleanly.
 swap_core() {
   _src=$1; _sv=$2
   verify_tree "$_src" || die "update source fails its own manifest — refusing to install a corrupt core"
-  STAGE=$CONTEXT_DIR/core.new
+  STAGE=$LEDGER_DIR/core.new
   rm -rf "$STAGE"
   cp -R "$_src" "$STAGE" || die "staging copy failed"
   normalize_lf "$STAGE"
   verify_tree "$STAGE" || { rm -rf "$STAGE"; die "staged copy fails verify — aborting, core untouched"; }
-  rm -rf "$CORE_DIR" && mv "$STAGE" "$CORE_DIR" || die "swap failed — restore .context/core from git (git checkout -- .context/core)"
+  rm -rf "$CORE_DIR" && mv "$STAGE" "$CORE_DIR" || die "swap failed — restore .context_ledger/core from git (git checkout -- .context_ledger/core)"
   write_lock "$_sv"
 }
 
@@ -263,7 +271,7 @@ cmd_update() {
       *) SRC_ARG=$a ;;
     esac
   done
-  SRC=$(find_source "$SRC_ARG") || die "no update source found (sibling clone, CONTEXT_PKG, or a path argument)"
+  SRC=$(find_source "$SRC_ARG") || die "no update source found (sibling clone, LEDGER_PKG, or a path argument)"
   SRC_V=$(core_version "$SRC"); LOCAL_V=$(core_version "$CORE_DIR")
   case $(ver_cmp "$SRC_V" "$LOCAL_V") in
     same)  say "already at $LOCAL_V — nothing to do"; return 0 ;;
@@ -277,7 +285,7 @@ cmd_update() {
   # Hand off to the JUST-INSTALLED script so backfill knows every file the new
   # version introduced (the running old script cannot) — one update fully
   # migrates. Old scripts (pre-0.16) lack this line; there, run `migrate` once.
-  exec sh "$CORE_DIR/bin/context-sync" migrate --backfill-only
+  exec sh "$CORE_DIR/bin/ledger-sync" migrate --backfill-only
 }
 
 # migrate — the one-command "bring this project fully current". Updates the
@@ -301,12 +309,12 @@ cmd_migrate() {
       SRC_V=$(core_version "$SRC"); LOCAL_V=$(core_version "$CORE_DIR")
       if [ "$(ver_cmp "$SRC_V" "$LOCAL_V")" = newer ]; then
         if [ "$(ver_part "$SRC_V" 1)" != "$(ver_part "$LOCAL_V" 1)" ] && [ "$ALLOW_MAJOR" = no ]; then
-          die "MAJOR bump ($LOCAL_V -> $SRC_V): read CHANGELOG.md, then: context-sync migrate --major"
+          die "MAJOR bump ($LOCAL_V -> $SRC_V): read CHANGELOG.md, then: ledger-sync migrate --major"
         fi
         say "updating core: $LOCAL_V -> $SRC_V"
         swap_core "$SRC" "$SRC_V"
         # re-exec the new script so its backfill knows all new files
-        exec sh "$CORE_DIR/bin/context-sync" migrate --backfill-only
+        exec sh "$CORE_DIR/bin/ledger-sync" migrate --backfill-only
       fi
     fi
   fi
@@ -315,34 +323,68 @@ cmd_migrate() {
   normalize_lf "$CORE_DIR" 2>/dev/null || true
   write_lock "$(core_version "$CORE_DIR")"
   _v=$(core_version "$CORE_DIR")
-  if verify_tree "$CORE_DIR" >/dev/null 2>&1; then _vs="core verified"; else _vs="core FAILED verify — run: context-sync rollback"; fi
+  if verify_tree "$CORE_DIR" >/dev/null 2>&1; then _vs="core verified"; else _vs="core FAILED verify — run: ledger-sync rollback"; fi
   say "migration complete — core $_v; all zones/files present; $_vs."
   say ""
   say "One step left — fill the project facts (facts from memory, no secrets):"
-  say "  .context/kickoff.md          — Project Facts (remote URL, default branch, name)"
+  say "  .context_ledger/kickoff.md          — Project Facts (remote URL, default branch, name)"
   say "  AGENTS.md                    — <PROJECT_NAME>"
   say "  memory/workflows/active.md   — protocol 'by agent type', BOTH edition paths"
-  say "then commit + push: chore(context): migrate to core $_v"
+  say "then commit + push: chore(ledger): migrate to core $_v"
+  if [ "$(basename -- "$LEDGER_DIR")" = ".context" ]; then
+    say ""
+    say "This project still uses the legacy .context/ directory — finish the 0.18"
+    say "rename with: ledger-sync rename"
+  fi
 }
 
 cmd_rollback() {
   need_project rollback
   WANT=${1:-$(lock_version)}
-  [ -n "$WANT" ] || die "no version given and no memory/core.lock — pass a version: context-sync rollback 0.2.0"
+  [ -n "$WANT" ] || die "no version given and no memory/core.lock — pass a version: ledger-sync rollback 0.2.0"
   cd "$PROJECT_DIR" || exit 1
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "project is not a git repo — cannot roll back"
   FOUND=""
-  for sha in $(git log --format=%H -- .context/core/VERSION); do
-    V=$(git show "$sha:.context/core/VERSION" 2>/dev/null | head -n1 | tr -d '[:space:]')
+  for sha in $(git log --format=%H -- .context_ledger/core/VERSION); do
+    V=$(git show "$sha:.context_ledger/core/VERSION" 2>/dev/null | head -n1 | tr -d '[:space:]')
     [ "$V" = "$WANT" ] && { FOUND=$sha; break; }
   done
   [ -n "$FOUND" ] || die "no commit in history has core VERSION $WANT"
-  rm -rf .context/core
-  git checkout "$FOUND" -- .context/core || die "git checkout failed — run: git checkout HEAD -- .context/core"
+  rm -rf .context_ledger/core
+  git checkout "$FOUND" -- .context_ledger/core || die "git checkout failed — run: git checkout HEAD -- .context_ledger/core"
   write_lock "$WANT"
   say "core rolled back to $WANT (from commit ${FOUND%????????????????????????????????})"
   say "log the incident in memory/flaws/log.md, then commit as:"
-  say "  chore(context): roll back core to $WANT"
+  say "  chore(ledger): roll back core to $WANT"
+}
+
+cmd_rename() {
+  need_project rename
+  [ "$(basename -- "$LEDGER_DIR")" = ".context" ] || die "this project already uses .context_ledger/ — nothing to rename"
+  cd "$PROJECT_DIR" || exit 1
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "project is not a git repo — cannot rename"
+  [ -z "$(git status --porcelain)" ] || die "working tree not clean — commit or stash first, then re-run rename"
+  # This script's own fd is open inside .context/ (sh reads scripts
+  # lazily), and on Windows an open handle blocks renaming the directory
+  # containing it. Re-exec through a helper OUTSIDE the ledger tree:
+  # exec closes the fd, the helper does the mv + entry-point sweep, hands
+  # over to the renamed script for verify + lock, and removes itself.
+  HELPER=$PROJECT_DIR/.ledger-rename.$$.sh
+  cat > "$HELPER" <<HELPER_EOF
+#!/bin/sh
+set -u
+git mv .context .context_ledger || { echo "ledger-sync: git mv .context .context_ledger failed — rename by hand, then run: sh .context_ledger/core/bin/ledger-sync lock" >&2; exit 1; }
+for f in .context_ledger/README.md .context_ledger/kickoff.md .context_ledger/.gitattributes AGENTS.md CLAUDE.md; do
+  [ -f "\$f" ] && sed -i 's|\.context/|.context_ledger/|g; s|\.context\b|.context_ledger|g' "\$f"
+done
+sh .context_ledger/core/bin/ledger-sync verify
+echo "renamed .context/ -> .context_ledger/"
+echo "One step left — sweep stale '.context/' instruction references in your memory/ files"
+echo "(historical log entries stay as written — append-only), then commit + push:"
+echo "  chore(ledger): rename .context/ to .context_ledger/ (core 0.18)"
+rm -f "\$0"
+HELPER_EOF
+  exec sh "$HELPER"
 }
 
 cmd_manifest() {
@@ -361,26 +403,28 @@ cmd_manifest() {
 
 cmd_bootstrap() {
   need_package bootstrap
-  DEST=${1:-}; [ -n "$DEST" ] || die "usage: context-sync bootstrap <project-root>"
+  DEST=${1:-}; [ -n "$DEST" ] || die "usage: ledger-sync bootstrap <project-root>"
   [ -d "$DEST" ] || die "no such directory: $DEST"
   DEST=$(CDPATH= cd -- "$DEST" && pwd)
   git -C "$DEST" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "$DEST is not a git repo — git init it first"
-  [ -e "$DEST/.context" ] && die "$DEST/.context already exists — this is a sync session, not a bootstrap (use the project's own .context/kickoff.md)"
+  if [ -e "$DEST/.context_ledger" ] || [ -e "$DEST/.context" ]; then
+    die "$DEST already has a .context_ledger/ (or legacy .context/) ledger — this is a sync session, not a bootstrap (use the project's own kickoff.md; legacy projects: ledger-sync rename)"
+  fi
   verify_tree "$CORE_DIR" || die "package core fails its manifest — pull a clean package first"
 
-  mkdir "$DEST/.context" || exit 1
-  cp -R "$CORE_DIR" "$DEST/.context/core"                            || die "vendoring core failed"
-  cp -R "$CORE_DIR/templates/memory" "$DEST/.context/memory"         || die "copying memory skeleton failed"
-  cp -R "$CORE_DIR/templates/history" "$DEST/.context/history"       || die "creating history/ zone failed"
-  cp -R "$CORE_DIR/templates/archive" "$DEST/.context/archive"       || die "creating archive/ zone failed"
+  mkdir "$DEST/.context_ledger" || exit 1
+  cp -R "$CORE_DIR" "$DEST/.context_ledger/core"                            || die "vendoring core failed"
+  cp -R "$CORE_DIR/templates/memory" "$DEST/.context_ledger/memory"         || die "copying memory skeleton failed"
+  cp -R "$CORE_DIR/templates/history" "$DEST/.context_ledger/history"       || die "creating history/ zone failed"
+  cp -R "$CORE_DIR/templates/archive" "$DEST/.context_ledger/archive"       || die "creating archive/ zone failed"
   # seed the current session group's opened date
-  printf '# Current session group — written by context-history. Do not hand-edit.\ngroup=1\nopened=%s\n' "$(date +%Y-%m-%d)" > "$DEST/.context/memory/agents/GROUP"
+  printf '# Current session group — written by ledger-history. Do not hand-edit.\ngroup=1\nopened=%s\n' "$(date +%Y-%m-%d)" > "$DEST/.context_ledger/memory/agents/GROUP"
   # byte-identical vendored core + skeleton regardless of this checkout's
   # line endings (Windows CRLF) — verify/rollback then work out of the box.
-  normalize_lf "$DEST/.context/core" "$DEST/.context/memory"
-  cp "$CORE_DIR/templates/context-README.md" "$DEST/.context/README.md"
-  cp "$CORE_DIR/templates/kickoff.md" "$DEST/.context/kickoff.md"
-  cp "$CORE_DIR/templates/.gitattributes" "$DEST/.context/.gitattributes" 2>/dev/null || true
+  normalize_lf "$DEST/.context_ledger/core" "$DEST/.context_ledger/memory"
+  cp "$CORE_DIR/templates/ledger-README.md" "$DEST/.context_ledger/README.md"
+  cp "$CORE_DIR/templates/kickoff.md" "$DEST/.context_ledger/kickoff.md"
+  cp "$CORE_DIR/templates/.gitattributes" "$DEST/.context_ledger/.gitattributes" 2>/dev/null || true
   [ -e "$DEST/AGENTS.md" ] || cp "$CORE_DIR/templates/AGENTS.md" "$DEST/AGENTS.md"
   # CLAUDE.md points Claude Code (which auto-loads it, not AGENTS.md) into
   # the protocol. Only create it when absent — never clobber a real one.
@@ -388,12 +432,12 @@ cmd_bootstrap() {
 
   V=$(core_version "$CORE_DIR")
   {
-    echo "# written by context-sync — the last-known-good core version."
-    echo "# Do not edit by hand. If core fails verify, \`context-sync rollback\`"
+    echo "# written by ledger-sync — the last-known-good core version."
+    echo "# Do not edit by hand. If core fails verify, \`ledger-sync rollback\`"
     echo "# restores the version recorded here from git history."
     echo "version=$V"
     echo "verified=$(date +%Y-%m-%d)"
-  } > "$DEST/.context/memory/core.lock"
+  } > "$DEST/.context_ledger/memory/core.lock"
 
   RURL=$(git -C "$DEST" remote get-url origin 2>/dev/null || true)
   if [ -n "${RURL:-}" ]; then
@@ -401,31 +445,31 @@ cmd_bootstrap() {
     say "registered in $(fleet_file): $RURL"
   else
     say "note: $DEST has no 'origin' remote yet — add its URL to $(fleet_file)"
-    say "      by hand once it has one, so 'context-sync harvest' can reach it."
+    say "      by hand once it has one, so 'ledger-sync harvest' can reach it."
   fi
 
-  say "bootstrapped $DEST/.context (core $V) + AGENTS.md + CLAUDE.md"
+  say "bootstrapped $DEST/.context_ledger (core $V) + AGENTS.md + CLAUDE.md"
   say "next (the bootstrapping agent does this):"
-  say "  1. fill .context/kickoff.md Project Facts + AGENTS.md <PROJECT_NAME>"
+  say "  1. fill .context_ledger/kickoff.md Project Facts + AGENTS.md <PROJECT_NAME>"
   say "  2. fill memory/: user/, workflows/active.md, system/, tasks/current.md, agents/sessions.md"
-  say "  3. scan: grep -rn '<PROJECT\\|<GIT_\\|<LIVE_' $DEST/.context --include='*.md' (hits only in HTML comments/token forms)"
+  say "  3. scan: grep -rn '<PROJECT\\|<GIT_\\|<LIVE_' $DEST/.context_ledger --include='*.md' (hits only in HTML comments/token forms)"
   say "  4. entrypoints: CLAUDE.md points Claude Code here. If the project also uses"
   say "     Copilot/Cursor/Gemini/Codex, add a one-line 'read AGENTS.md first' pointer"
   say "     to their entrypoint (.github/copilot-instructions.md, .cursor/rules, GEMINI.md)."
-  say "  5. commit as: chore(context): bootstrap .context/ (core $V)  — and push"
+  say "  5. commit as: chore(ledger): bootstrap .context_ledger/ (core $V)  — and push"
 }
 
 # resolve a fleet URL to a readable local checkout. Prefers a sibling clone
 # whose origin matches the URL (identify by remote, never by dir name — the
 # scrapamoja lesson); else shallow-clones read-only into the harvest cache.
-# $1 = url, $2 = cache dir. echoes a repo path with .context/memory, or fails.
+# $1 = url, $2 = cache dir. echoes a repo path with .context_ledger/memory, or fails.
 resolve_repo() {
   _name=$(basename "$1" .git)
   for _cand in "$PACKAGE_DIR/../$_name" "$PACKAGE_DIR/../$_name.git"; do
     [ -d "$_cand/.git" ] || continue
     _curl=$(git -C "$_cand" remote get-url origin 2>/dev/null || true)
     [ "$_curl" = "$1" ] || continue
-    [ -d "$_cand/.context/memory" ] && { echo "$_cand"; return 0; }
+    [ -d "$_cand/.context_ledger/memory" ] || [ -d "$_cand/.context/memory" ] && { echo "$_cand"; return 0; }
   done
   _dst="$2/$_name"
   if [ -d "$_dst/.git" ]; then
@@ -434,7 +478,7 @@ resolve_repo() {
     rm -rf "$_dst"
     git clone --depth 1 --quiet "$1" "$_dst" >/dev/null 2>&1 || return 1
   fi
-  [ -d "$_dst/.context/memory" ] && { echo "$_dst"; return 0; }
+  [ -d "$_dst/.context_ledger/memory" ] || [ -d "$_dst/.context/memory" ] && { echo "$_dst"; return 0; }
   return 1
 }
 
@@ -491,7 +535,8 @@ cmd_harvest() {
     name=$(basename "$url" .git)
     repo=$(resolve_repo "$url" "$CACHE") || { err "unreachable: $name ($url) — no matching sibling clone and clone failed (private? no creds?)"; continue; }
     reached=$((reached + 1))
-    mem="$repo/.context/memory"
+    mem="$repo/.context_ledger/memory"
+    [ -d "$mem" ] || mem="$repo/.context/memory"
     RTMP=$(mktemp) || continue
     nf=$(harvest_source "$mem/flaws/log.md"          'Status:[^A-Za-z]*open'        "flaws (open)"                         "$LEDGER" "$name" "$RTMP" '^## ')
     ni=$(harvest_source "$mem/inefficiencies/log.md" 'Upstream:[^A-Za-z]*candidate' "inefficiencies (upstream candidate)" "$LEDGER" "$name" "$RTMP" '^## ')
@@ -525,11 +570,12 @@ case "$CMD" in
   update)    cmd_update "$@" ;;
   migrate)   cmd_migrate "$@" ;;
   rollback)  cmd_rollback "$@" ;;
+  rename)    cmd_rename "$@" ;;
   lock)      need_project lock; write_lock "$(core_version "$CORE_DIR")"; say "locked $(core_version "$CORE_DIR")" ;;
   manifest)  cmd_manifest "$@" ;;
   bootstrap) cmd_bootstrap "$@" ;;
   harvest)   cmd_harvest "$@" ;;
   ''|-h|--help|help)
-    sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
-  *) die "unknown command: $CMD (try: context-sync help)" ;;
+    sed -n '2,38p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) die "unknown command: $CMD (try: ledger-sync help)" ;;
 esac

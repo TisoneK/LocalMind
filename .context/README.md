@@ -1,6 +1,6 @@
-# .context/ — Agent Memory + Vendored Protocol
+# .context_ledger/ — Agent Memory + Vendored Protocol
 
-<!-- CORE-OWNED — refreshed from core/templates/context-README.md on
+<!-- CORE-OWNED — refreshed from core/templates/ledger-README.md on
 core updates. Project-specific notes belong in memory/ files, never here. -->
 
 This directory makes any AI agent — any model, any machine, local or
@@ -8,16 +8,16 @@ cloud — a continuing member of this project instead of a stranger. It
 is committed to git and travels with the repo. It has **two zones**:
 
 ```text
-.context/
+.context_ledger/
 ├── README.md     # this file — the zone map
 ├── kickoff.md    # THE FRONT DOOR — read this first, every session
 ├── core/         # the protocol, vendored — package-owned, READ-ONLY
 │   ├── VERSION           # core semver in force here
 │   ├── rules/            # the protocol editions (local + cloud)
 │   ├── roles/            # mission overlays
-│   ├── schemas/          # context-schema.md — the single source of truth on formats
+│   ├── schemas/          # ledger-schema.md — the single source of truth on formats
 │   ├── templates/        # what memory files are generated from
-│   └── bin/              # context-sync + context-collab (+ .ps1): sync, peer coordination, and integration checks
+│   └── bin/              # ledger-sync + ledger-collab (+ .ps1): sync, peer coordination, and integration checks
 └── memory/       # this project's living memory — project-owned, writable
     ├── agents/sessions.md       # append-only session log
     ├── collaboration/           # opt-in peer coordination
@@ -39,7 +39,7 @@ is committed to git and travels with the repo. It has **two zones**:
     │   ├── SUMMARY.md           # compressed history — entries are removable
     │   └── YYYY-MM-DD-N/
     │       └── notes.md         # session-scoped detail
-    ├── core.lock                # last-known-good core version (context-sync writes it)
+    ├── core.lock                # last-known-good core version (ledger-sync writes it)
     └── secrets/                 # LOCAL-ONLY — self-gitignored, never travels
 ```
 
@@ -47,14 +47,14 @@ is committed to git and travels with the repo. It has **two zones**:
 
 1. **Never write under `core/`.** It is a versioned, checksummed copy
    of the protocol package — updated only as a whole tree by
-   `core/bin/context-sync`. Protocol improvements go to the package
+   `core/bin/ledger-sync`. Protocol improvements go to the package
    repo via `memory/flaws/log.md`, not into this copy.
 2. **`memory/` is this project's data.** Write it per each file's mode —
-   append-only logs stay append-only, `chore(context):` commit prefix,
+   append-only logs stay append-only, `chore(ledger):` commit prefix,
    no secret values in tracked files, ever. The full spec:
-   `core/schemas/context-schema.md`.
+   `core/schemas/ledger-schema.md`.
 3. **Sessions start at `kickoff.md`** (one level up from memory —
-   `.context/kickoff.md`). It routes you by agent type to your edition
+   `.context_ledger/kickoff.md`). It routes you by agent type to your edition
    in `core/rules/`. Memory never chooses your edition — your agent
    type does. For concurrent work, use isolated branches/worktrees and
    `memory/collaboration/events/`; overlapping changes require a peer

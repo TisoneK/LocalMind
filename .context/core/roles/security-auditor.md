@@ -12,9 +12,9 @@
 - **Findings handling:** fix safe security issues; flag risky/architectural
   security changes. Non-security findings noticed in passing are backlogged,
   never fixed.
-- **Deliverable:** `.context/memory/reviews/YYYY-MM-DD-security-review.md` + chat summary
+- **Deliverable:** `.context_ledger/memory/reviews/YYYY-MM-DD-security-review.md` + chat summary
 - **Allowed commits:** `fix(security):`, `test(security):` (regression tests
-  for fixed issues), `docs(review):` (the report), `chore(context):`.
+  for fixed issues), `docs(review):` (the report), `chore(ledger):`.
 
 ## Execution changes vs the base edition
 
@@ -65,5 +65,5 @@ role fixed still appear in full — the report is the audit record.
   (backlog it).
 - No hardening rewrites that change behavior — flag as architectural.
 - No vulnerability mechanics in the public changelog, ever.
-- No secret **values** in the report or anywhere in `.context/` — describe
+- No secret **values** in the report or anywhere in `.context_ledger/` — describe
   location and rotation need, never the secret itself.

@@ -6,7 +6,7 @@ by the door that says who's in and what they're on.
 
 **Every session checks in here, solo or not** — it is how the next agent
 through the door sees you are in the office. Push the check-in (its own
-`chore(context):` commit) before any product work; if the push forces a
+`chore(ledger):` commit) before any product work; if the push forces a
 rebase, a peer checked in concurrently — re-read the board.
 
 **Pick a real name you like when you start** — any human name (John, Ada,
@@ -32,14 +32,14 @@ is your stable session tag.
 |------|----------|-------|-------|
 
 **Clock out when your session ends**: remove your row in the closing
-`chore(context):` commit. The board shows who is in the office *now*;
+`chore(ledger):` commit. The board shows who is in the office *now*;
 who was on duty *when* lives in the system log, not here — your
 append-only entry in `agents/sessions.md`, plus this file's own git
 history (the check-in commit opens your shift, the clock-out commit
 closes it). A row left behind sends the next agent hunting for a peer
-who has left. `context-mem check` flags a duplicate name or codename,
+who has left. `ledger-mem check` flags a duplicate name or codename,
 and warns when a session entry was logged while your row still claimed
 the office. This roster is the **current group's** only — it resets when
-the group closes (`context-history close`), and the closed group's roster
-is kept in `.context/history/`. Update your own row (don't append a
+the group closes (`ledger-history close`), and the closed group's roster
+is kept in `.context_ledger/history/`. Update your own row (don't append a
 second); when your work changes, edit the "Doing" cell.

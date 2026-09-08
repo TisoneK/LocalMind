@@ -1,17 +1,17 @@
 #!/usr/bin/env pwsh
-# context-sync.ps1 -- Windows/PowerShell port of core/bin/context-sync.
+# ledger-sync.ps1 -- Windows/PowerShell port of core/bin/ledger-sync.
 #
-# The POSIX sh script (core/bin/context-sync) is the reference implementation
+# The POSIX sh script (core/bin/ledger-sync) is the reference implementation
 # and runs on macOS/Linux. This port covers the commands a Windows agent hits
 # inside a session; it is byte-compatible with the sh script's MANIFEST.sha256
 # (same hashes, same forward-slash paths), so a core verified here verifies
-# there and vice-versa. Never touches .context/memory/ except memory/core.lock.
+# there and vice-versa. Never touches .context_ledger/memory/ except memory/core.lock.
 #
 # Requires PowerShell 5.1+ (Windows PowerShell or PowerShell 7 `pwsh`) and,
 # for `rollback`, git on PATH.
 #
 # Commands (project mode -- run the launcher, no execution-policy setup:
-#     .context/core/bin/context-sync.cmd <cmd>):
+#     .context_ledger/core/bin/ledger-sync.cmd <cmd>):
 #   status               local core version + best reachable update source
 #   verify               check every core file against core/MANIFEST.sha256
 #   update [SOURCE]      replace core/ from SOURCE (package clone / unpacked
@@ -24,6 +24,9 @@
 #                        (default VERSION: the one in memory/core.lock)
 #   lock                 record the current verified core version in
 #                        memory/core.lock (update/verify call this for you)
+#   rename               one-time 0.18 migration: git mv a legacy .context/
+#                        project directory to .context_ledger/ and update
+#                        the generated entry points. Requires a clean tree.
 #
 # Package-mode commands (manifest, bootstrap, harvest) are NOT ported --
 # run them with the sh script on macOS/Linux.
@@ -41,7 +44,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Say  { param([string]$m) Write-Output $m }
-function Err  { param([string]$m) [Console]::Error.WriteLine("context-sync: $m") }
+function Err  { param([string]$m) [Console]::Error.WriteLine("ledger-sync: $m") }
 function Die  { param([string]$m) Err $m; exit 1 }
 
 # --- locate ourselves -------------------------------------------------------
@@ -49,11 +52,14 @@ $SCRIPT_DIR = $PSScriptRoot
 $CORE_DIR   = (Resolve-Path (Join-Path $SCRIPT_DIR '..')).Path
 $PARENT_DIR = Split-Path -Parent $CORE_DIR
 
-if ((Split-Path -Leaf $PARENT_DIR) -eq '.context') {
+# Mode detection accepts both layouts: .context_ledger/ (1.0+) and the
+# legacy .context/ (pre-1.0 projects mid-migration -- finish with `rename`).
+$leaf = Split-Path -Leaf $PARENT_DIR
+if ($leaf -eq '.context_ledger' -or $leaf -eq '.context') {
   $script:MODE        = 'project'
-  $script:CONTEXT_DIR = $PARENT_DIR
-  $script:PROJECT_DIR = Split-Path -Parent $CONTEXT_DIR
-  $script:MEMORY_DIR  = Join-Path $CONTEXT_DIR 'memory'
+  $script:LEDGER_DIR = $PARENT_DIR
+  $script:PROJECT_DIR = Split-Path -Parent $LEDGER_DIR
+  $script:MEMORY_DIR  = Join-Path $LEDGER_DIR 'memory'
 } else {
   $script:MODE        = 'package'   # running from a package clone
   $script:PACKAGE_DIR = $PARENT_DIR
@@ -109,11 +115,11 @@ function Find-Source { # $explicit -> core dir or $null
     if (-not $d) { Die "not a package clone or core tree: $explicit" }
     return $d
   }
-  if ($env:CONTEXT_PKG) {
-    $d = Source-Core-Dir $env:CONTEXT_PKG
+  if ($env:LEDGER_PKG) {
+    $d = Source-Core-Dir $env:LEDGER_PKG
     if ($d) { return $d }
   }
-  foreach ($rel in '../context', '../.context') {
+  foreach ($rel in '../context-ledger', '../context', '../.context') {
     $cand = Join-Path $PROJECT_DIR $rel
     if (Test-Path -LiteralPath $cand) {
       $d = Source-Core-Dir $cand
@@ -187,8 +193,8 @@ function Write-Lock { # $version
   }
   $today = Get-Date -Format 'yyyy-MM-dd'
   $body = @(
-    '# written by context-sync -- the last-known-good core version.'
-    '# Do not edit by hand. If core fails verify, `context-sync rollback`'
+    '# written by ledger-sync -- the last-known-good core version.'
+    '# Do not edit by hand. If core fails verify, `ledger-sync rollback`'
     '# restores the version recorded here from git history.'
     "version=$version"
     "verified=$today"
@@ -208,7 +214,7 @@ function Lock-Version {
 function Need-Project {
   param([string]$name)
   if ($MODE -ne 'project') {
-    Die "'$name' runs inside a project (.context/core/bin/context-sync.ps1), not the package clone"
+    Die "'$name' runs inside a project (.context_ledger/core/bin/ledger-sync.ps1), not the package clone"
   }
 }
 
@@ -217,7 +223,7 @@ function Cmd-Status {
   param([string]$srcArg)
   Need-Project 'status'
   $localV = Core-Version $CORE_DIR
-  Say "core:   $localV  (.context/core)"
+  Say "core:   $localV  ($LEDGER_DIR/core)"
   $locked = Lock-Version
   if ($locked -eq '') { $locked = '(no core.lock yet)' }
   Say "locked: $locked"
@@ -236,7 +242,7 @@ function Cmd-Status {
       'older' { Say "source: $srcV  ($src) -- source is OLDER than local; nothing to do" }
     }
   } else {
-    Say "source: none reachable (no sibling package clone; set CONTEXT_PKG or pass a path) -- skipping, this is fine"
+    Say "source: none reachable (no sibling package clone; set LEDGER_PKG or pass a path) -- skipping, this is fine"
   }
 }
 
@@ -249,7 +255,7 @@ function Cmd-Verify {
     exit 0
   }
   Err 'CORE INTEGRITY FAILURE -- core/ does not match its manifest.'
-  Err 'Do not ''fix'' core in place. Run: context-sync rollback'
+  Err 'Do not ''fix'' core in place. Run: ledger-sync rollback'
   Err 'Then log the incident in memory/flaws/log.md and continue.'
   exit 3
 }
@@ -258,15 +264,15 @@ function Cmd-Verify {
 # Idempotent; never clobbers existing files. Reads the CURRENT core/templates,
 # so it is the single definition of what a fully-migrated project contains.
 function Backfill-Project {
-  $readme = Join-Path $CORE_DIR 'templates/context-README.md'
-  if (Test-Path -LiteralPath $readme) { Copy-Item -LiteralPath $readme -Destination (Join-Path $CONTEXT_DIR 'README.md') -Force -ErrorAction SilentlyContinue }
-  $attrs = Join-Path $CONTEXT_DIR '.gitattributes'
+  $readme = Join-Path $CORE_DIR 'templates/ledger-README.md'
+  if (Test-Path -LiteralPath $readme) { Copy-Item -LiteralPath $readme -Destination (Join-Path $LEDGER_DIR 'README.md') -Force -ErrorAction SilentlyContinue }
+  $attrs = Join-Path $LEDGER_DIR '.gitattributes'
   if (-not (Test-Path -LiteralPath $attrs)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/.gitattributes') -Destination $attrs -ErrorAction SilentlyContinue }
   $claude = Join-Path $PROJECT_DIR 'CLAUDE.md'
   if (-not (Test-Path -LiteralPath $claude)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/CLAUDE.md') -Destination $claude -ErrorAction SilentlyContinue }
-  $hist = Join-Path $CONTEXT_DIR 'history'
+  $hist = Join-Path $LEDGER_DIR 'history'
   if (-not (Test-Path -LiteralPath $hist)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/history') -Destination $hist -Recurse -ErrorAction SilentlyContinue }
-  $arch = Join-Path $CONTEXT_DIR 'archive'
+  $arch = Join-Path $LEDGER_DIR 'archive'
   if (-not (Test-Path -LiteralPath $arch)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/archive') -Destination $arch -Recurse -ErrorAction SilentlyContinue }
   $wf = Join-Path $MEMORY_DIR 'workflows'; $ag = Join-Path $MEMORY_DIR 'agents'
   New-Item -ItemType Directory -Path $wf, $ag -Force -ErrorAction SilentlyContinue | Out-Null
@@ -278,17 +284,17 @@ function Backfill-Project {
   if (-not (Test-Path -LiteralPath $ros)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/memory/agents/roster.md') -Destination $ros -ErrorAction SilentlyContinue }
 }
 
-# Replace .context/core with the source tree, LF-normalized and re-verified.
+# Replace .context_ledger/core with the source tree, LF-normalized and re-verified.
 function Swap-Core {
   param([string]$src, [string]$srcV)
   if (-not (Verify-Tree $src)) { Die 'update source fails its own manifest -- refusing to install a corrupt core' }
-  $stage = Join-Path $CONTEXT_DIR 'core.new'
+  $stage = Join-Path $LEDGER_DIR 'core.new'
   if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
   Copy-Item -LiteralPath $src -Destination $stage -Recurse -Force
   Get-ChildItem -LiteralPath $stage -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
   if (-not (Verify-Tree $stage)) { Remove-Item -LiteralPath $stage -Recurse -Force; Die 'staged copy fails verify -- aborting, core untouched' }
   try { Remove-Item -LiteralPath $CORE_DIR -Recurse -Force; Move-Item -LiteralPath $stage -Destination $CORE_DIR }
-  catch { Die 'swap failed -- restore .context/core from git (git checkout -- .context/core)' }
+  catch { Die 'swap failed -- restore .context_ledger/core from git (git checkout -- .context_ledger/core)' }
   Write-Lock $srcV
 }
 
@@ -299,7 +305,7 @@ function Cmd-Update {
   $srcArg = ''
   foreach ($a in $uArgs) { if ($a -eq '--major') { $script:Major = $true } else { $srcArg = $a } }
   $src = Find-Source $srcArg
-  if (-not $src) { Die 'no update source found (sibling clone, CONTEXT_PKG, or a path argument)' }
+  if (-not $src) { Die 'no update source found (sibling clone, LEDGER_PKG, or a path argument)' }
   $srcV = Core-Version $src; $localV = Core-Version $CORE_DIR
   switch (Ver-Cmp $srcV $localV) {
     'same'  { Say "already at $localV -- nothing to do"; exit 0 }
@@ -311,7 +317,7 @@ function Cmd-Update {
   Swap-Core $src $srcV
   Say "core updated: $localV -> $srcV"
   # hand off to the just-installed script so backfill knows every new file
-  & (Join-Path $CORE_DIR 'bin/context-sync.ps1') migrate --backfill-only
+  & (Join-Path $CORE_DIR 'bin/ledger-sync.ps1') migrate --backfill-only
   exit $LASTEXITCODE
 }
 
@@ -337,7 +343,7 @@ function Cmd-Migrate {
         }
         Say "updating core: $localV -> $srcV"
         Swap-Core $src $srcV
-        & (Join-Path $CORE_DIR 'bin/context-sync.ps1') migrate --backfill-only
+        & (Join-Path $CORE_DIR 'bin/ledger-sync.ps1') migrate --backfill-only
         exit $LASTEXITCODE
       }
     }
@@ -346,14 +352,51 @@ function Cmd-Migrate {
   Get-ChildItem -LiteralPath $CORE_DIR -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
   Write-Lock (Core-Version $CORE_DIR)
   $v = Core-Version $CORE_DIR
-  if (Verify-Tree $CORE_DIR) { $vs = 'core verified' } else { $vs = 'core FAILED verify -- run: context-sync rollback' }
+  if (Verify-Tree $CORE_DIR) { $vs = 'core verified' } else { $vs = 'core FAILED verify -- run: ledger-sync rollback' }
   Say "migration complete -- core $v; all zones/files present; $vs."
   Say ''
   Say 'One step left -- fill the project facts (facts from memory, no secrets):'
-  Say '  .context/kickoff.md          -- Project Facts (remote URL, default branch, name)'
+  Say '  .context_ledger/kickoff.md          -- Project Facts (remote URL, default branch, name)'
   Say '  AGENTS.md                    -- <PROJECT_NAME>'
   Say '  memory/workflows/active.md   -- protocol by agent type, BOTH edition paths'
-  Say "then commit + push: chore(context): migrate to core $v"
+  Say "then commit + push: chore(ledger): migrate to core $v"
+  if ((Split-Path -Leaf $LEDGER_DIR) -eq '.context') {
+    Say ''
+    Say 'This project still uses the legacy .context/ directory -- finish the 0.18'
+    Say 'rename with: ledger-sync rename'
+  }
+  exit 0
+}
+
+# rename -- one-time 0.18 migration: git mv a legacy .context/ project
+# directory to .context_ledger/ and sweep the generated entry points.
+function Cmd-Rename {
+  Need-Project 'rename'
+  if ((Split-Path -Leaf $LEDGER_DIR) -ne '.context') { Die 'this project already uses .context_ledger/ -- nothing to rename' }
+  & git -C $PROJECT_DIR rev-parse --is-inside-work-tree *> $null
+  if ($LASTEXITCODE -ne 0) { Die 'project is not a git repo -- cannot rename' }
+  if (& git -C $PROJECT_DIR status --porcelain) { Die 'working tree not clean -- commit or stash first, then re-run rename' }
+  & git -C $PROJECT_DIR mv .context .context_ledger
+  if ($LASTEXITCODE -ne 0) { Die 'git mv .context .context_ledger failed -- rename by hand, then re-run this command' }
+  # this script itself moved with the tree -- re-point the computed paths
+  $script:LEDGER_DIR  = Join-Path $PROJECT_DIR '.context_ledger'
+  $script:CORE_DIR    = Join-Path $LEDGER_DIR 'core'
+  $script:MEMORY_DIR  = Join-Path $LEDGER_DIR 'memory'
+  # the generated entry points hardcode the directory name; sweep them
+  foreach ($f in @('.context_ledger/README.md', '.context_ledger/kickoff.md', '.context_ledger/.gitattributes', 'AGENTS.md', 'CLAUDE.md')) {
+    $p = Join-Path $PROJECT_DIR $f
+    if (Test-Path -LiteralPath $p -PathType Leaf) {
+      $t = Get-Content -LiteralPath $p -Raw
+      Set-Content -LiteralPath $p -Value ($t -replace '\.context/', '.context_ledger/' -replace '\.context\b', '.context_ledger') -NoNewline
+    }
+  }
+  Get-ChildItem -LiteralPath $CORE_DIR -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
+  Write-Lock (Core-Version $CORE_DIR)
+  if (Verify-Tree $CORE_DIR) { $vs = 'core verified' } else { $vs = 'core FAILED verify -- run: ledger-sync rollback' }
+  Say "renamed .context/ -> .context_ledger/ ($vs)"
+  Say 'One step left -- sweep stale ''.context/'' instruction references in your memory/ files'
+  Say '(historical log entries stay as written -- append-only), then commit + push:'
+  Say '  chore(ledger): rename .context/ to .context_ledger/ (core 0.18)'
   exit 0
 }
 
@@ -361,27 +404,27 @@ function Cmd-Rollback {
   param([string]$want)
   Need-Project 'rollback'
   if (-not $want) { $want = Lock-Version }
-  if (-not $want) { Die 'no version given and no memory/core.lock -- pass a version: context-sync rollback 0.2.0' }
+  if (-not $want) { Die 'no version given and no memory/core.lock -- pass a version: ledger-sync rollback 0.2.0' }
   & git -C $PROJECT_DIR rev-parse --is-inside-work-tree *> $null
   if ($LASTEXITCODE -ne 0) { Die 'project is not a git repo -- cannot roll back' }
   $found = ''
-  $shas = & git -C $PROJECT_DIR log --format=%H -- .context/core/VERSION
+  $shas = & git -C $PROJECT_DIR log --format=%H -- .context_ledger/core/VERSION
   foreach ($sha in $shas) {
-    $v = (& git -C $PROJECT_DIR show "${sha}:.context/core/VERSION" 2>$null | Select-Object -First 1)
+    $v = (& git -C $PROJECT_DIR show "${sha}:.context_ledger/core/VERSION" 2>$null | Select-Object -First 1)
     if ($null -ne $v) { $v = ($v -replace '\s', '') }
     if ($v -eq $want) { $found = $sha; break }
   }
   if (-not $found) { Die "no commit in history has core VERSION $want" }
-  Remove-Item -LiteralPath (Join-Path $PROJECT_DIR '.context/core') -Recurse -Force
-  & git -C $PROJECT_DIR checkout $found -- .context/core
-  if ($LASTEXITCODE -ne 0) { Die 'git checkout failed -- run: git checkout HEAD -- .context/core' }
+  Remove-Item -LiteralPath (Join-Path $PROJECT_DIR '.context_ledger/core') -Recurse -Force
+  & git -C $PROJECT_DIR checkout $found -- .context_ledger/core
+  if ($LASTEXITCODE -ne 0) { Die 'git checkout failed -- run: git checkout HEAD -- .context_ledger/core' }
   # a CRLF checkout (core.autocrlf=true) restores hashes that do not match
   # the manifest -- rewrite to LF so the rolled-back core verifies.
-  Get-ChildItem -LiteralPath (Join-Path $PROJECT_DIR '.context/core') -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
+  Get-ChildItem -LiteralPath (Join-Path $PROJECT_DIR '.context_ledger/core') -Recurse -File | ForEach-Object { Convert-ToLf $_.FullName }
   Write-Lock $want
   Say "core rolled back to $want (from commit $($found.Substring(0, [Math]::Min(8, $found.Length))))"
   Say 'log the incident in memory/flaws/log.md, then commit as:'
-  Say "  chore(context): roll back core to $want"
+  Say "  chore(ledger): roll back core to $want"
   exit 0
 }
 
@@ -394,6 +437,7 @@ switch ($Command) {
   'update'   { Cmd-Update $argsRest }
   'migrate'  { Cmd-Migrate $argsRest }
   'rollback' { Cmd-Rollback ($argsRest | Select-Object -First 1) }
+  'rename'   { Cmd-Rename }
   'lock' {
     Need-Project 'lock'
     Write-Lock (Core-Version $CORE_DIR)
@@ -401,13 +445,13 @@ switch ($Command) {
     exit 0
   }
   { $_ -in 'manifest', 'bootstrap', 'harvest' } {
-    Die "'$Command' is not ported to PowerShell -- run the sh script on macOS/Linux: sh core/bin/context-sync $Command"
+    Die "'$Command' is not ported to PowerShell -- run the sh script on macOS/Linux: sh core/bin/ledger-sync $Command"
   }
   { $_ -in '', $null, '-h', '--help', 'help' } {
-    # print the command-doc comment (lines 13..28) as help, stripping '# '
+    # print the command-doc comment (lines 13..31) as help, stripping '# '
     $self = Get-Content -LiteralPath $PSCommandPath
-    $self[12..30] | ForEach-Object { Say ($_ -replace '^# ?', '') }
+    $self[12..33] | ForEach-Object { Say ($_ -replace '^# ?', '') }
     exit 2
   }
-  default { Die "unknown command: $Command (try: context-sync.ps1 help)" }
+  default { Die "unknown command: $Command (try: ledger-sync.ps1 help)" }
 }

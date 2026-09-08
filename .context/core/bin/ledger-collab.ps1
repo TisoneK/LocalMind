@@ -1,16 +1,16 @@
 #!/usr/bin/env pwsh
-# context-collab.ps1 -- PowerShell peer coordination helper.
+# ledger-collab.ps1 -- PowerShell peer coordination helper.
 #
 # Coordination state is immutable, one-file-per-event under
-# .context/memory/collaboration/events/. Product changes still belong on an
+# .context_ledger/memory/collaboration/events/. Product changes still belong on an
 # isolated branch/worktree and are never merged by this helper.
 #
 # Usage:
-#   .context/core/bin/context-collab.cmd emit claim `
+#   .context_ledger/core/bin/ledger-collab.cmd emit claim `
 #     --session ID --agent ID --issue ID --paths src/a.py `
 #     --body-file C:\path\claim.md
-#   .context/core/bin/context-collab.cmd status --session ID --issue ID
-#   .context/core/bin/context-collab.cmd check --session ID --issue ID
+#   .context_ledger/core/bin/ledger-collab.cmd status --session ID --issue ID
+#   .context_ledger/core/bin/ledger-collab.cmd check --session ID --issue ID
 
 [CmdletBinding()]
 param(
@@ -23,7 +23,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Say { param([string]$Message) Write-Output $Message }
-function Die { param([string]$Message) [Console]::Error.WriteLine("context-collab: $Message"); exit 1 }
+function Die { param([string]$Message) [Console]::Error.WriteLine("ledger-collab: $Message"); exit 1 }
 function Usage {
   @(
     'Commands:',
@@ -44,8 +44,8 @@ function Usage {
 
 $scriptDir = $PSScriptRoot
 $coreDir = (Resolve-Path (Join-Path $scriptDir '..')).Path
-$contextDir = Split-Path -Parent $coreDir
-$eventDir = Join-Path $contextDir 'memory/collaboration/events'
+$ledgerDir = Split-Path -Parent $coreDir
+$eventDir = Join-Path $ledgerDir 'memory/collaboration/events'
 
 function Validate-Value { param([string]$Name, [string]$Value)
   if ([string]::IsNullOrWhiteSpace($Value) -or $Value.Contains("`n") -or $Value.Contains("`r")) {
@@ -140,11 +140,11 @@ function Emit { param([string]$EventType, [string[]]$EventArgs)
   )
   Set-Content -LiteralPath $temp -Value ($lines -join "`n") -NoNewline
   Move-Item -LiteralPath $temp -Destination $target
-  Say "created collaboration event: .context/memory/collaboration/events/$id.md"
+  Say "created collaboration event: .context_ledger/memory/collaboration/events/$id.md"
   if ($EventType -eq 'note') {
-    Say 'publish it in a chore(context): commit so your peers see it -- a note carries no obligation'
+    Say 'publish it in a chore(ledger): commit so your peers see it -- a note carries no obligation'
   } else {
-    Say 'publish it in a separate chore(context): commit before changing the claimed product scope'
+    Say 'publish it in a separate chore(ledger): commit before changing the claimed product scope'
   }
 }
 
@@ -231,9 +231,9 @@ switch ($Command) {
     # host (reading it unset trips StrictMode), so pre-seed it and fall
     # back to the child's success status.
     $global:LASTEXITCODE = $null
-    & (Join-Path $scriptDir 'context-collab-check.ps1') @checkArgs
+    & (Join-Path $scriptDir 'ledger-collab-check.ps1') @checkArgs
     if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }
     if ($?) { exit 0 } else { exit 1 }
   }
-  default { Die "unknown command '$Command' (try: context-collab.ps1 help)" }
+  default { Die "unknown command '$Command' (try: ledger-collab.ps1 help)" }
 }

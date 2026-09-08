@@ -1,13 +1,13 @@
-# The `.context/` Schema — Single Source of Truth
+# The `.context_ledger/` Schema — Single Source of Truth
 
-This file defines every file in a project's `.context/` directory: where
+This file defines every file in a project's `.context_ledger/` directory: where
 it lives, who owns it, how it may be written, and which *scope* its facts
 belong to. When any other document (a README, an edition, a template
 comment) disagrees with this schema, **this schema wins** — and the
 disagreement is a flaw to log.
 
 A machine-readable mirror lives beside this file as
-`context.schema.json`. The markdown is authoritative; the JSON is
+`ledger.schema.json`. The markdown is authoritative; the JSON is
 generated from it by hand and must be updated in the same commit as any
 schema change.
 
@@ -19,7 +19,7 @@ schema change.
 {project}/
 ├── AGENTS.md              # generated digest for agent discovery (see Translation layer)
 ├── CLAUDE.md              # pointer so Claude Code (auto-loads CLAUDE.md) reaches the protocol
-└── .context/
+└── .context_ledger/
     ├── README.md          # zone map — copied from core/templates at bootstrap/update
     ├── kickoff.md         # front door — generated at bootstrap, project-owned
     ├── .gitattributes     # LF policy for core + memory (Windows CRLF guard)
@@ -30,28 +30,28 @@ schema change.
 ```
 
 `history/` and `archive/` hold closed session groups produced by
-`context-history` (see **Session grouping** below). They are never in the
+`ledger-history` (see **Session grouping** below). They are never in the
 session-start reading order — only the live group in `memory/` is.
 
 | Zone | Owner | Agents may write? | How it changes |
 |---|---|---|---|
-| `core/` | The protocol package | **Never.** Not one byte. | Only via `context-sync update` (whole-tree, version-stamped) |
+| `core/` | The protocol package | **Never.** Not one byte. | Only via `ledger-sync update` (whole-tree, version-stamped) |
 | `memory/` | The project | Yes — per each file's write mode below | Normal session work, committed with the project |
 
 The zone rule is the entire sync model: **core is replaced as a unit,
 memory is never touched by sync.** There is no per-file structural/data
 classification anymore (the old `SYNC.md` basename rule is retired). If
-you are editing a path that starts with `.context/core/`, stop — you are
-either syncing (use `context-sync`) or making a protocol change, which
+you are editing a path that starts with `.context_ledger/core/`, stop — you are
+either syncing (use `ledger-sync`) or making a protocol change, which
 belongs in the package repo, not in a project.
 
 Two root files sit outside both zones:
 
-- **`.context/README.md`** — the zone map. Package-owned *content*
-  (refreshed from `core/templates/context-README.md` on core updates)
+- **`.context_ledger/README.md`** — the zone map. Package-owned *content*
+  (refreshed from `core/templates/ledger-README.md` on core updates)
   but deliberately kept at the root so a fresh agent's first `ls` +
   `cat` explains the layout.
-- **`.context/kickoff.md`** — the front door. Project-owned **data**:
+- **`.context_ledger/kickoff.md`** — the front door. Project-owned **data**:
   generated once at bootstrap from `core/templates/kickoff.md`, its
   facts kept current by sessions. Core updates never overwrite it; if
   its template changes materially (see `core/CHANGELOG.md`), the next
@@ -68,18 +68,18 @@ core/
 ├── CHANGELOG.md         # one entry per release + migration notes
 ├── MANIFEST.sha256      # checksums of every core file — integrity check
 ├── bin/
-│   ├── context-sync     # POSIX-sh: status / verify / update / migrate / rollback / bootstrap
-│   ├── context-sync.ps1   # PowerShell port (Windows): status / verify / update / rollback / lock
-│   ├── context-collab       # POSIX-sh: atomic collaboration events + status + check
-│   ├── context-collab.ps1   # PowerShell port (Windows): emit + status + check
-│   ├── context-collab-check # POSIX integration-readiness validator
-│   ├── context-collab-check.ps1 # PowerShell integration-readiness validator
-│   ├── context-gates        # POSIX lifecycle gates + checkpoint
-│   ├── context-gates.ps1    # PowerShell lifecycle gates + checkpoint
-│   ├── context-mem          # POSIX: check (registry dup keys) + lint (.context leak) + prune (log-archive advisory)
-│   ├── context-mem.ps1      # PowerShell port: same hygiene checks
-│   ├── context-history      # POSIX: group session history, rotate memory→history→archive→gc
-│   ├── context-history.ps1  # PowerShell port: session-group rotation
+│   ├── ledger-sync     # POSIX-sh: status / verify / update / migrate / rollback / bootstrap
+│   ├── ledger-sync.ps1   # PowerShell port (Windows): status / verify / update / rollback / lock
+│   ├── ledger-collab       # POSIX-sh: atomic collaboration events + status + check
+│   ├── ledger-collab.ps1   # PowerShell port (Windows): emit + status + check
+│   ├── ledger-collab-check # POSIX integration-readiness validator
+│   ├── ledger-collab-check.ps1 # PowerShell integration-readiness validator
+│   ├── ledger-gates        # POSIX lifecycle gates + checkpoint
+│   ├── ledger-gates.ps1    # PowerShell lifecycle gates + checkpoint
+│   ├── ledger-mem          # POSIX: check (registry dup keys) + lint (.context_ledger leak) + prune (log-archive advisory)
+│   ├── ledger-mem.ps1      # PowerShell port: same hygiene checks
+│   ├── ledger-history      # POSIX: group session history, rotate memory→history→archive→gc
+│   ├── ledger-history.ps1  # PowerShell port: session-group rotation
 │   └── context-*.cmd        # cmd.exe launchers, one per .ps1 port: each
 │                            #   runs it with -ExecutionPolicy Bypass -- no
 │                            #   Windows Set-ExecutionPolicy setup needed
@@ -88,20 +88,20 @@ core/
 │   └── ai-engineering-protocol.md         # CLOUD/SANDBOX agents' edition
 ├── roles/               # mission overlays: reviewer, security-auditor, docs-agent, feature-engineer
 ├── schemas/
-│   ├── context-schema.md    # this file
-│   └── context.schema.json  # machine-readable mirror
+│   ├── ledger-schema.md    # this file
+│   └── ledger.schema.json  # machine-readable mirror
 └── templates/
     ├── AGENTS.md            # root discovery digest (translation layer)
-    ├── context-README.md    # becomes .context/README.md
-    ├── kickoff.md           # becomes .context/kickoff.md (filled at bootstrap)
+    ├── ledger-README.md    # becomes .context_ledger/README.md
+    ├── kickoff.md           # becomes .context_ledger/kickoff.md (filled at bootstrap)
     └── memory/              # the memory/ stub tree copied at bootstrap
 ```
 
-Integrity: `sh .context/core/bin/context-sync verify` checks every core
+Integrity: `sh .context_ledger/core/bin/ledger-sync verify` checks every core
 file against `MANIFEST.sha256` (on Windows:
-`.context/core/bin/context-sync.cmd verify` — the launcher shares
+`.context_ledger/core/bin/ledger-sync.cmd verify` — the launcher shares
 the same manifest). A failed verify means core was
-hand-edited or corrupted — restore it (`context-sync rollback` or
+hand-edited or corrupted — restore it (`ledger-sync rollback` or
 `git checkout` of the last good commit) and log a flaw. Never "fix"
 core in place inside a project.
 
@@ -122,23 +122,23 @@ File inventory, write modes, and scopes. **Write modes:**
   editing it, not by appending a second one.** The prior value survives in
   git history, so editing loses nothing. Appending a duplicate for a key
   that already exists is the failure mode (two rows, conflicting counts);
-  `context-mem check` flags it. Keys: `ai-models.md` = (Agent, Model),
+  `ledger-mem check` flags it. Keys: `ai-models.md` = (Agent, Model),
   `environments.md` = the "Identify by:" line.
 - **generated** — created from a `core/templates/` file at bootstrap,
   then maintained as data (facts updated in place; regenerated only
   when the template materially changes).
 - **local-only** — never tracked by git, never travels.
 
-| Path (under `.context/memory/`) | Mode | Scope | Holds |
+| Path (under `.context_ledger/memory/`) | Mode | Scope | Holds |
 |---|---|---|---|
 | `agents/sessions.md` | append-only (current group) | project | One entry per session: agent, model, platform, task, commits, outcome |
-| `agents/roster.md` | update-in-place (current group) | project | Team roster — the "who's in the office *now*" board. Every session (solo included) adds its row at check-in and pushes it before product work; removes the row (clocks out) at session end. Who was on duty *when* lives in `agents/sessions.md` + this file's git history. Name and codename each unique in the group; `context-mem check` enforces it |
+| `agents/roster.md` | update-in-place (current group) | project | Team roster — the "who's in the office *now*" board. Every session (solo included) adds its row at check-in and pushes it before product work; removes the row (clocks out) at session end. Who was on duty *when* lives in `agents/sessions.md` + this file's git history. Name and codename each unique in the group; `ledger-mem check` enforces it |
 | `tasks/current.md` | overwrite | project | The one task in progress — a lock only in single-agent mode |
 | `tasks/backlog.md` | append-only | project | Open items for future sessions |
 | `collaboration/README.md` | generated | project | Peer collaboration rules and event contract |
 | `collaboration/events/<event-id>.md` | immutable new file | project | Notes (informal), claims, proposals, assessments, agreements, corrections, handoffs, releases |
 | `plans/decisions.md` | append-only | project | ADR-style decisions — respected, not relitigated |
-| `flaws/log.md` | append-only | project→package | Friction with the protocol/`.context/` system itself; flows upstream |
+| `flaws/log.md` | append-only | project→package | Friction with the protocol/`.context_ledger/` system itself; flows upstream |
 | `flaws/README.md` | generated | project | The flaws-vs-inefficiencies split rule (pointer to this schema) |
 | `inefficiencies/log.md` | append-only | project | Friction with the project's code, env, deps |
 | `reviews/YYYY-MM-DD-*.md` | new file per session | project | Session reports (deliverables — commit as `docs(review):`) |
@@ -153,7 +153,7 @@ File inventory, write modes, and scopes. **Write modes:**
 | `user/identity.md` | update-in-place | user | Who the user is |
 | `user/preferences.md` | update-in-place | user | Standing preferences, each bullet with provenance |
 | `overrides/rules.md` | update-in-place | project | Project-local protocol adjustments (see Overrides) |
-| `core.lock` | overwrite (by `context-sync`) | project | Last-known-good core version + when it was verified |
+| `core.lock` | overwrite (by `ledger-sync`) | project | Last-known-good core version + when it was verified |
 | `secrets/<slug>` | local-only | machine | One secret per file; line 1 = value. Self-gitignored |
 | `secrets/README.md`, `secrets/.gitignore` | generated | project | The secrets hard rules; the self-ignore |
 
@@ -165,7 +165,7 @@ wins.
 
 ### Reading order (session start)
 
-`.context/README.md` → `kickoff.md` → `memory/workflows/active.md` →
+`.context_ledger/README.md` → `kickoff.md` → `memory/workflows/active.md` →
 `memory/agents/sessions.md` (last 3–5) → `memory/agents/roster.md`
 (the "who's in the office now" board — a live row you didn't write means a
 peer is here) → `memory/sessions/SUMMARY.md`
@@ -199,9 +199,9 @@ duty *when* is the duty log's job: append-only `agents/sessions.md`
 entries plus the roster file's own git history (check-in commit opens a
 shift, clock-out closes it). Each agent presents itself by that name in
 events and to the supervisor, and
-name + codename are each unique in the group. `context-mem check` flags a
+name + codename are each unique in the group. `ledger-mem check` flags a
 duplicate and warns when a session entry was logged while a row still
-claimed the office (a forgotten clock-out). `context-history close`
+claimed the office (a forgotten clock-out). `ledger-history close`
 resets the roster (the closed group's roster is kept in `history/`).
 
 A group moves through three zones, and only the live one is read at session
@@ -213,7 +213,7 @@ start:
 | `history/` | recently closed groups | no | `group-<NNN>.md` (condensed) |
 | `archive/` | older closed groups | no | `group-<NNN>.tar.gz` (cold) |
 
-`context-history` rotates them: `close` consolidates the live group into
+`ledger-history` rotates them: `close` consolidates the live group into
 `history/` and starts a fresh one (default `group_size` = 20 sessions, or a
 milestone); when `history/` exceeds `history_keep` (default 3) the oldest
 group is zipped into `archive/`; `gc` deletes `archive/` tarballs over
@@ -257,8 +257,8 @@ best-supported option and one implementation owner. A correction names the
 evidence, likely cause, candidate repairs, and suggested owner; peers agree
 on the repair and owner before it is applied. There is no timestamp or
 agent-ID tie-breaker. If evidence remains tied, pause the conflicting work
-and ask the user. Use `.context/core/bin/context-collab` (or the `.ps1` port
-on Windows) to emit events and inspect status; run `context-collab check`
+and ask the user. Use `.context_ledger/core/bin/ledger-collab` (or the `.ps1` port
+on Windows) to emit events and inspect status; run `ledger-collab check`
 before integration. Event commits remain separate from product commits.
 
 `tasks/current.md` remains the single-agent lock when collaboration is not
@@ -273,7 +273,7 @@ block a peer; use the collaboration event trail instead.
 
 ## Fact scoping — the contamination rules
 
-`.context/` memory serves **every** agent that will ever work on the
+`.context_ledger/` memory serves **every** agent that will ever work on the
 project: local and cloud, strong and weak, on any machine. The single
 biggest failure mode observed in the field is *scope contamination*:
 one agent records a fact that is true only for its own type, machine,
@@ -339,10 +339,10 @@ hand-maintained per project:
    generated at bootstrap; optionally copied as `CLAUDE.md` and
    `.github/copilot-instructions.md` for tools that auto-load those
    paths). ~60 lines: the zones, the read-only rule for core, the entry
-   point (`.context/kickoff.md`), and the condensed binding rules. This
+   point (`.context_ledger/kickoff.md`), and the condensed binding rules. This
    is the floor — an agent that reads nothing else still learns where
    memory lives, what it must never write to, and where to start.
-2. **`.context/kickoff.md`** — the front door: typed entry steps that
+2. **`.context_ledger/kickoff.md`** — the front door: typed entry steps that
    route by agent type and point into core.
 3. **The full edition in `core/rules/`** — the complete instruction set
    for agents that can hold it.
@@ -358,7 +358,7 @@ cannot pick the wrong edition (the kickoff routes by type).
 ## Sync, change detection, and fallback
 
 - **Startup check:** the kickoff's entry steps run
-  `sh .context/core/bin/context-sync status` — compares the vendored
+  `sh .context_ledger/core/bin/ledger-sync status` — compares the vendored
   core's `VERSION` against the best reachable source (an explicit path,
   a sibling package clone, or the package remote). Unreachable source =
   skip and note; **never fail a session over sync.**
@@ -366,12 +366,12 @@ cannot pick the wrong edition (the kickoff routes by type).
   bumps included) may be applied without asking; a MAJOR bump requires
   the user (there may be migration steps in `CHANGELOG.md`). Updating
   core never touches `memory/` — that is what makes auto-update safe.
-- **core.lock:** after any successful `verify`, `context-sync` records
+- **core.lock:** after any successful `verify`, `ledger-sync` records
   the version + date in `memory/core.lock`. That is the
   **last-known-good** marker.
 - **Fallback:** if a session cannot parse or trust the current core
   (failed verify, half-applied update), roll back to the locked
-  version — `context-sync rollback` restores `core/` from the project's
+  version — `ledger-sync rollback` restores `core/` from the project's
   own git history — then log the incident in `memory/flaws/log.md` and
   continue on the restored version. The session proceeds; the flaw
   flows upstream.

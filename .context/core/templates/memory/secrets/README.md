@@ -3,7 +3,7 @@
 Secret values agents may use while working on this machine: GitHub PATs,
 API keys, passwords. The `.gitignore` in this directory keeps everything
 here out of git except itself and this README — values never appear in a
-commit and never travel with the repo. Every other `.context/` file is
+commit and never travel with the repo. Every other `.context_ledger/` file is
 shared memory; this one is strictly per-machine.
 
 ## Hard rules
@@ -11,12 +11,12 @@ shared memory; this one is strictly per-machine.
 1. **Never commit a value.** The `.gitignore` here enforces it — never
    weaken it, never `git add -f` anything in this directory. Before
    writing a new secret file, prove it's ignored:
-   `git check-ignore .context/memory/secrets/<file>` must succeed.
+   `git check-ignore .context_ledger/memory/secrets/<file>` must succeed.
 2. **Never echo a value** — not in chat output, not in logs, not in
    reports, not in commit messages, not in error output. Read it, use
    it, move on.
 3. **Never copy a value into a tracked file** — not into other
-   `.context/` files, not into code, not into `.env.example`. Refer to
+   `.context_ledger/` files, not into code, not into `.env.example`. Refer to
    secrets by filename (`secrets/github-pat`), never by value.
 4. **`chmod 600` every secret file** you create.
 5. **This directory does not travel.** A fresh clone has an empty
@@ -46,7 +46,7 @@ Read line 1 into an env var; never inline a value into a command —
 inlined values end up in shell history and process listings:
 
 ```bash
-export GIT_TOKEN="$(head -n1 .context/memory/secrets/github-pat)"
+export GIT_TOKEN="$(head -n1 .context_ledger/memory/secrets/github-pat)"
 ```
 
 ## Trade-off to know

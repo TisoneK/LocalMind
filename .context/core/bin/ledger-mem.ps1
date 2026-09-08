@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# context-mem.ps1 - Windows port of context-mem (memory-registry hygiene).
+# ledger-mem.ps1 - Windows port of ledger-mem (memory-registry hygiene).
 #
 # Update-in-place files hold ONE entry per key: correct an entry by editing
 # its row/block, never by appending a second one (its prior value is in git
@@ -17,25 +17,25 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Say { param([string]$Message) Write-Output $Message }
-function ErrLine { param([string]$Message) [Console]::Error.WriteLine("context-mem: $Message") }
+function ErrLine { param([string]$Message) [Console]::Error.WriteLine("ledger-mem: $Message") }
 function Die { param([string]$Message) ErrLine $Message; exit 2 }
 
 $scriptDir = $PSScriptRoot
 $coreDir = (Resolve-Path (Join-Path $scriptDir '..')).Path
-$contextDir = Split-Path -Parent $coreDir
-$projectDir = Split-Path -Parent $contextDir
-$memoryDir = Join-Path $contextDir 'memory'
+$ledgerDir = Split-Path -Parent $coreDir
+$projectDir = Split-Path -Parent $ledgerDir
+$memoryDir = Join-Path $ledgerDir 'memory'
 
 function Usage {
   @(
-    'context-mem - .context hygiene checks',
+    'ledger-mem - .context_ledger hygiene checks',
     '',
     '  check   duplicate keys in the update-in-place registries',
     '          (ai-models.md by Agent+Model, environments.md by Identify-by;',
     '          roster.md by Name and codename) plus a warn-only board-vs-',
     '          duty-log audit: a roster row whose Session N is already in',
     '          agents/sessions.md means the session never clocked out',
-    '  lint    .context vocabulary (ADR-N, bug IDs, .context/ paths) leaking',
+    '  lint    .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) leaking',
     '          into the staged product diff',
     '  prune   advise archiving resolved/superseded entries out of the',
     '          append-only durable logs; --list names them. Reports only.',
@@ -155,24 +155,24 @@ function Invoke-Lint {
   foreach ($line in $diff) {
     if ($line -match '^\+\+\+ ') { $file = $line -replace '^\+\+\+ b/', '' -replace '^\+\+\+ ', ''; continue }
     if ($line -match '^\+' -and $line -notmatch '^\+\+\+') {
-      if ($file -match '^\.context/' -or $file -eq '/dev/null') { continue }
+      if ($file -match '^\.context_ledger/' -or $file -eq '/dev/null') { continue }
       $s = $line.Substring(1)
       $pat = ''
       if ($s -match 'ADR-[0-9]') { $pat = 'an ADR reference' }
       elseif ($s -match 'B-[0-9]{4}-[0-9]{2}-[0-9]') { $pat = 'a bug-ID reference' }
-      elseif ($s -match '\.context/') { $pat = 'a .context/ path' }
+      elseif ($s -match '\.context_ledger/') { $pat = 'a .context_ledger/ path' }
       elseif ($s.ToLower() -match 'per adr') { $pat = '"per ADR"' }
       if ($pat -ne '') { ErrLine ('LEAK: {0} cites {1}: {2}' -f $file, $pat, $s); $n++ }
     }
   }
-  if ($n -eq 0) { Say 'lint passed: no .context vocabulary (ADR-N, bug IDs, .context/ paths) in the staged product diff'; return $true }
-  ErrLine 'lint failed: product code must stand on its own. State the reason in plain words; the ADR or bug-ID link belongs in .context/memory, not the source. Memory references code, never the reverse.'
+  if ($n -eq 0) { Say 'lint passed: no .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) in the staged product diff'; return $true }
+  ErrLine 'lint failed: product code must stand on its own. State the reason in plain words; the ADR or bug-ID link belongs in .context_ledger/memory, not the source. Memory references code, never the reverse.'
   return $false
 }
 
 function Invoke-Prune {
   param([bool]$List)
-  if (-not (Test-Path -LiteralPath $memoryDir)) { Say 'context-mem: no memory dir (nothing to prune)'; return }
+  if (-not (Test-Path -LiteralPath $memoryDir)) { Say 'ledger-mem: no memory dir (nothing to prune)'; return }
   $eligible = $false
   foreach ($rel in @('flaws/log.md', 'inefficiencies/log.md')) {
     $f = Join-Path $memoryDir $rel
@@ -210,7 +210,7 @@ function Invoke-Prune {
 
 switch ($Command) {
   'check' {
-    if (-not (Test-Path -LiteralPath $memoryDir)) { Say 'context-mem: no memory dir (nothing to check)'; exit 0 }
+    if (-not (Test-Path -LiteralPath $memoryDir)) { Say 'ledger-mem: no memory dir (nothing to check)'; exit 0 }
     $ok1 = Check-AiModels
     $ok2 = Check-Environments
     $ok3 = Check-Roster
@@ -227,5 +227,5 @@ switch ($Command) {
     exit 0
   }
   { $_ -in @('', '-h', '--help', 'help') } { Usage }
-  default { Die "unknown command '$Command' (try: context-mem.ps1 help)" }
+  default { Die "unknown command '$Command' (try: ledger-mem.ps1 help)" }
 }

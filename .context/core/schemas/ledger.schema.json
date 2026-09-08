@@ -1,29 +1,29 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Machine-readable mirror of context-schema.md (the authoritative document). Update both in the same commit. Consumers: context-sync, future check tooling, agents that prefer structured data.",
-  "title": ".context/ directory schema",
+  "$comment": "Machine-readable mirror of ledger-schema.md (the authoritative document). Update both in the same commit. Consumers: ledger-sync, future check tooling, agents that prefer structured data.",
+  "title": ".context_ledger/ directory schema",
   "coreVersion": "0.8.0",
   "zones": {
     "core": {
-      "path": ".context/core/",
+      "path": ".context_ledger/core/",
       "owner": "package",
       "agentWritable": false,
-      "sync": "whole-tree, version-stamped, via context-sync update only"
+      "sync": "whole-tree, version-stamped, via ledger-sync update only"
     },
     "memory": {
-      "path": ".context/memory/",
+      "path": ".context_ledger/memory/",
       "owner": "project",
       "agentWritable": true,
       "sync": "never"
     }
   },
   "rootFiles": {
-    ".context/README.md": {
+    ".context_ledger/README.md": {
       "mode": "generated",
-      "template": "core/templates/context-README.md",
+      "template": "core/templates/ledger-README.md",
       "refreshedOnCoreUpdate": true
     },
-    ".context/kickoff.md": {
+    ".context_ledger/kickoff.md": {
       "mode": "generated",
       "template": "core/templates/kickoff.md",
       "refreshedOnCoreUpdate": false,
@@ -38,8 +38,8 @@
     }
   },
   "memoryFiles": {
-    "agents/sessions.md":      { "mode": "append-only",      "scope": "project", "note": "current group's registry; rotated by context-history" },
-    "agents/roster.md":        { "mode": "update-in-place",  "scope": "project", "note": "team roster for the current group; one row per person (Name, codename S<NNN>, model, doing); Name and codename each unique; context-mem check enforces; context-history resets on group close" },
+    "agents/sessions.md":      { "mode": "append-only",      "scope": "project", "note": "current group's registry; rotated by ledger-history" },
+    "agents/roster.md":        { "mode": "update-in-place",  "scope": "project", "note": "team roster for the current group; one row per person (Name, codename S<NNN>, model, doing); Name and codename each unique; ledger-mem check enforces; ledger-history resets on group close" },
     "tasks/current.md":        { "mode": "overwrite",        "scope": "project", "note": "single-agent lock only; collaboration mode uses event claims" },
     "tasks/backlog.md":        { "mode": "append-only",      "scope": "project" },
     "collaboration/README.md": { "mode": "generated",         "scope": "project" },
@@ -60,7 +60,7 @@
     "user/identity.md":        { "mode": "update-in-place",  "scope": "user" },
     "user/preferences.md":     { "mode": "update-in-place",  "scope": "user", "note": "every bullet carries provenance" },
     "overrides/rules.md":      { "mode": "update-in-place",  "scope": "project", "precedence": "beats the edition, except secret-handling and append-only rules" },
-    "core.lock":               { "mode": "overwrite",        "scope": "project", "writer": "context-sync", "note": "last-known-good core version" },
+    "core.lock":               { "mode": "overwrite",        "scope": "project", "writer": "ledger-sync", "note": "last-known-good core version" },
     "secrets/<slug>":          { "mode": "local-only",       "scope": "machine", "tracked": false },
     "secrets/README.md":       { "mode": "generated",        "scope": "project" },
     "secrets/.gitignore":      { "mode": "generated",        "scope": "project" }
@@ -71,17 +71,17 @@
     "machineBlocks": "apply only where the block's 'Identify by' matches",
     "credentialFlows": "agent-type facts; PAT steps exist only in the cloud edition",
     "appendOnly": "corrections are appended, never edited in; byte-identical duplicates may be removed with a note",
-    "updateInPlace": "one entry per key (ai-models.md keyed by Agent+Model, environments.md by its Identify-by line); correct an entry by editing it in place, never by appending a duplicate — the prior value survives in git history; context-mem check flags a duplicated key",
-    "oneWayLinkage": "memory may reference product code; product code must never reference memory — no ADR number, bug ID, or .context/ path in a product docstring/comment/doc, which would be a dangling pointer for anyone reading only the product repo; context-mem lint flags it in the staged product diff",
+    "updateInPlace": "one entry per key (ai-models.md keyed by Agent+Model, environments.md by its Identify-by line); correct an entry by editing it in place, never by appending a duplicate — the prior value survives in git history; ledger-mem check flags a duplicated key",
+    "oneWayLinkage": "memory may reference product code; product code must never reference memory — no ADR number, bug ID, or .context_ledger/ path in a product docstring/comment/doc, which would be a dangling pointer for anyone reading only the product repo; ledger-mem lint flags it in the staged product diff",
     "secrets": "values only under memory/secrets/, never in tracked files, never echoed",
-    "coreReadOnly": "no agent writes under .context/core/ in a project repo, ever",
+    "coreReadOnly": "no agent writes under .context_ledger/core/ in a project repo, ever",
     "collaboration": "peers are one team, not rivals; isolated worktree/branch per agent; the everyday event is an informal note (body-only, non-gating); a release/handoff closes a claim by citing its event ID or by sharing session+issue and overlapping paths; overlapping ACTIVE claims escalate to peers comparing changes and an agreement naming the best-supported option and one owner; no timestamp or agent-ID tie-breaker",
-    "collaborationCheck": "context-collab check is the integration-readiness gate for malformed events, unresolved overlaps, incomplete agreements, unresolved corrections/handoffs, and releases without product commits; notes never gate it; single-pass so it stays fast on large trails",
-    "lifecycleGates": "context-gates checkpoint runs before each next agent action; pre-commit, integration, and exit gates block their lifecycle transition on failure; explicit gates.conf commands take precedence over hybrid discovery"
+    "collaborationCheck": "ledger-collab check is the integration-readiness gate for malformed events, unresolved overlaps, incomplete agreements, unresolved corrections/handoffs, and releases without product commits; notes never gate it; single-pass so it stays fast on large trails",
+    "lifecycleGates": "ledger-gates checkpoint runs before each next agent action; pre-commit, integration, and exit gates block their lifecycle transition on failure; explicit gates.conf commands take precedence over hybrid discovery"
   },
   "commitPrefixes": {
-    "memory": "chore(context):",
+    "memory": "chore(ledger):",
     "reviews": "docs(review):",
-    "coreUpdate": "chore(context): update core to <version>"
+    "coreUpdate": "chore(ledger): update core to <version>"
   }
 }

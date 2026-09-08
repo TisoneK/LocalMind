@@ -1,12 +1,63 @@
 # Core Changelog
 
 One entry per released core version, newest first. An agent syncing a
-project's `.context/core/` from an older version reads every entry
+project's `.context_ledger/core/` from an older version reads every entry
 between the two versions — migration notes live here.
 
-Semver: breaking changes to the `.context/` spec or the memory layout
+Semver: breaking changes to the `.context_ledger/` spec or the memory layout
 bump MAJOR; new features (roles, pitfalls, templates, schema fields)
 bump MINOR; wording and fixes bump PATCH.
+
+---
+
+## 0.18.0 — 2026-09-08
+
+**Context Ledger.** The package went public and took its real name. The
+repo is `TisoneK/context-ledger` (was `TisoneK/.context` — GitHub
+redirects the old URL), and every project's two-zone directory is
+renamed `.context/` → **`.context_ledger/`**. The tools rename with it:
+`context-sync` → **`ledger-sync`**, `context-gates` → **`ledger-gates`**,
+`context-collab` → **`ledger-collab`** (+ `ledger-collab-check`),
+`context-mem` → **`ledger-mem`**, `context-history` → **`ledger-history`**.
+Schemas rename to match: `ledger-schema.md` + `ledger.schema.json`,
+`ledger-README.md`.
+
+- **Breaking, shipped as a 0.x MINOR — deliberately.** The directory and
+  tool names are part of the spec, so this would be a MAJOR under 1.x
+  discipline; while the project is pre-1.0 it ships as a MINOR. Safe
+  because the 0.18 tooling detects **both** layouts: a project that
+  updates without renaming keeps working, and `rename` is the explicit
+  finishing step. Memory files, formats, and the two-zone model are
+  unchanged — this is a rename, not a redesign.
+- **Migration — three commands, existing project:** from the project
+  root, with the package reachable:
+
+  ```bash
+  sh .context/core/bin/context-sync update    # same-MAJOR: applies; its self-re-exec
+                                              # errors — expected, core 0.18 is in place
+  sh .context/core/bin/ledger-sync migrate    # new tool: backfill + relock + verify
+  sh .context/core/bin/ledger-sync rename     # git mv .context -> .context_ledger + sweep
+  ```
+
+  `rename` `git mv`s `.context/` to `.context_ledger/`, sweeps the
+  generated entry points (`README.md`, `kickoff.md`, `.gitattributes`,
+  root `AGENTS.md` + `CLAUDE.md`), relocks, and verifies. Requires a
+  clean tree. It prints the one manual step: sweep stale `.context/`
+  *instruction* references in your memory files (historical log entries
+  stay as written — append-only). Commit as `chore(ledger): rename
+  .context/ to .context_ledger/ (core 0.18)`.
+- **Compat.** Mode detection accepts `.context/` and `.context_ledger/`,
+  so `status`/`verify`/`update`/`migrate` all run in a legacy project;
+  `rename` finishes the job. Package-side `harvest` reads both layouts
+  too. Full recipe: `MIGRATION.md`.
+- **Sources.** `update`/`migrate` look for the package clone at
+  `../context-ledger` first, then legacy `../context`, then
+  `../.context` — or set `LEDGER_PKG`/pass a path as before.
+- **Windows.** Every `.cmd` launcher and `.ps1` port carries the new
+  names; the `rename` command is ported too.
+- **Public repo.** The package repo is now **public** — cloud bootstraps
+  no longer need a package PAT (project PATs unchanged). The docs'
+  private-repo claims were updated.
 
 ---
 
@@ -23,7 +74,7 @@ agents, N parallel solo sessions, unattributable uncommitted changes
 
 - **Check-in moved to Step 3 of every session, solo included:** pick a
   real name, add your row to `memory/agents/roster.md`, and **push it
-  immediately, before any product work** (`chore(context): <name>
+  immediately, before any product work** (`chore(ledger): <name>
   (<codename>) checks in — <task>`). Presence is real-time, not
   wrap-up-time; a rebase on that push is itself a signal that a peer
   checked in concurrently.
@@ -38,7 +89,7 @@ agents, N parallel solo sessions, unattributable uncommitted changes
   duty *when* stays in the append-only duty log (`agents/sessions.md`)
   and the roster file's own git history — check-in opens the shift,
   clock-out closes it. Nothing historical is deleted by clocking out.
-- **`context-mem check` audits board vs duty log** (POSIX + PowerShell):
+- **`ledger-mem check` audits board vs duty log** (POSIX + PowerShell):
   a roster row whose `Session N` is already in `agents/sessions.md`
   warns "logged itself done without clocking out". Warn-only, exit 0.
 - Collaboration section now opens with "Collaboration is opt-in;
@@ -49,15 +100,15 @@ agents, N parallel solo sessions, unattributable uncommitted changes
 
 **Migration:** none — `roster.md` already exists in every 0.15.0+
 project; existing empty boards behave exactly as before until the first
-session checks in. Older projects: `context-sync migrate` installs
+session checks in. Older projects: `ledger-sync migrate` installs
 `roster.md`.
 
 **The ports' self-referential help matches the `.cmd` convention.**
-`context-sync.ps1`'s printed help (what `context-sync.cmd` shows with no
-arguments) and `context-collab.ps1`'s header examples still told Windows
-agents to run `pwsh -File .context/core/bin/...ps1` — which an
+`ledger-sync.ps1`'s printed help (what `ledger-sync.cmd` shows with no
+arguments) and `ledger-collab.ps1`'s header examples still told Windows
+agents to run `pwsh -File .context_ledger/core/bin/...ps1` — which an
 execution-policy-locked machine blocks. Both now show the documented
-no-setup form (`context-sync.cmd <cmd>`). Text-only change, line counts
+no-setup form (`ledger-sync.cmd <cmd>`). Text-only change, line counts
 preserved (the sync help is sliced from the file header); manifest
 regenerated.
 
@@ -69,7 +120,7 @@ backfill lived in the *old* script that runs first, migrating an old project
 meant running `update` twice, guessing about CRLF, and hand-creating new
 zones. This restores the old simplicity.
 
-- **New `context-sync migrate` (POSIX + PowerShell + `.cmd`):** the
+- **New `ledger-sync migrate` (POSIX + PowerShell + `.cmd`):** the
   one-command bring-current. It updates the core to the newest reachable
   same-MAJOR version, then **backfills every missing zone/file** (`history/`,
   `archive/`, `CLAUDE.md`, `.gitattributes`, `roster.md`, `history.conf`,
@@ -109,11 +160,11 @@ the team reads as people in a workplace — with the human as the supervisor.
   doing. An agent adds its row at session start and presents itself by that
   name everywhere ("John (S427)"), in events and when reporting to the
   supervisor.
-- **Name and codename are each unique within the group.** `context-mem
+- **Name and codename are each unique within the group.** `ledger-mem
   check` now validates the roster and flags a duplicate name or codename
   (there is only one John on the team at a time) — the same update-in-place
   discipline as the other registries.
-- **The roster rotates with the group.** `context-history close` captures
+- **The roster rotates with the group.** `ledger-history close` captures
   the closed group's roster into `history/group-<NNN>.md` and resets a fresh
   empty roster for the new group.
 - **Docs reframed to the workplace metaphor:** the collaboration README (new
@@ -137,23 +188,23 @@ Every port was executed end-to-end against a bootstrapped fixture project
 collaboration trail, the gates), which surfaced defects a parse-level fix
 cannot catch.
 
-- **`context-collab-check.ps1` crashed on every invocation.** It assigned
+- **`ledger-collab-check.ps1` crashed on every invocation.** It assigned
   the automatic `$args` variable (a no-op under `Set-StrictMode`) and its
   `if`-expression `@()` unwrapped to `$null`, so the argument loop died on
   `$null.Count`. The array is now built by direct assignment. 0.9.1 had
   shipped this file as "Windows-verified"; only its parse had ever been
   exercised.
-- **`context-history.ps1 close` / `gc` crashed when run without flags.**
+- **`ledger-history.ps1 close` / `gc` crashed when run without flags.**
   `$RestArgs.Count` on a `$null` `ValueFromRemainingArguments` parameter
   is fatal under strict mode. Both such parameters now default to `@()`
-  (`context-mem.ps1` hardened the same way).
-- **`context-history.ps1` never archived anything.** It passed a
+  (`ledger-mem.ps1` hardened the same way).
+- **`ledger-history.ps1` never archived anything.** It passed a
   `C:\...` archive path to `tar`, which GNU tar (MSYS, often first on
   PATH) parses as remote *host* `C` ("Cannot connect to C: resolve
   failed"). The roll now runs tar from inside `history/` with a relative
   `-f` path — the exact pattern the POSIX port already used — so bsdtar
   (System32 `tar.exe`) and GNU tar behave identically.
-- **`context-collab.ps1` rejected its own documented `--re` flag.**
+- **`ledger-collab.ps1` rejected its own documented `--re` flag.**
   PowerShell parameter prefix-matching bound `--re` to the `$Rest`
   parameter (re ⊂ Rest), consuming it and derailing binding of every
   later flag ("parameter cannot be found '-session'"). The parameter is
@@ -162,7 +213,7 @@ cannot catch.
   executed by cmd.exe regardless of the PowerShell execution policy, and
   starts its port with `powershell -NoProfile -ExecutionPolicy Bypass
   -File`. The documented Windows invocation becomes e.g.
-  `.context/core/bin/context-mem.cmd check` — no `Set-ExecutionPolicy`
+  `.context_ledger/core/bin/ledger-mem.cmd check` — no `Set-ExecutionPolicy`
   step. Windows PowerShell 5.1 is targeted deliberately: it ships with
   every Windows 10+ install, while pwsh 7 is an optional add-on. All
   docs (kickoff, both protocol editions, schema, README, QUICKSTART) now
@@ -175,8 +226,8 @@ the policy allows it.
 
 ## 0.13.1 — 2026-09-06
 
-**ASCII-clean the new PowerShell ports.** `context-mem.ps1` and
-`context-history.ps1` (0.10.0–0.13.0) shipped with UTF-8 punctuation
+**ASCII-clean the new PowerShell ports.** `ledger-mem.ps1` and
+`ledger-history.ps1` (0.10.0–0.13.0) shipped with UTF-8 punctuation
 (em-dashes, arrows) in string literals. Windows PowerShell 5.1 decodes the
 `.ps1` as ANSI and fails to parse non-ASCII bytes — the same defect 0.9.1
 fixed for the other ports. Both files are now ASCII-only, matching the
@@ -191,12 +242,12 @@ bound and sat in the startup read (LocalMind's registry alone spans dozens of
 sessions). This introduces session **groups** that rotate through three zones
 so `memory/` only ever holds the live group.
 
-- **New zones `history/` and `archive/`** under `.context/` (created by
+- **New zones `history/` and `archive/`** under `.context_ledger/` (created by
   bootstrap and installed by `update` for existing projects). Neither is read
   at session start — the schema and both editions state this. `memory/`
   (live) → `history/` (closed, readable `group-<NNN>.md`) → `archive/` (cold
   `group-<NNN>.tar.gz`) → `gc`.
-- **New `context-history` + `context-history.ps1`:** `status` (current group,
+- **New `ledger-history` + `ledger-history.ps1`:** `status` (current group,
   session count, zone sizes, due?), `close [--milestone L] [--confirm]`
   (consolidate the live group into `history/`, start a fresh group, roll the
   oldest readable group into `archive/`), `gc [--confirm]` (delete oldest
@@ -220,7 +271,7 @@ so `memory/` only ever holds the live group.
 **Migration from 0.12.x:** `update` creates `history/`, `archive/`,
 `history.conf`, and `agents/GROUP` if absent, and never clobbers an existing
 one. Existing `agents/sessions.md` keeps growing until the first
-`context-history close`, which starts the rotation. Archives are `.tar.gz` on
+`ledger-history close`, which starts the rotation. Archives are `.tar.gz` on
 both platforms (the `.ps1` uses `tar.exe`, shipped on Windows 10+).
 
 ## 0.12.0 — 2026-09-05
@@ -233,7 +284,7 @@ inefficiencies 1172 lines / 108 entries). The session layer already had a
 cold-storage story (disposable notes, prunable SUMMARY.md); the durable
 layer had none.
 
-- **`context-mem prune`:** advises archiving resolved history out of the
+- **`ledger-mem prune`:** advises archiving resolved history out of the
   durable logs. It reports each log's size and how many entries are
   explicitly marked `RESOLVED` / `superseded` / fixed — the archive-eligible
   ones — and `--list` names them. It **never moves or deletes anything**;
@@ -247,23 +298,23 @@ layer had none.
   reads only the active log.
 
 **Migration from 0.11.x:** none — additive advisory + wording. Nothing is
-moved automatically; run `context-mem prune` when a log feels heavy and
+moved automatically; run `ledger-mem prune` when a log feels heavy and
 archive the entries it flags.
 
 ## 0.11.0 — 2026-09-05
 
-**Keep `.context` vocabulary out of product code.** The protocol trains
+**Keep `.context_ledger` vocabulary out of product code.** The protocol trains
 agents to think in ADRs, bug IDs, and session numbers — and that vocabulary
 leaks into product artifacts. Across the fleet, product source cites
-`.context`-internal terms in docstrings and comments
+`.context_ledger`-internal terms in docstrings and comments
 (`/** ADR-34 B-8: bounded evidence entry */`, `"""ADR-11 one-time data
-copy..."""`) — dangling pointers into a `.context/` that anyone cloning only
+copy..."""`) — dangling pointers into a `.context_ledger/` that anyone cloning only
 the product repo does not have.
 
-- **`context-mem lint`:** a new subcommand (POSIX + PowerShell). It scans the
-  **staged** product diff (everything outside `.context/`) and fails if an
+- **`ledger-mem lint`:** a new subcommand (POSIX + PowerShell). It scans the
+  **staged** product diff (everything outside `.context_ledger/`) and fails if an
   added line cites an ADR number (`ADR-N`), a bug ID (`B-YYYY-MM-DD-N`),
-  `"per ADR"`, or a `.context/` path. `.context/` files are exempt — they
+  `"per ADR"`, or a `.context_ledger/` path. `.context_ledger/` files are exempt — they
   legitimately use the vocabulary. (`Session N` is deliberately *not*
   flagged: apps have a legitimate "session" domain noun.)
 - **The one-way-linkage rule.** Memory may reference product code; product
@@ -271,11 +322,11 @@ the product repo does not have.
   `AGENTS.md` "two surfaces" rule, and a schema invariant. If the reason for
   a decision matters, state it in plain words in the docstring; the ADR link
   lives in `plans/decisions.md`, which points at the code — never the
-  reverse. The pre-commit step runs `context-mem lint` for product commits.
+  reverse. The pre-commit step runs `ledger-mem lint` for product commits.
 
 **Migration from 0.10.x:** none — additive subcommand + wording. Existing
-product code that already cites `.context` vocabulary will fail
-`context-mem lint` on the next edit to those lines; rephrase the docstring to
+product code that already cites `.context_ledger` vocabulary will fail
+`ledger-mem lint` on the next edit to those lines; rephrase the docstring to
 stand alone and move the ADR link into `plans/decisions.md`.
 
 ## 0.10.0 — 2026-09-05
@@ -287,7 +338,7 @@ append-only invariant is stated so loudly that agents apply it here too and
 registry accumulates two rows for one key with conflicting counts (observed
 in the fleet: one agent+model registered three times, sessions 8/10/30).
 
-- **`context-mem` + `context-mem.ps1`:** a new helper. `context-mem check`
+- **`ledger-mem` + `ledger-mem.ps1`:** a new helper. `ledger-mem check`
   flags a duplicated key in the update-in-place registries —
   `ai-models.md` keyed by (Agent, Model), `environments.md` by its
   "Identify by:" line. It is the inverse of the append-only rule: for these
@@ -297,10 +348,10 @@ in the fleet: one agent+model registered three times, sessions 8/10/30).
   editions' top rules, the `AGENTS.md` digest, the `ai-models.md` header,
   and the schema now say: correct an update-in-place entry by *editing* it,
   never by appending a duplicate — the prior value is safe in git history,
-  so editing loses nothing. The exit step runs `context-mem check`.
+  so editing loses nothing. The exit step runs `ledger-mem check`.
 
 **Migration from 0.9.x:** none — additive helper + wording. Existing
-registries that already have a duplicated key will fail `context-mem check`;
+registries that already have a duplicated key will fail `ledger-mem check`;
 merge the rows/blocks into one (sessions accumulate) and the old values
 remain in git history.
 
@@ -332,7 +383,7 @@ PowerShell 5.1), closing the validation pass 0.9.0 owed.
   under `core.autocrlf=true` verifies afterward instead of looping.
 - **`lock_version` tolerates a CRLF `core.lock`** (sh), fixing the
   rollback dead-end above.
-- **PowerShell `update` parity with sh:** installs `.context/.gitattributes`
+- **PowerShell `update` parity with sh:** installs `.context_ledger/.gitattributes`
   and the root `CLAUDE.md` pointer when absent — and `update` now installs
   them on *every* run, including a no-op, so a 0.8.x project's second
   `update` (after the new core has landed) picks them up (0.9.0 taught
@@ -352,10 +403,10 @@ PowerShell 5.1), closing the validation pass 0.9.0 owed.
 - **PowerShell argument parsing works again.** Parameters named `$Args`
   collide with the automatic variable of the same name, so every
   `--session/--issue/--paths/...` flag was silently lost in
-  `context-collab.ps1` (status filters matched everything) and
-  `context-gates.ps1` (checkpoint and integration scopes no-oped).
+  `ledger-collab.ps1` (status filters matched everything) and
+  `ledger-gates.ps1` (checkpoint and integration scopes no-oped).
   Renamed throughout. A missing collaboration events directory no longer
-  crashes `context-collab-check.ps1` under StrictMode.
+  crashes `ledger-collab-check.ps1` under StrictMode.
 - **`manifest` regenerates identically on Windows.** `sha256sum` under Git
   Bash defaults to the binary-mode separator (`hash *path`), so a
   Windows-regenerated manifest churned all 46 lines vs a mac `shasum`
@@ -376,8 +427,8 @@ Bash or PowerShell 7 — the 0.8.x `.ps1` cannot be parsed by Windows
 PowerShell 5.1 (its UTF-8 punctuation breaks 5.1's ANSI decoding; the
 0.9.1 `.ps1` files are ASCII-clean). (3) Run `update` a second time after
 it lands: the first run executes the old script and swaps in 0.9.1, the
-second (no-op) run is the one that installs `.context/.gitattributes` and
-the root `CLAUDE.md` pointer. (4) Commit `chore(context): update core to
+second (no-op) run is the one that installs `.context_ledger/.gitattributes` and
+the root `CLAUDE.md` pointer. (4) Commit `chore(ledger): update core to
 0.9.1`, and `git add --renormalize .` if the project ever committed CRLF
 blobs. Once 0.9.1 is in place, `verify` passes on LF and CRLF working
 trees alike, so the rollback deadlock cannot recur.
@@ -405,32 +456,32 @@ turns the "courtroom" into an "office."
   goal. The light path (`note` + `claim`/`release`) is the documented
   default; the `proposal → assessment → agreement` ceremony is the
   escalation for a genuine conflict (same paths, incompatible changes) only.
-- **`context-collab` tells the truth.** A `release`/`handoff` now closes a
+- **`ledger-collab` tells the truth.** A `release`/`handoff` now closes a
   claim when it cites the claim's event ID **or** simply shares its
   session+issue and overlaps its paths — so a release citing only the commit
   SHA no longer strands its claim as "active forever" (the common,
   weak-agent case).
-- **`context-collab check` no longer hangs.** Rewritten as a single-pass
+- **`ledger-collab check` no longer hangs.** Rewritten as a single-pass
   in-memory index instead of re-globbing the events dir and forking
   `sed`+`head` per field. On a 42-event trail it went from > 3.5 minutes
   (killed) to < 0.1 s. Notes are exempt from every gate; release/handoff
   correspondence is checked by the same forgiving claim-linkage.
 - **Windows / CRLF root fix.** New package-root `.gitattributes` and a
-  shipped `templates/.gitattributes` (installed into `.context/` by
+  shipped `templates/.gitattributes` (installed into `.context_ledger/` by
   `bootstrap` and `update`) force `eol=lf` on the vendored core *and* the
-  memory logs — fixing the `context-sync verify` false-positive under
+  memory logs — fixing the `ledger-sync verify` false-positive under
   `core.autocrlf=true`, the `sh` manifest-parse death on `\r`-suffixed
   filenames, and the phantom whole-file diffs in append-only logs. `verify`
   also tolerates a CRLF manifest defensively, and the "no sha256sum" error
   now points Windows users at the `.ps1` port.
-- **`context-gates.ps1` runs again.** Fixed a PowerShell binding crash
+- **`ledger-gates.ps1` runs again.** Fixed a PowerShell binding crash
   (`Cannot bind parameter because parameter 'PathType' is specified more
   than once` — two `Test-Path` calls chained by `-or` without parenthesizing
   each) that made every gate fail on Windows.
 - **No agent starts blind.** Bootstrap (and `update`) now install a root
   `CLAUDE.md` pointer, because Claude Code auto-loads `CLAUDE.md`, not
   `AGENTS.md`, and a session that never reads the digest runs with zero
-  `.context/` discipline (a logged fleet failure). `CLAUDE.md` routes into
+  `.context_ledger/` discipline (a logged fleet failure). `CLAUDE.md` routes into
   `AGENTS.md` + the kickoff; the bootstrap guidance and `AGENTS.md` header
   now name the other agent entrypoints (Copilot/Cursor/Gemini) that should
   carry the same one-line pointer. Existing `CLAUDE.md` files are never
@@ -438,10 +489,10 @@ turns the "courtroom" into an "office."
 
 **Migration from 0.8.x:** fully compatible — the seven formal event types
 keep their exact meaning; `note` is additive. New bootstraps and `update`
-install `.context/.gitattributes`. If a project was already checked out with
+install `.context_ledger/.gitattributes`. If a project was already checked out with
 CRLF (Windows `core.autocrlf=true`), run once after updating:
-`git add --renormalize . && git commit -m "chore(context): normalize line endings to LF"`
-(or set `core.autocrlf=false` and `git checkout -- .context`). The `.ps1`
+`git add --renormalize . && git commit -m "chore(ledger): normalize line endings to LF"`
+(or set `core.autocrlf=false` and `git checkout -- .context_ledger`). The `.ps1`
 ports could not be executed on the maintainer's Mac (no `pwsh`); they were
 updated by mirroring the POSIX behavior and are cross-checked against the
 manifest — a Windows validation pass is still owed.
@@ -451,7 +502,7 @@ manifest — a Windows validation pass is still owed.
 **Explicit lifecycle command gates.** Agents now have mechanical,
 project-owned gates instead of relying only on prose instructions.
 
-- **`context-gates` + `context-gates.ps1`:** add `checkpoint`,
+- **`ledger-gates` + `ledger-gates.ps1`:** add `checkpoint`,
   `pre-commit`, `integration`, and `exit` gate commands with consistent
   exit behavior and observable command output.
 - **Per-agent-turn checkpoint:** refreshes working-tree and collaboration
@@ -462,24 +513,24 @@ project-owned gates instead of relying only on prose instructions.
   `mode=explicit` fails when a required gate has no command.
 - **Mandatory transitions:** protocol editions, kickoff, AGENTS digest,
   and schema now require gates before commits, branch integration, and
-  session exit. Integration includes `context-collab check` when a
+  session exit. Integration includes `ledger-collab check` when a
   collaboration session/issue is supplied.
 
 **Migration from 0.7.x:** existing projects remain compatible. New
 bootstraps receive `gates.conf`; existing projects can initialize it with
-`sh .context/core/bin/context-gates init` or the PowerShell equivalent.
+`sh .context_ledger/core/bin/ledger-gates init` or the PowerShell equivalent.
 
 ## 0.7.0 — 2026-08-17
 
 **Collaboration integration-readiness checks.** The collaboration helper
 now provides a mechanical gate before product branches are integrated.
 
-- **`context-collab check`:** validates required event metadata, event ID
+- **`ledger-collab check`:** validates required event metadata, event ID
   uniqueness, resolvable same-session/same-issue references, complete agreements,
   selected options, peer participants, owners, active claim overlaps,
   unresolved proposals/assessments/corrections/handoffs, and product
   commit references on releases.
-- **PowerShell parity:** `context-collab.ps1 check` delegates to the
+- **PowerShell parity:** `ledger-collab.ps1 check` delegates to the
   PowerShell validator with the same checks and exit-code contract.
 - **Operational split:** `status` remains the live-work view; `check` is
   the integration-readiness gate and fails when the event trail is not
@@ -510,7 +561,7 @@ shared session/issue and coordinate without a mutable global lock.
 - **Corrections:** an agent can record the observed mistake, evidence, likely
   cause, candidate repairs, and suggested fixer; peers agree on the repair
   and owner before the correction is applied.
-- **`core/bin/context-collab` + `context-collab.ps1`:** POSIX and
+- **`core/bin/ledger-collab` + `ledger-collab.ps1`:** POSIX and
   PowerShell helpers for atomic event creation and overlap/status inspection.
 - **Schema and protocol:** both editions, kickoff, AGENTS digest, README,
   and schema now distinguish single-agent `tasks/current.md` locking from
@@ -519,7 +570,7 @@ shared session/issue and coordinate without a mutable global lock.
 **Migration from 0.5.x:** none required for existing single-agent
 projects. New bootstraps receive `memory/collaboration/README.md`; an
 existing project that opts in copies that template into
-`.context/memory/collaboration/` during its first collaboration session.
+`.context_ledger/memory/collaboration/` during its first collaboration session.
 Core updates never touch memory. Event files are created only when a
 project opts into collaboration.
 
@@ -527,7 +578,7 @@ project opts into collaboration.
 
 **The session-scoped memory release.** Session history is now self-contained
 and disposable — separate from durable project knowledge — preventing
-`.context/` bloat while preserving continuity.
+`.context_ledger/` bloat while preserving continuity.
 
 - **New `memory/sessions/` module:**
   - `memory/sessions/SUMMARY.md` — compressed session history (~1 line
@@ -548,15 +599,15 @@ and disposable — separate from durable project knowledge — preventing
   fact that matters beyond the session lives in its domain file, so
   deleting the session directory cannot delete the knowledge.
 - **"Session data is disposable" principle:** enshrined in both editions
-  (rule 7 of the `.context/` Rules) and in `memory/sessions/README.md`.
+  (rule 7 of the `.context_ledger/` Rules) and in `memory/sessions/README.md`.
   Session directories may be deleted; SUMMARY.md entries pruned; the
   formal registry (`agents/sessions.md`) is the permanent record.
 - **Three-layer model:** session detail (disposable) → session summary
   (prunable) → permanent registry (append-only). Together with the
   durable domain files, this gives a clean lifecycle: new information →
   session notes → summary → evaluate durability → promote or discard.
-- **Schema:** new `sessions/` entries in `context-schema.md` and
-  `context.schema.json`; reading order now includes `SUMMARY.md`.
+- **Schema:** new `sessions/` entries in `ledger-schema.md` and
+  `ledger.schema.json`; reading order now includes `SUMMARY.md`.
 - **Templates:** `memory/sessions/README.md`, `SUMMARY.md`, and `notes.md`
   added under `core/templates/memory/sessions/`.
 - **Migration from 0.4.x:** none required. The `sessions/` directory
@@ -568,15 +619,15 @@ and disposable — separate from durable project knowledge — preventing
 ## 0.4.0 — 2026-07-30
 
 **The Windows release.** The tool no longer assumes a POSIX shell. Windows
-agents run PowerShell, not `sh`, so a `sh`-only `context-sync` failed at
+agents run PowerShell, not `sh`, so a `sh`-only `ledger-sync` failed at
 session startup (`verify`/`status`) with no fallback. This adds a
 PowerShell port of the session commands.
 
-- **`core/bin/context-sync.ps1` (PowerShell port):** covers the project-mode
+- **`core/bin/ledger-sync.ps1` (PowerShell port):** covers the project-mode
   commands an agent hits inside a session — `status`, `verify`, `update`,
   `rollback`, `lock`. Requires PowerShell 5.1+ (`pwsh` or Windows
   PowerShell). Invoke as
-  `pwsh -File .context/core/bin/context-sync.ps1 <cmd>`; the `--major`
+  `pwsh -File .context_ledger/core/bin/ledger-sync.ps1 <cmd>`; the `--major`
   update gate is the `-Major` switch. Byte-compatible with the `sh` tool's
   `MANIFEST.sha256` (identical SHA-256 hashes, forward-slash paths), so a
   core verified on one platform verifies on the other.
@@ -584,10 +635,10 @@ PowerShell port of the session commands.
   `harvest` are not ported — the maintainer runs them from a package clone
   on macOS/Linux. The `.ps1` prints a pointer to the `sh` script if asked
   for one of them.
-- **Docs:** `sh …/context-sync <cmd>` invocations across the kickoff,
+- **Docs:** `sh …/ledger-sync <cmd>` invocations across the kickoff,
   QUICKSTART, and schema now show the PowerShell equivalent for Windows.
 - **Migration from 0.3.x:** none. The port is additive; existing projects
-  gain `context-sync.ps1` on their next `update`. macOS/Linux behavior is
+  gain `ledger-sync.ps1` on their next `update`. macOS/Linux behavior is
   unchanged.
 
 ## 0.3.0 — 2026-07-21
@@ -596,7 +647,7 @@ PowerShell port of the session commands.
 only ever promised: project memory now flows back to the package
 mechanically instead of by hand.
 
-- **`context-sync harvest` (package mode):** run from a package clone, it
+- **`ledger-sync harvest` (package mode):** run from a package clone, it
   reads `fleet.md`, reaches every listed project read-only (a sibling
   clone matched by remote URL, else a shallow clone), and collects three
   signals into `inbox/harvest-<date>.md` for triage — open `flaws/`,
@@ -623,27 +674,27 @@ mechanically instead of by hand.
 ## 0.2.0 — 2026-07-14
 
 **The vendored-core release.** The protocol no longer lives in a sibling
-clone — it travels inside every project as `.context/core/`, beside the
-project's own memory in `.context/memory/`.
+clone — it travels inside every project as `.context_ledger/core/`, beside the
+project's own memory in `.context_ledger/memory/`.
 
-- **Two-zone layout:** `.context/core/` (package-owned, read-only,
-  version-stamped) + `.context/memory/` (project-owned, writable, never
+- **Two-zone layout:** `.context_ledger/core/` (package-owned, read-only,
+  version-stamped) + `.context_ledger/memory/` (project-owned, writable, never
   synced). Replaces the basename-based structural/data split; `SYNC.md`
   is retired.
 - **Memory modules move under `memory/`:** `agents/`, `tasks/`, `plans/`,
   `flaws/`, `inefficiencies/`, `reviews/`, `system/`, `user/`,
   `workflows/`, `secrets/` keep their names and formats — only the path
-  prefix changes. `kickoff.md` and `README.md` stay at the `.context/`
+  prefix changes. `kickoff.md` and `README.md` stay at the `.context_ledger/`
   root as the front door and zone map.
 - **New memory modules:** `memory/overrides/rules.md` (project-local
   protocol adjustments, read after the edition) and `memory/core.lock`
-  (last-known-good core version, written by `context-sync`).
-- **Unified schema:** `core/schemas/context-schema.md` (+
-  `context.schema.json`) is now the single authority on every memory
+  (last-known-good core version, written by `ledger-sync`).
+- **Unified schema:** `core/schemas/ledger-schema.md` (+
+  `ledger.schema.json`) is now the single authority on every memory
   file's format, write mode, ownership, and fact scope — including the
   per-agent-type vs per-project vs per-machine scoping rules that stop
   cross-agent-type contamination.
-- **`core/bin/context-sync`:** POSIX-sh tool — `status`, `verify`,
+- **`core/bin/ledger-sync`:** POSIX-sh tool — `status`, `verify`,
   `update`, `rollback`, `bootstrap`. Startup change detection, checksum
   integrity via `core/MANIFEST.sha256`, git-based rollback to the
   locked version.
@@ -661,7 +712,7 @@ project's own memory in `.context/memory/`.
 ## 0.1.0 — 2026-07-13 (retroactive)
 
 The sibling-clone era: two protocol editions at the package root,
-`context-skeleton/` bootstrapped into projects as a flat `.context/`,
+`context-skeleton/` bootstrapped into projects as a flat `.context_ledger/`,
 structural-vs-data sync per `SYNC.md`, package cloned beside every
 project as `../context`. Never formally released; version assigned
 retroactively as the baseline `MIGRATION.md` migrates from.

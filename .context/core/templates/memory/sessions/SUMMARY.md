@@ -16,7 +16,7 @@ records.
 ---
 - **YYYY-MM-DD — Session N** — <agent> / <model> — <one-line outcome>.
   <Key decision or discovery, if any.>
-  Detail: .context/memory/sessions/YYYY-MM-DD-N/notes.md (or \"summary only\").
+  Detail: .context_ledger/memory/sessions/YYYY-MM-DD-N/notes.md (or \"summary only\").
 -->
 
 <!-- GC GUIDANCE (not part of the template — remove this comment before committing):

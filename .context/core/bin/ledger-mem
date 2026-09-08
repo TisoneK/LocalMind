@@ -1,5 +1,5 @@
 #!/bin/sh
-# context-mem — hygiene checks that keep .context healthy and contained.
+# ledger-mem — hygiene checks that keep .context_ledger healthy and contained.
 #
 # check  flags duplicate keys in the update-in-place registries. Those files
 #        hold ONE entry per key: correct an entry by editing its row/block,
@@ -10,9 +10,9 @@
 #          system/ai-models.md    key = (Agent, Model)         — one row/pair
 #          system/environments.md key = the "Identify by:" line — one block/env
 #
-# lint   flags .context vocabulary leaking into product artifacts. A product
-#        file (anything outside .context/) must stand on its own: a docstring
-#        or comment must not cite ADR-N, a bug ID, "per ADR", or a .context/
+# lint   flags .context_ledger vocabulary leaking into product artifacts. A product
+#        file (anything outside .context_ledger/) must stand on its own: a docstring
+#        or comment must not cite ADR-N, a bug ID, "per ADR", or a .context_ledger/
 #        path — meaningless to someone reading only the product repo. Memory
 #        may reference code; code must never reference memory. Scans the
 #        STAGED diff (the new lines you are about to commit).
@@ -22,24 +22,24 @@
 set -u
 
 say() { printf '%s\n' "$*"; }
-err() { printf 'context-mem: %s\n' "$*" >&2; }
+err() { printf 'ledger-mem: %s\n' "$*" >&2; }
 die() { err "$*"; exit 2; }
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 2
 CORE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd) || exit 2
-CONTEXT_DIR=$(dirname -- "$CORE_DIR")
-PROJECT_DIR=$(dirname -- "$CONTEXT_DIR")
-MEMORY_DIR=$CONTEXT_DIR/memory
+LEDGER_DIR=$(dirname -- "$CORE_DIR")
+PROJECT_DIR=$(dirname -- "$LEDGER_DIR")
+MEMORY_DIR=$LEDGER_DIR/memory
 
 usage() {
-  say "context-mem — .context hygiene checks"
+  say "ledger-mem — .context_ledger hygiene checks"
   say ""
   say "  check   duplicate keys in the update-in-place registries"
   say "          (ai-models.md by Agent+Model, environments.md by Identify-by;"
   say "          roster.md by Name and codename) plus a warn-only board-vs-"
   say "          duty-log audit: a roster row whose Session N is already in"
   say "          agents/sessions.md means the session never clocked out"
-  say "  lint    .context vocabulary (ADR-N, bug IDs, .context/ paths) leaking"
+  say "  lint    .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) leaking"
   say "          into the staged product diff"
   say "  prune   advise archiving resolved/superseded entries out of the"
   say "          append-only durable logs (flaws, inefficiencies); --list"
@@ -138,7 +138,7 @@ check_roster() {
 
 check() {
   [ $# -eq 0 ] || { case "$1" in -h|--help) usage ;; *) die "unknown argument '$1'" ;; esac; }
-  [ -d "$MEMORY_DIR" ] || { say "context-mem: no memory dir (nothing to check)"; return 0; }
+  [ -d "$MEMORY_DIR" ] || { say "ledger-mem: no memory dir (nothing to check)"; return 0; }
   _rc=0
   check_ai_models || _rc=1
   check_environments || _rc=1
@@ -193,7 +193,7 @@ prune() {
       *) die "unknown argument '$1'" ;;
     esac
   done
-  [ -d "$MEMORY_DIR" ] || { say "context-mem: no memory dir (nothing to prune)"; return 0; }
+  [ -d "$MEMORY_DIR" ] || { say "ledger-mem: no memory dir (nothing to prune)"; return 0; }
   _eligible=0
   for _rel in flaws/log.md inefficiencies/log.md; do
     _f=$MEMORY_DIR/$_rel
@@ -234,12 +234,12 @@ lint() {
   git -C "$_root" diff --cached -U0 --no-color 2>/dev/null | awk '
     /^\+\+\+ /{ f=$0; sub(/^\+\+\+ b\//, "", f); sub(/^\+\+\+ /, "", f); next }
     /^\+/ && !/^\+\+\+/ {
-      if (f ~ /^\.context\// || f == "/dev/null") next
+      if (f ~ /^\.context_ledger\// || f == "/dev/null") next
       s = substr($0, 2)
       pat = ""
       if (s ~ /ADR-[0-9]/) pat = "an ADR reference"
       else if (s ~ /B-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9]/) pat = "a bug-ID reference"
-      else if (s ~ /\.context\//) pat = "a .context/ path"
+      else if (s ~ /\.context_ledger\//) pat = "a .context_ledger/ path"
       else if (tolower(s) ~ /per adr/) pat = "\"per ADR\""
       if (pat != "") { printf "LEAK: %s cites %s: %s\n", f, pat, s | "cat 1>&2"; n++ }
     }
@@ -247,9 +247,9 @@ lint() {
   '
   _rc=$?
   if [ "$_rc" -eq 0 ]; then
-    say "lint passed: no .context vocabulary (ADR-N, bug IDs, .context/ paths) in the staged product diff"
+    say "lint passed: no .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) in the staged product diff"
   else
-    err "lint failed: product code must stand on its own. State the reason in plain words in the docstring/comment; the ADR or bug-ID link belongs in .context/memory, not the source. Memory references code, never the reverse."
+    err "lint failed: product code must stand on its own. State the reason in plain words in the docstring/comment; the ADR or bug-ID link belongs in .context_ledger/memory, not the source. Memory references code, never the reverse."
   fi
   return "$_rc"
 }
@@ -260,5 +260,5 @@ case "$CMD" in
   lint)  lint "$@" ;;
   prune) prune "$@" ;;
   ''|-h|--help|help) usage ;;
-  *) die "unknown command '$CMD' (try: context-mem help)" ;;
+  *) die "unknown command '$CMD' (try: ledger-mem help)" ;;
 esac

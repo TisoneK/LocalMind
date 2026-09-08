@@ -11,9 +11,9 @@
 - **Findings handling:** fix doc drift directly; flag structural doc
   rewrites (new doc architecture, splitting/merging docs) for approval.
   Code bugs discovered while verifying docs are backlogged, never fixed.
-- **Deliverable:** `.context/memory/reviews/YYYY-MM-DD-docs-review.md` + chat summary
+- **Deliverable:** `.context_ledger/memory/reviews/YYYY-MM-DD-docs-review.md` + chat summary
 - **Allowed commits:** `docs:` (the fixes), `docs(review):` (the report),
-  `chore(context):`.
+  `chore(ledger):`.
 
 ## Execution changes vs the base edition
 

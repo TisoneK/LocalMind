@@ -1,12 +1,12 @@
 #!/bin/sh
-# context-history — group session history and rotate it through the zones:
+# ledger-history — group session history and rotate it through the zones:
 #   memory/ (live) -> history/ (closed, readable) -> archive/ (cold, zipped) -> gc
 #
 # A "group" is the session-history subtree only: agents/sessions.md entries,
 # sessions/SUMMARY.md lines, and sessions/<date-N>/ notes. Durable facts
 # (user/, system/, plans/decisions.md, tasks/backlog.md, flaws/,
 # inefficiencies/) live in memory/ across groups and never rotate — they have
-# their own hygiene (update-in-place; context-mem prune). Collaboration events
+# their own hygiene (update-in-place; ledger-mem prune). Collaboration events
 # are a separate immutable trail and are never touched here.
 #
 # Commands:
@@ -29,15 +29,15 @@
 set -u
 
 say() { printf '%s\n' "$*"; }
-err() { printf 'context-history: %s\n' "$*" >&2; }
+err() { printf 'ledger-history: %s\n' "$*" >&2; }
 die() { err "$*"; exit 2; }
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd) || exit 2
 CORE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd) || exit 2
-CONTEXT_DIR=$(dirname -- "$CORE_DIR")
-MEMORY_DIR=$CONTEXT_DIR/memory
-HISTORY_DIR=$CONTEXT_DIR/history
-ARCHIVE_DIR=$CONTEXT_DIR/archive
+LEDGER_DIR=$(dirname -- "$CORE_DIR")
+MEMORY_DIR=$LEDGER_DIR/memory
+HISTORY_DIR=$LEDGER_DIR/history
+ARCHIVE_DIR=$LEDGER_DIR/archive
 SESSIONS_MD=$MEMORY_DIR/agents/sessions.md
 SUMMARY_MD=$MEMORY_DIR/sessions/SUMMARY.md
 ROSTER_MD=$MEMORY_DIR/agents/roster.md
@@ -88,7 +88,7 @@ today() { date -u +%Y-%m-%d; }
 write_group_state() { # $1 num(int) $2 opened
   mkdir -p "$MEMORY_DIR/agents"
   {
-    echo "# Current session group — written by context-history. Do not hand-edit."
+    echo "# Current session group — written by ledger-history. Do not hand-edit."
     printf 'group=%s\n' "$1"
     printf 'opened=%s\n' "$2"
   } > "$GROUP_STATE"
@@ -105,9 +105,9 @@ cmd_status() {
   say "archive/:        $_acount tarball(s) (cap $_ak)"
   if [ "$_c" -ge "$_gs" ]; then
     say ""
-    say "A close is DUE (>= group_size). Run: context-history close   (then --confirm)"
+    say "A close is DUE (>= group_size). Run: ledger-history close   (then --confirm)"
   fi
-  [ "$_acount" -gt "$_ak" ] && say "gc is DUE: archive/ over cap. Run: context-history gc --confirm"
+  [ "$_acount" -gt "$_ak" ] && say "gc is DUE: archive/ over cap. Run: ledger-history gc --confirm"
   return 0
 }
 
@@ -116,18 +116,18 @@ reset_registry() { # start a fresh empty registry for the new group
     echo "# Agent Sessions (append-only within the current group)"
     echo ""
     echo "One entry per agent session in the CURRENT group, newest at the bottom."
-    echo "Closed groups live in .context/history/ and .context/archive/ (not read"
-    echo "at session start). Rotate with context-history."
+    echo "Closed groups live in .context_ledger/history/ and .context_ledger/archive/ (not read"
+    echo "at session start). Rotate with ledger-history."
     echo ""
     echo "<!-- TEMPLATE — copy below the last entry and FILL IN every placeholder:"
     echo "---"
     echo "## YYYY-MM-DD — Session N"
-    echo "- **Agent:** <name> | **Model:** <model id> | **Platform:** <machine/sandbox + OS> | **Role:** <engineer, or overlay from .context/core/roles/> | **Core:** <version>"
+    echo "- **Agent:** <name> | **Model:** <model id> | **Platform:** <machine/sandbox + OS> | **Role:** <engineer, or overlay from .context_ledger/core/roles/> | **Core:** <version>"
     echo "- **Task:** <what this session set out to do>"
     echo "- **Commits:** <count> (<first-sha>..<last-sha>)"
     echo "- **Outcome:** <done / partial / blocked — one line>"
     echo "- **Open items:** <pointers into tasks/backlog.md, or \"none\">"
-    echo "- **Notes:** .context/memory/sessions/<date>-<N>/notes.md  (or \"none\")"
+    echo "- **Notes:** .context_ledger/memory/sessions/<date>-<N>/notes.md  (or \"none\")"
     echo "-->"
   } > "$SESSIONS_MD"
 }
@@ -137,7 +137,7 @@ reset_summary() {
     echo "# Session Summary (current group — prunable)"
     echo ""
     echo "One line per session: date, agent, model, one-line outcome. Closed"
-    echo "groups are in .context/history/. Keep this small."
+    echo "groups are in .context_ledger/history/. Keep this small."
   } > "$SUMMARY_MD"
 }
 
@@ -148,7 +148,7 @@ reset_roster() { # fresh empty team roster for the new group
     echo ""
     echo "Pick a real name you like and add your row; present yourself by it"
     echo "(\"John (S<NNN>)\"). Your name and codename are each unique in this group."
-    echo "The human is the supervisor. context-mem check flags a duplicate."
+    echo "The human is the supervisor. ledger-mem check flags a duplicate."
     echo ""
     echo "<!-- TEMPLATE — one row per person in this group:"
     echo "| <Name> | S<NNN> | <model id> | <what you're doing> |"
@@ -239,7 +239,7 @@ cmd_close() {
   say "started group-$_next"
   roll_oldest_history_to_archive
   say ""
-  say "Commit as: chore(context): close session group-$_n, open group-$_next"
+  say "Commit as: chore(ledger): close session group-$_n, open group-$_next"
 }
 
 cmd_gc() {
@@ -267,7 +267,7 @@ cmd_gc() {
     return 0
   fi
   printf '%s\n' "$_list" | while IFS= read -r _f; do [ -n "$_f" ] && rm -f "$_f" && say "deleted $(basename "$_f")"; done
-  say "Commit as: chore(context): gc archive/ to the $_ak-tarball cap"
+  say "Commit as: chore(ledger): gc archive/ to the $_ak-tarball cap"
 }
 
 CMD=${1:-}; [ $# -gt 0 ] && shift
@@ -276,5 +276,5 @@ case "$CMD" in
   close)  cmd_close "$@" ;;
   gc)     cmd_gc "$@" ;;
   ''|-h|--help|help) usage ;;
-  *) die "unknown command '$CMD' (try: context-history help)" ;;
+  *) die "unknown command '$CMD' (try: ledger-history help)" ;;
 esac
