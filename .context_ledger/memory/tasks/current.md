@@ -1,36 +1,32 @@
 # Current Task
 
-**Status:** IDLE — **Session 443 (Iris / ZCode local, glm-5.3-flash, Windows)
-COMPLETE (2026-09-08): B-2026-09-08-2 cross-platform gate portability SHIPPED
-(product `4e114cd`, registry `202d81e`, logs `5fe0258`).**
+**Status:** IDLE — **Session 444 (Vera / ZCode local, glm-5.3-flash, Windows)
+COMPLETE (2026-09-08): core 0.17.0 → 0.18.0 + Context Ledger rename SHIPPED
+(`c97b6f6a` update+migrate, `686e152e` rename, `12857f7f` sweep+regen,
+`56485ee9` fix(ci) script paths).**
 
-**What landed:** the Windows gate path is fully portable and formally
-verified end-to-end — ci-check.sh resolves the backend venv across
-Scripts//bin layouts and runs tools via `python -m`; every gates.conf line
-is a plain `sh scripts/...` invocation (new shims scripts/run-in.sh +
-scripts/venv-run.sh) that parses under BOTH the POSIX runner and the
-PowerShell 5.1 runner (the old `cd frontend && ...` tsc line was a PS parse
-error — pre-commit could never pass here); pytest is baseline-aware against
-scripts/pytest-baseline.txt (the documented 22 Windows failures, verified
-this session; failure-SET compare, never-add/ratchet-down); bash-only
-pipefail/`\<` removed from ci-check.sh + check-bookkeeping.sh; root
-.gitattributes pins *.sh to LF.
+**What landed:** the project now runs the renamed `.context_ledger/` layout
+with core 0.18.0 verified. Entry points (kickoff.md, AGENTS.md, CLAUDE.md)
+regenerated from the 0.18 templates with facts refilled (package upstream is
+now `https://github.com/TisoneK/context-ledger.git` — the old
+`TisoneK/.context` URL redirects). Living memory instruction files swept
+(paths, `ledger-*` tool names, `chore(ledger):` prefix); append-only logs and
+collaboration/events/ left as written. Product-side: gate scripts and
+live-test harnesses repointed (`fix(ci):` — check-conflict-markers.sh would
+have scanned a nonexistent directory and passed vacuously).
 
-**Verified on this box:** pre-commit gate 5/5 via ledger-gates.cmd; full CI
-green direct (ruff clean, pytest 2939 passed / 22 = exactly the documented
-baseline, tsc clean, eslint 0 err/53 warn, exit 0); formal exit gate GATE
-PASSED via the POSIX runner. **Windows caveat until a core patch lands:** the
-PS gate runner's aggregate verdict is untrusted (flaw filed S443 —
-`Run-One` stdout swallow can report a failing command as GATE PASSED; patch
-ready in flaws/log.md, blocked by an upstream package refactor mid-flight —
-a peer was live there; tree left untouched). Use the POSIX runner for formal
-gates meanwhile: `sh .context_ledger/core/bin/ledger-gates run <gate>`.
+**Verified on this box:** pre-commit gate 5/5 via the POSIX runner on the new
+paths. **Windows caveat unchanged:** the PS gate runner's aggregate verdict is
+still untrusted (S443 flaw OPEN — 0.18.0's `Run-One` still swallows child
+stdout through the return pipeline). Use
+`sh .context_ledger/core/bin/ledger-gates run <gate>` for formal gates.
 
 **Feature:** none
 
-**Next up for the owner:** apply the documented Run-One patch upstream after
-the ledger refactor settles → core release → `ledger-sync update` locally;
+**Next up for the owner:** S443's Run-One stdout-capture patch is UNBLOCKED —
+the upstream ledger refactor shipped in 0.18.0; apply the documented patch in
+the package repo → upstream release → `ledger-sync update` locally.
 B-2026-09-08-1 (next eslint tranche below 53) and B-2026-09-05-4 (the 22
-tests/tools Windows failures — the new baseline file gives the gate a green
-path meanwhile) remain open. Residue delete-list (B-2026-09-06-5) still
-awaits owner confirmation.
+tests/tools Windows failures — baseline file gives the gate a green path
+meanwhile) remain open. Residue delete-list (B-2026-09-06-5) still awaits
+owner confirmation.
