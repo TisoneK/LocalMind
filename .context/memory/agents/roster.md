@@ -32,13 +32,8 @@ is your stable session tag.
 `.context/history/`. Update your own row (don't append a second); when your
 work changes, edit the "Doing" cell.
 
-| Ada | S430 | glm-5.3-flash | core sync 0.16.0 -> 0.16.1 patch (same Ada as S429; supervisor: rename me here if you like) |
-| Kwame | S431 | glm-5.3-flash | fix phase RELEASED (-3/-6/-7 shipped + ruff-zero + 14-failure clearance, merged 02b42e0); IDLE — awaiting next assignment |
-| Mei | S434 | glm-5.3-flash | (same Mei as S433) closed B-2026-09-06-4 (live-verified) + rider -11 conflict-marker gate; released, merging to main |
-| Noah | S436 | glm-5.3-flash | S436a right-click menus + S436b export copy-to-clipboard LANDED (fbffcac/e89c3dc/3403e61); live-verified; session closed |
-| Amina | S437 | glm-5.3-flash | store hygiene: pytest LOCALMIND_HOME isolation shipped (conftest isolation half of the chat-store pollution item); residue delete-list staged for owner sign-off; released |
-| Zuri | S438 | glm-5.3-flash | B-2026-08-30-8 over-thinker: evidence-sufficient answer-only call shipped (live-verified 184.8s→14.1s weather turn); released |
-| Sena | S439 | glm-5.3-flash | backlog truth-sweep shipped; CORRECTION: collab-protocol self-correction recorded (event 20260908T022624Z, flaws entry) |
-| Tavi | S440 | glm-5.3-flash | collab-init per owner directive (3 agents live): shared session localmind-live-2026-09-08 declared; backlog duplicate-drift verification + guard gate + closeout |
-| Talia | S441 | glm-5.3-flash | (the unattributed frontend peer Tavi's note addressed) eslint exit-gate clearance: 9 errors → 0, warnings 84 → 53, ratchet 71 → 53, wire typing; claimed frontend paths on localmind-live-2026-09-08 |
-| Nadia | S442 | glm-5.3-flash | core sync 0.16.1 → 0.17.0: kickoff+AGENTS regen, stale-row clock-outs (S430–S441 flagged by the new audit) |
+<!-- Clock-outs 2026-09-08 (S442 board audit, context-mem check): the
+S430–S441 rows were removed — all nine sessions have completed entries in
+agents/sessions.md and no live work; who was on duty stays in sessions.md
+and this file's git history. Nadia (S442) clocked out at closeout the same
+day. Board empty = nobody is in the office. -->

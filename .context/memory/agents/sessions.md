@@ -6369,3 +6369,15 @@ your name in the roster, present yourself by it.
 - **Honest inefficiency:** mid-session I misread my own multi-range `sed` output (lines 300-320;380-395;… — the gap between ranges is invisible) as a live peer edit of client.ts and ran a full coordination-stop; evidence showed HEAD had contained the "new" lines since the S431-era export commit, and my Edit failure was a stale-reconstruction artifact. Cost ~15 min; logged with the two-shell-rule lesson in inefficiencies.
 - **Open items:** new backlog **B-2026-09-08-1** (next ratchet tranche below 53: 15 ChatMessage react-markdown anys, 24 set-state-in-effect, 9 react-refresh, 5 exhaustive-deps). Standing queue unchanged.
 - **Report:** none — fix session (commits + regression evidence + coordination trail + this entry are the record).
+
+---
+## 2026-09-08 — Session 442 — core sync 0.16.1 → 0.17.0 + board cleanup (Nadia)
+
+- **Agent:** ZCode (local) | **Model:** glm-5.3-flash (per system prompt ID 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0; not user-stated) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.17.0 (this session performed the sync; started on 0.16.1)
+- **Task:** owner: "Sync protocol" — kickoff Step 1 sync + core update.
+- **Work:** git pull clean; `context-sync verify` OK on 0.16.1; `status` offered 0.17.0 (same MAJOR) → ran `context-sync update` (core verified post-migration). Read the 0.17.0 CHANGELOG: check-in is universal (roster row + immediate push, solo included), clock-out in the closing commit, board-vs-duty-log audit, presence-on-every-read-order. Regenerated `.context/kickoff.md` from the new template (material change: check-in + evidence-based mode decision) and refilled all project facts; regenerated AGENTS.md from the new template and re-attached all seven project addenda (Sessions 12–303 sections, verbatim). First use of the new board audit flagged all nine S430–S441 rows (logged done, never clocked out — all predate the convention); rows removed, board empty of peers.
+- **Verification:** placeholder scan on kickoff.md (only allowed token forms remain); AGENTS.md structure check (7 project sections, full tail); `context-mem check` clean after clock-outs; conflict-marker + backlog-duplicate gates pass; tsc + ruff clean (run by hand — see inefficiencies for the gate-path issue); `context-mem lint` flags AGENTS.md's by-design citations (documented false positive, precedent d1f38d9).
+- **Commits:** 35f12b9 (check-in), 278d80f (core update + regens + inefficiency + B-2026-09-08-2), this closeout.
+- **Open items:** B-2026-09-08-2 filed (gates.conf Windows ruff path); lint AGENTS.md exemption is a core back-port candidate (upstream `.context` package), not a project backlog item.
+- **Coordination:** solo session (no declared session/issue; board had only logged-done rows; current.md idle). Checked in per 0.17.0 BEFORE the regen work; clocking out here.
+- **Report:** none — sync session (core diff + regens + this entry are the record).
