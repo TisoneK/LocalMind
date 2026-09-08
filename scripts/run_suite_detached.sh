@@ -15,7 +15,7 @@ if [[ $# -gt 0 && "$1" != --* ]]; then
   set -- --only "$1" "${@:2}"
 fi
 
-KEY_FILE=".context/memory/secrets/bankofai-key"
+KEY_FILE=".context_ledger/memory/secrets/bankofai-key"
 if [[ ! -f "$KEY_FILE" ]]; then
   echo "ERROR: $KEY_FILE missing" >&2
   exit 2

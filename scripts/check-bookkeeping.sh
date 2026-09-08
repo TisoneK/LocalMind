@@ -13,7 +13,7 @@
 # have logged its friction (or an explicit none) too.
 set -eu
 cd "$(dirname "$0")/.."
-M=.context/memory
+M=.context_ledger/memory
 
 newest_header_date() {
   grep -oE '^(## |---.*)?[0-9]{4}-[0-9]{2}-[0-9]{2}' "$1" 2>/dev/null \

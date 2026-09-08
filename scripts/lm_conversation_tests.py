@@ -18,7 +18,7 @@ Usage:
   ../scripts/lm_conversation_tests.py --all
   ../scripts/lm_conversation_tests.py --list   # print catalog and exit
 
-Catalog + "what to look for" notes: .context/memory/system/conversation-test-sets.md
+Catalog + "what to look for" notes: .context_ledger/memory/system/conversation-test-sets.md
 """
 from __future__ import annotations
 
