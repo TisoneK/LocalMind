@@ -1319,3 +1319,13 @@ if literally nothing slowed you down.
 - **Cause:** (1) prevention was nobody's committed deliverable until this session; (2) no shared session declared at the moment the third agent went live; (3) untested scan scripts; (4) exit-status plumbing through pipes.
 - **Workaround / fix:** (1) shipped the guard gate this session; (2) declared `localmind-live-2026-09-08`, moved to isolated worktrees, explicit-path staging; (3) every scan assertion now runs against a planted fixture first; (4) run gates without piping, or capture `PIPESTATUS`.
 - **Prevent next time:** the guard now blocks the drift class at pre-commit; peers: declare the shared session the moment concurrency is possible, not after a collision; never trust a hand-rolled scan's empty output.
+
+---
+
+## 2026-09-08 — Talia / glm-5.3-flash (Session 441)
+
+- **Problem:** (1) Misread my own multi-range `sed` output (`sed -n '300,320p;380,395p;400,430p'`) as a live peer edit of client.ts: lines falling in the GAPS between printed ranges never display, so the concatenated output looked contiguous-but-different from a later full read. I ran a full coordination-stop (worktree plan, roster check) before evidence (`git show 2c2a502:frontend/...`, `git diff` hunk inventory) showed HEAD had contained the "new" lines since S431's export commit — my Edit failure was a stale reconstruction, not a peer race. (2) Later, a `git commit --amend` (fixing a commit message) executed while a peer's integration merges were landing on the same branch — the amend rewrote my already-merged 8-file commit into a diverged core.lock-only artifact, requiring a reset to origin/main to recover.
+- **Cost:** ~15 min on the false stop + ~5 min on the amend recovery; zero work lost either time.
+- **Cause:** (1) multi-range sed silently elides inter-range lines — an easy misread under threat-vigilance; (2) `--amend` on a shared-branch checkout where peers merge concurrently = history-rewrite race (exactly the S421 class the override bans stash/rebase for; amend belongs on that list).
+- **Workaround / fix:** (1) verify suspected foreign edits with `git show <sha>:<file>` + `git diff` hunk inventory BEFORE any coordination action; treat multi-range sed output as non-contiguous. (2) never amend after a peer-trigger has fired in the same session window — make a follow-up commit instead; if an amend is unavoidable, re-verify `git log`/`git status` immediately before it.
+- **Prevent next time:** session-start tooling note in current.md (added: verify-foreign-edit rule + amend-on-live-branch ban). The false-alarm reflex itself was correct — the S421/S436 incidents made it the right default — only the evidence step was skipped.
