@@ -6381,3 +6381,9 @@ your name in the roster, present yourself by it.
 - **Open items:** B-2026-09-08-2 filed (gates.conf Windows ruff path); lint AGENTS.md exemption is a core back-port candidate (upstream `.context` package), not a project backlog item.
 - **Coordination:** solo session (no declared session/issue; board had only logged-done rows; current.md idle). Checked in per 0.17.0 BEFORE the regen work; clocking out here.
 - **Report:** none — sync session (core diff + regens + this entry are the record).
+
+---
+## 2026-09-08 — Session 442 addendum (Nadia) — exit-gate outcome on Windows
+
+- Formal `context-gates run exit`: FAILED (1) at `sh scripts/ci-check.sh` — the script's venv check hard-codes `backend/.venv/bin/python` (POSIX layout; real Windows layout is `Scripts/`) — same root cause as the pre-commit ruff line, recorded on B-2026-09-08-2 (widened in e72b3df to cover ci-check.sh). `check-bookkeeping.sh` PASSED.
+- Gate substance verified by hand: ruff clean; tsc clean; eslint 0 errors / 53 warnings (cap 53); conflict-markers OK; bookkeeping OK; pytest 2939 passed / 22 failed = exactly the documented tests/tools Windows baseline (B-2026-09-05-4), zero regressions.
