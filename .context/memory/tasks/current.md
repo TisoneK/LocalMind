@@ -1,7 +1,18 @@
 # Current Task
 
-**Status:** IDLE — **Session 436 (Noah / ZCode local, glm-5.3-flash, Windows)
-COMPLETE (2026-09-07), both parts landed and pushed.**
+**Status:** IDLE — **Session 440 (Tavi / ZCode local, glm-5.3-flash, Windows)
+COMPLETE (2026-09-08): backlog duplicate-drift verified + recurrence guard
+shipped.** The three owner-named conflicting pairs (B-2026-08-15-14,
+B-2026-08-17-1, B-2026-08-17-2) were reconciled by Sena's S439 sweep
+(d33ab5c) mid-session; truth cross-checked here against the surviving
+checked copies. New: `scripts/check-backlog-duplicates.sh` in gates.conf
+pre-commit fails mixed-status duplicate IDs (first catch: B-2026-08-18-4,
+live copy annotated). Three-agent live situation handled per the
+2026-09-05 override: shared session `localmind-live-2026-09-08`,
+init notes to both peers, isolated worktrees. Branch
+`collab/localmind-live-2026-09-08/tavi-zcode-glm-5.3-flash-win-s440`.
+
+**Feature:** none
 
 **Part 1 — selected-text right-click menus (the session's chat-message
 target) LANDED:** transcript menu (Copy selection / Copy message via

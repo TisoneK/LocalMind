@@ -39,3 +39,4 @@ work changes, edit the "Doing" cell.
 | Amina | S437 | glm-5.3-flash | store hygiene: pytest LOCALMIND_HOME isolation shipped (conftest isolation half of the chat-store pollution item); residue delete-list staged for owner sign-off; released |
 | Zuri | S438 | glm-5.3-flash | B-2026-08-30-8 over-thinker: evidence-sufficient answer-only call shipped (live-verified 184.8s→14.1s weather turn); released |
 | Sena | S439 | glm-5.3-flash | backlog truth-sweep shipped; CORRECTION: collab-protocol self-correction recorded (event 20260908T022624Z, flaws entry) |
+| Tavi | S440 | glm-5.3-flash | collab-init per owner directive (3 agents live): shared session localmind-live-2026-09-08 declared; backlog duplicate-drift verification + guard gate + closeout |
