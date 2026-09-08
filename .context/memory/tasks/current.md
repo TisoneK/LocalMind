@@ -1,18 +1,43 @@
 # Current Task
 
-**Status:** IDLE — **Session 440 (Tavi / ZCode local, glm-5.3-flash, Windows)
-COMPLETE (2026-09-08): backlog duplicate-drift verified + recurrence guard
-shipped.** The three owner-named conflicting pairs (B-2026-08-15-14,
-B-2026-08-17-1, B-2026-08-17-2) were reconciled by Sena's S439 sweep
-(d33ab5c) mid-session; truth cross-checked here against the surviving
-checked copies. New: `scripts/check-backlog-duplicates.sh` in gates.conf
-pre-commit fails mixed-status duplicate IDs (first catch: B-2026-08-18-4,
-live copy annotated). Three-agent live situation handled per the
-2026-09-05 override: shared session `localmind-live-2026-09-08`,
-init notes to both peers, isolated worktrees. Branch
-`collab/localmind-live-2026-09-08/tavi-zcode-glm-5.3-flash-win-s440`.
+**Status:** IDLE — **Session 441 (Talia / ZCode local, glm-5.3-flash, Windows)
+COMPLETE (2026-09-08): B-2026-08-17-13 eslint exit-gate clearance SHIPPED.**
+
+**The exit gate no longer fails on main:** 9 errors → 0 (rules-of-hooks:
+`useEnterMotion` was called after ResponseBlockRenderer's early return —
+now called first; 5 dead imports + unused `fmtTok` removed; 2 empty catch
+blocks documented; `presentation_hint` added to the presentation-type
+union so the filter needs no any-cast), warnings 84 → 53 (client.ts now
+has explicit snake_case wire interfaces + mappers — sessions, history,
+tool calls, file entries, todos, objectives, file tree — replacing every
+`any[]`/`any` cast; `ObservationData.intent` typed as the free-form wire
+string it is, dropping the intent/tool-arg casts; `buildAgentPhase`
+takes typed event data), **ratchet 71 → 53** in scripts/ci-check.sh
+(below the item's original 56 target). Product commit `501be00`,
+integrated to main via Tavi's S440 merge `f37e5dd` (my session's local
+amend artifact was discarded — origin was authoritative). Verified:
+tsc clean, eslint 0 errors / 53 warnings, 422/422 vitest, vite build
+green, eslint gate passes at the new cap. No agent-loop/tool/provider-
+adapter surface touched → live-MODEL bar assessed, does not apply.
+
+**Coordination:** 3-agent live session (Tavi's init): shared session
+`localmind-live-2026-09-08`, note `20260908T031917Z` + claim
+`20260908T031940Z` on `collab/localmind-live-2026-09-08/coordination`;
+roster row added; release emitted at closeout. Mid-session honest note:
+I briefly misread my own multi-range `sed` output (a gap between printed
+ranges) as a peer edit of client.ts, ran a coordination-stop, then
+reversed with evidence — logged in inefficiencies.
 
 **Feature:** none
+
+**S440 (Tavi, concurrent on this box — separate worktrees, same collab
+session) DONE:** backlog duplicate-drift verified + recurrence guard
+shipped. The three owner-named conflicting pairs (B-2026-08-15-14,
+B-2026-08-17-1, B-2026-08-17-2) were reconciled by Sena's S439 sweep
+(d33ab5c) mid-session; truth cross-checked there against the surviving
+checked copies. New: `scripts/check-backlog-duplicates.sh` in gates.conf
+pre-commit fails mixed-status duplicate IDs (first catch: B-2026-08-18-4,
+live copy annotated).
 
 **Part 1 — selected-text right-click menus (the session's chat-message
 target) LANDED:** transcript menu (Copy selection / Copy message via
@@ -150,8 +175,11 @@ run on macOS. No overlap with Kwame's still-unmerged -6/-7.
   restore = `git revert 645b5c4` + the owed smoke test.
 - **Standing P0 queue:** Step 4 (tool-result FTS5+vec0 index + search), Step 5
   (Context Budget Manager), Steps 6-8; Step 3 live prompt-audit owed.
-- **Frontend eslint drift (S422): 9 errors + 84 warnings vs --max-warnings 71
-  — the exit gate FAILS as-is on main.** Needs the deferred peer pass.
+- **Frontend eslint drift FIXED (S441, 2026-09-08): 9 errors → 0, warnings
+  84 → 53, ratchet 71 → 53 — the exit gate PASSES on main again** (commit
+  `501be00`). Remaining lint debt for a future ratchet below 53: 15
+  react-markdown anys in ChatMessage.tsx, 24 set-state-in-effect, 9
+  react-refresh, 5 exhaustive-deps.
 - **B-2026-09-05-4:** the ~23-failure Windows backend baseline needs the peer
   pass (find_path KeyError family + permission-gate asserts look like one
   shared fixture cause). Deferred file-reading items B-2026-09-05-1..3 remain.
@@ -167,3 +195,11 @@ run on macOS. No overlap with Kwame's still-unmerged -6/-7.
   before the after-run (S426 mislabeled a trace set this way — prefer a
   read-only worktree). Session resumption: check `git log`/`status` before
   re-running an interrupted commit chain (S429).**
+  **(S441, twice-burned this session): (1) multi-range `sed -n 'a,b;c,d'`
+  output is NON-contiguous — inter-range lines are silently hidden; verify
+  a suspected foreign edit with `git show <sha>:<file>` + `git diff` hunks
+  BEFORE running a coordination-stop. (2) Never `git commit --amend` on a
+  shared-branch checkout once a peer-trigger has fired — peers may merge
+  your commit concurrently (S440 merged mine mid-session); make a
+  follow-up commit instead, or re-verify `git log`/`status` immediately
+  before amending.**
