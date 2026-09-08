@@ -1,0 +1,34 @@
+# Backend pytest baseline — known-failing node IDs on Windows.
+#
+# scripts/ci-check.sh compares the suite's failure SET against this file:
+#   - a failure NOT listed here fails the gate (new regression);
+#   - a listed failure is tolerated (documented Windows-only baseline, all
+#     in the tests/tools suite — see the project agent memory, audit
+#     2026-09-04/05, updated 2026-09-08);
+#   - a listed test that PASSES must be REMOVED here (ratchet down —
+#     never add entries; new failures are regressions, not baseline).
+#
+# One node ID per line; lines starting with '#' and blank lines are
+# ignored by the parser. Keep LF endings.
+tests/tools/test_code_exec_runfile_redirect.py::test_run_file_command_is_executed_via_shell
+tests/tools/test_csv_tool.py::test_dispatch_csv_registered
+tests/tools/test_csv_tool.py::test_rejects_disallowed_path
+tests/tools/test_file_writer_l3.py::test_absolute_path_is_honored_verbatim
+tests/tools/test_find_path.py::test_all_paths_returns_full_catalog_in_metadata
+tests/tools/test_find_path.py::test_cached_walk_not_rewalked
+tests/tools/test_find_path.py::test_catalog_paginates_with_offset
+tests/tools/test_find_path.py::test_catalog_reports_total_groups_and_types
+tests/tools/test_find_path.py::test_exact_match_filters
+tests/tools/test_find_path.py::test_ext_filter_accepts_dot_and_list
+tests/tools/test_find_path.py::test_ext_filter_narrows_catalog
+tests/tools/test_find_path.py::test_find_path_blocks_outside_allowed_folders
+tests/tools/test_find_path.py::test_find_path_multi_keyword_and_e2e
+tests/tools/test_find_path.py::test_find_path_no_match
+tests/tools/test_find_path.py::test_find_path_returns_paths_only
+tests/tools/test_find_path.py::test_kind_filter_files_vs_dirs
+tests/tools/test_find_path.py::test_subpath_filter_narrows_catalog
+tests/tools/test_json_tool.py::test_rejects_disallowed_path
+tests/tools/test_observe.py::test_recent_files_rejects_disallowed_path
+tests/tools/test_propose_edit.py::test_propose_str_replace_permission_gate
+tests/tools/test_sql_tool.py::test_not_a_database
+tests/tools/test_sql_tool.py::test_rejects_disallowed_path

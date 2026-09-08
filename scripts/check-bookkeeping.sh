@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 #
 # Bookkeeping gate (Session 296): fail the exit if the append-only logs are
 # STALE relative to the session log. The protocol requires appending
@@ -11,7 +11,7 @@
 # Rule: the newest dated "## YYYY-MM-DD" header in each append-only log must be
 # >= the newest one in agents/sessions.md. If you logged a session, you must
 # have logged its friction (or an explicit none) too.
-set -euo pipefail
+set -eu
 cd "$(dirname "$0")/.."
 M=.context/memory
 
@@ -24,18 +24,25 @@ s=$(newest_header_date "$M/agents/sessions.md")
 i=$(newest_header_date "$M/inefficiencies/log.md")
 f=$(newest_header_date "$M/flaws/log.md")
 
+# Lexicographic less-than for the zero-padded ISO dates (POSIX: test has no
+# \< operator — that's a bash extension; this script runs via plain sh).
+lt() {
+  [ "$1" = "$2" ] && return 1
+  [ "$(printf '%s\n%s\n' "$1" "$2" | sort | head -n 1)" = "$1" ]
+}
+
 if [ -z "$s" ]; then
   echo "bookkeeping: no dated session entries yet — skipping"
   exit 0
 fi
 
 fail=0
-if [ -z "$i" ] || [ "$i" \< "$s" ]; then
+if [ -z "$i" ] || lt "$i" "$s"; then
   echo "STALE: inefficiencies/log.md newest=${i:-none} < sessions.md newest=$s"
   echo "  → append this session's entry (an explicit '## $s — none this session' counts)"
   fail=1
 fi
-if [ -z "$f" ] || [ "$f" \< "$s" ]; then
+if [ -z "$f" ] || lt "$f" "$s"; then
   echo "STALE: flaws/log.md newest=${f:-none} < sessions.md newest=$s"
   echo "  → append this session's entry (an explicit '## $s — none this session' counts)"
   fail=1

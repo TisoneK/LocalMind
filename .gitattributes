@@ -1,0 +1,4 @@
+# Shell scripts must always be LF in every checkout: they are invoked via
+# POSIX sh (gate registries, hooks, CI), and a CRLF working copy breaks
+# strict sh implementations (dash) even though Git Bash tolerates it.
+*.sh text eol=lf
