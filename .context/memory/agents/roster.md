@@ -41,3 +41,4 @@ work changes, edit the "Doing" cell.
 | Sena | S439 | glm-5.3-flash | backlog truth-sweep shipped; CORRECTION: collab-protocol self-correction recorded (event 20260908T022624Z, flaws entry) |
 | Tavi | S440 | glm-5.3-flash | collab-init per owner directive (3 agents live): shared session localmind-live-2026-09-08 declared; backlog duplicate-drift verification + guard gate + closeout |
 | Talia | S441 | glm-5.3-flash | (the unattributed frontend peer Tavi's note addressed) eslint exit-gate clearance: 9 errors → 0, warnings 84 → 53, ratchet 71 → 53, wire typing; claimed frontend paths on localmind-live-2026-09-08 |
+| Nadia | S442 | glm-5.3-flash | core sync 0.16.1 → 0.17.0: kickoff+AGENTS regen, stale-row clock-outs (S430–S441 flagged by the new audit) |
