@@ -34,7 +34,7 @@ model, and what went wrong before.
 > erode recall, and the rules below are the ones whose violation costs
 > the most. If you can hold only ten things, hold these:
 
-1. **Read `.context/` before touching anything; update it before ending.** (Steps 3, 15–17)
+1. **Read `.context/` before touching anything; check in at the roster before working; update it before ending.** (Steps 3, 15–17 — the roster is the "who's in the office" board; sign it and push before product work, clock out at wrap-up. An empty board does not prove you're alone: a live row you didn't write means a peer is here.)
 2. **Two zones under `.context/`:** `core/` is the vendored protocol — **read-only, never write one byte there** (it updates only as a whole tree via `core/bin/context-sync`); `memory/` is this project's writable memory. Nothing needs to be cloned or fetched to run a session — the protocol travels inside the repo.
 3. **Two surfaces, never one commit:** project code and `.context/` memory are staged and committed separately — `git add .context/` for memory, explicit paths for project. Never `git add -A` with both dirty.
 4. **Know which kind of memory file you're in.** *Append-only* logs (`sessions.md`, `inefficiencies/log.md`, `backlog.md`, `decisions.md`, `flaws/log.md`) only grow — before committing one, its `git diff` shows no removed lines. *Update-in-place* registries (`system/ai-models.md`, `system/environments.md`) hold one entry per key — **correct them by editing the entry, never by appending a duplicate row/block** (the old value is safe in git history). Appending to an update-in-place file is the same mistake as editing an append-only one. `context-mem check` catches a duplicated key.
@@ -151,9 +151,14 @@ or am I editing the agent's memory of the project?"
 
 ## Peer Collaboration Mode — Concurrent Agents, Shared Issues
 
-Collaboration is opt-in. Declare a shared `session` ID and `issue` ID
-when two or more agents will work on the same issue. Without those IDs,
-the normal one-agent workflow and `tasks/current.md` lock stay in force.
+Collaboration is opt-in; **presence is not.** Every session checks in at
+the roster (Step 3), solo or not — that is how the next agent through the
+door sees you. Declare a shared `session` ID and `issue` ID when two or
+more agents will work on the same issue — and expect to reach this mode
+*after* a solo start: a live roster row you didn't write means a peer is
+already in the office, so declare or join the trail instead of continuing
+solo. Without those IDs, the normal one-agent workflow and
+`tasks/current.md` lock stay in force.
 
 **You and your peers are one team with one goal — the working product.**
 There is no race and no scoreboard. Work like coworkers in an office: say what
@@ -161,7 +166,7 @@ you're doing, leave a note if it affects someone, look before you start.
 
 ### The light path (do this by default)
 
-0. **Pick a name.** Add your row to `memory/agents/roster.md` — a real name you choose (any human name), your codename `S<NNN>`, model, and what you're doing. Present yourself by that name everywhere (`--agent John`, "John (S427)" to the supervisor), never "peer" or a bare id. One name per group — `context-mem check` flags a clash.
+0. **Check in.** You already did at Step 3 — every session signs `memory/agents/roster.md`, solo or not; edit your row's "Doing" cell as your work changes. Present yourself by that chosen name everywhere (`--agent John`, "John (S427)" to the supervisor), never "peer" or a bare id. One name per group — `context-mem check` flags a clash.
 1. **Say what you're on** — a `note`, the office channel. One line.
 2. **`claim` → work → `release`** (citing the commit). Same as
    single-agent mode, plus visibility.
@@ -286,6 +291,7 @@ missing commands fail rather than pass with a notice.
 - [ ] `.context/memory/agents/sessions.md` + `.context/memory/sessions/SUMMARY.md` + `.context/memory/inefficiencies/log.md` + `.context/memory/flaws/log.md` appended, committed, AND pushed
 - [ ] `.context/memory/sessions/` notes promoted + committed, AND pushed (if this session produced a notes file)
 - [ ] `tasks/current.md` cleared (set to idle) in single-agent mode; collaboration mode releases/handoffs each claim without clearing a peer's task
+- [ ] Roster row removed (clocked out) in `agents/roster.md` (Step 15)
 - [ ] Temporary files cleaned up, dev servers stopped
 - [ ] Chat summary delivered to user
 
@@ -321,7 +327,7 @@ git config user.name             # is git identity configured?
 git config user.email
 ```
 - If `pwd` doesn't match `<LOCAL_REPO_PATH>`, `cd` there. If the directory doesn't exist, STOP — the user gave a wrong path.
-- If the working tree is dirty (uncommitted changes), STOP and report: "Working tree has uncommitted changes. Please commit or stash them before I start."
+- If the working tree is dirty (uncommitted changes), STOP and report: "Working tree has uncommitted changes. Please commit or stash them before I start." When you do, check `.context/memory/agents/roster.md` and any collaboration events first — the changes may be a teammate's claim in progress. Attribute them; don't investigate or touch them.
 - If git identity is not configured (`git config user.name` returns empty), set it using the Pre-Flight values: `git config user.name "<GIT_NAME>"` and `git config user.email "<GIT_EMAIL>"`. If no values provided, STOP and report.
 
 **Step 2 — Pull latest**
@@ -331,7 +337,7 @@ git pull --ff-only
 ```
 - The user or other tools may have pushed from another machine.
 - If pull fails (non-fast-forward), the local has diverged. STOP and report: "Local branch has diverged from remote. Please sync manually before I start."
-- If there are unexpected changes in the working tree (files you didn't touch), the user or another tool made them. STOP and report — don't stash or discard someone else's work.
+- If there are unexpected changes in the working tree (files you didn't touch), the user or another tool made them. STOP and report — don't stash or discard someone else's work. Check the roster and collaboration events to attribute the changes: a peer's work in progress is a teammate's claim, not a mystery to solve — note it and stay on your task.
 
 **Step 3 — Read `.context/` (agent memory)**
 - **Reading `workflows/active.md` is a binding instruction, not passive documentation.** It records the standing session parameters and confirms the protocol in force. The protocol itself is already on disk — vendored at `.context/core/` — so there is nothing to fetch: your edition is `.context/core/rules/` + the file matching YOUR agent type (see Pitfall #43 — memory never chooses your edition).
@@ -339,21 +345,24 @@ git pull --ff-only
 - If `.context/` exists, read it in this order:
   1. `.context/README.md` — the zone map (core = read-only protocol; memory = this project's data)
   2. `.context/memory/agents/sessions.md` — who worked here before, with which model, on which machine, and what they did (read the last 3–5 entries)
-  3. `.context/memory/sessions/SUMMARY.md` — compressed session continuity (skim the last ~10 entries; if the file doesn't exist yet, skip — it's created by the first session that runs on 0.5.0+)
-  4. `.context/memory/collaboration/README.md` — collaboration rules; if a shared session/issue is active, read its event files and status before claiming work.
-  5. `.context/memory/workflows/gates.conf` — explicit commands and gate mode; initialize it if missing.
-  6. `.context/memory/tasks/current.md` — in single-agent mode, is a task marked in-progress? If a prior session died mid-task, this is where you find out. In collaboration mode it is not a lock.
-  7. `.context/memory/tasks/backlog.md` — open items waiting for a session like this one
-  8. `.context/memory/flaws/log.md` — known workflow/protocol traps — where the `.context` system itself misled a prior agent. **Don't re-hit a logged flaw.**
-  9. `.context/memory/inefficiencies/log.md` — known project traps (tool failures, flaky tests, env quirks). **Don't re-hit a logged trap.**
-  10. `.context/memory/plans/decisions.md` — architectural decisions already made. **Don't relitigate them; don't "fix" code into violating them.**
-  11. `.context/memory/overrides/rules.md` — project-local protocol adjustments. **Overrides beat this edition** (except secret-handling and append-only rules).
-  12. `.context/memory/system/environments.md` + `.context/memory/system/ai-models.md` — environments and agents seen before (a cloud agent and you may be alternating on this repo — this is how you know)
-  13. `.context/memory/user/identity.md` + `.context/memory/user/preferences.md` — who the user is and how they like things done
-  14. `.context/memory/workflows/active.md` — the workflow currently in force
-  15. `.context/memory/secrets/` — local-only secret values available on this machine (never tracked; empty on a fresh clone). Note what's available — never print values.
+  3. `.context/memory/agents/roster.md` — the board by the door: who is in the office right now (each row: chosen name, codename `S<NNN>`, model, what they're on). **A live row you didn't write means a peer is here now** — see the check-in + mode rule below.
+  4. `.context/memory/sessions/SUMMARY.md` — compressed session continuity (skim the last ~10 entries; if the file doesn't exist yet, skip — it's created by the first session that runs on 0.5.0+)
+  5. `.context/memory/collaboration/README.md` — collaboration rules; if a shared session/issue is active, read its event files and status before claiming work.
+  6. `.context/memory/workflows/gates.conf` — explicit commands and gate mode; initialize it if missing.
+  7. `.context/memory/tasks/current.md` — in single-agent mode, is a task marked in-progress? If a prior session died mid-task, this is where you find out. In collaboration mode it is not a lock.
+  8. `.context/memory/tasks/backlog.md` — open items waiting for a session like this one
+  9. `.context/memory/flaws/log.md` — known workflow/protocol traps — where the `.context` system itself misled a prior agent. **Don't re-hit a logged flaw.**
+  10. `.context/memory/inefficiencies/log.md` — known project traps (tool failures, flaky tests, env quirks). **Don't re-hit a logged trap.**
+  11. `.context/memory/plans/decisions.md` — architectural decisions already made. **Don't relitigate them; don't "fix" code into violating them.**
+  12. `.context/memory/overrides/rules.md` — project-local protocol adjustments. **Overrides beat this edition** (except secret-handling and append-only rules).
+  13. `.context/memory/system/environments.md` + `.context/memory/system/ai-models.md` — environments and agents seen before (a cloud agent and you may be alternating on this repo — this is how you know)
+  14. `.context/memory/user/identity.md` + `.context/memory/user/preferences.md` — who the user is and how they like things done
+  15. `.context/memory/workflows/active.md` — the workflow currently in force
+  16. `.context/memory/secrets/` — local-only secret values available on this machine (never tracked; empty on a fresh clone). Note what's available — never print values.
 - If `.context/` does NOT exist, bootstrap it now (see Bootstrap in the `.context/` section) and commit it: `chore(context): bootstrap .context/ (core <version>)`.
 - **Migration:** if `docs/report/` contains prior reviews, move them: `git mv docs/report/*.md .context/memory/reviews/` in the same bootstrap commit. Leave a `docs/report/README.md` pointer saying reviews now live in `.context/memory/reviews/`.
+- **Check in (every session — solo or collaboration).** Pick a real name you like (any human name — John, Ada, Kwame, Mei; unique in the group) and add or update your row in `.context/memory/agents/roster.md`: name, codename `S<NNN>` (your session number), model, and one line on what you're on. Then commit and push the row immediately, before any product work: `chore(context): <name> (<codename>) checks in — <task>`. This is the office registry — it is how the next agent through the door sees you are here, and the push is the sync point: if it forces a rebase, a peer checked in concurrently, so re-read the board. Present yourself by that name everywhere — events, session log, reports ("John (S427)", never "peer" or a bare id).
+- **Decide the mode from evidence, not from an empty board.** You are solo only if NO collaboration `session` + `issue` was declared AND the roster shows no live row you didn't write AND `tasks/current.md` is idle. A live roster row you didn't write means a peer is in the office: do not run a solo protocol — fetch and check for a `collab/<session-id>/coordination` branch and join its event trail; if none exists, declare a shared session/issue (mind the peer's "Doing" scope), take your own isolated worktree/branch, and emit a `note` + `claim` before editing. If `tasks/current.md` shows a live session but the roster is empty (an old-core or crashed session), follow the stale-entry guidance on `current.md`; when it is genuinely live, do not start — one agent per project repo.
 - In single-agent mode, set `.context/memory/tasks/current.md` to this session's task before starting work (overwrite — it holds one task at a time). In collaboration mode, do not use it as a lock: create an isolated branch/worktree, emit a `claim` event with the shared session/issue IDs, and inspect peer events first.
 
 **Step 4 — Install dependencies**
@@ -483,6 +492,7 @@ git push origin main  # uses the user's existing credentials
 
 **Step 15 — Update `.context/memory/tasks/`**
 - In single-agent mode, clear `.context/memory/tasks/current.md` — mark the session's task done (or blocked, with the blocker). In collaboration mode, leave peers' task state untouched and emit a `release` or `handoff` event for each claimed scope.
+- **Clock out.** Remove your row from `.context/memory/agents/roster.md` in this closing memory commit — the board shows who is in the office *now*, and a row left behind sends the next agent hunting for a peer who has left. Your visit is still on record: the session entry and git history keep it. `context-mem check` warns if a session entry was appended while your row still claims the office.
 - Append every open item you couldn't finish to `.context/memory/tasks/backlog.md` (append-only — never delete or reorder existing entries). Include enough context that a fresh agent can act on the item without this session's chat history.
 - If this session completed an existing backlog item, check it off (`- [x]`) and note the session/commit — don't remove the line.
 
@@ -821,11 +831,13 @@ Treat this as a production project. Think like an owner, not a contractor.
 
 ### Multi-agent / multi-tool awareness
 - **Read `.context/` before anything else** (Step 3) — it's the shared brain across agents, machines, and models. The user may alternate between you and a cloud agent; `.context/` keeps you coherent.
+- **Check `.context/memory/agents/roster.md` before concluding you're alone** — an empty board is only trustworthy right after you verify it; a live row you didn't write means a peer is here now (declare or join a session; never run a solo protocol into a peer).
+- **Check in and push the row before product work** — presence must be visible to peers in real time, not at wrap-up.
 - **Always pull before starting work** and after every commit.
 - **Check `.context/memory/reviews/`** for prior agent reviews — don't redo work that's already done.
 - **Check `.context/memory/tasks/current.md`** — in single-agent mode, if another agent marked a task in-progress recently, don't collide with it; in collaboration mode, use the shared session/issue event trail and claims instead, and note any overlap in your session entry.
 - **Don't assume your local state matches remote.** Check with `git fetch` and `git log HEAD..origin/main`.
-- **If your working tree has unexpected changes**, the user or another tool likely made them. STOP and report — don't stash or discard someone else's work.
+- **If your working tree has unexpected changes**, the user or another tool likely made them. STOP and report — don't stash or discard someone else's work. Check the roster and collaboration events to attribute them — it may be a peer's claim; note it and stay on your task.
 
 ### Respecting the user's machine
 - **Don't start long-running background processes** without telling the user. A dev server you start will hold a port; tell the user so they know.
@@ -1011,6 +1023,7 @@ Save to `.context/memory/reviews/YYYY-MM-DD-review.md`. Commit and push it.
 ### End-of-session gates (before Step 19 cleanup)
 
 - [ ] `.context/memory/tasks/current.md` cleared, open items appended to `backlog.md` (Step 15) in single-agent mode; collaboration mode releases/handoffs each claim without clearing a peer's task
+- [ ] Roster row removed (clocked out) in `.context/memory/agents/roster.md` (Step 15)
 - [ ] `.context/memory/system/` + `.context/memory/user/` + `.context/memory/plans/` updated (Step 16)
 - [ ] Session entry in `.context/memory/agents/sessions.md` + inefficiencies logged (Step 17)
 - [ ] All `chore(context):` commits pushed

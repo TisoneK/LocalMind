@@ -35,7 +35,10 @@ usage() {
   say "context-mem — .context hygiene checks"
   say ""
   say "  check   duplicate keys in the update-in-place registries"
-  say "          (ai-models.md by Agent+Model, environments.md by Identify-by)"
+  say "          (ai-models.md by Agent+Model, environments.md by Identify-by;"
+  say "          roster.md by Name and codename) plus a warn-only board-vs-"
+  say "          duty-log audit: a roster row whose Session N is already in"
+  say "          agents/sessions.md means the session never clocked out"
   say "  lint    .context vocabulary (ADR-N, bug IDs, .context/ paths) leaking"
   say "          into the staged product diff"
   say "  prune   advise archiving resolved/superseded entries out of the"
@@ -140,12 +143,38 @@ check() {
   check_ai_models || _rc=1
   check_environments || _rc=1
   check_roster || _rc=1
+  check_roster_stale
   if [ "$_rc" -eq 0 ]; then
     say "memory check passed: no duplicate keys in the update-in-place registries"
   else
     err "memory check failed: a registry has more than one entry for a key — correct in place (edit the entry), do not append a duplicate"
   fi
   return "$_rc"
+}
+
+# board vs duty log: agents/sessions.md entries are appended at wrap-up
+# (protocol Step 17), so a "Session N" entry whose roster row S<N> is still
+# on the board means the session logged itself done without clocking out.
+# Warns only — never fails the check; the fix is to remove the row.
+check_roster_stale() {
+  _r=$MEMORY_DIR/agents/roster.md
+  _s=$MEMORY_DIR/agents/sessions.md
+  [ -f "$_r" ] || return 0
+  [ -f "$_s" ] || return 0
+  for _num in $(awk '
+    /^[[:space:]]*\|/ {
+      n = split($0, c, "|")
+      if (n < 4) next
+      code = c[3]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", code)
+      if (code ~ /^[Ss][0-9]+$/) { sub(/^[Ss]/, "", code); print code }
+    }
+  ' "$_r" | sort -u); do
+    if grep -Eq "^## .*Session $_num([^0-9]|$)" "$_s"; then
+      say "WARN roster.md: codename S$_num is still on the board, but a Session $_num entry already exists in agents/sessions.md — the session logged itself done without clocking out; remove the row"
+    fi
+  done
+  return 0
 }
 
 # prune — advise archiving resolved history out of the append-only durable

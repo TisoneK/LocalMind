@@ -10,7 +10,47 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
-## 0.16.1 — 2026-09-06
+## 0.17.0 — 2026-09-08
+
+**Check-in is universal — the board shows who is in the office.** The
+roster was signed only inside Peer Collaboration Mode, and the solo
+decision keyed on `tasks/current.md` being idle — a value that stays
+"idle" on the shared branch until the first agent's wrap-up commit. So
+every arriving agent saw an empty board, concluded it was alone, and ran
+a solo protocol that never signs in and never claims a worktree: N
+agents, N parallel solo sessions, unattributable uncommitted changes
+(from `flaws/log.md`, 2026-09-08 user report).
+
+- **Check-in moved to Step 3 of every session, solo included:** pick a
+  real name, add your row to `memory/agents/roster.md`, and **push it
+  immediately, before any product work** (`chore(context): <name>
+  (<codename>) checks in — <task>`). Presence is real-time, not
+  wrap-up-time; a rebase on that push is itself a signal that a peer
+  checked in concurrently.
+- **The board is on every read order** (both editions, kickoff Step 2,
+  AGENTS.md digest, schema reading order) and drives the mode decision:
+  **solo = no declared session/issue AND no live roster row you didn't
+  write AND `current.md` idle.** A live row you didn't write means a peer
+  is here — declare or join a session, take an isolated worktree, emit a
+  `note` + `claim`; never run a solo protocol into a peer.
+- **Clock-out at Step 15:** remove your row in the closing memory
+  commit. The board answers "who is in the office *now*"; who was on
+  duty *when* stays in the append-only duty log (`agents/sessions.md`)
+  and the roster file's own git history — check-in opens the shift,
+  clock-out closes it. Nothing historical is deleted by clocking out.
+- **`context-mem check` audits board vs duty log** (POSIX + PowerShell):
+  a roster row whose `Session N` is already in `agents/sessions.md`
+  warns "logged itself done without clocking out". Warn-only, exit 0.
+- Collaboration section now opens with "Collaboration is opt-in;
+  **presence is not**"; the collaboration-light-path step 0 references
+  the Step 3 check-in; dirty-tree STOP / unexpected-changes guidance in
+  both editions says to check the roster and events before
+  investigating — it may be a teammate's claim, not drift.
+
+**Migration:** none — `roster.md` already exists in every 0.15.0+
+project; existing empty boards behave exactly as before until the first
+session checks in. Older projects: `context-sync migrate` installs
+`roster.md`.
 
 **The ports' self-referential help matches the `.cmd` convention.**
 `context-sync.ps1`'s printed help (what `context-sync.cmd` shows with no

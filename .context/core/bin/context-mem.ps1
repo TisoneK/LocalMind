@@ -31,7 +31,10 @@ function Usage {
     'context-mem - .context hygiene checks',
     '',
     '  check   duplicate keys in the update-in-place registries',
-    '          (ai-models.md by Agent+Model, environments.md by Identify-by)',
+    '          (ai-models.md by Agent+Model, environments.md by Identify-by;',
+    '          roster.md by Name and codename) plus a warn-only board-vs-',
+    '          duty-log audit: a roster row whose Session N is already in',
+    '          agents/sessions.md means the session never clocked out',
     '  lint    .context vocabulary (ADR-N, bug IDs, .context/ paths) leaking',
     '          into the staged product diff',
     '  prune   advise archiving resolved/superseded entries out of the',
@@ -115,6 +118,34 @@ function Check-Roster {
   return (-not $dup)
 }
 
+function Check-RosterStale {
+  # Board vs duty log: sessions.md entries are appended at wrap-up (Step 17),
+  # so a "Session N" entry whose roster row S<N> is still on the board means
+  # the session logged itself done without clocking out. Warns only.
+  $r = Join-Path $memoryDir 'agents/roster.md'
+  $s = Join-Path $memoryDir 'agents/sessions.md'
+  if (-not (Test-Path -LiteralPath $r) -or -not (Test-Path -LiteralPath $s)) { return }
+  $nums = @()
+  foreach ($raw in Get-Content -LiteralPath $r) {
+    $line = $raw.TrimEnd("`r")
+    if ($line -notmatch '^\s*\|') { continue }
+    $cells = $line.Split('|')
+    if ($cells.Count -lt 4) { continue }
+    $code = $cells[2].Trim()
+    if ($code -match '^[Ss]([0-9]+)$') { $nums += $Matches[1] }
+  }
+  if ($nums.Count -eq 0) { return }
+  $heads = @(Get-Content -LiteralPath $s | Where-Object { $_ -match '^## ' })
+  foreach ($num in ($nums | Sort-Object -Unique)) {
+    foreach ($h in $heads) {
+      if ($h -match ("Session {0}([^0-9]|`$)" -f $num)) {
+        Say ('WARN roster.md: codename S{0} is still on the board, but a Session {0} entry already exists in agents/sessions.md - the session logged itself done without clocking out; remove the row' -f $num)
+        break
+      }
+    }
+  }
+}
+
 function Invoke-Lint {
   if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Die 'lint needs git on PATH' }
   $root = (& git -C $projectDir rev-parse --show-toplevel 2>$null)
@@ -183,6 +214,7 @@ switch ($Command) {
     $ok1 = Check-AiModels
     $ok2 = Check-Environments
     $ok3 = Check-Roster
+    Check-RosterStale
     if ($ok1 -and $ok2 -and $ok3) { Say 'memory check passed: no duplicate keys in the update-in-place registries'; exit 0 }
     ErrLine 'memory check failed: a registry has more than one entry for a key - correct in place (edit the entry), do not append a duplicate'
     exit 1

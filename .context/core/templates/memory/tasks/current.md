@@ -3,7 +3,8 @@
 Holds exactly one task — the one being worked on right now. Set it at
 session start (protocol Step 3), clear it at session end (Step 15). If
 you find a stale in-progress entry here, a prior session died mid-task —
-check its session entry and backlog before starting.
+its roster row (if left behind) says who was here; check the session
+entry and backlog before starting.
 
 <!-- TEMPLATE — replace everything below this comment:
 - **Session:** YYYY-MM-DD — <agent> / <model>

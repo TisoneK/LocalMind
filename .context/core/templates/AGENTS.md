@@ -30,19 +30,26 @@ If you read nothing else, obey these rules:
 4. **Read memory before working:** at minimum
    `.context/memory/workflows/active.md`,
    `.context/memory/agents/sessions.md` (last entries),
+   `.context/memory/agents/roster.md` (the "who's in the office" board —
+   a live row you didn't write means a peer is here),
    `.context/memory/collaboration/README.md` and relevant event files
    when collaboration is enabled, `.context/memory/workflows/gates.conf`,
    `.context/memory/tasks/current.md`, and
    `.context/memory/inefficiencies/log.md` (known traps). If the
    active session has detailed notes at
    `.context/memory/sessions/`, skim them for current state.
-5. **Choose the mode explicitly.** Without a shared collaboration
-   `session` + `issue`, `tasks/current.md` is the single-agent lock. In
-   collaboration mode you and your teammates are one team, not rivals, and
-   the human is your supervisor: use an isolated git worktree/branch and the
-   immutable event trail; do not block teammates on `tasks/current.md`. Pick
-   a real name in `memory/agents/roster.md` (unique per group) and present
-   yourself by it — "John (S427)", never "peer". The everyday move is a
+5. **Check in first, then choose the mode from evidence.** Every session
+   (solo or collaboration) adds or updates its row in
+   `memory/agents/roster.md` — real name you pick (unique per group),
+   codename `S<NNN>`, model, one line on what you're on — and pushes it
+   before product work. You are solo only when there is no shared
+   collaboration `session` + `issue`, no live roster row you didn't
+   write, and `tasks/current.md` is idle; otherwise coordinate (join or
+   declare a session, isolated worktree/branch, `note` + `claim`) — a
+   peer in the office is a teammate, not a rival, and the human is your
+   supervisor: do not block teammates on `tasks/current.md`. Present
+   yourself by your name — "John (S427)", never "peer". The everyday move
+   is a
    `note` (the office channel — say what you're on, flag a coworker, review a
    diff); then `claim → work → release`. Save the `proposal → assessment → agreement`
    ceremony for a genuine conflict (same paths, incompatible changes).
@@ -71,9 +78,11 @@ If you read nothing else, obey these rules:
    lint` flags it in your staged diff.
 9. **The session is not done until everything is committed AND pushed**,
    the session is logged in `.context/memory/agents/sessions.md`, and
-   `.context/memory/tasks/current.md` is cleared. If the user has to
-   remind you to commit or push, that is a protocol failure — log it in
-   `.context/memory/flaws/log.md`.
+   `.context/memory/tasks/current.md` is cleared. Clock out too: remove
+   your row from `.context/memory/agents/roster.md` in the closing
+   memory commit, so the board shows who is in the office now. If the
+   user has to remind you to commit or push, that is a protocol
+   failure — log it in `.context/memory/flaws/log.md`.
 10. **Don't ask permission for the default next step.** Do it and
     report. Ask only on genuine ambiguity or destructive/irreversible
     actions.

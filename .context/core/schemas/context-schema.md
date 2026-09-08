@@ -132,7 +132,7 @@ File inventory, write modes, and scopes. **Write modes:**
 | Path (under `.context/memory/`) | Mode | Scope | Holds |
 |---|---|---|---|
 | `agents/sessions.md` | append-only (current group) | project | One entry per session: agent, model, platform, task, commits, outcome |
-| `agents/roster.md` | update-in-place (current group) | project | Team roster — one row per person: chosen Name, codename `S<NNN>`, model, what they're doing. Name and codename each unique in the group; `context-mem check` enforces it |
+| `agents/roster.md` | update-in-place (current group) | project | Team roster — the "who's in the office *now*" board. Every session (solo included) adds its row at check-in and pushes it before product work; removes the row (clocks out) at session end. Who was on duty *when* lives in `agents/sessions.md` + this file's git history. Name and codename each unique in the group; `context-mem check` enforces it |
 | `tasks/current.md` | overwrite | project | The one task in progress — a lock only in single-agent mode |
 | `tasks/backlog.md` | append-only | project | Open items for future sessions |
 | `collaboration/README.md` | generated | project | Peer collaboration rules and event contract |
@@ -166,7 +166,9 @@ wins.
 ### Reading order (session start)
 
 `.context/README.md` → `kickoff.md` → `memory/workflows/active.md` →
-`memory/agents/sessions.md` (last 3–5) → `memory/sessions/SUMMARY.md`
+`memory/agents/sessions.md` (last 3–5) → `memory/agents/roster.md`
+(the "who's in the office now" board — a live row you didn't write means a
+peer is here) → `memory/sessions/SUMMARY.md`
 (skim last 10 entries for compressed continuity) → `memory/collaboration/README.md`
 (and active event files when collaboration is enabled) →
 `memory/tasks/current.md` → `memory/tasks/backlog.md` →
@@ -188,11 +190,19 @@ entries, `sessions/SUMMARY.md` lines, `sessions/<date-N>/` notes, and the
 `plans/decisions.md`, `tasks/backlog.md`, `flaws/`, `inefficiencies/`) and
 collaboration events are **not** part of a group and never rotate.
 
-The **roster** is the team board for the current group: each agent picks a
-human name and adds a row (Name, codename `S<NNN>`, model, what they're
-doing), presents itself by that name in events and to the supervisor, and
-name + codename are each unique in the group. `context-history close`
-resets it (the closed group's roster is kept in `history/`).
+The **roster** is the team board for the current group: **every session
+(solo included) checks in** — picks a human name, adds a row (Name,
+codename `S<NNN>`, model, what they're doing), and pushes it before
+product work — and **clocks out** by removing the row in the closing
+memory commit, so the board shows who is in the office *now*. Who was on
+duty *when* is the duty log's job: append-only `agents/sessions.md`
+entries plus the roster file's own git history (check-in commit opens a
+shift, clock-out closes it). Each agent presents itself by that name in
+events and to the supervisor, and
+name + codename are each unique in the group. `context-mem check` flags a
+duplicate and warns when a session entry was logged while a row still
+claimed the office (a forgotten clock-out). `context-history close`
+resets the roster (the closed group's roster is kept in `history/`).
 
 A group moves through three zones, and only the live one is read at session
 start:
@@ -252,7 +262,11 @@ on Windows) to emit events and inspect status; run `context-collab check`
 before integration. Event commits remain separate from product commits.
 
 `tasks/current.md` remains the single-agent lock when collaboration is not
-enabled. In collaboration mode it is not a lock and must not be used to
+enabled — but "no collaboration declared" no longer means "alone": the
+roster's live rows are the occupancy evidence. A live row you didn't
+write means a peer is in the office — declare or join a shared
+session/issue and coordinate before editing. In collaboration mode
+`tasks/current.md` is not a lock and must not be used to
 block a peer; use the collaboration event trail instead.
 
 ---
