@@ -27,10 +27,10 @@ is your stable session tag.
 |------|----------|-------|-------|
 | Vera | S444 | glm-5.3-flash | core sync 0.17.0 → 0.18.0 + ledger rename (.context → .context_ledger) |
 
-`context-mem check` flags a duplicate name or codename. This roster is the
+`ledger-mem check` flags a duplicate name or codename. This roster is the
 **current group's** only — it resets when the group closes
-(`context-history close`), and the closed group's roster is kept in
-`.context/history/`. Update your own row (don't append a second); when your
+(`ledger-history close`), and the closed group's roster is kept in
+`.context_ledger/history/`. Update your own row (don't append a second); when your
 work changes, edit the "Doing" cell.
 
 <!-- Clock-outs 2026-09-08 (S442 board audit, context-mem check): the

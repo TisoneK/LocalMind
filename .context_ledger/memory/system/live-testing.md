@@ -53,9 +53,9 @@ trace** (a backgrounded server does not survive across separate terminal calls).
 | Script | Purpose |
 |--------|---------|
 | `scripts/live_test_cybercafe.py` | Quick repro harness — ONE prompt (or a small set). `--label baseline\|fix-N` marks before/after runs; saves `sse-<label>-<name>.sse` + `results-<label>.json`, prints latency/tools/event-type counts/usage/duplicate heuristics. |
-| `scripts/lm_benchmark.py` | The full benchmark suite (52 tests across CAT1/2/6/9/14/15 + LM-* categories; catalog in `.context/memory/system/test-catalog.md`). Per-test PASS/PARTIAL/FAIL scoring, 60s timeout, 15s cooldown, 429 retry with 30s backoff, partial results saved after every test. |
+| `scripts/lm_benchmark.py` | The full benchmark suite (52 tests across CAT1/2/6/9/14/15 + LM-* categories; catalog in `.context_ledger/memory/system/test-catalog.md`). Per-test PASS/PARTIAL/FAIL scoring, 60s timeout, 15s cooldown, 429 retry with 30s backoff, partial results saved after every test. |
 | `scripts/lm_collision_tests.py` | Multi-guard collision suite (COL-1..10 + MEM-*) — what happens when MULTIPLE pre-init guards match the same prompt. Same harness/score format. |
-| `scripts/lm_conversation_tests.py` | Multi-turn conversation harness (S342) — runs SHORT 2-3 turn conversations on one `session_id` and prints the transcript (turn-by-turn latency/tools/replans/thinking + observation heuristics). Catalog + what-to-look-for: `.context/memory/system/conversation-test-sets.md`. Portable (resolves the repo from the script path — no hardcoded /home/z). |
+| `scripts/lm_conversation_tests.py` | Multi-turn conversation harness (S342) — runs SHORT 2-3 turn conversations on one `session_id` and prints the transcript (turn-by-turn latency/tools/replans/thinking + observation heuristics). Catalog + what-to-look-for: `.context_ledger/memory/system/conversation-test-sets.md`. Portable (resolves the repo from the script path — no hardcoded /home/z). |
 | `scripts/run_benchmark_detached.sh` | Fully detached benchmark run (`setsid` + `nohup` + `&`) so a long suite survives agent/terminal disconnect. Poll the log (`scratch/bench-detached.log`), results land in `scratch/`. |
 | `scripts/run_collision_detached.sh` | Same, for the collision suite. |
 | Older one-offs (`live_test_glm_tool_trace*.py`, `live_test_prose_commitment.py`, `live_test_post_loop_synthesis.py`, `live_test_session305.py`, `live_trace_empty_answer.py`, `live_test_compaction.py`, `live_test_extractor.py`, `live_audit_full.py`) | Repro/debug traces from earlier sessions — keep as templates; the harness pattern is identical. |
@@ -203,10 +203,10 @@ Run with `timeout_seconds` >= 300 so the 270s curl fits.
 From Session 336 onward, live testing runs through the committed scripts above
 instead of hand-rolled traces, and evidence is recorded in dedicated files:
 
-- **`.context/memory/system/test-catalog.md`** — the benchmark suite definition
+- **`.context_ledger/memory/system/test-catalog.md`** — the benchmark suite definition
   (52 tests, categories, pass criteria, provider = bankofai/deepseek-v4-flash,
   zai/glm-4.5-flash as rate-limit fallback).
-- **`.context/memory/system/test-results-336.md`** — Session 336 results:
+- **`.context_ledger/memory/system/test-results-336.md`** — Session 336 results:
   41 PASS / 5 PARTIAL / 6 FAIL, with the 4 ROOT-CAUSE CLUSTERS (tool-first reflex,
   workspace pollution on planning prompts, …). This is the template for how to
   report benchmark outcomes — cluster by root cause, not by test.
@@ -223,7 +223,7 @@ instead of hand-rolled traces, and evidence is recorded in dedicated files:
 
 Single-turn prompts (the benchmark) can't observe follow-ups, corrections, or
 constraint carry-over. Added `scripts/lm_conversation_tests.py` + catalog
-`.context/memory/system/conversation-test-sets.md`: 18 short conversations in 9
+`.context_ledger/memory/system/conversation-test-sets.md`: 18 short conversations in 9
 behavior sets (context-retention, corrections, clarify, incremental, stated-
 facts, honesty, topic-switch, constraints, elaboration). Multi-turn works by
 reusing the same `session_id` — `chat.py` derives `is_first` server-side from

@@ -88,4 +88,4 @@ belong only here — promote it.
 
 <!-- The templates for SUMMARY.md and notes.md live in this directory.
 In a running project, copy the template comments from
-.context/core/templates/memory/sessions/. -->
+.context_ledger/core/templates/memory/sessions/. -->

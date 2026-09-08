@@ -29,11 +29,11 @@ correction twice.
 ## Workflow
 
 - Push to main directly after each commit; one logical change per commit (pre-flight)
-- Conventional Commits with scope: `fix(security):`, `feat(api):`, `docs:`, `chore(context):` (approved pattern, 2026-07-11)
+- Conventional Commits with scope: `fix(security):`, `feat(api):`, `docs:`, `chore(ledger):` (approved pattern, 2026-07-11)
 - Pull before pushing — other agents or the user may have pushed (approved pattern, 2026-07-11)
 - Set local git config (`user.name`, `user.email`) before the first commit on cloud/sandbox — identity must match `memory/user/identity.md`; the sandbox default identity is never the user's (correction, 2026-07-15 — Sessions 9–10 shipped commits as `Z User <z@container>`, fixed in Session 11 by rebasing with `--reset-author`)
-- **`.context/kickoff.md` is READ-ONLY for agents.** It is the front door that already exists in the repo — agents READ it and FOLLOW its 4 steps (identify agent type → sync → read .context/ → load protocol → follow protocol). Agents do NOT create a file called `kickoff.md`. The only time kickoff.md is created/modified is at bootstrap (by `context-sync bootstrap`) or when regenerating a stale file (per the "If this file is stale or missing" section at the bottom of kickoff.md itself). Treat it as an instruction set to execute, not a template to fill in (correction, 2026-08-02 — Session 65 created a bogus `kickoff.md` at `/home/z/my-project/download/codebuff-research/kickoff.md` instead of following the existing one; user caught it: "was kickoff.md read-only or create???")
-- **When a session is "purely research," still follow the full `.context/` protocol** — write the report to `.context/memory/reviews/`, session notes to `.context/memory/sessions/`, backlog items to `.context/memory/tasks/backlog.md`, log the session in `agents/sessions.md`, etc. "Purely research" means no Phase 3 product code changes; it does NOT mean skip the protocol. The user provided a PAT precisely because sessions push (correction, 2026-08-02 — Session 65 initially wrote research to `/home/z/my-project/download/` instead of the repo's `.context/memory/`, missing that the protocol requires reports in the repo)
+- **`.context_ledger/kickoff.md` is READ-ONLY for agents.** It is the front door that already exists in the repo — agents READ it and FOLLOW its 4 steps (identify agent type → sync → read .context_ledger/ → load protocol → follow protocol). Agents do NOT create a file called `kickoff.md`. The only time kickoff.md is created/modified is at bootstrap (by `ledger-sync bootstrap`) or when regenerating a stale file (per the "If this file is stale or missing" section at the bottom of kickoff.md itself). Treat it as an instruction set to execute, not a template to fill in (correction, 2026-08-02 — Session 65 created a bogus `kickoff.md` at `/home/z/my-project/download/codebuff-research/kickoff.md` instead of following the existing one; user caught it: "was kickoff.md read-only or create???")
+- **When a session is "purely research," still follow the full `.context_ledger/` protocol** — write the report to `.context_ledger/memory/reviews/`, session notes to `.context_ledger/memory/sessions/`, backlog items to `.context_ledger/memory/tasks/backlog.md`, log the session in `agents/sessions.md`, etc. "Purely research" means no Phase 3 product code changes; it does NOT mean skip the protocol. The user provided a PAT precisely because sessions push (correction, 2026-08-02 — Session 65 initially wrote research to `/home/z/my-project/download/` instead of the repo's `.context_ledger/memory/`, missing that the protocol requires reports in the repo)
 
 ## Fixing approach & verification
 
@@ -76,7 +76,7 @@ correction twice.
 ## Communication
 
 - Plain-language changelog entries (grandmother test); technical detail in review reports, not the changelog (approved pattern, 2026-07-11)
-- Reports go in `.context/memory/reviews/` (was `docs/report/` — migrated 2026-07-11; path updated to `memory/reviews/` on 2026-07-15 core 0.2.0 migration) (correction, 2026-07-11; updated 2026-07-15)
+- Reports go in `.context_ledger/memory/reviews/` (was `docs/report/` — migrated 2026-07-11; path updated to `memory/reviews/` on 2026-07-15 core 0.2.0 migration) (correction, 2026-07-11; updated 2026-07-15)
 - Chat summary at session end: one paragraph + commits + findings + open items (approved pattern, 2026-07-11)
 
 ## Code style

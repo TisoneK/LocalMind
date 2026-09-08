@@ -30,7 +30,7 @@ block (and its "last verified" date) every time you run on it again.
   - `node --version` → v24.13.0 (2026-07-11, re-verified 2026-08-31)
   - `python --version` → Python 3.14.2 (2026-07-11, re-verified 2026-08-31)
   - `npm --version` → 11.12.1 (2026-07-11, re-verified 2026-08-31)
-  - Git Bash is the working shell for `.context/core/bin/*` scripts; `pwsh` also available (2026-08-31)
+  - Git Bash is the working shell for `.context_ledger/core/bin/*` scripts; `pwsh` also available (2026-08-31)
   - `backend/.venv/Scripts/python.exe -m pytest tests -q` (repo root) → full backend suite; no pytest-timeout plugin here — do NOT pass `--timeout` (2026-09-04)
   - `backend/.venv/Scripts/python.exe -m pytest <files> -q` (from `backend/`) → targeted suites (2026-09-04)
   - `backend/.venv/Scripts/ruff.exe check backend/src` → 34 findings (2026-09-04) / 32 (2026-09-05) = the Windows baseline; compare failure SETS, not counts
@@ -38,7 +38,7 @@ block (and its "last verified" date) every time you run on it again.
   - `cd frontend && npx tsc -b --noEmit` → 0 errors (2026-09-04)
   - `cd frontend && npx vitest run` → 365 tests; **timeout-boundary tests flake under parallel local load** — a stashed baseline flaked 9 vs 1-2 on the changed tree; verify failures in isolation before believing them (2026-09-04)
   - Isolated live harness: from `backend/`, `LOCALMIND_PORT=8765 LOCALMIND_HOME=<scratch>/home LOCALMIND_SHELL_ENABLED=true .venv/Scripts/python.exe server.py &` + curl `/api/chat` — the Session-330 one-command pattern works; env-var prefixes survive Git Bash (2026-09-04). Script-based: copy `scripts/live_test_cybercafe.py`, swap PROMPTS — copy settings.json (WITH api_keys) into the scratch home so the isolated server authenticates; never print values (2026-09-05, S423)
-  - Live-test harness port hygiene (S425): after kill_port, VERIFY 8765 is free and grep the new server log for "already in use" + a fresh "parent-kernel] ready" line before trusting a trace — a stale listener answers health checks and the client silently measures OLD code (cost one invalid after-run). context-collab.ps1: use `--refs`, not `--re` (the alias breaks pwsh parameter binding). (2026-09-06)
+  - Live-test harness port hygiene (S425): after kill_port, VERIFY 8765 is free and grep the new server log for "already in use" + a fresh "parent-kernel] ready" line before trusting a trace — a stale listener answers health checks and the client silently measures OLD code (cost one invalid after-run). ledger-collab.ps1: use `--refs`, not `--re` (the alias breaks pwsh parameter binding). (2026-09-06)
   - Live-test server on Windows: launch children with PLAIN Popen (no DETACHED_PROCESS) when the harness waits in `finally` — DETACHED_PROCESS + piped stdout killed the server mid-turn, no traceback, client saw WinError 10054 (2026-09-05, S423)
   - OCR stack in backend/.venv: pillow + pytesseract installed (2026-09-05, S423); system Tesseract-OCR at `C:\Program Files\Tesseract-OCR\tesseract.exe`; image reads + .jpg path extraction live-verified (2026-09-05, S423)
   - OneDrive Files-On-Demand on this machine: placeholders carry RECALL_ON_DATA_ACCESS (0x400000); with OneDrive.exe DOWN every read fails EINVAL/WinError 362 and does NOT auto-hydrate; file_task now auto-starts OneDrive and hydrates on sync (~30s+ for first file after cold start) (2026-09-05, S423)
