@@ -6337,3 +6337,9 @@ your name in the roster, present yourself by it.
 - **Coordination:** single-agent, owner-directed, board IDLE. Found UNCOMMITTED foreign WIP in the shared main checkout (4 frontend files — eslint no-empty fixes + a new presentation_hint type — plus a core.lock verify-stamp bump) — not mine, NOT staged or touched; explicit-path staging only per the S436/S438 precedent. Logged in inefficiencies.
 - **Open items:** none new (the eslint regression is pre-existing and annotated on its entry; B-2026-08-17-2's Windows re-run caveat noted on its entry).
 - **Report:** none — bookkeeping session (backlog diff + this entry are the record).
+
+---
+## 2026-09-08 — Session 439 addendum (Sena) — collab-protocol self-correction
+
+- **Owner callout:** "all of you omitted the collab protocol." Confirmed against S439: d33ab5c was committed and pushed from the shared main checkout after the peer-live trigger had fired (foreign uncommitted WIP logged in inefficiencies but not acted on) — no worktree, no claim, no events. Correction event `20260908T022624Z` on `collab/localmind-backlog-sweep/coordination`; flaws/log.md correction entry appended (supersedes the earlier "None this session" line per append-only).
+- **Repair:** no revert (owner-directed content, zero path overlap with peer WIP); the repair is the record plus the standing behavior change: peer-live check before every commit, and worktree+events for context edits too while a peer is live.

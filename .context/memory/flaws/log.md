@@ -772,3 +772,10 @@ logged in inefficiencies/log.md — no product behavior was wrong.
 ---
 ## 2026-09-08 — Sena / glm-5.3-flash (Session 439)
 - **None this session** — context-only bookkeeping (backlog truth-sweep); no product code touched. Note: the exit-gate eslint failure on main is the documented standing drift (B-2026-08-17-13, annotated in the backlog this session), not a new flaw.
+
+---
+## 2026-09-08 — Sena / glm-5.3-flash (Session 439, correction to the "None this session" entry above)
+- **Flaw:** S439's own commit (d33ab5c, the backlog truth-sweep) violated the 2026-09-05 collab-protocol override: after a peer's uncommitted WIP appeared in the shared main checkout (the override's peer-live trigger, mid-session), the commit was still made FROM the shared checkout with no worktree, no claim/release, and no coordination events. The earlier "None this session" entry was written after the WIP was discovered and is superseded by this one (append-only — not edited).
+- **Root cause:** read the override's mandate as applying to product edits and treated a context-only chore as exempt; did not re-run the peer-live check before committing (it was only run implicitly at session start, when the board read IDLE). This is the same failure family the owner has now called out across sessions ("all of you omitted the collab protocol") — S437 landing commits into Noah's in-progress tree and the current anonymous peer's unclaimed WIP are the same omission from the peer side.
+- **Suggested fix (behavior + candidate gate):** (a) re-run the peer-live check before EVERY commit, not only at session start — the tree can gain a peer mid-session; (b) when peer-live: worktree + session-suffixed events are mandatory for context edits too, not just product code; (c) candidate hardening (owner sign-off needed): a `context-gates checkpoint` component that fails when the shared checkout has uncommitted foreign changes and the current commit isn't coming from a session-suffixed worktree branch.
+- **Status:** recorded; behavior change applied from this correction onward. No revert — content owner-directed, verified, zero path overlap with the peer WIP.
