@@ -40,7 +40,8 @@ export type PresentationType =
   | "timeline" // ordered events with timestamps
   | "comparison" // side-by-side comparison
   | "list" // numbered/bulleted list
-  | "mixed"; // composite (multiple blocks in sequence)
+  | "mixed" // composite (multiple blocks in sequence)
+  | "presentation_hint"; // metadata-only block (visual tone/cue hints), never rendered directly
 
 // ── Diagram types ───────────────────────────────────────────────────────────
 

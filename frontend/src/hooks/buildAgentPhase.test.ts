@@ -190,7 +190,7 @@ describe('buildAgentPhase', () => {
   });
 
   it('returns null for undefined event type', () => {
-    const phase = buildAgentPhase(undefined as any, {});
+    const phase = buildAgentPhase(undefined, {});
     expect(phase).toBeNull();
   });
 

@@ -914,7 +914,7 @@ export function useChat(
                 setActiveToolCalls([...toolCalls]);
                 setAgentRuns((prev) => attachToolToAgentRun(prev, rootRunId, toolCall));
                 setLiveObservation((prev) => ({
-                  intent: _toolToIntent(toolCall.name, prev?.intent || currentIntent || 'chat') as any,
+                  intent: _toolToIntent(toolCall.name, prev?.intent || currentIntent || 'chat'),
                   confidence: prev?.confidence ?? currentConfidence ?? 0,
                   toolsUsed: [...toolsUsedSet],
                   memoryHits: prev?.memoryHits ?? 0,
@@ -975,7 +975,7 @@ export function useChat(
                 setCurrentIntent(parsed.intent);
                 if (parsed.confidence) setCurrentConfidence(parsed.confidence);
                 setLiveObservation((prev) => ({
-                  intent: (parsed.intent || prev?.intent || 'chat') as any,
+                  intent: parsed.intent || prev?.intent || 'chat',
                   confidence: parsed.confidence ?? prev?.confidence ?? 0,
                   toolsUsed: prev?.toolsUsed ?? [],
                   memoryHits: prev?.memoryHits ?? 0,
@@ -1000,7 +1000,7 @@ export function useChat(
                       (a) => a.kind !== anomaly.kind
                     );
                     return {
-                      intent: prev?.intent ?? ('chat' as any),
+                      intent: prev?.intent ?? 'chat',
                       confidence: prev?.confidence ?? 0,
                       toolsUsed: prev?.toolsUsed ?? [],
                       memoryHits: prev?.memoryHits ?? 0,
@@ -1060,7 +1060,7 @@ export function useChat(
                         (a) => a.kind !== obsAnomaly.kind
                       );
                       return {
-                        intent: prev?.intent ?? ('chat' as any),
+                        intent: prev?.intent ?? 'chat',
                         confidence: prev?.confidence ?? 0,
                         toolsUsed: prev?.toolsUsed ?? [],
                         memoryHits: prev?.memoryHits ?? 0,
@@ -1287,7 +1287,7 @@ export function useChat(
                   // the Observe pipeline renders truth instead of a guess.
                   if (obs.type === 'stage_timing' && obsData.stage) {
                     setLiveObservation((prev) => ({
-                      intent: (prev?.intent || 'chat') as any,
+                      intent: prev?.intent || 'chat',
                       confidence: prev?.confidence ?? 0,
                       toolsUsed: prev?.toolsUsed ?? [],
                       memoryHits: prev?.memoryHits ?? 0,
@@ -1297,7 +1297,7 @@ export function useChat(
                         ...(prev?.stageTimings ?? {}),
                         [String(obsData.stage)]: {
                           latencyMs: Number(obsData.latency_ms || 0),
-                          status: (obsData.status === 'skipped' || obsData.status === 'running' ? obsData.status : 'done') as any,
+                          status: obsData.status === 'skipped' || obsData.status === 'running' ? obsData.status : 'done',
                         },
                       },
                       anomalies: prev?.anomalies,
@@ -1307,7 +1307,7 @@ export function useChat(
                   setLiveObservation((prev) => ({
                     intent: (isPlaceholderIntent
                       ? (prev?.intent || 'chat')
-                      : (obsIntent || prev?.intent || 'chat')) as any,
+                      : (obsIntent || prev?.intent || 'chat')),
                     confidence: Number(isPlaceholderIntent
                       ? (prev?.confidence || 0)
                       : (obsData.confidence || obs.confidence || prev?.confidence || 0)),
@@ -1546,7 +1546,7 @@ export function useChat(
 
               case 'error': {
                 const err = parsed.error;
-                if (err && typeof err === 'object' && (err as any).code) {
+                if (err && typeof err === 'object' && 'code' in err) {
                   // ADR-20 (Session 167): the backend now emits the canonical
                   // error OBJECT — store it on the message and let the
                   // ErrorMessage card render it. Never stuff it into content
@@ -2015,8 +2015,8 @@ export function collapseAdjacentPhases(phases: AgentPhase[]): AgentPhase[] {
 }
 
 export function buildAgentPhase(
-  eventType: string,
-  data: any,
+  eventType: string | undefined,
+  data: Record<string, unknown> | null | undefined,
 ): AgentPhase | null {
   const ts = Date.now();
   switch (eventType) {
@@ -2277,14 +2277,18 @@ const TOOL_LABELS: Record<string, string> = {
   sysinfo: 'Getting system info',
 };
 
-function _buildToolLabel(toolName: string, args: any): string {
+/** Tool args arrive as JSON from the wire — an object with string-ish
+ *  fields, or occasionally a bare string. */
+type ToolArgsWire = Record<string, unknown> | string | null | undefined;
+
+function _buildToolLabel(toolName: string, args: ToolArgsWire): string {
   // Try to extract a descriptive label from structured args
   if (args && typeof args === 'object') {
-    const path = args.path || '';
-    const command = args.command || '';
-    const query = args.query || '';
-    const code = (args.code || '').slice(0, 30);
-    const operation = args.operation || '';
+    const path = String(args.path ?? '');
+    const command = String(args.command ?? '');
+    const query = String(args.query ?? '');
+    const code = String(args.code ?? '').slice(0, 30);
+    const operation = String(args.operation ?? '');
     switch (toolName) {
       case 'file_write': return path ? `Creating ${path.split(/[\\/]/).pop()}` : 'Creating file';
       case 'file_task': return path ? `Reading ${path.split(/[\\/]/).pop()}` : 'Reading file';
@@ -2304,17 +2308,17 @@ function _buildToolLabel(toolName: string, args: any): string {
   return TOOL_LABELS[toolName] || toolName.replace(/_/g, ' ');
 }
 
-function _buildToolInputPreview(toolName: string, args: any): string {
+function _buildToolInputPreview(toolName: string, args: ToolArgsWire): string {
   if (args && typeof args === 'object') {
     switch (toolName) {
-      case 'file_write': return args.path || '';
-      case 'file_task': return args.path || '';
-      case 'edit_file': return args.path || '';
-      case 'shell': return args.command || '';
-      case 'code_exec': return (args.code || '').slice(0, 80);
-      case 'web_search': return args.query || '';
-      case 'memory_op': return `${args.operation || ''} ${args.content || ''}`.trim();
-      case 'sysinfo': return args.query || '';
+      case 'file_write': return String(args.path ?? '');
+      case 'file_task': return String(args.path ?? '');
+      case 'edit_file': return String(args.path ?? '');
+      case 'shell': return String(args.command ?? '');
+      case 'code_exec': return String(args.code ?? '').slice(0, 80);
+      case 'web_search': return String(args.query ?? '');
+      case 'memory_op': return `${String(args.operation ?? '')} ${String(args.content ?? '')}`.trim();
+      case 'sysinfo': return String(args.query ?? '');
     }
   }
   if (typeof args === 'string') return args.slice(0, 80);
@@ -2828,7 +2832,7 @@ export function useObservability(sessionId: string | null) {
   // Don't default intent to 'chat' — that masks the empty state.
   // The ObservabilityTab uses hasData = confidence>0 || toolsUsed>0 || latency>0
   // to decide whether to show real data or the "—" placeholder.
-  const emptyObs: ObservationData = { intent: '' as any, confidence: 0, toolsUsed: [], memoryHits: 0, contextTokens: 0, latency: 0 };
+  const emptyObs: ObservationData = { intent: '', confidence: 0, toolsUsed: [], memoryHits: 0, contextTokens: 0, latency: 0 };
   const [observation, setObservation] = useState<ObservationData>(emptyObs);
   const [loading, setLoading] = useState(true);
 

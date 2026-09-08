@@ -532,7 +532,11 @@ export interface AnomalyData {
 }
 
 export interface ObservationData {
-  intent: IntentType;
+  /** Free-form intent string from the wire. '' = nothing classified yet
+   *  (the empty-state sentinel); the backend also emits internal routing
+   *  placeholders like 'dispatch' that never fit a fixed union, so this
+   *  stays a string rather than the classified-intent literals. */
+  intent: string;
   confidence: number;
   toolsUsed: string[];
   memoryHits: number;

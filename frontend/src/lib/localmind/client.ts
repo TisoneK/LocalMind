@@ -299,7 +299,133 @@ function mapObservationSummary(raw: unknown): ObservationSummary | null {
   };
 }
 
+// ─── Backend wire types ────────────────────────────────────────────────
+// Raw JSON shapes the backend persists/returns (mostly snake_case). The
+// client maps them into the frontend types below; declaring the raw
+// payloads keeps every mapping site type-checked instead of `any`.
+
+/** Raw session row from GET /api/sessions. */
+interface SessionWire {
+  id: string;
+  title?: string;
+  last_message?: string;
+  lastMessage?: string;
+  preview?: string;
+  /** Merged last-active/created epoch seconds (display string added on top). */
+  timestamp?: number | string;
+  formattedDate?: string;
+  messageCount?: number;
+  /** Defensive snake_case fallbacks kept from older backend shapes. */
+  message_count?: number;
+  workspacePath?: string;
+  workspace_path?: string;
+  createdAt?: number;
+  lastActive?: number;
+}
+
+/** Raw persisted tool call (same shape as the live SSE tool_call payload). */
+interface ToolCallWire {
+  id?: string;
+  name?: string;
+  label?: string;
+  status?: string;
+  tool_args?: string;
+  input?: string;
+  output?: string;
+  duration?: number;
+  latency_ms?: number | string;
+  iteration?: number | string;
+  todo_id?: string;
+  todoId?: string;
+  reasoning?: string;
+  agent?: string;
+  provider?: string;
+  timestamp?: string;
+}
+
+/** Raw persisted chat message from GET /api/sessions/:id/history. */
+interface HistoryMessageWire {
+  id: string;
+  role: string;
+  content: string;
+  /** Backend stores raw epoch floats; older rows may carry display strings. */
+  timestamp?: number | string;
+  toolCalls?: ToolCallWire[];
+  fileResults?: ChatMessage['fileResults'];
+  thinking?: unknown;
+  acknowledgement?: unknown;
+  error?: ChatMessage['error'];
+  performance?: ChatMessage['performance'];
+  agentRuns?: ChatMessage['agentRuns'];
+  agentPhases?: ChatMessage['agentPhases'];
+}
+
+/** Raw workspace file entry (session files / search results / recent). */
+interface FileEntryWire {
+  name?: string;
+  type?: string;
+  path?: string;
+  relPath?: string;
+  size?: number;
+  modified?: string;
+}
+
+/** Raw recursive file-tree node from GET /api/files. */
+interface FileNodeWire {
+  name?: string;
+  type?: string;
+  path?: string;
+  children?: FileNodeWire[];
+  size?: number;
+  modified?: string;
+}
+
+/** Raw todo row from GET /api/todos. */
+interface TodoWire {
+  id: string;
+  session_id?: string;
+  sessionId?: string;
+  content?: string;
+  text?: string;
+  completed?: boolean;
+  status?: string;
+  title?: string;
+  order?: number;
+}
+
+/** Raw objective row from the /api/objectives endpoints. */
+interface ObjectiveWire {
+  id: string;
+  session_id?: string;
+  prompt?: string;
+  status?: string;
+  priority?: number;
+  result?: string | null;
+  error?: string | null;
+  approval?: string | null;
+  resume_message?: string | null;
+  last_event?: string | null;
+  attempts?: number;
+  cancel_requested?: boolean;
+  created_at?: number;
+  updated_at?: number;
+  started_at?: number | null;
+  completed_at?: number | null;
+}
+
 // ─── Client ────────────────────────────────────────────────────────────
+
+/** Wire file-tree node → frontend FileNode (recursive; preserves depth). */
+function mapFileNode(node: FileNodeWire): FileNode {
+  return {
+    name: node.name || '',
+    type: node.type === 'folder' ? 'folder' : 'file',
+    path: node.path || '',
+    children: node.children?.map(mapFileNode),
+    size: node.size,
+    modified: node.modified,
+  };
+}
 
 class LocalMindClient {
   private baseUrl: string;
@@ -307,7 +433,7 @@ class LocalMindClient {
   constructor() {
     // Allow Electron preload to override the API base URL for desktop mode.
     // In browser/dev mode, baseUrl is '' so requests go through the Vite proxy.
-    this.baseUrl = (typeof window !== 'undefined' && (window as any).__LOCALMIND_API__) || '';
+    this.baseUrl = (typeof window !== 'undefined' && window.__LOCALMIND_API__) || '';
   }
 
   /**
@@ -385,7 +511,7 @@ class LocalMindClient {
   // ── Sessions ────────────────────────────────────────────────────────
 
   async getSessions(): Promise<Session[]> {
-    const data = await this.request<{ sessions: any[] }>('/api/sessions');
+    const data = await this.request<{ sessions: SessionWire[] }>('/api/sessions');
     // Map backend format → frontend Session type
     return (data.sessions || []).map((s) => ({
       id: s.id,
@@ -405,7 +531,7 @@ class LocalMindClient {
   }
 
   async getSessionFiles(sessionId: string): Promise<SessionFileEntry[]> {
-    const data = await this.request<{ files: any[] }>(`/api/sessions/${encodeURIComponent(sessionId)}/files`);
+    const data = await this.request<{ files: FileEntryWire[] }>(`/api/sessions/${encodeURIComponent(sessionId)}/files`);
     return (data.files || []).map((f) => ({
       name: f.name || '',
       type: f.type === 'folder' ? 'folder' : 'file',
@@ -421,11 +547,11 @@ class LocalMindClient {
   }
 
   async getSessionHistory(sessionId: string): Promise<ChatMessage[]> {
-    const data = await this.request<{ history: any[] }>(
+    const data = await this.request<{ history: HistoryMessageWire[] }>(
       `/api/sessions/${sessionId}/history`
     );      return (data.history || []).map((m) => ({
         id: m.id,
-        role: m.role,
+        role: m.role === 'assistant' ? 'assistant' as const : 'user' as const,
         content: m.content,
 
       // Backend stores timestamps as raw epoch floats (e.g. 1783586329.77).
@@ -442,11 +568,11 @@ class LocalMindClient {
       // Undefined stays undefined so message rendering can tell "no pills"
       // from "an empty list" (matches the pre-266 behavior).
       toolCalls: m.toolCalls
-        ? m.toolCalls.map((tc: any) => ({
-            id: tc.id,
-            name: tc.name,
+        ? m.toolCalls.map((tc: ToolCallWire) => ({
+            id: tc.id ?? '',
+            name: tc.name ?? '',
             label: tc.label,
-            status: tc.status,
+            status: (tc.status ?? 'done') as import('@/types').ToolStatus,
             input: tc.tool_args || tc.input || '',
             output: tc.output,
             duration: tc.duration || (tc.latency_ms ? Number(tc.latency_ms) : undefined),
@@ -643,17 +769,10 @@ class LocalMindClient {
   async getFileTree(path?: string): Promise<FileNode[]> {
     try {
       const queryPath = path || '';
-      const data = await this.request<{ children: any[] }>(
+      const data = await this.request<{ children: FileNodeWire[] }>(
         `/api/files?path=${encodeURIComponent(queryPath)}`
       );
-      return (data.children || []).map((c) => ({
-        name: c.name,
-        type: c.type,
-        path: c.path,
-        children: c.children,
-        size: c.size,
-        modified: c.modified,
-      }));
+      return (data.children || []).map(mapFileNode);
     } catch {
       return [];
     }
@@ -672,7 +791,7 @@ class LocalMindClient {
 
   async searchFiles(path: string, query: string): Promise<SessionFileEntry[]> {
     try {
-      const data = await this.request<{ results: any[] }>(
+      const data = await this.request<{ results: FileEntryWire[] }>(
         `/api/files/search?path=${encodeURIComponent(path)}&q=${encodeURIComponent(query)}`
       );
       return (data.results || []).map((f) => ({
@@ -723,7 +842,7 @@ class LocalMindClient {
   async getRecentFiles(path?: string, limit = 10): Promise<SessionFileEntry[]> {
     try {
       const queryPath = path || '';
-      const data = await this.request<{ files: any[] }>(
+      const data = await this.request<{ files: FileEntryWire[] }>(
         `/api/files/recent?path=${encodeURIComponent(queryPath)}&limit=${limit}`
       );
       return (data.files || []).map((f) => ({
@@ -743,15 +862,21 @@ class LocalMindClient {
 
   async getTodos(sessionId: string): Promise<TodoItem[]> {
     try {
-      const data = await this.request<any[]>(
+      const data = await this.request<TodoWire[]>(
         `/api/todos?session_id=${encodeURIComponent(sessionId)}`
       );
       return Array.isArray(data)
         ? data.map((todo) => ({
-            ...todo,
-            // B-2026-08-23-11: prefer the short title for display.
+            id: todo.id,
+            // Prefer the short title for display when the backend provides one.
             text: todo.title || todo.text || todo.content || '',
+            completed: todo.completed ?? false,
+            status: todo.status as TodoItem['status'],
+            order: todo.order,
             sessionId: todo.sessionId || todo.session_id,
+            title: todo.title,
+            // The full agent-facing content (paths/commands) kept for tooltips.
+            content: todo.content,
           }))
         : [];
     } catch {
@@ -782,12 +907,12 @@ class LocalMindClient {
   async getObjectives(sessionId?: string): Promise<import('@/types').Objective[]> {
     const query = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
     try {
-      const data = await this.request<{ objectives: any[] }>(`/api/objectives${query}`);
+      const data = await this.request<{ objectives: ObjectiveWire[] }>(`/api/objectives${query}`);
       return (data.objectives || []).map((item) => ({
         id: item.id,
-        sessionId: item.session_id,
-        prompt: item.prompt,
-        status: item.status,
+        sessionId: item.session_id ?? '',
+        prompt: item.prompt ?? '',
+        status: item.status as import('@/types').ObjectiveStatus,
         priority: item.priority ?? 0,
         result: item.result,
         error: item.error,
@@ -796,8 +921,8 @@ class LocalMindClient {
         lastEvent: item.last_event,
         attempts: item.attempts ?? 0,
         cancelRequested: Boolean(item.cancel_requested),
-        createdAt: item.created_at,
-        updatedAt: item.updated_at,
+        createdAt: item.created_at ?? 0,
+        updatedAt: item.updated_at ?? 0,
         startedAt: item.started_at,
         completedAt: item.completed_at,
       }));
@@ -807,7 +932,7 @@ class LocalMindClient {
   }
 
   async createObjective(sessionId: string, prompt: string): Promise<import('@/types').Objective> {
-    const item = await this.request<any>('/api/objectives', {
+    const item = await this.request<ObjectiveWire>('/api/objectives', {
       method: 'POST',
       body: JSON.stringify({ session_id: sessionId, prompt }),
     });
@@ -826,12 +951,12 @@ class LocalMindClient {
     return this._mapObjective(await this.request(`/api/objectives/${encodeURIComponent(id)}/cancel`, { method: 'POST' }));
   }
 
-  private _mapObjective(item: any): import('@/types').Objective {
+  private _mapObjective(item: ObjectiveWire): import('@/types').Objective {
     return {
       id: item.id,
-      sessionId: item.session_id,
-      prompt: item.prompt,
-      status: item.status,
+      sessionId: item.session_id ?? '',
+      prompt: item.prompt ?? '',
+      status: item.status as import('@/types').ObjectiveStatus,
       priority: item.priority ?? 0,
       result: item.result,
       error: item.error,
@@ -840,8 +965,8 @@ class LocalMindClient {
       lastEvent: item.last_event,
       attempts: item.attempts ?? 0,
       cancelRequested: Boolean(item.cancel_requested),
-      createdAt: item.created_at,
-      updatedAt: item.updated_at,
+      createdAt: item.created_at ?? 0,
+      updatedAt: item.updated_at ?? 0,
       startedAt: item.started_at,
       completedAt: item.completed_at,
     };
@@ -1283,7 +1408,7 @@ class LocalMindClient {
         if (!res.ok) {
           // Best-effort error extraction
           let detail = `HTTP ${res.status}`;
-          try { const body = await res.json(); detail = body.detail || detail; } catch {}
+          try { const body = await res.json(); detail = body.detail || detail; } catch { /* keep HTTP status as detail */ }
           onError(detail);
           return;
         }
@@ -1303,12 +1428,12 @@ class LocalMindClient {
                 if (data.status === 'done') { onDone(); return; }
                 if (data.status === 'error') { onError(data.detail); return; }
                 onProgress(data);
-              } catch {}
+              } catch { /* skip malformed SSE line */ }
             }
           }
         }
-      } catch (e: any) {
-        if (e.name !== 'AbortError') onError(String(e));
+      } catch (e) {
+        if (e instanceof Error && e.name !== 'AbortError') onError(String(e));
       }
     })();
     return { cancel: () => controller.abort() };

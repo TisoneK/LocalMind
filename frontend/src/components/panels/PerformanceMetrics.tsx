@@ -28,12 +28,6 @@ interface PerformanceMetricsProps {
   sessionStats?: SessionStats | null;
 }
 
-/** Display "—" for undefined/null, otherwise format the number (including 0) */
-function fmtTok(v: number | undefined): string {
-  if (v === undefined || v === null) return '—';
-  return v.toLocaleString();
-}
-
 export function PerformanceMetrics({
   metrics,
   lastMetrics,

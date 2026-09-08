@@ -16,11 +16,17 @@
  */
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
-import type { EnterMotionProps } from '@/lib/localmind/motion';
-import { Check, AlertTriangle, X, Info, HelpCircle, Minus } from 'lucide-react';
-import { useEnterMotion } from '@/lib/localmind/motion';
+import { motion } from 'framer-motion';
+import {
+  useEnterMotion,
+  type EnterOptions,
+  type EnterMotionProps,
+} from '@/lib/localmind/motion';
+import { Check, HelpCircle, Minus } from 'lucide-react';
 import type { ResponseBlock, Tone, InfoState } from '@/types/response-blocks';
+
+/** Spreadable enter-motion props handed down to sub-renderers. */
+type EnterMotionFn = (opts?: EnterOptions) => EnterMotionProps;
 
 // ── Tone → color mapping ────────────────────────────────────────────────────
 
@@ -68,7 +74,7 @@ function TextBlockRenderer({ block }: { block: ResponseBlock }) {
   );
 }
 
-function TableBlockRenderer({ block, enter }: { block: ResponseBlock; enter: (opts?: any) => any }) {
+function TableBlockRenderer({ block, enter }: { block: ResponseBlock; enter: EnterMotionFn }) {
   if (!block.columns || !block.rows) return null;
   const colors = getToneColors(block.tone);
   return (
@@ -112,7 +118,7 @@ function TableBlockRenderer({ block, enter }: { block: ResponseBlock; enter: (op
   );
 }
 
-function MetricBlockRenderer({ block, enter }: { block: ResponseBlock; enter: (opts?: any) => any }) {
+function MetricBlockRenderer({ block, enter }: { block: ResponseBlock; enter: EnterMotionFn }) {
   const colors = getToneColors(block.tone);
   return (
     <motion.div
@@ -224,11 +230,13 @@ function ChartBlockRenderer({ block }: { block: ResponseBlock }) {
 // ── Main renderer ────────────────────────────────────────────────────────────
 
 export function ResponseBlockRenderer({ blocks }: { blocks: ResponseBlock[] }) {
-  if (!blocks || blocks.length === 0) return null;
+  // Hooks must run before any early return (same order every render).
   const { enter } = useEnterMotion();
 
   // Filter out presentation_hint blocks (they're metadata, not visual)
-  const visualBlocks = blocks.filter((b) => b.type !== 'presentation_hint' as any);
+  const visualBlocks = (blocks || []).filter((b) => b.type !== 'presentation_hint');
+
+  if (visualBlocks.length === 0) return null;
 
   return (
     <div className="space-y-1">
