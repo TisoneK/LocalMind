@@ -38,3 +38,4 @@ work changes, edit the "Doing" cell.
 | Noah | S436 | glm-5.3-flash | S436a right-click menus + S436b export copy-to-clipboard LANDED (fbffcac/e89c3dc/3403e61); live-verified; session closed |
 | Amina | S437 | glm-5.3-flash | store hygiene: pytest LOCALMIND_HOME isolation shipped (conftest isolation half of the chat-store pollution item); residue delete-list staged for owner sign-off; released |
 | Zuri | S438 | glm-5.3-flash | B-2026-08-30-8 over-thinker: evidence-sufficient answer-only call shipped (live-verified 184.8s→14.1s weather turn); released |
+| Sena | S439 | glm-5.3-flash | backlog truth-sweep: 8 marked done, 15 partials annotated (48→40 pending); released |

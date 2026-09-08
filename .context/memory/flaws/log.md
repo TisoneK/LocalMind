@@ -768,3 +768,7 @@ logged in inefficiencies/log.md — no product behavior was wrong.
 - **Root cause:** shebang ignored under `sh <script>` invocation; process substitution assumed a bash interpreter. No POSIX-sh smoke of the script before wiring it into the gate.
 - **Suggested fix / done:** rewrote POSIX-sh (`find -exec grep -lE … {} +`, dropped `pipefail`); verified clean→exit 0, planted marker→exit 1 under `sh`. Commit `aa8ef68`. General lesson: any script wired into a gate that invokes it via `sh` must be POSIX-sh, not merely bash-shebanged.
 - **Status:** resolved this session (`aa8ef68`).
+
+---
+## 2026-09-08 — Sena / glm-5.3-flash (Session 439)
+- **None this session** — context-only bookkeeping (backlog truth-sweep); no product code touched. Note: the exit-gate eslint failure on main is the documented standing drift (B-2026-08-17-13, annotated in the backlog this session), not a new flaw.

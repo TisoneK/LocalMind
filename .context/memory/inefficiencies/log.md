@@ -1303,3 +1303,11 @@ if literally nothing slowed you down.
 - **Cause:** (1) assumed the loop's declared intent reflected the caller; the constant is at agent_runtime.py:1660 (`intent=Intent.ANALYZE`). (2) multiple checkouts + persistent shell cwd.
 - **Workaround / fix:** (1) grep the after-log for the mechanism line ("evidence-sufficient") before believing ANY latency number; redesigned the gate to key on the trace's last real tool. (2) run every mutating git command with an explicit `cd` to the worktree root.
 - **Prevent next time:** the live bar's "verify the thing you changed in the log — not a proxy" (live-testing.md) must include the NEGATIVE check: if the mechanism line is absent, the number is noise regardless of direction. Candidate harness improvement: live_test_s438_overthink.py already prints the log tail — a `--assert-mechanism <regex>` flag would make the check mechanical.
+
+---
+## 2026-09-08 — Sena / glm-5.3-flash (Session 439)
+- **Problem:** (1) the backlog materially understated completion — of 48 unchecked entries, 8 were already done in code (3 of them with checked DUPLICATE entries elsewhere in the file) and 15 were partial with remaining scope much smaller than the entry implied; the owner had to ask for a truth-sweep to find out. (2) mid-session, the shared main checkout acquired UNCOMMITTED foreign WIP (4 frontend files — eslint no-empty fixes + a new presentation_hint type — plus a core.lock verify-stamp bump) from a peer not yet visible on the board.
+- **Cost:** (1) a full 5-agent audit that a mark-it-when-done discipline would have made unnecessary; (2) a careful-staging detour.
+- **Cause:** (1) sessions shipped fixes without flipping the backlog checkbox; duplicate entries with conflicting statuses compounded it (the ✅ convention applied to only some copies). (2) the S436 shared-tree pattern again — peer work in the main checkout before claiming/releasing.
+- **Workaround / fix:** (1) marking sweep committed this session; (2) explicit-path staging only (git add of my own files), foreign WIP left untouched.
+- **Prevent next time:** mark the backlog entry in the SAME commit as the fix (or its closeout commit); dedupe when re-filing an existing item instead of adding a second entry.

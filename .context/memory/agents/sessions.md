@@ -6326,3 +6326,14 @@ your name in the roster, present yourself by it.
 - **Coordination:** collab session `localmind-loop-efficiency`, issue B-2026-08-30-8 — note `20260907T111224Z`, claim `20260907T111226Z`, release `20260907T201729Z` (refs bd0641d,3527f49,d679097). Peer Noah (S436) was live in the main checkout during my start → per the 2026-09-05 override: separate worktrees `../LocalMind-zuri-s438` (product) + `../LocalMind-collab-loop` (coordination), session-suffixed agent id, explicit-path staging only. Zero file overlap with his frontend closeout.
 - **Open items:** the memory-store detector gap ("I meant remember <url>" — leading "I meant" defeats the start-anchored write cues) is NOT part of this item's re-scope and stays with the owner to schedule; standing queue unchanged.
 - **Report:** none — fix session (regression tests + live traces + release event + this entry are the record).
+
+---
+## 2026-09-08 — Session 439 — backlog truth-sweep: mark done-but-unmarked items (Sena)
+
+- **Agent:** ZCode (local) | **Model:** glm-5.3-flash (per system prompt ID) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.16.1
+- **Task:** owner: "I think we have fixed most of them, verify which ones have been handled but not marked" → then "mark the 8 handled items done and annotate the partial ones."
+- **Work:** 5-subagent code audit of all 48 unchecked backlog entries against the working tree + tests + session logs; then a marking sweep in backlog.md — 8 marked [x] with ✅ evidence notes (B-2026-08-11-3, -15-3, -15-11, -15-14, -17-1, -17-2 stale-dup, -23-24, -30-17), 15 partials annotated ◐ with done-vs-remaining scope (incl. B-2026-08-17-13 REGRESSED: 9 eslint errors + 84 warnings vs cap 71 — exit gate fails on main today). Pending 48 → 40.
+- **Verification:** context-only change (no product files touched); conflict-marker gate + context-mem lint clean; no live-model bar (bookkeeping, not agent behavior).
+- **Coordination:** single-agent, owner-directed, board IDLE. Found UNCOMMITTED foreign WIP in the shared main checkout (4 frontend files — eslint no-empty fixes + a new presentation_hint type — plus a core.lock verify-stamp bump) — not mine, NOT staged or touched; explicit-path staging only per the S436/S438 precedent. Logged in inefficiencies.
+- **Open items:** none new (the eslint regression is pre-existing and annotated on its entry; B-2026-08-17-2's Windows re-run caveat noted on its entry).
+- **Report:** none — bookkeeping session (backlog diff + this entry are the record).
