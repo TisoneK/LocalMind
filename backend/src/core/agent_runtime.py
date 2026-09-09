@@ -1078,11 +1078,12 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 _hist_dicts = []
 
             # S427: recent stored memories for referential follow-ups
-            # ("What's it?" after "Remember the source…"). Only needed on the
-            # conversational leg — trivial turns get canned replies.
+            # ("What's it?" after "Remember the source…"). Needed on BOTH
+            # fast-path legs: a trivial-shaped acknowledgment ("ok", "sure")
+            # can carry an evidence requirement, and the one-call reply must
+            # ground itself in what was actually done/said — not answer blind.
             _recent_memories: list[str] = []
-            if not is_trivial_input(message):
-                _recent_memories = await self._recent_memory_facts(limit=5)
+            _recent_memories = await self._recent_memory_facts(limit=5)
 
             _adapter = kernel.adapter
             _is_trivial = is_trivial_input(message, _hist_dicts)
@@ -1131,7 +1132,13 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 _response_chunks: list[str] = []
                 _fast_usage: dict[str, int] = {}
                 if _is_trivial:
-                    _stream = trivial_response(message, _adapter, _hist_dicts)
+                    _stream = trivial_response(
+                        message,
+                        _adapter,
+                        _hist_dicts,
+                        todo_state=current_todos,
+                        memory_facts=_recent_memories,
+                    )
                 else:
                     _stream = conversational_response(
                         message,
@@ -1174,14 +1181,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
 
                 # Finalize: persist + emit turn_complete (mirror the parent-
                 # agent path's epilog so observability and history survive
-                # reload). A canned (synthetic) turn made NO provider call:
-                # its persisted metrics must say so explicitly (zeros +
-                # synthetic flag) rather than dressing string-lookup
-                # estimates up as provider token counts — the sidebar's
-                # tok/s and latency aggregates read these numbers, and the
-                # S431 export proved fabricated 5/8-token "provider" calls
-                # reconcile into polluting averages. The display contract
-                # (nonzero prompt estimate on the Observe panel) is kept by
+                # reload). The social fast path now goes through the MODEL
+                # (one call, brief visible think); the synthetic flag marks
+                # only the degraded path — the canned fallback shown when the
+                # provider was unreachable, which made NO provider call and
+                # must persist honest zeros rather than dressing a string
+                # lookup up as provider token counts (the sidebar's tok/s and
+                # latency aggregates read these numbers, and the S431 export
+                # proved fabricated 5/8-token "provider" calls reconcile into
+                # polluting averages). The display contract (nonzero prompt
+                # estimate on the Observe panel) is kept by
                 # tokens_approx/prompt_tokens_approx, which stay labeled
                 # estimates.
                 _response_text = "".join(_response_chunks)
@@ -1218,9 +1227,10 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 self._persist_assistant(
                     session_id,
                     _response_text,
-                    # The conversational leg streams the model's own thinking;
-                    # the trivial leg is a canned string (no thinking, no model
-                    # call) and stays metric-free except for honest estimates.
+                    # Both fast-path legs stream the model's thinking now;
+                    # only the canned FALLBACK (provider unreachable) has
+                    # none. Metrics: synthetic turn = honest zeros; real
+                    # turn = provider usage + identity.
                     thinking="".join(_fast_thinking_parts) or None,
                     acknowledgement=None,
                     error=None,

@@ -1,4 +1,4 @@
-"""Regression: the canned fast path must not fabricate provider metrics.
+"""Regression: the fast path must not fabricate provider metrics.
 
 Live evidence: a "How are you?" turn (pre-fix) was answered with the verbatim
 canned greeting AND reported promptTokens 5/8, 4ms latency, 4250 tok/s — the
@@ -7,17 +7,17 @@ model. The sidebar aggregates inherit those numbers, so one canned turn
 pollutes the session's average speed/latency stats (the S431 export
 reconciled the pollution arithmetically across all four aggregates).
 
-Contract locked here:
-  - the canned trivial branch streams usage={synthetic: True} — no token
+Contract locked here (updated when the canned path became the FALLBACK):
+  - a healthy-provider social turn goes through the MODEL (one call) and its
+    real usage flows through untouched — no synthetic flag on the happy path;
+  - the canned strings are the degraded path only (provider unreachable/
+    empty stream): those chunks stream usage={synthetic: True} — no token
     numbers that could be mistaken for provider data;
   - the runtime epilog persists {prompt_tokens: 0, completion_tokens: 0,
-    latency_ms: real, synthetic: True} for canned turns and sends
+    latency_ms: real, synthetic: True} for synthetic turns and sends
     provider_usage={} on turn_complete;
   - the Session 111 display contract survives: tokens_approx /
-    prompt_tokens_approx stay nonzero on canned turns;
-  - the detector split: "Hi" stays canned/zero-provider; "How are you?"
-    takes the conversational path (a real model call — its usage, if the
-    provider reports one, flows through as before).
+    prompt_tokens_approx stay nonzero on synthetic turns.
 """
 
 from __future__ import annotations
@@ -65,9 +65,35 @@ def patch_adapter(adapter):
 
 class TestCannedUsageIsSynthetic:
     @pytest.mark.asyncio
-    async def test_canned_branch_streams_synthetic_usage_no_tokens(self):
-        """The canned reply's chunks carry the synthetic flag, no token counts."""
-        chunks = await _collect(trivial_response("Hi", MagicMock()))
+    async def test_model_greeting_keeps_real_usage_no_synthetic_flag(self):
+        """Healthy path: the greeting goes through the model — real provider
+        usage flows through, no synthetic flag anywhere."""
+
+        async def chat(messages, intent="chat", **kwargs):
+            yield MagicMock(text="Hey! How's it going?", done=False, usage={"prompt_tokens": 25})
+            yield MagicMock(text="", done=True, usage={"prompt_tokens": 25, "completion_tokens": 8})
+
+        adapter = MagicMock()
+        adapter.chat = chat
+        chunks = await _collect(trivial_response("Hi", adapter))
+        text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+        assert "going" in text
+        done = next(c for c in chunks if c.done)
+        assert "synthetic" not in (done.usage or {})
+        assert done.usage.get("prompt_tokens") == 25
+
+    @pytest.mark.asyncio
+    async def test_canned_fallback_streams_synthetic_usage_no_tokens(self):
+        """Degraded path (provider unreachable): the canned reply's chunks
+        carry the synthetic flag, no token counts."""
+        adapter = MagicMock()
+
+        async def exploding_chat(messages, intent="chat", **kwargs):
+            raise ConnectionError("provider unreachable")
+            yield  # pragma: no cover
+
+        adapter.chat = exploding_chat
+        chunks = await _collect(trivial_response("Hi", adapter))
         canned = _SOCIAL_REPLIES["greeting"]
         assert chunks[0].text == canned
         assert chunks[0].usage == {"synthetic": True}
@@ -95,14 +121,21 @@ class TestCannedUsageIsSynthetic:
 
 class TestEpilogPersistsHonestMetrics:
     @pytest.mark.asyncio
-    async def test_canned_turn_persists_synthetic_metrics_and_empty_provider_usage(self, runtime):
-        """Canned turn: persisted metrics are zeros + synthetic, provider_usage={},
-        while the approx display fields stay nonzero (Session 111 contract)."""
+    async def test_provider_down_greeting_persists_synthetic_metrics_and_empty_provider_usage(self, runtime):
+        """Degraded turn (provider unreachable): the greeting falls back to
+        the canned line; persisted metrics are zeros + synthetic,
+        provider_usage={}, while the approx display fields stay nonzero
+        (Session 111 contract)."""
         sid = "sess-synth-canned"
         adapter = MagicMock()
         adapter.thinking_enabled = False
-        adapter.chat.side_effect = AssertionError("canned path must not call the LLM")
-        adapter.chat_with_tools.side_effect = AssertionError("canned path must not call the LLM")
+
+        async def exploding_chat(messages, intent="chat", **kwargs):
+            raise ConnectionError("provider unreachable")
+            yield  # pragma: no cover
+
+        adapter.chat = exploding_chat
+        adapter.chat_with_tools.side_effect = AssertionError("fast path must not use tools")
 
         with patch_adapter(adapter):
             chunks = await _collect(runtime.process("Hi", sid, obs=ObsCollector()))
@@ -121,14 +154,20 @@ class TestEpilogPersistsHonestMetrics:
         assert metrics["latency_ms"] >= 0
 
     @pytest.mark.asyncio
-    async def test_canned_turn_display_approx_fields_stay_nonzero(self, runtime):
-        """The Observe-panel contract: tokens_approx > 0 on a greeting turn."""
+    async def test_degraded_greeting_display_approx_fields_stay_nonzero(self, runtime):
+        """The Observe-panel contract: tokens_approx > 0 on a fallback
+        greeting turn."""
         obs = ObsCollector()
         sid = "sess-synth-approx"
         adapter = MagicMock()
         adapter.thinking_enabled = False
-        adapter.chat.side_effect = AssertionError("canned path must not call the LLM")
-        adapter.chat_with_tools.side_effect = AssertionError("canned path must not call the LLM")
+
+        async def exploding_chat(messages, intent="chat", **kwargs):
+            raise ConnectionError("provider unreachable")
+            yield  # pragma: no cover
+
+        adapter.chat = exploding_chat
+        adapter.chat_with_tools.side_effect = AssertionError("fast path must not use tools")
 
         with patch_adapter(adapter):
             await _collect(runtime.process("Hi", sid, obs=obs))
@@ -198,16 +237,27 @@ class TestDetectorSplitLiveContract:
         assert len(calls) == 1, "exactly one direct model call"
 
     @pytest.mark.asyncio
-    async def test_hi_stays_canned_zero_provider_calls(self, runtime):
-        """'Hi' keeps the S206 boundary: canned reply, zero provider calls."""
+    async def test_hi_goes_through_the_model_one_call(self, runtime):
+        """'Hi' is answered by the model on the trivial fast path — exactly
+        ONE direct call, no loop pipeline. (The S206 zero-provider boundary
+        now lives only in the provider-DOWN fallback: a dead provider still
+        can't turn 'hi' into an error card, but a healthy one answers for
+        real.)"""
         sid = "sess-synth-hi"
+        calls: list = []
+
+        async def chat(messages, intent="chat", **kwargs):
+            calls.append(messages)
+            yield MagicMock(text="Hey! What are we working on?", done=False, usage={})
+            yield MagicMock(text="", done=True, usage={})
+
         adapter = MagicMock()
         adapter.thinking_enabled = False
-        adapter.chat.side_effect = AssertionError("Hi must stay zero-provider")
-        adapter.chat_with_tools.side_effect = AssertionError("Hi must stay zero-provider")
+        adapter.chat = chat
 
         with patch_adapter(adapter):
             chunks = await _collect(runtime.process("Hi", sid, obs=ObsCollector()))
 
         text = "".join(getattr(c, "text", "") or "" for c in chunks)
-        assert text == _SOCIAL_REPLIES["greeting"]
+        assert text == "Hey! What are we working on?"
+        assert len(calls) == 1, "exactly one direct model call"

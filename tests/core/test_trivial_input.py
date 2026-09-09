@@ -622,19 +622,79 @@ async def test_conversational_response_normal_stream_not_polluted():
     assert "try again" not in text.lower()
 
 
-# ── Deterministic social replies (Session 187) ─────────────────────────────
-# Pure social intents (greeting/farewell/thanks/acknowledgment) are answered
-# with canned text and ZERO LLM calls — the provider being down/rate-limited
-# must never turn "hi" into an error card.
+# ── Social replies: model-first, canned only as fallback ────────────────────
+# Social intents (greeting/farewell/thanks/acknowledgment) used to be canned
+# strings with zero LLM calls. The owner retired that: "then you have all the
+# answers" — the model answers a social gesture with a real, brief reply
+# (visible think, one call). The canned strings survive ONLY as the degraded
+# path when the provider is unreachable, so a dead provider still can't turn
+# "hi" into an error card.
 
 
 @pytest.mark.asyncio
-async def test_greeting_is_deterministic_no_llm_call():
-    """"hi" must be answered instantly with a canned greeting — the adapter
-    (and therefore the rate-limited provider) is never touched."""
+async def test_greeting_streams_from_model_one_call():
+    """"hi" is answered by the MODEL on a single call — a real greeting with
+    visible brief thinking, not a hardcoded string."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        nonlocal calls
+        calls += 1
+        yield MagicMock(text="", thinking="Simple greeting; one short line back.", done=False, usage=None)
+        yield MagicMock(
+            text="Hey! I'm LocalMind — what can I do for you?",
+            done=False,
+            error=None,
+            usage={"prompt_tokens": 25, "completion_tokens": 12},
+        )
+        yield MagicMock(text="", done=True, error=None, usage={"prompt_tokens": 25, "completion_tokens": 12})
+
+    mock_adapter = MagicMock()
+    calls = 0
+    mock_adapter.chat = mock_chat
+
+    chunks = [c async for c in trivial_response("hi", mock_adapter)]
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    thinking = "".join(c.thinking for c in chunks if getattr(c, "thinking", ""))
+    assert "localmind" in text.lower()
+    assert "greeting" in thinking  # the brief think streamed
+    assert any(getattr(c, "done", False) for c in chunks)
+    assert calls == 1
+    # A real provider call persists real usage — NOT the synthetic flag.
+    done = next(c for c in chunks if getattr(c, "done", False))
+    assert "synthetic" not in (done.usage or {})
+
+
+@pytest.mark.asyncio
+async def test_all_social_intents_go_through_the_model():
+    """Every pure-social intent reaches the model exactly once — no canned
+    short-circuit on the healthy path."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        nonlocal calls
+        calls += 1
+        yield MagicMock(text="A warm one-line reply.", done=False, error=None, usage=None)
+        yield MagicMock(text="", done=True, error=None, usage={})
+
+    mock_adapter = MagicMock()
+    calls = 0
+    mock_adapter.chat = mock_chat
+
+    for msg in ["hello", "bye", "thanks", "ok", "got it"]:
+        chunks = [c async for c in trivial_response(msg, mock_adapter)]
+        text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+        assert text, f"{msg!r} must still yield visible text"
+        assert any(getattr(c, "done", False) for c in chunks)
+    assert calls == 5
+
+
+@pytest.mark.asyncio
+async def test_greeting_canned_fallback_when_provider_dies():
+    """The degraded path keeps the Session 187 guarantee: the adapter raising
+    mid-call on a social gesture falls back to the canned warm line (with the
+    synthetic flag — no fabricated provider tokens), never an error card."""
 
     async def exploding_chat(messages, intent="chat", **kwargs):
-        raise AssertionError("adapter.chat must NOT be called for a greeting")
+        raise ConnectionError("provider unreachable")
         yield  # pragma: no cover
 
     mock_adapter = MagicMock()
@@ -642,41 +702,11 @@ async def test_greeting_is_deterministic_no_llm_call():
 
     chunks = [c async for c in trivial_response("hi", mock_adapter)]
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
-    assert text, "canned greeting must be yielded"
+    assert text, "canned fallback must be yielded"
     assert "help" in text.lower()
     assert any(getattr(c, "done", False) for c in chunks)
-    mock_adapter.chat.assert_not_called()
-    # The zero-LLM turn must NOT dress estimates up as provider usage — the
-    # chunks carry the synthetic flag instead of token numbers. The Session
-    # 111 display contract (nonzero prompt estimate on the Observe panel) is
-    # served by the runtime epilog's labeled tokens_approx fields, not here.
     done = next(c for c in chunks if getattr(c, "done", False))
     assert done.usage == {"synthetic": True}
-
-
-@pytest.mark.asyncio
-async def test_all_social_intents_are_deterministic():
-    """Every pure-social intent gets a canned reply without an LLM call."""
-
-    async def exploding_chat(messages, intent="chat", **kwargs):
-        raise AssertionError("adapter.chat must NOT be called for social intents")
-        yield  # pragma: no cover
-
-    mock_adapter = MagicMock()
-    mock_adapter.chat = MagicMock(side_effect=exploding_chat)
-
-    for msg, kind in [
-        ("hello", "greeting"),
-        ("bye", "farewell"),
-        ("thanks", "thanks"),
-        ("ok", "acknowledgment"),
-        ("got it", "acknowledgment"),
-    ]:
-        chunks = [c async for c in trivial_response(msg, mock_adapter)]
-        text = "".join(c.text for c in chunks if getattr(c, "text", ""))
-        assert text, f"{msg!r} ({kind}) must yield a canned reply"
-        assert any(getattr(c, "done", False) for c in chunks)
-    mock_adapter.chat.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -767,11 +797,9 @@ async def test_engine_conversational_question_emits_prompt_tokens():
 @pytest.mark.parametrize("message", ["Hi", "Hey LM", "Hello LocalMind"])
 @pytest.mark.asyncio
 async def test_engine_greeting_uses_the_warm_parent_boundary(message):
-    """Session 332-C: greetings use the trivial fast-path — canned reply,
-    zero LLM calls (immune to provider rate-limits). Previously the parent
-    agent handled greetings via a native call (1 LLM call); the user's
-    review flagged this as overkill for trivial inputs.
-    """
+    """Greetings use the trivial fast-path — ONE model call, no parent-loop
+    pipeline (no init event, no tools). The reply is the model's own warm
+    greeting now; the canned string is only the provider-down fallback."""
     from core.engine import Engine
     from core.obs import ObsCollector
 
@@ -799,8 +827,9 @@ async def test_engine_greeting_uses_the_warm_parent_boundary(message):
     text = "".join(c.text for c in chunks if getattr(c, "text", ""))
     assert "localmind" in text.lower()
     assert any(getattr(c, "done", False) for c in chunks)
-    # Session 332-C: trivial greetings get a canned reply — zero LLM calls.
-    assert calls == 0
+    # Exactly ONE provider call — the greeting itself; the loop pipeline
+    # (init/classifier/tools) is still skipped.
+    assert calls == 1
     assert not any(event.type == "agent_initialization_done" for event in obs.history())
     assert not any(event.type == "tool_call" for event in obs.history())
 

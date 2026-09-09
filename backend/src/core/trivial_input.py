@@ -853,22 +853,32 @@ async def _direct_chat_response(
                     usage=_done_usage,
                 )
                 return
-            _fallback = (
+            # Empty stream, no error (free-tier overload shape): a social
+            # gesture falls back to its canned warm line so "hi" still gets
+            # a hello; anything else keeps the generic retry pointer.
+            _canned = _SOCIAL_REPLIES.get(trivial_intent(message))
+            _fallback = _canned or (
                 "I didn't get a response from the model this time — the "
                 "free-tier model may be overloaded. Please try again, or "
                 "switch to a faster model."
             )
-            yield StreamChunk(text=_fallback, done=False)
+            yield StreamChunk(text=_fallback, done=False, usage={"synthetic": True})
         yield StreamChunk(text="", done=True, usage=_done_usage)
     except Exception:
-        # If the direct chat fails, yield a minimal fallback and done.
-        # Do NOT fall through to the parent-agent runtime — that would defeat
-        # the purpose of the short-circuit.
+        # Provider unreachable mid-call: fall back to a deterministic reply
+        # so the turn still ends with visible text — a social gesture gets
+        # its canned warm line, anything else the generic pointer. The
+        # synthetic flag marks these chunks as NOT provider data (the epilog
+        # persists zeros + the flag; never fabricated token counts).
+        _canned = _SOCIAL_REPLIES.get(trivial_intent(message))
         yield StreamChunk(
-            text="Hi! I'm LocalMind. How can I help you?",
+            text=_canned or (
+                "Hi! I'm LocalMind. How can I help you?"
+            ),
             done=False,
+            usage={"synthetic": True},
         )
-        yield StreamChunk(text="", done=True)
+        yield StreamChunk(text="", done=True, usage={"synthetic": True})
 
 
 def is_trivial_input(message: str, history: Optional[list[dict]] = None) -> bool:
@@ -935,57 +945,61 @@ async def trivial_response(
     message: str,
     adapter,
     history: Optional[list[dict]] = None,
+    todo_state: Optional[list[dict]] = None,
+    memory_facts: Optional[list[str]] = None,
 ) -> AsyncIterator[StreamChunk]:
     """
-    Stream a direct chat response for a trivial input.
+    Stream a reply for a trivial input (greeting/thanks/acknowledgment/...).
 
-    This is a lightweight conversational response — no capability inference
-    or tool execution is needed. The model just streams a direct reply.
+    The MODEL answers, always — a social gesture gets a real, brief,
+    visible-think reply from the configured provider on ONE call, exactly
+    like every other conversational turn. The canned strings are NOT the
+    primary answer anymore: they are the degraded-path fallback when the
+    provider is unreachable, so a dead/rate-limited provider still can't
+    turn "hi" into an error card — but a healthy provider never answers a
+    human warm-up with a hardcoded string.
 
-    Session 187: pure social intents (greeting/farewell/thanks/
-    acknowledgment) are answered DETERMINISTICALLY with zero LLM calls —
-    the provider being down/rate-limited must never turn "hi" into an
-    error card. "yes_no" and conversational questions still use the model.
+    Trivial-shaped does NOT mean context-free: "ok" right after a task turn
+    may be acceptance of work that must be described truthfully, and a
+    gesture can carry a question. The prompt therefore grounds the reply in
+    the conversation, the session's todos and stored memories, and applies
+    the same honesty rule as everywhere else: speak only to what the
+    evidence supports; if the gesture needs evidence the reply doesn't have,
+    say what is known and what's missing — never invent a result.
 
     Args:
         message: the user's trivial message.
         adapter: the model adapter (already configured with the right model).
         history: optional chat history for context.
+        todo_state: the session's current persisted todo list.
+        memory_facts: the session's most recent stored memories.
 
     Yields:
-        StreamChunk — the model's direct response, streamed token by token.
+        StreamChunk — the model's reply (or the canned fallback on provider
+        failure), streamed token by token.
     """
     _kind = trivial_intent(message)
-    _canned = _SOCIAL_REPLIES.get(_kind)
-    if _canned:
-        logger.info(
-            "[trivial] %r → deterministic %s reply (no LLM call)",
-            message[:40],
-            _kind,
-        )
-        # The canned reply is a string lookup — no provider call, so the
-        # usage here is NOT provider data and must never be persisted or
-        # aggregated as if it were (it previously showed up as fabricated
-        # promptTokens / 4250 tok/s in the stats). The chunks carry no
-        # token numbers at all; the Session 111 display contract (a
-        # nonzero prompt estimate on the Observe panel) is served by the
-        # runtime's OWN labeled estimate (tokens_approx), not by fake
-        # provider usage.
-        yield StreamChunk(text=_canned, done=False, usage={"synthetic": True})
-        yield StreamChunk(
-            text="",
-            done=True,
-            usage={"synthetic": True},
-        )
-        return
+    todo_block = _render_conversational_todos(todo_state)
+    memory_block = _render_conversational_memories(memory_facts)
     async for chunk in _direct_chat_response(
         message,
         adapter,
         history,
         system_prompt=(
             CAPABILITY_NOTE
-            + "Respond naturally and briefly. Do not output your reasoning "
-            "process — just give the response directly."
+            + "The user's message is a brief social gesture "
+            f"({_kind}). Reply in kind — one short warm sentence; do not "
+            "launch into a capability list. Ground the reply in the "
+            "conversation history, checklist, and memories below: if the "
+            "gesture follows real work (acceptance, thanks for a result), "
+            "your reply must match what actually happened — speak only to "
+            "what that evidence supports, and if it asks something the "
+            "evidence doesn't cover, say what you know and that the rest "
+            "needs a real look (Agent mode), rather than inventing an "
+            "answer. Do not output your reasoning process — just give the "
+            "response directly."
+            f"{todo_block}"
+            f"{memory_block}"
         ),
     ):
         yield chunk
