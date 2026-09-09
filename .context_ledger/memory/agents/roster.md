@@ -25,7 +25,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Leah | S450 | glm-5.3-flash (per system prompt ID cf02f3d0-2445-43ea-ae61-da470b683985) | Sync protocol — vendored core 0.19.0 → 0.20.0 + entry-point refresh; worktree `LocalMind-leah-s450`, leaving Otto's main-checkout WIP untouched |
 | Otto | S449 | glm-5.3-flash | Live-testing the agent (new prompt sets beyond the saved suites), backlogging found issues for workers; main checkout |
 
 `ledger-mem check` flags a duplicate name or codename. This roster is the
