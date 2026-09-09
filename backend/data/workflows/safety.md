@@ -40,11 +40,18 @@ the specific action. The constraint is: don't act blind.
   and whether it would overwrite something.
 
 ### File tools (file_write, edit_file, file_task)
-- Before `file_write <path>`: check if `<path>` already exists.
-  - If it doesn't exist → create it.
-  - If it exists → READ it first (file_task), understand what's there,
-    and decide: overwrite (with confirmation), append, or write to a
-    different path. Never blind-overwrite.
+- CREATE vs MODIFY first: if the user asks you to CREATE a file (a path
+  they named, content they described) and nothing suggests it already
+  exists, the create IS the check — call `file_write` directly. Do NOT
+  probe with file_task/shell first; that burns a round-trip on an
+  unambiguous create. The runtime verifies every file_write and reports
+  the result; if the target unexpectedly existed, the verification
+  output tells you and you adapt from there.
+- If the target plausibly ALREADY exists (the user says "update",
+  "fix", "add to", or references an existing file) or the request is
+  ambiguous → READ it first (file_task), understand what's there, and
+  decide: overwrite (with confirmation), append, or write to a
+  different path. Never blind-overwrite a file you haven't seen.
 - Before `edit_file <path>`: ALWAYS read the file first (this is
   already in coding.md constraint #1, but it's the same principle).
 - Before `file_task <path>`: check if the file exists (shell list_files

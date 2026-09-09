@@ -307,7 +307,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "file_write",
-            "description": "Write or save content to a file (creates parent directories). Use ONLY to CREATE or OVERWRITE — to modify an existing file use edit_file; to read use file_task. When creating a file in a folder you just listed with shell, use the exact folder path from that listing (check-before-acting).",  # noqa: E501
+            "description": "Write or save content to a file (creates parent directories). Use ONLY to CREATE or OVERWRITE — to modify an existing file use edit_file; to read use file_task. On a request to CREATE a new file, call this directly — do NOT probe with file_task/shell first (the runtime verifies the write and reports the on-disk result). When creating a file in a folder you just listed with shell, use the exact folder path from that listing (check-before-acting).",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -357,7 +357,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "file_task",
-            "description": "READ an existing FILE's contents (PDF, DOCX, XLSX, code, text/binary). READ-ONLY (to create/write a file use file_write). NOT for directory listings — use shell. Do NOT use shell 'cat'/'type' to read files.",  # noqa: E501
+            "description": "READ an existing FILE's contents (PDF, DOCX, XLSX, code, text/binary). READ-ONLY (to create/write a file use file_write). NOT for directory listings — use shell. Do NOT use shell 'cat'/'type' to read files. Not a create-existence probe: if the user asked you to CREATE a file, call file_write directly instead of checking here first.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
