@@ -258,6 +258,47 @@ def test_conversational_question_fast_path_positives():
     assert is_conversational_question("Explain how you work") is True
     assert is_conversational_question("How does this work?") is True
     assert is_conversational_question("what should I do") is True
+
+
+# ── fast-path Thinker consult skip ───────────────────────────────────────────
+
+
+def test_consult_unnecessary_self_contained_skips():
+    """Clearly self-contained messages skip the pre-answer consult: the
+    measured 108s "What can you do?" turn was mostly serial consult dead
+    air, and the question names its own subject."""
+    from core.trivial_input import consult_unnecessary
+
+    assert consult_unnecessary("What can you do?") is True
+    assert consult_unnecessary("Who are you?") is True
+    assert consult_unnecessary("Tell me about yourself") is True
+    assert consult_unnecessary("What is LocalMind?") is True
+    assert consult_unnecessary("Why is Python popular?") is True
+    assert consult_unnecessary("How do REST APIs work?") is True
+
+
+def test_consult_unnecessary_referential_or_unclear_keeps_consult():
+    """Anything referential, over-long, or not question-shaped still pays for
+    the consult (Session 354's anti-clarification-loop contract)."""
+    from core.trivial_input import consult_unnecessary
+
+    assert consult_unnecessary("Like what?") is False
+    assert consult_unnecessary("What about the other one?") is False
+    assert consult_unnecessary("Can you fix it?") is False
+    assert consult_unnecessary("How do I use that?") is False
+    assert consult_unnecessary("What is this?") is False
+    # Over-long: the self-contained shape cap.
+    assert consult_unnecessary("What can you do? " + "x" * 130) is False
+    # Not question-shaped: imperative/declarative phrasing keeps the consult.
+    assert consult_unnecessary("Tell me more about the options") is False
+
+
+def test_consult_unnecessary_env_kill_switch():
+    """LOCALMIND_CONSULT_ALWAYS=1 restores the always-consult behavior."""
+    from core.trivial_input import consult_unnecessary
+
+    with patch("core.trivial_input.os.getenv", return_value="1"):
+        assert consult_unnecessary("What can you do?") is False
     assert is_conversational_question("Why do you exist?") is True
 
 
@@ -747,7 +788,15 @@ async def test_engine_greeting_uses_the_warm_parent_boundary(message):
 
 @pytest.mark.asyncio
 async def test_engine_conversational_followup_uses_direct_chat_context():
-    """Direct follow-ups use one generic chat boundary, not a phrase shortcut."""
+    """Direct follow-ups use one generic chat boundary, not a phrase shortcut.
+
+    The fast-path Thinker consult now SKIPS clearly self-contained messages
+    ("What can you do?" names its own subject — a consult there was pure
+    serial dead air before the first token, the measured 108s turn). The
+    follow-up ("Like what?") is referential, so the consult still runs there
+    — both contracts exercised in one test: turn 1 = 1 call (skip), turn 2 =
+    2 calls (consult + response).
+    """
     from core.engine import Engine
     from core.obs import ObsCollector
 
@@ -757,13 +806,16 @@ async def test_engine_conversational_followup_uses_direct_chat_context():
 
     async def mock_chat(messages, intent="chat", **kwargs):
         calls.append(messages)
-        # Session 354: the Thinker now runs on the conversational fast-path,
-        # so the first call is the Thinker consult, the second is the actual
-        # response. Adjust the call-counting accordingly.
+        # The Thinker runs on the conversational fast-path for interpretive
+        # turns, so those turns make a consult call first. Self-contained
+        # turns skip it (1 call), referential turns keep it (2 calls).
+        # Adjust the call-counting accordingly.
         answer = (
             "I can help with coding, files, and research."
-            if len(calls) == 2
+            if len(calls) == 1
             else "For example, I can create a script or find a document."
+            if len(calls) == 3
+            else ""  # the consult call on turn 2 — no user-visible text
         )
         yield MagicMock(text=answer, done=False, error=None, usage={"prompt_tokens": 30})
         yield MagicMock(text="", done=True, error=None, usage={"prompt_tokens": 30, "completion_tokens": 12})
@@ -778,23 +830,23 @@ async def test_engine_conversational_followup_uses_direct_chat_context():
     second_text = "".join(c.text for c in second if getattr(c, "text", ""))
     assert "coding" in first_text.lower()
     assert "script" in second_text.lower()
-    # Session 354: the Thinker now runs on the conversational fast-path,
-    # adding 1 extra LLM call per conversational turn. 2 turns × (Thinker + response) = 4 calls.
-    assert len(calls) == 4
-    # Turn 1 = Thinker consult, turn 2 = the response call. The response
+    # Turn 1 is self-contained → consult SKIPPED (1 call); turn 2 is
+    # referential → consult + response (2 calls).
+    assert len(calls) == 3
+    # Turn 1 = the response call itself (no consult precedes it). The response
     # request must carry THIS run's user message — not residue from prior
     # runs leaked through a shared data home (the old assertion matched the
     # assistant reply inside calls[1], which only passed when history from
     # earlier contaminated runs was present).
     assert any(
         message.get("role") == "user" and message.get("content") == "What can you do?"
-        for message in calls[1]
+        for message in calls[0]
     )
     # The follow-up call must carry the prior exchange from this same run
     # as conversation context.
     assert any(
         message.get("role") == "assistant" and message.get("content") == "I can help with coding, files, and research."
-        for message in calls[3]
+        for message in calls[2]
     )
     assert all(event.data.get("fast_path") for event in obs.history() if event.type == "agent_initialization_done")
 

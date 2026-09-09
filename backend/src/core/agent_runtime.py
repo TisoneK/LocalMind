@@ -1055,6 +1055,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         if file is None and _conversational_hint and _pre_init_override.mode is None:
             from core.trivial_input import (
                 _direct_chat_response,
+                consult_unnecessary,
                 conversational_response,
                 is_conversational_question,
                 is_trivial_input,
@@ -1147,7 +1148,7 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 # of the turn — collect it so the persisted assistant message
                 # carries what the UI showed live.
                 _fast_thinking_parts: list[str] = []
-                if not _is_trivial:
+                if not _is_trivial and not consult_unnecessary(message):
                     try:
                         from core.agent.thinker import Evidence, Thinker
                         _hist_text = "\n".join(

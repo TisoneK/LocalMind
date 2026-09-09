@@ -873,7 +873,14 @@ def _render_goal_route(goal_tree: Optional[list[dict]]) -> str:
     """
     if not goal_tree:
         return ""
-    lines = ["# Goal route (follow in order; each step feeds the next)"]
+    # "follow in order" made a regex-derived route a cage — the model obeyed
+    # mechanical steps that tool results had already contradicted. The route
+    # is a PRIOR, not an order: evidence wins.
+    lines = [
+        "# Goal route (a default order, each step feeding the next — when tool"
+        " results contradict a step, adapt; the goal is the outcome, not the"
+        " literal route)"
+    ]
     for i, entry in enumerate(goal_tree):
         if not isinstance(entry, dict):
             continue

@@ -45,7 +45,10 @@ def test_render_goal_route_ordered_and_numbered():
         ]
     )
     lines = rendered.splitlines()
-    assert lines[0] == "# Goal route (follow in order; each step feeds the next)"
+    # The route is a default prior, not an order — tool evidence wins over
+    # the mechanical steps.
+    assert lines[0].startswith("# Goal route (a default order")
+    assert "adapt" in lines[0]
     assert "Goal 1: file exists at a.txt with content" in lines
     assert "   1. check whether a.txt already exists (read it if so)" in lines
     assert "   2. write a.txt with the full content" in lines

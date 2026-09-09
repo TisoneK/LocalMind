@@ -51,6 +51,7 @@ Compatibility usage (not used by the live parent runtime):
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import AsyncIterator, Optional
 
@@ -76,6 +77,64 @@ CAPABILITY_NOTE = (
     "files, search the computer), tell the user to switch to Agent mode instead "
     "of inventing a limitation. "
 )
+
+# The fast-path Thinker consult runs SERIALLY before the conversational
+# answer streams — on a slow provider its full latency lands before the first
+# visible token (measured live: a 108s "What can you do?" turn where the
+# consult was the bulk of the wait). The consult exists to interpret ambiguous
+# turns so the answer doesn't loop into clarification — but a CLEARLY
+# SELF-CONTAINED message needs no interpretation, so the consult there is
+# pure dead air. Two conservative skip classes: (1) identity/capability/
+# social shapes, whose meaning never depends on prior context; (2) short
+# question-shaped messages free of referential markers — the question names
+# its own subject. Anything else (referential phrasing, over-long, not
+# question-shaped) keeps the consult. LOCALMIND_CONSULT_ALWAYS=1 restores
+# the always-consult behavior.
+_CONSULT_SELF_CONTAINED_RE = re.compile(
+    r"^\s*(?:what|who)\s+(?:can|do)\s+you\b[^?.!]*[?.!]?\s*$"
+    r"|^\s*who\s+are\s+you\b[^?.!]*[?.!]?\s*$"
+    r"|^\s*(?:tell\s+me\s+about|introduce)\s+yourself\b[^?.!]*[?.!]?\s*$"
+    r"|^\s*what\s+(?:are\s+you|is\s+localmind)\b[^?.!]*[?.!]?\s*$",
+    re.IGNORECASE,
+)
+_CONSULT_QUESTION_RE = re.compile(
+    r"^\s*(?:what|who|whose|why|when|how|which|where|is|are|do|does|did|can|"
+    r"could|should|would|will)\b[^?]*\?\s*$",
+    re.IGNORECASE,
+)
+_CONSULT_REFERENTIAL_RE = re.compile(
+    r"\b(?:it|that|this|those|these|them|they|their|there|again|also|another|"
+    r"instead|earlier|previous|other|others|above|same|both|either|else|"
+    r"the\s+(?:file|folder|directory|one|result|error|answer|above)|"
+    r"(?:my|our)\s+(?:file|folder|code|project|document|computer|machine|repo))\b",
+    re.IGNORECASE,
+)
+_CONSULT_MAX_CHARS = 120
+
+
+def consult_unnecessary(message: str) -> bool:
+    """True when a pre-answer Thinker consult on the conversational fast path
+    adds latency without decision value.
+
+    Conservative by construction: only clearly self-contained messages skip.
+    Anything referential, over-long, or not question-shaped still consults,
+    preserving the anti-clarification-loop contract where it matters.
+    """
+    if os.getenv("LOCALMIND_CONSULT_ALWAYS", "").strip().lower() in (
+        "1",
+        "true",
+        "on",
+        "yes",
+    ):
+        return False
+    cleaned = message.strip()
+    if not cleaned or len(cleaned) > _CONSULT_MAX_CHARS:
+        return False
+    if _CONSULT_SELF_CONTAINED_RE.match(cleaned):
+        return True
+    return bool(
+        _CONSULT_QUESTION_RE.match(cleaned) and not _CONSULT_REFERENTIAL_RE.search(cleaned)
+    )
 
 # ── Trivial input patterns ───────────────────────────────────────────────────
 # Each pattern is a regex that matches the ENTIRE message (anchored ^...$).
