@@ -29,12 +29,13 @@ class _MemoryMixin:
     async def _extract_and_store_facts(
         self, message: str, session_id: str, obs: ObsCollector
     ) -> None:
-        fact = re.sub(
-            r"^\s*(remember|note|store|keep in mind)\s*(that\s*)?",
-            "",
-            message,
-            flags=re.IGNORECASE,
-        ).strip()
+        # Session 342: the shared deterministic extractor is the single
+        # source of truth for cue-prefix removal — the local regex copy
+        # missed "remember this:" (colon after the demonstrative) and stored
+        # the framing as the fact.
+        from core.memory_intent import extract_memory_content
+
+        fact = extract_memory_content(message)
         if not fact:
             return
         await self._store_fact_if_valid(fact, session_id, obs, source="user", message=message)

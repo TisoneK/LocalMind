@@ -178,6 +178,26 @@ class TestRecallOperation:
         assert result.success is True
         assert "Python" in store.store.await_args.kwargs["fact"]
 
+    @pytest.mark.asyncio
+    async def test_colon_cue_stores_fact_not_framing(self, tmp_path, monkeypatch):
+        """'Remember this: <fact>. Just acknowledge.' must store the fact alone."""
+        from core.config import settings
+
+        monkeypatch.setattr(settings, "localmind_home", str(tmp_path))
+        monkeypatch.setattr(settings, "localmind_db_path", str(tmp_path / "localmind.db"))
+
+        store = MagicMock()
+        store.store = AsyncMock(return_value=True)
+        with patch("storage.vector.VectorStore", return_value=store):
+            result = await memory_op(
+                "Remember this: my project is called Falcon. Just acknowledge."
+            )
+        assert result.success is True
+        fact = store.store.await_args.kwargs["fact"]
+        assert fact == "my project is called Falcon"
+        assert "this:" not in fact and "acknowledge" not in fact.lower()
+        assert result.content == "Remembered: *my project is called Falcon*"
+
 
 class TestGapBClassifierContentThrough:
     """The deterministic write path must store the classifier's extraction."""

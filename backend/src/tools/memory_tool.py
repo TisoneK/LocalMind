@@ -18,6 +18,7 @@ import logging
 import re
 import time as _time
 
+from core.memory_intent import extract_memory_content
 from core.models import Intent, RiskLevel, ToolResult
 from tools import register_tool
 
@@ -33,10 +34,6 @@ _LIST_PAT = re.compile(
 # message fell through to the STORE path and stored "recall" as a junk fact.
 _RECALL_PAT = re.compile(
     r"^\s*(?:please\s+)?(?:recall|search(?:\s+memory)?|find(?:\s+in\s+memory)?)\s+(.+)$",
-    re.IGNORECASE,
-)
-_STORE_PAT = re.compile(
-    r"^\s*(remember|note|store|keep in mind|don't forget)\s*(that\s*)?",
     re.IGNORECASE,
 )
 
@@ -218,8 +215,11 @@ async def memory_op(
 
     # ── Store a fact ──────────────────────────────────────────────────────
     # Use the Session 342 classifier's extraction when provided — it handles
-    # cue prefixes the regex misses ("note down", "keep in mind", etc.).
-    fact = (content or "").strip() if content else _STORE_PAT.sub("", message).strip()
+    # cue prefixes the regex misses ("note down", "keep in mind", "remember
+    # this:" with punctuation). Without the shared extractor the framing
+    # survives ("this: my project is called Falcon. Just acknowledge") and the
+    # store keeps the user's instruction as the fact.
+    fact = (content or "").strip() if content else extract_memory_content(message)
     if not fact:
         return ToolResult(
             content="I didn't catch what you'd like me to remember. Try: 'remember that I prefer Python'",

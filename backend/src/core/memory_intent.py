@@ -187,23 +187,48 @@ def _classify_memory_type(content: str, is_source_knowledge: bool) -> MemoryType
     return MemoryType.GENERAL
 
 
+# ── Deterministic content extraction ────────────────────────────────────────
+# The memory-cue prefix strip. A colon/semicolon/dash may follow the verb
+# directly ("Remember: X"), and the demonstrative may carry punctuation
+# before the fact ("Remember this: X"). The old form required whitespace
+# after "this", so "Remember this: X" survived extraction and the framing
+# was persisted verbatim as the fact.
+_CUE_PREFIX_RE = re.compile(
+    r"^\s*(?:remember|save|store|keep in mind|don'?t forget|note down)"
+    r"(?:\s+(?:(?:that|this|these|those|the)\s*[:;,]?\s+)?"  # "remember this: X"
+    r"|\s*[:;,]\s+)",  # bare "remember: X" — keep a leading article intact
+    re.IGNORECASE,
+)
+
+# A trailing assistant-directed instruction ("Just acknowledge.", "No reply
+# needed.") is framing, not durable content. Stripped only at a sentence
+# boundary, and `_extract_content` never lets it empty the fact.
+_TRAILING_IMPERATIVE_RE = re.compile(
+    r"(?:^|(?<=[.!?]))\s*"
+    r"(?:just\s+|only\s+|simply\s+|please\s+)?"
+    r"(?:acknowledge|confirm|reply|respond|say|note)(?:\s+only)?\b"
+    r"[^.!?]*[.!?]*\s*$",
+    re.IGNORECASE,
+)
+
+
 def _extract_content(message: str) -> str:
     """Extract the content to remember from the user's message.
 
     Strips the memory-write cue prefix and returns the remaining content.
     For "remember that I prefer concise answers" → "I prefer concise answers"
     For "remember the sites that give a lot of information" → "sites that give a lot of information"
+    For "remember this: my project is called Falcon. Just acknowledge." →
+    "my project is called Falcon" — the cue demonstrative survives a colon
+    ("this:") and the trailing imperative is a framing instruction, not the
+    fact (live echo artifact: "Remembered: *this: … Just acknowledge*").
     """
     # Strip common prefixes
     content = message.strip()
-    # Remove leading "remember that" / "remember this" / "save this" etc.
-    content = re.sub(
-        r"^\s*(remember|save|store|keep in mind|don'?t forget|note down)\s+"
-        r"(?:that\s+|this\s+|the\s+)?",
-        "",
-        content,
-        flags=re.IGNORECASE,
-    )
+    # Remove leading "remember that" / "remember this" / "save this" etc.,
+    # tolerating punctuation after the verb and after the demonstrative
+    # ("Remember this:" / "Remember:").
+    content = _CUE_PREFIX_RE.sub("", content, count=1)
     # Remove "next time remember" prefix
     content = re.sub(
         r"^\s*(?:for\s+)?next\s+time[,\.]?\s*remember\s+(?:that\s+|to\s+)?",
@@ -211,11 +236,24 @@ def _extract_content(message: str) -> str:
         content,
         flags=re.IGNORECASE,
     )
+    # Floor: drop a trailing assistant-directed imperative sentence ("Just
+    # acknowledge.") — it's framing, not durable content. Only after a
+    # sentence boundary, and only while a fact survives ahead of it.
+    while True:
+        stripped = _TRAILING_IMPERATIVE_RE.sub("", content).strip()
+        if not stripped or stripped == content:
+            break
+        content = stripped
     # Clean up
     content = content.strip().rstrip(".").strip()
     # If the content starts with "so that" / "so we won't", it's a reason clause
     # — keep it as part of the content for context
     return content
+
+
+def extract_memory_content(message: str) -> str:
+    """Public handle on the deterministic cue extractor (memory write paths)."""
+    return _extract_content(message)
 
 
 # ── Referential-content detection (S427) ─────────────────────────────────────

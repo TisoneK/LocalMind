@@ -109,6 +109,45 @@ class TestContentExtraction:
         content = _extract_content("Next time remember to use the BBC source.")
         assert "use the bbc source" in content.lower()
 
+    # Regression: the cue prefix survived a colon, so
+    # "Remember this: <fact>. Just acknowledge." persisted the framing
+    # ("this: ... Just acknowledge") as the fact and echoed it back broken.
+    def test_strips_colon_after_demonstrative(self):
+        content = _extract_content(
+            "Remember this: my project is called Falcon. Just acknowledge."
+        )
+        assert content == "my project is called Falcon"
+
+    def test_strips_bare_colon_after_verb(self):
+        content = _extract_content("Remember: the deploy runs at 03:00 UTC")
+        assert content == "the deploy runs at 03:00 UTC"
+
+    def test_strips_trailing_assistant_directive(self):
+        content = _extract_content(
+            "Keep in mind that my SSH port is 2222. Just acknowledge."
+        )
+        assert content == "my SSH port is 2222"
+
+    def test_imperative_words_inside_a_fact_are_kept(self):
+        content = _extract_content(
+            "Remember that the deploy script says 'ok' before it starts."
+        )
+        assert content == "the deploy script says 'ok' before it starts"
+
+    def test_fact_that_is_only_an_instruction_survives(self):
+        # A fact whose whole content is an imperative must not be nuked —
+        # the floor only trims directives trailing real content.
+        content = _extract_content("Remember: acknowledge receipt of the invoice.")
+        assert content == "acknowledge receipt of the invoice"
+
+    def test_classifier_content_strips_framing(self):
+        intent = classify_memory_intent(
+            "Remember this: my project is called Falcon. Just acknowledge."
+        )
+        assert intent.content == "my project is called Falcon"
+        assert intent.memory_type.value == "user_fact"
+        assert intent.needs_resolution is False
+
 
 # ── Source-domain detection ────────────────────────────────────────────────
 
