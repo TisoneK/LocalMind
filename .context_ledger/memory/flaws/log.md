@@ -797,3 +797,12 @@ logged in inefficiencies/log.md — no product behavior was wrong.
 - **Fix (prepared, NOT yet shipped upstream):** capture `$out = & ([scriptblock]::Create($Text))`, re-emit each line via `Write-Host`, then branch on `$LASTEXITCODE`/`$?` exactly as now (same 8-line shape as `Invoke-ChildScript`). The patch was written and hand-verified against the vendored 0.17.0 copy.
 - **Why not shipped this session:** the upstream package repo (`TisoneK/.context` clone at `C:\Users\tison\Dev\context`) acquired a large STAGED refactor mid-session (mass rename `context-*` → `ledger-*`, `.context/` → `.context_ledger/` rebrand across core + templates; VERSION file went 0.17.0 → 0.17.1 under me between two reads minutes apart). Per the 2026-09-05 override (peer-live trigger) no commits were made there; both of this session's temporary edits in that tree (VERSION bump, Run-One patch) were backed out exactly (`git restore --worktree` on the file's unstaged part; VERSION re-written) — their staged state untouched. The fix must land AFTER the refactor settles: apply the 8-line patch to the gates runner .ps1 in the package repo, bump PATCH, `ledger-sync manifest`, release, then `context-sync update` locally.
 - **Status:** open (patch documented here; blocked on the upstream refactor mid-flight, discovered 2026-09-08)
+
+---
+## 2026-09-09 — Session 445 (Mara) — none this session
+
+No protocol flaws hit this session. The one process near-miss (the A/B
+before-trace initially ran without its env arm, producing a mislabeled
+"before") is a live-testing hygiene lesson, recorded in
+inefficiencies/log.md — always confirm the mechanism line in the SSE, not
+just the number, before trusting a before/after label.
