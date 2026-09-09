@@ -1,26 +1,27 @@
 # Current Task
 
-**Status:** IDLE — **Session 448 (Juno / ZCode local, glm-5.3-flash, Windows)
-COMPLETE (2026-09-09): fast-path latency fixed** — the conversational fast path
-no longer runs ANY pre-answer Thinker consult (product `890ce947`; claim
-`...57138721`, release `...0c479acf-prior-note` on `collab/localmind-fastpath-20260909/*`).
-Routing is the only intent decision (trivial canned / conversational one direct
-call / interpretive parent loop); the model's OWN streaming reasoning now
-forwards leak-filtered to the Thinking box on that same single call; the
-conversational prompt gained a brevity contract. Live bankofai/glm-5.3-flash
-isolated 8765: "How are you" 8.7s → 2.9s (visible 144-char think, answer 36 →
-22 words); referential follow-ups still resolve from history, no clarification
-loop. B-2026-09-07-2 RESOLVED — supersedes S445's regex half at the owner's
-direction (classifier-gated latency deprecated: "hardcode conditions and you
-will never catch everything"). Suite 22 failed = exact documented Windows
-baseline; pre-commit 5/5; lint clean. A test pins the removal.
+**Status:** IDLE — **Session 448 + RESUME slice (Juno / ZCode local,
+glm-5.3-flash, Windows) COMPLETE (2026-09-09): fast path fully model-answered.**
+(1) Main slice (`890ce947`): the conversational fast path runs NO pre-answer
+consult — routing is the only intent decision; the model's OWN streaming
+reasoning forwards to the Thinking box on the single call; brevity contract in
+the prompt. "How are you" 8.7s → 2.9s live. B-2026-09-07-2 RESOLVED
+(supersedes S445's regex half; classifier-gated latency deprecated). (2) Resume
+slice (`4c2564ae`, after the owner's "then you have all the answers" + the
+evidence catch): social gestures (greeting/farewell/thanks/acknowledgment) are
+answered BY THE MODEL on the trivial path — one call, visible brief think,
+evidence-grounded prompt (memories now load for BOTH fast-path legs; honesty
+rule: speak only to supported evidence, never invent results). Canned strings
+are the provider-DOWN fallback only (synthetic-flagged, honest zeros). Live:
+bare "hi" 2.7s, bare "ok" 4.3s grounded. Both slices: suite = exact documented
+22-failure Windows baseline, pre-commit 5/5, lint clean.
 
 **Next up for the owner:** B-2026-09-06-8/9 (loop-side Thinker cadence/effort
 tuning) unchanged; B-2026-09-07-1 (fast-path workspace artifacts) unchanged;
 P0 Step 4 slice 2 (`search_tool_results` loop wiring) still the
-p0-context-engineering next slice. Owner may want the trivial canned path
-("Hi" zero-provider boundary) revisited under the same no-hardcoding principle
-— S206 boundary kept this session, flagged not changed.
+p0-context-engineering next slice. Note: S206's zero-provider guarantee now
+lives ONLY on the degraded path (provider unreachable) — if the owner wants
+an always-instant greeting back, that's a product choice to revisit.
 
 ---
 
