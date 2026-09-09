@@ -30,6 +30,7 @@ is your stable session tag.
 
 | Zola | S455 | qwen3.8-flash (per system prompt ID cf02f3d0-2445-43ea-ae61-da470b683985; not user-stated) | Taking B-2026-09-09-6 (memory-ingest: explicit-memory-op fallback stores raw framing text — run the fact extractor instead); isolated worktree |
 | Ravi | S456 | qwen3.8-flash (ZCode prompt model ID; the cf02f3d0-… UUID prefix is the shared ZCode harness marker, not an identity — same UUID on S450/S452 under glm-5.3-flash) | Context sync (owner: "Sync context"); next: core update 0.20.0→0.21.0 in isolated worktree |
+| Nia | S454 | qwen3.8-flash | B-2026-09-09-5 resumed after clock-out (goal reopened): derivation fix landed 86ae1163 — now shipping half (b), the safety.md create-mandate clause Cleo left open; worktree |
 
 `ledger-mem check` flags a duplicate name or codename. This roster is the
 **current group's** only — it resets when the group closes
