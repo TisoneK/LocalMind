@@ -46,8 +46,11 @@ if [ -z "$VENV_PYTHON" ]; then
   exit 1
 fi
 
-if [ ! -d frontend/node_modules ]; then
-  echo "ERROR: frontend/node_modules not found — run: cd frontend && npm install" >&2
+# npm workspaces hoist frontend deps to the repo-root node_modules
+# (frontend/ has no node_modules of its own in that layout — e.g. in git
+# worktrees). Accept either location; also verify tsc actually resolves.
+if [ ! -d frontend/node_modules ] && [ ! -d node_modules ]; then
+  echo "ERROR: no node_modules (root or frontend/) — run: npm install" >&2
   exit 1
 fi
 
