@@ -29,6 +29,8 @@ is your stable session tag.
 | Vera | S451 | glm-5.3-flash | Taking B-2026-09-09-2 (acceptance gate replans injected-context turns); isolated worktree |
 | Maya | S452 | glm-5.3-flash | Taking B-2026-09-09-4 (lm_edge_sets.py result-file overwrite + merge-on-rerun); isolated worktree |
 
+| Cleo | S453 | glm-5.3-flash | Taking B-2026-09-09-3 (tool-discovery round-trips on unambiguous creates); isolated worktree |
+
 `ledger-mem check` flags a duplicate name or codename. This roster is the
 **current group's** only — it resets when the group closes
 (`ledger-history close`), and the closed group's roster is kept in
