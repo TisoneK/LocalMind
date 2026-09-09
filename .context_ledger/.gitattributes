@@ -25,3 +25,18 @@ memory/**            text eol=lf
 *.json text eol=lf
 *.conf text eol=lf
 *.lock text eol=lf
+
+# Binary assets under memory/ (e.g. smoke-test screenshots) must NOT be
+# eol-normalised: `memory/** text eol=lf` above is too broad, and the PNG
+# signature itself contains a CR-LF pair, so normalisation corrupts the file
+# and leaves it permanently "modified" (which also blocks rebases). These come
+# last so they win over `memory/**` for these extensions. NOTE: the vendored
+# template (core/templates/.gitattributes) has the same over-broad rule — flag
+# upstream so a fresh bootstrap doesn't reintroduce it.
+memory/**/*.png  binary
+memory/**/*.jpg  binary
+memory/**/*.jpeg binary
+memory/**/*.gif  binary
+memory/**/*.webp binary
+memory/**/*.ico  binary
+memory/**/*.pdf  binary

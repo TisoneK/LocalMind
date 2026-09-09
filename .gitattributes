@@ -2,3 +2,21 @@
 # POSIX sh (gate registries, hooks, CI), and a CRLF working copy breaks
 # strict sh implementations (dash) even though Git Bash tolerates it.
 *.sh text eol=lf
+
+# Binary assets must never be line-ending-normalised. Without this, Git's text
+# auto-detection tried to CRLF→LF the committed screenshot PNGs on checkout,
+# corrupting them and leaving them permanently "modified" in the working tree
+# (which also blocked rebases). `binary` = `-text -diff`.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
+*.zip  binary
+*.gz   binary
