@@ -264,6 +264,32 @@ _WRITE_VERBS = (
 # Verbs that commit the agent to CREATING a folder.
 _FOLDER_VERBS = ("create", "make", "new", "add", "mkdir", "set up", "build")
 
+# The commitment must live in the SAME SENTENCE as the artifact it names,
+# and match on word boundaries. A long message can carry quoted or pasted
+# content (background docs, prose) whose incidental words — "every new
+# hire", "a folder convention that everybody tolerated" — must never be
+# mistaken for the user's instruction: a whole-message substring match
+# fabricated a "folder created at …" contract on turns that asked only to
+# read and answer. False negatives are safe here (no derived deliverable →
+# no contract → the legacy path); false positives make the model
+# manufacture filesystem artifacts to satisfy an invented goal.
+_SENTENCE_SPLIT_RE = re.compile(r"\n+|(?<=[.!?])\s+")
+
+
+def _compile_verb_re(verbs: Iterable[str]) -> "re.Pattern[str]":
+    return re.compile(
+        r"\b(?:" + "|".join(re.escape(v) for v in verbs) + r")\b",
+        re.IGNORECASE,
+    )
+
+
+_WRITE_COMMIT_RE = _compile_verb_re(_WRITE_VERBS)
+_FOLDER_COMMIT_RE = _compile_verb_re(_FOLDER_VERBS)
+
+
+def _sentences(message: str) -> list[str]:
+    return [s for s in _SENTENCE_SPLIT_RE.split(message or "") if s.strip()]
+
 # Marker phrases that introduce a folder name: "a folder called path-test",
 # "folder named X", "directory path-test". Greedy path-ish token (no spaces)
 # so hyphenated/dotted names survive whole; quoted multi-word names are
@@ -344,11 +370,18 @@ def derive_goal_items(
 
     Rules (conservative by design):
       - A named file (``a.txt``, ``src/utils/helper.py``) becomes a goal
-        item ONLY when the message also commits to writing it (create /
+        item ONLY when the same sentence commits to writing it (create /
         write / save / update / edit / ...). Read-only mentions ("show
         me config.json") produce no item — no false gate.
       - A folder name introduced by "folder/directory [called|named] X"
-        becomes an item when the message commits to creating it.
+        becomes an item when a creating verb sits in the same sentence.
+      - Verb matching is on word boundaries within a sentence, never as a
+        substring anywhere in the message: prose the user merely PASTED
+        for reading must not fabricate a deliverable the user never asked
+        for (a whole-message substring match let "every new hire" + "a
+        folder convention" invent a folder-creation contract on a pure
+        reading-comprehension turn, and the agent obediently polluted its
+        workspace to satisfy it).
       - Items are phrased exactly like the gate's checkable criteria
         ("file exists at <path> with content", "folder created at <name>")
         so verify.py can evaluate them against tool evidence.
@@ -356,7 +389,6 @@ def derive_goal_items(
     """
     if not message or not message.strip():
         return []
-    lowered = message.lower()
     items: list[str] = []
     seen: set[str] = set()
 
@@ -366,11 +398,14 @@ def derive_goal_items(
             seen.add(item.lower())
             items.append(item)
 
-    commits_to_write = any(v in lowered for v in _WRITE_VERBS)
-    commits_to_folder = any(v in lowered for v in _FOLDER_VERBS)
+    sentences = _sentences(message)
 
-    if commits_to_write:
-        for m in _FILE_TOKEN_RE.finditer(message):
+    # File pass: a write-commit verb and the named file must share a
+    # sentence.
+    for sentence in sentences:
+        if not _WRITE_COMMIT_RE.search(sentence):
+            continue
+        for m in _FILE_TOKEN_RE.finditer(sentence):
             # Group 1 = normal file token ("src/app.tsx").
             # No group 1 but group 0 = dotfile (".env").
             token = _clean_token(m.group(1) or m.group(0))
@@ -381,29 +416,32 @@ def derive_goal_items(
             token = _resolve_against(token, base_dir)
             _add(f"file exists at {token} with content")
             if len(items) >= max_items:
-                break
+                return items[:_MAX_GOAL_ITEMS]
 
-    if commits_to_folder:
-        # Quoted names first ("folder called 'my stuff'"), then unquoted.
-        folder_names: list[str] = []
-        for m in _QUOTED_FOLDER_RE.finditer(message):
+    # Folder pass: quoted names first ("folder called 'my stuff'"), then
+    # unquoted — same sentence requirement as the file pass.
+    folder_names: list[str] = []
+    for sentence in sentences:
+        if not _FOLDER_COMMIT_RE.search(sentence):
+            continue
+        for m in _QUOTED_FOLDER_RE.finditer(sentence):
             folder_names.append(_clean_token(m.group(1)))
-        for m in _FOLDER_REF_RE.finditer(message):
+        for m in _FOLDER_REF_RE.finditer(sentence):
             folder_names.append(_clean_token(m.group(1)))
-        for name in folder_names:
-            if not name:
-                continue
-            # Drop partial duplicates: the unquoted regex also matches a
-            # prefix of a quoted name ("my" from "my stuff") — keep the
-            # longer name.
-            if any(other and name != other and name in other for other in folder_names):
-                continue
-            # Session 382 follow-up: resolve onto the session workspace so
-            # the folder goal names its actual destination.
-            name = _resolve_against(name, base_dir)
-            _add(f"folder created at {name}")
-            if len(items) >= max_items:
-                break
+    for name in folder_names:
+        if not name:
+            continue
+        # Drop partial duplicates: the unquoted regex also matches a
+        # prefix of a quoted name ("my" from "my stuff") — keep the
+        # longer name.
+        if any(other and name != other and name in other for other in folder_names):
+            continue
+        # Session 382 follow-up: resolve onto the session workspace so the
+        # folder goal names its actual destination.
+        name = _resolve_against(name, base_dir)
+        _add(f"folder created at {name}")
+        if len(items) >= max_items:
+            break
 
     return items[:_MAX_GOAL_ITEMS]
 

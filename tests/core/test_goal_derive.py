@@ -230,3 +230,66 @@ def test_goal_tree_route_uses_workspace_resolved_path():
     assert a_goal.sub_goals[1].startswith("write /ws/sess-1/a.txt")
     folder_goal = next(g for g in tree if g.goal.startswith("folder created at"))
     assert folder_goal.goal == "folder created at /ws/sess-1/path-test"
+
+
+# ── Reading-prose must never fabricate a creation contract ───────────────────
+#
+# A long message can PASTE background prose for reading ("read this and
+# answer one question"). Words inside that prose are content, not the
+# user's instruction. Before the same-sentence rule, a whole-message
+# substring match let "every new hire" supply the folder verb for "a
+# folder convention that everybody tolerated" — the extractor invented a
+# "folder created at …" goal, the model obediently mkdir'd it in its
+# session workspace to satisfy the acceptance gate, and the user got a
+# fabricated "✓ 1/1 criteria met (folder created at …)" line. The fix:
+# word-boundary verbs + verb and artifact committed in the SAME sentence.
+
+_OTT19_STYLE_PROSE = (
+    "Please read this background and then answer ONE question at the end. "
+    "On the tools side we migrated our document store twice, first to a "
+    "self-hosted wiki that nobody liked, then to a folder convention that "
+    "everybody tolerated. Each new hire shadows a senior consultant and "
+    "presents one insight at the Friday forum. Maria's favorite color is "
+    "teal. Question: what is Maria's favorite color?"
+)
+
+
+def test_reading_prose_with_incidental_folder_words_derives_nothing():
+    assert derive_goal_items(_OTT19_STYLE_PROSE) == []
+    assert derive_goal_items(_OTT19_STYLE_PROSE, base_dir="/ws/sess-1") == []
+    assert derive_goal_tree(_OTT19_STYLE_PROSE, base_dir="/ws/sess-1") == []
+
+
+def test_verbs_do_not_leak_across_sentences():
+    # 'new' is a whole word here but nowhere near a folder/file commit;
+    # the config.json mention sits in a read-only sentence.
+    msg = (
+        "Renew my subscription. The config.json file in the old folder "
+        "is stale - just tell me what it contains."
+    )
+    assert derive_goal_items(msg) == []
+
+
+def test_word_boundary_verb_required_not_substring():
+    # 'renew'/'mistakes' must not count as 'new'/'make' commitments.
+    assert derive_goal_items("I made some mistakes. Where does data.txt go?") == []
+    assert derive_goal_items("Renew everything about notes.txt") == []
+
+
+def test_same_sentence_commit_with_determiner_still_derives():
+    # 'new' as a determiner INSIDE the committing sentence remains a
+    # legitimate create-shape ("make the new reports folder called X").
+    items = derive_goal_items("make the new reports folder called monthly-data")
+    assert items == ["folder created at monthly-data"]
+
+
+def test_multi_sentence_request_keeps_all_legit_items():
+    msg = (
+        "Create a folder called project-notes. Inside it, write a summary.md "
+        "with the key points."
+    )
+    items = derive_goal_items(msg, base_dir="/ws/s-1")
+    assert items == [
+        "file exists at /ws/s-1/summary.md with content",
+        "folder created at /ws/s-1/project-notes",
+    ]
