@@ -26,7 +26,12 @@ is your stable session tag.
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
 
-| Ravi | S456 | qwen3.8-flash (ZCode prompt model ID; cf02f3d0-… UUID prefix is the shared ZCode harness marker, not an identity — same UUID on S450/S452 under glm-5.3-flash; logged as flaw S456) | Context sync DONE (0.21.0 refused upstream — half-release, stale MANIFEST; stayed on 0.20.0); on board pending owner next word |
+| Iris | S457 | claude-opus-4-8 (Claude Code desktop app, macOS) | P0 Step 4 slice 2 — register `search_tool_results` agent tool + >5 KB tool-result stub/pointer in loop.py; live before/after on a research turn |
+
+<!-- Board audit 2026-09-09 (Iris S457 check-in): Ravi's (S456) row removed —
+owner confirmed it stale. S456 was a context-sync session on a different
+machine (Windows ZCode), logged complete in sessions.md, no live work here on
+macOS. Iris works solo. -->
 
 `ledger-mem check` flags a duplicate name or codename. This roster is the
 **current group's** only — it resets when the group closes
