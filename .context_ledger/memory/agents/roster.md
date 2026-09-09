@@ -25,7 +25,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Petra | S447 | glm-5.3-flash | RESUME SLICE DONE (Dependabot fixes pushed, 5228f712); staying on board — owner still active in session |
 
 `ledger-mem check` flags a duplicate name or codename. This roster is the
 **current group's** only — it resets when the group closes
