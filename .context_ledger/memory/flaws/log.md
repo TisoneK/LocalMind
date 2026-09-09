@@ -806,3 +806,13 @@ before-trace initially ran without its env arm, producing a mislabeled
 "before") is a live-testing hygiene lesson, recorded in
 inefficiencies/log.md — always confirm the mechanism line in the SSE, not
 just the number, before trusting a before/after label.
+
+---
+## 2026-09-09 — Otto / glm-5.3-flash (Session 449)
+
+- **Flaw:** on check-in I (1) adopted the existing roster identity instead of creating my own — answered to "Juno (S448)", a peer who was live — and (2) when correcting it, used a replace-style edit whose old_string/new_string pair REMOVED Juno's row entirely, so my check-in commit (`c8bc3222`) silently deleted a live peer from the board. The supervisor caught both: "Juno is another worker not you" and "why are you deleting him when he is working".
+- **Symptom:** roster.md went from 2 live rows (Juno + template) to 1 (Otto) in one commit; session log would have attributed S449's work to S448.
+- **Root cause:** at Step 2 I read the roster as data to imitate rather than as a live board to append to. The Edit tool requires old_string uniqueness, so I anchored on the table body — which contained Juno's row — and the "correction" replaced the whole body instead of inserting after it. Both errors share one mechanism: I acted on the roster without treating peer rows as immutable live state.
+- **Fix applied this session:** Juno's row restored verbatim in `8353a669`; my row added as a separate line; board verified to show both rows before proceeding.
+- **Suggested fix (behavior):** roster edits must be ADDITIVE — never let old_string span an existing peer's row; after any roster edit, diff must show exactly +1 line (own row) and `git diff` reviewed before commit. Peer rows are live state: deleting one is deleting a colleague's check-in.
+- **Status:** resolved this session (restored + verified). Logged per rule 9 (supervisor had to correct me twice before I did it right).
