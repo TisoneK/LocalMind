@@ -1,11 +1,18 @@
 # Current Task
 
-**Status:** IDLE — **Session 447 (Petra, ZCode local, glm-5.3-flash, Windows)
-COMPLETE (2026-09-09): core sync 0.18.0 → 0.19.0** (clock-out/resume +
-one-entry-per-codename rules; entry points refreshed in place — the template
-delta was rule-9 text only). Also staged the external setup agent's product
-`package.json` `allowScripts` change on its own commit (`513531fb`,
-owner-approved).
+**Status:** ACTIVE — **Session 447 RESUMED** (Petra, S447 check-back-in per the
+0.19 rule): clearing the 5 Dependabot alerts — all dev-tooling deps
+(js-yaml High; vitest/@vitest/mocker Moderate ×2; joi Low ×2), npm bumps +
+gates. Note emitted to Juno (S448): npm install touches the shared root
+node_modules their worktree junctions; code paths disjoint.
+
+---
+
+**Prior — Session 447 slice 1 (Petra) COMPLETE (2026-09-09): core sync
+0.18.0 → 0.19.0** (clock-out/resume + one-entry-per-codename rules; entry
+points refreshed in place — the template delta was rule-9 text only). Also
+staged the external setup agent's product `package.json` `allowScripts`
+change on its own commit (`513531fb`, owner-approved).
 
 ---
 

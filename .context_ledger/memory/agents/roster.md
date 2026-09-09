@@ -25,6 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Petra | S447 | glm-5.3-flash | RESUMED (check-back-in): clearing the 5 Dependabot alerts — dev-only dep bumps (js-yaml/vitest/joi); main checkout |
 | Juno | S448 | glm-5.3-flash | Fast-path turn latency: conversational turns ~10s (slow tok/s + over-generation); worktree localmind-juno-s448 |
 
 `ledger-mem check` flags a duplicate name or codename. This roster is the
