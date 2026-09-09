@@ -19,5 +19,10 @@
     "concurrently": "^9.0.0",
     "cross-env": "^10.1.0",
     "wait-on": "^8.0.0"
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true,
+    "esbuild@0.25.12": true,
+    "electron@43.3.0": true
   }
 }
