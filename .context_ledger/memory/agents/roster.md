@@ -31,6 +31,7 @@ is your stable session tag.
 
 | Cleo | S453 | glm-5.3-flash | Taking B-2026-09-09-3 (tool-discovery round-trips on unambiguous creates); isolated worktree |
 | Nia | S454 | qwen3.8-flash | Taking B-2026-09-09-5 (gate-pressure makes models fabricate "verification" artifacts on reading turns — safety-workflow create-mandate guard + OTT-19 verification); isolated worktree |
+| Zola | S455 | qwen3.8-flash (per system prompt ID cf02f3d0-2445-43ea-ae61-da470b683985; not user-stated) | Taking B-2026-09-09-6 (memory-ingest: explicit-memory-op fallback stores raw framing text — run the fact extractor instead); isolated worktree |
 
 `ledger-mem check` flags a duplicate name or codename. This roster is the
 **current group's** only — it resets when the group closes
