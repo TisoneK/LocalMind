@@ -45,11 +45,7 @@ correction twice.
   the real win." He benchmarks against Claude Code (a lot of work in few tokens).
   Before shipping, ask "does this fix the loop/system or just this input?"
   (strong repeated signal, Sessions 237 + 244/245)
-- **Verify fixes LIVE before claiming them.** Don't declare something fixed
-  without real evidence (a live trace / reproduction). "It didn't fix anything!"
-  is his response to unverified claims. If the only providers are walled/quota-
-  exhausted and you cannot verify, SAY SO plainly — do not present an unverified
-  change as a confirmed win (correction, 2026-08-15)
+- **Verify fixes LIVE before claiming them — the live test IS the proof, not regression/offline tests.** Don't declare something fixed without real evidence (a live trace / reproduction against the real provider). Regression tests and stubbed offline harnesses are supporting evidence only; "we prove by live test, not regression tests" is his explicit standard even for changes that look like pure IO/plumbing — if a real run can demonstrate the behavior, run it. "It didn't fix anything!" is his response to unverified claims. If the only providers are walled/quota-exhausted and you cannot verify, SAY SO plainly — do not present an unverified change as a confirmed win (correction, 2026-08-15; sharpened 2026-09-09 — S452's harness-IO fix was accepted offline-verified, then the owner directed a live run; the two-run live proof is what settled it)
 - **Never handle API credentials.** When a key/secret is needed, direct the user
   to the app's Settings UI (or their password manager) — never save, enter, or
   read key VALUES yourself. He offered to hand over a Zen key "to save in

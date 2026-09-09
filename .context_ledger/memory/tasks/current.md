@@ -13,10 +13,13 @@ main (branch `collab/localmind-harness-fix-20260909/maya-s452`, release
 event `20260909T134732Z`). Half (a)'s final-file timestamp was already in
 Otto's `d481413f`; this session moved the checkpoints onto the same
 per-invocation stamp, added the merge half, and rewrote the committed
-bug-ID citation out of the product comment. Offline-verified end-to-end
-in a stubbed temp sandbox (no clobber across invocations, latest-wins
-merge, corrupt-file recovery); no live provider run needed — result-file
-IO only, zero loop/adapter surface. Pre-commit gate 5/5.
+bug-ID citation out of the product comment. LIVE-VERIFIED per owner correction ("we prove by live test not
+regression tests"): two real runs on bankofai/glm-5.3-flash isolated 8765
+from the worktree harness — both per-invocation files survive side by
+side and the cumulative -all.json merged run-2 evidence over run-1 (the
+429-storm failure record on OTT-01 replaced by the corrected Wednesday
+answer; run-1 OTT-04 carried forward). Pre-commit gate 5/5; exit gate
+PASSED.
 
 **Live peers at S452 closeout (do not treat their items as free):**
 Otto (S449) live-testing on the main checkout; Vera (S451) on
