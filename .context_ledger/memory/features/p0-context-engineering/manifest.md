@@ -20,10 +20,10 @@ Grounded in two research reports:
 
 ## Implementation plan (addendum-refined, priority order)
 
-1. **Step 1 — Surface cache data to the UI** (1 session) ← S416 in progress
-2. **Step 2 — Byte-stabilize the system prefix** (1-2 sessions)
-3. **Step 3 — Memory Retrieval Gate** (1-2 sessions)
-4. **Step 4 — Tool-Result Index + Search** (hybrid FTS5+vec0, 2-3 sessions) — NEW from addendum
+1. **Step 1 — Surface cache data to the UI** (1 session) ✅ DONE (S416)
+2. **Step 2 — Byte-stabilize the system prefix** (1-2 sessions) ✅ DONE (S418 + S421 folded the CHAT branch)
+3. **Step 3 — Memory Retrieval Gate** (1-2 sessions) ✅ DONE (S419)
+4. **Step 4 — Tool-Result Index + Search** (hybrid FTS5+vec0, 2-3 sessions) — NEW from addendum ← slice 1 DONE; slice 2 (loop wiring) next
 5. **Step 5 — Checkpoint Compaction** (deterministic TOC, 2-3 sessions)
 6. **Step 6 — Context Budget Manager** (2-3 sessions)
 7. **Step 7 — Instruction Epoch** (2-3 sessions)
@@ -76,3 +76,23 @@ Grounded in two research reports:
   stability tests; 147/147 prompt-context suites. HONEST FINDING: the hot
   path (native parent) was already byte-stable — variance lived on the
   delegated/planned branch; A/B on bankofai 81%=81% (block-granular cache).
+- **S419** (`38739c5`): **Step 3 DONE** — Memory Retrieval Gate. Scoping
+  finding: retrieval was ALREADY per-request, conditional, semantic top-K
+  (_MAX_FACTS=6) + relevance-thresholded — the "inject-all dump" was already
+  gone. Missing Component-5 piece was a TOKEN budget: added cap_facts_to_budget
+  (~500 tok) at agent_runtime._memory_facts. 5 cap tests + 50 memory regression.
+- **S421** (`cd7fd48`): **Step 2b DONE** — folded the Intent.CHAT branch into
+  the byte-stable baseline+tail split. The chat prefix embedded the boot-cached
+  env summary + memory + intent history — busting caching AND sending env TWICE
+  per chat turn (the loop's turn_context_parts is unconditional). Prefix is now
+  identity + HOW-TO-RESPOND only. Byte-stability test repointed; ruff clean.
+- **S446** (`7392173`): **Step 4 slice 1 DONE** — the tool-result index
+  storage engine. New storage/tool_result_index.py::ToolResultIndex — hybrid
+  FTS5 (porter+trigram, external-content) + vec0 over size-gated (>5 KB),
+  heading-aware chunks; hybrid search with Reciprocal Rank Fusion + tool/session
+  filters; safe FTS MATCH from arbitrary text. NOT wired to the loop (slice 2).
+  Live-verified vs mxbai-embed-large (dim=1024, vec_rows==chunks); fixed a 4 KB
+  chunk overrunning the ~512-tok embed window by capping embed input to 1800
+  chars. 15 hermetic unit tests. **Slice 2 next:** register the
+  search_tool_results agent tool + replace >5 KB tool results with a stub +
+  pointer in the loop; live before/after on a research turn (target 91→~500 tok).
