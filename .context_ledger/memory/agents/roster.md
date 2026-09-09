@@ -25,7 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Otto | S449 | glm-5.3-flash | Live-testing the agent (new prompt sets beyond the saved suites), backlogging found issues for workers; main checkout |
+| Otto | S449 | glm-5.3-flash | Live-testing: batches 1-8 done, B-2026-09-09-2/3/5/6/7 filed (B-2/3/5/6 claimed by peers); next: clean rerun of OTT-26/27/29 when bankofai 429 storm clears |
 | Vera | S451 | glm-5.3-flash | Taking B-2026-09-09-2 (acceptance gate replans injected-context turns); isolated worktree |
 
 | Cleo | S453 | glm-5.3-flash | Taking B-2026-09-09-3 (tool-discovery round-trips on unambiguous creates); isolated worktree |
