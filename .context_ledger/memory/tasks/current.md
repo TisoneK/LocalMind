@@ -1,7 +1,7 @@
 # Current Task
 
 **Status:** IDLE — **Session 451 (Vera / ZCode local, glm-5.3-flash,
-Windows) COMPLETE (2026-09-09): B-2026-09-09-2 resolved (`639118c2`).**
+Windows) COMPLETE (2026-09-09): B-2026-09-09-2 resolved (`37a3184c`).**
 The acceptance gate's tool-evidence expectation misread two complete
 zero-tool answer classes as narration and forced replan churn
 (OTT-01 "what day is it" 32.0s/41.9s + 1 replan + `describe_tool`
