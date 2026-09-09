@@ -1,6 +1,21 @@
 # Current Task
 
-**Status:** IDLE — **Session 445 (Mara / ZCode local, glm-5.3-flash, Windows) COMPLETE
+**Status:** IDLE — **Session 446 (claude-opus-4.8, macOS localmind-7c) COMPLETE
+(2026-09-08): P0 Step 4 slice 1 shipped** — the tool-result index storage engine
+(`storage/tool_result_index.py`, product `8481102`; claim `668cd64`, release
+`99d03c3`). Hybrid FTS5 (porter+trigram) + vec0 over >5 KB chunked tool results,
+Reciprocal-Rank-Fusion search, tool/session filters. 15 hermetic unit tests +
+live-verified vs mxbai (dim=1024, vec_rows==chunks). NOT wired to the loop.
+Also fixed a repo blocker: `.gitattributes` was CRLF-mangling committed
+screenshot PNGs (`d66720a`) — flag the vendored template upstream.
+
+**Step 4 slice 2 is the next P0 step:** register the `search_tool_results`
+agent tool + replace >5 KB tool results with a stub+pointer in loop.py; live
+before/after on a research turn (target 91→~500 tok).
+
+---
+
+**Prior — Session 445 (Mara / ZCode local, glm-5.3-flash, Windows) COMPLETE
 (2026-09-09): agent-intelligence fixes shipped (product `6d53f6c3`).**
 
 **What landed:** three live-verified intelligence fixes. (1) The conversational
