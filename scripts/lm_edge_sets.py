@@ -58,6 +58,55 @@ DEFAULT_SETTINGS = Path.home() / "LocalMind" / "settings.json"
 GROUND_TRUTH_DATE = "2026-09-09"
 GROUND_TRUTH_WEEKDAY = "Wednesday"
 
+def _long_needle_prompt() -> str:
+    """~1600 words of plausible filler with ONE retrievable fact mid-text."""
+    filler = (
+        "I want to walk you through the background of our team restructure before I ask my question, "
+        "so please bear with me. Last year the consultancy grew from twelve consultants to thirty-one, "
+        "which meant our old practice of everyone sitting in one open room stopped working somewhere "
+        "around consultant number twenty. We tried hot-desking, then fixed neighborhoods, then a "
+        "hybrid model where project teams cluster for six weeks and reshuffle after each engagement. "
+        "The reshuffle calendar is maintained by the operations team, and every Monday the floor "
+        "plan is reprinted and pinned by the coffee machine. Consultant onboarding moved from a "
+        "one-day seminar to a two-week rotation across three desks: front office, delivery, and "
+        "research. Each new hire shadows a senior consultant, keeps a learning journal, and presents "
+        "one insight at the Friday forum. The Friday forum started as a fifteen-minute standup and "
+        "grew into a forty-five-minute knowledge session with slides, questions, and occasionally a "
+        "guest speaker from a client organization. Attendance is optional but the room is usually "
+        "full because the coffee is good and the stories are better. ")
+    filler2 = (
+        "On the tools side we migrated our document store twice, first to a self-hosted wiki that "
+        "nobody liked, then to a folder convention that everybody tolerated. We settled on naming "
+        "files with the engagement code, a date, and a two-letter doc type, which the research team "
+        "enforces with a lint script that runs in the background and nags people in chat. The "
+        "finance team insists on paper receipts, which the operations team digitizes monthly, and "
+        "the digitized copies live in the same folder convention with a scanned suffix. Travel "
+        "booking goes through an agency that replies within two business days, and emergency "
+        "bookings go through the operations lead, who is remarkably patient. Our security policy "
+        "requires full-disk encryption, a password manager, and a hardware key for anyone touching "
+        "client data, and the hardware keys are distributed by IT with a signature sheet that "
+        "circulates roughly once a quarter. ")
+    needle = ("Maria handles the client portfolio for the manufacturing practice, and by the way, "
+              "Maria's favorite color is teal, which she mentions every time the team orders "
+              "branded notebooks. ")
+    filler3 = (
+        "Back to the restructure: the leadership team meets monthly to review utilization, "
+        "pipeline health, and the training budget, and the minutes are circulated as a one-page "
+        "memo that everyone claims to read. Utilization targets are reviewed twice a year, and "
+        "the bench policy guarantees paid bench time for professional development rather than "
+        "staffing people into misfit projects, which was the old way and made everyone "
+        "miserable. The mentoring program pairs each consultant with a mentor outside their "
+        "practice area, on the theory that advice lands better when the mentor has no stake in "
+        "your billable hours. The program won a small industry award two years ago, which "
+        "surprised nobody more than the people running it. ")
+    return ("Please read this background and then answer ONE question at the end.\n\n"
+            + filler + needle + filler2 + filler3
+            + "\n\nQuestion: what is Maria's favorite color?")
+
+
+
+# ─── Server boot + SSE capture (same pattern as lm_conversation_tests.py) ────
+
 CONVERSATIONS: list[dict] = [
     # ── date-time ────────────────────────────────────────────────────────────
     {
@@ -290,10 +339,98 @@ CONVERSATIONS: list[dict] = [
              "note": "primary signal is the PER-TURN LATENCY TREND in the transcript, not the answers"},
         ],
     },
+
+    # ── long-context ─────────────────────────────────────────────────────────
+    {
+        "id": "OTT-19", "set": "long-context",
+        "name": "needle in a long message (~1600 words, fact mid-text)",
+        "turns": [
+            {"prompt": _long_needle_prompt()},
+        ],
+    },
+
+    # ── cross-session memory ─────────────────────────────────────────────────
+    {
+        "id": "OTT-20", "set": "cross-session",
+        "name": "fact stated in an earlier session — recalled from memory store?",
+        "turns": [
+            {"prompt": "Remember this: my project is called Falcon. Just acknowledge.", "expect": []},
+            {"prompt": "What is my project called?", "expect": [
+                ("recalls Falcon (from this turn or memory)", r"\bfalcon\b")],
+             "note": "observe whether recall comes from session history only; the cross-session half is probed by OTT-20B"},
+        ],
+    },
+    {
+        "id": "OTT-20B", "set": "cross-session",
+        "name": "FRESH session asks the OTT-20 fact — persistent memory, not history",
+        "turns": [
+            {"prompt": "What is my project called?", "expect": [
+                ("recalls Falcon from the persistent memory store", r"\bfalcon\b")],
+             "note": "FAIL shape: fabricates a project name, or claims never told — depends on memory-store write/read of OTT-20 turn 1"},
+        ],
+    },
+
+    # ── web-chain ────────────────────────────────────────────────────────────
+    {
+        "id": "OTT-21", "set": "web-chain",
+        "name": "fetch from web + persist to file in one turn",
+        "turns": [
+            {"prompt": "Look up the latest stable Python version on the web and save a one-line note about it to python_note.txt in the workspace.", "expect": [
+                ("names a Python 3.x version", r"Python\s*3\.\d+")],
+             "expect_tool_calls_min": 2,
+             "note": "needs BOTH a web tool and a file tool; FAIL: answers from memory without fetching, or fetches but never writes"},
+        ],
+    },
+
+    # ── cjk ──────────────────────────────────────────────────────────────────
+    {
+        "id": "OTT-22", "set": "cjk",
+        "name": "Chinese greeting 你好",
+        "turns": [
+            {"prompt": "你好！", "expect": [
+                ("some reply (not empty, no crash)", r".+")],
+             "note": "non-Latin script beyond OTT-04's Swahili; observe reply language and routing"},
+        ],
+    },
+
+    # ── self-correction ──────────────────────────────────────────────────────
+    {
+        "id": "OTT-23", "set": "self-correction",
+        "name": "on-demand verification of its own arithmetic",
+        "turns": [
+            {"prompt": "What is 15 × 12?", "expect": [
+                ("answers 180", r"\b180\b")],
+            },
+            {"prompt": "Double-check that with an actual calculation before answering again.", "expect": [
+                ("still says 180 after verifying", r"\b180\b")],
+             "expect_tool_calls_min": 1,
+             "note": "tool presence goes through expect_tool_calls_min on the tool_calls list, not the answer text (S449 regex lesson)"},
+        ],
+    },
+
+    # ── negative-instruction ─────────────────────────────────────────────────
+    {
+        "id": "OTT-24", "set": "negative-instruction",
+        "name": "'don't use tools' — knowledge answer with zero tool calls",
+        "turns": [
+            {"prompt": "Don't use any tools or search the web. From your own knowledge only: what is the capital of France?", "expect": [
+                ("answers Paris", r"\bParis\b")],
+             "expect_tool_calls_max": 0,
+             "note": "FAIL shape: obeying the literal task but disobeying the constraint (or vice versa)"},
+        ],
+    },
+
+    # ── compound-constraint ──────────────────────────────────────────────────
+    {
+        "id": "OTT-25", "set": "compound-constraint",
+        "name": "exactly two sentences AND must include a given word",
+        "turns": [
+            {"prompt": "Describe the ocean in exactly two sentences, and the word 'pineapple' must appear in your answer.", "expect": [
+                ("includes pineapple", r"pineapple")],
+             "note": "observe sentence count honestly — the model-vs-constraint tension is the signal"},
+        ],
+    },
 ]
-
-
-# ─── Server boot + SSE capture (same pattern as lm_conversation_tests.py) ────
 
 
 def ensure_settings() -> None:
@@ -470,6 +607,9 @@ def run_conversation(conv: dict, port: int, timeout: int, cooldown: int) -> dict
         min_tools = turn.get("expect_tool_calls_min", 0)
         if min_tools and len(parsed["tool_calls"]) < min_tools:
             print(f"      ✗ observe: expected ≥{min_tools} tool calls, got {len(parsed['tool_calls'])}")
+        max_tools = turn.get("expect_tool_calls_max")
+        if max_tools is not None and len(parsed["tool_calls"]) > max_tools:
+            print(f"      ✗ observe: expected ≤{max_tools} tool calls, got {len(parsed['tool_calls'])}")
         for desc, check in turn.get("expect", []):
             negate = check.startswith("!")
             rx = check[1:] if negate else check
