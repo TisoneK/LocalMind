@@ -1,7 +1,43 @@
 # Current Task
 
-**Status:** IDLE — **Session 451 (Vera / ZCode local, glm-5.3-flash,
-Windows) COMPLETE (2026-09-09): B-2026-09-09-2 resolved (`37a3184c`).**
+**Status:** IDLE — **Session 456 (Ravi / ZCode local, qwen3.8-flash,
+Windows) COMPLETE (2026-09-09): context sync.** `pull --ff-only` clean
+(S453 closeout + ci-check workspaces fix `090eaa78` landed mid-session);
+`ledger-sync verify` OK on 0.20.0; `status` offered 0.21.0
+(backlog-live-queue spec, same MAJOR) but the update was **refused by
+the tool itself**: the package source
+(`C:/Users/Lameck/Tisone/context-ledger`) is an UNCOMMITTED half-release
+— HEAD still 0.20.0 (`e0252d9`), 12 files drafted in its working tree,
+`core/MANIFEST.sha256` never relocked, source fails its own manifest on
+the 5 touched core files. We stay on 0.20.0 (verified); retry after the
+upstream release is relocked + committed. **Second flag:** S455 (Zola)
+was found mid-session with an unpublished extension claim (2 events +
+review + CHANGELOG entry uncommitted in the main checkout) — flagged
+untouched; while this sync's closeout was pushing, she landed it
+herself (`7cc8d9e8` + release `0bfcad11` + report `974173c8` + checkoff
+`7143ef7f` + duplicate-B-9-7-ID note `9990fcef`). Her sessions.md entry
++ clock-out were still pending at this log; her main-checkout
+uncommitted copies are now duplicates of committed content.
+
+**Owner actions surfaced by S456:** finish the upstream 0.21.0 release
+(relock `core/MANIFEST.sha256` + commit in `../context-ledger`), then
+any session runs `ledger-sync update`; confirm S455's sessions.md entry
++ clock-out landed (she was still closing out mid-rebase — route to
+her, don't sweep her files).
+
+**Next up for the owner:** B-2026-09-06-8/9 (loop-side Thinker
+cadence/effort tuning) unchanged; B-2026-09-07-1 (fast-path workspace
+artifacts) unchanged; P0 Step 4 slice 2 (`search_tool_results` loop
+wiring) unchanged; B-2026-09-09-5 half (b) — re-claimed by Nia (S454
+back in, see roster); pytest-baseline refresh (B-2026-09-09-7; plus
+Zola's duplicate-ID note `9990fcef` on the two `-7` rows); literal
+zai/glm-4.5-flash spot-check of Vera's zero-tool gate fix whenever a
+ZAI key exists (nice-to-have, per her closeout).
+
+---
+
+**Prior — Session 451 (Vera / ZCode local, glm-5.3-flash, Windows)
+COMPLETE (2026-09-09): B-2026-09-09-2 resolved (`37a3184c`).**
 The acceptance gate's tool-evidence expectation misread two complete
 zero-tool answer classes as narration and forced replan churn
 (OTT-01 "what day is it" 32.0s/41.9s + 1 replan + `describe_tool`
@@ -20,28 +56,15 @@ untouched; task-shaped requests mentioning the clock never match).
 fabricated-date, narration-quoting-date, criteria-contract non-bypass).
 LIVE before/after (bankofai/glm-5.3-flash isolated 8765): OTT-01 →
 15.5s / 0 replans / 0 tools accepted on iteration 1, both harness
-expects ✓; OTT-09 0 replans both runs. Second-model check (owner has
-retired the "weak model" term): no ZAI_API_KEY on this box → literal
-glm-4.5-flash not runnable; Session-438-precedent stand-in
+expects ✓; OTT-09 0 replans both runs. Second-model check: no
+ZAI_API_KEY on this box; Session-438-precedent stand-in
 bankofai/qwen3.8-flash clean (date 56.8s / 0 replans single-iteration,
-decline 19.3s/23.0s / 0 replans); two of its date attempts died to
-provider 429 storms (provider-side, `finished iter=1`, no gate
-involvement). Full suite 2983 passed / 22 failed = exact documented
+decline 19.3s/23.0s / 0 replans); two provider-429 deaths noted
+honestly. Full suite 2983 passed / 22 failed = exact documented
 baseline (2958 + 25 new); ruff clean; pre-commit 5/5; ledger-mem lint
-clean (a session-ID citation stripped from a product comment before
-commit). Ran in worktree `LocalMind-vera-s451` per the 2026-09-05
-peer-live override (Otto S449 live on the main checkout, untouched);
-rebased over S452–S456 (no path overlap); claim released; integrated.
-
-**Next up for the owner:** B-2026-09-06-8/9 (loop-side Thinker
-cadence/effort tuning) unchanged; B-2026-09-07-1 (fast-path workspace
-artifacts) unchanged; P0 Step 4 slice 2 (`search_tool_results` loop
-wiring) unchanged; B-2026-09-09-5 half (b) (safety.md "flag creates no
-subtask asked for") still routed to Otto; pytest-baseline refresh
-(S453 found drift — live 7-fail set vs documented 22); literal
-zai/glm-4.5-flash spot-check of the zero-tool gate fix whenever a ZAI
-key exists on this machine (nice-to-have — the fix is deterministic,
-not model-fitted).
+clean. Ran in worktree `LocalMind-vera-s451` per the 2026-09-05
+peer-live override; rebased over S452–S456 (no path overlap); claim
+released; integrated.
 
 ---
 
