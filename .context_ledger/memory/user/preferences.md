@@ -58,14 +58,23 @@ correction twice.
   or "for weak models."** The root fix must make ANY model (small or large) in
   ANY environment run the agent effectively. Framing a fix as local-/small-model-
   specific (a `slow_provider` flag, a local-only timeout budget, a "compact env
-  for local models") is a SYMPTOM fix and "leaves trails of fixing symptoms." A
-  weak model exposing a failure is a lens onto a ROOT weakness in the
+  for local models") is a SYMPTOM fix and "leaves trails of fixing symptoms."
+  A small model exposing a failure is a lens onto a ROOT weakness in the
   agent/loop/contract that also degrades big models — fix THAT. Before shipping,
   ask "does this make the agent robust for every model+env, or did I special-case
   one model?" (correction, 2026-08-17 — S289/S290 framed the "Hi enters the tool
   loop" work around phi4-mini/Ollama with `slow_provider` band-aids; the real bug
   is a fragile classify/execute contract that fails open to `execute` on ANY
   model that doesn't emit clean JSON). Sharpens [[cure-the-disease]].
+- **"There is no weak model."** Drop the term entirely — in session logs,
+  reports, commits, code comments, and memory files. All models are capable;
+  "use any, they are all capable" (see above). When the verification bar calls
+  for a second-model check, name the model by its size/tier in neutral terms
+  ("smallest available model", "flash-tier model", or the model's name) —
+  never "weak model". (correction, 2026-09-09 — user, reacting to Session 453's
+  weak-model phrasing; sharpens the 2026-08-15/08-17 bullets. NOTE: the standing
+  directive files `system/live-testing.md`, `workflows/active.md`, and ADR-40's
+  guardrail text still carry the term — sweeping those is the owner's call.)
 - **Use ANY capable model.** A free/small model failing to run tools is OUR bug,
   not the model's — "use any, they are all capable." Provider/model choice is
   config, not the root of agent failures (stated, 2026-08-15)
