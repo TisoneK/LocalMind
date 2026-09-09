@@ -1,10 +1,12 @@
 # Current Task
 
-**Status:** ACTIVE — **Session 447 RESUMED** (Petra, S447 check-back-in per the
-0.19 rule): clearing the 5 Dependabot alerts — all dev-tooling deps
-(js-yaml High; vitest/@vitest/mocker Moderate ×2; joi Low ×2), npm bumps +
-gates. Note emitted to Juno (S448): npm install touches the shared root
-node_modules their worktree junctions; code paths disjoint.
+**Status:** IDLE — **Session 447 (Petra) resume slice COMPLETE (2026-09-09):
+all 5 Dependabot alerts' fixes pushed** (`5228f712`, lockfile-only
+`npm audit fix`: js-yaml 4.3.2 high, vitest/@vitest/mocker 4.1.11 moderate,
+joi 18.2.8 low ×2 — all dev-tooling, nothing ships). Frontend 422/422 on
+vitest 4.1.11; pre-commit 5/5; exit gate PASSED. Petra stays on the board
+(owner still active in this session — 0.19 rule); alerts close asynchronously
+via Dependabot re-scan.
 
 ---
 
