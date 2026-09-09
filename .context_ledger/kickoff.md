@@ -152,6 +152,11 @@ number), model, one line on what you're on. Commit and push the row
 immediately, before any product work:
 `chore(ledger): <name> (<codename>) checks in — <task>`. If the push
 forces a rebase, a peer checked in concurrently — re-read the board.
+Clock-out (Step 15) is *leaving the office*, not finishing a task — and
+the session is not over until the user says so. If you clocked out and
+the supervisor brings more work, **check back in before touching
+anything**: re-add your row under the same name and codename `S<N>`, and
+extend your existing session entry rather than opening a second one.
 
 **Decide the mode from evidence, not from an empty board.** You are
 solo only if no collaboration `session` + `issue` was declared AND the

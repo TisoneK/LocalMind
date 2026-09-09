@@ -80,8 +80,12 @@ If you read nothing else, obey these rules:
    the session is logged in `.context_ledger/memory/agents/sessions.md`, and
    `.context_ledger/memory/tasks/current.md` is cleared. Clock out too: remove
    your row from `.context_ledger/memory/agents/roster.md` in the closing
-   memory commit, so the board shows who is in the office now. If the
-   user has to remind you to commit or push, that is a protocol
+   memory commit, so the board shows who is in the office now — but only
+   when you are actually leaving. The session is not over until the user
+   says so; if you clocked out and the supervisor brings more work, check
+   back in first (re-add your row, same name and codename `S<N>`) and
+   extend your existing `sessions.md` entry — never a second `Session N`.
+   If the user has to remind you to commit or push, that is a protocol
    failure — log it in `.context_ledger/memory/flaws/log.md`.
 10. **Don't ask permission for the default next step.** Do it and
     report. Ask only on genuine ambiguity or destructive/irreversible
