@@ -148,6 +148,27 @@ class TestContentExtraction:
         assert intent.memory_type.value == "user_fact"
         assert intent.needs_resolution is False
 
+    # Batch-8 shape: a quantified "things" tail survives as framing too —
+    # "Remember two things: X and Y" stored "two things: X and Y" verbatim.
+    def test_strips_quantified_things_colon(self):
+        content = _extract_content(
+            "Remember two things: my project is called Falcon "
+            "and my sister's name is Ama"
+        )
+        assert content == (
+            "my project is called Falcon and my sister's name is Ama"
+        )
+
+    def test_strips_bare_things_colon(self):
+        content = _extract_content("Remember things: my birthday is May 5")
+        assert content == "my birthday is May 5"
+
+    # The floor is punctuation-gated: without a colon after "things" it is
+    # part of the fact and every word must survive.
+    def test_things_without_punctuation_is_kept(self):
+        content = _extract_content("Remember two things matter for the deploy")
+        assert content == "two things matter for the deploy"
+
 
 # ── Source-domain detection ────────────────────────────────────────────────
 

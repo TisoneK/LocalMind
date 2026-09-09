@@ -198,6 +198,27 @@ class TestRecallOperation:
         assert "this:" not in fact and "acknowledge" not in fact.lower()
         assert result.content == "Remembered: *my project is called Falcon*"
 
+    @pytest.mark.asyncio
+    async def test_quantified_things_cue_stores_fact_not_framing(
+        self, tmp_path, monkeypatch
+    ):
+        """'Remember two things: X and Y' must not persist the 'two things:' tail."""
+        from core.config import settings
+
+        monkeypatch.setattr(settings, "localmind_home", str(tmp_path))
+        monkeypatch.setattr(settings, "localmind_db_path", str(tmp_path / "localmind.db"))
+
+        store = MagicMock()
+        store.store = AsyncMock(return_value=True)
+        with patch("storage.vector.VectorStore", return_value=store):
+            result = await memory_op(
+                "Remember two things: my project is called Falcon "
+                "and my sister's name is Ama"
+            )
+        assert result.success is True
+        fact = store.store.await_args.kwargs["fact"]
+        assert fact == "my project is called Falcon and my sister's name is Ama"
+
 
 class TestGapBClassifierContentThrough:
     """The deterministic write path must store the classifier's extraction."""

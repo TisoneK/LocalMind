@@ -188,14 +188,22 @@ def _classify_memory_type(content: str, is_source_knowledge: bool) -> MemoryType
 
 
 # ── Deterministic content extraction ────────────────────────────────────────
-# The memory-cue prefix strip. A colon/semicolon/dash may follow the verb
-# directly ("Remember: X"), and the demonstrative may carry punctuation
-# before the fact ("Remember this: X"). The old form required whitespace
-# after "this", so "Remember this: X" survived extraction and the framing
-# was persisted verbatim as the fact.
+# The memory-cue prefix strip. Two forms consume the cue:
+#   verb + space + optional ("two things:" / "this:") → "Remember this: X"
+#   verb + colon directly                                          → "Remember: X"
+# The old form required whitespace after the demonstrative, so
+# "Remember this: X" survived extraction and the framing was persisted
+# verbatim as the fact; a quantified "things" tail ("Remember two things:
+# X and Y") is the same disease in batch-8 — stripped ONLY when punctuation
+# follows it, so "the two things that matter for the deploy" stays intact.
+_QUANTIFIERS = (
+    r"one|two|three|four|five|six|seven|eight|nine|ten|several|both|\d+"
+    r"|a couple of|a few|these|those"
+)
 _CUE_PREFIX_RE = re.compile(
     r"^\s*(?:remember|save|store|keep in mind|don'?t forget|note down)"
-    r"(?:\s+(?:(?:that|this|these|those|the)\s*[:;,]?\s+)?"  # "remember this: X"
+    r"(?:\s+(?:(?:" + _QUANTIFIERS + r")?\s*things?\s*[:;,]\s+"  # "… two things: X"
+    r"|(?:that|this|these|those|the)\s*[:;,]?\s+)?"  # "remember this: X"
     r"|\s*[:;,]\s+)",  # bare "remember: X" — keep a leading article intact
     re.IGNORECASE,
 )
@@ -222,6 +230,9 @@ def _extract_content(message: str) -> str:
     "my project is called Falcon" — the cue demonstrative survives a colon
     ("this:") and the trailing imperative is a framing instruction, not the
     fact (live echo artifact: "Remembered: *this: … Just acknowledge*").
+    For "remember two things: X and Y" → "X and Y" — the quantified
+    "things:" tail is framing too; it is stripped only when punctuation
+    follows ("two things matter for the deploy" keeps every word).
     """
     # Strip common prefixes
     content = message.strip()
