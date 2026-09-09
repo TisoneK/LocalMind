@@ -375,7 +375,13 @@ cmd_rename() {
 set -u
 git mv .context .context_ledger || { echo "ledger-sync: git mv .context .context_ledger failed — rename by hand, then run: sh .context_ledger/core/bin/ledger-sync lock" >&2; exit 1; }
 for f in .context_ledger/README.md .context_ledger/kickoff.md .context_ledger/.gitattributes AGENTS.md CLAUDE.md; do
-  [ -f "\$f" ] && sed -i 's|\.context/|.context_ledger/|g; s|\.context\b|.context_ledger|g' "\$f"
+  [ -f "\$f" ] || continue
+  # Portable in-place edit: BSD/macOS sed needs a backup-suffix arg for -i and
+  # has no \b, so rewrite via a temp file with POSIX-only regex (GNU + BSD sed,
+  # i.e. Linux, macOS, and Git Bash on Windows). The trailing-slash case is
+  # rewritten first; then bare .context followed by a non-word/non-slash char
+  # (kept via \1) or at end of line -- which never matches .context_ledger.
+  sed 's|\.context/|.context_ledger/|g; s|\.context\([^A-Za-z0-9_/]\)|.context_ledger\1|g; s|\.context\$|.context_ledger|g' "\$f" > "\$f.ledger-tmp.\$\$" && mv "\$f.ledger-tmp.\$\$" "\$f"
 done
 sh .context_ledger/core/bin/ledger-sync verify
 echo "renamed .context/ -> .context_ledger/"

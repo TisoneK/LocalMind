@@ -34,7 +34,8 @@ function Usage {
     '          (ai-models.md by Agent+Model, environments.md by Identify-by;',
     '          roster.md by Name and codename) plus a warn-only board-vs-',
     '          duty-log audit: a roster row whose Session N is already in',
-    '          agents/sessions.md means the session never clocked out',
+    '          agents/sessions.md means the session never clocked out,',
+    '          and a duplicated Session N means a resumed session re-logged',
     '  lint    .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) leaking',
     '          into the staged product diff',
     '  prune   advise archiving resolved/superseded entries out of the',
@@ -146,6 +147,30 @@ function Check-RosterStale {
   }
 }
 
+function Check-DupSessions {
+  # sessions.md holds one entry per session codename S<N> (Step 17). Two
+  # "Session N" headers for the same N mean a resumed session re-logged
+  # instead of extending its entry (the ghost-editor flaw). Warns only.
+  $s = Join-Path $memoryDir 'agents/sessions.md'
+  if (-not (Test-Path -LiteralPath $s)) { return }
+  $seen = @{}; $where = @{}
+  $ln = 0
+  foreach ($raw in Get-Content -LiteralPath $s) {
+    $ln++
+    $line = $raw.TrimEnd("`r")
+    if ($line -match '^##\s+.*[Ss]ession\s+([0-9]+)') {
+      $num = [int]$Matches[1]
+      if ($seen.ContainsKey($num)) { $seen[$num]++; $where[$num] += " $ln" }
+      else { $seen[$num] = 1; $where[$num] = "$ln" }
+    }
+  }
+  foreach ($num in ($seen.Keys | Sort-Object)) {
+    if ($seen[$num] -gt 1) {
+      Say ('WARN sessions.md: Session {0} has {1} entries (lines {2}) - one entry per codename S<N>; a resumed session should extend its entry, not add a second. Merge them.' -f $num, $seen[$num], $where[$num])
+    }
+  }
+}
+
 function Invoke-Lint {
   if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Die 'lint needs git on PATH' }
   $root = (& git -C $projectDir rev-parse --show-toplevel 2>$null)
@@ -215,6 +240,7 @@ switch ($Command) {
     $ok2 = Check-Environments
     $ok3 = Check-Roster
     Check-RosterStale
+    Check-DupSessions
     if ($ok1 -and $ok2 -and $ok3) { Say 'memory check passed: no duplicate keys in the update-in-place registries'; exit 0 }
     ErrLine 'memory check failed: a registry has more than one entry for a key - correct in place (edit the entry), do not append a duplicate'
     exit 1

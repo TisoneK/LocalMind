@@ -38,7 +38,8 @@ usage() {
   say "          (ai-models.md by Agent+Model, environments.md by Identify-by;"
   say "          roster.md by Name and codename) plus a warn-only board-vs-"
   say "          duty-log audit: a roster row whose Session N is already in"
-  say "          agents/sessions.md means the session never clocked out"
+  say "          agents/sessions.md means the session never clocked out,"
+  say "          and a duplicated Session N means a resumed session re-logged"
   say "  lint    .context_ledger vocabulary (ADR-N, bug IDs, .context_ledger/ paths) leaking"
   say "          into the staged product diff"
   say "  prune   advise archiving resolved/superseded entries out of the"
@@ -144,6 +145,7 @@ check() {
   check_environments || _rc=1
   check_roster || _rc=1
   check_roster_stale
+  check_dup_sessions
   if [ "$_rc" -eq 0 ]; then
     say "memory check passed: no duplicate keys in the update-in-place registries"
   else
@@ -174,6 +176,28 @@ check_roster_stale() {
       say "WARN roster.md: codename S$_num is still on the board, but a Session $_num entry already exists in agents/sessions.md — the session logged itself done without clocking out; remove the row"
     fi
   done
+  return 0
+}
+
+# duplicate duty-log entries: agents/sessions.md holds one entry per session
+# codename S<N> (protocol Step 17). Two "Session N" headers for the same N mean
+# a resumed session re-logged instead of extending its entry — the ghost-editor
+# flaw. Warns only; the fix is to merge the two into one entry.
+check_dup_sessions() {
+  _s=$MEMORY_DIR/agents/sessions.md
+  [ -f "$_s" ] || return 0
+  awk '
+    match($0, /^##[[:space:]].*[Ss]ession[[:space:]]+[0-9]+/) {
+      line = $0
+      sub(/.*[Ss]ession[[:space:]]+/, "", line)
+      num = line + 0
+      seen[num]++; where[num] = where[num] " " FNR
+    }
+    END {
+      for (k in seen) if (seen[k] > 1)
+        printf "WARN sessions.md: Session %d has %d entries (lines%s) — one entry per codename S<N>; a resumed session should extend its entry, not add a second. Merge them.\n", k, seen[k], where[k]
+    }
+  ' "$_s"
   return 0
 }
 
