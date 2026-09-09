@@ -56,6 +56,8 @@ Grounded in two research reports:
   chip. Live-verified 4-turn trace: 10,977/32,768 = 33%, cached 56%.
   qwen3.8-flash missing from MODEL_CONTEXT_WINDOWS → B-2026-09-04-1.
 
+- **S445** (`6d53f6c3`): agent-intelligence slice adjacent to this feature — the deferred S412 prompt-diet finding was re-aimed by discovery: the giant execution prompt + planner are the PARKED branch (parent turns run the native-bootstrap surface); the live fixes were the serial fast-path consult skip (live 5.5s→1.7s), advisory route/plan wording, honest chat capability. Per-tool-rules-into-descriptions stays a Step-3+ candidate.
+
 ## Constraints / do-not-regress
 
 - ADR-40 guardrail: live-verify tool SELECTION on a weak model after any
