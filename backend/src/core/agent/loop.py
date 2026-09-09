@@ -7114,6 +7114,35 @@ class AgentLoop:
             # unchanged (return the legacy model-assertion path below).
             _floor_note = parent_completion_floor_note(trace) if is_parent else None
             if _floor_note is None:
+                # Zero-tool success shapes (injected-context gate): turns
+                # whose answer is fully grounded in context the loop itself
+                # injects (current date/time — the environment context block
+                # carries the clock into every turn) and clean policy
+                # declines of violation-shaped requests carry NO tool
+                # evidence by design. The narration detectors below exist to
+                # catch narrated-but-unexecuted ACTIONS, so a grounded
+                # answer or a refusal that narrates nothing is accepted.
+                # The detectors still win when the text commits to a tool
+                # action — "I'll write that to a file" is narration even
+                # when it quotes the injected date.
+                if is_parent and not any(
+                    getattr(s, "tool_name", "") for s in getattr(trace, "steps", []) or []
+                ):
+                    _final_text = getattr(trace, "final_response", "") or ""
+                    from core.agent.injected_context_gate import (
+                        zero_tool_turn_is_valid,
+                    )
+
+                    if (
+                        _final_text.strip()
+                        and not prose_commits_to_tool_action(_final_text)
+                        and not narrates_pending_action(_final_text)
+                        and zero_tool_turn_is_valid(
+                            message=reformulated_message or "",
+                            answer=_final_text,
+                        )
+                    ):
+                        return "", True
                 # B-2026-08-20-6 (Session 307) — the prose-tool-commitment
                 # detector. Distinct from the completion floor (which fires
                 # when a tool RAN and failed): this fires when NO tool ran
