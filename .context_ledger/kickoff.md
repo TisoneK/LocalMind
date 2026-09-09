@@ -152,6 +152,12 @@ number), model, one line on what you're on. Commit and push the row
 immediately, before any product work:
 `chore(ledger): <name> (<codename>) checks in — <task>`. If the push
 forces a rebase, a peer checked in concurrently — re-read the board.
+**Roster edits are additive — your row only.** A live row you didn't
+write is a colleague's check-in, not sample text: never adopt a peer's
+name, and never let an edit's `old_string` span a peer's row (the edit
+tool replaces blocks — anchoring on the table body erases whoever is on
+it); after a roster edit the diff must show exactly your own row
+(`+1` on check-in) — review `git diff` before committing.
 Clock-out (Step 15) is *leaving the office*, not finishing a task — and
 the session is not over until the user says so. If you clocked out and
 the supervisor brings more work, **check back in before touching

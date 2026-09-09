@@ -42,7 +42,11 @@ If you read nothing else, obey these rules:
    (solo or collaboration) adds or updates its row in
    `memory/agents/roster.md` — real name you pick (unique per group),
    codename `S<NNN>`, model, one line on what you're on — and pushes it
-   before product work. You are solo only when there is no shared
+   before product work. Roster edits are additive — your row only: a live
+   row you didn't write is a colleague's check-in, not sample text — never
+   adopt a peer's name, never let an edit span a peer's row, review the
+   `git diff` (exactly your row, `+1` on check-in) before committing. You
+   are solo only when there is no shared
    collaboration `session` + `issue`, no live roster row you didn't
    write, and `tasks/current.md` is idle; otherwise coordinate (join or
    declare a session, isolated worktree/branch, `note` + `claim`) — a

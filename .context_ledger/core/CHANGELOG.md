@@ -10,6 +10,32 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 0.20.0 — 2026-09-09
+
+**Additive roster edits — the peer-clobber fix.** On check-in into a
+board holding a live peer's row, the arriving agent (LocalMind S449)
+answered to the peer's identity instead of creating its own; when
+corrected, its replace-style edit anchored on the table body *containing
+the peer's row* — the block swap erased the live peer from the board and
+was committed and pushed without a diff review (from `flaws/log.md`,
+2026-09-09, via LocalMind flaw 86eeaef6). The check-in rule said "add or
+update your row" but never stated the edit discipline that makes that
+safe on a shared board.
+
+- **Roster edits are additive — your row only** (both editions, kickoff,
+  AGENTS.md digest): a live row you didn't write is a colleague's
+  check-in, not sample text. Never take a peer's identity (name taken →
+  pick another); never let an edit's `old_string` span or include a
+  peer's row — the edit tool replaces blocks, so anchoring on the table
+  body erases whoever is on it.
+- **Diff-review gate for roster edits:** after any roster edit, `git
+  diff` must show exactly your own row changed (`+1` on check-in) —
+  review the diff before committing. A two-second diff review is what
+  the S449 push lacked.
+- No tool changes, schema changes, or memory-layout changes — project
+  agents pick the rule up from the vendored rules/kickoff/digest text at
+  the next same-major `ledger-sync update`.
+
 ## 0.19.0 — 2026-09-08
 
 **Resume after clock-out — the ghost-editor fix.** Clock-out (Step 15)
