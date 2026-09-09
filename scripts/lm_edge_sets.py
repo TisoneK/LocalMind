@@ -25,7 +25,11 @@ This harness probes dimensions those suites do NOT:
   - pronoun-ref   : "make it vegan" where "it" is the file the agent itself
                     wrote — reference resolution over its own artifacts.
   - greeting-personal : addressed greeting with a name (fast path), then recall
-                    of that name next turn.
+                        of that name next turn.
+
+Results: scratch/edge-sets-<date>-<HHMMSS>.json (this run, checkpointed after
+  every conversation) plus scratch/edge-sets-<date>-all.json (cumulative for
+  the day — reruns of a conversation id replace the older entry).
 
 Usage:
   cd backend && ../scripts/lm_edge_sets.py --convs OTT-01,OTT-04
@@ -622,6 +626,38 @@ def run_conversation(conv: dict, port: int, timeout: int, cooldown: int) -> dict
     return {"id": conv["id"], "set": conv["set"], "name": conv["name"], "turns": turns_out}
 
 
+def load_merged_results(stamp: str) -> list[dict]:
+    """Carry prior evidence forward: merge this invocation's results into the
+    cumulative day file. A conv id re-run in this invocation REPLACES its stale
+    entry (latest evidence wins); ids not in this run keep their earlier
+    entries — multi-batch days end with one stitched artifact instead of
+    fragments that each later run silently overwrites."""
+    merged_path = SCRATCH / f"edge-sets-{GROUND_TRUTH_DATE}-all.json"
+    prior: dict[str, dict] = {}
+    if merged_path.exists():
+        try:
+            for entry in json.loads(merged_path.read_text(encoding="utf-8")):
+                if isinstance(entry, dict) and entry.get("id"):
+                    prior[entry["id"]] = entry
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"[warn] unreadable cumulative file {merged_path.name} ({e}) — starting fresh")
+    for entry in load_invocation_results(stamp):
+        prior[entry["id"]] = entry
+    return list(prior.values())
+
+
+def load_invocation_results(stamp: str) -> list[dict]:
+    """This invocation's own results so far, from its checkpoint file."""
+    checkpoint = SCRATCH / f"edge-sets-{GROUND_TRUTH_DATE}-{stamp}.json"
+    if not checkpoint.exists():
+        return []
+    try:
+        data = json.loads(checkpoint.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--convs", help="comma-separated conversation IDs")
@@ -663,7 +699,18 @@ def main():
 
     print(f"[boot] starting server on port {port} (venv: {VENV_PY})")
     proc = None
-    results = []
+    # One stamp per invocation: checkpoints and the final artifact share it,
+    # so a second batch on the same day never clobbers the first batch's file
+    # and a hard crash still leaves readable evidence under this run's stamp.
+    stamp = time.strftime("%H%M%S")
+    checkpoint = SCRATCH / f"edge-sets-{GROUND_TRUTH_DATE}-{stamp}.json"
+    merged_path = SCRATCH / f"edge-sets-{GROUND_TRUTH_DATE}-all.json"
+
+    def save_progress(results: list) -> None:
+        checkpoint.write_text(json.dumps(results, indent=2), encoding="utf-8")
+        merged_path.write_text(json.dumps(load_merged_results(stamp), indent=2), encoding="utf-8")
+
+    results: list = []
     try:
         proc = boot_server(port, log_file)
         print(f"[boot] server ready (pid={proc.pid})")
@@ -672,19 +719,17 @@ def main():
                 time.sleep(args.conv_cooldown)
             result = run_conversation(conv, port, args.timeout, args.cooldown)
             results.append(result)
-            out = SCRATCH / f"edge-sets-{GROUND_TRUTH_DATE}-partial.json"
-            out.write_text(json.dumps(results, indent=2), encoding="utf-8")
+            save_progress(results)
     except KeyboardInterrupt:
         print(f"\n[abort] KeyboardInterrupt — saved {len(results)} partial results")
     finally:
         if proc is not None:
             kill_process_tree(proc)
         kill_port(port)
-        # B-2026-09-09-4(a): timestamp per invocation — a second batch on the
-        # same day must not clobber the first batch's evidence file.
-        out = SCRATCH / f"edge-sets-{GROUND_TRUTH_DATE}-{time.strftime('%H%M%S')}.json"
-        out.write_text(json.dumps(results, indent=2), encoding="utf-8")
-        print(f"\n[done] results → {out}")
+        save_progress(results)
+        count = len(load_merged_results(stamp))
+        print(f"\n[done] {len(results)} results this run → {checkpoint.name}")
+        print(f"       cumulative day file ({count} conversations) → {merged_path.name}")
 
 
 if __name__ == "__main__":
