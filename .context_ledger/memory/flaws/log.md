@@ -833,3 +833,11 @@ just the number, before trusting a before/after label.
 - **Fix applied this session:** none of S455's files touched; checked in as a NEW session (S456/Ravi, additive row, diff-reviewed +1); her work flagged to the owner as in-flight.
 - **Suggested fix (behavior):** identity = the row you check in as, never an inference from a model string. If a roster row's model matches yours, grep what that marker means across memory (ai-models.md / sessions.md headers) BEFORE concluding; fresh context ⇒ new codename unless the owner explicitly resumes your session. Dirty tree not provably yours = peer's: untouched, flagged.
 - **Status:** caught by the supervisor before any commit (logged per rule 9 — the correction had to come from the owner, that is the flaw).
+
+---
+## 2026-09-09 — Zola / qwen3.8-flash (Session 455)
+- **Flaw:** the vendored `ledger-collab` emit helper writes a **blank line at EOF** into every event file it creates when the body ends in a newline. The universal pre-commit check `git diff --cached --check` then FAILS the commit ("new blank line at EOF") for any session that stages its own events cleanly.
+- **Symptom:** my check-in pre-commit gate failed on the two freshly emitted note+claim files; because I ran the gate through a pipe (`| tail`), the failure was invisible until the next command (see the companion inefficiency). I stripped the trailing LF from both files in Python; the first strip rode into a peer's commit (shared-checkout), the second I caught and pre-stripped before committing.
+- **Root cause:** the helper writes `body + "\n"` with the body itself ending in `"\n"` (the event template's closing newline is not normalized). The files parse fine (`ledger-collab status/check` pass on them) — it is purely the staged-diff hygiene check that rejects them.
+- **Suggested fix (package):** in the emit implementation, normalize the event file to exactly one trailing newline (`rstrip("\n") + "\n"`) before writing; then `ledger-gates run pre-commit` is passable for a fresh event commit out-of-the-box.
+- **Status:** open — workaround this session: strip the EOF blank line (single trailing LF) before staging any emitted event file.

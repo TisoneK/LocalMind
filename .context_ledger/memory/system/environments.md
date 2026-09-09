@@ -22,9 +22,9 @@ block (and its "last verified" date) every time you run on it again.
 ---
 ## Tison's local Windows machine (last verified 2026-09-09)
 
-- **Identify by:** hostname matches `Tison`; OS is Windows; user home is `C:\Users\tison`; Dev root is `C:\Users\tison\Dev`
+- **Identify by:** OS is Windows; Tisone's dev account; observed this session: hostname `DESKTOP-3LRR8MD`, user home `C:\Users\Lameck`, repo at `C:\Users\Lameck\Tisone\LocalMind` (older S421-S449 records used `C:\Users\tison` — the account path moved; same machine family: Windows 11, Tisone's local box)
 - **OS:** Windows 11 (PowerShell, Git Bash available)
-- **Runtimes:** Node.js v24.13.0, Python 3.14.2, npm 11.12.1
+- **Runtimes:** Node.js v24.20.0, Python 3.14.7, backend venv `backend/.venv/Scripts/python.exe` -> Python 3.11.0 (re-verified 2026-09-09, S455)
 - **Package manager:** npm (root `package-lock.json` with workspaces); pip (system Python, not venv — on Windows, PEP 668 is advisory only)
 - **Verified commands:**
   - `node --version` → v24.13.0 (2026-07-11, re-verified 2026-08-31)
@@ -41,6 +41,7 @@ block (and its "last verified" date) every time you run on it again.
   - Live-test harness port hygiene (S425): after kill_port, VERIFY 8765 is free and grep the new server log for "already in use" + a fresh "parent-kernel] ready" line before trusting a trace — a stale listener answers health checks and the client silently measures OLD code (cost one invalid after-run). ledger-collab.ps1: use `--refs`, not `--re` (the alias breaks pwsh parameter binding). (2026-09-06)
   - Live-test server on Windows: launch children with PLAIN Popen (no DETACHED_PROCESS) when the harness waits in `finally` — DETACHED_PROCESS + piped stdout killed the server mid-turn, no traceback, client saw WinError 10054 (2026-09-05, S423)
   - OCR stack in backend/.venv: pillow + pytesseract installed (2026-09-05, S423); system Tesseract-OCR at `C:\Program Files\Tesseract-OCR\tesseract.exe`; image reads + .jpg path extraction live-verified (2026-09-05, S423)
+  - Live-verify on a CONTENDED port: when a peer batch holds 8765, boot the isolated server on 8766 instead (`LOCALMIND_PORT=8766 LOCALMIND_HOME=<scratch>/home LOCALMIND_ADAPTER=bankofai PYTHONPATH=<repo>/backend/src` + `backend/.venv/Scripts/python.exe server.py`, boot+curl+taskkill in one bash invocation) — never kill_port a peer's port, never edit their harness script mid-claim (2026-09-09, S455; settings.json copied into the scratch home, keys never printed)
   - OneDrive Files-On-Demand on this machine: placeholders carry RECALL_ON_DATA_ACCESS (0x400000); with OneDrive.exe DOWN every read fails EINVAL/WinError 362 and does NOT auto-hydrate; file_task now auto-starts OneDrive and hydrates on sync (~30s+ for first file after cold start) (2026-09-05, S423)
 - **Quirks:**
   - Windows paths use backslashes; PowerShell handles both `/` and `\`
