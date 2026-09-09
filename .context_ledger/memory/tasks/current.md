@@ -1,13 +1,16 @@
 # Current Task
 
-**Status:** ACTIVE — Session 447 (Petra, ZCode local, glm-5.3-flash, Windows):
-protocol sync 0.18.0 → 0.19.0 (clock-out/resume rules) + staging the external
-setup agent's product `package.json` `allowScripts` change (owner-approved),
-kept on its own product commit.
+**Status:** IDLE — **Session 447 (Petra, ZCode local, glm-5.3-flash, Windows)
+COMPLETE (2026-09-09): core sync 0.18.0 → 0.19.0** (clock-out/resume +
+one-entry-per-codename rules; entry points refreshed in place — the template
+delta was rule-9 text only). Also staged the external setup agent's product
+`package.json` `allowScripts` change on its own commit (`513531fb`,
+owner-approved).
 
 ---
 
-**Prior — Session 446
+**Prior — Session 446 (claude-opus-4.8, macOS localmind-7c) COMPLETE
+(2026-09-08): P0 Step 4 slice 1 shipped
 (`storage/tool_result_index.py`, product `8481102`; claim `668cd64`, release
 `99d03c3`). Hybrid FTS5 (porter+trigram) + vec0 over >5 KB chunked tool results,
 Reciprocal-Rank-Fusion search, tool/session filters. 15 hermetic unit tests +
