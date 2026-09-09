@@ -27,6 +27,7 @@ is your stable session tag.
 |------|----------|-------|-------|
 | Otto | S449 | glm-5.3-flash | Live-testing the agent (new prompt sets beyond the saved suites), backlogging found issues for workers; main checkout |
 | Vera | S451 | glm-5.3-flash | Taking B-2026-09-09-2 (acceptance gate replans injected-context turns); isolated worktree |
+| Maya | S452 | glm-5.3-flash | Taking B-2026-09-09-4 (lm_edge_sets.py result-file overwrite + merge-on-rerun); isolated worktree |
 
 `ledger-mem check` flags a duplicate name or codename. This roster is the
 **current group's** only — it resets when the group closes
