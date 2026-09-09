@@ -816,3 +816,12 @@ just the number, before trusting a before/after label.
 - **Fix applied this session:** Juno's row restored verbatim in `8353a669`; my row added as a separate line; board verified to show both rows before proceeding.
 - **Suggested fix (behavior):** roster edits must be ADDITIVE — never let old_string span an existing peer's row; after any roster edit, diff must show exactly +1 line (own row) and `git diff` reviewed before commit. Peer rows are live state: deleting one is deleting a colleague's check-in.
 - **Status:** resolved this session (restored + verified). Logged per rule 9 (supervisor had to correct me twice before I did it right).
+
+---
+## 2026-09-09 — Nia / qwen3.8-flash (Session 454)
+
+- **Flaw:** a collab `release` event missing the required product-commit reference can never be corrected — events are immutable ("emit a correction instead of editing"), but the check validates EVERY release event in scope, and there is no withdraw/supersede marker.
+- **Symptom:** `ledger-collab check --session localmind-goalcontract-20260909 --issue b-2026-09-09-5-fakecontract` fails permanently with "release 20260909T143306Z-nia-zcode-qwen3.8-flash-win-s454-82e67b2f does not reference a product commit" even though the claim IS properly closed by the compliant supplementary release (full SHA in refs). The integration gate's collab-check component fails for my session scope forever; a second, duplicate release was the only workaround.
+- **Root cause:** `ledger-collab-check` (core 0.20.0) validates releases by checking each release event's own `refs` for a SHA; it never asks whether the CLAIM was closed by any valid release. My first release cited the claim event ID (`--re c62aa7ae`) — which the schema itself calls sufficient to close a claim ("citing the claim's event ID … still closes the claim") — but the release-then-check rule additionally demands a SHA.
+- **Suggested fix:** (a) validate the SHA-reference requirement against the claim's closing state (a claim with a later compliant release passes; older events warn, not fail); or (b) add a `withdraws: <event-id>` frontmatter key that exempts the named event from validation while preserving immutability. Also reconcile the schema sentence vs the check: event-ID citation is documented as sufficient, the checker says otherwise.
+- **Status:** open — back-port candidate for the context-ledger package (upstream https://github.com/TisoneK/context-ledger.git).
