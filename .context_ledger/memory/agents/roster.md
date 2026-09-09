@@ -26,6 +26,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
 | Otto | S449 | glm-5.3-flash | Live-testing the agent (new prompt sets beyond the saved suites), backlogging found issues for workers; main checkout |
+| Vera | S451 | glm-5.3-flash | Taking B-2026-09-09-2 (acceptance gate replans injected-context turns); isolated worktree |
 
 `ledger-mem check` flags a duplicate name or codename. This roster is the
 **current group's** only — it resets when the group closes
