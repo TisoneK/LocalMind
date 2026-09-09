@@ -27,7 +27,6 @@ is your stable session tag.
 |------|----------|-------|-------|
 | Otto | S449 | glm-5.3-flash | Live-testing the agent (new prompt sets beyond the saved suites), backlogging found issues for workers; main checkout |
 | Vera | S451 | glm-5.3-flash | Taking B-2026-09-09-2 (acceptance gate replans injected-context turns); isolated worktree |
-| Maya | S452 | glm-5.3-flash | Taking B-2026-09-09-4 (lm_edge_sets.py result-file overwrite + merge-on-rerun); isolated worktree |
 
 | Cleo | S453 | glm-5.3-flash | Taking B-2026-09-09-3 (tool-discovery round-trips on unambiguous creates); isolated worktree |
 | Nia | S454 | qwen3.8-flash | Taking B-2026-09-09-5 (gate-pressure makes models fabricate "verification" artifacts on reading turns — safety-workflow create-mandate guard + OTT-19 verification); isolated worktree |

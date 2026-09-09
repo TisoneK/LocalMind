@@ -1,6 +1,38 @@
 # Current Task
 
-**Status:** IDLE — **Session 450 (Leah / ZCode local, glm-5.3-flash,
+**Status:** IDLE — **Session 452 (Maya / ZCode local, glm-5.3-flash,
+Windows) COMPLETE (2026-09-09): backlog B-2026-09-09-4 fixed** —
+`scripts/lm_edge_sets.py` result files are now per-invocation-stamped
+(one HHMMSS stamp shared by mid-run checkpoints and the final artifact;
+the shared `edge-sets-<date>-partial.json` clobber point is deleted) and
+a cumulative `edge-sets-<date>-all.json` is rewritten after every
+conversation (rerun of a conversation id replaces its entry — latest
+evidence wins; ids not in the current run carry forward; an unreadable
+cumulative file warns and starts fresh). Product commit `0755ff6d` on
+main (branch `collab/localmind-harness-fix-20260909/maya-s452`, release
+event `20260909T134732Z`). Half (a)'s final-file timestamp was already in
+Otto's `d481413f`; this session moved the checkpoints onto the same
+per-invocation stamp, added the merge half, and rewrote the committed
+bug-ID citation out of the product comment. Offline-verified end-to-end
+in a stubbed temp sandbox (no clobber across invocations, latest-wins
+merge, corrupt-file recovery); no live provider run needed — result-file
+IO only, zero loop/adapter surface. Pre-commit gate 5/5.
+
+**Live peers at S452 closeout (do not treat their items as free):**
+Otto (S449) live-testing on the main checkout; Vera (S451) on
+B-2026-09-09-2; Cleo (S453) on B-2026-09-09-3; Nia (S454) on
+B-2026-09-09-5; Zola (S455) on B-2026-09-09-6. Otto's batch-8 probes
+live in `scripts/lm_edge_sets_b8.py` (untracked at S452 close).
+
+**Next up for the owner:** B-2026-09-06-8/9 (loop-side Thinker
+cadence/effort tuning) unchanged; B-2026-09-07-1 (fast-path workspace
+artifacts) unchanged; B-2026-09-09-1 (flaky test_stop_already_stopped)
+unchanged; P0 Step 4 slice 2 (`search_tool_results` loop wiring) still
+the p0-context-engineering next slice.
+
+---
+
+**Prior — Session 450 (Leah / ZCode local, glm-5.3-flash,
 Windows) COMPLETE (2026-09-09): protocol sync — vendored core 0.19.0 →
 0.20.0.** 0.20.0 is the additive-roster-edit rule (the peer-row clobber
 fix — literally the fix for Otto's S449 check-in incident, flaw
@@ -22,17 +54,6 @@ PASSED (5/5). One inefficiency logged: the first core-update attempt
 ran in the main checkout before the mode decision — reverted exactly,
 redone in the worktree; next sync session reads the roster BEFORE the
 mutating `update` step.
-
-**Next up for the owner:** B-2026-09-06-8/9 (loop-side Thinker
-cadence/effort tuning) unchanged; B-2026-09-07-1 (fast-path workspace
-artifacts) unchanged; P0 Step 4 slice 2 (`search_tool_results` loop
-wiring) still the p0-context-engineering next slice; Otto's fresh live
-findings queued for workers: B-2026-09-09-2 (P2 — injected-context /
-refusal turns trip the acceptance gate's tool-evidence criteria →
-replan churn on zero-tool turns; live verification bar specified),
-B-2026-09-09-3 (P3 — tool-discovery round-trips on unambiguous creates),
-B-2026-09-09-4 (P3 — `lm_edge_sets.py` result-file overwrite +
-scratch-home settings trap).
 
 ---
 
@@ -56,13 +77,3 @@ baseline, pre-commit 5/5, lint clean. Note: S206's zero-provider
 guarantee now lives ONLY on the degraded path (provider unreachable) —
 if the owner wants an always-instant greeting back, that's a product
 choice to revisit.
-
----
-
-**Prior — Session 447 (Petra) COMPLETE (2026-09-09): resume slice — all
-5 Dependabot alerts' fixes pushed** (`5228f712`, lockfile-only
-`npm audit fix`: js-yaml 4.3.2 high, vitest/@vitest/mocker 4.1.11
-moderate, joi 18.2.8 low ×2 — all dev-tooling, nothing ships). Frontend
-422/422 on vitest 4.1.11; pre-commit 5/5; exit gate PASSED. Alerts
-close asynchronously via Dependabot re-scan — VERIFY they actually
-closed if any banner still shows after 24h.
