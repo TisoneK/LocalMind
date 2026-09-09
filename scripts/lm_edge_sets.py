@@ -274,6 +274,22 @@ CONVERSATIONS: list[dict] = [
              "note": "tests sequential multi-tool planning in ONE turn without dropping subtasks"},
         ],
     },
+
+    # ── latency-drift ────────────────────────────────────────────────────────
+    {
+        "id": "OTT-18", "set": "latency-drift",
+        "name": "6 short turns — does per-turn latency grow with session history?",
+        "turns": [
+            {"prompt": "Hi! Let's have a quick chat."},
+            {"prompt": "What's your favorite season and why?"},
+            {"prompt": "Interesting. Do you prefer mountains or beaches?"},
+            {"prompt": "Same question but for a rainy day indoors."},
+            {"prompt": "Got it. Coffee or tea?"},
+            {"prompt": "Last one: sum up this chat in one sentence.", "expect": [
+                ("recaps the chat (references the topics)", r"(season|mountain|beach|coffee|tea|chat)")],
+             "note": "primary signal is the PER-TURN LATENCY TREND in the transcript, not the answers"},
+        ],
+    },
 ]
 
 
