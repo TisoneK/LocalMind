@@ -20,7 +20,7 @@ block (and its "last verified" date) every time you run on it again.
 
 ---
 ---
-## Tison's local Windows machine (last verified 2026-09-07)
+## Tison's local Windows machine (last verified 2026-09-09)
 
 - **Identify by:** hostname matches `Tison`; OS is Windows; user home is `C:\Users\tison`; Dev root is `C:\Users\tison\Dev`
 - **OS:** Windows 11 (PowerShell, Git Bash available)
@@ -49,6 +49,7 @@ block (and its "last verified" date) every time you run on it again.
   - This is a local development machine — persistent storage, full filesystem access
   - **`core.autocrlf=true` made `context-sync verify` false-positive** (all core files FAILED, git tree clean) — documented flaw B-2026-08-30-17. RESOLVED 2026-09-05: core 0.9.1 hashes CR-stripped content + `.context/.gitattributes` forces eol=lf; on 0.8.x cores the old signature still applies (don't rollback on it — update the core instead).
   - **Git Bash mangles `$VAR`-holding-Windows-paths inside compound commands**: `> "$SC/file"` where `SC="C:/..."` can resolve to `/file` (root) and fail with permission denied. Workaround: write a small bash script with the paths baked in (`scratch/s416/trace.sh` pattern) and run `bash <script>` — env-var prefixes for the server boot still work fine inline. (2026-09-04, Session 416)
+  - Worktree gate/harness setup re-verified 2026-09-09 (S452): the three junctions (`backend/.venv`, root `node_modules`, `frontend/node_modules`) + `sh` gate runner + venv harness all work from a fresh worktree; `mklink /J` via `cmd //c` from Git Bash, delete junctions with plain `rmdir` (never recursive delete through one). Bare `python` is still the Store alias stub — use `backend/.venv/Scripts/python.exe`.
 
 ## Z.ai cloud sandbox (last verified 2026-09-03, Session 411)
 
