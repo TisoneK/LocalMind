@@ -1,37 +1,34 @@
 # Current Task
 
-**Status:** IDLE — **Session 452 (Maya / ZCode local, glm-5.3-flash,
-Windows) COMPLETE (2026-09-09): backlog B-2026-09-09-4 fixed** —
-`scripts/lm_edge_sets.py` result files are now per-invocation-stamped
-(one HHMMSS stamp shared by mid-run checkpoints and the final artifact;
-the shared `edge-sets-<date>-partial.json` clobber point is deleted) and
-a cumulative `edge-sets-<date>-all.json` is rewritten after every
-conversation (rerun of a conversation id replaces its entry — latest
-evidence wins; ids not in the current run carry forward; an unreadable
-cumulative file warns and starts fresh). Product commit `0755ff6d` on
-main (branch `collab/localmind-harness-fix-20260909/maya-s452`, release
-event `20260909T134732Z`). Half (a)'s final-file timestamp was already in
-Otto's `d481413f`; this session moved the checkpoints onto the same
-per-invocation stamp, added the merge half, and rewrote the committed
-bug-ID citation out of the product comment. LIVE-VERIFIED per owner correction ("we prove by live test not
-regression tests"): two real runs on bankofai/glm-5.3-flash isolated 8765
-from the worktree harness — both per-invocation files survive side by
-side and the cumulative -all.json merged run-2 evidence over run-1 (the
-429-storm failure record on OTT-01 replaced by the corrected Wednesday
-answer; run-1 OTT-04 carried forward). Pre-commit gate 5/5; exit gate
-PASSED.
-
-**Live peers at S452 closeout (do not treat their items as free):**
-Otto (S449) live-testing on the main checkout; Vera (S451) on
-B-2026-09-09-2; Cleo (S453) on B-2026-09-09-3; Nia (S454) on
-B-2026-09-09-5; Zola (S455) on B-2026-09-09-6. Otto's batch-8 probes
-live in `scripts/lm_edge_sets_b8.py` (untracked at S452 close).
+**Status:** IDLE — **Session 453 (Cleo / ZCode local, glm-5.3-flash,
+Windows) COMPLETE (2026-09-09): B-2026-09-09-3 resolved (`b81b6887`).**
+The create-churn on unambiguous file creates was a prompt contradiction,
+not tool discovery: the injected safety workflow demanded a pre-write
+existence check for every `file_write` while CRITICAL RULES #7 said call
+`file_write` directly — the model resolved toward the read-oriented probe
+(`file_task` → not_found → write). Fix: create-shape exception in
+`backend/data/workflows/safety.md` (CREATE → write directly, the runtime
+auto-verifies and reports the on-disk result; MODIFY/ambiguous → read
+first, never blind-overwrite) + matching hints in the `file_write` /
+`file_task` descriptions; 9 regression tests. Live before/after on
+bankofai (isolated 8765): OTT-11 turn 1 3 calls/86.4s → 1 call/37.0s;
+OTT-17 replan 1→0, 167.0s→109.8s, correct minimal shape, criteria met;
+direct-create confirmed on bankofai/qwen3.8-flash (its remaining turns
+died to provider disconnects — partial, stated honestly). Suite 2,972
+pass / 7 fail — all pre-existing on clean origin/main; NOTE
+`scripts/pytest-baseline.txt` (22) has drifted vs the live 7-fail set;
+refresh needed. Pre-commit 4/4. Owner correction recorded in
+`user/preferences.md`: **"there is no weak model" — the term is dropped**
+(standing directive files live-testing.md / active.md / ADR-40 still
+carry it; sweeping those is the owner's call).
 
 **Next up for the owner:** B-2026-09-06-8/9 (loop-side Thinker
 cadence/effort tuning) unchanged; B-2026-09-07-1 (fast-path workspace
-artifacts) unchanged; B-2026-09-09-1 (flaky test_stop_already_stopped)
-unchanged; P0 Step 4 slice 2 (`search_tool_results` loop wiring) still
-the p0-context-engineering next slice.
+artifacts) unchanged; P0 Step 4 slice 2 (`search_tool_results` loop
+wiring) unchanged; Vera's B-2026-09-09-2 in flight; Otto to route
+B-2026-09-09-5 half (b) (safety.md "flag creates no subtask asked for" —
+Nia deferred it into my claim's region; composes with the landed
+create-shape exception); pytest-baseline refresh.
 
 ---
 

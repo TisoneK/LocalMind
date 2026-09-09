@@ -14,7 +14,7 @@ accordingly).
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 | Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-15 | 10 |
 | opencode | deepseek-v4-flash (bankofai) · glm-5.3-flash (bankofai) · claude-opus-4.8 (per collab events) | 2026-08-31 | 2026-08-31 | 1 |
-| ZCode (zcode) | glm-5.3-flash (per system prompts: 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0 and cf02f3d0-2445-43ea-ae61-da470b683985 — two harness instances) | 2026-08-31 | 2026-09-09 | 12 |
+| ZCode (zcode) | glm-5.3-flash (per system prompts: 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0 and cf02f3d0-2445-43ea-ae61-da470b683985 — two harness instances) | 2026-08-31 | 2026-09-09 | 13 |
 
 ## Observations
 
@@ -201,3 +201,4 @@ Updated registry row:
 
 - **ZCode model-naming drift (S422):** the same harness agent-ID prefix (18ae0130) was recorded as deepseek-v4-flash (S416 era), qwen3.8-flash-class (S418/S420), and glm-5.3-flash (S422) — the harness's model naming is inconsistent across sessions; the ID prefix is the stable part. Each session recorded what its system prompt stated. (2026-09-05)
 - **ZCode / glm-5.3-flash:** Session 425 — shipped ADR-57 slice 1 (visible decision-grade Thinker reasoning) end-to-end on the local Windows box: streaming consult surfacing with structural JSON-cut, decision-grade task-focused prompt, turn continuity; 7 new tests, live before/after on bankofai/qwen3.8-flash (0 → 2189–2737 chars streamed). Demonstrated: the worktree+claim collab protocol works under THREE concurrent peer sessions (S424 add→revert, S426 fastpath, this one) with zero cross-contamination; and the stale-server trap — a leftover listener on the harness port makes the client measure OLD code while health checks pass (validate the boot log). (2026-09-06)
+- **ZCode / glm-5.3-flash:** Session 453 — B-2026-09-09-3 fixed (b81b6887): the tool-discovery churn on unambiguous creates was prompt-contradiction, not schema discovery (file_write/file_task are both core; the injected safety workflow demanded a pre-write existence check that CRITICAL RULES #7 forbade) — fixed with a create-shape exception in safety.md + matching tool-description hints; live before/after on bankofai (OTT-11 turn 1: 3 calls/86.4s → 1 call/37.0s; OTT-17: replan 1→0, 167.0s→109.8s) + a direct-create check on bankofai/qwen3.8-flash. Demonstrated: provider rate limits under five concurrent peer sessions fragment multi-turn live runs (429-in-SSE + WinError 10054 mid-conversation) — run probe pairs in one invocation, retry with cooldowns, and report partial-model coverage honestly. (2026-09-09)
