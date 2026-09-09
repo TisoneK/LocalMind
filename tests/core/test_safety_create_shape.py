@@ -62,6 +62,34 @@ class TestSafetySectionCreateShape:
         assert "Before `edit_file <path>`: ALWAYS read the file first" in system_prompt
 
 
+class TestCreateMandate:
+    """The create-mandate clause: an artifact is legitimate only when the
+    user's request needed it. Reading/analysis turns carry no filesystem
+    deliverable — a model that fabricates one (empty "verification"
+    folders from stray prose words) pollutes the workspace and stamps a
+    bogus criteria-met receipt on a turn whose correct output was a
+    sentence. Pinned in the INJECTED region of the safety workflow (the
+    universal-rule section — "What you must NOT do" is human docs and
+    never reaches the model)."""
+
+    def test_create_mandate_present(self, system_prompt: str) -> None:
+        flat = " ".join(system_prompt.split())
+        assert "check that the creation was asked for" in flat
+        assert "deliverables, not proof of work" in flat
+
+    def test_reading_turns_create_nothing(self, system_prompt: str) -> None:
+        flat = " ".join(system_prompt.split())
+        assert "create NOTHING" in flat
+        assert "the faithful, complete answer IS the receipt" in flat
+
+    def test_mandate_harmonizes_with_create_exception(self, system_prompt: str) -> None:
+        # The mandate must not contradict the create-vs-modify exception:
+        # unambiguous creates the USER named still write directly.
+        flat = " ".join(system_prompt.split())
+        assert "CREATE vs MODIFY" in flat
+        assert "call `file_write` directly" in flat
+
+
 class TestToolDescriptionCreateShape:
     def test_file_write_says_create_directly(self) -> None:
         desc = _tool_description("file_write")

@@ -20,6 +20,12 @@ something, you MUST first check whether the target already exists or has
 content. Your action must depend on what you find — never on what you
 assumed or expected.**
 
+**And before creating anything, check that the creation was asked for.
+Files and folders are deliverables, not proof of work: when the task is
+to read, summarize, or answer a question about content the user
+provided, create NOTHING — the faithful, complete answer IS the
+receipt.**
+
 This is a constraint, not a script. You decide the specific check and
 the specific action. The constraint is: don't act blind.
 
@@ -82,6 +88,16 @@ the specific action. The constraint is: don't act blind.
 
 ## What you must NOT do
 
+- **Don't create what wasn't asked for.** Files and folders are
+  deliverables, not proof of work — and an artifact you invented to
+  satisfy a checklist is pollution, not evidence. When the task is to
+  read, summarize, compare, or answer a question about content the user
+  provided, the correct output is the answer itself: create NOTHING on
+  the filesystem. A create (file or folder) is legitimate only when the
+  user's request names it or unambiguously implies it ("write X to
+  notes.txt", "update the config"). If you catch yourself making an
+  artifact to "prove" you worked — stop; the receipt for an analysis
+  turn is a faithful answer.
 - **Don't act blind.** If you're about to create/write/modify/delete
   something and you haven't checked its current state, STOP and check
   first.
