@@ -260,46 +260,41 @@ def test_conversational_question_fast_path_positives():
     assert is_conversational_question("what should I do") is True
 
 
-# ── fast-path Thinker consult skip ───────────────────────────────────────────
+# ── fast-path consult removal ────────────────────────────────────────────────
+# The conversational fast path used to run a Thinker consult BEFORE the
+# answer streamed, gated by a message classifier (regex). The gate decided
+# TURN LATENCY, so every phrasing it missed stalled the first token 5-15s
+# (measured live: "How are you" 8.7s vs "How are you?" 3.4s). The consult is
+# GONE from the fast path: routing (is_trivial_input / is_conversational_
+# question) is the only intent decision; interpretive turns belong to the
+# parent-agent loop, whose own consults run concurrently with tool work.
+# These tests pin the removal so the serial consult can't silently return.
 
 
-def test_consult_unnecessary_self_contained_skips():
-    """Clearly self-contained messages skip the pre-answer consult: the
-    measured 108s "What can you do?" turn was mostly serial consult dead
-    air, and the question names its own subject."""
-    from core.trivial_input import consult_unnecessary
+def test_fastpath_consult_removed_from_trivial_input():
+    """The consult-gate API is fully retired — importing it must fail, so a
+    future edit can't reintroduce classifier-gated latency without breaking
+    a test."""
+    import importlib
 
-    assert consult_unnecessary("What can you do?") is True
-    assert consult_unnecessary("Who are you?") is True
-    assert consult_unnecessary("Tell me about yourself") is True
-    assert consult_unnecessary("What is LocalMind?") is True
-    assert consult_unnecessary("Why is Python popular?") is True
-    assert consult_unnecessary("How do REST APIs work?") is True
+    from core import trivial_input
 
-
-def test_consult_unnecessary_referential_or_unclear_keeps_consult():
-    """Anything referential, over-long, or not question-shaped still pays for
-    the consult (Session 354's anti-clarification-loop contract)."""
-    from core.trivial_input import consult_unnecessary
-
-    assert consult_unnecessary("Like what?") is False
-    assert consult_unnecessary("What about the other one?") is False
-    assert consult_unnecessary("Can you fix it?") is False
-    assert consult_unnecessary("How do I use that?") is False
-    assert consult_unnecessary("What is this?") is False
-    # Over-long: the self-contained shape cap.
-    assert consult_unnecessary("What can you do? " + "x" * 130) is False
-    # Not question-shaped: imperative/declarative phrasing keeps the consult.
-    assert consult_unnecessary("Tell me more about the options") is False
-
-
-def test_consult_unnecessary_env_kill_switch():
-    """LOCALMIND_CONSULT_ALWAYS=1 restores the always-consult behavior."""
-    from core.trivial_input import consult_unnecessary
-
-    with patch("core.trivial_input.os.getenv", return_value="1"):
-        assert consult_unnecessary("What can you do?") is False
-    assert is_conversational_question("Why do you exist?") is True
+    importlib.reload(trivial_input)
+    assert not hasattr(trivial_input, "consult_unnecessary"), (
+        "consult_unnecessary was removed with the fast-path consult — "
+        "re-adding it reintroduces classifier-gated turn latency"
+    )
+    for symbol in (
+        "_CONSULT_SELF_CONTAINED_RE",
+        "_CONSULT_QUESTION_RE",
+        "_CONSULT_SHORT_QUESTION_RE",
+        "_CONSULT_REFERENTIAL_RE",
+    ):
+        assert not hasattr(trivial_input, symbol), f"{symbol} must stay removed"
+    # The routing detectors the fast path DOES rely on are intact.
+    assert trivial_input.is_conversational_question("How are you") is True
+    assert trivial_input.is_conversational_question("How are you?") is True
+    assert trivial_input.is_trivial_input("hi") is True
 
 
 def test_conversational_question_realtime_queries_fall_through():
@@ -461,6 +456,30 @@ async def test_conversational_response_prompt_estimate_fallback():
     done = next(c for c in chunks if getattr(c, "done", False))
     assert done.usage.get("prompt_tokens", 0) > 0
     assert done.usage.get("completion_tokens", 0) == 0  # no completion estimate
+
+
+@pytest.mark.asyncio
+async def test_conversational_response_forwards_native_thinking():
+    """A reasoning model's OWN brief think streams to the Thinking box on the
+    fast path — same call, zero extra round-trips. The old behavior dropped
+    reasoning chunks, leaving a silent gap while the model thought; the
+    removed pre-answer consult had made thinking visible at the cost of a
+    full second provider call. Fake-adapter guard: MagicMock chunks carry
+    auto-created truthy non-string attributes that must NOT forward."""
+
+    async def mock_chat(messages, intent="chat", **kwargs):
+        yield MagicMock(text="", thinking="The user greets; keep it short.", done=False, usage=None)
+        yield MagicMock(text="Hey! Good to see you.", done=False, usage=None)
+        yield MagicMock(text="", done=True, usage={"prompt_tokens": 40, "completion_tokens": 20})
+
+    mock_adapter = MagicMock()
+    mock_adapter.chat = mock_chat
+
+    chunks = [c async for c in conversational_response("hi", mock_adapter)]
+    thinking = "".join(c.thinking for c in chunks if getattr(c, "thinking", ""))
+    text = "".join(c.text for c in chunks if getattr(c, "text", ""))
+    assert "keep it short" in thinking, "native reasoning must reach the Thinking box"
+    assert "Good to see you" in text, "the answer still streams untouched"
 
 
 @pytest.mark.asyncio
@@ -790,12 +809,13 @@ async def test_engine_greeting_uses_the_warm_parent_boundary(message):
 async def test_engine_conversational_followup_uses_direct_chat_context():
     """Direct follow-ups use one generic chat boundary, not a phrase shortcut.
 
-    The fast-path Thinker consult now SKIPS clearly self-contained messages
-    ("What can you do?" names its own subject — a consult there was pure
-    serial dead air before the first token, the measured 108s turn). The
-    follow-up ("Like what?") is referential, so the consult still runs there
-    — both contracts exercised in one test: turn 1 = 1 call (skip), turn 2 =
-    2 calls (consult + response).
+    The fast path no longer consults the Thinker at all — the pre-answer
+    consult was serial, and its regex gate decided turn latency (any phrasing
+    it missed stalled the first token 5-15s). Both the self-contained turn
+    and the referential follow-up are now exactly ONE provider call: the
+    response itself. Routing owns the intent decision; the parent-agent
+    loop's own consults (which run concurrently with tool work) cover
+    interpretive turns.
     """
     from core.engine import Engine
     from core.obs import ObsCollector
@@ -806,16 +826,10 @@ async def test_engine_conversational_followup_uses_direct_chat_context():
 
     async def mock_chat(messages, intent="chat", **kwargs):
         calls.append(messages)
-        # The Thinker runs on the conversational fast-path for interpretive
-        # turns, so those turns make a consult call first. Self-contained
-        # turns skip it (1 call), referential turns keep it (2 calls).
-        # Adjust the call-counting accordingly.
         answer = (
             "I can help with coding, files, and research."
             if len(calls) == 1
             else "For example, I can create a script or find a document."
-            if len(calls) == 3
-            else ""  # the consult call on turn 2 — no user-visible text
         )
         yield MagicMock(text=answer, done=False, error=None, usage={"prompt_tokens": 30})
         yield MagicMock(text="", done=True, error=None, usage={"prompt_tokens": 30, "completion_tokens": 12})
@@ -830,14 +844,15 @@ async def test_engine_conversational_followup_uses_direct_chat_context():
     second_text = "".join(c.text for c in second if getattr(c, "text", ""))
     assert "coding" in first_text.lower()
     assert "script" in second_text.lower()
-    # Turn 1 is self-contained → consult SKIPPED (1 call); turn 2 is
-    # referential → consult + response (2 calls).
-    assert len(calls) == 3
-    # Turn 1 = the response call itself (no consult precedes it). The response
-    # request must carry THIS run's user message — not residue from prior
-    # runs leaked through a shared data home (the old assertion matched the
-    # assistant reply inside calls[1], which only passed when history from
-    # earlier contaminated runs was present).
+    # No consult on either turn: 2 turns = 2 response calls, full stop. The
+    # old contract (skip → 1 call, referential → 2 calls) is retired with
+    # the removed pre-answer consult.
+    assert len(calls) == 2
+    # Turn 1 = the response call itself. The response request must carry
+    # THIS run's user message — not residue from prior runs leaked through a
+    # shared data home (the old assertion matched the assistant reply inside
+    # calls[1], which only passed when history from earlier contaminated
+    # runs was present).
     assert any(
         message.get("role") == "user" and message.get("content") == "What can you do?"
         for message in calls[0]
@@ -846,7 +861,7 @@ async def test_engine_conversational_followup_uses_direct_chat_context():
     # as conversation context.
     assert any(
         message.get("role") == "assistant" and message.get("content") == "I can help with coding, files, and research."
-        for message in calls[2]
+        for message in calls[1]
     )
     assert all(event.data.get("fast_path") for event in obs.history() if event.type == "agent_initialization_done")
 

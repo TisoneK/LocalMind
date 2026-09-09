@@ -1054,38 +1054,11 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         _conversational_hint = client_intent in (None, "", "chat")
         if file is None and _conversational_hint and _pre_init_override.mode is None:
             from core.trivial_input import (
-                _direct_chat_response,
-                consult_unnecessary,
                 conversational_response,
                 is_conversational_question,
                 is_trivial_input,
                 trivial_response,
             )
-
-            async def _conversational_response_with_context(msg, adptr, hist, thinker_ctx):
-                """Session 354: conversational response with Thinker context injected."""
-                todo_block = ""
-                if current_todos:
-                    from core.trivial_input import _render_conversational_todos
-
-                    todo_block = _render_conversational_todos(current_todos)
-                from core.trivial_input import _render_conversational_memories
-
-                memory_block = _render_conversational_memories(_recent_memories)
-                from core.trivial_input import CAPABILITY_NOTE
-
-                sys_prompt = (
-                    CAPABILITY_NOTE
-                    + "Answer the user's "
-                    "latest message naturally and briefly using the recent conversation "
-                    "as context. Resolve short follow-ups against what was just said; "
-                    "do not repeat a previous answer when the user asks for more detail. "
-                    "Give concrete examples when examples are requested. Do not output "
-                    "your reasoning process — just give the response directly.\n\n"
-                    f"Context from reasoning: {thinker_ctx}\n{todo_block}{memory_block}"
-                )
-                async for chunk in _direct_chat_response(msg, adptr, hist, sys_prompt):
-                    yield chunk
             # _approx_tokens is already imported at module top (line 35).
             # Session 333: do NOT re-import here — a local `from X import Y`
             # makes Y function-local, shadowing the module-level import for
@@ -1137,79 +1110,36 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                 )
                 _gen_start = time.monotonic()
 
-                # Session 354: run the Thinker BEFORE the conversational
-                # response — even on the fast-path, the model needs
-                # understanding/intent analysis to avoid clarification loops.
-                # Only for the CONVERSATIONAL path (not trivial — trivial gets
-                # a canned reply with zero LLM calls).
-                _thinker_context = ""
-                # v3 export: the reasoning the fast path streams (Thinker
-                # consult + the conversational model's own thinking) is part
-                # of the turn — collect it so the persisted assistant message
-                # carries what the UI showed live.
+                # The conversational fast path streams the answer DIRECTLY —
+                # no pre-answer Thinker consult. The consult ran serially
+                # here (Session 354), putting its full wall-clock in front of
+                # the first visible token, and the gating classifier (regex)
+                # decided WHICH messages paid it — every phrasing the regex
+                # missed stalled the turn 5-15s (measured live: 8.7s on
+                # "How are you" vs 3.4s with a "?"). Routing is the intent
+                # decision: a message is either trivial (canned), clearly
+                # conversational (this path — answer now), or interpretive
+                # (the parent-agent loop, where the Thinker consults run
+                # concurrently with tool work). A conversational turn never
+                # needs a second reasoning pass to answer warmly.
+                # v3 export: the reasoning the fast path streams (the
+                # conversational model's own thinking) is part of the turn —
+                # collect it so the persisted assistant message carries what
+                # the UI showed live.
                 _fast_thinking_parts: list[str] = []
-                if not _is_trivial and not consult_unnecessary(message):
-                    try:
-                        from core.agent.thinker import Evidence, Thinker
-                        _hist_text = "\n".join(
-                            f"{h.get('role', '?')}: {h.get('content', '')[:200]}"
-                            for h in _hist_dicts[-4:]
-                            if h.get("content")
-                        )
-                        _ev = Evidence(
-                            user_message=message,
-                            conversation_history=_hist_text,
-                            observations="",
-                            iteration=0,
-                        )
-                        if _ev.has_evidence and getattr(_adapter, "thinking_enabled", False):
-                            if collector:
-                                collector.emit("agent_thinker_start", iteration=0)
-                            _thinker = Thinker(timeout_secs=15.0)
-                            # ADR-57 slice 1: forward the consult's prose
-                            # reasoning (the Thinker stops at the JSON marker
-                            # itself; filtered like every other thinking path).
-                            from core.filters import _filter_system_leaks as _fsl
-                            async for _tc in _thinker.consult(_ev, _adapter):
-                                if isinstance(getattr(_tc, "thinking", None), str) and _tc.thinking:
-                                    _piece = _fsl(_tc.thinking)
-                                    if _piece:
-                                        yield StreamChunk(text="", thinking=_piece, done=False)
-                                        _fast_thinking_parts.append(_piece)
-                            _analysis = _thinker.last_analysis
-                            if _analysis and not _analysis.is_empty:
-                                _thinker_context = _analysis.reasoning[:500]
-                                if collector:
-                                    collector.emit(
-                                        "agent_thinker_done",
-                                        iteration=0,
-                                        next_step=_analysis.next_step[:200],
-                                        facts=len(_analysis.facts),
-                                        ambiguities=len(_analysis.ambiguities),
-                                    )
-                    except Exception as _thx:
-                        logger.debug("[agent-runtime] Thinker on fast-path skipped: %s", _thx)
 
                 _response_chunks: list[str] = []
                 _fast_usage: dict[str, int] = {}
                 if _is_trivial:
                     _stream = trivial_response(message, _adapter, _hist_dicts)
                 else:
-                    # Session 354: if the Thinker provided context, inject it
-                    # into the conversational response's system prompt so the
-                    # model has understanding guidance.
-                    if _thinker_context:
-                        _stream = _conversational_response_with_context(
-                            message, _adapter, _hist_dicts, _thinker_context
-                        )
-                    else:
-                        _stream = conversational_response(
-                            message,
-                            _adapter,
-                            _hist_dicts,
-                            todo_state=current_todos,
-                            memory_facts=_recent_memories,
-                        )
+                    _stream = conversational_response(
+                        message,
+                        _adapter,
+                        _hist_dicts,
+                        todo_state=current_todos,
+                        memory_facts=_recent_memories,
+                    )
                 async for _chunk in _stream:
                     if _chunk.usage:
                         _fast_usage.update(_chunk.usage)

@@ -51,7 +51,6 @@ Compatibility usage (not used by the live parent runtime):
 from __future__ import annotations
 
 import logging
-import os
 import re
 from typing import AsyncIterator, Optional
 
@@ -77,64 +76,6 @@ CAPABILITY_NOTE = (
     "files, search the computer), tell the user to switch to Agent mode instead "
     "of inventing a limitation. "
 )
-
-# The fast-path Thinker consult runs SERIALLY before the conversational
-# answer streams — on a slow provider its full latency lands before the first
-# visible token (measured live: a 108s "What can you do?" turn where the
-# consult was the bulk of the wait). The consult exists to interpret ambiguous
-# turns so the answer doesn't loop into clarification — but a CLEARLY
-# SELF-CONTAINED message needs no interpretation, so the consult there is
-# pure dead air. Two conservative skip classes: (1) identity/capability/
-# social shapes, whose meaning never depends on prior context; (2) short
-# question-shaped messages free of referential markers — the question names
-# its own subject. Anything else (referential phrasing, over-long, not
-# question-shaped) keeps the consult. LOCALMIND_CONSULT_ALWAYS=1 restores
-# the always-consult behavior.
-_CONSULT_SELF_CONTAINED_RE = re.compile(
-    r"^\s*(?:what|who)\s+(?:can|do)\s+you\b[^?.!]*[?.!]?\s*$"
-    r"|^\s*who\s+are\s+you\b[^?.!]*[?.!]?\s*$"
-    r"|^\s*(?:tell\s+me\s+about|introduce)\s+yourself\b[^?.!]*[?.!]?\s*$"
-    r"|^\s*what\s+(?:are\s+you|is\s+localmind)\b[^?.!]*[?.!]?\s*$",
-    re.IGNORECASE,
-)
-_CONSULT_QUESTION_RE = re.compile(
-    r"^\s*(?:what|who|whose|why|when|how|which|where|is|are|do|does|did|can|"
-    r"could|should|would|will)\b[^?]*\?\s*$",
-    re.IGNORECASE,
-)
-_CONSULT_REFERENTIAL_RE = re.compile(
-    r"\b(?:it|that|this|those|these|them|they|their|there|again|also|another|"
-    r"instead|earlier|previous|other|others|above|same|both|either|else|"
-    r"the\s+(?:file|folder|directory|one|result|error|answer|above)|"
-    r"(?:my|our)\s+(?:file|folder|code|project|document|computer|machine|repo))\b",
-    re.IGNORECASE,
-)
-_CONSULT_MAX_CHARS = 120
-
-
-def consult_unnecessary(message: str) -> bool:
-    """True when a pre-answer Thinker consult on the conversational fast path
-    adds latency without decision value.
-
-    Conservative by construction: only clearly self-contained messages skip.
-    Anything referential, over-long, or not question-shaped still consults,
-    preserving the anti-clarification-loop contract where it matters.
-    """
-    if os.getenv("LOCALMIND_CONSULT_ALWAYS", "").strip().lower() in (
-        "1",
-        "true",
-        "on",
-        "yes",
-    ):
-        return False
-    cleaned = message.strip()
-    if not cleaned or len(cleaned) > _CONSULT_MAX_CHARS:
-        return False
-    if _CONSULT_SELF_CONTAINED_RE.match(cleaned):
-        return True
-    return bool(
-        _CONSULT_QUESTION_RE.match(cleaned) and not _CONSULT_REFERENTIAL_RE.search(cleaned)
-    )
 
 # ── Trivial input patterns ───────────────────────────────────────────────────
 # Each pattern is a regex that matches the ENTIRE message (anchored ^...$).
@@ -853,6 +794,21 @@ async def _direct_chat_response(
             _err = getattr(chunk, "error", None)
             if isinstance(_err, str) and _err:
                 _stream_error = _err
+            # Reasoning-capable models think BRIEFLY before a conversational
+            # answer (a "few seconds of thought" that calibrates tone and
+            # length — the same shape every mainstream agent UI shows). That
+            # reasoning is the model's OWN native think on this same call, so
+            # surfacing it costs zero extra round-trips; dropping it here left
+            # the user staring at a silent gap while tokens were burning.
+            # isinstance guard: fake adapters in tests auto-create truthy
+            # MagicMock attributes; only real string reasoning forwards.
+            _th = getattr(chunk, "thinking", None)
+            if isinstance(_th, str) and _th:
+                from core.filters import _filter_system_leaks
+
+                _piece = _filter_system_leaks(_th)
+                if _piece:
+                    yield StreamChunk(text="", thinking=_piece, done=False)
             if hasattr(chunk, "text") and chunk.text:
                 _streamed_any_text = True
                 yield StreamChunk(text=chunk.text, done=False, usage=dict(_u))
@@ -1095,6 +1051,13 @@ async def conversational_response(
             CAPABILITY_NOTE
             + "You are in a conversation with the user. "
             "Respond naturally and keep the flow going.\n"
+            # Brevity contract for casual conversation: a wellbeing check or
+            # small-talk turn gets one or two short sentences. Measured live:
+            # unhedged, the model produced 89-token replies that at free-tier
+            # streaming speeds dominated the turn's wall-clock.
+            "Small talk, greetings, and wellbeing checks get ONE short "
+            "sentence or two; substantive questions get a real but tight "
+            "answer.\n"
             "CRITICAL: When the user asks a QUESTION (like 'can you switch workspace?' "
             "or 'what are you doing?'), ANSWER the question directly — do NOT take "
             "action. 'Can you switch workspace?' means 'do you have this capability?', "

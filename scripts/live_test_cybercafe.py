@@ -42,6 +42,11 @@ PROMPTS = [
     # fabricated token counts. It must take the conversational path (one
     # real model call).
     ("how_are_you", "How are you?"),
+    # S448: the SAME wellbeing question WITHOUT the trailing "?" — the exact
+    # shape the owner's screenshot shows (10.6s turn). The "?"-less form
+    # must still take the conversational fast path, and (before the fix)
+    # consult_skip returned False for it: the Thinker consult ran serially.
+    ("how_are_you_noq", "How are you"),
     # Session 335: knowledge-imperative prompt that previously leaked
     # system-prompt text. Should fast-path now.
     ("ram_storage", "Summarize the difference between RAM and storage."),
