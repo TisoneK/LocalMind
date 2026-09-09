@@ -25,7 +25,6 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Otto | S449 | glm-5.3-flash | Live-testing: batches 1-8 done, B-2026-09-09-2/3/5/6/7 filed (B-2/3/5/6 claimed by peers); next: clean rerun of OTT-26/27/29 when bankofai 429 storm clears |
 
 | Ravi | S456 | qwen3.8-flash (ZCode prompt model ID; cf02f3d0-… UUID prefix is the shared ZCode harness marker, not an identity — same UUID on S450/S452 under glm-5.3-flash; logged as flaw S456) | Context sync DONE (0.21.0 refused upstream — half-release, stale MANIFEST; stayed on 0.20.0); on board pending owner next word |
 
