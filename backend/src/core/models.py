@@ -82,6 +82,7 @@ class Intent(str, Enum):
     DESCRIBE_TOOL = "describe_tool"  # ADR-40 option C: load a long-tail tool's full schema on demand
     TODO_WRITE = "todo_write"  # ADR-43: agent-driven live UI todo checklist (create/update/mark)
     WEB_RESEARCH = "web_research"  # Session 340: adaptive web acquisition (search + fetch + browser)
+    SEARCH_TOOL_RESULTS = "search_tool_results"  # P0 Step 4 slice 2: read back a large stored tool result
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

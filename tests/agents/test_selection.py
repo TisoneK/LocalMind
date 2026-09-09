@@ -68,6 +68,7 @@ def test_list_intent_mappings_covers_all_intents():
         Intent.DESCRIBE_TOOL,  # ADR-40 option C: the describe_tool meta-tool
         Intent.TODO_WRITE,  # ADR-43: the todo_write meta-tool (agent-called, not routed)
         Intent.WEB_RESEARCH,  # Session 340: adaptive web acquisition (agent-called, not routed)
+        Intent.SEARCH_TOOL_RESULTS,  # P0 Step 4 slice 2: read back a stored result (agent-called, not routed)
     )
     routing_intents = {i for i in Intent if i not in meta_tool_intents}
     for intent in routing_intents:

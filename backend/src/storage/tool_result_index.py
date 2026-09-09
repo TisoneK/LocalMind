@@ -59,6 +59,9 @@ logger = logging.getLogger(__name__)
 # Gate: only large results are worth indexing — below this the pointer +
 # search overhead exceeds the context saved (addendum: 5 KB threshold).
 _INDEX_THRESHOLD_BYTES = 5 * 1024
+# Public alias for the agent loop's stub/pointer pass (slice 2), which gates on
+# the SAME size so it only indexes + points at results the store actually keeps.
+INDEX_THRESHOLD_BYTES = _INDEX_THRESHOLD_BYTES
 # Target chunk size: markdown sections are packed up to this, oversize units
 # hard-split at it. ~4 KB ≈ ~1 K tokens — small enough to retrieve precisely,
 # large enough to keep a coherent section together.
@@ -258,6 +261,18 @@ class ToolResultIndex:
             return (result_id or "", 0)
 
         result_id = result_id or _result_id(session_id, tool_name, content)
+        # Idempotency (the module's stated intent — "re-indexing the same output
+        # is idempotent-friendly"): the loop's per-iteration stub/pointer pass
+        # re-encounters the same large result every iteration (iteration_messages
+        # is a fresh copy of the persistent history), so index_result is called
+        # repeatedly for one output. Without this guard each call re-INSERTs the
+        # chunks, multiplying rows and skewing search. If the id already has
+        # chunks and we're not forcing, return the existing count untouched.
+        if not force:
+            existing = self._count_result(result_id)
+            if existing:
+                return (result_id, existing)
+
         conn = self._connect()
         inserted: list[tuple[int, str]] = []
         conn.execute("BEGIN IMMEDIATE")
@@ -324,14 +339,17 @@ class ToolResultIndex:
         *,
         tool_name: str | None = None,
         session_id: str | None = None,
+        result_id: str | None = None,
         limit: int = _DEFAULT_SEARCH_LIMIT,
     ) -> list[ResultChunk]:
         """Hybrid search over indexed chunks.
 
         Runs each query through BM25 (porter), trigram, and (when available)
         vec0, fuses the ranked lists with Reciprocal Rank Fusion, and returns
-        the top ``limit`` chunks. ``tool_name`` / ``session_id`` scope the
-        results. An empty / all-blank query list returns [].
+        the top ``limit`` chunks. ``tool_name`` / ``session_id`` / ``result_id``
+        scope the results (``result_id`` narrows to one stored result — the
+        stub/pointer path names a concrete id). An empty / all-blank query list
+        returns [].
         """
         if isinstance(queries, str):
             queries = [queries]
@@ -342,9 +360,9 @@ class ToolResultIndex:
         fused: dict[int, dict] = {}
         for query in queries:
             ranked_lists = [
-                ("bm25", self._fts_search(query, "trc_fts", tool_name, session_id, limit)),
-                ("trigram", self._fts_search(query, "trc_fts_tri", tool_name, session_id, limit)),
-                ("vec", await self._vec_search(query, tool_name, session_id, limit)),
+                ("bm25", self._fts_search(query, "trc_fts", tool_name, session_id, result_id, limit)),
+                ("trigram", self._fts_search(query, "trc_fts_tri", tool_name, session_id, result_id, limit)),
+                ("vec", await self._vec_search(query, tool_name, session_id, result_id, limit)),
             ]
             for source, ranked in ranked_lists:
                 for rank, cid in enumerate(ranked):
@@ -363,6 +381,7 @@ class ToolResultIndex:
         table: str,
         tool_name: str | None,
         session_id: str | None,
+        result_id: str | None,
         limit: int,
     ) -> list[int]:
         """Ranked chunk ids from one FTS5 table (BM25 order), with filters."""
@@ -380,6 +399,9 @@ class ToolResultIndex:
         if session_id:
             sql += " AND t.session_id = ?"
             params.append(session_id)
+        if result_id:
+            sql += " AND t.result_id = ?"
+            params.append(result_id)
         sql += f" ORDER BY bm25({table}) LIMIT ?"
         params.append(limit)
         try:
@@ -393,6 +415,7 @@ class ToolResultIndex:
         query: str,
         tool_name: str | None,
         session_id: str | None,
+        result_id: str | None,
         limit: int,
     ) -> list[int]:
         """Ranked chunk ids from vec0 (cosine order). Empty when the vec table
@@ -406,12 +429,12 @@ class ToolResultIndex:
         if not raw:
             return []
         vec = _normalise(raw)
-        # Over-fetch, then filter by tool/session in Python — vec0's MATCH does
-        # not compose cleanly with arbitrary JOIN predicates across versions.
-        k = limit * 3 if (tool_name or session_id) else limit
+        # Over-fetch, then filter by tool/session/result in Python — vec0's MATCH
+        # does not compose cleanly with arbitrary JOIN predicates across versions.
+        k = limit * 3 if (tool_name or session_id or result_id) else limit
         try:
             rows = self._connect().execute(
-                "SELECT t.id, t.tool_name, t.session_id "
+                "SELECT t.id, t.tool_name, t.session_id, t.result_id "
                 "FROM trc_vec v JOIN trc_chunks t ON t.id = v.rowid "
                 "WHERE v.embedding MATCH ? AND k = ? ORDER BY v.distance",
                 (_pack(vec), k),
@@ -424,6 +447,8 @@ class ToolResultIndex:
             if tool_name and r["tool_name"] != tool_name:
                 continue
             if session_id and r["session_id"] != session_id:
+                continue
+            if result_id and r["result_id"] != result_id:
                 continue
             out.append(r["id"])
             if len(out) >= limit:
@@ -463,6 +488,16 @@ class ToolResultIndex:
         except Exception:
             return 0
 
+    def _count_result(self, result_id: str) -> int:
+        """Number of chunks already stored for a result_id (idempotency check)."""
+        try:
+            row = self._connect().execute(
+                "SELECT COUNT(*) FROM trc_chunks WHERE result_id = ?", (result_id,)
+            ).fetchone()
+            return int(row[0]) if row else 0
+        except Exception:
+            return 0
+
     def clear(self) -> None:
         """Remove every indexed chunk (FTS + vec). Used by tests and, later, by
         session/turn pruning."""
@@ -478,3 +513,21 @@ class ToolResultIndex:
             conn.commit()
         except Exception as exc:  # noqa: BLE001
             logger.debug("[trc] clear failed: %s", exc)
+
+
+# ── Shared instance + pointer rendering (slice 2 wiring) ─────────────────────
+
+_INDEX_SINGLETON: ToolResultIndex | None = None
+
+
+def get_tool_result_index() -> ToolResultIndex:
+    """Process-wide shared index over the LocalMind db.
+
+    The agent loop (indexing large results) and the ``search_tool_results``
+    tool (reading them back) must hit the SAME store; a singleton avoids
+    re-running ``_init_db`` on every large result and every search.
+    """
+    global _INDEX_SINGLETON
+    if _INDEX_SINGLETON is None:
+        _INDEX_SINGLETON = ToolResultIndex()
+    return _INDEX_SINGLETON

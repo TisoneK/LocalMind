@@ -21,6 +21,7 @@ from storage.tool_result_index import (
     _chunk_text,
     _fts_match,
     _result_id,
+    get_tool_result_index,
 )
 
 # ── Pure helpers ─────────────────────────────────────────────────────────────
@@ -200,3 +201,38 @@ async def test_embed_input_is_capped_to_the_model_window(tmp_path, monkeypatch):
 
     assert seen_lengths, "embeddings should have been attempted"
     assert max(seen_lengths) <= tri._EMBED_CHAR_CAP
+
+
+# ── Slice 2 additions: idempotency, result_id filter, pointer, singleton ─────
+
+
+@pytest.mark.asyncio
+async def test_index_result_is_idempotent(idx):
+    """The loop re-indexes the same large result every iteration (fresh message
+    copy). Re-indexing must NOT duplicate rows — it returns the existing count."""
+    doc = _big("only one copy of this belongs in the store")
+    rid1, n1 = await idx.index_result(doc, session_id="s1", tool_name="web_fetch")
+    assert n1 >= 1
+    after_first = idx.count()
+    rid2, n2 = await idx.index_result(doc, session_id="s1", tool_name="web_fetch")
+    assert rid2 == rid1 and n2 == n1
+    assert idx.count() == after_first, "re-indexing must not add rows"
+    # force re-inserts (explicit override — used for genuine re-index).
+    _rid3, n3 = await idx.index_result(doc, session_id="s1", tool_name="web_fetch", force=True)
+    assert n3 >= 1 and idx.count() > after_first
+
+
+@pytest.mark.asyncio
+async def test_result_id_filter_scopes_to_one_result(idx):
+    rid_a, _ = await idx.index_result(_big("alpha marker distinct one"), session_id="s1", tool_name="web_fetch")
+    rid_b, _ = await idx.index_result(_big("alpha marker distinct two"), session_id="s1", tool_name="web_fetch")
+    assert rid_a != rid_b
+    only_a = await idx.search("alpha", result_id=rid_a)
+    assert only_a and all(h.result_id == rid_a for h in only_a)
+
+
+def test_get_tool_result_index_is_a_singleton(monkeypatch):
+    monkeypatch.setattr(tri, "_INDEX_SINGLETON", None)
+    a = get_tool_result_index()
+    b = get_tool_result_index()
+    assert a is b

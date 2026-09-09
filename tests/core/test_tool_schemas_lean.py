@@ -41,16 +41,19 @@ def test_lean_catalog_size_budget() -> None:
     B-2026-08-30-13 promoted `browse` to CORE and gave it batch/read/extract/
     links actions (the describe_tool round-trip that loaded ~3k of browse schema
     every browse turn was blowing the context window — a lean always-present
-    schema is the fix, not prose creep). The lower bound guards against an
+    schema is the fix, not prose creep); bumped to 21,500 after P0 Step 4 slice 2
+    added `search_tool_results` (~530 chars) — a LONG_TAIL retrieval tool that
+    is NOT in the per-call CORE surface, so it adds nothing to the hot-path
+    per-call cost the ADR-40 budget protects. The lower bound guards against an
     accidental empty/truncated catalog.
     """
     size = _catalog_chars()
-    assert 9_000 < size < 20_500, f"catalog size {size} outside the lean budget"
+    assert 9_000 < size < 21_500, f"catalog size {size} outside the lean budget"
 
 
 def test_all_tools_keep_callable_structure() -> None:
     """Every def keeps the OpenAI function-calling contract intact."""
-    assert len(TOOL_DEFINITIONS) == 33  # +todo_write (ADR-43), +system_search (Session 400)
+    assert len(TOOL_DEFINITIONS) == 34  # +todo_write (ADR-43), +system_search (S400), +search_tool_results (P0 slice 2)
     for td in TOOL_DEFINITIONS:
         assert td["type"] == "function"
         fn = td["function"]

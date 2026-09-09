@@ -155,6 +155,7 @@ from core.context_compactor import simplify_tool_results
 from core.models import AgentAbortedError, Intent, StreamChunk, ToolResult
 from core.workspace_state import format_snapshot, mark_turn_start
 from core.workspace_state import snapshot as workspace_snapshot
+from storage.tool_result_index import INDEX_THRESHOLD_BYTES, get_tool_result_index
 
 logger = logging.getLogger(__name__)
 
@@ -544,6 +545,55 @@ def _filtered_tool_defs(allowed_tools: Optional[frozenset[str]] = None) -> list[
     """
     allowed_names = allowed_tools if allowed_tools is not None else AGENT_ALLOWED_TOOLS
     return [td for td in TOOL_DEFINITIONS if td["function"]["name"] in allowed_names]
+
+
+async def _carry_observation(
+    full_obs: str,
+    tool_name: str,
+    session_id: str | None,
+    loaded_tools: set[str],
+    *,
+    fallback: str,
+) -> str:
+    """P0 Step 4 slice 2: the carried form of a tool observation.
+
+    For a LARGE result (> ~5 KB) this stores the FULL output in the hybrid
+    Tool-Result Index and returns a bounded head PLUS a one-line pointer
+    (``id=<result_id>``) so the model can pull the otherwise-discarded
+    remainder back on demand via ``search_tool_results`` — instead of
+    re-running the tool or working from the head alone. A large tool result
+    is otherwise either truncated (its tail lost) or carried whole (context
+    bloat); the pointer path is bounded AND lossless.
+
+    For a result at/under the threshold, returns ``fallback`` unchanged — the
+    call site's existing carried form — so slice 2 changes behaviour ONLY for
+    large results. Never raises: any indexing failure also returns
+    ``fallback`` (correctness over savings). Records ``search_tool_results``
+    in ``loaded_tools`` when a pointer is added so its schema loads this run.
+    """
+    # Never index a retrieval result — search_tool_results output is ALREADY a
+    # read-back of stored content; re-indexing it makes the model chase nested
+    # pointers into its own searches (seen live: 4 chained searches).
+    if tool_name == "search_tool_results":
+        return fallback
+    if len(full_obs.encode("utf-8")) < INDEX_THRESHOLD_BYTES:
+        return fallback
+    try:
+        result_id, n_chunks = await get_tool_result_index().index_result(
+            full_obs, session_id=session_id or "", tool_name=tool_name
+        )
+    except Exception as exc:  # noqa: BLE001 — never fail a turn on indexing
+        logger.debug("[agent.loop] tool-result indexing failed (non-critical): %s", exc)
+        return fallback
+    if not result_id or n_chunks == 0:
+        return fallback
+    loaded_tools.add("search_tool_results")
+    return (
+        f"{_truncate_observation(full_obs)}\n"
+        f"…[truncated for context — full {tool_name or 'tool'} output "
+        f"({len(full_obs):,} chars) stored — id={result_id}; call "
+        f"search_tool_results with this result_id to read the rest]…"
+    )
 
 
 def _note_described_tool(tool_name: str, tool_result, loaded_tools: set[str]) -> None:
@@ -2205,6 +2255,14 @@ class AgentLoop:
         # ever added.
         def _current_tool_defs() -> list[dict]:
             _allowed = scoped_tools if scoped_tools is not None else AGENT_ALLOWED_TOOLS
+            # P0 Step 4 slice 2: search_tool_results is a meta-retrieval tool
+            # (like describe_tool) — permit its composition regardless of the
+            # per-intent scope so a stub/pointer is always actionable. It is
+            # kept OUT of the in-prompt "Available tools" list (scoped_available
+            # is unchanged) and only enters the native param when the loop adds
+            # it to loaded_tools — i.e. only on a turn that stored a large result.
+            if "search_tool_results" in loaded_tools:
+                _allowed = frozenset(_allowed) | {"search_tool_results"}
             # B-2026-08-30-16: the call-1 tool param ALWAYS includes core tools.
             # Bootstrap used to send ONLY describe_tool, which forced a handshake
             # round-trip — and for a CORE tool it caused an INFINITE describe_tool
@@ -3236,11 +3294,18 @@ class AgentLoop:
                     ],
                 }
             )
+            # P0 Step 4 slice 2: index a large pre-dispatched result and carry a
+            # bounded head + pointer (retrievable via search_tool_results);
+            # small results keep the existing bounded head.
+            _carried_initial = await _carry_observation(
+                safe_initial, initial_tool_result.source or "tool", session_id, loaded_tools,
+                fallback=_truncate_observation(safe_initial),
+            )
             loop_messages.append(
                 {
                     "role": "tool",
                     "tool_call_id": tool_call_id,
-                    "content": _truncate_observation(safe_initial),
+                    "content": _carried_initial,
                 }
             )
             # ADR-18 P1 (Session 174): the SINGLE_TOOL fast path (dir
@@ -3757,6 +3822,7 @@ class AgentLoop:
             # what the model still needs; old results it already acted on
             # are exactly what frees the most context (see
             # context_compactor.simplify_tool_results docstring).
+            # B-2026-08-02-4 (A4): deterministic tool-result simplification.
             iteration_messages = simplify_tool_results(
                 iteration_messages,
                 policy=getattr(self, "_context_policy", None),
@@ -4176,9 +4242,18 @@ class AgentLoop:
                 any_failed = False
                 tool_messages: list[dict] = []
                 for tc_name, tc_obs, tc_failed, tc_lat, tc_provider in dispatch_results:
+                    # P0 Step 4 slice 2: bounded head + retrieval pointer for a
+                    # large result (indexes the full output so the truncated tail
+                    # is recoverable via search_tool_results); plain bounded head
+                    # otherwise. Computed ONCE and reused across every carried
+                    # surface so they stay consistent.
+                    _carried = await _carry_observation(
+                        tc_obs, tc_name, session_id, loaded_tools,
+                        fallback=_truncate_observation(tc_obs),
+                    )
                     observation_log += (
                         f"\n[Tool: {tc_name} | Status: {'FAILED' if tc_failed else 'OK'} | Latency: {tc_lat}ms]\n"
-                        f"{_truncate_observation(tc_obs)}\n"
+                        f"{_carried}\n"
                     )
                     trace.steps.append(
                         AgentStep(
@@ -4186,7 +4261,7 @@ class AgentLoop:
                             thought=result.raw_content or "",
                             tool_name=tc_name,
                             tool_input="",  # individual inputs not tracked in parallel
-                            observation=_truncate_observation(tc_obs),
+                            observation=_carried,
                             tool_failed=tc_failed,
                             retry_count=0,
                             latency_ms=tc_lat,
@@ -4219,7 +4294,7 @@ class AgentLoop:
                         {
                             "role": "tool",
                             "tool_call_id": call_id,
-                            "content": _truncate_observation(tc_obs),
+                            "content": _carried,
                         }
                     )
 
@@ -5238,18 +5313,27 @@ class AgentLoop:
                         ],
                     }
                 )
+                # P0 Step 4 slice 2: for a LARGE result, index the full output
+                # and carry a bounded head + retrieval pointer instead of the
+                # whole payload (the single-tool path otherwise carries the
+                # observation whole — the context-bloat driver on research
+                # turns). Small results are carried unchanged (fallback).
+                _carried_obs = await _carry_observation(
+                    observation, tool_name, session_id, loaded_tools,
+                    fallback=observation,
+                )
                 # Anti-fabrication wrapper: the model MUST base its response
                 # on the actual tool output. Without this, models (especially
                 # smaller ones like MiniMax M2.5) sometimes ignore the tool
                 # result and fabricate plausible-looking but false data.
-                if not tool_failed and observation:
+                if not tool_failed and _carried_obs:
                     safe_observation = (
                         f"[ACTUAL TOOL OUTPUT — use ONLY this data in your response]\n"
-                        f"{observation}\n"
+                        f"{_carried_obs}\n"
                         f"[END TOOL OUTPUT — do NOT invent or add items not shown above]"
                     )
                 else:
-                    safe_observation = observation
+                    safe_observation = _carried_obs
                 loop_messages.append(
                     {
                         "role": "tool",

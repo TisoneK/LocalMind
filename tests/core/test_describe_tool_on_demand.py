@@ -48,7 +48,7 @@ def test_tier_split_covers_catalog_exactly() -> None:
     # (git, process, web_research, observe, sysinfo, calculator) — ~900 tok/call
     # saved on the always-present tools param. Core: 17→11, long-tail: 16→22.
     assert len(CORE_TOOL_NAMES) == 11  # Session 411: -git, -process, -web_research, -observe, -sysinfo, -calculator
-    assert len(LONG_TAIL_TOOL_NAMES) == 22  # Session 411: +git, +process, +web_research, +observe, +sysinfo, +calculator
+    assert len(LONG_TAIL_TOOL_NAMES) == 23  # S411 (+6); S457 (+search_tool_results, P0 slice 2 retrieval tool)
     # the ADR's named long tail is all present (browse is CORE, not long-tail)
     for name in ("delegate", "sql", "csv", "json", "best_of_n_edit",
                  "propose_str_replace", "propose_write_file", "apply_proposed_edit",

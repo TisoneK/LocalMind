@@ -21,13 +21,26 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from core.agent.constants import (
     AGENT_ALLOWED_TOOLS,
     INTENT_TOOL_SCOPES,
 )
 from core.agent.loop import TOOL_DEFINITIONS, _filtered_tool_defs
 from core.models import Intent
+
+
+@pytest.fixture(autouse=True)
+def _shell_enabled(monkeypatch):
+    """Force the shell tool ON so the wire-level scoping tests are hermetic.
+
+    ``_shell_tool_enabled()`` reads live settings; on a machine whose app
+    settings.json has shell disabled, the loop strips ``shell`` from the tool
+    surface and the "shell in names" assertions fail for reasons unrelated to
+    scoping. Pin the default (enabled) regardless of the ambient config.
+    """
+    from core.config import settings
+
+    monkeypatch.setattr(settings, "localmind_shell_enabled", True, raising=False)
 
 
 def _payload_chars(tool_names: frozenset[str]) -> int:

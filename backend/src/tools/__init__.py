@@ -194,6 +194,7 @@ from tools import (
     process_tool,  # noqa: E402, F401 -- PROCESS (long-running process management)
     propose_edit,  # noqa: E402, F401 -- B-2026-08-02-7: stage an edit proposal (no write)
     propose_write,  # noqa: E402, F401 -- B-2026-08-02-7: stage a write proposal (no write)
+    search_tool_results,  # noqa: E402, F401 -- P0 Step 4 slice 2: read back a large stored tool result
     shell,  # noqa: E402, F401 -- registers SHELL
     skill,  # noqa: E402, F401 -- B-2026-08-02-12: load a skill into context
     sql_tool,  # noqa: E402, F401 -- B-2026-07-31-10: SQL (read-only SQLite queries)

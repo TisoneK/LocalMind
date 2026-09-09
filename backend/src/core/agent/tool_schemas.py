@@ -147,6 +147,11 @@ LONG_TAIL_TOOL_NAMES: frozenset[str] = frozenset(
         "observe",
         "sysinfo",
         "calculator",
+        # P0 Step 4 slice 2: retrieval half of the Tool-Result Index. On-demand
+        # by construction — the loop loads it into the native surface only on a
+        # turn that actually carries a stub/pointer (a large result was stored),
+        # so the common turn never pays its schema cost.
+        "search_tool_results",
     }
 )
 
@@ -813,6 +818,23 @@ TOOL_DEFINITIONS: list[dict] = [
                     "path": {"type": "string", "description": "For inspect_logs: file to read; if omitted, 'text' is analyzed"},
                 },
                 "required": ["operation"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_tool_results",
+            "description": "Read back an earlier large tool result stored as a short 'id=<result_id>' stub in this conversation. Pass that result_id + a 'query' for the detail you need, instead of re-running the original tool.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "result_id": {"type": "string", "description": "The id from a stub — scopes to that one stored result."},
+                    "tool_name": {"type": "string"},
+                    "limit": {"type": "integer"},
+                },
+                "required": ["query"],
             },
         },
     },

@@ -269,6 +269,7 @@ _EXCLUDED_INTENTS = {
     Intent.TODO_WRITE,  # ADR-43: UI-checklist tool (updates the panel; no checkable goal contract)
     Intent.WEB_RESEARCH,  # Session 340: adaptive web acquisition (search+fetch+browser; no checkable contract)
     Intent.GREP_SEARCH,  # B-2026-08-23-31: grep search — file content search, no checkable goal contract
+    Intent.SEARCH_TOOL_RESULTS,  # P0 slice 2: meta-tool (reads back a stored result; agent-called, no checkable contract)
     # MEMORY_OP gets a generic "completed without error" — it's in the map.
 }
 

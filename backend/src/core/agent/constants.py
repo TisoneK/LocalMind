@@ -243,6 +243,7 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
         "best_of_n_edit",  # B-2026-08-02-11: N candidate edits → selector → apply winner
         "describe_tool",  # ADR-40 option C: load a long-tail tool's full schema on demand
         "todo_write",  # ADR-43: agent-driven live UI todo checklist (universal)
+        "search_tool_results",  # P0 Step 4 slice 2: read back a large stored tool result
     }
 )
 
