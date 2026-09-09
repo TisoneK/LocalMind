@@ -25,6 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Juno | S448 | glm-5.3-flash | CHECKED BACK IN — retire the trivial canned-reply path: social gestures via real model, canned only as provider-down fallback; worktree localmind-juno-s448 |
 
 `ledger-mem check` flags a duplicate name or codename. This roster is the
 **current group's** only — it resets when the group closes
