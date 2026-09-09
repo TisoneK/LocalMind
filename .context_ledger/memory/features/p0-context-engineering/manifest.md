@@ -23,7 +23,7 @@ Grounded in two research reports:
 1. **Step 1 — Surface cache data to the UI** (1 session) ✅ DONE (S416)
 2. **Step 2 — Byte-stabilize the system prefix** (1-2 sessions) ✅ DONE (S418 + S421 folded the CHAT branch)
 3. **Step 3 — Memory Retrieval Gate** (1-2 sessions) ✅ DONE (S419)
-4. **Step 4 — Tool-Result Index + Search** (hybrid FTS5+vec0, 2-3 sessions) — NEW from addendum ← slice 1 DONE; slice 2 (loop wiring) next
+4. **Step 4 — Tool-Result Index + Search** (hybrid FTS5+vec0, 2-3 sessions) — NEW from addendum ← slice 1 DONE; **slice 2 DONE (S457)** — loop wiring + search_tool_results tool, live-verified
 5. **Step 5 — Checkpoint Compaction** (deterministic TOC, 2-3 sessions)
 6. **Step 6 — Context Budget Manager** (2-3 sessions)
 7. **Step 7 — Instruction Epoch** (2-3 sessions)
@@ -86,6 +86,28 @@ Grounded in two research reports:
   env summary + memory + intent history — busting caching AND sending env TWICE
   per chat turn (the loop's turn_context_parts is unconditional). Prefix is now
   identity + HOW-TO-RESPOND only. Byte-stability test repointed; ruff clean.
+- **S457** (`350d19a`): **Step 4 slice 2 DONE** — loop wiring + retrieval tool
+  (Iris / claude-opus-4-8, macOS). New `search_tool_results` agent tool
+  (Intent.SEARCH_TOOL_RESULTS, LONG_TAIL, session-scoped) reads stored results
+  back on demand. `_carry_observation` in loop.py: at dispatch a >5 KB result
+  is indexed in full and carried as a bounded head + `id=<result_id>` pointer;
+  ≤5 KB unchanged (per-path fallback, so behavior changes ONLY for large
+  results). Applied at all three carried surfaces (parallel batch / single-tool
+  / seed). Index made idempotent + gained a result_id filter + a process-wide
+  singleton; retrieval results are never re-indexed (fixed a live-observed
+  nested-search recursion). **DESIGN PIVOT (logged inefficiency):** the first
+  hook was at the compaction site — but results are truncated to
+  OBS_LOG_MAX_CHARS (2000) BEFORE reaching there, so the >5 KB gate never
+  fired; the full result only exists at dispatch. **LIVE-VERIFIED**
+  bankofai/qwen3.8-flash isolated 8765: full HTTP/1.1 spec fetched → model
+  retrieved buried §10.4.5 404 def via search_tool_results → correct answer,
+  ~79% less of that result carried inline (10,035→~2,150 chars), full content
+  retrievable. Before/after on same task: origin/main carried the full 10 KB
+  inline (no index, no retrieval); after indexes + points + retrieves. Honest
+  tradeoff: single buried-fact lookups add a round-trip; the win is multi-
+  result research turns (no context balloon, nothing lost). ci-check green
+  (3049 pass); +29 slice-2 unit tests. **Slice 2 done; Step 5 (Checkpoint
+  Compaction) next.**
 - **S446** (`7392173`): **Step 4 slice 1 DONE** — the tool-result index
   storage engine. New storage/tool_result_index.py::ToolResultIndex — hybrid
   FTS5 (porter+trigram, external-content) + vec0 over size-gated (>5 KB),

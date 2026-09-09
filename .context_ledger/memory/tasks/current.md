@@ -1,28 +1,15 @@
 # Current Task
 
-**Status:** ACTIVE — **Session 457 (Iris / claude-opus-4-8, Claude Code desktop, macOS) — solo.**
+**Status:** IDLE — **Session 457 (Iris / claude-opus-4-8, Claude Code desktop, macOS) COMPLETE (2026-09-09).**
 
-**Feature:** p0-context-engineering
+P0 Context Engineering **Step 4 slice 2 DONE** — tool-result index wired into
+the loop + `search_tool_results` retrieval tool (product `350d19a`). Large
+(>5 KB) tool results are indexed in full at dispatch and carried as a bounded
+head + `id=<result_id>` pointer; the model reads the rest back on demand via
+`search_tool_results`. Live-verified bankofai/qwen3.8-flash (retrieved a buried
+§10.4.5 def, ~79% smaller inline footprint, correct answer); ci-check green.
+See sessions.md (S457) + `reviews/2026-09-09-review-s457.md`.
 
-**Task (owner directive):** P0 Step 4 **slice 2** — the behavioral half of the
-Tool-Result Index + Search. Slice 1 (the storage engine
-`backend/src/storage/tool_result_index.py::ToolResultIndex`) shipped in S446
-(`7392173`). Slice 2:
-
-1. Register a `search_tool_results` agent tool that queries the hybrid
-   FTS5+vec0 index so the model can pull detail back on demand.
-2. In `loop.py`, when a tool result exceeds the >5 KB index threshold, index it
-   and replace the inline result carried into context with a short **stub +
-   pointer** (result_id) instead of the full raw output.
-3. **Live before/after on a research turn** — target reduction ~91 → ~500 tokens
-   of carried tool-result history (per the manifest / addendum FINDING 7/8).
-   Live bar is MANDATORY (workflows/active.md, S274 directive): real provider,
-   isolated port 8765, before/after trace, grep the SSE for the actual number.
-
-**Mode:** solo. Ravi (S456) row was stale (owner-confirmed, different machine);
-removed at check-in. HEAD at start: `a41c5f7`.
-
-**Env note:** live-testing scripts hardcode `REPO=/home/z/my-project/localmind`
-(Linux dev box) — this is a macOS checkout at `/Users/bao/Code/LocalMind`; the
-REPO/BACKEND/VENV_PY/SCRATCH top-of-script vars must be adjusted before any
-live run (see system/live-testing.md).
+**Next up:** P0 Step 5 — Checkpoint Compaction (deterministic TOC). Also open
+from prior sessions (not this one): OTT-26/27/29 clean rerun, B-2026-09-09-2/3/6
+peer claims.
