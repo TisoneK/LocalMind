@@ -857,3 +857,11 @@ just the number, before trusting a before/after label.
 - **Root cause:** same as flaw `6f79ee2` (S421): two live sessions on one checkout; the peer's add was not explicit-path. The 2026-09-05 override codified the rule but nothing ENFORCES it.
 - **Suggested fix (gate teeth):** add a pre-commit check — a `chore(ledger):` commit whose staged diff contains any non-`.context_ledger/` path fails (and symmetrically, a product-prefix commit containing `.context_ledger/` paths fails). This incident would have been caught at the peer's commit. Victim-side recovery stayed cheap here only because the swept content was intact (corrective `docs:` commit `ac8cf898`).
 - **Status:** open — rule exists (overrides 2026-09-05), enforcement gap remains; recovered per-incident this session.
+
+---
+## 2026-09-10 — Theo / qwen3.8-flash (Session 460)
+- **Flaw:** `ledger-collab emit release` accepts a `--refs` list its own `check` then rejects (short event-ID suffix instead of full event ID; release lacking a product-commit ref), and the immutable-event rule gives no invalidate/supersede path — the malformed releases fail `ledger-collab check` forever, failing the integration gate for every later agent in that session even after a correct release closes the claim.
+- **Symptom:** check reported "release ... does not correspond to a claim" / "does not reference a product commit" for two of my own superseded events; a third, correct release closed the claim but the two stale ones kept the gate red; I documented via a trail-correction note and proceeded per-command (S458 substance precedent).
+- **Root cause:** the emit helper validates field presence, not ref resolvability against existing event IDs / commit SHAs; the checker has no supersession semantics for released-released or corrected events.
+- **Suggested fix:** at emit, resolve every `--refs` token (full event ID prefix-match within the session, else require a git object) and fail early; add a `--supersedes <event-id>` field honored by check (a superseded release is skipped). Back-port to context-ledger.
+- **Status:** open — workaround this session: re-emit a correct final release citing full claim-ID + commit refs and record the deviation in a note + the session entry.

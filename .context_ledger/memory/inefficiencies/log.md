@@ -1454,3 +1454,11 @@ if literally nothing slowed you down.
 - **Cause:** (1) the PS port rewrites the file without preserving encoding/EOL; (2) the old append-only rule let backlog lines grow without bound — the 0.21.0 live-queue rule (delete when done) is the real fix.
 - **Workaround / fix:** `git restore .context_ledger/memory/core.lock` after each `.cmd` gate run, never stage the churn; pipe backlog greps through `cut -c1-130`.
 - **Prevent next time:** sweep the tombstones (backlog B-2026-09-10-1) and the grep trap disappears with the file size; the core.lock churn is already logged — check `git status` before staging the ledger surface.
+
+---
+## 2026-09-10 — Theo / qwen3.8-flash (Session 460)
+- **Problem:** (1) `cmd //c mklink /J "..." "..."` from Git Bash failed with "Invalid switch" (MSYS mangles the quoted args); needed a baked-paths .bat run via `cmd //c`. (2) First-pass sweep classifier over-deleted: `Session \d` (provenance) matched as a done-annotation, so unannotated audit-wave tombstones would have slipped through silently — caught in report mode before any write.
+- **Cost:** (1) ~3 min one retry; (2) ~15 min second classifier pass + 77-item manual adjudication reading (the B-1 guardrail made it necessary).
+- **Cause:** (1) Git Bash path-conversion on `/`-prefixed and quoted arguments; (2) backlog lines legitimately contain `Session N` provenance text everywhere.
+- **Workaround / fix:** (1) write junction/`rmdir` commands into a scratch .bat and invoke it (S416 recipe, re-confirmed); (2) require a STRONG completion marker (DONE/✅/RESOLVED/sha/`marked YYYY-MM-DD`) for auto-delete and route everything else to a review bucket; assert zero `- [x]` post-write.
+- **Prevent next time:** for any bulk memory-file transform, run report mode first and eyeball counts before `--apply`; and when claiming a file you share with a live peer, expect their mid-work appends — ff-merge only when the main checkout's backlog.md is clean, else rebase around their commit.

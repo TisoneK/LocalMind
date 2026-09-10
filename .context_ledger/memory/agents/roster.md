@@ -25,7 +25,11 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Theo | S460 | qwen3.8-flash | Backlog tombstone sweep (B-2026-09-10-1) + B-2 checkbox normalize + B-3 stale worktree teardown |
+
+<!-- Clock-out 2026-09-10: Theo (S460) — backlog tombstone sweep complete
+(250 done lines + 9 stale pointers deleted, 7 [x]->[~], B-2 half, B-3
+teardown; B-2026-09-10-1/-3 closed and their lines deleted), session
+logged, claim released. Board empty = nobody in the office. -->
 
 <!-- Clock-out 2026-09-10: Amara (S459) — Explorer tool design finalized
 (dir_explorer {list,tree,stat}; 0ec563bd), owner decisions applied, session
