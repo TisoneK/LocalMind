@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260910T144314Z-Juma-58dda0ef",
+  "type": "release",
+  "session": "S463",
+  "agent": "Juma",
+  "created": "2026-09-10T14:43:14Z",
+  "issue": "b-2026-09-10-2-id-renumber",
+  "body": "Renumber complete and pushed (684e7a00ef549786a412868ee43f70b763df7812). Otto's server-death item is now B-2026-09-09-9 (its provenance records both renumbers and the landed-first basis: Zola's filing commit 7143ef7f at 20:18 predates Otto's renumber commit a41c5f74 at 21:02); Zola's memory-ingest item keeps B-2026-09-09-8; the B-2026-09-10-2 backlog line is deleted per the live-queue rule (completion record = this release + the session entry + the commit). Verification: check-backlog-duplicates.sh OK (exactly one entry-leading B-2026-09-09-8 remains, no -9 collision), pre-commit gate 4/4 green, diff confined to tasks/backlog.md (1 insertion, 7 deletions). tasks/current.md left untouched (Njeri/S462 live task; its carried-list mention of B-2026-09-10-2 is informational only).",
+  "paths": [],
+  "refs": ["20260910T143707Z-Juma-ef368f80", "684e7a00ef549786a412868ee43f70b763df7812"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
