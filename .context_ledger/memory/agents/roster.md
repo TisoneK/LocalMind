@@ -26,7 +26,11 @@ is your stable session tag.
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
 | Njeri | S462 | qwen3.8-flash | implementing the `dir_explorer` Explorer tool (feature: explorer-tool) |
-| Juma | S463 | glm-5.3-flash | renumbering the duplicate `B-2026-09-09-8` backlog ID (B-2026-09-10-2, ledger hygiene) |
+
+<!-- Clock-out 2026-09-10: Juma (S463) — B-2026-09-10-2 closed: duplicate
+B-2026-09-09-8 renumbered (server-death item to B-2026-09-09-9, landed-first
+rule), B-2 line deleted, session logged, claim released, collab check green.
+Board shows Njeri (S462) still in the office — implementation in progress. -->
 
 <!-- Clock-out 2026-09-10: Thabo (S461) — protocol sync to core 0.22.0
 landed (migration 40aa398c; entry points refreshed — collab README caught

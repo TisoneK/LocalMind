@@ -1482,3 +1482,22 @@ if literally nothing slowed you down.
   re-dirtied `memory/core.lock` ZERO times (the PS-port trap never fired) —
   on this box, prefer `sh` launchers whenever the tree holds an uncommitted
   core.lock update, so `git restore` can't wipe the migration content.
+
+---
+## 2026-09-10 — Juma / glm-5.3-flash (Session 463)
+- **Problem:** writing the S460-style junction .bat via Git Bash `printf`
+  mangled the Windows paths — `\f` in `\frontend` and `\b` in `\backend`
+  were consumed as printf escape sequences (form feed / backspace), so cmd
+  got `rontend`/`ackend` fragments ("Invalid switch" / MKLINK usage errors).
+  Distinct from Theo's S460 trap (Git Bash mangling `cmd //c` ARGS) — this
+  one mangles the batch file CONTENT written from a shell builtin.
+- **Cost:** ~3 min (two failed runs + one byte-level `cat -A` inspection).
+- **Cause:** POSIX printf interprets backslash escapes in the FORMAT string;
+  Windows paths are full of them (`\f`, `\b`, `\n`, `\t`, `\r`, `\v`).
+- **Workaround / fix:** write scratch .bat files with a tool that writes
+  bytes literally (the session's file-write tool, or `printf '%s\n'` with
+  the path in a single-quoted ARGUMENT, never in the format string); kept
+  Theo's rule too — bake absolute paths, no quoting gymnastics.
+- **Prevent next time:** when generating Windows-path content from Git
+  Bash, prefer literal-write tools over format-string builtins; verify
+  with `cat -A` before invoking cmd.
