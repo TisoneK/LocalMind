@@ -1,4 +1,4 @@
-# Explorer Tool — Design (LocalMind Parent)
+# Explorer tool `dir_explorer` — Design (LocalMind Parent)
 
 **Status:** Design proposal — awaiting owner approval. **No code ships in this
 session.** Implementation + live verification are the next session once the
@@ -81,7 +81,7 @@ constraint: the Explorer must not create a second "find/locate" tool.
 ## 3. Design decision: ONE tool, three operations
 
 ```
-explorer (Intent.EXPLORER, core tool — position right after system_search)
+dir_explorer (Intent.DIR_EXPLORER, core tool — position right after system_search)
 ├── operation=list   — one directory level: typed entries + size + mtime
 ├── operation=tree   — bounded subtree sketch (depth + entry caps)
 └── operation=stat   — one path's metadata (the brief's get_metadata)
@@ -101,9 +101,9 @@ Rationale (why one tool, not three, and not three new tools):
 4. **ADR-53 Parent-only.** A tool, not an agent. Deterministic primitives
    inspect; the Parent understands and presents.
 
-**Tier placement (open question — §9):** proposed **CORE**, positioned
+**Tier placement (decided — see §9):** **CORE**, positioned
 immediately after `system_search`, because directory inspection is as frequent
-as search in coding/file tasks. But per ADR-40 this is contingent on a
+as search in coding/file tasks. Per ADR-40 this stays contingent on a
 weak-model live trace showing no regression in `system_search`/`grep_search`/
 `shell`-ls selection; if selection is confused, drop to LONG_TAIL with a
 `describe_tool` path.
@@ -112,12 +112,12 @@ weak-model live trace showing no regression in `system_search`/`grep_search`/
 
 ## 4. API surface (model-facing schema)
 
-Single OpenAI-function tool `explorer`, mirroring `system_search`'s structure
+Single OpenAI-function tool `dir_explorer`, mirroring `system_search`'s structure
 (lean params, guardrail prose kept, tutorial prose dropped per ADR-40):
 
 ```json
 {
-  "name": "explorer",
+            "name": "dir_explorer",
   "description": "Inspect LOCAL files/folders — use to look around a directory, sketch a project's structure, or check a path before writing. LOCAL disks only (NOT the web — that is 'browse'). For finding files by name/content use system_search/grep_search; for reading a file's contents use file_task.",
   "parameters": {
     "type": "object",
@@ -137,9 +137,9 @@ Single OpenAI-function tool `explorer`, mirroring `system_search`'s structure
 **Return contract** (inherits `system_search` conventions): a `ToolResult`
 whose `metadata["results"]` is a list of normalized rows
 `{type, path, name, size, modified, detail}`, plus `walk_complete` /
-`scanned` honesty flags in metadata. `content` is a compact human string
-(e.g. the tree as indented plain text — token-cheap; or a 200-row table for
-`list`). `success=False` + `requires_confirmation=False` on any error (read-only
+`scanned` honesty flags in metadata. `content` is a compact human string — for `tree`, indented plain text
+(decided, §9: token-cheap and human-readable); for `list`, a bounded table —
+while `metadata["results"]` carries the structured rows either way. `success=False` + `requires_confirmation=False` on any error (read-only
 → never prompts the user). All failures degrade to `ToolResult(success=False)`
 — **never raises**.
 
@@ -156,7 +156,7 @@ allow-list reuse as `system_search`).
 | Brief proposal | LocalMind reality / design |
 |---|---|
 | Root Directory Jail (`BASE_DIR`) | **No bespoke jail.** Reuse `settings.is_path_allowed` (`core/config.py`) — the same allowed-roots the user already configured. Every `path` is resolved + `relative_to()`-checked; out-of-root → `success=False`, no prompt. This is *better* than a fixed `~/LocalMindWorkspace` because it respects the user's real machine layout. |
-| Ignore / hidden lists (`.git`, `node_modules`, `.env`) | Reuse `_HEAVY_DIR_NAMES` for the "skip + mark `skipped`" behavior. **Crucially, secrets are not *hidden* — they are *out of scope*: `is_path_allowed` already gates the roots, and `explorer` is read-only so it can never *exfiltrate* by writing. It must still not *print* `.env` contents — but `list`/`stat`/`tree` only emit names+metadata, never bytes, so no secret value is ever returned. |
+| Ignore / hidden lists (`.git`, `node_modules`, `.env`) | Reuse `_HEAVY_DIR_NAMES` for the "skip + mark `skipped`" behavior. **Crucially, secrets are not *hidden* — they are *out of scope*: `is_path_allowed` already gates the roots, and `dir_explorer` is read-only so it can never *exfiltrate* by writing. It must still not *print* `.env` contents — but `list`/`stat`/`tree` only emit names+metadata, never bytes, so no secret value is ever returned. |
 | File size limits | N/A to `list`/`tree`/`stat` (they return metadata, not file bytes). The **bytes** cap already lives in `file_task` (`FILE_READ_MAX_BYTES`) — Explorer never reads bytes, so there is nothing to cap here. (If a future `preview` op is added, it reuses `file_task`'s cap.) |
 | Read-only by default | **Hard read-only by construction.** Only `os.scandir` / `os.stat` — no write path exists. `RiskLevel.LOW`, `requires_confirmation=False`. Permission prompts (brief §3) are unnecessary for normal paths; an out-of-root attempt is a flat deny, not a prompt. |
 
@@ -173,9 +173,10 @@ surface is required (consistent with the S400 precedent: "Frontend untouched").
 
 | Brief UX idea | Already exists in LocalMind |
 |---|---|
-| **Breadcrumbs** ("AI is looking at `<dir>`") | `loop.py` `action_label` builds a structured label from `path`/`command`/`query`; rendered in `frontend/src/components/chat/ToolSteps.tsx` (the Actions timeline, S210). `explorer: list ~/Projects` shows automatically. |
+| **Breadcrumbs** ("AI is looking at `<dir>`") | `loop.py` `action_label` builds a structured label from `path`/`command`/`query`; rendered in `frontend/src/components/chat/ToolSteps.tsx` (the Actions timeline, S210). `dir_explorer: list ~/Projects` shows automatically. |
 | **Action chips** ("Read index.js (45 lines)") | Same `ToolSteps.tsx` step pill + `metadata` (entry count, `walk_complete`). No bespoke chip component needed. |
 | **Permission prompts** | `ToolResult.requires_confirmation` + `RiskLevel` gate in the engine. Explorer is read-only → never triggers them. The *brief's* prompt scenario (accessing a protected folder) is handled as a silent deny, not an interrupt. |
+| **Display name ("Explorer")** | The UI shows human aliases, not raw function names: this tool displays as **"Explorer"** while the web `browse` tool displays as **"Browser"**. Today that mapping lives in two ad-hoc copies (`toolLabels` in `ToolSteps.tsx`, `toolLabel()` in `AgentWorkspace.tsx`) with a capitalize-the-words fallback; the implementation session adds the `dir_explorer → "Explorer"` entry, and consolidating the copies into one shared alias module is proposed and backlogged (B-2026-09-10-6). The model-facing name stays `dir_explorer` — aliases are display-only and never shown to the model. |
 
 Optional follow-up (NOT in this design): a collapsible "folder preview" panel
 in `ToolSteps` rendering the `tree` output as an interactive outline. Defer —
@@ -191,15 +192,15 @@ implementation session reuses a known path:
 | Piece | Location |
 |---|---|
 | Intent enum entry | `backend/src/core/models.py` (`EXPLORER`) |
-| Tool module | `backend/src/tools/explorer.py` |
+| Tool module | `backend/src/tools/dir_explorer.py` |
 | Registry import | `backend/src/tools/__init__.py` |
 | Model-facing schema | `backend/src/core/agent/tool_schemas.py` (`TOOL_DEFINITIONS`, tier in `CORE_TOOL_NAMES`) |
 | Allowed + per-intent scopes | `backend/src/core/agent/constants.py` (`AGENT_ALLOWED_TOOLS`, `INTENT_TOOL_SCOPES` — add to `_INTENT_CORE_LOCAL_TOOLS` and the `FILE_TASK`/`SYSTEM_SEARCH` intents) |
-| Routing | `backend/src/core/trivial_input.py` — extend `_LOCAL_DISCOVERY_RE` so "show me / look at / what's in this folder / structure of" route to the agent loop, where the Parent picks `explorer` (find-by-query stays `system_search`). |
-| Steering | `file_task`/`shell` descriptions + agent-prompt strategy lines direct "list / inspect / tree" intents to `explorer` instead of `shell ls`/`tree`. |
+| Routing | `backend/src/core/trivial_input.py` — extend `_LOCAL_DISCOVERY_RE` so "show me / look at / what's in this folder / structure of" route to the agent loop, where the Parent picks `dir_explorer` (find-by-query stays `system_search`). |
+| Steering | `file_task`/`shell` descriptions + agent-prompt strategy lines direct "list / inspect / tree" intents to `dir_explorer` instead of `shell ls`/`tree`. |
 | Reuse | `tools/find_path.py` `_HEAVY_DIR_NAMES`, `_walk_catalog` for bounded traversal. |
-| Tests | `tests/tools/test_explorer.py` (unit: structure, bounds, honesty flags, security deny, never-raises). |
-| Live harness | `scripts/live_test_explorer.py` (env-keyed, no keys on disk; provider via `LOCALMIND_ADAPTER` + `<PROV>_API_KEY`, per S400). |
+| Tests | `tests/tools/test_dir_explorer.py` (unit: structure, bounds, honesty flags, security deny, never-raises). |
+| Live harness | `scripts/live_test_dir_explorer.py` (env-keyed, no keys on disk; provider via `LOCALMIND_ADAPTER` + `<PROV>_API_KEY`, per S400). |
 
 Schema-budget accounting: adding a core tool shifts the pinned counts
 (`tools_architecture_proposal.md` pins: schema count, token budget, core /
@@ -213,7 +214,7 @@ weak-model selection** (ADR-40) — see §10.
 `backend/data/workflows/safety.md` mandates that every create/write/edit first
 *verify the target's actual state*. Today that check is shell `ls` or a
 `file_task` failure. Explorer makes the check **first-class and bounded**: when
-the Parent is about to write to `path`, it can call `explorer stat/list` first
+the Parent is about to write to `path`, it can call `dir_explorer stat/list` first
 to learn whether `path` exists, what's already there, and adapt — exactly the
 workflow's intent — without spending a shell call or risking an unbounded
 `ls`. This is a natural steering addition to `safety.md` and the agent system
@@ -222,21 +223,21 @@ prompt (the rule is already injected for all intents via
 
 ---
 
-## 9. Open questions for the owner (decisions needed before build)
+## 9. Owner decisions (2026-09-10)
 
-1. **Tool name vs `browse` collision.** The brief says "Explorer"; the web
-   browser tool is already named `browse`. Weak models may conflate "explore the
-   docs" between them. Primary proposal: keep `explorer` with explicit steering
-   ("LOCAL disks only — NOT the web"). Fallback name if selection is confused in
-   the live trace: `dir_browse` or `fs_explorer`. **Owner call.**
-2. **Core vs long-tail tier.** Proposed CORE (frequent). Must pass the ADR-40
-   weak-model live trace first; if selection regresses, LONG_TAIL + `describe_tool`.
-3. **Routing phrasing.** Which user phrasings ("structure of", "what's in",
-   "sketch") route to the agent loop (and then `explorer`) vs straight to
-   `system_search`? Needs a `_LOCAL_DISCOVERY_RE` extension + live tuning.
-4. **`tree` output format.** Indented plain text (token-cheap, human-readable)
-   vs compact JSON (machine-friendly for the Parent). Proposed: plain text in
-   `content`, structured rows in `metadata`.
+1. **Tool name: `dir_explorer`** — decided. Sidesteps the `browse` (web
+   browser) name collision entirely; no steering-only mitigation needed.
+2. **`tree` output format: plain text** — decided. Indented plain text in
+   `content` (token-cheap, human-readable); the normalized rows stay in
+   `metadata["results"]` for the Parent to reason over.
+3. **Tier: CORE** — proposed default accepted; positioned after
+   `system_search`. Still gated on the ADR-40 weak-model live trace: if
+   selection regresses on `system_search`/`grep_search`/`shell ls`, drop to
+   LONG_TAIL + `describe_tool`.
+4. **Routing: extend `_LOCAL_DISCOVERY_RE`** — proposed default accepted.
+   "show me / look at / what's in / structure of" → agent loop (the Parent
+   picks `dir_explorer`); find-by-query stays `system_search`. Phrasings are
+   tuned live in the implementation session.
 
 ---
 
@@ -245,12 +246,12 @@ prompt (the rule is already injected for all intents via
 This is a **design-only** session: no product code changed, so **no live test
 is claimed**. The *implementation* session must satisfy:
 
-- **Unit (structure):** `tests/tools/test_explorer.py` pins the normalized row
+- **Unit (structure):** `tests/tools/test_dir_explorer.py` pins the normalized row
   shape, depth/entry caps, `walk_complete`/`scanned` honesty, out-of-root deny,
   heavy-dir skip, symlink non-follow, and **never-raises**.
 - **Live (mandatory, ADR-40):** a trace on a free provider
   (zen/deepseek-v4-flash-free primary; zai/glm-4.5-flash weak-model check)
-  showing the model SELECTING `explorer` for "what's in `~/Projects/LocalMind`"
+  showing the model SELECTING `dir_explorer` for "what's in `~/Projects/LocalMind`"
   and "sketch the structure of this repo", and PRESENTING bounded output — and
   **not** regressing `system_search`/`grep_search`/`shell ls` selection. Tool-
   selection schema changes MUST be live-verified on the weak model before the
