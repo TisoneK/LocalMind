@@ -61,6 +61,7 @@ const toolLabels: Record<string, string> = {
   file_write: 'Creating file',
   file_read: 'Reading file',
   file_task: 'Reading file',
+  dir_explorer: 'Explorer',
   edit_file: 'Editing file',
   code_exec: 'Running code',
   shell: 'Running command',

@@ -48,7 +48,11 @@ function statusClass(status: AgentRunStatus): string {
 }
 
 function toolLabel(tool: ToolCall): string {
-  return tool.label || tool.name.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  // Display-only aliases (kept in step with ToolSteps.tsx's toolLabels map;
+  // consolidating the two copies is a separate cleanup). The model-facing
+  // name stays dir_explorer — the alias is never shown to the model.
+  const alias: Record<string, string> = { dir_explorer: 'Explorer' };
+  return tool.label || alias[tool.name] || tool.name.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 }
 
 
