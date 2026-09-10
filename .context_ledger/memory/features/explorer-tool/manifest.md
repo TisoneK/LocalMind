@@ -8,10 +8,11 @@ approval; implementation is the next session) · **Sessions:** 459 (design)
 A **bounded, normalized, read-only local directory-inspection tool** for the
 Parent agent — the "look around a folder / sketch a project's structure / check
 a path before writing" verb that LocalMind currently lacks (it only has
-`system_search` = find, and `file_task` = read a file). One tool, three
-operations: `list` (one level + metadata), `tree` (bounded subtree sketch),
-`stat` (one path's metadata). NOT a find tool (that's `system_search`), NOT a
-file reader (that's `file_task`).
+`system_search` = find, and `file_task` = read a file). One tool named
+**`dir_explorer`** (owner-named 2026-09-10 to avoid the `browse` web-tool
+collision), three operations: `list` (one level + metadata), `tree` (bounded
+subtree sketch, plain-text output), `stat` (one path's metadata). NOT a find
+tool (that's `system_search`), NOT a file reader (that's `file_task`).
 
 Design doc (the authority for this feature): `docs/explorer_tool_design.md`.
 
@@ -22,9 +23,10 @@ Deterministic `os.scandir`/`os.stat` walks do the INSPECTING; the Parent model
 does the UNDERSTANDING + presenting (same split as `system_search`).
 
 ```
-explorer (Intent.EXPLORER, proposed CORE — position after system_search)
+dir_explorer (Intent.DIR_EXPLORER, CORE — owner-accepted default, gated on the
+             ADR-40 weak-model live trace; position after system_search)
 ├── operation=list   — one directory level: typed entries + size + mtime
-├── operation=tree   — bounded subtree sketch (depth + entry caps)
+├── operation=tree   — bounded subtree sketch (depth + entry caps, plain text)
 └── operation=stat   — one path's metadata
 ```
 
@@ -36,15 +38,15 @@ computer" local tools.
 
 | Piece | Location |
 |---|---|
-| Intent enum entry | `backend/src/core/models.py` (`EXPLORER`) |
-| Tool module | `backend/src/tools/explorer.py` |
+| Intent enum entry | `backend/src/core/models.py` (`DIR_EXPLORER`) |
+| Tool module | `backend/src/tools/dir_explorer.py` |
 | Registry import | `backend/src/tools/__init__.py` |
 | Model-facing schema | `backend/src/core/agent/tool_schemas.py` (`TOOL_DEFINITIONS`, tier in `CORE_TOOL_NAMES`) |
 | Allowed + per-intent scopes | `backend/src/core/agent/constants.py` (`AGENT_ALLOWED_TOOLS`, `INTENT_TOOL_SCOPES`) |
 | Routing | `backend/src/core/trivial_input.py` — extend `_LOCAL_DISCOVERY_RE` |
 | Steering | `file_task`/`shell` descriptions + agent-prompt strategy lines |
-| Tests | `tests/tools/test_explorer.py` |
-| Live harness | `scripts/live_test_explorer.py` |
+| Tests | `tests/tools/test_dir_explorer.py` |
+| Live harness | `scripts/live_test_dir_explorer.py` |
 
 ## Contracts (inherit from system_search hard lessons)
 
@@ -64,11 +66,11 @@ computer" local tools.
 
 ## Verification bar (next session — Session 274 mandate)
 
-- Unit: `tests/tools/test_explorer.py` pins structure, bounds, honesty flags,
+- Unit: `tests/tools/test_dir_explorer.py` pins structure, bounds, honesty flags,
   security deny, symlink/heavy-dir skip, never-raises.
 - **Live (ADR-40, mandatory for tool-selection schema change):** trace on a free
   provider (zen/deepseek-v4-flash-free primary; zai/glm-4.5-flash weak-model
-  check) showing the model SELECTS `explorer` for "what's in `~/Projects/X`" and
+  check) showing the model SELECTS `dir_explorer` for "what's in `~/Projects/X`" and
   "sketch this repo's structure", PRESENTS bounded output, and does NOT regress
   `system_search`/`grep_search`/`shell ls` selection. Plus update the
   `tools_architecture_proposal.md` schema-count/budget pins.
@@ -81,9 +83,16 @@ computer" local tools.
   in the doc §9 (name vs `browse`, core vs long-tail, routing phrasing, tree
   format).
 
-## Open items for the owner (blocking build)
+## Owner decisions (2026-09-10) — RESOLVED, build unblocked
 
-- Tool name `explorer` vs `browse` collision → steer, or rename `dir_browse`.
-- Core vs long-tail tier (gated on ADR-40 live trace).
-- `trivial_input.py` routing phrasing extension.
-- `tree` output format (plain text vs JSON).
+- **Tool name: `dir_explorer`** (owner) — avoids the `browse` web-tool name
+  collision entirely.
+- **`tree` output: plain text** (owner) — indented text in `content`; rows in
+  `metadata["results"]`.
+- **Tier: CORE** (owner accepted the default) — still gated on the ADR-40
+  weak-model live trace; regression → LONG_TAIL + `describe_tool`.
+- **Routing: extend `_LOCAL_DISCOVERY_RE`** (owner accepted the default) —
+  phrasings tuned live in the implementation session.
+
+Implementation session must also update the `tools_architecture_proposal.md`
+schema-count/budget pins.

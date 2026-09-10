@@ -55,3 +55,20 @@ while a peer was live. Kofi's closeout landed (`f8d17aff`) before I began
 product work, so I ran standard solo mode. Lesson: when `git status` shows
 uncommitted `.context_ledger/` edits you didn't make, treat it as a live peer
 and isolate — don't `git add` whole files (would sweep their hunks).
+
+## Owner decisions received (2026-09-10, post-design)
+
+Owner: "dir_explorer, tree plain text also log incident as protocol flaw."
+
+- **Name: `dir_explorer`** — the `browse`-collision question is closed by
+  construction; steering text no longer has to fight name affinity.
+- **`tree` format: plain text** — indented text in `content`; normalized rows
+  stay in `metadata["results"]`.
+- **Incident as protocol flaw:** already logged at closeout in
+  `memory/flaws/log.md` (2026-09-10 — Amara / glm-5.3-flash, Session 459: S421
+  broad-add sweep recurrence, with the gate-teeth proposal — a
+  `chore(ledger):` commit containing non-`.context_ledger/` paths should fail
+  pre-commit). Confirmed to owner; no duplicate entry appended.
+- Tier (CORE) + routing (`_LOCAL_DISCOVERY_RE` extension) were accepted as the
+  proposed defaults by silence; both remain gated on the ADR-40 live trace /
+  live tuning in the implementation session.
