@@ -12,8 +12,9 @@
 # a fourth pair survived two marking sweeps because the checked copy's
 # supersession pointer was only recognized by humans.
 #
-# Same-state duplicates are tolerated on purpose: the backlog is append-
-# only, historical same-status copies stay, and a mid-line ID reference
+# Same-state duplicates are tolerated on purpose: the backlog is a live
+# queue of open work (delete a line when its item is done), so same-status
+# copies are pre-rule residue pending a sweep, and a mid-line ID reference
 # inside another entry's body is not an entry (only entry-LEADING IDs
 # count — the ID right after the checkbox, optional [severity] tag, and
 # the bold marker). An opposite-status pair is ALSO tolerated when the
@@ -68,7 +69,7 @@ END {
 
 rc=$?
 if [ "$rc" -ne 0 ]; then
-  echo "check-backlog-duplicates: FAILED (reconcile the copies in place: check off + note — never delete lines)"
+  echo "check-backlog-duplicates: FAILED (reconcile the copies: if the work is done, delete the lines — the queue holds open work; if it continues, keep the open copy and drop the stale one)"
   exit 1
 fi
 echo "check-backlog-duplicates: OK (no conflicting-status duplicate IDs)"
