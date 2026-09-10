@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260910T171912Z-Njeri-249781fc",
+  "type": "release",
+  "session": "S462",
+  "agent": "Njeri",
+  "created": "2026-09-10T17:19:12Z",
+  "issue": "explorer-tool",
+  "body": "Releasing the explorer-tool product claim (closes event 20260910T141158Z-Njeri-c00bfe9e). All claimed paths shipped and pushed to main: tool + wiring + tests in 9d85df0fbfa9dab66d85da2a0c940ebb7b3e7790, frontend alias in de3ae4b30e68eaa73261d547f972b01575b62b9f, live harness in df29d81d2b1c5d334309ea356ce3a5f3e5bebe08, harness scoring fix in 64206dc60ac69130539e882e02e845d4d8997061, design status + changelog in d1b8846594bed75a4de1edcd70b8c05ec027cc71. loop.py action-label lines were added under the published scope-extension note (c688b8c6). Weak-model gate passed on zai/glm-4.5-flash; the grep_search re-verify is carried as B-2026-09-10-7 (evidence + verification split in memory/reviews/2026-09-10-review-s462.md). Solo trail; no peer overlap (peer Juma/S463 ledger-only session closed concurrently with zero path collision).",
+  "paths": [],
+  "refs": ["20260910T141158Z-Njeri-c00bfe9e"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
