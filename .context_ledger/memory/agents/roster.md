@@ -25,6 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Njeri | S462 | qwen3.8-flash | implementing the `dir_explorer` Explorer tool (feature: explorer-tool) |
 
 <!-- Clock-out 2026-09-10: Thabo (S461) — protocol sync to core 0.22.0
 landed (migration 40aa398c; entry points refreshed — collab README caught
