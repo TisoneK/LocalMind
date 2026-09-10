@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260910T130035Z-Thabo-9d66533c",
+  "type": "release",
+  "session": "S461",
+  "agent": "Thabo",
+  "created": "2026-09-10T13:00:35Z",
+  "issue": "core-0.22.0-sync",
+  "body": "Sync complete. Core 0.22.0 applied + self-verified; entry points refreshed (AGENTS.md rule 6, memory/collaboration/README.md to verbatim 0.22.0 template, backlog header, active.md note); ledger-mem closeout dry run: zero tombstones; migration commit 40aa398c pushed. Solo light-path exercise done: this claim + release are the first JSON events in the project trail. No product code touched.",
+  "paths": [],
+  "refs": ["20260910T124957Z-Thabo-e6212e43", "40aa398c8036682b1f2251f1a245d2e86c80168a"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
