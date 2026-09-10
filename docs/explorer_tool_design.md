@@ -1,11 +1,17 @@
 # Explorer tool `dir_explorer` — Design (LocalMind Parent)
 
-**Status:** Design proposal — awaiting owner approval. **No code ships in this
-session.** Implementation + live verification are the next session once the
-owner accepts the direction below.
+**Status:** SHIPPED (2026-09-10). `backend/src/tools/dir_explorer.py` plus the
+full §7 wiring landed with `tests/tools/test_dir_explorer.py`; the §10
+live plan ran on the weak model (zai/glm-4.5-flash): all three inspection
+prompts selected `dir_explorer` with the right operation and grounded,
+bounded presentation, and `system_search`/`shell` selection did not
+regress. One carried gap: the `grep_search` non-regression prompt never
+completed on any healthy provider (repeated rate limits mid-chain) —
+listed as a follow-up, not evidence of a regression.
 
 **Session:** 459 (Amara) · **Date:** 2026-09-10 · **Feature:** `explorer-tool`
-(active) · **Scope:** Parent-only (ADR-53).
+(implementation shipped next session) · **Scope:** Parent-only (exactly one
+active agent — the Parent).
 
 ---
 
