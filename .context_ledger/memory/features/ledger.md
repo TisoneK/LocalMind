@@ -32,3 +32,4 @@ archived or deleted **only after** its ledger line records the outcome
 - **fail-fast-provider-errors** — started 2026-08-14 · merged `1762509` + `6014254` · finished 2026-08-14 (ADR-32 complete; adapter + parent-loop fail-fast and canonical error propagation; see feature manifest)
 - **system-search-tool** — started 2026-08-25 · active · finished — (Local Search Intelligence Phase 1: unified system_search tool for the Parent — files/recent/largest/duplicates/apps/open_with operations with normalized, bounded, security-gated results)
 - **p0-context-engineering** — started 2026-09-03 · active · S410-412 reductions (`ec5521c`/`1bbe2e6`/`a1e7c68`) + S414/S415 research (`4cce4f6`/`c0de368`); addendum-confirmed 8-step plan, S416 executing Step 1 (cache data → UI) —
+- **explorer-tool** — started 2026-09-10 · active (design shipped at `docs/explorer_tool_design.md`, awaiting owner approval; implementation is the next session) · finished —
