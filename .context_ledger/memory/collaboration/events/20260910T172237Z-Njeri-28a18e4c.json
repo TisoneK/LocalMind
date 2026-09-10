@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260910T172237Z-Njeri-28a18e4c",
+  "type": "release",
+  "session": "S462",
+  "agent": "Njeri",
+  "created": "2026-09-10T17:22:37Z",
+  "issue": "explorer-tool",
+  "body": "Corrected release of the explorer-tool product claim (supersedes release 20260910T171912Z-Njeri-249781fc, whose refs field omitted the product commits and failed the checker; the malformed event is immutable trail noise). Closes event 20260910T141158Z-Njeri-c00bfe9e. Product commits in refs: 9d85df0f backend tool, de3ae4b3 frontend alias, df29d81d + 64206dc6 live harness + scoring fix, d1b88465 design status + changelog. Weak-model gate passed on zai/glm-4.5-flash; grep_search re-verify carried as B-2026-09-10-7. Report: memory/reviews/2026-09-10-review-s462.md. Solo trail; peer Juma (S463) ledger-only, zero collision.",
+  "paths": [],
+  "refs": ["20260910T141158Z-Njeri-c00bfe9e", "9d85df0fbfa9dab66d85da2a0c940ebb7b3e7790", "de3ae4b30e68eaa73261d547f972b01575b62b9f", "df29d81d2b1c5d334309ea356ce3a5f3e5bebe08", "64206dc60ac69130539e882e02e845d4d8997061", "d1b8846594bed75a4de1edcd70b8c05ec027cc71"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
