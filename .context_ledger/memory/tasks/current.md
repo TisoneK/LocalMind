@@ -1,18 +1,16 @@
 # Current Task
 
-**Status:** IDLE — **Session 461 (Thabo / qwen3.8-flash, ZCode local, Windows)
-COMPLETE (2026-09-10).**
+**Status:** ACTIVE — **Session 462 (Njeri / qwen3.8-flash, ZCode local, Windows)**
+**Feature:** explorer-tool
 
-Protocol sync landed: core 0.21.0 → 0.22.0 applied (`40aa398c`), entry
-points refreshed (AGENTS.md rule-6 closeout sentence;
-`memory/collaboration/README.md` caught up to the template — it had lagged
-two releases; backlog header + active.md version note), and the new
-universal light path exercised with this project's first solo JSON events
-(claim `20260910T124957Z-Thabo-e6212e43` → release
-`20260910T130035Z-Thabo-9d66533c`, `ledger-collab check` green on first
-pass). `ledger-mem closeout` dry run: zero tombstones (S460's sweep
-holds). No product code changed.
+**Task:** implement the `dir_explorer` Explorer tool (design `docs/explorer_tool_design.md`,
+owner decisions 2026-09-10 resolved — manifest map is the work list): Intent enum
+entry, tool module, registry, model-facing schema + CORE tier, allowed/scopes,
+`_LOCAL_DISCOVERY_RE` routing, steering, frontend "Explorer" alias, unit tests,
+ADR-40 weak-model live trace, and the `tools_architecture_proposal.md` pin updates.
 
-**Next up:** implementation session for `explorer-tool` (the S459 feature
-manifest is the map). Carried: B-2026-09-10-2/4/5/6, OTT-26/27/29 clean
+**Mode:** solo (board mine only, no declared collab session). Claim/release
+events emitted per the 0.22.0 universal light path (session = S462).
+
+**Carried (not mine, do not start):** B-2026-09-10-2/4/5/6, OTT-26/27/29 clean
 rerun, B-2026-09-09-2/3/6 peer claims.

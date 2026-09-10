@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260910T141158Z-Njeri-c00bfe9e",
+  "type": "claim",
+  "session": "S462",
+  "agent": "Njeri",
+  "created": "2026-09-10T14:11:58Z",
+  "issue": "explorer-tool",
+  "body": "Solo implementation session (no peer live â€” board empty at check-in, current.md idle). Claiming the product paths for the dir_explorer feature: tool module, registry, Intent enum, model-facing schema (CORE tier), agent scopes, routing regex, steering text, unit tests, live harness, frontend alias rows, and the architecture-doc schema pins. No peer claims overlap this set.",
+  "paths": ["backend/src/core/models.py", "backend/src/tools", "backend/src/core/agent/tool_schemas.py", "backend/src/core/agent/constants.py", "backend/src/core/agent/prompts.py", "backend/src/core/trivial_input.py", "backend/data/workflows/safety.md", "tests/tools/test_dir_explorer.py", "scripts/live_test_dir_explorer.py", "docs/tools_architecture_proposal.md", "docs/explorer_tool_design.md", "frontend/src/components/chat/ToolSteps.tsx", "frontend/src/components/panels/AgentWorkspace.tsx"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
