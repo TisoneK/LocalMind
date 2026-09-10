@@ -1,16 +1,19 @@
 # Current Task
 
-**Status:** ACTIVE — **Session 462 (Njeri / qwen3.8-flash, ZCode local, Windows)**
-**Feature:** explorer-tool
+**Status:** IDLE — **Session 462 (Njeri / qwen3.8-flash, ZCode local, Windows)
+COMPLETE (2026-09-10).**
 
-**Task:** implement the `dir_explorer` Explorer tool (design `docs/explorer_tool_design.md`,
-owner decisions 2026-09-10 resolved — manifest map is the work list): Intent enum
-entry, tool module, registry, model-facing schema + CORE tier, allowed/scopes,
-`_LOCAL_DISCOVERY_RE` routing, steering, frontend "Explorer" alias, unit tests,
-ADR-40 weak-model live trace, and the `tools_architecture_proposal.md` pin updates.
+explorer-tool shipped: `dir_explorer` {list,tree,stat} — backend tool + full
+wiring + steering + routing (`9d85df0f`), "Explorer" UI alias (`de3ae4b3`),
+live harness (`df29d81d`/`64206dc6`), design status + changelog (`d1b88465`),
+22 unit tests + lean-pin updates. Weak-model gate PASSED on zai/glm-4.5-flash
+(3/3 new-capability picks; system_search + shell non-regression). Feature
+ledger line stays OPEN until B-2026-09-10-7 closes the grep_search verdict
+(zen upstream "Model is unavailable" all session; bankofai balance=0 — owner
+top-up; zai rate-limited the chain). Report:
+`memory/reviews/2026-09-10-review-s462.md`.
 
-**Mode:** solo (board mine only, no declared collab session). Claim/release
-events emitted per the 0.22.0 universal light path (session = S462).
-
-**Carried (not mine, do not start):** B-2026-09-10-2/4/5/6, OTT-26/27/29 clean
-rerun, B-2026-09-09-2/3/6 peer claims.
+**Next up:** B-2026-09-10-7 (provider re-verify for explorer-tool) and
+B-2026-09-10-5 (browser live-verify — needs agent-browser + a healthy
+provider). Carried: B-2026-09-10-4/6, OTT-26/27/29 clean rerun,
+B-2026-09-09-2/3/6 peer claims.

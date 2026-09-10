@@ -25,7 +25,15 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Njeri | S462 | qwen3.8-flash | implementing the `dir_explorer` Explorer tool (feature: explorer-tool) |
+
+<!-- Clock-out 2026-09-10: Njeri (S462) — explorer-tool SHIPPED:
+dir_explorer {list,tree,stat} + wiring + 22 tests (9d85df0f), Explorer UI
+alias (de3ae4b3), live harness (df29d81d/64206dc6); weak-model gate PASS
+on zai (3/3 picks + system_search/shell non-regression), grep_search
+verdict carried B-2026-09-10-7 (zen down / bankofai quota empty). Solo
+light path closed: claim c00bfe9e → release 28a18e4c (first release
+249781fc published malformed — permanent check noise, flaw re-logged).
+Session logged, current idle. Board empty = nobody in the office. -->
 
 <!-- Clock-out 2026-09-10: Juma (S463) — B-2026-09-10-2 closed: duplicate
 B-2026-09-09-8 renumbered (server-death item to B-2026-09-09-9, landed-first

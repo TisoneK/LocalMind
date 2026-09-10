@@ -890,3 +890,19 @@ just the number, before trusting a before/after label.
 - **Status:** open — worked around this session by diffing project copies vs
   `core/templates/` manually and refreshing to verbatim (collab README has no
   project-custom content; verified before overwriting).
+
+---
+## 2026-09-10 — Njeri / qwen3.8-flash (Session 462)
+- **Flaw:** `ledger-collab emit release --refs` with the flag repeated N times silently keeps ONLY the last value (published event 20260910T172047Z-95305bbb showed refs:[final-sha] after six --refs flags) — no warning at emit, then `check` rejects the event with a message that doesn't name the cause ("does not correspond to a claim").
+- **Symptom:** the emit rc=0 looked like success; the failure surfaced only at check, after commit.
+- **Root cause:** the PS port's parameter binding treats a repeated array-style switch as last-wins; comma-separated single `--refs "a,b,c"` works (the S461 precedent) but neither the help text nor emit says so.
+- **Suggested fix:** package: bind --refs as an array (or error on repeats); note the comma form in the emit usage line.
+- **Status:** open
+
+---
+## 2026-09-10 — Njeri / qwen3.8-flash (Session 462) — RECURRENCE
+- **Flaw:** a published malformed release event can never be invalidated — no supersede path (S460's entry, still open). Second occurrence: my 249781fc (refs cited the closing event but no product commit — the body had all five SHAs, the structured refs field did not) now fails `check` permanently even though 28a18e4c correctly closed the claim.
+- **Symptom:** `ledger-collab check --session S462 --issue explorer-tool` stays red with 1 problem (the superseded event) after a green closing release; the exit gate records the known-benign noise.
+- **Root cause:** `check` validates every published event individually; the event contract has no `supersedes`/`invalidated` field and events are immutable.
+- **Suggested fix:** package: a release may declare `supersedes: <event-id>`; the checker then reports the superseded event as a note, not a problem. Emit-time validation: require ≥1 product-commit-looking ref when type=release (the 249781fc mistake would have been rejected BEFORE publishing).
+- **Status:** open (second occurrence; strengthens S460's ask)

@@ -1501,3 +1501,11 @@ if literally nothing slowed you down.
 - **Prevent next time:** when generating Windows-path content from Git
   Bash, prefer literal-write tools over format-string builtins; verify
   with `cat -A` before invoking cmd.
+
+---
+## 2026-09-10 — Njeri / qwen3.8-flash (Session 462)
+- **Problem:** three separate time sinks: (1) `git show origin/main:<path>` failed with "ambiguous argument" — Git Bash MSYS-converts the colon path; (2) the FIRST baseline suite run was piped `| tail -5`, so its log captured 4 of 27 FAILED lines — I read "27 vs documented 24" as drift and burned a re-run to compare failure SETS (3 of the 27 were the DNS-dependent test_web_fetch_ssrf::test_allows_public_urls trio — passed on the clean re-run; Juma's S463 "isolated-pass SSRF flakes" entry is the same family); (3) provider availability: zen OpenCode free-tier models returned upstream 400 "Model is unavailable" ALL session, bankofai now `credit insufficient balance: balance=0` — leaving only a flaky zai for live work.
+- **Cost:** ~10 min across the three.
+- **Cause:** MSYS path conversion is off for `rev:path` syntax; pipes swallow both output and exit status (the recurring lesson family); two of three free-tier providers degraded at once — an availability reality, not a repo bug.
+- **Workaround / fix:** prefix `MSYS_NO_PATHCONV=1 git show <rev>:<path>`; never pipe a run whose FAILURE LIST you need (redirect to a file first — scratch/s462/*.txt pattern); live-test on the machine currently reaches zai only — budget cooldowns (≥40s) and score BLOCKED≠FAIL (the harness does now).
+- **Prevent next time:** bankofai quota top-up is an OWNER action item (stated in this session's report); re-check zen before planning any live-verification session on the primary provider.
