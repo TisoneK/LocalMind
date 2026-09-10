@@ -25,6 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Njeri | S462 | qwen3.8-flash | re-checked in — exit-gate follow-up: registering DIR_EXPLORER in the intent-coverage maps |
 
 <!-- Clock-out 2026-09-11: Zuri (S465) — benchmark suite extended + live run:
 per-adapter model pin + --adapter/--model + multi-turn + usage capture + new
