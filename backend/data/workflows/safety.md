@@ -32,7 +32,8 @@ the specific action. The constraint is: don't act blind.
 ## How it applies per tool
 
 ### Shell (mkdir, rm, cp, mv, etc.)
-- Before `mkdir <path>`: check if `<path>` already exists (dir/ls).
+- Before `mkdir <path>`: check if `<path>` already exists (dir_explorer
+  operation=stat — one bounded read-only call; shell `ls`/`dir` also works).
   - If it doesn't exist → create it.
   - If it exists AND is empty → proceed (or skip, it's already there).
   - If it exists AND is non-empty AND unrelated to your task → do NOT
@@ -60,8 +61,9 @@ the specific action. The constraint is: don't act blind.
   different path. Never blind-overwrite a file you haven't seen.
 - Before `edit_file <path>`: ALWAYS read the file first (this is
   already in coding.md constraint #1, but it's the same principle).
-- Before `file_task <path>`: check if the file exists (shell list_files
-  or stat). If it doesn't, say so — don't fabricate contents.
+- Before `file_task <path>`: check if the file exists (dir_explorer
+  operation=stat, or shell list_files). If it doesn't, say so — don't
+  fabricate contents.
 
 ### Code execution (code_exec)
 - Before executing code that writes to disk: the code should check

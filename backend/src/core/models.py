@@ -45,6 +45,8 @@ class Intent(str, Enum):
     FIND_PATH = "find_path"  # Session 125: name-match search for files/folders (path-only, capped)
     # Session 400: unified local search (files/recent/largest/duplicates/apps/open_with)
     SYSTEM_SEARCH = "system_search"
+    # Bounded read-only folder inspection (list/tree/stat)
+    DIR_EXPLORER = "dir_explorer"
     WEB_SEARCH = "web_search"
     WEB_FETCH = "web_fetch"
     CODE_EXEC = "code_exec"

@@ -4151,6 +4151,10 @@ class AgentLoop:
                         if call.tool_args.get("url")
                         else "Fetching web page",
                         "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
+                        "dir_explorer": (
+                            f"Exploring ({call.tool_args.get('operation', 'list')}): {_path[:80]}"
+                            if _path else "Inspecting a folder"
+                        ),
                         "shell": f"Running: {_command[:80]}" if _command else "Running command",
                         "memory_op": f"Memory: {call.tool_args.get('operation', '')} {call.tool_args.get('content', '')[:40]}".strip(),  # noqa: E501
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
@@ -4737,6 +4741,10 @@ class AgentLoop:
                         "web_search": f"Searching: {_query[:80]}" if _query else "Searching the web",
                         "web_fetch": f"Fetching: {tool_args.get('url', '')[:80]}" if tool_args.get("url") else "Fetching page",  # noqa: E501
                         "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
+                        "dir_explorer": (
+                            f"Exploring ({tool_args.get('operation', 'list')}): {_path[:80]}"
+                            if _path else "Inspecting a folder"
+                        ),
                         "shell": f"Running: {_command[:80]}" if _command else "Running command",
                         "memory_op": f"Memory: {tool_args.get('operation', '')} {tool_args.get('content', '')[:40]}".strip(),  # noqa: E501
                         "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",
@@ -5708,6 +5716,10 @@ class AgentLoop:
                             "web_fetch": f"Fetching: {_url[:80]}" if _url else "Fetching web page",
                             "shell": f"Running: {_command[:80]}" if _command else "Running command",
                             "file_task": f"Reading: {_path[:80]}" if _path else "Reading file",
+                            "dir_explorer": (
+                                f"Exploring ({_normalized_args.get('operation', 'list')}): {_path[:80]}"
+                                if _path else "Inspecting a folder"
+                            ),
                             "code_exec": "Executing code",
                             "memory_op": f"Memory: {_normalized_args.get('operation', '')} {_normalized_args.get('content', '')[:40]}".strip(),  # noqa: E501
                             "sysinfo": f"System info: {_query[:60]}" if _query else "Getting system info",

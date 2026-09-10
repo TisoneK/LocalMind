@@ -94,7 +94,7 @@ def build_planning_prompt(
     intent_templates = {
         Intent.FILE_WRITE: """
 FILE_WRITE WORKFLOW — follow this template:
-0. If you don't know the exact target folder (e.g. "desktop"), list it with shell first to confirm the path — then write there
+0. If you don't know the exact target folder (e.g. "desktop"), inspect it with dir_explorer (operation=list) first to confirm the path — then write there
 1. Identify the file path from the user's request (or infer a sensible default)
 2. Determine the complete file content — write it ALL, no placeholders
 3. Call file_write ONCE with both 'path' and 'content' filled
@@ -144,8 +144,8 @@ SHELL WORKFLOW — follow this template:
         Intent.FILE_TASK: """
 FILE_TASK WORKFLOW — follow this template:
 1. If the user gave a FILE path: call file_task with that exact path — read it immediately
-2. If the user gave a DIRECTORY/FOLDER path: call shell to list it first, identify the target file, then call file_task to read it — do NOT stop after listing
-3. If the path is ambiguous (could be file or folder): try file_task first; if it fails, use shell to list and find the file, then read it
+2. If the user gave a DIRECTORY/FOLDER path: call dir_explorer (operation=list) to inspect it first, identify the target file, then call file_task to read it — do NOT stop after listing
+3. If the path is ambiguous (could be file or folder): try file_task first; if it fails, use dir_explorer to list and find the file, then read it
 4. NEVER guess file names — use ONLY names that appear in the tool output
 5. If you found the file the user asked for, READ IT — do not ask "which one?" when the answer is obvious (e.g., the only CV in a folder)
 6. COMPLETE THE TASK: If the user asked you to READ a file and you found it, you MUST call file_task to read it. Do NOT stop after just listing the directory.
@@ -180,6 +180,16 @@ WEB_FETCH WORKFLOW — follow this template:
 2. Extract the specific facts the user needs from the page content
 3. Report exactly what the page says — do NOT add information from your training data
 4. If the page content doesn't contain the answer, say so clearly""",
+        Intent.DIR_EXPLORER: """
+DIR_EXPLORER WORKFLOW — follow this template (read-only folder inspection):
+1. Pick the operation that answers the ask: 'what's in this folder?' → list;
+   'sketch the project structure' → tree (depth 2 default, max 4);
+   'does this path exist / how big is it?' → stat
+2. Call dir_explorer ONCE with the resolved path — do NOT dump file contents
+   (that is file_task) and do NOT hunt by name (that is system_search)
+3. Report ONLY the names the tool returned — NEVER add "typical" entries
+4. If the result says PARTIAL / truncated / depth-limited, SAY SO and offer
+   to go deeper on a narrower path""",
     }
 
     template = intent_templates.get(intent, "")
@@ -765,7 +775,8 @@ VERIFY (after EVERY tool result — skipping this is the same as fabricating):
 COMPLETION ENFORCEMENT: complete ALL steps before stopping. If iterations remain and task isn't done, KEEP WORKING. Stopping mid-task is a FAILURE.
 
 TOOL ARGUMENT RULES:
-- file_task: ONLY use for reading the TEXT CONTENTS of a single file — never for directories/folder listings (use shell for those).
+- file_task: ONLY use for reading the TEXT CONTENTS of a single file — never for directories/folder listings (use dir_explorer operation=list for those).
+- dir_explorer: read-only folder inspection — list (one level), tree (bounded structure sketch, depth<=4), stat (one path's metadata). Prefer it over shell ls/dir/tree for "look around a folder" and pre-write checks; it returns names + metadata, never file bytes.
 - file_write: BOTH "path" AND "content" required; content must be COMPLETE — no placeholders or "... more code here ...".
 - shell: commands MUST match the OS — CHECK env first. Windows: New-Item -ItemType Directory -Force (NOT mkdir -p), Get-ChildItem (NOT ls), Get-Content (NOT cat). Unix: mkdir -p, ls, cat, grep, find. If "not recognized", fix OS syntax.
 - shell writing to a FILE is the LAST RESORT: prefer file_write (dedicated, verified, diffable) and edit_file (in-place edit). Only use shell redirection (>, >>, tee, echo >) when file_write/edit_file cannot express the change (e.g. complex pipeline output) — and then prefer a temp file + copy.

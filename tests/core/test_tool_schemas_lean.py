@@ -44,16 +44,20 @@ def test_lean_catalog_size_budget() -> None:
     schema is the fix, not prose creep); bumped to 21,500 after P0 Step 4 slice 2
     added `search_tool_results` (~530 chars) — a LONG_TAIL retrieval tool that
     is NOT in the per-call CORE surface, so it adds nothing to the hot-path
-    per-call cost the ADR-40 budget protects. The lower bound guards against an
-    accidental empty/truncated catalog.
+    per-call cost the lean budget protects; bumped to 22,700 after
+    dir_explorer joined the core surface (~1,750 chars — a necessary new core
+    tool: three-operation bounded folder inspection with find-vs-inspect
+    disambiguation prose, lean to the bone like system_search's, not prose
+    creep). The lower bound guards against an accidental empty/truncated
+    catalog.
     """
     size = _catalog_chars()
-    assert 9_000 < size < 21_500, f"catalog size {size} outside the lean budget"
+    assert 9_000 < size < 22_700, f"catalog size {size} outside the lean budget"
 
 
 def test_all_tools_keep_callable_structure() -> None:
     """Every def keeps the OpenAI function-calling contract intact."""
-    assert len(TOOL_DEFINITIONS) == 34  # +todo_write (ADR-43), +system_search (S400), +search_tool_results (P0 slice 2)
+    assert len(TOOL_DEFINITIONS) == 35  # +dir_explorer (bounded folder inspection)
     for td in TOOL_DEFINITIONS:
         assert td["type"] == "function"
         fn = td["function"]

@@ -182,6 +182,7 @@ from tools import (
     delegate_parallel,  # noqa: E402, F401 -- B-2026-08-02-6: parallel delegation fan-out
     describe_tool,  # noqa: E402, F401 -- ADR-40 option C: load a long-tail tool's full schema on demand
     diagnostics,  # noqa: E402, F401 -- DIAGNOSTICS (structured failure analysis)
+    dir_explorer,  # noqa: E402, F401 -- DIR_EXPLORER (bounded read-only folder inspection: list/tree/stat)
     edit_file,  # noqa: E402, F401 -- FILE_EDIT (in-place file editing)
     file_reader,  # noqa: E402, F401 -- registers FILE_TASK
     file_writer,  # noqa: E402, F401 -- FILE_WRITE (secondary intent)

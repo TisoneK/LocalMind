@@ -220,6 +220,7 @@ AGENT_ALLOWED_TOOLS: frozenset[str] = frozenset(
         "edit_file",
         "file_task",
         "system_search",  # Session 400: unified local search — front door for find/discover questions
+        "dir_explorer",  # bounded read-only folder inspection (list/tree/stat)
         "git",
         "process",
         "shell",
@@ -278,6 +279,7 @@ _INTENT_CORE_LOCAL_TOOLS: frozenset[str] = frozenset(
         "sql",  # B-2026-07-31-10: read-only SQLite queries — cheap, offline, bounded
         "memory_op",
         "system_search",  # Session 400: unified local search (files/recent/largest/duplicates/apps/open_with)
+        "dir_explorer",  # bounded read-only folder inspection — look around / structure / pre-write check
         "delegate",  # ADR-8 Phase 3: keep delegation available everywhere
         "skill",  # B-2026-08-02-12: universal tool — playbooks are cheap (~130 tok)
         "todo_write",  # ADR-43: live UI checklist — universal, cheap, multi-step progress
@@ -291,6 +293,7 @@ INTENT_TOOL_SCOPES: dict[Intent, frozenset[str]] = {
     Intent.FILE_TASK: _INTENT_CORE_LOCAL_TOOLS,
     Intent.FIND_PATH: _INTENT_CORE_LOCAL_TOOLS,  # Session 125: locate before listing
     Intent.SYSTEM_SEARCH: _INTENT_CORE_LOCAL_TOOLS,  # Session 400: unified local search
+    Intent.DIR_EXPLORER: _INTENT_CORE_LOCAL_TOOLS,  # folder inspection needs the local file tools too
     # Editing intents keep the proposal/best-of-N family (B-2026-08-02-7/11)
     # — those are coding-agent editing features that must not be lost.
     Intent.FILE_WRITE: _INTENT_CORE_LOCAL_TOOLS | frozenset(

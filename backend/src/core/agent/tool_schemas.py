@@ -85,6 +85,7 @@ CORE_TOOL_NAMES: frozenset[str] = frozenset(
         # picked find_path by name-affinity 4/4). find_path's schema stays in
         # TOOL_DEFINITIONS (registry + internal file-ops dispatch intact).
         "system_search",
+        "dir_explorer",  # bounded read-only folder inspection (list/tree/stat) — sits right after system_search: both are "know your computer" local tools; selection live-verified on a weak model
         "web_search",
         "web_fetch",
         # Session 411 (P0 Context Engineering): web_research moved to LONG_TAIL.
@@ -183,6 +184,27 @@ TOOL_DEFINITIONS: list[dict] = [
                     "path": {"type": "string", "description": "File path for open_with"},
                 },
                 "required": ["operation"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            # dir_explorer sits right after system_search — both are "know
+            # your computer" local tools; the descriptions keep the
+            # find-vs-inspect boundary explicit for weak models.
+            "name": "dir_explorer",
+            "description": "Inspect LOCAL files/folders — use to look around a directory, sketch a project's structure, or check a path before writing. LOCAL disks only (NOT the web — that is 'browse'). For finding files by name/content use system_search/grep_search; for reading a file's contents use file_task.",  # noqa: E501
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "operation": {"type": "string", "enum": ["list", "tree", "stat"], "description": "list=one folder's entries; tree=bounded subtree sketch; stat=one path's metadata"},  # noqa: E501
+                    "path": {"type": "string", "description": "Absolute or ~/ path inside an allowed folder"},
+                    "depth": {"type": "integer", "description": "tree only: max descent (default 2, max 4)", "default": 2},  # noqa: E501
+                    "max_entries": {"type": "integer", "description": "list/tree entry cap (default 200, max 500)"},
+                    "dirs_first": {"type": "boolean", "description": "list only: sort folders before files", "default": True},  # noqa: E501
+                },
+                "required": ["operation", "path"],
             },
         },
     },
@@ -362,7 +384,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "file_task",
-            "description": "READ an existing FILE's contents (PDF, DOCX, XLSX, code, text/binary). READ-ONLY (to create/write a file use file_write). NOT for directory listings — use shell. Do NOT use shell 'cat'/'type' to read files. Not a create-existence probe: if the user asked you to CREATE a file, call file_write directly instead of checking here first.",  # noqa: E501
+            "description": "READ an existing FILE's contents (PDF, DOCX, XLSX, code, text/binary). READ-ONLY (to create/write a file use file_write). NOT for directory listings — use dir_explorer. Do NOT use shell 'cat'/'type' to read files. Not a create-existence probe: if the user asked you to CREATE a file, call file_write directly instead of checking here first.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -392,7 +414,7 @@ TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "shell",
-            "description": "Run a system command — but for FINDING things (files, folders, recent work, largest files, duplicates, installed programs) ALWAYS use system_search instead; never find/ls/du/dir hunts. Shell is for: folder listings, git, disk checks, OS commands. To READ file contents use file_task — NOT shell. To CREATE a file use file_write. Commands MUST match the current OS (Windows=PowerShell: Get-ChildItem, New-Item -ItemType Directory -Force; Unix=bash: ls, mkdir -p, cat, grep, find). NEVER use Unix syntax on Windows.",  # noqa: E501
+            "description": "Run a system command — but for FINDING things (files, folders, recent work, largest files, duplicates, installed programs) ALWAYS use system_search instead; never find/ls/du/dir hunts. To LIST, TREE, or STAT a folder use dir_explorer — not ls/dir/tree. Shell is for: git, disk checks, OS commands. To READ file contents use file_task — NOT shell. To CREATE a file use file_write. Commands MUST match the current OS (Windows=PowerShell: Get-ChildItem, New-Item -ItemType Directory -Force; Unix=bash: ls, mkdir -p, cat, grep, find). NEVER use Unix syntax on Windows.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {

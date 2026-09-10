@@ -467,6 +467,26 @@ _SIG_OPENWITH = re.compile(
     r"|\bwhich\s+(?:app|application|program)\s+opens?\b",
     re.IGNORECASE,
 )
+# Folder-inspection phrasings ("what's in my downloads", "show me the
+# structure of this repo", "list the files in backend/src", "what does this
+# project look like") — the Parent answers these by inspecting the disk, not
+# with exposition. Grounded like the size/recency signals: a local noun is
+# required, so knowledge questions ("structure of a python class", "what's
+# in a name?") stay conversational.
+_SIG_INSPECT = re.compile(
+    r"\bwhat(?:'s|s)?\s+(?:in|inside|on)\b"
+    r"|\b(?:look|looking|looks)\s+(?:at|inside|in|around)\b"
+    r"|\b(?:show|see)\s+(?:me\s+)?(?:the\s+|my\s+)?(?:contents?|files?|folders?|structure|layout|tree|shape)\b"
+    r"|\b(?:structure|layout|hierarchy|tree|shape)\s+of\b"
+    r"|\b(?:list|listing)\s+(?:the\s+|my\s+|out\s+)?(?:contents?|files?|folders?|directories|dir\b|folder\b)"
+    r"|\bwhat\s+does\s+(?:this|my|the)\s+\w+\s+look\s+like\b",
+    re.IGNORECASE,
+)
+_INSPECT_CTX = re.compile(
+    r"\b(?:folders?|directories|dirs?|files?|repos?|projects?|codebases?|workspaces?"
+    r"|computers?|pcs?|macs?|laptops?|drives?)\b",
+    re.IGNORECASE,
+)
 # A noun that makes an otherwise-ambiguous adjective clearly about local content.
 _FILE_NOUN = re.compile(
     r"\b(?:files?|folders?|director\w+|documents?|downloads?|photos?|pictures?"
@@ -524,6 +544,8 @@ def _is_local_discovery(message: str) -> bool:
     ):
         return True
     grounded = bool(_FILE_NOUN.search(m) or _LOCAL_CTX.search(m))
+    if _SIG_INSPECT.search(m) and (grounded or _INSPECT_CTX.search(m)):
+        return True
     if _SIG_LOCATE.search(m) and grounded:
         return True
     if (_SIG_SIZE.search(m) or _SIG_RECENCY.search(m)) and grounded:
