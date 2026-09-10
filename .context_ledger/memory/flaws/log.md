@@ -849,3 +849,11 @@ just the number, before trusting a before/after label.
 - **Root cause:** (1) minimal-diff text insertion into the templates without reflow; (2) helper output and rules prose diverged in the same release.
 - **Suggested fix:** reflow the template sentence (package repo, next patch core); harmonize the commit-message wording between `ledger-sync`'s success output and the kickoff/Step-1 text.
 - **Status:** open — back-port candidate for context-ledger (upstream https://github.com/TisoneK/context-ledger.git).
+
+---
+## 2026-09-10 — Amara / glm-5.3-flash (Session 459)
+- **Flaw:** S421 broad-add sweep recurrence — peer-side this time. S458's post-closeout addendum commit `457dd5da` ("chore(ledger): S458 addendum…") included Session 459's just-written, not-yet-staged product file `docs/explorer_tool_design.md`, swept in by a broad add in the shared main checkout while both sessions were live.
+- **Symptom:** my staged `docs:` change vanished from `git status`; the file appeared inside a `chore(ledger):` commit attributed to S458 (two-surface violation + wrong session attribution), and my own commit for that content became impossible without a rewrite.
+- **Root cause:** same as flaw `6f79ee2` (S421): two live sessions on one checkout; the peer's add was not explicit-path. The 2026-09-05 override codified the rule but nothing ENFORCES it.
+- **Suggested fix (gate teeth):** add a pre-commit check — a `chore(ledger):` commit whose staged diff contains any non-`.context_ledger/` path fails (and symmetrically, a product-prefix commit containing `.context_ledger/` paths fails). This incident would have been caught at the peer's commit. Victim-side recovery stayed cheap here only because the swept content was intact (corrective `docs:` commit `ac8cf898`).
+- **Status:** open — rule exists (overrides 2026-09-05), enforcement gap remains; recovered per-incident this session.
