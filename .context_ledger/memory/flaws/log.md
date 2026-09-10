@@ -841,3 +841,11 @@ just the number, before trusting a before/after label.
 - **Root cause:** the helper writes `body + "\n"` with the body itself ending in `"\n"` (the event template's closing newline is not normalized). The files parse fine (`ledger-collab status/check` pass on them) — it is purely the staged-diff hygiene check that rejects them.
 - **Suggested fix (package):** in the emit implementation, normalize the event file to exactly one trailing newline (`rstrip("\n") + "\n"`) before writing; then `ledger-gates run pre-commit` is passable for a fresh event commit out-of-the-box.
 - **Status:** open — workaround this session: strip the EOF blank line (single trailing LF) before staging any emitted event file.
+
+---
+## 2026-09-10 — Kofi / qwen3.8-flash (Session 458)
+- **Flaw:** (1) core 0.21.0's shipped templates carry a cosmetic wrap defect: the AGENTS.md rule-5 insertion leaves an orphaned mid-sentence break ("…or the user's word.\n   You\n   are solo only when…"). (2) `ledger-sync update`'s success message prescribes `chore(ledger): migrate to core <version>` while kickoff Step 1 prescribes `chore(ledger): update core to <version>` — two mandated messages for one commit.
+- **Symptom:** regenerated entry points inherit the ragged wrap; a strict reader at the migration moment sees conflicting commit-message instructions.
+- **Root cause:** (1) minimal-diff text insertion into the templates without reflow; (2) helper output and rules prose diverged in the same release.
+- **Suggested fix:** reflow the template sentence (package repo, next patch core); harmonize the commit-message wording between `ledger-sync`'s success output and the kickoff/Step-1 text.
+- **Status:** open — back-port candidate for context-ledger (upstream https://github.com/TisoneK/context-ledger.git).

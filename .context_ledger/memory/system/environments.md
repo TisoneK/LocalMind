@@ -20,7 +20,7 @@ block (and its "last verified" date) every time you run on it again.
 
 ---
 ---
-## Tison's local Windows machine (last verified 2026-09-09)
+## Tison's local Windows machine (last verified 2026-09-10)
 
 - **Identify by:** OS is Windows; Tisone's dev account; observed this session: hostname `DESKTOP-3LRR8MD`, user home `C:\Users\Lameck`, repo at `C:\Users\Lameck\Tisone\LocalMind` (older S421-S449 records used `C:\Users\tison` — the account path moved; same machine family: Windows 11, Tisone's local box)
 - **OS:** Windows 11 (PowerShell, Git Bash available)
@@ -51,6 +51,7 @@ block (and its "last verified" date) every time you run on it again.
   - **`core.autocrlf=true` made `context-sync verify` false-positive** (all core files FAILED, git tree clean) — documented flaw B-2026-08-30-17. RESOLVED 2026-09-05: core 0.9.1 hashes CR-stripped content + `.context/.gitattributes` forces eol=lf; on 0.8.x cores the old signature still applies (don't rollback on it — update the core instead).
   - **Git Bash mangles `$VAR`-holding-Windows-paths inside compound commands**: `> "$SC/file"` where `SC="C:/..."` can resolve to `/file` (root) and fail with permission denied. Workaround: write a small bash script with the paths baked in (`scratch/s416/trace.sh` pattern) and run `bash <script>` — env-var prefixes for the server boot still work fine inline. (2026-09-04, Session 416)
   - Worktree gate/harness setup re-verified 2026-09-09 (S452): the three junctions (`backend/.venv`, root `node_modules`, `frontend/node_modules`) + `sh` gate runner + venv harness all work from a fresh worktree; `mklink /J` via `cmd //c` from Git Bash, delete junctions with plain `rmdir` (never recursive delete through one). Bare `python` is still the Store alias stub — use `backend/.venv/Scripts/python.exe`.
+- Core sync verified 2026-09-10 (S458): `.context_ledger/core/bin/ledger-sync.cmd verify/status/update` all work from Git Bash in the MAIN checkout — `update` applied 0.20.0→0.21.0 cleanly (source must be a COMMITTED, manifest-consistent release in `C:/Users/Lameck/Tisone/context-ledger`; a dirty or unrelocked source is refused). `.cmd` gate/sync runs touch `memory/core.lock` (em-dash churn) — `git restore` it before staging the ledger surface.
 
 ## Z.ai cloud sandbox (last verified 2026-09-03, Session 411)
 

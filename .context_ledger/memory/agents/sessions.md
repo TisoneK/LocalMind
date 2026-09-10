@@ -6595,3 +6595,16 @@ your name in the roster, present yourself by it.
 - **Coordination:** solo — no collab events. Push policy: pushed to main after each commit (`24d2e7c` check-in, `350d19a` product, ledger closeout).
 - **Open items:** Step 5 (Checkpoint Compaction) is the next P0 step. Follow-up idea (not done): the single-tool path historically carried FULL observations; now bounded to 2 KB+pointer for large results — if weak models under-retrieve buried info this is the lever to revisit (raise the head, or keep-verbatim-once). OTT-26/27/29 clean rerun + B-2/3/6 peer claims still open from S449 (not mine).
 - **Report:** `.context_ledger/memory/reviews/2026-09-09-review-s457.md`
+
+---
+## 2026-09-10 — Session 458 — protocol sync: core 0.20.0 → 0.21.0 landed (Kofi)
+
+- **Agent:** Kofi (ZCode local) | **Model:** qwen3.8-flash (per ZCode system prompt; the cf02f3d0-… UUID prefix is the shared harness marker — registered as a fresh arrival per the new Pitfall #45, NOT a resumption of S454/S455/S456) | **Platform:** Windows 11, Tison's local machine | **Role:** engineer | **Core:** 0.20.0 → 0.21.0
+- **Task:** owner: "Sync protocal" — kickoff Step 1.
+- **Sync:** pull clean (S457's P0 slice-2 landed via it, product `350d19a`). `ledger-sync verify` OK (0.20.0); `status` → 0.21.0 available. S456's blocker is GONE: package repo HEAD `e462943` "core 0.21.0" (MANIFEST relocked in the release commit), clean tree, origin in sync. `ledger-sync update` ran from the MAIN checkout (clean tree, solo — no worktree needed) → 0.21.0 applied + self-verified. Entry points refreshed: kickoff.md + AGENTS.md digest (identity-claim, worktree-teardown, backlog-live-queue hunks; post-edit template diff is facts-only), active.md version note. Migration commit `a969390e`.
+- **Rules now in force (absorbed):** backlog = live queue (delete a line when done — the ~257 existing tombstones are a sweep candidate, NOT done here); identity claimed, never inferred (Pitfall #45, codified from this harness's own S456 flaw); worktree teardown at clock-out.
+- **Findings (backlog B-2026-09-10-1/2/3):** NEW duplicate ID `B-2026-09-09-8` (Otto's renumbered server-death item vs Zola's memory-ingest follow-up — both open, both missing the `- [ ]` checkbox, invisible to check-backlog-duplicates.sh); 4 stale exiled-session worktrees registered; tombstone sweep pending.
+- **Coordination:** solo — board empty, current.md idle at start. No collab events. Commits: `ccc5be6c` (check-in), `aed10e99` (task set), `a969390e` (migration), closeout = last of this range. Push policy: main direct.
+- **Inefficiencies / flaws:** logged — core.lock `.cmd` churn re-hit (S454 trap, workaround applied each time), backlog line-length grep trap; flaw: 0.21.0 template orphan line-wrap + helper-vs-kickoff commit-message wording mismatch.
+- **Verification:** `ledger-sync verify` OK on 0.21.0 after update; pre-commit gate green on each commit; exit gate run per the documented Windows precedent — product tree is bit-identical to S457's ci-check-green state (ledger-surface-only deltas this session).
+- **Report:** none — sync session (this entry + migration commit are the record).

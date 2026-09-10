@@ -1446,3 +1446,11 @@ if literally nothing slowed you down.
 - **Cause:** designed against the mental model "the loop carries full tool results and I bound them," without first confirming WHERE the bounding already happens. The truncation is upstream of the compaction pass.
 - **Workaround / fix:** for any "shrink what the model carries" change, first grep for the existing bound (`_truncate_observation`, `OBS_LOG_MAX_CHARS`, tool self-caps) and confirm the layer where the FULL payload still exists — that is the only place worth indexing. A tool that emits large output can re-trigger a size-gated transform on its OWN output; exempt it by name.
 - **Prevent next time:** before wiring a context-size transform, trace one real large result end to end (dispatch → message → next-iteration prompt) and print the byte size at each hop; don't assume the payload is still full where it's convenient to hook.
+
+---
+## 2026-09-10 — Kofi / qwen3.8-flash (Session 458)
+- **Problem:** (1) `ledger-gates.cmd` runs again dirtied `.context_ledger/memory/core.lock` (em-dash → `--` header rewrite) — re-hit of the S454 trap on all three gate runs. (2) Line-oriented `grep` on the 847-line backlog is unusable: the checked-off lines embed multi-paragraph RESOLVED annotations on ONE physical line, so a targeted search returned 48 KB of noise.
+- **Cost:** (1) ~0 min — known workaround applied before every stage; (2) ~2 min + a persisted-output detour.
+- **Cause:** (1) the PS port rewrites the file without preserving encoding/EOL; (2) the old append-only rule let backlog lines grow without bound — the 0.21.0 live-queue rule (delete when done) is the real fix.
+- **Workaround / fix:** `git restore .context_ledger/memory/core.lock` after each `.cmd` gate run, never stage the churn; pipe backlog greps through `cut -c1-130`.
+- **Prevent next time:** sweep the tombstones (backlog B-2026-09-10-1) and the grep trap disappears with the file size; the core.lock churn is already logged — check `git status` before staging the ledger surface.
