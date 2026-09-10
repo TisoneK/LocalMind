@@ -1,15 +1,14 @@
 # Current Task
 
-**Status:** IDLE — **Session 457 (Iris / claude-opus-4-8, Claude Code desktop, macOS) COMPLETE (2026-09-09).**
+**Status:** IN PROGRESS — **Session 458 (Kofi / qwen3.8-flash, ZCode local, Windows).**
 
-P0 Context Engineering **Step 4 slice 2 DONE** — tool-result index wired into
-the loop + `search_tool_results` retrieval tool (product `350d19a`). Large
-(>5 KB) tool results are indexed in full at dispatch and carried as a bounded
-head + `id=<result_id>` pointer; the model reads the rest back on demand via
-`search_tool_results`. Live-verified bankofai/qwen3.8-flash (retrieved a buried
-§10.4.5 def, ~79% smaller inline footprint, correct answer); ci-check green.
-See sessions.md (S457) + `reviews/2026-09-09-review-s457.md`.
+Owner directive: **"Sync protocal"** — kickoff Step 1. Core 0.20.0 verified
+intact; `ledger-sync status` shows 0.21.0 available upstream at
+`C:/Users/Lameck/Tisone/context-ledger`. Per S456 (2026-09-09) that source was
+an uncommitted half-release (MANIFEST not relocked) and the update was refused;
+this session re-checks the upstream state and completes the core update.
+No product code in scope. Feature: none.
 
-**Next up:** P0 Step 5 — Checkpoint Compaction (deterministic TOC). Also open
-from prior sessions (not this one): OTT-26/27/29 clean rerun, B-2026-09-09-2/3/6
-peer claims.
+**Carried next-up (from S457/S456, not this session's scope):** P0 Step 5 —
+Checkpoint Compaction (deterministic TOC); OTT-26/27/29 clean rerun;
+B-2026-09-09-2/3/6 peer claims; upstream 0.21.0 release completion.
