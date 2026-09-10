@@ -25,6 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Kofi | S458 | qwen3.8-flash | protocol sync — bring core past 0.20.0 (kickoff Step 1) |
 
 <!-- Board audit 2026-09-09 (Iris S457 check-in): Ravi's (S456) row removed —
 owner confirmed it stale. S456 was a context-sync session on a different
