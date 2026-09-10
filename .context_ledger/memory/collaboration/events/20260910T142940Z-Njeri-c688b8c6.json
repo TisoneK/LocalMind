@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260910T142940Z-Njeri-c688b8c6",
+  "type": "note",
+  "session": "S462",
+  "agent": "Njeri",
+  "created": "2026-09-10T14:29:40Z",
+  "issue": "explorer-tool",
+  "body": "Scope extension: the claim listed the six wiring files but missed loop.py â€” dir_explorer needs one line in the loop tool action_labels map (Exploring breadcrumb, per the UX mapping in the feature design). No peer is live; recording it here so the claim matches the actual product diff.",
+  "paths": [],
+  "refs": ["dir_explorer"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
