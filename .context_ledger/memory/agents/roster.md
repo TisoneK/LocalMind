@@ -26,6 +26,7 @@ is your stable session tag.
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
 | Amara | S459 | glm-5.3-flash | Explorer tool design — file/folder exploration tool for the Parent (design doc first) |
+| Theo | S460 | qwen3.8-flash | Backlog tombstone sweep (B-2026-09-10-1) + B-2 checkbox normalize + B-3 stale worktree teardown |
 
 <!-- Clock-out 2026-09-10: Kofi (S458) — protocol sync complete (core 0.21.0
 applied, a969390e; entry points refreshed; logs appended). Board empty =
