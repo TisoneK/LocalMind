@@ -74,7 +74,9 @@ If you read nothing else, obey these rules:
    `flaws/log.md`, `inefficiencies/log.md`) grow at the bottom — never edit
    or delete past entries. `tasks/backlog.md` is a live queue: append
    open items, delete a line when its item is finished (the completion
-   record is the session entry + commit, not a tombstone). *Update-in-place* registries
+   record is the session entry + commit, not a tombstone); `ledger-mem
+   closeout` sweeps tombstones a session left checked off.
+   *Update-in-place* registries
    (`system/ai-models.md`, `system/environments.md`) have one entry per key:
    correct them by **editing** the entry, never by appending a duplicate
    (its old value is in git history). `ledger-mem check` flags a dup key.

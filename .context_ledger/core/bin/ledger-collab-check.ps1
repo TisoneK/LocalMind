@@ -30,18 +30,33 @@ $coreDir = (Resolve-Path (Join-Path $scriptDir '..')).Path
 $ledgerDir = Split-Path -Parent $coreDir
 $eventDir = Join-Path $ledgerDir 'memory/collaboration/events'
 
-# Parse each event's frontmatter ONCE and cache it (keyed by full path).
-# The previous Get-Field re-read the whole file per field, which was very slow
-# on a large trail. TrimEnd("`r") keeps it correct on CRLF (Windows) checkouts.
+# Parse each event ONCE and cache it (keyed by full path). JSON documents
+# (<id>.json, the current format) and legacy markdown frontmatter (<id>.md)
+# normalize into the same hashtable: null/[] -> 'none', arrays -> comma-
+# joined, so every downstream rule stays format-blind. TrimEnd("`r") keeps
+# markdown parsing correct on CRLF (Windows) checkouts.
 $script:FileFields = @{}
 function Get-Fields { param([IO.FileInfo]$File)
   if ($script:FileFields.ContainsKey($File.FullName)) { return $script:FileFields[$File.FullName] }
   $h = @{}
-  $dashes = 0
-  foreach ($raw in Get-Content -LiteralPath $File.FullName) {
-    $ln = $raw.TrimEnd("`r")
-    if ($ln -eq '---') { $dashes++; if ($dashes -ge 2) { break }; continue }
-    if ($dashes -eq 1 -and $ln -match '^([a-z]+): (.*)$') { $h[$matches[1]] = $matches[2] }
+  $first = [IO.File]::ReadLines($File.FullName) | Select-Object -First 1
+  if ($null -ne $first -and $first.TrimEnd("`r") -match '^\{') {
+    $obj = [IO.File]::ReadAllText($File.FullName) | ConvertFrom-Json
+    foreach ($prop in $obj.PSObject.Properties) {
+      if ($null -eq $prop.Value) { $h[$prop.Name] = 'none' }
+      elseif ($prop.Value -is [System.Array]) {
+        if ($prop.Value.Count -eq 0) { $h[$prop.Name] = 'none' }
+        else { $h[$prop.Name] = (@($prop.Value | ForEach-Object { [string]$_ }) -join ',') }
+      }
+      else { $h[$prop.Name] = [string]$prop.Value }
+    }
+  } else {
+    $dashes = 0
+    foreach ($raw in Get-Content -LiteralPath $File.FullName) {
+      $ln = $raw.TrimEnd("`r")
+      if ($ln -eq '---') { $dashes++; if ($dashes -ge 2) { break }; continue }
+      if ($dashes -eq 1 -and $ln -match '^([a-z]+): (.*)$') { $h[$matches[1]] = $matches[2] }
+    }
   }
   $script:FileFields[$File.FullName] = $h
   return $h
@@ -88,7 +103,12 @@ function Has-NonEventRef { param([IO.FileInfo]$File)
   return $false
 }
 function Claim-Closed { param([string]$Id)
-  if (Referenced-By-Type $Id 'release' -or Referenced-By-Type $Id 'handoff') { return $true }
+  # Split into named booleans: `Cmd a -or Cmd b` inside an if() does not
+  # evaluate as two command calls in expression mode — every other call site
+  # parenthesizes; this one now does too.
+  $released = Referenced-By-Type $Id 'release'
+  $handedOff = Referenced-By-Type $Id 'handoff'
+  if ($released -or $handedOff) { return $true }
   # weak-agent fallback: a release/handoff sharing this claim's session+issue
   # and overlapping its paths closes it even when it cites only a commit SHA.
   $target = @(Event-By-Id $Id)
@@ -246,7 +266,8 @@ for ($i = 0; $i -lt $positional.Count; $i++) {
 if ($script:Session -and -not (Valid-Id $script:Session)) { Die "invalid session id: $($script:Session)" }
 if ($script:Issue -and -not (Valid-Id $script:Issue)) { Die "invalid issue id: $($script:Issue)" }
 
-$script:Files = @(Get-ChildItem -LiteralPath $eventDir -Filter '*.md' -File -ErrorAction SilentlyContinue | Where-Object { $_ })
+$script:Files = @(Get-ChildItem -LiteralPath $eventDir -File -ErrorAction SilentlyContinue |
+  Where-Object { $_ -and ($_.Extension -eq '.md' -or $_.Extension -eq '.json') })
 if (-not $script:Files -or $script:Files.Count -eq 0) { Say 'collaboration check: no events (nothing to check)'; exit 0 }
 $script:Failures = 0
 foreach ($file in $script:Files) { Check-Event $file }

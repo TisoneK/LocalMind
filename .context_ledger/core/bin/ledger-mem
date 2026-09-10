@@ -45,8 +45,13 @@ usage() {
   say "  prune   advise archiving resolved/superseded entries out of the"
   say "          append-only durable logs (flaws, inefficiencies); --list"
   say "          names them. Never moves or deletes — reports only."
+  say "  closeout delete finished backlog items (- [x] tombstones) from the"
+  say "          tasks/backlog.md live queue — open work stays. Dry run by"
+  say "          default (lists the tombstones); --confirm deletes. Every"
+  say "          deleted line stays recoverable in git history; the completion"
+  say "          record is the finishing session's entry + commit."
   say ""
-  say "Exit codes: check/lint 0 clean, 1 problem; prune always 0; 2 usage/error"
+  say "Exit codes: check/lint 0 clean, 1 problem; prune/closeout always 0; 2 usage/error"
   exit 2
 }
 
@@ -146,6 +151,7 @@ check() {
   check_roster || _rc=1
   check_roster_stale
   check_dup_sessions
+  check_backlog_tombstones
   if [ "$_rc" -eq 0 ]; then
     say "memory check passed: no duplicate keys in the update-in-place registries"
   else
@@ -250,6 +256,60 @@ prune() {
   return 0
 }
 
+# finished backlog tombstones: the backlog is a live queue of open work
+# (core 0.21.0) — a checked-off `- [x]` line means the item finished but the
+# line was never deleted. Warns only; the sweep is `ledger-mem closeout`.
+check_backlog_tombstones() {
+  _f=$MEMORY_DIR/tasks/backlog.md
+  [ -f "$_f" ] || return 0
+  _n=$(grep -cE '^[[:space:]]*[-*+][[:space:]]+\[[xX]\]' "$_f" 2>/dev/null)
+  _n=${_n:-0}
+  [ "$_n" -gt 0 ] && say "WARN backlog.md: $_n finished item(s) still sit checked off (- [x]) — the backlog holds open work only; run ledger-mem closeout to sweep them (git history keeps the lines)"
+  return 0
+}
+
+# closeout — delete finished backlog items from the tasks/backlog.md live
+# queue. A `- [x]` line is a finished item a session checked off instead of
+# deleting (the tombstone the 0.21.0 live-queue rule retired). Open work
+# (`- [ ]`) is never touched, and every deleted line stays recoverable in
+# git history. Dry run by default: lists the tombstones; --confirm deletes.
+closeout() {
+  _confirm=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --confirm) _confirm=1; shift ;;
+      -h|--help) usage ;;
+      *) die "unknown argument '$1'" ;;
+    esac
+  done
+  _f=$MEMORY_DIR/tasks/backlog.md
+  [ -f "$_f" ] || { say "ledger-mem: no tasks/backlog.md (nothing to close out)"; return 0; }
+  _pat='^[[:space:]]*[-*+][[:space:]]+\[[xX]\]'
+  _n=$(grep -cE "$_pat" "$_f" 2>/dev/null); _n=${_n:-0}
+  if [ "$_n" -eq 0 ]; then
+    say "backlog closeout: no finished tombstones — tasks/backlog.md already holds only open work."
+    return 0
+  fi
+  if [ "$_confirm" -ne 1 ]; then
+    say "backlog closeout (dry run): $_n finished item(s) would be deleted from tasks/backlog.md:"
+    grep -nE "$_pat" "$_f" | sed -E 's/^([0-9]+):/  - line \1: /'
+    say ""
+    say "Open items stay untouched, and the deleted lines remain in git history."
+    say "Re-run with --confirm to delete."
+    return 0
+  fi
+  _tmp=$MEMORY_DIR/tasks/.closeout.$$.tmp
+  awk '
+    /^[[:space:]]*[-*+][[:space:]]+\[[xX]\]/ { next }
+    { print }
+  ' "$_f" > "$_tmp" || { rm -f "$_tmp"; die "could not write the cleaned backlog"; }
+  mv "$_tmp" "$_f" || { rm -f "$_tmp"; die "could not replace tasks/backlog.md"; }
+  say "backlog closeout: deleted $_n finished item(s) from tasks/backlog.md (git history keeps them)."
+  _open=$(grep -cE '^[[:space:]]*[-*+][[:space:]]+\[ \]' "$_f" 2>/dev/null); _open=${_open:-0}
+  say "backlog now holds $_open open item(s)."
+  say "Commit as: chore(ledger): close out finished backlog items"
+}
+
 lint() {
   [ $# -eq 0 ] || { case "$1" in -h|--help) usage ;; *) die "unknown argument '$1'" ;; esac; }
   command -v git >/dev/null 2>&1 || die "lint needs git on PATH"
@@ -283,6 +343,7 @@ case "$CMD" in
   check) check "$@" ;;
   lint)  lint "$@" ;;
   prune) prune "$@" ;;
+  closeout) closeout "$@" ;;
   ''|-h|--help|help) usage ;;
   *) die "unknown command '$CMD' (try: ledger-mem help)" ;;
 esac

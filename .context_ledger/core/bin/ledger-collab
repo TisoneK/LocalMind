@@ -6,6 +6,11 @@
 # append to a shared log. Product work still belongs on isolated branches or
 # worktrees; this tool does not merge or force-push product code.
 #
+# Events are JSON documents (schema: core/schemas/collab-event.schema.json),
+# written in a strict profile — one "key": value per line — so the POSIX-sh
+# reader needs no JSON dependency. Legacy markdown events (<id>.md) are
+# still read by status and check.
+#
 # Commands:
 #   emit TYPE --session ID --agent ID --issue ID [metadata] [--body-file FILE]
 #   status [--session ID] [--issue ID]
@@ -59,20 +64,128 @@ validate_id() {
   esac
 }
 
-field() {
-  # tr -d '\r' keeps parsing correct on CRLF checkouts (Windows autocrlf).
-  sed -n "s/^$1: //p" "$2" | head -n 1 | tr -d '\r'
+validate_body() {
+  # JSON strings cannot carry raw control characters; the writer escapes
+  # tab/CR/LF, so any other control char would produce an invalid document.
+  _clean=$(printf '%s' "$1" | tr -d '\11\12\15')
+  if printf '%s' "$_clean" | grep -q '[[:cntrl:]]'; then
+    die "body contains control characters (tab, newline, and CR are the only ones allowed)"
+  fi
 }
 
-# First non-empty line of the event body (after the second '---'). Used for
-# the chatter feed. Kept to one line so status stays scannable.
+is_json() {
+  _first=
+  IFS= read -r _first < "$1" || true
+  case "$_first" in
+    '{'*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# JSON strict-profile reader: every key sits on its own line as
+# `  "key": value,` (the writer's contract), so no JSON parser is needed.
+# Values are normalized to the legacy markdown conventions — null/[] ->
+# "none", arrays -> comma-joined, strings -> unescaped — so all downstream
+# logic (released, paths_overlap, check) sees one shape.
+json_field() {
+  _f=$1 _k=$2
+  awk -v key="$_k" '
+    function unescape(s) {
+      gsub(/\\\\/, "\001", s); gsub(/\\n/, "\n", s); gsub(/\\r/, "\r", s)
+      gsub(/\\t/, "\t", s); gsub(/\\"/, "\"", s); gsub(/\001/, "\\", s)
+      return s
+    }
+    function norm(v) {
+      sub(/\r$/, "", v); sub(/,$/, "", v)
+      if (v == "null" || v == "[]") return "none"
+      if (v ~ /^\[/) {
+        gsub(/^\[/, "", v); gsub(/\]$/, "", v)
+        if (v == "") return "none"
+        gsub(/", "/, ",", v); gsub(/^"/, "", v); gsub(/"$/, "", v)
+        gsub(/\\\\/, "\001", v); gsub(/\\"/, "\"", v); gsub(/\001/, "\\", v)
+        return v
+      }
+      if (v ~ /^"/) { sub(/^"/, "", v); sub(/"$/, "", v); return unescape(v) }
+      return v
+    }
+    index($0, "  \"" key "\": ") == 1 {
+      print norm(substr($0, length(key) + 7))
+      exit
+    }
+  ' "$_f"
+}
+
+field() {
+  _k=$1 _f=$2
+  if is_json "$_f"; then
+    json_field "$_f" "$_k"
+  else
+    sed -n "s/^$_k: //p" "$_f" | head -n 1 | tr -d '\r'
+  fi
+}
+
+# First non-empty line of the event body. Used for the chatter feed so
+# status stays scannable.
 first_body_line() {
-  awk 'f && NF { print; exit } /^---$/ { c++; if (c==2) f=1 }' "$1" | tr -d '\r'
+  if is_json "$1"; then
+    field body "$1" | awk 'NF { print; exit }'
+  else
+    awk 'f && NF { print; exit } /^---$/ { c++; if (c==2) f=1 }' "$1" | tr -d '\r'
+  fi
 }
 
 usage() {
-  sed -n '9,31p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '14,36p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
+}
+
+# --- JSON writing helpers (the strict profile's other half) ---
+
+json_escape() {
+  # stdin -> single-line JSON string content (no surrounding quotes).
+  # Backslash first, then quote, then the escapable control chars; CR is
+  # escaped per line so CRLF bodies round-trip as \r\n.
+  awk '
+    {
+      if (NR > 1) printf "\\n"
+      s = $0
+      gsub(/\\/, "\\\\", s)
+      gsub(/"/, "\\\"", s)
+      gsub(/\t/, "\\t", s)
+      gsub(/\r/, "\\r", s)
+      printf "%s", s
+    }
+  '
+}
+
+json_scalar() {
+  # shell value ("none" = absent) -> JSON null or quoted string
+  case "$1" in
+    none|"") printf 'null'; return ;;
+  esac
+  printf '"%s"' "$(printf '%s' "$1" | json_escape)"
+}
+
+csv_to_json_array() {
+  # CLI CSV ("none" = absent) -> JSON array of strings
+  case "$1" in
+    none|"") printf '[]'; return ;;
+  esac
+  printf '%s' "$1" | awk '
+    {
+      n = split($0, a, ",")
+      out = "["; c = 0
+      for (i = 1; i <= n; i++) {
+        e = a[i]
+        sub(/^ +/, "", e); sub(/ +$/, "", e)
+        if (e == "") continue
+        gsub(/\\/, "\\\\", e); gsub(/"/, "\\\"", e); gsub(/\t/, "\\t", e)
+        out = out (c ? ", " : "") "\"" e "\""
+        c++
+      }
+      print (c ? out "]" : "[]")
+    }
+  '
 }
 
 emit() {
@@ -125,11 +238,12 @@ emit() {
       [ "$OWNER" != none ] || die "agreement requires --owner"
       [ "$PARTICIPANTS" != none ] || die "agreement requires --participants" ;;
   esac
-  if [ -n "$BODY_FILE" ]; then
-    [ -f "$BODY_FILE" ] || die "body file not found: $BODY_FILE"
-  fi
   if [ -n "$BODY_FILE" ] && [ -n "$BODY" ]; then
     die "use either --body or --body-file, not both"
+  fi
+  if [ -n "$BODY_FILE" ]; then
+    [ -f "$BODY_FILE" ] || die "body file not found: $BODY_FILE"
+    BODY=$(cat "$BODY_FILE")
   fi
   if [ -z "$BODY_FILE" ] && [ -z "$BODY" ]; then
     case "$TYPE" in
@@ -138,6 +252,7 @@ emit() {
       *) die "$TYPE requires --body-file or --body with evidence and reasoning" ;;
     esac
   fi
+  validate_body "$BODY"
 
   mkdir -p "$EVENT_DIR" || die "cannot create $EVENT_DIR"
   # Timestamp + agent + process/random suffix makes collisions exceedingly
@@ -149,29 +264,29 @@ emit() {
     RAND=$$
   fi
   ID="$STAMP-$AGENT-$RAND"
-  TARGET=$EVENT_DIR/$ID.md
+  TARGET=$EVENT_DIR/$ID.json
   TMP="$EVENT_DIR/.${ID}.$$.tmp"
   [ ! -e "$TARGET" ] || die "event ID collision: $ID"
   {
-    printf '%s\n' '---'
-    printf 'id: %s\n' "$ID"
-    printf 'type: %s\n' "$TYPE"
-    printf 'session: %s\n' "$SESSION"
-    printf 'agent: %s\n' "$AGENT"
-    printf 'created: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf 'issue: %s\n' "$ISSUE"
-    printf 'paths: %s\n' "$PATHS"
-    printf 'refs: %s\n' "$REFS"
-    printf 'option: %s\n' "$OPTION"
-    printf 'selected: %s\n' "$SELECTED"
-    printf 'owner: %s\n' "$OWNER"
-    printf 'participants: %s\n' "$PARTICIPANTS"
-    printf '%s\n\n' '---'
-    if [ -n "$BODY_FILE" ]; then cat "$BODY_FILE"; else printf '%s\n' "$BODY"; fi
-    printf '\n'
+    printf '{\n'
+    printf '  "schema": 1,\n'
+    printf '  "id": "%s",\n' "$ID"
+    printf '  "type": "%s",\n' "$TYPE"
+    printf '  "session": "%s",\n' "$SESSION"
+    printf '  "agent": "%s",\n' "$AGENT"
+    printf '  "created": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '  "issue": "%s",\n' "$ISSUE"
+    printf '  "body": "%s",\n' "$(printf '%s' "$BODY" | json_escape)"
+    printf '  "paths": %s,\n' "$(csv_to_json_array "$PATHS")"
+    printf '  "refs": %s,\n' "$(csv_to_json_array "$REFS")"
+    printf '  "option": %s,\n' "$(json_scalar "$OPTION")"
+    printf '  "selected": %s,\n' "$(json_scalar "$SELECTED")"
+    printf '  "owner": %s,\n' "$(json_scalar "$OWNER")"
+    printf '  "participants": %s\n' "$(csv_to_json_array "$PARTICIPANTS")"
+    printf '}\n'
   } > "$TMP" || { rm -f "$TMP"; die "could not write event"; }
   mv "$TMP" "$TARGET" || { rm -f "$TMP"; die "could not publish event"; }
-  say "created collaboration event: .context_ledger/memory/collaboration/events/$ID.md"
+  say "created collaboration event: .context_ledger/memory/collaboration/events/$ID.json"
   if [ "$TYPE" = note ]; then
     say "publish it in a chore(ledger): commit so your peers see it — a note carries no obligation"
   else
@@ -183,7 +298,7 @@ released() { # $1 = claim event FILE
   _cf=$1
   _cid=$(field id "$_cf")
   _cses=$(field session "$_cf"); _ciss=$(field issue "$_cf"); _cpaths=$(field paths "$_cf")
-  for _f in "$EVENT_DIR"/*.md; do
+  for _f in "$EVENT_DIR"/*.md "$EVENT_DIR"/*.json; do
     [ -f "$_f" ] || continue
     _type=$(field type "$_f")
     [ "$_type" = release ] || [ "$_type" = handoff ] || continue
@@ -223,7 +338,7 @@ status() {
   [ -d "$EVENT_DIR" ] || { say "no collaboration events yet"; return 0; }
   count=0
   say "Collaboration events${SESSION:+ for session $SESSION}${ISSUE:+ / issue $ISSUE}:"
-  for f in "$EVENT_DIR"/*.md; do
+  for f in "$EVENT_DIR"/*.md "$EVENT_DIR"/*.json; do
     [ -f "$f" ] || continue
     s=$(field session "$f"); i=$(field issue "$f")
     [ -z "$SESSION" ] || [ "$s" = "$SESSION" ] || continue
@@ -235,7 +350,7 @@ status() {
 
   say ""
   say "Active claims and possible overlaps:"
-  for a in "$EVENT_DIR"/*.md; do
+  for a in "$EVENT_DIR"/*.md "$EVENT_DIR"/*.json; do
     [ -f "$a" ] || continue
     [ "$(field type "$a")" = claim ] || continue
     sa=$(field session "$a"); ia=$(field issue "$a");
@@ -243,7 +358,7 @@ status() {
     [ -z "$ISSUE" ] || [ "$ia" = "$ISSUE" ] || continue
     released "$a" && continue
     say "- $(field id "$a") — agent=$(field agent "$a") paths=$(field paths "$a")"
-    for b in "$EVENT_DIR"/*.md; do
+    for b in "$EVENT_DIR"/*.md "$EVENT_DIR"/*.json; do
       [ -f "$b" ] || continue
       [ "$a" \< "$b" ] || continue
       [ "$(field type "$b")" = claim ] || continue
@@ -258,7 +373,7 @@ status() {
   say ""
   say "Recent chatter (notes) — read these first to catch up, like a team channel:"
   notes=0
-  for f in "$EVENT_DIR"/*.md; do
+  for f in "$EVENT_DIR"/*.md "$EVENT_DIR"/*.json; do
     [ -f "$f" ] || continue
     [ "$(field type "$f")" = note ] || continue
     ns=$(field session "$f"); ni=$(field issue "$f")

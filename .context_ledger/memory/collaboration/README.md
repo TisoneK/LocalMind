@@ -5,6 +5,17 @@ working on one issue or project session. It is **opt-in**: when no
 collaboration session is declared, the normal single-agent workflow and
 `tasks/current.md` lock still apply.
 
+**Solo sessions use the same light path.** The event tools are
+mode-agnostic: when no collaboration session is declared, your session
+still writes a `claim` (with `--paths` for the task scope) at start and
+a `release` (citing the product commit) at close into this same
+`events/` directory, committed with your normal `chore(ledger):` memory
+commits on the shared branch — `session` is your roster codename
+(`S<NNN>`) and `issue` a short task slug. Notes are collaboration
+politeness; solo, claim + release is the whole ceremony. The point is
+arrival safety: any agent that walks in mid-session sees your live
+scope — paths and all — on the board, in any mode.
+
 **You and your teammates are one team with one goal — the working
 product — and the human is your supervisor.** You are not bidding against
 each other and there is no prize for being first. Think of it as a
@@ -17,16 +28,29 @@ escalation for a genuine conflict, not the everyday path.
 
 ## Who you are — pick a name
 
-You are a person on this team, not an anonymous ID. At the start of your
-session, open `../agents/roster.md` and **add your row with a real name you
-choose** — any human name you like (John, Ada, Kwame, Mei, …) — your
+You are a person on this team, not an anonymous ID. You already signed
+`../agents/roster.md` at session start — **every session does, solo or
+not** (see the protocol's check-in step): a real name you choose, your
 codename `S<NNN>` (your session number), your model, and one line on what
-you're doing. From then on, **present yourself by that name** in every
+you're doing. Edit your row's "Doing" cell as your work changes, and
+remove the row (clock out) in your closing memory commit. From then on,
+**present yourself by that name** in every
 event you emit and when you report to the supervisor: `John (S427)`, never
 "peer" or a bare model id. Your name and codename are each unique within
 the group — if a name is taken, pick another; there is only one John on the
 team at a time. `ledger-mem check` flags a clash. The roster is the board
 by the door: who's in, and what they're on.
+
+**You are a new arrival until you register.** Never "recognize yourself"
+in a row that already exists: a matching model string (or harness UUID)
+is not identity — model IDs and harness markers are shared by every
+session on that harness or model, so two peers can honestly list the
+same model. If your name is on the board without your having signed in
+this session, treat it as a peer who happens to share your fingerprint:
+pick a fresh name and codename `S<NNN>`, write your own row, and leave
+theirs (and their working tree) alone. "That row is mine" is true only
+with continuity in your own session — you clocked out earlier in this
+same conversation and are checking back in — or when the user says so.
 
 ## Goals
 
@@ -93,6 +117,23 @@ and use the same coordination worktree or rebase their event-only branch
 onto it. Cloud agents normally get product isolation from separate
 clones; they must still publish/fetch the shared coordination ref.
 
+**Teardown — the topology is rented, not owned.** After your final
+`release` and the integration of your product branch, remove the product
+worktree you created and delete your branch: run `git status` inside the
+worktree (clean it or stop if changes are unexplained), then
+`git worktree remove ../<project>-<agent-id>` and
+`git branch -d collab/<session-id>/<agent-id>` (`-d` refuses an unmerged
+branch — that refusal is the safety net; use `git push origin --delete`
+too if you pushed the branch). A worktree left behind is a trap: stale
+checkouts claim locked files and "unexpected working-tree changes" for
+the next session. Never remove another agent's worktree. The
+coordination *worktree* may be removed by the last agent to leave (the
+next session re-adds it from the branch in one command); the
+coordination *branch* is the session's event trail — later agents fetch
+it to continue the session — so it is not deleted while the session can
+resume. If a worktree directory was already deleted by hand, run
+`git worktree prune` so the stale registration doesn't linger.
+
 ## Event files are immutable
 
 Every coordination event is a new file under `events/`:
@@ -101,7 +142,7 @@ Every coordination event is a new file under `events/`:
 collaboration/
 ├── README.md
 └── events/
-    └── <event-id>.md
+    └── <event-id>.json
 ```
 
 Never edit an event after publishing it. If it is wrong, emit a new
@@ -155,32 +196,36 @@ The helpers are conveniences; the event contract is authoritative.
 
 ## Event contract
 
-Each event has immutable metadata followed by evidence and reasoning:
+Each event is one immutable JSON document (`collab-event.schema.json` v1):
 
-```markdown
----
-id: <globally-unique-event-id>
-type: note | claim | proposal | assessment | agreement | correction | handoff | release
-session: <shared-collaboration-session-id>
-agent: <stable-agent-id>
-created: <UTC timestamp>
-issue: <shared-issue-id>
-paths: <comma-separated repo-relative paths, or none>
-refs: <comma-separated event IDs or commit SHAs, or none>
-option: <proposal option ID, or none>
-selected: <selected option ID, or none>
-owner: <agent-id responsible for implementation, or none>
-participants: <comma-separated agents who agreed, or none>
----
-
-<evidence, reasoning, trade-offs, and next action>
+```json
+{
+  "schema": 1,
+  "id": "<UTC-timestamp-agent-random>",
+  "type": "note | claim | proposal | assessment | agreement | correction | handoff | release",
+  "session": "<shared-collaboration-session-id>",
+  "agent": "<stable-agent-id>",
+  "created": "<UTC timestamp>",
+  "issue": "<shared-issue-id>",
+  "body": "<evidence, reasoning, trade-offs, and next action>",
+  "paths": ["<repo-relative paths claimed or affected>"],
+  "refs": ["<event IDs or commit SHAs cited>"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
 ```
 
-`id`, `type`, `session`, `agent`, `created`, and `issue` are required.
-`paths` is required for a `claim`; `refs` is required for an
-`assessment`, `agreement`, or `correction`. A `note` requires none of the
-type-specific fields — a body is all it needs. The other fields are
-required when relevant to the event type.
+`id`, `type`, `session`, `agent`, `created`, `issue`, and `body` are
+always present. Type-specific requirements: `paths` (non-empty) for a
+`claim`; `option` for a `proposal`; `refs` for an `assessment`,
+`agreement`, `correction`, `handoff`, or `release`; an `agreement` also
+requires `selected`, `owner`, and at least two distinct `participants`.
+A `note` requires none of the type-specific fields — a body is all it
+needs. The full document schema is `core/schemas/collab-event.schema.json`.
+Legacy markdown events (`<event-id>.md`, written by pre-0.22.0 cores) are
+still read by `status` and `check` — never rewritten.
 
 ### Event meanings and lifecycle
 
@@ -263,7 +308,8 @@ checks.
   conflicts even when the files differ; negotiate them explicitly.
 - At integration time, merge/rebase each product branch into the shared
   branch in dependency order. Never force-push over a peer's work.
-- Normal durable files (`tasks/backlog.md`, `plans/decisions.md`, and
+- Normal durable files (`tasks/backlog.md` — a live queue, delete a line
+  when its item is done — `plans/decisions.md`, and
   session logs) are updated after the collaboration event trail is
   published. If two agents need the same durable file, one agent owns
   that update or peers merge it after rebasing; do not use those files as

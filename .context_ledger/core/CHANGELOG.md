@@ -10,6 +10,67 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 0.22.0 — 2026-09-10
+
+**Collaboration events are JSON documents — and every session writes
+them, solo included.** Events move from markdown frontmatter to immutable
+JSON documents (`core/schemas/collab-event.schema.json` v1): validated
+document-level by a standard JSON Schema, trail-level by
+`ledger-collab check` exactly as before. The light path (`claim` → work
+→ `release`) becomes universal — solo sessions emit it into the same
+`memory/collaboration/events/` directory on the shared branch, so an
+agent arriving mid-session sees live claimed paths in any mode. Design:
+`designs/collab-events-json.md` in the package repo.
+
+- **New event format:** one `<event-id>.json` per event, written in a
+  strict profile (fixed key order, one `"key": value` per line, UTF-8
+  without BOM) that keeps the POSIX-sh reader dependency-free — no jq.
+  The `none` sentinels become real `null`/`[]`; CSV strings become real
+  arrays; a new `schema: 1` field versions the durable trail for future
+  format changes.
+- **Backward compatible:** readers accept legacy `<event-id>.md`
+  frontmatter files (pre-0.22.0) alongside JSON, forever; writers emit
+  JSON only. Event files live in the memory zone, which `ledger-sync`
+  never touches, so projects need no migration. MINOR bump.
+- **Solo light path:** solo `session` = the roster codename (`S<NNN>`),
+  `issue` = a short task slug; `tasks/current.md` unchanged. The
+  collaboration README teaches it; edition prose may follow later.
+- **Fixed (Windows port):** `ledger-collab-check.ps1`'s `Claim-Closed`
+  used `if (Cmd a -or Cmd b)` — a bare `-or` between command calls
+  inside an `if()` does not evaluate as two boolean command results, so
+  event-ID-based claim closure silently never matched in PowerShell and
+  only the path-overlap fallback ever closed claims there. Split into
+  named booleans; logged as a flaw.
+- **Cross-platform bytes:** the sh and PowerShell writers produce
+  identical strict-profile documents (PowerShell writes UTF-8 without a
+  BOM via `[IO.File]::WriteAllText` — a BOM would break the sh reader);
+  both platforms read both representations and each other's output.
+  Runtime-verified on Git Bash and Windows PowerShell over a mixed
+  sh/ps1/markdown trail: emit, status (chatter, overlaps), check pass
+  and fail paths, agreement ceremony, handoff, weak-agent SHA fallback.
+
+**`ledger-mem closeout` — the live queue gets its sweep command.**
+0.21.0 reclassified `tasks/backlog.md` as open-work-only and told
+sessions to delete a finished item's line, but left the rule
+prose-only: agents kept checking the box (`- [x]`) instead of
+deleting, and tombstones accrued exactly as under the old append-only
+habit.
+
+- **New `closeout` command** (sh + `.ps1` port): deletes finished
+  `- [x]` tombstones from `tasks/backlog.md`; open (`- [ ]`) items are
+  never touched, and every deleted line stays recoverable in git
+  history. Dry run by default — lists the tombstones with line
+  numbers; `--confirm` deletes and prints the `chore(ledger):` commit
+  suggestion.
+- **`ledger-mem check` now warns** (warn-only, exit stays 0) when the
+  backlog still holds checked-off items, pointing at `closeout`.
+- **Teaching updated:** Step 15 in both protocol editions, the
+  memory-tree comments, `ledger-README.md`, `AGENTS.md` rule 6, the
+  backlog template header, and the schema (`ledger.schema.json`,
+  `ledger-schema.md`).
+- No memory migration: existing checked-off lines are exactly what
+  `closeout` removes — run it once per project after updating.
+
 ## 0.21.0 — 2026-09-09
 
 **Backlog is a live queue — open work only.** The backlog previously

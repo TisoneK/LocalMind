@@ -40,8 +40,13 @@ function Usage {
     '          into the staged product diff',
     '  prune   advise archiving resolved/superseded entries out of the',
     '          append-only durable logs; --list names them. Reports only.',
+    '  closeout delete finished backlog items (- [x] tombstones) from the',
+    '          tasks/backlog.md live queue - open work stays. Dry run by',
+    '          default (lists the tombstones); --confirm deletes. Every',
+    '          deleted line stays recoverable in git history; the completion',
+    "          record is the finishing session's entry + commit.",
     '',
-    'Exit codes: check/lint 0 clean, 1 problem; prune always 0; 2 usage/error'
+    'Exit codes: check/lint 0 clean, 1 problem; prune/closeout always 0; 2 usage/error'
   ) | ForEach-Object { Say $_ }
   exit 2
 }
@@ -171,6 +176,52 @@ function Check-DupSessions {
   }
 }
 
+function Check-BacklogTombstones {
+  # The backlog is a live queue of open work (core 0.21.0) - a checked-off
+  # "- [x]" line means the item finished but the line was never deleted.
+  # Warns only; the sweep is `ledger-mem closeout`.
+  $f = Join-Path $memoryDir 'tasks/backlog.md'
+  if (-not (Test-Path -LiteralPath $f)) { return }
+  $n = @(Get-Content -LiteralPath $f | Where-Object { $_ -match '^\s*[-*+]\s+\[[xX]\]' }).Count
+  if ($n -gt 0) {
+    Say ('WARN backlog.md: {0} finished item(s) still sit checked off (- [x]) - the backlog holds open work only; run ledger-mem closeout to sweep them (git history keeps the lines)' -f $n)
+  }
+}
+
+function Invoke-Closeout {
+  param([bool]$Confirm)
+  $f = Join-Path $memoryDir 'tasks/backlog.md'
+  if (-not (Test-Path -LiteralPath $f)) { Say 'ledger-mem: no tasks/backlog.md (nothing to close out)'; return }
+  $raw = [IO.File]::ReadAllText($f)
+  $eol = if ($raw.Contains("`r`n")) { "`r`n" } else { "`n" }
+  # split on the EOL string only: a trailing newline yields a final empty
+  # element, so rejoining reproduces the file byte-for-byte
+  $lines = $raw -split [regex]::Escape($eol)
+  $tomb = @(); $keep = @()
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -match '^\s*[-*+]\s+\[[xX]\]') { $tomb += "line $($i + 1): $($lines[$i])" }
+    else { $keep += $lines[$i] }
+  }
+  if ($tomb.Count -eq 0) {
+    Say 'backlog closeout: no finished tombstones - tasks/backlog.md already holds only open work.'
+    return
+  }
+  if (-not $Confirm) {
+    Say ('backlog closeout (dry run): {0} finished item(s) would be deleted from tasks/backlog.md:' -f $tomb.Count)
+    foreach ($t in $tomb) { Say ('  - {0}' -f $t) }
+    Say ''
+    Say 'Open items stay untouched, and the deleted lines remain in git history.'
+    Say 'Re-run with --confirm to delete.'
+    return
+  }
+  $utf8 = New-Object System.Text.UTF8Encoding($false)
+  [IO.File]::WriteAllText($f, $keep -join $eol, $utf8)
+  Say ('backlog closeout: deleted {0} finished item(s) from tasks/backlog.md (git history keeps them).' -f $tomb.Count)
+  $open = @(Get-Content -LiteralPath $f | Where-Object { $_ -match '^\s*[-*+]\s+\[ \]' }).Count
+  Say ('backlog now holds {0} open item(s).' -f $open)
+  Say 'Commit as: chore(ledger): close out finished backlog items'
+}
+
 function Invoke-Lint {
   if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Die 'lint needs git on PATH' }
   $root = (& git -C $projectDir rev-parse --show-toplevel 2>$null)
@@ -241,6 +292,7 @@ switch ($Command) {
     $ok3 = Check-Roster
     Check-RosterStale
     Check-DupSessions
+    Check-BacklogTombstones
     if ($ok1 -and $ok2 -and $ok3) { Say 'memory check passed: no duplicate keys in the update-in-place registries'; exit 0 }
     ErrLine 'memory check failed: a registry has more than one entry for a key - correct in place (edit the entry), do not append a duplicate'
     exit 1
@@ -250,6 +302,14 @@ switch ($Command) {
   }
   'prune' {
     Invoke-Prune -List:($RestArgs -contains '--list')
+    exit 0
+  }
+  'closeout' {
+    foreach ($a in $RestArgs) {
+      if ($a -notin @('--confirm', '-h', '--help')) { Die "unknown argument '$a'" }
+    }
+    if ($RestArgs -contains '-h' -or $RestArgs -contains '--help') { Usage }
+    Invoke-Closeout -Confirm:($RestArgs -contains '--confirm')
     exit 0
   }
   { $_ -in @('', '-h', '--help', 'help') } { Usage }

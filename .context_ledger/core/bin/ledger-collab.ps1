@@ -5,6 +5,11 @@
 # .context_ledger/memory/collaboration/events/. Product changes still belong on an
 # isolated branch/worktree and are never merged by this helper.
 #
+# Events are JSON documents (schema: core/schemas/collab-event.schema.json)
+# written in the same strict profile as the sh tool (one "key": value per
+# line, UTF-8 without BOM) so both platforms produce identical bytes.
+# Legacy markdown events (<id>.md) are still read by status and check.
+#
 # Usage:
 #   .context_ledger/core/bin/ledger-collab.cmd emit claim `
 #     --session ID --agent ID --issue ID --paths src/a.py `
@@ -83,13 +88,51 @@ function Parse-Options { param([string[]]$OptArgs)
   }
   return $result
 }
+function ConvertTo-JsonEscaped { param([string]$Text)
+  # Backslash first, then quote, then the escapable control chars.
+  return $Text.Replace('\', '\\').Replace('"', '\"').Replace("`t", '\t').Replace("`r", '\r').Replace("`n", '\n')
+}
+function ConvertTo-JsonArray { param([string]$Csv)
+  if (-not $Csv -or $Csv -eq 'none') { return '[]' }
+  $items = @($Csv -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } | ForEach-Object { '"' + (ConvertTo-JsonEscaped $_) + '"' })
+  if ($items.Count -eq 0) { return '[]' }
+  return '[' + ($items -join ', ') + ']'
+}
+function ConvertTo-JsonScalar { param([string]$Value)
+  if (-not $Value -or $Value -eq 'none') { return 'null' }
+  return '"' + (ConvertTo-JsonEscaped $Value) + '"'
+}
+function Test-JsonFile { param([IO.FileInfo]$File)
+  $first = [IO.File]::ReadLines($File.FullName) | Select-Object -First 1
+  return ($null -ne $first -and $first.TrimEnd("`r") -match '^\{')
+}
+# JSON value -> the same field value the markdown parser produces:
+# null/[] -> 'none', arrays -> comma-joined, strings -> unescaped.
+function Get-JsonField { param([IO.FileInfo]$File, [string]$Name)
+  $obj = [IO.File]::ReadAllText($File.FullName) | ConvertFrom-Json
+  $prop = $obj.PSObject.Properties[$Name]
+  if ($null -eq $prop) { return '' }
+  if ($null -eq $prop.Value) { return 'none' }
+  if ($prop.Value -is [System.Array]) {
+    if ($prop.Value.Count -eq 0) { return 'none' }
+    return (@($prop.Value | ForEach-Object { [string]$_ }) -join ',')
+  }
+  return [string]$prop.Value
+}
 function Get-Field { param([IO.FileInfo]$File, [string]$Name)
+  if (Test-JsonFile $File) { return Get-JsonField $File $Name }
   $pattern = "^${Name}: (.*)$"
   $line = Get-Content -LiteralPath $File.FullName | Where-Object { $_ -match $pattern } | Select-Object -First 1
   if ($null -eq $line) { return '' } else { return (($line -replace $pattern, '$1').TrimEnd("`r")) }
 }
-# First non-empty body line (after the second '---'), for the chatter feed.
+# First non-empty body line, for the chatter feed.
 function Get-FirstBodyLine { param([IO.FileInfo]$File)
+  if (Test-JsonFile $File) {
+    $body = Get-JsonField $File 'body'
+    if ($body -eq 'none' -or $body -eq '') { return '' }
+    foreach ($ln in ($body -split "`n")) { if ($ln.Trim() -ne '') { return $ln } }
+    return ''
+  }
   $dashes = 0
   foreach ($raw in Get-Content -LiteralPath $File.FullName) {
     $ln = $raw.TrimEnd("`r")
@@ -129,18 +172,37 @@ function Emit { param([string]$EventType, [string[]]$EventArgs)
   $stamp = [DateTime]::UtcNow.ToString("yyyyMMddTHHmmss'Z'")
   $random = [Guid]::NewGuid().ToString('N').Substring(0, 8)
   $id = "$stamp-$($o.agent)-$random"
-  $target = Join-Path $eventDir "$id.md"
+  $target = Join-Path $eventDir "$id.json"
   $temp = Join-Path $eventDir ".$id.$PID.tmp"
   $created = [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
-  $lines = @(
-    '---', "id: $id", "type: $EventType", "session: $($o.session)", "agent: $($o.agent)",
-    "created: $created", "issue: $($o.issue)", "paths: $($o.paths)", "refs: $($o.refs)",
-    "option: $($o.option)", "selected: $($o.selected)", "owner: $($o.owner)",
-    "participants: $($o.participants)", '---', '', $body.TrimEnd(), ''
-  )
-  Set-Content -LiteralPath $temp -Value ($lines -join "`n") -NoNewline
+  $body = $body.TrimEnd("`r", "`n")
+  if ($body -match '[\x00-\x08\x0B\x0C\x0E-\x1F]') {
+    Die 'body contains control characters (tab, newline, and CR are the only ones allowed)'
+  }
+  # Strict profile: fixed key order, one "key": value per line, UTF-8
+  # without BOM — byte-compatible with the sh writer.
+  $json = @(
+    '{',
+    '  "schema": 1,',
+    "  `"id`": `"$id`",",
+    "  `"type`": `"$EventType`",",
+    "  `"session`": `"$($o.session)`",",
+    "  `"agent`": `"$($o.agent)`",",
+    "  `"created`": `"$created`",",
+    "  `"issue`": `"$($o.issue)`",",
+    "  `"body`": `"$(ConvertTo-JsonEscaped $body)`",",
+    "  `"paths`": $(ConvertTo-JsonArray $o.paths),",
+    "  `"refs`": $(ConvertTo-JsonArray $o.refs),",
+    "  `"option`": $(ConvertTo-JsonScalar $o.option),",
+    "  `"selected`": $(ConvertTo-JsonScalar $o.selected),",
+    "  `"owner`": $(ConvertTo-JsonScalar $o.owner),",
+    "  `"participants`": $(ConvertTo-JsonArray $o.participants)",
+    '}'
+  ) -join "`n"
+  # WriteAllText: UTF-8 without BOM (a BOM would break the sh reader).
+  [IO.File]::WriteAllText($temp, $json)
   Move-Item -LiteralPath $temp -Destination $target
-  Say "created collaboration event: .context_ledger/memory/collaboration/events/$id.md"
+  Say "created collaboration event: .context_ledger/memory/collaboration/events/$id.json"
   if ($EventType -eq 'note') {
     Say 'publish it in a chore(ledger): commit so your peers see it -- a note carries no obligation'
   } else {
@@ -170,7 +232,8 @@ function Overlap { param([string]$Left, [string]$Right)
 }
 function Status { param([string[]]$StatusArgs)
   $o = Parse-Options $StatusArgs
-  $files = @(Get-ChildItem -LiteralPath $eventDir -Filter '*.md' -File -ErrorAction SilentlyContinue)
+  $files = @(Get-ChildItem -LiteralPath $eventDir -File -ErrorAction SilentlyContinue |
+    Where-Object { $_ -and ($_.Extension -eq '.md' -or $_.Extension -eq '.json') })
   if ($files.Count -eq 0) { Say 'no collaboration events yet'; return }
   $files = @($files | Where-Object {
     ($o.session -eq '' -or (Get-Field $_ 'session') -eq $o.session) -and

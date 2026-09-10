@@ -5,6 +5,17 @@ working on one issue or project session. It is **opt-in**: when no
 collaboration session is declared, the normal single-agent workflow and
 `tasks/current.md` lock still apply.
 
+**Solo sessions use the same light path.** The event tools are
+mode-agnostic: when no collaboration session is declared, your session
+still writes a `claim` (with `--paths` for the task scope) at start and
+a `release` (citing the product commit) at close into this same
+`events/` directory, committed with your normal `chore(ledger):` memory
+commits on the shared branch — `session` is your roster codename
+(`S<NNN>`) and `issue` a short task slug. Notes are collaboration
+politeness; solo, claim + release is the whole ceremony. The point is
+arrival safety: any agent that walks in mid-session sees your live
+scope — paths and all — on the board, in any mode.
+
 **You and your teammates are one team with one goal — the working
 product — and the human is your supervisor.** You are not bidding against
 each other and there is no prize for being first. Think of it as a
@@ -131,7 +142,7 @@ Every coordination event is a new file under `events/`:
 collaboration/
 ├── README.md
 └── events/
-    └── <event-id>.md
+    └── <event-id>.json
 ```
 
 Never edit an event after publishing it. If it is wrong, emit a new
@@ -185,32 +196,36 @@ The helpers are conveniences; the event contract is authoritative.
 
 ## Event contract
 
-Each event has immutable metadata followed by evidence and reasoning:
+Each event is one immutable JSON document (`collab-event.schema.json` v1):
 
-```markdown
----
-id: <globally-unique-event-id>
-type: note | claim | proposal | assessment | agreement | correction | handoff | release
-session: <shared-collaboration-session-id>
-agent: <stable-agent-id>
-created: <UTC timestamp>
-issue: <shared-issue-id>
-paths: <comma-separated repo-relative paths, or none>
-refs: <comma-separated event IDs or commit SHAs, or none>
-option: <proposal option ID, or none>
-selected: <selected option ID, or none>
-owner: <agent-id responsible for implementation, or none>
-participants: <comma-separated agents who agreed, or none>
----
-
-<evidence, reasoning, trade-offs, and next action>
+```json
+{
+  "schema": 1,
+  "id": "<UTC-timestamp-agent-random>",
+  "type": "note | claim | proposal | assessment | agreement | correction | handoff | release",
+  "session": "<shared-collaboration-session-id>",
+  "agent": "<stable-agent-id>",
+  "created": "<UTC timestamp>",
+  "issue": "<shared-issue-id>",
+  "body": "<evidence, reasoning, trade-offs, and next action>",
+  "paths": ["<repo-relative paths claimed or affected>"],
+  "refs": ["<event IDs or commit SHAs cited>"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
 ```
 
-`id`, `type`, `session`, `agent`, `created`, and `issue` are required.
-`paths` is required for a `claim`; `refs` is required for an
-`assessment`, `agreement`, or `correction`. A `note` requires none of the
-type-specific fields — a body is all it needs. The other fields are
-required when relevant to the event type.
+`id`, `type`, `session`, `agent`, `created`, `issue`, and `body` are
+always present. Type-specific requirements: `paths` (non-empty) for a
+`claim`; `option` for a `proposal`; `refs` for an `assessment`,
+`agreement`, `correction`, `handoff`, or `release`; an `agreement` also
+requires `selected`, `owner`, and at least two distinct `participants`.
+A `note` requires none of the type-specific fields — a body is all it
+needs. The full document schema is `core/schemas/collab-event.schema.json`.
+Legacy markdown events (`<event-id>.md`, written by pre-0.22.0 cores) are
+still read by `status` and `check` — never rewritten.
 
 ### Event meanings and lifecycle
 

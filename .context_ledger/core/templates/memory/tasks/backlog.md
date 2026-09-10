@@ -7,7 +7,9 @@ is the finishing session's `agents/sessions.md` entry and the commit
 itself; git history keeps every removed line, so deleting loses
 nothing. Never remove a line whose item is still open — a `- [ ]` line
 vanishing from the diff without a matching session entry is a dropped
-handoff, not cleanup.
+handoff, not cleanup. A checked-off `- [x]` line a session left behind
+is a finished tombstone — sweep it with `ledger-mem closeout` (dry run
+by default; `--confirm` deletes).
 
 <!-- TEMPLATE — copy below the last entry:
 ---

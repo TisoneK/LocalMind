@@ -88,8 +88,9 @@ core/
 │   └── ai-engineering-protocol.md         # CLOUD/SANDBOX agents' edition
 ├── roles/               # mission overlays: reviewer, security-auditor, docs-agent, feature-engineer
 ├── schemas/
-│   ├── ledger-schema.md    # this file
-│   └── ledger.schema.json  # machine-readable mirror
+│   ├── ledger-schema.md         # this file
+│   ├── ledger.schema.json       # machine-readable mirror
+│   └── collab-event.schema.json # collaboration event document (v1)
 └── templates/
     ├── AGENTS.md            # root discovery digest (translation layer)
     ├── ledger-README.md    # becomes .context_ledger/README.md
@@ -119,7 +120,8 @@ File inventory, write modes, and scopes. **Write modes:**
   Never delete a line whose item is still open (git history keeps every
   removed line, so nothing is lost). The only live-queue file is
   `tasks/backlog.md`; completion records live in `agents/sessions.md`
-  and the commits, not in the backlog.
+  and the commits, not in the backlog. `ledger-mem closeout` sweeps
+  checked-off tombstones a session forgot to delete.
 - **overwrite** — current-state only; replace the content, history
   lives in the append-only logs.
 - **update-in-place** — structured records with one entry per key,
@@ -142,7 +144,7 @@ File inventory, write modes, and scopes. **Write modes:**
 | `tasks/current.md` | overwrite | project | The one task in progress — a lock only in single-agent mode |
 | `tasks/backlog.md` | live queue (append / delete-when-done) | project | Open items for future sessions only — a finished item's line is deleted; its completion record is the session entry + commit |
 | `collaboration/README.md` | generated | project | Peer collaboration rules and event contract |
-| `collaboration/events/<event-id>.md` | immutable new file | project | Notes (informal), claims, proposals, assessments, agreements, corrections, handoffs, releases |
+| `collaboration/events/<event-id>.json` | immutable new file | project | Coordination events — notes (informal), claims, proposals, assessments, agreements, corrections, handoffs, releases. JSON documents validated by `core/schemas/collab-event.schema.json`. Every session writes the light path (claim → release), solo included; solo `session` is the roster codename, `issue` a task slug. Legacy `<event-id>.md` frontmatter files (pre-0.22.0) stay readable, never rewritten |
 | `plans/decisions.md` | append-only | project | ADR-style decisions — respected, not relitigated |
 | `flaws/log.md` | append-only | project→package | Friction with the protocol/`.context_ledger/` system itself; flows upstream |
 | `flaws/README.md` | generated | project | The flaws-vs-inefficiencies split rule (pointer to this schema) |

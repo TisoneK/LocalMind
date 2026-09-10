@@ -24,7 +24,7 @@ is committed to git and travels with the repo. It has **two zones**:
     │   ├── README.md            # worktree + event contract
     │   └── events/               # immutable one-file-per-event records
     ├── tasks/current.md         # task in progress (single-agent lock only)
-    ├── tasks/backlog.md         # live queue of open items (delete a line when done)
+    ├── tasks/backlog.md         # live queue of open items (delete a line when done; ledger-mem closeout sweeps leftovers)
     ├── plans/decisions.md       # append-only ADRs
     ├── flaws/log.md             # protocol friction — flows upstream to the package
     ├── inefficiencies/log.md    # project friction

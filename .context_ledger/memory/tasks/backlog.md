@@ -4,7 +4,9 @@ Open items for future sessions only. Append at the bottom; never reorder.
 When an item is done, DELETE its line — the completion record is the
 session entry in `agents/sessions.md` plus the commit itself, never a
 tombstone here (core 0.21.0 live-queue rule; git history preserves removed
-lines). Partially-done work carries `- [~]`.
+lines). Partially-done work carries `- [~]`. A checked-off `- [x]` line a
+session left behind is a finished tombstone — sweep it with
+`ledger-mem closeout` (dry run by default; `--confirm` deletes).
 
 ---
 
