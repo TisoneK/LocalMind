@@ -160,9 +160,9 @@ allow-list reuse as `system_search`).
 | File size limits | N/A to `list`/`tree`/`stat` (they return metadata, not file bytes). The **bytes** cap already lives in `file_task` (`FILE_READ_MAX_BYTES`) — Explorer never reads bytes, so there is nothing to cap here. (If a future `preview` op is added, it reuses `file_task`'s cap.) |
 | Read-only by default | **Hard read-only by construction.** Only `os.scandir` / `os.stat` — no write path exists. `RiskLevel.LOW`, `requires_confirmation=False`. Permission prompts (brief §3) are unnecessary for normal paths; an out-of-root attempt is a flat deny, not a prompt. |
 
-The two surfaces two-prefix rule still applies: Explorer is product code; any
-memory note about it goes under `.context_ledger/`, never cited in product
-docstrings.
+The product/memory two-surface rule still applies: Explorer is product code; any
+note about it goes in the project's agent-memory directory, never cited from
+product docstrings.
 
 ---
 
@@ -283,4 +283,3 @@ is claimed**. The *implementation* session must satisfy:
 - `frontend/src/components/chat/ToolSteps.tsx` — existing tool-step UI (§6).
 - ADR-40 (lean schemas), ADR-43 (tools as bounded helpers), ADR-53 (Parent-only).
 - `docs/tools_architecture_proposal.md`, `docs/parent-agent-spec.md`.
-- Feature manifest: `.context_ledger/memory/features/explorer-tool/manifest.md`.
