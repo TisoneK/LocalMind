@@ -201,16 +201,49 @@ def _args_of(tc: dict) -> dict:
         return {"operation": m.group(1)} if m else {}
 
 
+def _op_of(tc: dict) -> str:
+    """Operation of a dir_explorer call, from whichever shape the model sent:
+    JSON args, a plain 'list <path>' string, or the loop's own Exploring
+    label (built from structured args — survives weak-model arg shapes)."""
+    label = str(tc.get("label") or "")
+    m = re.search(r"Exploring \((\w+)\)", label)
+    if m:
+        return m.group(1)
+    op = _args_of(tc).get("operation")
+    if op:
+        return str(op)
+    raw = str(tc.get("arguments") or "").strip().lower()
+    return raw.split()[0] if raw.split() else "?"
+
+
 def score(name: str, prompt: str, expected_tool: str, expected_op: str | None, parsed: dict) -> dict:
-    tools = [tc.get("name") or tc.get("tool") or "?" for tc in parsed["tool_calls"]]
-    calls_by_name: dict[str, list[dict]] = {}
+    # Dedupe by call id: every call appears once as 'started' and once as
+    # 'done' — counting both doubles the tool list.
+    seen: dict[str, dict] = {}
     for tc in parsed["tool_calls"]:
-        calls_by_name.setdefault(tc.get("name") or tc.get("tool") or "?", []).append(_args_of(tc))
-    explorer_ops = [a.get("operation", "?") for a in calls_by_name.get("dir_explorer", [])]
+        tc_id = tc.get("id") or f"{tc.get('name')}-{len(seen)}"
+        cur = seen.get(tc_id)
+        if cur is None or (cur.get("status") == "started" and tc.get("status") != "started"):
+            seen[tc_id] = tc
+    calls = list(seen.values())
+    tools = [tc.get("name") or tc.get("tool") or "?" for tc in calls]
+    explorer_ops = [_op_of(tc) for tc in calls if (tc.get("name") or tc.get("tool")) == "dir_explorer"]
     selected = expected_tool in tools
     op_ok = (expected_op is None) or (expected_op in explorer_ops)
     # The non-regression half: the OTHER new surface must not swallow it.
     bleed = (expected_tool != "dir_explorer") and ("dir_explorer" in tools[:1])
+    # A turn that never reached the model (provider error) measures nothing —
+    # it must be scored BLOCKED, not FAIL. The loop's silent-failure contract
+    # can also swallow a mid-turn rate limit into the final answer's prose
+    # ("provider was rate-limited on my final synthesis"), so the text itself
+    # is a provider-error signal too.
+    provider_error = bool(parsed["errors"]) or bool(
+        re.search(
+            r"rate.?limited|temporarily unavailable|Couldn't reach the model|switch to a larger model",
+            parsed["final_text"],
+            re.IGNORECASE,
+        )
+    )
     final = parsed["final_text"]
     return {
         "name": name,
@@ -221,6 +254,7 @@ def score(name: str, prompt: str, expected_tool: str, expected_op: str | None, p
         "dir_explorer_ops": explorer_ops,
         "selected_expected": selected and op_ok,
         "explorer_bled_into_regression": bleed,
+        "provider_error": provider_error,
         "n_errors": len(parsed["errors"]),
         "degraded": parsed["degraded"],
         "errors": parsed["errors"][:2],
@@ -268,12 +302,19 @@ def main() -> int:
                     "name": name, "prompt": prompt, "expected_tool": exp_tool,
                     "expected_op": exp_op, "tools_used": [], "dir_explorer_ops": [],
                     "selected_expected": False, "explorer_bled_into_regression": False,
+                    "provider_error": True,
                     "n_errors": 1, "degraded": True, "errors": [f"harness: {exc}"],
                     "final_chars": 0, "final_head": "", "usage": None,
                 }
             row["latency_s"] = round(time.time() - t0, 1)
             results.append(row)
-            verdict = "PASS" if row["selected_expected"] and not row["explorer_bled_into_regression"] else "FAIL"
+            if row["selected_expected"] and not row["explorer_bled_into_regression"]:
+                verdict = "PASS"
+            elif row.get("provider_error") or row.get("degraded"):
+                verdict = "BLOCKED"
+            else:
+                verdict = "FAIL"
+            row["verdict"] = verdict
             print(
                 f"  {verdict} {name:16s} {row['latency_s']:6.1f}s "
                 f"want={exp_tool}{'/' + exp_op if exp_op else ''} "
@@ -286,12 +327,14 @@ def main() -> int:
 
     out_file = SCRATCH / f"results-direxplore-{args.label}.json"
     out_file.write_text(json.dumps(results, indent=2), encoding="utf-8")
-    ok = sum(1 for r in results if r["selected_expected"] and not r["explorer_bled_into_regression"])
-    newcap = sum(1 for r in results if r["expected_tool"] == "dir_explorer" and r["selected_expected"])
+    ok = sum(1 for r in results if r["verdict"] == "PASS")
+    blocked = sum(1 for r in results if r["verdict"] == "BLOCKED")
+    newcap = sum(1 for r in results if r["expected_tool"] == "dir_explorer" and r["verdict"] == "PASS")
     print(f"\n== dir_explorer live-test [{adapter} / {args.label}] ==")
-    print(f"selection PASS overall: {ok}/{len(results)} · new-capability picks: {newcap}/{sum(1 for r in results if r['expected_tool'] == 'dir_explorer')}")
+    print(f"PASS {ok}/{len(results)} · BLOCKED {blocked} · FAIL {len(results) - ok - blocked} · "
+          f"new-capability picks: {newcap}/{sum(1 for r in results if r['expected_tool'] == 'dir_explorer')}")
     print(f"artifacts: {out_file}")
-    return 0 if ok == len(results) else 1
+    return 0 if ok + blocked == len(results) else 1
 
 
 if __name__ == "__main__":
