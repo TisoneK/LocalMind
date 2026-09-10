@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260910T143707Z-Juma-ef368f80",
+  "type": "claim",
+  "session": "S463",
+  "agent": "Juma",
+  "created": "2026-09-10T14:37:07Z",
+  "issue": "b-2026-09-10-2-id-renumber",
+  "body": "Ledger-hygiene session executing the owner renumber call for backlog B-2026-09-10-2: the duplicate B-2026-09-09-8 ID. Decision basis (same landed-first rule as the -7 collision): Zola's memory-ingest item landed with id -8 first (commit 7143ef7f, 20:18) vs Otto's renumber onto -8 (commit a41c5f74, 21:02), so Otto's server-death item renumbers to B-2026-09-09-9 (verified free) and Zola's line keeps -8. On completion the B-2026-09-10-2 backlog line is deleted per the live-queue rule. Claiming tasks/backlog.md only; no overlap with Njeri/S462's product claim (explorer-tool paths).",
+  "paths": [".context_ledger/memory/tasks/backlog.md"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
