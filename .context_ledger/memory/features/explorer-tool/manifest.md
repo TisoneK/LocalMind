@@ -1,7 +1,8 @@
 # Feature: explorer-tool — Local file/folder inspection tool (Parent)
 
-**Started:** 2026-09-10 · **Status:** active (design doc shipped, awaiting owner
-approval; implementation is the next session) · **Sessions:** 459 (design)
+**Started:** 2026-09-10 · **Status:** SHIPPED (2026-09-10, implementation +
+weak-model live gate green; one re-verify carried → B-2026-09-10-7) ·
+**Sessions:** 459 (design), 462 (implementation)
 
 ## What this feature is
 
@@ -94,5 +95,25 @@ computer" local tools.
 - **Routing: extend `_LOCAL_DISCOVERY_RE`** (owner accepted the default) —
   phrasings tuned live in the implementation session.
 
-Implementation session must also update the `tools_architecture_proposal.md`
-schema-count/budget pins.
+Implementation session must also update the schema-count/budget pins —
+CORRECTED during implementation: `tools_architecture_proposal.md` (a July
+proposal) holds NO pins; the live pins are the lean-surface assertions in
+`tests/core/test_tool_schemas_lean.py` (size budget + tool count) — both
+updated in S462's feature commit.
+
+## Session log
+
+- **Session 462 (2026-09-10, Njeri / qwen3.8-flash, Windows):** implemented
+  the full map (backend commits `9d85df0f`..`d1b88465`): tool module, Intent,
+  registry, lean schema after system_search + CORE tier, scopes, grounded
+  `_SIG_INSPECT` routing, steering (file_task/shell descriptions, planning
+  templates, safety workflow), Exploring breadcrumbs on all three loop label
+  dicts, "Explorer" alias in both frontend copies, 22 unit tests, live
+  harness `scripts/live_test_dir_explorer.py`, pin updates, changelog.
+  Weak-model gate on zai/glm-4.5-flash: list/tree/stat selection PASS
+  (bounded + grounded presentation, plain-string args absorbed);
+  system_search + shell regressions PASS; grep_search regression UNRESOLVED
+  (provider rate limits killed all three attempts mid-chain) →
+  B-2026-09-10-7. zen upstream DOWN all session ("Model is unavailable");
+  bankofai account empty (balance=0) — owner action. Evidence + full
+  verification split: `memory/reviews/2026-09-10-review-s462.md`.

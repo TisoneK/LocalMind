@@ -33,3 +33,5 @@ archived or deleted **only after** its ledger line records the outcome
 - **system-search-tool** — started 2026-08-25 · active · finished — (Local Search Intelligence Phase 1: unified system_search tool for the Parent — files/recent/largest/duplicates/apps/open_with operations with normalized, bounded, security-gated results)
 - **p0-context-engineering** — started 2026-09-03 · active · S410-412 reductions (`ec5521c`/`1bbe2e6`/`a1e7c68`) + S414/S415 research (`4cce4f6`/`c0de368`); addendum-confirmed 8-step plan, S416 executing Step 1 (cache data → UI) —
 - **explorer-tool** — started 2026-09-10 · active (design shipped at `docs/explorer_tool_design.md`, awaiting owner approval; implementation is the next session) · finished —
+
+- **explorer-tool** — started 2026-09-10 · **SHIPPED (not yet finished)** — S462 implementation `9d85df0f`..`d1b88465` + design status + changelog; 22 unit tests green; weak-model gate passed on zai/glm-4.5-flash (list/tree/stat picks + system_search/shell non-regression); grep_search re-verify + zen/bankofai retry carried as B-2026-09-10-7; ledger line completes when that verdict lands.
