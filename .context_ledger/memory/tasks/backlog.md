@@ -626,10 +626,8 @@ item remains open.
 ---
 
 - [~] **B-2026-09-10-2** (P2, ledger hygiene — S458 finding): **NEW duplicate backlog ID `B-2026-09-09-8`** — Otto's renumbered server-death item (P2, backend/robustness, S449 batch-8) AND Zola's memory-ingest follow-up (P3, multi-fact Remember split, S455) both carry `-8`, both open. The -7 collision renumber created this one. Both lines also lack the leading `- [ ]` checkbox, so `scripts/check-backlog-duplicates.sh` (checkbox-based) never sees the clash — either teach the script the bare `- **B-…` shape or normalize the open lines. Owner's renumber call, same as the -7 one. (Set by S458, 2026-09-10) (◐ half landed S460 2026-09-10: both B-2026-09-09-8 lines now carry the `- [ ]` checkbox and are visible to the dup-check gate; the ID renumber itself remains the owner's call)
-
 ---
 
-- [ ] **B-2026-09-10-3** (P3, repo hygiene — owner call): **Tear down 4 stale exiled-session worktrees**: `../LocalMind-juno-s448`, `../LocalMind-nia-s454`, `../LocalMind-ravi-s456`, `../LocalMind-vera-s451` (see `git worktree list`). All owners logged complete; the 0.21.0 teardown rule (clock out clean) arrived after them. CAUTION before `git worktree remove`: the S452-era setups contain junctions to the REAL `backend/.venv` + root/`frontend/node_modules` — verify no junctions remain (or unlink them first) so removal can never recurse into live deps. Coordination branches stay (event trail). (Set by S458, 2026-09-10)
 
 ---
 
