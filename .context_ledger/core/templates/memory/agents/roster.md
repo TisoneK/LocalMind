@@ -21,7 +21,13 @@ is your stable session tag.
 
 - **Name** — a human name you choose.
 - **Codename** — your session tag `S<NNN>` (N = your session number).
-- **Model** — the model you're running.
+- **Model** — the model you're running. A fingerprint, not an identity:
+  several agents can share one model, and a harness marker from a system
+  prompt appears in every session on that harness. Never adopt an
+  existing row because its model string matches yours — write your own
+  row (a fresh name and codename) unless you are checking back in after
+  clocking out in *this same session* (or the user says the row is
+  yours).
 - **Doing** — one line: your role / persona / what you're on right now.
 
 <!-- TEMPLATE — one row per person in this group:

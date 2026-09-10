@@ -10,6 +10,86 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 0.21.0 — 2026-09-09
+
+**Backlog is a live queue — open work only.** The backlog previously
+held completed items as checked-off tombstones (`- [x]`, "don't remove
+the line"), so every session re-read fixed work at startup. Completion
+history already has a home: `agents/sessions.md` entries, the commits
+themselves, and git history (which preserves any removed line).
+`designs/feature-scoped-memory.md` had already flagged checked-off
+backlog items as unbounded growth.
+
+- **`tasks/backlog.md` reclassified:** no longer in the append-only set.
+  Append new items at the bottom; **delete the line** when the item is
+  finished or no longer relevant. Never delete a line whose item is
+  still open — a `- [ ]` line vanishing without a matching session
+  entry is a dropped handoff.
+- Both protocol editions updated (Rule 4 file-kinds digest, Step 15,
+  memory-tree comment, what-goes-where table, memory Rules 1, Pitfall
+  #22, Pitfall #39). Pitfall #39's additions-only diff check now lists
+  `backlog.md` as the explicit exemption.
+- Templates updated: `memory/tasks/backlog.md` header rewritten;
+  `ledger-README.md` tree; `AGENTS.md` digest rule 6; collaboration
+  README durable-files note. Repo-level `README.md` and `MVP.md`
+  updated to match.
+- No tool changes: `ledger-mem`/`ledger-gates` never mechanically
+  enforced backlog append-only (the check was prose-only), so no script
+  edits. Existing project ledgers keep their checked-off lines until an
+  agent deletes them under the new rule — no migration needed; a
+  same-major `ledger-sync update` ships the new spec.
+
+**Identity is never inferred — a model match proves nothing.** At sync
+start a fresh session inferred "Zola (S455) is ME" from her roster row's
+model-ID string matching its own system prompt's model name, and moved
+to treat a dirty main checkout as its own uncommitted closeout. Doubly
+wrong: the `cf02f3d0-…` UUID it matched on is the ZCode harness marker
+shared by every ZCode session (it appears in the S450/S452 sessions.md
+entries under glm-5.3-flash), and the model suffix `qwen3.8-flash` also
+matches Nia's row (S454). Model strings can never discriminate agents,
+and a fresh context can never prove it is a prior session.
+
+- **New check-in bullet + Pitfall #45 in both editions:** identity is
+  *claimed* at registration (fresh name + codename `S<NNN>`), never
+  *inferred* from a model/harness-string match — model IDs, version
+  suffixes, and harness/session UUIDs are fingerprints shared by every
+  session on that harness or model. "That row is me" is justified only
+  by continuity within your own live context (the re-check-in rule) or
+  the user's word; a matching row is a peer's — leave it and its dirty
+  checkout (Pitfall #20) alone.
+- Threaded through the kickoff check-in, the AGENTS.md digest, the
+  collaboration README ("You are a new arrival until you register"), the
+  roster template's Model bullet, and both schemas' roster notes
+  (duplicate model values are documented as normal).
+- No tool changes: `ledger-mem check` already keys roster uniqueness on
+  Name + codename, never on model, so duplicate model values never trip
+  it. No migration; a same-major `ledger-sync update` ships the new spec.
+
+**Worktrees are rented, not owned — tear down the topology at closeout.**
+Collaboration setup was taught everywhere (check-in/mode bullets, the
+collaboration README's workspace topology, the kickoff, the digest) and
+teardown nowhere: clock-out, Step 15, and the EXIT checklists covered
+the roster row, `current.md`, the logs, and the PAT — never the
+workspace an agent created. So worktree directories accumulated one per
+agent per session, and stale `git worktree list` registrations met the
+next session as unexplained, locked paths.
+
+- **Both editions:** a teardown bullet in the collaboration Isolation
+  guidance, a Step 15 clock-out sentence, and a new EXIT / end-of-session
+  gates checkbox. After the final `release` and integration: remove your
+  product worktree (from a clean tree — unexplained changes stop you,
+  Pitfall #20) and delete your product branch (`git branch -d` refuses
+  an unmerged branch; `git push origin --delete` if pushed).
+  `git worktree list` must be clean of your rows before you go.
+- The coordination *branch* is the deliberate exception: it is the
+  session's event trail, which later agents fetch to continue the
+  session — it is not deleted while the session can resume. The
+  coordination *worktree* may be removed by the last agent out
+  (re-added in one command next session).
+- Threaded through the collaboration README ("Teardown — the topology is
+  rented, not owned"), the kickoff, and the AGENTS.md digest. No tool
+  changes; a same-major `ledger-sync update` ships the new spec.
+
 ## 0.20.0 — 2026-09-09
 
 **Additive roster edits — the peer-clobber fix.** On check-in into a

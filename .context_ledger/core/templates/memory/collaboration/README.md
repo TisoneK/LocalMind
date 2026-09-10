@@ -30,6 +30,17 @@ the group — if a name is taken, pick another; there is only one John on the
 team at a time. `ledger-mem check` flags a clash. The roster is the board
 by the door: who's in, and what they're on.
 
+**You are a new arrival until you register.** Never "recognize yourself"
+in a row that already exists: a matching model string (or harness UUID)
+is not identity — model IDs and harness markers are shared by every
+session on that harness or model, so two peers can honestly list the
+same model. If your name is on the board without your having signed in
+this session, treat it as a peer who happens to share your fingerprint:
+pick a fresh name and codename `S<NNN>`, write your own row, and leave
+theirs (and their working tree) alone. "That row is mine" is true only
+with continuity in your own session — you clocked out earlier in this
+same conversation and are checking back in — or when the user says so.
+
 ## Goals
 
 - let agents talk — a lightweight `note` is the office channel, so a
@@ -94,6 +105,23 @@ The first agent publishes the coordination branch; later agents fetch it
 and use the same coordination worktree or rebase their event-only branch
 onto it. Cloud agents normally get product isolation from separate
 clones; they must still publish/fetch the shared coordination ref.
+
+**Teardown — the topology is rented, not owned.** After your final
+`release` and the integration of your product branch, remove the product
+worktree you created and delete your branch: run `git status` inside the
+worktree (clean it or stop if changes are unexplained), then
+`git worktree remove ../<project>-<agent-id>` and
+`git branch -d collab/<session-id>/<agent-id>` (`-d` refuses an unmerged
+branch — that refusal is the safety net; use `git push origin --delete`
+too if you pushed the branch). A worktree left behind is a trap: stale
+checkouts claim locked files and "unexpected working-tree changes" for
+the next session. Never remove another agent's worktree. The
+coordination *worktree* may be removed by the last agent to leave (the
+next session re-adds it from the branch in one command); the
+coordination *branch* is the session's event trail — later agents fetch
+it to continue the session — so it is not deleted while the session can
+resume. If a worktree directory was already deleted by hand, run
+`git worktree prune` so the stale registration doesn't linger.
 
 ## Event files are immutable
 
@@ -265,7 +293,8 @@ checks.
   conflicts even when the files differ; negotiate them explicitly.
 - At integration time, merge/rebase each product branch into the shared
   branch in dependency order. Never force-push over a peer's work.
-- Normal durable files (`tasks/backlog.md`, `plans/decisions.md`, and
+- Normal durable files (`tasks/backlog.md` — a live queue, delete a line
+  when its item is done — `plans/decisions.md`, and
   session logs) are updated after the collaboration event trail is
   published. If two agents need the same durable file, one agent owns
   that update or peers merge it after rebasing; do not use those files as

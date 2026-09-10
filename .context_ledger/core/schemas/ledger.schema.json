@@ -39,9 +39,9 @@
   },
   "memoryFiles": {
     "agents/sessions.md":      { "mode": "append-only",      "scope": "project", "note": "current group's registry; rotated by ledger-history" },
-    "agents/roster.md":        { "mode": "update-in-place",  "scope": "project", "note": "team roster for the current group; one row per person (Name, codename S<NNN>, model, doing); Name and codename each unique; ledger-mem check enforces; ledger-history resets on group close" },
+    "agents/roster.md":        { "mode": "update-in-place",  "scope": "project", "note": "team roster for the current group; one row per person (Name, codename S<NNN>, model, doing); Name and codename each unique; ledger-mem check enforces; ledger-history resets on group close; identity is claimed at check-in (fresh name + codename), never inferred from a model/harness-string match — model strings are shared across sessions, so duplicate model values are normal" },
     "tasks/current.md":        { "mode": "overwrite",        "scope": "project", "note": "single-agent lock only; collaboration mode uses event claims" },
-    "tasks/backlog.md":        { "mode": "append-only",      "scope": "project" },
+    "tasks/backlog.md":        { "mode": "live-queue",       "scope": "project", "note": "open work only; append new items at the bottom, delete the line when the item is finished (completion record = session entry + commit); never delete a line whose item is still open" },
     "collaboration/README.md": { "mode": "generated",         "scope": "project" },
     "collaboration/events/<event-id>.md": { "mode": "immutable-new-file", "scope": "project", "note": "one file per peer event; never edit an event" },
     "plans/decisions.md":      { "mode": "append-only",      "scope": "project" },

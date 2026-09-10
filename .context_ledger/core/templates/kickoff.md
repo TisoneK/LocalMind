@@ -158,6 +158,13 @@ name, and never let an edit's `old_string` span a peer's row (the edit
 tool replaces blocks — anchoring on the table body erases whoever is on
 it); after a roster edit the diff must show exactly your own row
 (`+1` on check-in) — review `git diff` before committing.
+**Claim an identity; never infer one.** A live row whose model string
+matches yours is a peer, not you — model IDs and harness markers are
+fingerprints shared by every session on that harness or model, and a
+fresh context can never prove it is a prior session. Register as a new
+arrival (fresh name, codename `S<NNN>`); "that row is mine" is
+justified only by continuity in your own session (the re-check-in rule
+below) or the user's word.
 Clock-out (Step 15) is *leaving the office*, not finishing a task — and
 the session is not over until the user says so. If you clocked out and
 the supervisor brings more work, **check back in before touching
@@ -211,6 +218,16 @@ best-supported option and one implementation owner. There is no timestamp
 or agent-ID winner. A correction similarly records evidence, root cause,
 candidate repairs, and a suggested owner; peers agree on the repair and
 owner before it is applied.
+
+**Tear down what you set up.** After your final `release` and the
+integration of your product branch, remove your worktree from a clean
+tree (`git status` first — unexplained changes stop you, not `--force`)
+and delete your branch (`git branch -d` refuses an unmerged branch; push
+`--delete` too if you pushed it). The coordination *branch* is the
+session's event trail — later agents fetch it to continue — so it stays;
+the coordination *worktree* may be removed by the last agent out and
+re-added in one command next time. `git worktree list` should be clean
+of your rows before you go.
 
 ### Gate commands (every session)
 

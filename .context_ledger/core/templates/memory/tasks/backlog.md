@@ -1,8 +1,13 @@
-# Backlog (append-only)
+# Backlog (live queue — open work only)
 
-Open items for future sessions. Append at the bottom; never delete or
-reorder. When an item is done, check it off and note the session/commit —
-don't remove the line.
+Undone or partially done items for future sessions. Append new items at
+the bottom. When an item is finished, **delete its line** — the backlog
+holds only open work, never completed tombstones. The completion record
+is the finishing session's `agents/sessions.md` entry and the commit
+itself; git history keeps every removed line, so deleting loses
+nothing. Never remove a line whose item is still open — a `- [ ]` line
+vanishing from the diff without a matching session entry is a dropped
+handoff, not cleanup.
 
 <!-- TEMPLATE — copy below the last entry:
 ---

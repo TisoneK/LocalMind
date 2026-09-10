@@ -45,7 +45,13 @@ If you read nothing else, obey these rules:
    before product work. Roster edits are additive — your row only: a live
    row you didn't write is a colleague's check-in, not sample text — never
    adopt a peer's name, never let an edit span a peer's row, review the
-   `git diff` (exactly your row, `+1` on check-in) before committing. You
+   `git diff` (exactly your row, `+1` on check-in) before committing.
+   Claim an identity; never infer one: a row whose model string matches
+   yours is a peer, not you — model IDs and harness markers are shared by
+   every session on that harness or model, and a fresh context can never
+   prove it is a prior session. "That row is mine" only with continuity in
+   your own session (the re-check-in rule) or the user's word.
+   You
    are solo only when there is no shared
    collaboration `session` + `issue`, no live roster row you didn't
    write, and `tasks/current.md` is idle; otherwise coordinate (join or
@@ -57,13 +63,18 @@ If you read nothing else, obey these rules:
    `note` (the office channel — say what you're on, flag a coworker, review a
    diff); then `claim → work → release`. Save the `proposal → assessment → agreement`
    ceremony for a genuine conflict (same paths, incompatible changes).
+   Tear down what you set up: at clock-out remove your product worktree
+   and delete your branch (`-d` refuses unmerged) — the coordination
+   branch is the session's event trail and stays.
    Before each next action run `ledger-gates checkpoint`; before commits,
    integration, and exit run the matching gate. On Windows, use the `.cmd`
    launchers (they run the `.ps1` ports; no execution-policy setup).
 6. **Know which kind of file you're in.** *Append-only* logs
-   (`agents/sessions.md`, `tasks/backlog.md`, `plans/decisions.md`,
+   (`agents/sessions.md`, `plans/decisions.md`,
    `flaws/log.md`, `inefficiencies/log.md`) grow at the bottom — never edit
-   or delete past entries. *Update-in-place* registries
+   or delete past entries. `tasks/backlog.md` is a live queue: append
+   open items, delete a line when its item is finished (the completion
+   record is the session entry + commit, not a tombstone). *Update-in-place* registries
    (`system/ai-models.md`, `system/environments.md`) have one entry per key:
    correct them by **editing** the entry, never by appending a duplicate
    (its old value is in git history). `ledger-mem check` flags a dup key.

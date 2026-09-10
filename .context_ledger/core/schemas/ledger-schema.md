@@ -114,6 +114,12 @@ File inventory, write modes, and scopes. **Write modes:**
 - **append-only** — entries are only added at the bottom; corrections
   are appended, never edited in. Sole exception: byte-identical
   duplicate entries may be removed, leaving a one-line note in place.
+- **live queue** — open work only. New items append at the bottom; a
+  line is deleted when its item is finished or no longer relevant.
+  Never delete a line whose item is still open (git history keeps every
+  removed line, so nothing is lost). The only live-queue file is
+  `tasks/backlog.md`; completion records live in `agents/sessions.md`
+  and the commits, not in the backlog.
 - **overwrite** — current-state only; replace the content, history
   lives in the append-only logs.
 - **update-in-place** — structured records with one entry per key,
@@ -132,9 +138,9 @@ File inventory, write modes, and scopes. **Write modes:**
 | Path (under `.context_ledger/memory/`) | Mode | Scope | Holds |
 |---|---|---|---|
 | `agents/sessions.md` | append-only (current group) | project | One entry per session: agent, model, platform, task, commits, outcome |
-| `agents/roster.md` | update-in-place (current group) | project | Team roster — the "who's in the office *now*" board. Every session (solo included) adds its row at check-in and pushes it before product work; removes the row (clocks out) at session end. Who was on duty *when* lives in `agents/sessions.md` + this file's git history. Name and codename each unique in the group; `ledger-mem check` enforces it |
+| `agents/roster.md` | update-in-place (current group) | project | Team roster — the "who's in the office *now*" board. Every session (solo included) adds its row at check-in and pushes it before product work; removes the row (clocks out) at session end. Who was on duty *when* lives in `agents/sessions.md` + this file's git history. Name and codename each unique in the group; `ledger-mem check` enforces it. Identity is *claimed* at check-in (fresh name + codename you pick), never *inferred* from a model/harness-string match — model strings are shared across sessions, so duplicate model values are normal |
 | `tasks/current.md` | overwrite | project | The one task in progress — a lock only in single-agent mode |
-| `tasks/backlog.md` | append-only | project | Open items for future sessions |
+| `tasks/backlog.md` | live queue (append / delete-when-done) | project | Open items for future sessions only — a finished item's line is deleted; its completion record is the session entry + commit |
 | `collaboration/README.md` | generated | project | Peer collaboration rules and event contract |
 | `collaboration/events/<event-id>.md` | immutable new file | project | Notes (informal), claims, proposals, assessments, agreements, corrections, handoffs, releases |
 | `plans/decisions.md` | append-only | project | ADR-style decisions — respected, not relitigated |
