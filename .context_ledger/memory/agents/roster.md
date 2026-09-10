@@ -25,7 +25,12 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Thabo | S461 | qwen3.8-flash | protocol sync: core 0.21.0 → 0.22.0 (JSON collab events + closeout sweep) |
+
+<!-- Clock-out 2026-09-10: Thabo (S461) — protocol sync to core 0.22.0
+landed (migration 40aa398c; entry points refreshed — collab README caught
+up two releases; closeout dry run zero tombstones; first solo JSON
+claim→release emitted, check green). Session logged, current idle. Board
+empty = nobody in the office. -->
 
 <!-- Clock-out 2026-09-10: Theo (S460) — backlog tombstone sweep complete
 (250 done lines + 9 stale pointers deleted, 7 [x]->[~], B-2 half, B-3

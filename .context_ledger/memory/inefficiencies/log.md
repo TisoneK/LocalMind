@@ -1462,3 +1462,23 @@ if literally nothing slowed you down.
 - **Cause:** (1) Git Bash path-conversion on `/`-prefixed and quoted arguments; (2) backlog lines legitimately contain `Session N` provenance text everywhere.
 - **Workaround / fix:** (1) write junction/`rmdir` commands into a scratch .bat and invoke it (S416 recipe, re-confirmed); (2) require a STRONG completion marker (DONE/✅/RESOLVED/sha/`marked YYYY-MM-DD`) for auto-delete and route everything else to a review bucket; assert zero `- [x]` post-write.
 - **Prevent next time:** for any bulk memory-file transform, run report mode first and eyeball counts before `--apply`; and when claiming a file you share with a live peer, expect their mid-work appends — ff-merge only when the main checkout's backlog.md is clean, else rebase around their commit.
+
+---
+## 2026-09-10 — Thabo / qwen3.8-flash (Session 461)
+- **Problem:** verifying "AGENTS.md digest matches the template, facts-only"
+  with raw `diff` reported EVERY line as different (1,113c1,112) — a
+  working-tree EOL artifact (template read via bash stream vs the root file's
+  checkout encoding), not real drift. The files were textually identical.
+- **Cost:** ~2 min reading the full-line diff to eyeball the truth.
+- **Cause:** Git Bash `diff`/`sed` streams bypass git's text conversion;
+  root AGENTS.md is outside the `.context_ledger/.gitattributes` eol=lf
+  scope and its checkout encoding differs from the template's bytes.
+- **Workaround / fix:** for template-vs-generated comparisons use
+  `git diff --no-index` with normalization (`sed 's/<PROJECT_NAME>/Name/g'`),
+  or compare `git show HEAD:<path>` blobs which are both index-LF.
+- **Prevent next time:** known-safe signal: after the comparison, `git diff`
+  of your own edit showed ONLY the intended 3 lines — trust that as the
+  drift check. Also: the whole session's gates via Git Bash `sh` ports
+  re-dirtied `memory/core.lock` ZERO times (the PS-port trap never fired) —
+  on this box, prefer `sh` launchers whenever the tree holds an uncommitted
+  core.lock update, so `git restore` can't wipe the migration content.

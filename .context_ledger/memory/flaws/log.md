@@ -865,3 +865,28 @@ just the number, before trusting a before/after label.
 - **Root cause:** the emit helper validates field presence, not ref resolvability against existing event IDs / commit SHAs; the checker has no supersession semantics for released-released or corrected events.
 - **Suggested fix:** at emit, resolve every `--refs` token (full event ID prefix-match within the session, else require a git object) and fail early; add a `--supersedes <event-id>` field honored by check (a superseded release is skipped). Back-port to context-ledger.
 - **Status:** open — workaround this session: re-emit a correct final release citing full claim-ID + commit refs and record the deviation in a note + the session entry.
+
+---
+## 2026-09-10 — Thabo / qwen3.8-flash (Session 461)
+- **Flaw:** `ledger-sync update`'s success message prescribes filling facts in
+  exactly three entry points (kickoff.md, AGENTS.md, workflows/active.md). It
+  never mentions the MEMORY-zone files that are verbatim copies of core
+  templates — `memory/collaboration/README.md` first, template-headered
+  `tasks/backlog.md`. Consequence: LocalMind's collab README silently
+  lagged TWO releases (missed the 0.21.0 check-in/new-arrival/teardown
+  paragraphs AND the 0.22.0 JSON event contract) — S458 refreshed "entry
+  points" per the tool's list and the staleness passed unnoticed until this
+  session diffed it on purpose.
+- **Symptom:** agents read a project collab contract describing the OLD
+  markdown-frontmatter event format and pre-0.21.0 check-in prose while the
+  vendored helpers emit/read the new format.
+- **Root cause:** the refresh instruction is enumerated by hand in the
+  update helper's output instead of derived from the template→copy mapping.
+- **Suggested fix:** have `ledger-sync status`/`update` list every memory file
+  whose content matches a PRIOR template version but not the new one
+  (stale-template-copy detector; a one-time `git diff` between old and new
+  templates' outputs suffices), or add those paths to the update's fill list.
+  Back-port to context-ledger.
+- **Status:** open — worked around this session by diffing project copies vs
+  `core/templates/` manually and refreshing to verbatim (collab README has no
+  project-custom content; verified before overwriting).
