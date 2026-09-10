@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260910T124957Z-Thabo-e6212e43",
+  "type": "claim",
+  "session": "S461",
+  "agent": "Thabo",
+  "created": "2026-09-10T12:49:57Z",
+  "issue": "core-0.22.0-sync",
+  "body": "Solo sync session (no peer declared). Claiming the ledger surface for the core 0.21.0 -> 0.22.0 migration: the vendored core tree, the two generated READMEs, AGENTS.md rule-6 digest, memory/collaboration/README.md refresh, backlog header note, workflows/active.md version line, core.lock. No product code touched. This is the first solo claim on the 0.22.0 JSON light path.",
+  "paths": ["AGENTS.md", ".context_ledger/README.md", ".context_ledger/kickoff.md", ".context_ledger/core", ".context_ledger/memory/collaboration", ".context_ledger/memory/tasks/backlog.md", ".context_ledger/memory/workflows/active.md", ".context_ledger/memory/core.lock"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
