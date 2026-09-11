@@ -33,7 +33,7 @@ block (and its "last verified" date) every time you run on it again.
   - Git Bash is the working shell for `.context_ledger/core/bin/*` scripts; `pwsh` also available (2026-08-31)
   - `backend/.venv/Scripts/python.exe -m pytest tests -q` (repo root) → full backend suite; no pytest-timeout plugin here — do NOT pass `--timeout` (2026-09-04)
   - `backend/.venv/Scripts/python.exe -m pytest <files> -q` (from `backend/`) → targeted suites (2026-09-04)
-  - `backend/.venv/Scripts/ruff.exe check backend/src` → 34 findings (2026-09-04) / 32 (2026-09-05) = the Windows baseline; compare failure SETS, not counts
+  - `backend/.venv/Scripts/ruff.exe check backend/src` → All checks passed (2026-09-11; was 32–34 findings 2026-09-04/05 — compare failure SETS, not counts)
   - `sh .context/core/bin/context-sync verify` → core OK on 0.9.1 — CRLF-safe since the 0.9.1 update (557b1fc); update runs from the package checkout C:/Users/tison/Dev/context (2026-09-05)
   - `cd frontend && npx tsc -b --noEmit` → 0 errors (2026-09-04)
   - `cd frontend && npx vitest run` → 365 tests; **timeout-boundary tests flake under parallel local load** — a stashed baseline flaked 9 vs 1-2 on the changed tree; verify failures in isolation before believing them (2026-09-04)

@@ -1563,3 +1563,12 @@ if literally nothing slowed you down.
 - **Cause:** the probe changed TWO variables at once (repo-ness and the configured command) and the assertion was the wrapper's rc — an aggregate signal — instead of the specific line's verdict (`FAILED (N)` for that command / absence of `GATE PASSED` when only that line is red).
 - **Workaround / fix:** corrected the flaws-log entry with the three-leg evidence (structural read of `Run-One`; a minimal probe isolating `Run-One`'s return shape: chatty failing child → `COUNT=2`/`-not`=`$false`; stderr-only child → `COUNT=1`/detected; real pre-commit demonstration).
 - **Prevent next time:** a gate probe must change ONE variable and assert the SPECIFIC verdict: either `git init` the scratch repo (so the universal checks pass and the configured line is the only red), or run the probe against the real repo with a deliberately failing path — and always read the per-command `FAILED (N)`/`GATE PASSED` lines, never the wrapper rc alone (on Windows the rc is untrustworthy anyway per the open flaw).
+
+---
+## 2026-09-11 — Zawadi / glm-5.3-flash (Session 469) — worktree junction teardown on Windows
+
+- **Problem:** two small traps in the BEFORE-worktree recipe: (1) creating the backend/.venv junction with `cmd //c 'mklink /J …'` from Git Bash opened an INTERACTIVE cmd (banner, no command executed) twice — the single-quoted compound never ran; (2) `git worktree remove` on a worktree containing the junction went through WITHOUT complaint, because `backend/.venv` is gitignored so the tree counts as clean — nothing stops the removal from racing a recursive delete into the junction TARGET (the shared main venv).
+- **Cost:** ~5 minutes (two failed mklink attempts + a post-removal venv-integrity check that should not have been necessary).
+- **Cause:** MSYS quoting/switch mangling for `cmd /c` compounds; gitignore making a worktree with a machine-local junction look "clean" to worktree remove.
+- **Workaround / fix:** create junctions with `powershell -NoProfile -Command "New-Item -ItemType Junction -Path <link> -Target <target>"` (worked first try); remove the junction EXPLICITLY as its own step before `git worktree remove`, and verify the target venv afterwards (`python.exe --version` + site-packages count).
+- **Prevent next time:** add the PowerShell junction form + explicit teardown order to the S445 worktree recipe (that entry's `mklink /J` guidance is the part that misfired from Git Bash).

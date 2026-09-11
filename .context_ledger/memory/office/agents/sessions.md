@@ -6745,3 +6745,12 @@ your name in the roster, present yourself by it.
 - **Open items:** B-2026-09-10-4 (date bombs — expected sole exit-gate red), the upstream gate fix (Run-One child-output capture + a verdict-asserting regression), B-2026-09-11-1, B-2026-09-11-2, B-2026-09-10-5/-6/-8, OTT reruns, legacy sessions.md double-entry WARNs (owner call), first `ledger-history close` (owner call, nudge now firing).
 - **Report:** none — sync session (the state is in the entries above).
 - **Notes:** none
+---
+## 2026-09-11 — Session 469
+- **Agent:** ZCode (Zawadi) | **Model:** glm-5.3-flash | **Platform:** Windows 11 (DESKTOP-3LRR8MD, Lameck checkout) | **Role:** engineer | **Core:** 1.0.2
+- **Task:** B-2026-08-25-4 — stop the internal "Worker report — tool execution evidence:" format from leaking into user-facing answers (fix + live verify)
+- **Commits:** 5 (3915738b check-in, e885f8f5 claim+task, 78fadbcc fix + 14 tests, bb9555b1 changelog, b6203c2a review + release event + backlog line delete)
+- **Outcome:** done — root cause: the deterministic WorkReport append (a USER-facing fallback) persists into assistant messages and re-enters the model's own context via the prompt tail, ParentSession tail, thinker history, episode distill, memory resolver, and social fast path; the model then mimics the format into answers. One canonical strip helper beside the format owner (core/agent/models.py) now guards every model-facing history feed (7 sites) and the loop's full-text emission boundaries (_force_final_answer, _rescue_final_answer, both buffered gate-flush blocks), so the deterministic renderer stays the sole author of the format and the fallback still reaches the user. Live before/after on bankofai/qwen3.8-flash (isolated 8765 + scratch home, 3-turn same-session scenario): on pre-fix code (throwaway worktree at the parent commit) the turn-3 verbatim readback reproduced the full internal report from context; on fixed main, zero model-authored report text across two runs (every SSE header occurrence is the exact append shape). Suite: 3056 pass; failure set = 22 baseline entries + the tracked date-bomb trio only.
+- **Open items:** none new (date-bomb trio untouched, still tracked)
+- **Report:** .context_ledger/memory/office/reviews/2026-09-11-review-s469.md
+- **Notes:** memory/office/sessions/2026-09-11-469/notes.md

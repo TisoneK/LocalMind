@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260911T175908Z-Zawadi-c4bae1dc",
+  "type": "release",
+  "session": "S469",
+  "agent": "Zawadi",
+  "created": "2026-09-11T17:59:09Z",
+  "issue": "worker-report-leak",
+  "body": "Corrected release (supersedes the body of 20260911T174233Z-Zawadi-fdedccf3, whose short-form ref did not resolve — see the standing no-withdrawal flaw for the residual check noise): the claim is complete.\n\nClaim released: the worker-report leak fix is landed and live-verified. Product 78fadbcc (fix + 14 tests) + changelog bb9555b1 + review b6203c2a. Root cause: the deterministic user-facing WorkReport append persisted into assistant messages and flowed verbatim back into the model's own context (prompt tail, ParentSession tail, thinker history, memory distill/resolver, social fast path); the model then mimicked the format. Fix: one canonical strip helper beside the format owner applied at every model-facing history feed (7 sites) and the loop's full-text emission boundaries. Live before/after on bankofai/qwen3.8-flash: pre-fix readback reproduced the report from context; post-fix zero model-authored report text (append-shape SSE hits only). Suite failure set = documented baseline + tracked date-bomb trio.",
+  "paths": [],
+  "refs": ["20260911T141242Z-Zawadi-47372c7a", "78fadbcc", "bb9555b1", "b6203c2a"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

@@ -25,7 +25,17 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Zawadi | S469 | glm-5.3-flash | B-2026-08-25-4 — worker-report leak into user answers (fix + live verify) |
+
+<!-- Clock-out 2026-09-11: Zawadi (S469) — B-2026-08-25-4 fixed and live-verified
+(78fadbcc fix + 14 tests, bb9555b1 changelog, b6203c2a review/release/backlog):
+the internal worker-report append was re-entering the model's context via the
+history feeds and the model mimicked it into answers; one strip helper beside
+the format owner now guards every model-facing history feed + emission
+boundary, fallback preserved. Live before/after on bankofai/qwen3.8-flash:
+pre-fix readback reproduced the report from context, post-fix never. Suite =
+baseline + tracked date-bomb trio. Claim fdedccf3 released; worktree/junction
+torn down, venv verified. Board empty = nobody in the office. -->
+
 
 <!-- Clock-out 2026-09-11: Amir (S468) — protocol sync to core 1.0.2 landed
 (5ef36cb5; templates unchanged, entry points left as S467 regenerated them).

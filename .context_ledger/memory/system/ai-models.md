@@ -14,7 +14,7 @@ accordingly).
 | GitHub Copilot | DeepSeek V4 Flash Free | 2026-07-11 | 2026-07-11 | 2 |
 | Claude Code | claude-opus-4-8 | 2026-08-14 | 2026-08-15 | 10 |
 | opencode | deepseek-v4-flash (bankofai) · glm-5.3-flash (bankofai) · claude-opus-4.8 (per collab events) | 2026-08-31 | 2026-08-31 | 1 |
-| ZCode (zcode) | glm-5.3-flash (per system prompts: 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0 and cf02f3d0-2445-43ea-ae61-da470b683985 — two harness instances; the cf02f3d0 instance's stated name drifts: qwen3.8-flash in S454-S456, S458, S460-S462, S467) | 2026-08-31 | 2026-09-11 | 21 |
+| ZCode (zcode) | glm-5.3-flash (per system prompts: 18ae0130-10c3-4a72-ac96-e46e6f4b7bc0 and cf02f3d0-2445-43ea-ae61-da470b683985 — two harness instances; the cf02f3d0 instance's stated name drifts: qwen3.8-flash in S454-S456, S458, S460-S462, S467) | 2026-08-31 | 2026-09-11 | 22 |
 
 ## Observations
 
