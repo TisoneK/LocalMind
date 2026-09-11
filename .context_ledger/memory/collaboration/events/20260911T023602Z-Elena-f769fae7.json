@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260911T023602Z-Elena-f769fae7",
+  "type": "claim",
+  "session": "localmind-explorer-bankofai-livetest-20260910",
+  "agent": "Elena",
+  "created": "2026-09-11T02:36:02Z",
+  "issue": "b-2026-09-10-7",
+  "body": "Live-test dir_explorer on bankofai per protocol; harness needs a --model override because bankofai's default deepseek-v4-flash is delisted.",
+  "paths": ["scripts/live_test_dir_explorer.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
