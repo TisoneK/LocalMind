@@ -908,6 +908,14 @@ just the number, before trusting a before/after label.
 - **Status:** open (second occurrence; strengthens S460's ask)
 
 ---
+## 2026-09-11 — Zuri / glm-5.3-flash (Session 465)
+- **Flaw:** `git rebase --continue` after resolving a conflict commits with NO pre-commit gate — a half-resolved file (one hunk fixed, a stray `>>>>>>>` line left) went straight into a pushed commit (the S465 check-in rebase; it landed on main before a manual grep caught the marker and a corrective commit removed it).
+- **Symptom:** a conflict marker shipped to main inside a `chore(ledger)` commit. The marker-check gate that would have blocked a normal commit never ran, because rebase-continue bypasses hooks/gates entirely — and "Successfully rebased" reads like success.
+- **Root cause:** the gate protocol binds pre-commit checks to explicit `git commit` steps; rebase/merge paths have no gate binding. Compounding it: the agent RAN `grep -c` before continuing, saw the count `1`, and misread it as noise instead of stopping — a run check without an interpreted threshold is decoration.
+- **Suggested fix:** package: in the collaboration/Windows guidance, add the rule "after resolving any conflict, run the conflict-marker check (and any other pre-commit checks) BEFORE `rebase --continue`; a nonzero grep count is a hard stop, not noise." Project: same rule adopted now — the corrective commit is `86050a4d`.
+- **Status:** open (package suggestion; project workaround in force this session — every later rebase was followed by `check-conflict-markers.sh`)
+
+---
 ## 2026-09-10 — Session 464 (Elena, macOS) — `ledger-collab check` fails SILENTLY: rc=2, no verdict, no failing event named
 
 - **Symptom:** `sh .context_ledger/core/bin/ledger-collab check` exits **2** printing only `awk: towc: multibyte conversion failure on: …` — no `FAIL:` lines, no summary. The gate is unusable, and it reads as "your own claim event is malformed".

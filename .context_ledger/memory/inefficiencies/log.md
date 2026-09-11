@@ -1530,3 +1530,11 @@ if literally nothing slowed you down.
 - **Cause:** the provider rotated its catalog to `deepseek-v4.1-flash` / `deepseek-v4-pro` (both gated on balance or deposit); balance stays 0 on this account, so only the genuinely free models answer.
 - **Workaround / fix:** with balance 0 on this account, exactly **`qwen3.8-flash`** and **`glm-5.3-flash`** answered; everything else returned either `Deposit required to unlock premium models` (qwen3.8-27b, glm-5.1, gpt-5-nano, deepseek-v4-pro) or a plain **429** (hy3, minimax-*, kimi-*, gemini-3-*, claude-haiku-4.5, qwen3.8-27b on retry) — a 429 there is rate limiting, not an entitlement block, so retry before concluding a model is unavailable. `/v1/models` still authenticates with a zero balance (47 ids) and is the cheap way to distinguish "key dead" from "model gone". `scripts/live_test_dir_explorer.py` now pins `bankofai -> qwen3.8-flash` (`aa08cd5`), matching `live_test_prompt_audit.py`'s existing pin.
 - **Prevent next time:** never trust an adapter's `default_model` for live work — read it, then probe. Owner action still open: point the adapter default / app settings at a served model, or top the balance up.
+
+### 2026-09-11 — Session 465 (Zuri, Windows) — the benchmark harness silently shrank a batch on an unknown test ID
+
+- **Problem:** `lm_benchmark.py --tests CAT14-2,CAT14-5,CAT15-1,CAT10-3` returned THREE results and a green-looking summary — CAT10-3 was silently dropped because the CAT10 category is not implemented in the harness's TESTS registry (the catalog doc lists it, the code never had it), and the ID matcher kept no record of unmatched IDs. A batch that "completed" while silently missing whole checks is worse than a failure.
+- **Cost:** ~2 min (the missing test was caught only by counting results against the request).
+- **Cause:** `selected = [t for t in TESTS if t["id"] in ids]` with no else-branch.
+- **Workaround / fix:** fixed in-product same session (commit `71ab798e`): unknown IDs now print a WARNING naming them. General lesson stands for every "select from registry" CLI: report what did NOT match.
+- **Prevent next time:** when a run's result count must equal the request count, assert it — or let the tool warn (now it does).
