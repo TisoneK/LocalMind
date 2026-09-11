@@ -25,6 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Jabari | S470 | glm-5.3-flash (ZCode local, 18ae0130) | context sync: core 1.0.2 → 1.0.4, registries, gates |
 
 <!-- Clock-out 2026-09-11: Zawadi (S469) — B-2026-08-25-4 fixed and live-verified
 (78fadbcc fix + 14 tests, bb9555b1 changelog, b6203c2a review/release/backlog):
