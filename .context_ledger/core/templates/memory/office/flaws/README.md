@@ -18,7 +18,7 @@ goes in `../inefficiencies/log.md` — **not here**. The split:
 This file is the **source of truth** inside this project. Periodically —
 or when a pattern repeats across sessions — the flaws here are
 back-ported to the protocol package (the "Package upstream" URL in
-`../workflows/active.md` — the repo that `core/` is vendored from). The
+`../../workflows/active.md` — the repo that `core/` is vendored from). The
 package fix might be: a new pitfall, a reworded step, a new template
 field, a schema change, or a new core release. It reaches this project
 on the next `ledger-sync update`.

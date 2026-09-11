@@ -5,7 +5,11 @@
 # and runs on macOS/Linux. This port covers the commands a Windows agent hits
 # inside a session; it is byte-compatible with the sh script's MANIFEST.sha256
 # (same hashes, same forward-slash paths), so a core verified here verifies
-# there and vice-versa. Never touches .context_ledger/memory/ except memory/core.lock.
+# there and vice-versa. Never touches .context_ledger/memory/ except
+# memory/core.lock and one deliberate exception: backfill/migrate group a
+# legacy flat memory layout into the live memory/office/ directory (core
+# 1.0.0) and seed a missing office skeleton from templates. Durable memory
+# files are never altered.
 #
 # Requires PowerShell 5.1+ (Windows PowerShell or PowerShell 7 `pwsh`) and,
 # for `rollback`, git on PATH.
@@ -16,7 +20,8 @@
 #   verify               check every core file against core/MANIFEST.sha256
 #   update [SOURCE]      replace core/ from SOURCE (package clone / unpacked
 #                        archive). Same-MAJOR updates apply directly; a MAJOR
-#                        bump needs -Major. Memory is never touched.
+#                        bump needs -Major. Then migrate -BackfillOnly runs,
+#                        which groups a legacy flat layout into memory/office/.
 #   migrate [SOURCE]     ONE-COMMAND bring-current: update core to newest,
 #                        backfill every missing zone/file, normalize, relock,
 #                        verify. Idempotent. Leaves only "fill the facts".
@@ -260,10 +265,42 @@ function Cmd-Verify {
   exit 3
 }
 
+# One-time layout migration (core 1.0.0): group a legacy flat memory layout
+# into the live office directory. The live office is memory/office/ -- roster,
+# session registry and notes, tasks, plans, flaw and inefficiency logs,
+# reviews -- everything session-produced, frozen verbatim when the office
+# closes. Durable files (workflows/, collaboration/, system/, user/,
+# overrides/, core.lock, secrets/) stay at the memory/ root and never move.
+# Idempotent: no office dir + flat dirs present = migrate; otherwise no-op.
+# Runs at the top of Backfill-Project, so every update and migrate performs
+# it -- the old architecture becomes an office during sync.
+function Migrate-OfficeLayout {
+  if (Test-Path -LiteralPath (Join-Path $MEMORY_DIR 'office')) { return }
+  if (-not (Test-Path -LiteralPath (Join-Path $MEMORY_DIR 'agents'))) { return }  # not a flat-layout install
+  Say 'office migration: grouping the flat memory layout into memory/office/'
+  New-Item -ItemType Directory -Path (Join-Path $MEMORY_DIR 'office') -Force | Out-Null
+  foreach ($d in @('agents', 'sessions', 'tasks', 'plans', 'flaws', 'inefficiencies', 'reviews')) {
+    $src = Join-Path $MEMORY_DIR $d
+    if (Test-Path -LiteralPath $src) { Move-Item -LiteralPath $src -Destination (Join-Path $MEMORY_DIR "office/$d") }
+  }
+  $grp = Join-Path $MEMORY_DIR 'office/agents/GROUP'
+  if (Test-Path -LiteralPath $grp) { Remove-Item -LiteralPath $grp -Force }  # counter retired: office numbers are derived at close
+  $hc = Join-Path $MEMORY_DIR 'workflows/history.conf'
+  if ((Test-Path -LiteralPath $hc) -and (Select-String -LiteralPath $hc -Pattern '^group_size=' -Quiet)) {
+    $lines = Get-Content -LiteralPath $hc | ForEach-Object { $_ -replace '^group_size=', 'office_size=' }
+    [IO.File]::WriteAllText($hc, ($lines -join "`n") + "`n", (New-Object System.Text.UTF8Encoding $false))
+  }
+  Say 'office migration: done -- the old layout is now the live office.'
+  Say 'Commit as: chore(ledger): group memory into the live office (core 1.0.0)'
+}
+
 # Install every current-version scaffolding file the project may be missing.
 # Idempotent; never clobbers existing files. Reads the CURRENT core/templates,
 # so it is the single definition of what a fully-migrated project contains.
+# The office layout migration runs first, so a legacy install is regrouped
+# before this checks what is missing.
 function Backfill-Project {
+  Migrate-OfficeLayout
   $readme = Join-Path $CORE_DIR 'templates/ledger-README.md'
   if (Test-Path -LiteralPath $readme) { Copy-Item -LiteralPath $readme -Destination (Join-Path $LEDGER_DIR 'README.md') -Force -ErrorAction SilentlyContinue }
   $attrs = Join-Path $LEDGER_DIR '.gitattributes'
@@ -274,14 +311,29 @@ function Backfill-Project {
   if (-not (Test-Path -LiteralPath $hist)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/history') -Destination $hist -Recurse -ErrorAction SilentlyContinue }
   $arch = Join-Path $LEDGER_DIR 'archive'
   if (-not (Test-Path -LiteralPath $arch)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/archive') -Destination $arch -Recurse -ErrorAction SilentlyContinue }
-  $wf = Join-Path $MEMORY_DIR 'workflows'; $ag = Join-Path $MEMORY_DIR 'agents'
-  New-Item -ItemType Directory -Path $wf, $ag -Force -ErrorAction SilentlyContinue | Out-Null
+  $wf = Join-Path $MEMORY_DIR 'workflows'
+  New-Item -ItemType Directory -Path $wf -Force -ErrorAction SilentlyContinue | Out-Null
   $hc = Join-Path $wf 'history.conf'
   if (-not (Test-Path -LiteralPath $hc)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/memory/workflows/history.conf') -Destination $hc -ErrorAction SilentlyContinue }
-  $grp = Join-Path $ag 'GROUP'
-  if (-not (Test-Path -LiteralPath $grp)) { "group=1`nopened=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))`n" | Set-Content -LiteralPath $grp -NoNewline }
-  $ros = Join-Path $ag 'roster.md'
-  if (-not (Test-Path -LiteralPath $ros)) { Copy-Item -LiteralPath (Join-Path $CORE_DIR 'templates/memory/agents/roster.md') -Destination $ros -ErrorAction SilentlyContinue }
+  # the live office -- seeded from templates when absent, topped up when
+  # partial (a migrated install may never have created every directory)
+  $office = Join-Path $MEMORY_DIR 'office'
+  $officeTpl = Join-Path $CORE_DIR 'templates/memory/office'
+  if (Test-Path -LiteralPath $officeTpl) {
+    if (-not (Test-Path -LiteralPath $office)) {
+      New-Item -ItemType Directory -Path $office -Force | Out-Null
+      Copy-Item -LiteralPath $officeTpl -Destination $office -Recurse -ErrorAction SilentlyContinue
+    } else {
+      Get-ChildItem -LiteralPath $officeTpl -Recurse -File | ForEach-Object {
+        $rel = $_.FullName.Substring($officeTpl.Length).TrimStart('\', '/')
+        $dest = Join-Path $office $rel
+        if (-not (Test-Path -LiteralPath $dest)) {
+          New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force -ErrorAction SilentlyContinue | Out-Null
+          Copy-Item -LiteralPath $_.FullName -Destination $dest -ErrorAction SilentlyContinue
+        }
+      }
+    }
+  }
 }
 
 # Replace .context_ledger/core with the source tree, LF-normalized and re-verified.

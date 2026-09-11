@@ -11,8 +11,8 @@
 
 - **Scope:** discovery + review + report — **no fixes of any kind**
 - **Findings handling:** report everything; fix nothing. Every actionable
-  finding becomes a `.context_ledger/memory/tasks/backlog.md` entry.
-- **Deliverable:** `.context_ledger/memory/reviews/YYYY-MM-DD-review.md` + chat summary
+  finding becomes a `.context_ledger/memory/office/tasks/backlog.md` entry.
+- **Deliverable:** `.context_ledger/memory/office/reviews/YYYY-MM-DD-review.md` + chat summary
 - **Allowed commits:** `docs(review):` (the report) and `chore(ledger):`
   (memory updates) only. Nothing else gets committed.
 

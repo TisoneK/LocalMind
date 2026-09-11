@@ -11,6 +11,11 @@ handoff, not cleanup. A checked-off `- [x]` line a session left behind
 is a finished tombstone — sweep it with `ledger-mem closeout` (dry run
 by default; `--confirm` deletes).
 
+This backlog belongs to the **current office**. When the office closes,
+open items do not carry over implicitly — the closing session re-seeds
+into the new office's backlog only what still matters, and records the
+rest in the permanent record (`history/office-<NNN>.md`, "Open threads").
+
 <!-- TEMPLATE — copy below the last entry:
 ---
 - [ ] **<short title>** (added YYYY-MM-DD by <agent>) — <enough context that

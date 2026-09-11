@@ -21,7 +21,9 @@ If you read nothing else, obey these rules:
    for "context" — the protocol lives in the `.context_ledger/` directory.
 2. **Never write under `.context_ledger/core/`** — it is a read-only, versioned
    copy of the protocol. All project memory you write lives under
-   `.context_ledger/memory/`.
+   `.context_ledger/memory/` — the live office in `memory/office/`, the
+   durable files (workflows, collaboration, system, user, overrides,
+   secrets) at the memory root.
 3. **Pick your instruction set by YOUR agent type**, never by what a
    previous session recorded: local IDE agent →
    `.context_ledger/core/rules/ai-engineering-protocol-local.md`; cloud/sandbox
@@ -29,18 +31,18 @@ If you read nothing else, obey these rules:
    agents never use PATs or clone this repo; cloud steps are not yours.
 4. **Read memory before working:** at minimum
    `.context_ledger/memory/workflows/active.md`,
-   `.context_ledger/memory/agents/sessions.md` (last entries),
-   `.context_ledger/memory/agents/roster.md` (the "who's in the office" board —
+   `.context_ledger/memory/office/agents/sessions.md` (last entries),
+   `.context_ledger/memory/office/agents/roster.md` (the "who's in the office" board —
    a live row you didn't write means a peer is here),
    `.context_ledger/memory/collaboration/README.md` and relevant event files
    when collaboration is enabled, `.context_ledger/memory/workflows/gates.conf`,
-   `.context_ledger/memory/tasks/current.md`, and
-   `.context_ledger/memory/inefficiencies/log.md` (known traps). If the
+   `.context_ledger/memory/office/tasks/current.md`, and
+   `.context_ledger/memory/office/inefficiencies/log.md` (known traps). If the
    active session has detailed notes at
-   `.context_ledger/memory/sessions/`, skim them for current state.
+   `.context_ledger/memory/office/sessions/`, skim them for current state.
 5. **Check in first, then choose the mode from evidence.** Every session
    (solo or collaboration) adds or updates its row in
-   `memory/agents/roster.md` — real name you pick (unique per group),
+   `memory/office/agents/roster.md` — real name you pick (unique per office),
    codename `S<NNN>`, model, one line on what you're on — and pushes it
    before product work. Roster edits are additive — your row only: a live
    row you didn't write is a colleague's check-in, not sample text — never
@@ -54,10 +56,10 @@ If you read nothing else, obey these rules:
    You
    are solo only when there is no shared
    collaboration `session` + `issue`, no live roster row you didn't
-   write, and `tasks/current.md` is idle; otherwise coordinate (join or
+   write, and `office/tasks/current.md` is idle; otherwise coordinate (join or
    declare a session, isolated worktree/branch, `note` + `claim`) — a
    peer in the office is a teammate, not a rival, and the human is your
-   supervisor: do not block teammates on `tasks/current.md`. Present
+   supervisor: do not block teammates on `office/tasks/current.md`. Present
    yourself by your name — "John (S427)", never "peer". The everyday move
    is a
    `note` (the office channel — say what you're on, flag a coworker, review a
@@ -70,9 +72,9 @@ If you read nothing else, obey these rules:
    integration, and exit run the matching gate. On Windows, use the `.cmd`
    launchers (they run the `.ps1` ports; no execution-policy setup).
 6. **Know which kind of file you're in.** *Append-only* logs
-   (`agents/sessions.md`, `plans/decisions.md`,
-   `flaws/log.md`, `inefficiencies/log.md`) grow at the bottom — never edit
-   or delete past entries. `tasks/backlog.md` is a live queue: append
+   (`office/agents/sessions.md`, `office/plans/decisions.md`,
+   `office/flaws/log.md`, `office/inefficiencies/log.md`) grow at the bottom — never edit
+   or delete past entries. `office/tasks/backlog.md` is a live queue: append
    open items, delete a line when its item is finished (the completion
    record is the session entry + commit, not a tombstone); `ledger-mem
    closeout` sweeps tombstones a session left checked off.
@@ -81,7 +83,10 @@ If you read nothing else, obey these rules:
    correct them by **editing** the entry, never by appending a duplicate
    (its old value is in git history). `ledger-mem check` flags a dup key.
    Collaboration event files are stronger still: immutable, one event per
-   file; emit a correction instead of editing one.
+   file; emit a correction instead of editing one. Office files are
+   office-scoped: when the office fills up, `ledger-history close` freezes
+   the whole directory verbatim into `history/` and the next office starts
+   from empty skeletons — open threads are re-seeded explicitly.
 7. **No secrets in tracked files, ever.** Values go only in
    `.context_ledger/memory/secrets/` (self-gitignored). Never echo a secret or
    token in chat, logs, or commit messages.
@@ -94,16 +99,16 @@ If you read nothing else, obey these rules:
    dangling pointer for anyone reading only the product repo. `ledger-mem
    lint` flags it in your staged diff.
 9. **The session is not done until everything is committed AND pushed**,
-   the session is logged in `.context_ledger/memory/agents/sessions.md`, and
-   `.context_ledger/memory/tasks/current.md` is cleared. Clock out too: remove
-   your row from `.context_ledger/memory/agents/roster.md` in the closing
+   the session is logged in `.context_ledger/memory/office/agents/sessions.md`, and
+   `.context_ledger/memory/office/tasks/current.md` is cleared. Clock out too: remove
+   your row from `.context_ledger/memory/office/agents/roster.md` in the closing
    memory commit, so the board shows who is in the office now — but only
    when you are actually leaving. The session is not over until the user
    says so; if you clocked out and the supervisor brings more work, check
    back in first (re-add your row, same name and codename `S<N>`) and
    extend your existing `sessions.md` entry — never a second `Session N`.
    If the user has to remind you to commit or push, that is a protocol
-   failure — log it in `.context_ledger/memory/flaws/log.md`.
+   failure — log it in `.context_ledger/memory/office/flaws/log.md`.
 10. **Don't ask permission for the default next step.** Do it and
     report. Ask only on genuine ambiguity or destructive/irreversible
     actions.

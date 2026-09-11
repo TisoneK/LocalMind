@@ -29,7 +29,7 @@ escalation for a genuine conflict, not the everyday path.
 ## Who you are — pick a name
 
 You are a person on this team, not an anonymous ID. You already signed
-`../agents/roster.md` at session start — **every session does, solo or
+`../office/agents/roster.md` at session start — **every session does, solo or
 not** (see the protocol's check-in step): a real name you choose, your
 codename `S<NNN>` (your session number), your model, and one line on what
 you're doing. Edit your row's "Doing" cell as your work changes, and

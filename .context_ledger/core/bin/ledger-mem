@@ -30,6 +30,7 @@ CORE_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd) || exit 2
 LEDGER_DIR=$(dirname -- "$CORE_DIR")
 PROJECT_DIR=$(dirname -- "$LEDGER_DIR")
 MEMORY_DIR=$LEDGER_DIR/memory
+OFFICE_DIR=$MEMORY_DIR/office
 
 usage() {
   say "ledger-mem — .context_ledger hygiene checks"
@@ -114,10 +115,10 @@ check_environments() {
 }
 
 # team roster: a row is | Name | Codename | Model | Doing |. Both the name and
-# the codename must be unique within the current group. A real row has an
+# the codename must be unique within the current office. A real row has an
 # S<NNN> codename in column 2 (this skips the header, separator, and template).
 check_roster() {
-  _f=$MEMORY_DIR/agents/roster.md
+  _f=$OFFICE_DIR/agents/roster.md
   [ -f "$_f" ] || return 0
   awk '
     /^[[:space:]]*\|/ {
@@ -132,7 +133,7 @@ check_roster() {
     END {
       d = 0
       for (k in nseen) if (nseen[k] > 1) {
-        printf "DUP roster.md: name \"%s\" used by %d rows (lines%s) — one name per group; pick another, or edit your own row\n", k, nseen[k], nwhere[k] | "cat 1>&2"; d++
+        printf "DUP roster.md: name \"%s\" used by %d rows (lines%s) — one name per office; pick another, or edit your own row\n", k, nseen[k], nwhere[k] | "cat 1>&2"; d++
       }
       for (k in cseen) if (cseen[k] > 1) {
         printf "DUP roster.md: codename \"%s\" on %d rows (lines%s) — one row per session codename; edit your row instead of adding a second\n", k, cseen[k], cwhere[k] | "cat 1>&2"; d++
@@ -165,8 +166,8 @@ check() {
 # on the board means the session logged itself done without clocking out.
 # Warns only — never fails the check; the fix is to remove the row.
 check_roster_stale() {
-  _r=$MEMORY_DIR/agents/roster.md
-  _s=$MEMORY_DIR/agents/sessions.md
+  _r=$OFFICE_DIR/agents/roster.md
+  _s=$OFFICE_DIR/agents/sessions.md
   [ -f "$_r" ] || return 0
   [ -f "$_s" ] || return 0
   for _num in $(awk '
@@ -190,7 +191,7 @@ check_roster_stale() {
 # a resumed session re-logged instead of extending its entry — the ghost-editor
 # flaw. Warns only; the fix is to merge the two into one entry.
 check_dup_sessions() {
-  _s=$MEMORY_DIR/agents/sessions.md
+  _s=$OFFICE_DIR/agents/sessions.md
   [ -f "$_s" ] || return 0
   awk '
     match($0, /^##[[:space:]].*[Ss]ession[[:space:]]+[0-9]+/) {
@@ -226,7 +227,7 @@ prune() {
   [ -d "$MEMORY_DIR" ] || { say "ledger-mem: no memory dir (nothing to prune)"; return 0; }
   _eligible=0
   for _rel in flaws/log.md inefficiencies/log.md; do
-    _f=$MEMORY_DIR/$_rel
+    _f=$OFFICE_DIR/$_rel
     [ -f "$_f" ] || continue
     awk -v rel="$_rel" -v list="$_list" '
       function flush() { if (inseg && closed) { c++; cand[c] = heading } }
@@ -260,7 +261,7 @@ prune() {
 # (core 0.21.0) — a checked-off `- [x]` line means the item finished but the
 # line was never deleted. Warns only; the sweep is `ledger-mem closeout`.
 check_backlog_tombstones() {
-  _f=$MEMORY_DIR/tasks/backlog.md
+  _f=$OFFICE_DIR/tasks/backlog.md
   [ -f "$_f" ] || return 0
   _n=$(grep -cE '^[[:space:]]*[-*+][[:space:]]+\[[xX]\]' "$_f" 2>/dev/null)
   _n=${_n:-0}
@@ -282,7 +283,7 @@ closeout() {
       *) die "unknown argument '$1'" ;;
     esac
   done
-  _f=$MEMORY_DIR/tasks/backlog.md
+  _f=$OFFICE_DIR/tasks/backlog.md
   [ -f "$_f" ] || { say "ledger-mem: no tasks/backlog.md (nothing to close out)"; return 0; }
   _pat='^[[:space:]]*[-*+][[:space:]]+\[[xX]\]'
   _n=$(grep -cE "$_pat" "$_f" 2>/dev/null); _n=${_n:-0}
@@ -298,7 +299,7 @@ closeout() {
     say "Re-run with --confirm to delete."
     return 0
   fi
-  _tmp=$MEMORY_DIR/tasks/.closeout.$$.tmp
+  _tmp=$OFFICE_DIR/tasks/.closeout.$$.tmp
   awk '
     /^[[:space:]]*[-*+][[:space:]]+\[[xX]\]/ { next }
     { print }

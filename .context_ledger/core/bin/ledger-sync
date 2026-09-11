@@ -2,14 +2,18 @@
 # ledger-sync — manage the vendored protocol core (.context_ledger/core/)
 #
 # POSIX sh; runs on macOS (shasum) and Linux (sha256sum). Never touches
-# .context_ledger/memory/ except the single file memory/core.lock.
+# .context_ledger/memory/ except memory/core.lock and one deliberate
+# exception: backfill/migrate group a legacy flat memory layout into the
+# live memory/office/ directory (core 1.0.0) and seed a missing office
+# skeleton from templates. Durable memory files are never altered.
 #
 # Commands (project mode — run as: sh .context_ledger/core/bin/ledger-sync <cmd>):
 #   status               local core version + best reachable update source
 #   verify               check every core file against core/MANIFEST.sha256
 #   update [SOURCE]      replace core/ from SOURCE (package clone / unpacked
 #                        archive). Same-MAJOR updates apply directly; a MAJOR
-#                        bump needs --major. Memory is never touched.
+#                        bump needs --major. Then migrate --backfill-only runs,
+#                        which groups a legacy flat layout into memory/office/.
 #   migrate [SOURCE]     ONE-COMMAND bring-current: update core to the newest
 #                        reachable version, then backfill every missing zone/
 #                        file, LF-normalize, relock, and verify. Idempotent.
@@ -228,22 +232,67 @@ cmd_verify() {
   return 3
 }
 
+# One-time layout migration (core 1.0.0): group a legacy flat memory layout
+# into the live office directory. The live office is memory/office/ — roster,
+# session registry and notes, tasks, plans, flaw and inefficiency logs,
+# reviews — everything session-produced, frozen verbatim when the office
+# closes. Durable files (workflows/, collaboration/, system/, user/,
+# overrides/, core.lock, secrets/) stay at the memory/ root and never move.
+# Idempotent: no office dir + flat dirs present = migrate; otherwise no-op.
+# Runs at the top of backfill_project, so every `update` and `migrate`
+# performs it — the old architecture becomes an office during sync.
+migrate_office_layout() {
+  [ -d "$MEMORY_DIR/office" ] && return 0
+  [ -d "$MEMORY_DIR/agents" ] || return 0   # not a flat-layout install
+  say "office migration: grouping the flat memory layout into memory/office/"
+  mkdir -p "$MEMORY_DIR/office"
+  for _d in agents sessions tasks plans flaws inefficiencies reviews; do
+    [ -d "$MEMORY_DIR/$_d" ] && mv "$MEMORY_DIR/$_d" "$MEMORY_DIR/office/$_d"
+  done
+  rm -f "$MEMORY_DIR/office/agents/GROUP" 2>/dev/null || true  # counter retired: office numbers are derived at close
+  _hc=$MEMORY_DIR/workflows/history.conf
+  if [ -f "$_hc" ] && grep -q '^group_size=' "$_hc" 2>/dev/null; then
+    sed 's/^group_size=/office_size=/' "$_hc" > "$_hc.tmp" && mv "$_hc.tmp" "$_hc"
+  fi
+  say "office migration: done — the old layout is now the live office."
+  say "Commit as: chore(ledger): group memory into the live office (core 1.0.0)"
+}
+
 # Install every current-version scaffolding file the project may be missing.
 # Idempotent: only creates what's absent, never clobbers existing files, safe
 # to run repeatedly. Reads the CURRENT (post-swap) core/templates, so it is
 # the single source of "what a fully-migrated project should contain" — the
 # `migrate` command and each future release both go through here, and adding a
 # new template file to the list is the only step to teach migration about it.
+# The office layout migration runs first, so a legacy install is regrouped
+# before this checks what is missing.
 backfill_project() {
+  migrate_office_layout
   cp "$CORE_DIR/templates/ledger-README.md" "$LEDGER_DIR/README.md" 2>/dev/null || true
   [ -f "$LEDGER_DIR/.gitattributes" ] || cp "$CORE_DIR/templates/.gitattributes" "$LEDGER_DIR/.gitattributes" 2>/dev/null || true
   [ -e "$PROJECT_DIR/CLAUDE.md" ] || cp "$CORE_DIR/templates/CLAUDE.md" "$PROJECT_DIR/CLAUDE.md" 2>/dev/null || true
   [ -d "$LEDGER_DIR/history" ] || cp -R "$CORE_DIR/templates/history" "$LEDGER_DIR/history" 2>/dev/null || true
   [ -d "$LEDGER_DIR/archive" ] || cp -R "$CORE_DIR/templates/archive" "$LEDGER_DIR/archive" 2>/dev/null || true
-  mkdir -p "$MEMORY_DIR/workflows" "$MEMORY_DIR/agents" 2>/dev/null || true
+  mkdir -p "$MEMORY_DIR/workflows" 2>/dev/null || true
   [ -f "$MEMORY_DIR/workflows/history.conf" ] || cp "$CORE_DIR/templates/memory/workflows/history.conf" "$MEMORY_DIR/workflows/history.conf" 2>/dev/null || true
-  [ -f "$MEMORY_DIR/agents/GROUP" ] || printf 'group=1\nopened=%s\n' "$(date +%Y-%m-%d)" > "$MEMORY_DIR/agents/GROUP" 2>/dev/null || true
-  [ -f "$MEMORY_DIR/agents/roster.md" ] || cp "$CORE_DIR/templates/memory/agents/roster.md" "$MEMORY_DIR/agents/roster.md" 2>/dev/null || true
+  # the live office — seeded from templates when absent, topped up when
+  # partial (a migrated install may never have created every directory)
+  _otpl=$CORE_DIR/templates/memory/office
+  _office=$MEMORY_DIR/office
+  if [ -d "$_otpl" ]; then
+    if [ ! -d "$_office" ]; then
+      mkdir -p "$_office"
+      cp -R "$_otpl/." "$_office/" 2>/dev/null || true
+    else
+      find "$_otpl" -type f | while IFS= read -r _tf; do
+        _rel=${_tf#"$_otpl"/}
+        if [ ! -e "$_office/$_rel" ]; then
+          mkdir -p "$_office/$(dirname "$_rel")"
+          cp "$_tf" "$_office/$_rel" 2>/dev/null || true
+        fi
+      done
+    fi
+  fi
 }
 
 # Replace .context_ledger/core with the source tree, LF-normalized and re-verified.
@@ -423,8 +472,6 @@ cmd_bootstrap() {
   cp -R "$CORE_DIR/templates/memory" "$DEST/.context_ledger/memory"         || die "copying memory skeleton failed"
   cp -R "$CORE_DIR/templates/history" "$DEST/.context_ledger/history"       || die "creating history/ zone failed"
   cp -R "$CORE_DIR/templates/archive" "$DEST/.context_ledger/archive"       || die "creating archive/ zone failed"
-  # seed the current session group's opened date
-  printf '# Current session group — written by ledger-history. Do not hand-edit.\ngroup=1\nopened=%s\n' "$(date +%Y-%m-%d)" > "$DEST/.context_ledger/memory/agents/GROUP"
   # byte-identical vendored core + skeleton regardless of this checkout's
   # line endings (Windows CRLF) — verify/rollback then work out of the box.
   normalize_lf "$DEST/.context_ledger/core" "$DEST/.context_ledger/memory"
@@ -457,7 +504,7 @@ cmd_bootstrap() {
   say "bootstrapped $DEST/.context_ledger (core $V) + AGENTS.md + CLAUDE.md"
   say "next (the bootstrapping agent does this):"
   say "  1. fill .context_ledger/kickoff.md Project Facts + AGENTS.md <PROJECT_NAME>"
-  say "  2. fill memory/: user/, workflows/active.md, system/, tasks/current.md, agents/sessions.md"
+  say "  2. fill memory/: user/, workflows/active.md, system/, office/tasks/current.md, office/agents/sessions.md"
   say "  3. scan: grep -rn '<PROJECT\\|<GIT_\\|<LIVE_' $DEST/.context_ledger --include='*.md' (hits only in HTML comments/token forms)"
   say "  4. entrypoints: CLAUDE.md points Claude Code here. If the project also uses"
   say "     Copilot/Cursor/Gemini/Codex, add a one-line 'read AGENTS.md first' pointer"

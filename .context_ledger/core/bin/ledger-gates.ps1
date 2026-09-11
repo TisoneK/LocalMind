@@ -153,6 +153,24 @@ function Checkpoint { param([string[]]$CheckpointArgs)
   $scope = Parse-Scope $CheckpointArgs
   Say "GATE checkpoint: $([DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"))"
   Say 'Working tree:'; & git -C $projectDir status --short
+  # advisory nudge (never blocks): an office at capacity should close before
+  # more sessions log into it
+  $sm = Join-Path $memoryDir 'office/agents/sessions.md'
+  if (Test-Path -LiteralPath $sm) {
+    $sc = 0
+    foreach ($raw in Get-Content -LiteralPath $sm) { if ($raw -match '^## \d{4}-\d{2}-\d{2}.*Session ') { $sc++ } }
+    $os = 0; $gsz = 0
+    $hc = Join-Path $memoryDir 'workflows/history.conf'
+    if (Test-Path -LiteralPath $hc) {
+      foreach ($raw in Get-Content -LiteralPath $hc) {
+        $line = $raw.TrimEnd("`r")
+        if ($line -match '^office_size=(\d+)') { $os = [int]$matches[1] }
+        elseif ($line -match '^group_size=(\d+)') { $gsz = [int]$matches[1] }
+      }
+    }
+    $gs = $os; if ($gs -le 0) { $gs = $gsz }; if ($gs -le 0) { $gs = 20 }
+    if ($sc -ge $gs) { Say "NOTICE: the office is full ($sc / $gs sessions) - run: ledger-history close" }
+  }
   if ($scope.Session -and $scope.Issue) { & (Join-Path $coreDir 'bin/ledger-collab.ps1') status --session $scope.Session --issue $scope.Issue }
   Say 'CHECKPOINT PASSED: re-read the latest state before the next action'
 }

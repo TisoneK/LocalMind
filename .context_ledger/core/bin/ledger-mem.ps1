@@ -25,6 +25,7 @@ $coreDir = (Resolve-Path (Join-Path $scriptDir '..')).Path
 $ledgerDir = Split-Path -Parent $coreDir
 $projectDir = Split-Path -Parent $ledgerDir
 $memoryDir = Join-Path $ledgerDir 'memory'
+$officeDir = Join-Path $memoryDir 'office'
 
 function Usage {
   @(
@@ -104,7 +105,7 @@ function Check-Environments {
 }
 
 function Check-Roster {
-  $f = Join-Path $memoryDir 'agents/roster.md'
+  $f = Join-Path $officeDir 'agents/roster.md'
   if (-not (Test-Path -LiteralPath $f)) { return $true }
   $nseen = @{}; $nwhere = @{}; $cseen = @{}; $cwhere = @{}; $ln = 0
   foreach ($raw in Get-Content -LiteralPath $f) {
@@ -119,7 +120,7 @@ function Check-Roster {
     if ($cseen.ContainsKey($code)) { $cseen[$code]++; $cwhere[$code] += " $ln" } else { $cseen[$code] = 1; $cwhere[$code] = "$ln" }
   }
   $dup = $false
-  foreach ($k in $nseen.Keys) { if ($nseen[$k] -gt 1) { ErrLine ('DUP roster.md: name "{0}" used by {1} rows (lines {2}) - one name per group; pick another, or edit your own row' -f $k, $nseen[$k], $nwhere[$k].Trim()); $dup = $true } }
+  foreach ($k in $nseen.Keys) { if ($nseen[$k] -gt 1) { ErrLine ('DUP roster.md: name "{0}" used by {1} rows (lines {2}) - one name per office; pick another, or edit your own row' -f $k, $nseen[$k], $nwhere[$k].Trim()); $dup = $true } }
   foreach ($k in $cseen.Keys) { if ($cseen[$k] -gt 1) { ErrLine ('DUP roster.md: codename "{0}" on {1} rows (lines {2}) - one row per session codename; edit your row instead of adding a second' -f $k, $cseen[$k], $cwhere[$k].Trim()); $dup = $true } }
   return (-not $dup)
 }
@@ -128,8 +129,8 @@ function Check-RosterStale {
   # Board vs duty log: sessions.md entries are appended at wrap-up (Step 17),
   # so a "Session N" entry whose roster row S<N> is still on the board means
   # the session logged itself done without clocking out. Warns only.
-  $r = Join-Path $memoryDir 'agents/roster.md'
-  $s = Join-Path $memoryDir 'agents/sessions.md'
+  $r = Join-Path $officeDir 'agents/roster.md'
+  $s = Join-Path $officeDir 'agents/sessions.md'
   if (-not (Test-Path -LiteralPath $r) -or -not (Test-Path -LiteralPath $s)) { return }
   $nums = @()
   foreach ($raw in Get-Content -LiteralPath $r) {
@@ -156,7 +157,7 @@ function Check-DupSessions {
   # sessions.md holds one entry per session codename S<N> (Step 17). Two
   # "Session N" headers for the same N mean a resumed session re-logged
   # instead of extending its entry (the ghost-editor flaw). Warns only.
-  $s = Join-Path $memoryDir 'agents/sessions.md'
+  $s = Join-Path $officeDir 'agents/sessions.md'
   if (-not (Test-Path -LiteralPath $s)) { return }
   $seen = @{}; $where = @{}
   $ln = 0
@@ -180,7 +181,7 @@ function Check-BacklogTombstones {
   # The backlog is a live queue of open work (core 0.21.0) - a checked-off
   # "- [x]" line means the item finished but the line was never deleted.
   # Warns only; the sweep is `ledger-mem closeout`.
-  $f = Join-Path $memoryDir 'tasks/backlog.md'
+  $f = Join-Path $officeDir 'tasks/backlog.md'
   if (-not (Test-Path -LiteralPath $f)) { return }
   $n = @(Get-Content -LiteralPath $f | Where-Object { $_ -match '^\s*[-*+]\s+\[[xX]\]' }).Count
   if ($n -gt 0) {
@@ -190,7 +191,7 @@ function Check-BacklogTombstones {
 
 function Invoke-Closeout {
   param([bool]$Confirm)
-  $f = Join-Path $memoryDir 'tasks/backlog.md'
+  $f = Join-Path $officeDir 'tasks/backlog.md'
   if (-not (Test-Path -LiteralPath $f)) { Say 'ledger-mem: no tasks/backlog.md (nothing to close out)'; return }
   $raw = [IO.File]::ReadAllText($f)
   $eol = if ($raw.Contains("`r`n")) { "`r`n" } else { "`n" }
@@ -251,7 +252,7 @@ function Invoke-Prune {
   if (-not (Test-Path -LiteralPath $memoryDir)) { Say 'ledger-mem: no memory dir (nothing to prune)'; return }
   $eligible = $false
   foreach ($rel in @('flaws/log.md', 'inefficiencies/log.md')) {
-    $f = Join-Path $memoryDir $rel
+    $f = Join-Path $officeDir $rel
     if (-not (Test-Path -LiteralPath $f)) { continue }
     $total = 0; $lines = 0; $inseg = $false; $closed = $false; $heading = ''; $cand = @()
     foreach ($raw in Get-Content -LiteralPath $f) {

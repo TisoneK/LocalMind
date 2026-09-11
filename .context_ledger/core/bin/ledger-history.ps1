@@ -1,22 +1,29 @@
 #!/usr/bin/env pwsh
-# ledger-history.ps1 - Windows port of ledger-history (session-group rotation).
+# ledger-history.ps1 - Windows port of ledger-history (office lifecycle).
 #
-# Groups the session-history subtree (agents/sessions.md, sessions/SUMMARY.md,
-# sessions/<date-N>/) and rotates it memory/ -> history/ -> archive/ -> gc.
-# Durable memory (user/, system/, decisions, backlog, flaws, inefficiencies)
-# and collaboration events never rotate.
+# The live office is the unnumbered directory memory/office/ (roster, session
+# registry, session notes, tasks, plans, flaws, inefficiencies, reviews). Only
+# one office is ever live, so its paths are stable. Closing NEVER condenses or
+# resets anything: the directory is frozen verbatim and numbered at that
+# moment (history/office-<NNN>/), and a permanent accomplishments record
+# (history/office-<NNN>.md) is written - it stays in history/ forever, even
+# after the frozen office is zipped into archive/office-<NNN>.tar.gz and
+# eventually gc'd. The next office opens from empty skeletons; durable memory
+# (workflows/, collaboration/, system/, user/, overrides/, core.lock,
+# secrets/) lives at the memory/ root and never rotates.
 #
-#   status                 current group, session count, zone sizes, due?
-#   close [--milestone L] [--confirm]   consolidate the live group into
-#                          history/group-<NNN>.md, start group NNN+1, roll the
-#                          oldest readable group into archive/ when full.
-#                          Prints the promotion checklist; only --confirm runs.
+#   status                 live office, session count, zone sizes, due?
+#   close [--milestone L] [--confirm]   freeze the live office into history/,
+#                          write the permanent record, open a fresh office,
+#                          zip the oldest frozen office when history/ is full.
+#                          Prints the checklist; only --confirm runs.
 #   gc [--confirm]         delete oldest archive/ tarballs over the cap
 #                          (git-recoverable). --confirm executes.
 #
-# Config: memory/workflows/history.conf - group_size=20, history_keep=3,
-# archive_keep=12 (defaults when absent). Uses tar (Windows 10+ ships tar.exe)
-# so archives are .tar.gz, matching the POSIX port.
+# Config: memory/workflows/history.conf - office_size=20 (legacy key
+# group_size still read), history_keep=3, archive_keep=12 (defaults when
+# absent). Uses tar (Windows 10+ ships tar.exe) so archives are .tar.gz,
+# matching the POSIX port.
 
 [CmdletBinding()]
 param(
@@ -34,21 +41,20 @@ $scriptDir = $PSScriptRoot
 $coreDir = (Resolve-Path (Join-Path $scriptDir '..')).Path
 $ledgerDir = Split-Path -Parent $coreDir
 $memoryDir = Join-Path $ledgerDir 'memory'
+$officeDir = Join-Path $memoryDir 'office'
 $historyDir = Join-Path $ledgerDir 'history'
 $archiveDir = Join-Path $ledgerDir 'archive'
-$sessionsMd = Join-Path $memoryDir 'agents/sessions.md'
-$summaryMd = Join-Path $memoryDir 'sessions/SUMMARY.md'
-$rosterMd = Join-Path $memoryDir 'agents/roster.md'
-$groupState = Join-Path $memoryDir 'agents/GROUP'
+$sessionsMd = Join-Path $officeDir 'agents/sessions.md'
 $configFile = Join-Path $memoryDir 'workflows/history.conf'
+$officeTpl = Join-Path $coreDir 'templates/memory/office'
 
 function Usage {
   @(
-    'ledger-history - group and rotate session history',
-    '  status                 current group, session count, zone sizes, due?',
-    '  close [--milestone L] [--confirm]   close the live group into history/',
+    'ledger-history - office lifecycle: open, work, close, freeze, archive',
+    '  status                 live office, session count, zone sizes, due?',
+    '  close [--milestone L] [--confirm]   freeze the live office into history/',
     '  gc [--confirm]         delete oldest archive/ tarballs over the cap',
-    'Config: memory/workflows/history.conf (group_size, history_keep, archive_keep).'
+    'Config: memory/workflows/history.conf (office_size, history_keep, archive_keep).'
   ) | ForEach-Object { Say $_ }
   exit 2
 }
@@ -63,25 +69,7 @@ function Get-Conf { param([string]$Key, [int]$Default)
   return $Default
 }
 
-function Get-GroupInt {
-  if (Test-Path -LiteralPath $groupState) {
-    foreach ($raw in Get-Content -LiteralPath $groupState) {
-      $line = $raw.TrimEnd("`r")
-      if ($line -match '^group=(\d+)') { return [int]$matches[1] }
-    }
-  }
-  return 1
-}
-
-function Get-GroupOpened {
-  if (Test-Path -LiteralPath $groupState) {
-    foreach ($raw in Get-Content -LiteralPath $groupState) {
-      $line = $raw.TrimEnd("`r")
-      if ($line -match '^opened=(.*)$') { return $matches[1].Trim() }
-    }
-  }
-  return ''
-}
+function Get-OfficeSize { Get-Conf 'office_size' (Get-Conf 'group_size' 20) }
 
 function Get-SessionCount {
   if (-not (Test-Path -LiteralPath $sessionsMd)) { return 0 }
@@ -92,85 +80,50 @@ function Get-SessionCount {
   return $n
 }
 
-function Count-Archives { @(Get-ChildItem -LiteralPath $archiveDir -Filter 'group-*.tar.gz' -File -ErrorAction SilentlyContinue).Count }
-function Count-History { @(Get-ChildItem -LiteralPath $historyDir -Filter 'group-*.md' -File -ErrorAction SilentlyContinue).Count }
+function Get-OfficeOpened {
+  if (-not (Test-Path -LiteralPath $sessionsMd)) { return '' }
+  foreach ($raw in Get-Content -LiteralPath $sessionsMd) {
+    if ($raw -match '^## (\d{4}-\d{2}-\d{2})') { return $matches[1] }
+  }
+  return ''
+}
+
+function Get-MaxOfficeNum {
+  # highest office number on record; the records are permanent, so the
+  # sequence is always derivable - no state file
+  $max = 0
+  $items = @()
+  $items += @(Get-ChildItem -LiteralPath $historyDir -Filter 'office-*.md' -File -ErrorAction SilentlyContinue)
+  $items += @(Get-ChildItem -LiteralPath $historyDir -Filter 'office-*' -Directory -ErrorAction SilentlyContinue)
+  $items += @(Get-ChildItem -LiteralPath $archiveDir -Filter 'office-*.tar.gz' -File -ErrorAction SilentlyContinue)
+  foreach ($f in $items) {
+    if ($f.Name -match '^office-0*(\d+)') { $n = [int]$matches[1]; if ($n -gt $max) { $max = $n } }
+  }
+  return $max
+}
+
+function Count-Archives { @(Get-ChildItem -LiteralPath $archiveDir -Filter 'office-*.tar.gz' -File -ErrorAction SilentlyContinue).Count }
+function Count-Records { @(Get-ChildItem -LiteralPath $historyDir -Filter 'office-*.md' -File -ErrorAction SilentlyContinue).Count }
+function Count-OfficeDirs { @(Get-ChildItem -LiteralPath $historyDir -Filter 'office-*' -Directory -ErrorAction SilentlyContinue).Count }
 function Today { (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd') }
 function Pad { param([int]$N) '{0:000}' -f $N }
 
-function Write-GroupState { param([int]$N, [string]$Opened)
-  New-Item -ItemType Directory -Path (Split-Path -Parent $groupState) -Force | Out-Null
-  @(
-    '# Current session group - written by ledger-history. Do not hand-edit.',
-    "group=$N",
-    "opened=$Opened"
-  ) -join "`n" | Set-Content -LiteralPath $groupState -NoNewline
+function Show-PrecloseChecklist {
+  Say 'Before closing this office:'
+  Say '  - the directory is frozen VERBATIM (roster, registry, notes, logs -'
+  Say '    nothing is condensed, trimmed, or reset)'
+  Say '  - after the freeze, fill the permanent record history/office-<NNN>.md:'
+  Say '    Accomplished / Decisions still in force / Open threads'
+  Say "  - re-seed open threads that still matter into the NEW office's files"
+  Say '    (backlog / flaws / decisions) - the only carryover there is'
+  Say 'The new office starts from empty skeletons; durable files do not rotate.'
 }
 
-function Reset-Registry {
-  @(
-    '# Agent Sessions (append-only within the current group)',
-    '',
-    'One entry per agent session in the CURRENT group, newest at the bottom.',
-    'Closed groups live in .context_ledger/history/ and .context_ledger/archive/ (not read',
-    'at session start). Rotate with ledger-history.',
-    '',
-    '<!-- TEMPLATE - copy below the last entry and FILL IN every placeholder:',
-    '---',
-    '## YYYY-MM-DD - Session N',
-    '- **Agent:** <name> | **Model:** <model id> | **Platform:** <machine/sandbox + OS> | **Role:** <engineer, or overlay> | **Core:** <version>',
-    '- **Task:** <what this session set out to do>',
-    '- **Commits:** <count> (<first-sha>..<last-sha>)',
-    '- **Outcome:** <done / partial / blocked>',
-    '- **Open items:** <pointers into tasks/backlog.md, or "none">',
-    '- **Notes:** .context_ledger/memory/sessions/<date>-<N>/notes.md  (or "none")',
-    '-->'
-  ) -join "`n" | Set-Content -LiteralPath $sessionsMd
-}
-
-function Reset-Summary {
-  @(
-    '# Session Summary (current group - prunable)',
-    '',
-    'One line per session: date, agent, model, one-line outcome. Closed groups',
-    'are in .context_ledger/history/. Keep this small.'
-  ) -join "`n" | Set-Content -LiteralPath $summaryMd
-}
-
-function Reset-Roster {
-  if (-not (Test-Path -LiteralPath $rosterMd)) { return }
-  @(
-    '# Team Roster (current group - update in place)',
-    '',
-    'Pick a real name you like and add your row; present yourself by it',
-    '("John (S<NNN>)"). Your name and codename are each unique in this group.',
-    'The human is the supervisor. ledger-mem check flags a duplicate.',
-    '',
-    '<!-- TEMPLATE - one row per person in this group:',
-    '| <Name> | S<NNN> | <model id> | <what you are doing> |',
-    '-->',
-    '',
-    '| Name | Codename | Model | Doing |',
-    '|------|----------|-------|-------|'
-  ) -join "`n" | Set-Content -LiteralPath $rosterMd
-}
-
-function Show-PromotionChecklist {
-  Say 'Before closing this group, confirm every open thread is captured in a'
-  Say 'DURABLE file (it will NOT carry over implicitly - the new group starts clean):'
-  Say '  - open work              -> tasks/backlog.md'
-  Say '  - decisions in force      -> plans/decisions.md'
-  Say '  - constraints/workarounds -> inefficiencies/log.md'
-  Say '  - unresolved protocol traps -> flaws/log.md'
-  Say '  - user preferences         -> user/preferences.md'
-  Say 'Durable files persist across the boundary; the session stream resets.'
-}
-
-function Roll-OldestHistoryToArchive {
+function Roll-OldestOfficeToArchive {
   $keep = Get-Conf 'history_keep' 3
-  while ((Count-History) -gt $keep) {
-    $oldest = Get-ChildItem -LiteralPath $historyDir -Filter 'group-*.md' -File | Sort-Object Name | Select-Object -First 1
+  while ((Count-OfficeDirs) -gt $keep) {
+    $oldest = Get-ChildItem -LiteralPath $historyDir -Filter 'office-*' -Directory | Sort-Object Name | Select-Object -First 1
     if (-not $oldest) { break }
-    $base = [IO.Path]::GetFileNameWithoutExtension($oldest.Name)
     New-Item -ItemType Directory -Path $archiveDir -Force | Out-Null
     # tar runs with the CWD inside history/ and a relative -f path: GNU tar
     # (MSYS, often first on PATH) parses "C:\..." in -f as remote host "C"
@@ -178,23 +131,27 @@ function Roll-OldestHistoryToArchive {
     # name. archive/ is always a sibling of history/ under .context_ledger/.
     Push-Location $historyDir
     try {
-      & tar -czf ("../{0}/{1}.tar.gz" -f (Split-Path -Leaf $archiveDir), $base) "$($oldest.Name)"
-      if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("ledger-history: could not archive $base (need tar.exe)"); break }
-      Remove-Item -LiteralPath $oldest.FullName -Force
-      Say "archived $base -> archive/$base.tar.gz"
+      & tar -czf ("../{0}/{1}.tar.gz" -f (Split-Path -Leaf $archiveDir), $oldest.Name) $oldest.Name
+      if ($LASTEXITCODE -ne 0) { [Console]::Error.WriteLine("ledger-history: could not archive $($oldest.Name) (need tar.exe)"); break }
+      Remove-Item -LiteralPath $oldest.FullName -Recurse -Force
+      Say "archived $($oldest.Name) -> archive/$($oldest.Name).tar.gz (its record stays in history/)"
     } finally { Pop-Location }
   }
 }
 
 function Cmd-Status {
-  $n = Pad (Get-GroupInt); $c = Get-SessionCount
-  $gs = Get-Conf 'group_size' 20; $hk = Get-Conf 'history_keep' 3; $ak = Get-Conf 'archive_keep' 12
-  $opened = Get-GroupOpened; if (-not $opened) { $opened = '-' }
-  Say "Current group:   group-$n (opened $opened)"
-  Say "Sessions in it:  $c / $gs"
-  Say "history/:        $(Count-History) closed group(s) readable (keep $hk)"
+  $c = Get-SessionCount
+  $gs = Get-OfficeSize; $hk = Get-Conf 'history_keep' 3; $ak = Get-Conf 'archive_keep' 12
+  $opened = Get-OfficeOpened; if (-not $opened) { $opened = '-' }
+  if (Test-Path -LiteralPath $officeDir) {
+    Say "Live office:     memory/office (opened $opened)"
+    Say "Sessions in it:  $c / $gs"
+  } else {
+    Say 'Live office:     none - memory/office missing (run: ledger-sync migrate)'
+  }
+  Say "history/:        $(Count-OfficeDirs) frozen office(s) readable, $(Count-Records) permanent record(s) (keep $hk)"
   Say "archive/:        $(Count-Archives) tarball(s) (cap $ak)"
-  if ($c -ge $gs) { Say ''; Say 'A close is DUE (>= group_size). Run: ledger-history close   (then --confirm)' }
+  if ($c -ge $gs) { Say ''; Say 'A close is DUE (>= office_size). Run: ledger-history close   (then --confirm)' }
   if ((Count-Archives) -gt $ak) { Say 'gc is DUE: archive/ over cap. Run: ledger-history gc --confirm' }
 }
 
@@ -207,47 +164,74 @@ function Cmd-Close {
       default { Die "unknown argument '$($RestArgs[$i])'" }
     }
   }
-  if (-not (Test-Path -LiteralPath $sessionsMd)) { Die "no $sessionsMd - is this a bootstrapped project?" }
-  $int = Get-GroupInt; $n = Pad $int; $next = Pad ($int + 1)
-  $c = Get-SessionCount; $opened = Get-GroupOpened; if (-not $opened) { $opened = Today }
-  $target = Join-Path $historyDir "group-$n.md"
-  Say "== Closing group-$n =="
+  if (-not (Test-Path -LiteralPath $officeDir)) { Die "no $officeDir - run: ledger-sync migrate" }
+  if (-not (Test-Path -LiteralPath $officeTpl)) { Die "$officeTpl missing - core is too old for the office layout; update core first" }
+  $c = Get-SessionCount
+  $int = Get-MaxOfficeNum
+  $n = Pad ($int + 1)
+  $targetDir = Join-Path $historyDir "office-$n"
+  $record = Join-Path $historyDir "office-$n.md"
+  $opened = Get-OfficeOpened; if (-not $opened) { $opened = '-' }
+  Say "== Closing the live office -> office-$n =="
   Say "sessions: $c   opened: $opened   closing: $(Today)$(if ($milestone) { "   milestone: $milestone" })"
-  Say ''; Show-PromotionChecklist; Say ''
+  $dirty = & git -C (Split-Path -Parent $ledgerDir) status --porcelain 2>$null
+  if ($dirty) { Say 'notice: uncommitted changes present - the closing commit should include the frozen office move + record' }
+  Say ''; Show-PrecloseChecklist; Say ''
   Say 'Plan:'
-  Say "  - write $target (condensed registry + summaries)"
-  Say "  - reset the live registry + SUMMARY for a new group-$next"
-  Say '  - roll the oldest readable group into archive/ if history/ exceeds keep'
-  if (-not $confirm) { Say ''; Say 'Dry run - nothing changed. Re-run with --confirm once promotion is done.'; return }
+  Say "  - freeze memory/office verbatim -> $targetDir (nothing trimmed)"
+  Say "  - write $record (permanent accomplishments record)"
+  Say '  - open a fresh empty office from core/templates/memory/office/'
+  Say '  - zip the oldest frozen office into archive/ if history/ exceeds keep'
+  if (-not $confirm) { Say ''; Say 'Dry run - nothing changed. Re-run with --confirm once the checklist is done.'; return }
 
   New-Item -ItemType Directory -Path $historyDir -Force | Out-Null
-  $lines = @("# Session group $n (closed $(Today))", '',
+  Move-Item -LiteralPath $officeDir -Destination $targetDir
+  Say "froze memory/office -> $targetDir (verbatim)"
+
+  $lines = @("# Office $n - accomplishments record (permanent)", '',
     "- Opened: $opened", "- Closed: $(Today)", "- Sessions: $c")
   if ($milestone) { $lines += "- Milestone: $milestone" }
-  $lines += @('', 'Not read at session start - audit/lookback only.', '')
-  if (Test-Path -LiteralPath $rosterMd) { $lines += @('## Team roster', ''); $lines += (Get-Content -LiteralPath $rosterMd); $lines += '' }
-  $lines += @('## Session registry', '')
-  $lines += (Get-Content -LiteralPath $sessionsMd)
-  if (Test-Path -LiteralPath $summaryMd) { $lines += @('', '## Summaries', ''); $lines += (Get-Content -LiteralPath $summaryMd) }
-  $lines -join "`n" | Set-Content -LiteralPath $target
-  Say "wrote $target"
+  $lines += @('', "The frozen office lives at history/office-$n/ until it is zipped into archive/office-$n.tar.gz. This record stays in history/ forever - even after the tarball is garbage-collected, the office is never forgotten. Not read at session start; deliberate lookback only.", '')
+  $lines += @(
+    "<!-- FILL IN before committing the close - this is the office's permanent memory:",
+    '## Accomplished',
+    '- <what this office achieved - releases, milestones, work worth remembering>',
+    '',
+    '## Decisions still in force',
+    '- <ADRs / working agreements the next office must respect - or "none">',
+    '',
+    '## Open threads',
+    '- <items re-seeded into the new office''s backlog / flaws / decisions - or "none">',
+    '-->'
+  )
+  # WriteAllText with UTF-8 without BOM: Set-Content on Windows PowerShell
+  # mangles non-ASCII and adds a BOM; the record is a permanent file whose
+  # bytes must match what the POSIX port writes (same convention as the
+  # collab-event JSON writers).
+  [IO.File]::WriteAllText($record, ($lines -join "`n") + "`n", (New-Object System.Text.UTF8Encoding $false))
+  Say "wrote $record (fill it in before committing)"
 
-  Reset-Registry; Reset-Summary; Reset-Roster; Write-GroupState -N ($int + 1) -Opened (Today)
-  Say "started group-$next"
-  Roll-OldestHistoryToArchive
-  Say ''; Say "Commit as: chore(ledger): close session group-$n, open group-$next"
+  Copy-Item -Path $officeTpl -Destination $officeDir -Recurse
+  Say 'opened a fresh memory/office (empty skeletons)'
+
+  Roll-OldestOfficeToArchive
+  Say ''
+  Say "Then, before committing: fill in $record and re-seed open threads into the"
+  Say "new office's backlog / flaws / decisions - only what still matters."
+  Say ''
+  Say "Commit as: chore(ledger): close office-$n, open a fresh office"
 }
 
 function Cmd-Gc {
   $confirm = ($RestArgs -contains '--confirm')
   $ak = Get-Conf 'archive_keep' 12
-  $tarballs = @(Get-ChildItem -LiteralPath $archiveDir -Filter 'group-*.tar.gz' -File -ErrorAction SilentlyContinue | Sort-Object Name)
+  $tarballs = @(Get-ChildItem -LiteralPath $archiveDir -Filter 'office-*.tar.gz' -File -ErrorAction SilentlyContinue | Sort-Object Name)
   if ($tarballs.Count -le $ak) { Say "archive/ holds $($tarballs.Count) tarball(s), cap $ak - nothing to delete."; return }
   $over = $tarballs.Count - $ak
   $doomed = $tarballs | Select-Object -First $over
   Say "archive/ over cap ($($tarballs.Count) > $ak). Oldest-first, $over tarball(s) to delete:"
   $doomed | ForEach-Object { Say "  - $($_.Name)" }
-  Say '(recoverable from git history after deletion - this only bounds the working tree)'
+  Say '(recoverable from git history after deletion; the permanent records in history/ stay)'
   if (-not $confirm) { Say 'Dry run - nothing deleted. Re-run with --confirm to delete.'; return }
   $doomed | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force; Say "deleted $($_.Name)" }
   Say "Commit as: chore(ledger): gc archive/ to the $ak-tarball cap"

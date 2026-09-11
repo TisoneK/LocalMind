@@ -1,6 +1,6 @@
-# Team Roster (current group — update in place)
+# Team Roster (current office — update in place)
 
-The people working this group, and as whom. Think of it as a workplace: you
+The people working this office, and as whom. Think of it as a workplace: you
 are a coworker on a team, the human is your supervisor, and this is the board
 by the door that says who's in and what they're on.
 
@@ -14,7 +14,7 @@ Kwame, Mei, …) — and add your row. Present yourself by that name from then
 on: in collaboration events, in your session log, when you report to the
 supervisor. "John (S427)", never "peer" or a bare ID.
 
-Your **name and your codename are each unique within this group**. If a name
+Your **name and your codename are each unique within this office**. If a name
 is already taken, pick another — there is only one John on the team at a
 time. The name is how the team and the supervisor refer to you; the codename
 is your stable session tag.
@@ -30,7 +30,7 @@ is your stable session tag.
   yours).
 - **Doing** — one line: your role / persona / what you're on right now.
 
-<!-- TEMPLATE — one row per person in this group:
+<!-- TEMPLATE — one row per person in this office:
 | <Name> | S<NNN> | <model id> | <what you're doing> |
 -->
 
@@ -45,7 +45,10 @@ history (the check-in commit opens your shift, the clock-out commit
 closes it). A row left behind sends the next agent hunting for a peer
 who has left. `ledger-mem check` flags a duplicate name or codename,
 and warns when a session entry was logged while your row still claimed
-the office. This roster is the **current group's** only — it resets when
-the group closes (`ledger-history close`), and the closed group's roster
-is kept in `.context_ledger/history/`. Update your own row (don't append a
+the office. This roster belongs to the **current office** only — it is
+never reset or trimmed: when the office fills up, `ledger-history close`
+freezes this whole directory verbatim into `.context_ledger/history/`
+(every shift preserved), and the next office starts with an empty board.
+The permanent record `history/office-<NNN>.md` keeps each office's duty
+summary forever. Update your own row (don't append a
 second); when your work changes, edit the "Doing" cell.

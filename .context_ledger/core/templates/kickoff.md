@@ -122,7 +122,7 @@ the `.ps1` port with `-ExecutionPolicy Bypass` (same commands, same output):
 - `verify` fails → core was hand-edited or corrupted. Run
   `sh .context_ledger/core/bin/ledger-sync rollback` (Windows:
   `.context_ledger/core/bin/ledger-sync.cmd rollback`), log a flaw in
-  `memory/flaws/log.md`, continue on the restored core.
+  `memory/office/flaws/log.md`, continue on the restored core.
 - `status` reports a newer core with the **same MAJOR** → run
   `sh .context_ledger/core/bin/ledger-sync update` (Windows:
   `.context_ledger/core/bin/ledger-sync.cmd update`) — it replaces `core/` only,
@@ -134,20 +134,24 @@ the `.ps1` port with `-ExecutionPolicy Bypass` (same commands, same output):
 
 ### Step 2 — Read `.context_ledger/`
 
-`README.md` (the zone map) → then, under `memory/`:
-`workflows/active.md` → `agents/sessions.md` (last 3–5 entries —
+`README.md` (the zone map) → then the **live office**, under `memory/office/`:
+`agents/sessions.md` (last 3–5 entries —
 if the active entry points to `sessions/<date>-N/notes.md`, skim it
 for the current state) → `agents/roster.md` (the board by the door:
 who is in the office right now — a live row you didn't write means a
-peer is here) → `collaboration/README.md` and relevant
-`collaboration/events/` when collaboration is enabled → `tasks/current.md` → `tasks/backlog.md` →
-`inefficiencies/log.md` → `flaws/log.md` → `plans/decisions.md` →
-`overrides/rules.md` → `workflows/gates.conf` → `system/` → `user/` → note what's in
-`secrets/` (never print values).
+peer is here) → the durable files at the memory root:
+`workflows/active.md` → `collaboration/README.md` and relevant
+`collaboration/events/` when collaboration is enabled → `workflows/gates.conf` →
+then back into the office: `office/tasks/current.md` → `office/tasks/backlog.md` →
+`office/inefficiencies/log.md` → `office/flaws/log.md` → `office/plans/decisions.md` →
+`overrides/rules.md` → `system/` → `user/` → note what's in
+`secrets/` (never print values). The office is everything session-produced
+(roster, registry, tasks, plans, logs, reviews); `history/` and `archive/`
+hold closed offices and are never read at session start.
 
 **Check in — every session, solo or not.** Pick a real name you like
-(unique in the group) and add or update your row in
-`memory/agents/roster.md`: name, codename `S<NNN>` (your session
+(unique in the office) and add or update your row in
+`memory/office/agents/roster.md`: name, codename `S<NNN>` (your session
 number), model, one line on what you're on. Commit and push the row
 immediately, before any product work:
 `chore(ledger): <name> (<codename>) checks in — <task>`. If the push
@@ -173,17 +177,17 @@ extend your existing session entry rather than opening a second one.
 
 **Decide the mode from evidence, not from an empty board.** You are
 solo only if no collaboration `session` + `issue` was declared AND the
-roster shows no live row you didn't write AND `memory/tasks/current.md`
+roster shows no live row you didn't write AND `memory/office/tasks/current.md`
 is idle. A live roster row you didn't write means a peer is in the
 office: do not run a solo protocol — fetch and check for a
 `collab/<session-id>/coordination` branch and join its event trail; if
 none exists, declare a shared session/issue (mind the peer's "Doing"
 scope), take your own isolated worktree/branch, and emit a `note` +
-`claim` before editing. If `tasks/current.md` shows a live session but
+`claim` before editing. If `office/tasks/current.md` shows a live session but
 the roster is empty (an old-core or crashed session), follow the
 stale-entry guidance on `current.md`; when it is genuinely live,
 **do not start** — one agent per project repo at a time. If collaboration
-was declared, do not use `tasks/current.md` as a lock: create or join the
+was declared, do not use `office/tasks/current.md` as a lock: create or join the
 shared session/issue event trail, use a separate worktree/branch, publish
 a claim, and inspect peer events before editing.
 
@@ -280,7 +284,7 @@ All steps, all phases, in order. Don't skip Phase 1 because the task
 seems small. In collaboration mode, follow the collaboration event
 lifecycle in addition to the normal phases. Don't forget the Exit
 checklist: everything committed and pushed, session logged,
-`memory/tasks/current.md` cleared when you own single-agent mode, roster
+`memory/office/tasks/current.md` cleared when you own single-agent mode, roster
 row removed (clocked out), chat summary delivered.
 
 ---

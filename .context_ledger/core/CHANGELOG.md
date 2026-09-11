@@ -10,6 +10,68 @@ bump MINOR; wording and fixes bump PATCH.
 
 ---
 
+## 1.0.0 — 2026-09-11
+
+**Office architecture — the live session group is a directory, frozen
+verbatim when it closes.** The flat memory layout
+(`memory/agents/`, `memory/tasks/`, `memory/plans/`, …) becomes the live
+office: an unnumbered directory `memory/office/` holding everything
+session-produced — team roster, session registry, session notes, tasks,
+plans, flaw and inefficiency logs, reviews. Only one office is ever live,
+so every path in the protocol stays static. Design:
+`designs/office-architecture.md` in the package repo.
+
+- **Close freezes the office VERBATIM** — no condensing, no resetting;
+  the roster keeps every check-in/clock-out shift. The whole directory
+  moves to `history/office-<NNN>/`, numbered **at close time** from the
+  records (the `agents/GROUP` state file retires — the sequence is
+  derived from the permanent records, which never leave). Previously
+  `close` condensed registry + summaries into one file and reset the
+  live roster and registry.
+- **A permanent accomplishments record per office:**
+  `history/office-<NNN>.md`, written by close with the auto-facts
+  (number, opened/closed dates, session count, milestone) and filled in
+  by the closing session — **Accomplished / Decisions still in force /
+  Open threads**. It stays in `history/` forever, even after the frozen
+  office is zipped into `archive/office-<NNN>.tar.gz` and eventually
+  garbage-collected: no office is ever forgotten.
+- **The next office starts from empty skeletons.** Nothing carries over
+  implicitly — the closing session re-seeds open threads that still
+  matter into the new office's backlog/flaws/decisions and lists them in
+  the permanent record. A fresh office cannot be misdirected by a
+  previous office's stale claims, resolved-but-unpruned log entries, or
+  superseded decisions.
+- **Durable files never rotate:** `workflows/`, `collaboration/`
+  (events trail), `system/`, `user/`, `overrides/`, `core.lock`, and
+  `secrets/` stay at the `memory/` root across offices — they orient a
+  session (rules, config, registries, the human's facts) rather than
+  narrate one.
+- **Migration is automatic and happens during sync:** `update` (and
+  `migrate`) group a legacy flat layout into `memory/office/` — the old
+  layout becomes the live office, nothing is lost or rewritten;
+  `memory/agents/GROUP` is removed and the `history.conf` key
+  `group_size` is renamed `office_size` (the tools still read the legacy
+  key). Durable files never move. Legacy `history/group-<NNN>.md`
+  records stay in place as read-only history. MAJOR bump: run
+  `update --major` / `migrate --major` with the user's go-ahead; commit
+  the regroup as `chore(ledger): group memory into the live office
+  (core 1.0.0)`.
+- **The full-office nudge:** `ledger-gates checkpoint` prints a
+  warn-only notice (never blocks) when the live office has reached
+  `office_size` sessions — the grouping lifecycle now announces itself
+  instead of relying on the agent remembering `ledger-history status`.
+- **Backfill tops up a partial office:** after migration, any office
+  directory missing from the install (e.g. `reviews/` if never used) is
+  seeded from templates without touching existing files.
+- **Tools (sh + ps1 parity, runtime-verified on Git Bash and Windows
+  PowerShell 5.1):** `ledger-history` rewritten (freeze-at-close,
+  stateless numbering, permanent-record stub, fresh-office seeding,
+  directory roll-to-archive, gc); `ledger-mem` checks repointed to the
+  office paths; `ledger-sync` migration + office backfill; `ledger-gates`
+  checkpoint notice. Templates, schemas (`ledger-schema.md`,
+  `ledger.schema.json`), both protocol editions, and all generated
+  entry-point digests updated to the office layout.
+
 ## 0.22.0 — 2026-09-10
 
 **Collaboration events are JSON documents — and every session writes

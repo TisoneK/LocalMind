@@ -63,7 +63,7 @@ model, and what went wrong before.
 ### Agent Identity (USER FILLS IN — AGENT COPIES, NEVER GUESSES)
 
 > The user fills in the model version below. The agent copies it into
-> `.context_ledger/memory/agents/sessions.md` and `.context_ledger/memory/system/ai-models.md`.
+> `.context_ledger/memory/office/agents/sessions.md` and `.context_ledger/memory/system/ai-models.md`.
 > **The agent must never guess its own model version.** System prompts
 > often don't state the model version, and guessing produces wrong
 > entries that propagate across sessions. If the user didn't fill this
@@ -86,7 +86,7 @@ model, and what went wrong before.
 - **Focus areas:** all _[default: all — security, performance, UX, architecture, testing, docs]_
 - **Findings handling:** fix safe issues; flag architectural changes for next session _[default: fix safe, flag architectural]_
 - **Push policy:** push to main directly after each commit _[default: push to main directly]_
-- **Deliverable:** markdown report in .context_ledger/memory/reviews/ + chat summary _[default: markdown report in .context_ledger/memory/reviews/YYYY-MM-DD-review.md + chat summary]_
+- **Deliverable:** markdown report in .context_ledger/memory/office/reviews/ + chat summary _[default: markdown report in .context_ledger/memory/office/reviews/YYYY-MM-DD-review.md + chat summary]_
 - **Commit granularity:** one logical change per commit _[default: one logical change per commit]_
 
 ### GitHub PAT (PRIVATE REPOS ONLY)
@@ -122,11 +122,11 @@ model, and what went wrong before.
 1. **The project** — product code, docs, tests, config. Commits use
    normal prefixes (`fix:`, `feat:`, `docs:`). Friction with the project
    (its code, toolchain, environment, dependencies) goes in
-   `.context_ledger/memory/inefficiencies/log.md`.
+   `.context_ledger/memory/office/inefficiencies/log.md`.
 2. **`.context_ledger/`** — agent memory. Commits use `chore(ledger):`. Friction
    **with the `.context_ledger/` system or this protocol itself** (a rule that's
    ambiguous, a step that's missing, a template that's confusing) goes in
-   `.context_ledger/memory/flaws/log.md`.
+   `.context_ledger/memory/office/flaws/log.md`.
 
 If you're editing a file under `.context_ledger/`, you're in **memory mode**.
 If you're editing anything else, you're in **project mode**. The 19 steps
@@ -163,7 +163,7 @@ Reach for the lightest thing that works. For the common case —
 non-overlapping work, or work no one else has touched — the whole
 lifecycle is:
 
-0. **Check in.** You already did at Step 3 — every session signs `memory/agents/roster.md`, solo or not; edit your row's "Doing" cell as your work changes. Present yourself by that chosen name everywhere (`--agent John`, "John (S427)" to the supervisor), never "peer" or a bare id. One name per group — `ledger-mem check` flags a clash.
+0. **Check in.** You already did at Step 3 — every session signs `memory/office/agents/roster.md`, solo or not; edit your row's "Doing" cell as your work changes. Present yourself by that chosen name everywhere (`--agent John`, "John (S427)" to the supervisor), never "peer" or a bare id. One name per office — `ledger-mem check` flags a clash.
 1. **Say what you're on** with a `note`, the office channel. One line
    ("taking the token-refresh path; leaving the session store to you")
    keeps peers from colliding with you.
@@ -337,11 +337,11 @@ missing commands fail rather than pass with a notice.
 
 ### EXIT (Step 19 — the session is not done until ALL of these happen)
 - [ ] All fixes committed AND pushed
-- [ ] Report written, committed, AND pushed (`.context_ledger/memory/reviews/`)
+- [ ] Report written, committed, AND pushed (`.context_ledger/memory/office/reviews/`)
 - [ ] CHANGELOG updated, committed, AND pushed (if behavior changed)
-- [ ] `.context_ledger/memory/tasks/`, `.context_ledger/memory/system/`, `.context_ledger/memory/plans/` updated, committed, AND pushed
-- [ ] `.context_ledger/memory/agents/sessions.md` + `.context_ledger/memory/sessions/SUMMARY.md` + `.context_ledger/memory/inefficiencies/log.md` + `.context_ledger/memory/flaws/log.md` appended, committed, AND pushed
-- [ ] `.context_ledger/memory/sessions/` notes promoted + committed, AND pushed (if this session produced a notes file)
+- [ ] `.context_ledger/memory/office/tasks/`, `.context_ledger/memory/system/`, `.context_ledger/memory/office/plans/` updated, committed, AND pushed
+- [ ] `.context_ledger/memory/office/agents/sessions.md` + `.context_ledger/memory/office/sessions/SUMMARY.md` + `.context_ledger/memory/office/inefficiencies/log.md` + `.context_ledger/memory/office/flaws/log.md` appended, committed, AND pushed
+- [ ] `.context_ledger/memory/office/sessions/` notes promoted + committed, AND pushed (if this session produced a notes file)
 - [ ] `tasks/current.md` cleared (set to idle) in single-agent mode; collaboration mode releases/handoffs each claim without clearing a peer's task
 - [ ] Own product worktree(s) removed + branch deleted after merge (`git worktree list` clean; coordination branch kept — Step 15)
 - [ ] PAT unset (Step 19)
@@ -400,28 +400,28 @@ git config user.email "<GIT_EMAIL>"
 - **Check the vendored core first (never fatal):** `sh .context_ledger/core/bin/ledger-sync verify` — a failure means core was hand-edited or corrupted: run `ledger-sync rollback`, log a flaw, continue on the restored core. Then `ledger-sync status` — a newer core with the same MAJOR may be applied with `ledger-sync update` (it replaces `core/` only, never memory; commit as `chore(ledger): update core to <version>`); a MAJOR bump or no reachable source = note it and move on.
 - If `.context_ledger/` exists, read it in this order:
   1. `.context_ledger/README.md` — the zone map (core = read-only protocol; memory = this project's data)
-  2. `.context_ledger/memory/agents/sessions.md` — who worked here before, with which model, and what they did (read the last 3–5 entries)
-  3. `.context_ledger/memory/agents/roster.md` — the board by the door: who is in the office right now (each row: chosen name, codename `S<NNN>`, model, what they're on). **A live row you didn't write means a peer is here now** — see the check-in + mode rule below.
-  4. `.context_ledger/memory/sessions/SUMMARY.md` — compressed session continuity (skim the last ~10 entries; if the file doesn't exist yet, skip — it's created by the first session that runs on 0.5.0+)
+  2. `.context_ledger/memory/office/agents/sessions.md` — who worked here before, with which model, and what they did (read the last 3–5 entries)
+  3. `.context_ledger/memory/office/agents/roster.md` — the board by the door: who is in the office right now (each row: chosen name, codename `S<NNN>`, model, what they're on). **A live row you didn't write means a peer is here now** — see the check-in + mode rule below.
+  4. `.context_ledger/memory/office/sessions/SUMMARY.md` — compressed session continuity (skim the last ~10 entries; if the file doesn't exist yet, skip — it's created by the first session that logs one)
   5. `.context_ledger/memory/collaboration/README.md` — collaboration rules; if a shared session/issue is active, read its event files and status before claiming work.
   6. `.context_ledger/memory/workflows/gates.conf` — explicit commands and gate mode; initialize it if missing.
-  7. `.context_ledger/memory/tasks/current.md` — in single-agent mode, is a task marked in-progress? If a prior session died mid-task, this is where you find out. In collaboration mode it is not a lock.
-  8. `.context_ledger/memory/tasks/backlog.md` — open items waiting for a session like this one
-  9. `.context_ledger/memory/flaws/log.md` — known workflow/protocol traps — where the `.context_ledger` system itself misled a prior agent. **Don't re-hit a logged flaw.**
-  10. `.context_ledger/memory/inefficiencies/log.md` — known project traps (tool failures, flaky tests, env quirks). **Don't re-hit a logged trap.**
-  11. `.context_ledger/memory/plans/decisions.md` — architectural decisions already made. **Don't relitigate them; don't "fix" code into violating them.**
+  7. `.context_ledger/memory/office/tasks/current.md` — in single-agent mode, is a task marked in-progress? If a prior session died mid-task, this is where you find out. In collaboration mode it is not a lock.
+  8. `.context_ledger/memory/office/tasks/backlog.md` — open items waiting for a session like this one
+  9. `.context_ledger/memory/office/flaws/log.md` — known workflow/protocol traps — where the `.context_ledger` system itself misled a prior agent. **Don't re-hit a logged flaw.**
+  10. `.context_ledger/memory/office/inefficiencies/log.md` — known project traps (tool failures, flaky tests, env quirks). **Don't re-hit a logged trap.**
+  11. `.context_ledger/memory/office/plans/decisions.md` — architectural decisions already made. **Don't relitigate them; don't "fix" code into violating them.**
   12. `.context_ledger/memory/overrides/rules.md` — project-local protocol adjustments. **Overrides beat this edition** (except secret-handling and append-only rules).
   13. `.context_ledger/memory/system/environments.md` + `.context_ledger/memory/system/ai-models.md` — environments and agents seen before
   14. `.context_ledger/memory/user/identity.md` + `.context_ledger/memory/user/preferences.md` — who the user is and how they like things done
   15. `.context_ledger/memory/workflows/active.md` — the workflow currently in force
   16. `.context_ledger/memory/secrets/` — local-only secret values available on this machine (never tracked; empty on a fresh clone). Note what's available — never print values.
 - If `.context_ledger/` does NOT exist, bootstrap it now (see Bootstrap in the `.context_ledger/` section) and commit it: `chore(ledger): bootstrap .context_ledger/ (core <version>)`.
-- **Migration:** if `docs/report/` contains prior reviews, move them: `git mv docs/report/*.md .context_ledger/memory/reviews/` in the same bootstrap commit. Leave a `docs/report/README.md` pointer saying reviews now live in `.context_ledger/memory/reviews/`.
-- **Check in (every session — solo or collaboration).** Pick a real name you like (any human name — John, Ada, Kwame, Mei; unique in the group) and add or update your row in `.context_ledger/memory/agents/roster.md`: name, codename `S<NNN>` (your session number), model, and one line on what you're on. Then commit and push the row immediately, before any product work: `chore(ledger): <name> (<codename>) checks in — <task>`. This is the office registry — it is how the next agent through the door sees you are here, and the push is the sync point: if it forces a rebase, a peer checked in concurrently, so re-read the board. Present yourself by that name everywhere — events, session log, reports ("John (S427)", never "peer" or a bare id). **Roster edits are additive — your row only.** A live row you didn't write is a colleague's check-in, not sample text: never take a peer's identity (if your chosen name is taken, pick another), and never let an edit's `old_string` span or include a peer's row — the edit tool replaces blocks, so anchoring on the table body erases whoever is on it. After a roster edit, `git diff` must show exactly your own row changed (`+1` on check-in); review the diff before committing.
+- **Migration:** if `docs/report/` contains prior reviews, move them: `git mv docs/report/*.md .context_ledger/memory/office/reviews/` in the same bootstrap commit. Leave a `docs/report/README.md` pointer saying reviews now live in `.context_ledger/memory/office/reviews/`.
+- **Check in (every session — solo or collaboration).** Pick a real name you like (any human name — John, Ada, Kwame, Mei; unique in the office) and add or update your row in `.context_ledger/memory/office/agents/roster.md`: name, codename `S<NNN>` (your session number), model, and one line on what you're on. Then commit and push the row immediately, before any product work: `chore(ledger): <name> (<codename>) checks in — <task>`. This is the office registry — it is how the next agent through the door sees you are here, and the push is the sync point: if it forces a rebase, a peer checked in concurrently, so re-read the board. Present yourself by that name everywhere — events, session log, reports ("John (S427)", never "peer" or a bare id). **Roster edits are additive — your row only.** A live row you didn't write is a colleague's check-in, not sample text: never take a peer's identity (if your chosen name is taken, pick another), and never let an edit's `old_string` span or include a peer's row — the edit tool replaces blocks, so anchoring on the table body erases whoever is on it. After a roster edit, `git diff` must show exactly your own row changed (`+1` on check-in); review the diff before committing.
 - **Claim an identity; never infer one.** You are a new arrival until you register: pick a fresh name and codename `S<NNN>` and write your own row — you never "recognize yourself" in a row that already exists. A roster row (or a `sessions.md` entry) whose model string matches your system prompt's model name or harness UUID is **not evidence that it is you**: model IDs and harness markers are fingerprints shared by every session running that harness or model — two peers can honestly list the same model, and one harness UUID appears in every session on it — and a fresh context can never prove it authored a past entry. Acting on the match adopts a peer's identity, and their in-flight state with it: their dirty checkout gets read as "my own uncommitted closeout" instead of the unexplained work it is (Pitfall #20). The only basis for "that row is mine" is continuity inside your own live context (you clocked out earlier in this same conversation — the re-check-in rule below) or the user telling you.
 - **Check back in when work resumes after clock-out.** Clocking out (Step 15) vacates the board, but the session is not over until the user says so (Pitfall #30) — a supervisor follow-up after wrap-up means you have *left the office and come back*. Re-check in **before touching anything**: re-add your row to `agents/roster.md` and push it — `chore(ledger): <name> (<codename>) checks back in — <task>`. You are the same session, so keep the same name and codename `S<N>`; do **not** resume editing under a retired identity while your row is gone (peers see edits landing from someone not on the board), and do **not** open a second `Session N` — extend your existing session entry at the true close (Step 17). If you can foresee the follow-up, the cleaner move is to not clock out until the user actually releases the session.
 - **Decide the mode from evidence, not from an empty board.** You are solo only if NO collaboration `session` + `issue` was declared AND the roster shows no live row you didn't write AND `tasks/current.md` is idle. A live roster row you didn't write means a peer is in the office: do not run a solo protocol — fetch and check for a `collab/<session-id>/coordination` branch and join its event trail; if none exists, declare a shared session/issue (mind the peer's "Doing" scope), take your own isolated clone/branch, and emit a `note` + `claim` before editing. If `tasks/current.md` shows a live session but the roster is empty (an old-core or crashed session), follow the stale-entry guidance on `current.md`; when it is genuinely live, do not start — one agent per project repo.
-- In single-agent mode, set `.context_ledger/memory/tasks/current.md` to this session's task before starting work (overwrite — it holds one task at a time). In collaboration mode, do not use it as a lock: create an isolated branch/worktree, emit a `claim` event with the shared session/issue IDs, and inspect peer events first.
+- In single-agent mode, set `.context_ledger/memory/office/tasks/current.md` to this session's task before starting work (overwrite — it holds one task at a time). In collaboration mode, do not use it as a lock: create an isolated branch/worktree, emit a `claim` event with the shared session/issue IDs, and inspect peer events first.
 
 **Step 4 — Install dependencies**
 - **Discover the package manager first** by checking which lockfile exists:
@@ -448,7 +448,7 @@ Read these in order (use `offset`/`limit` for files >500 lines to avoid truncati
 1. `README.md` — what the project does, how to run it
 2. `docs/ARCHITECTURE.md` (if exists) — system design
 3. `CHANGELOG.md` (top section only) — recent changes + conventions
-4. `.context_ledger/memory/reviews/` — **prior agent reviews** (already skimmed in Step 3; now read the most recent one fully to avoid redoing work). Legacy location: `docs/report/`.
+4. `.context_ledger/memory/office/reviews/` — **prior agent reviews** (already skimmed in Step 3; now read the most recent one fully to avoid redoing work). Legacy location: `docs/report/`.
 5. Any devlog in `docs/` — technical context
 
 **Step 6 — Review recent commits**
@@ -457,7 +457,7 @@ git log --oneline -20
 ```
 - Note the commit style (Conventional Commits? scope? body?).
 - Note recent activity — what's been changing.
-- Cross-check against `.context_ledger/memory/agents/sessions.md` — commits by prior agents should have session entries.
+- Cross-check against `.context_ledger/memory/office/agents/sessions.md` — commits by prior agents should have session entries.
 
 **Step 7 — Fill in the Agent Discovery Phase** (see section below)
 - This is mandatory, not optional busywork. It's the map for the session.
@@ -475,7 +475,7 @@ git log --oneline -20
   - Rust: `cargo check`, `cargo test`, `cargo clippy`
 - Record the baseline: test count, lint error count, typecheck pass/fail.
 - If the baseline is broken (tests failing, build broken), document it before touching anything. The agent is not responsible for pre-existing breakage.
-- If a health-check command fails in a way `.context_ledger/memory/inefficiencies/log.md` already documents, follow the logged workaround instead of rediscovering it.
+- If a health-check command fails in a way `.context_ledger/memory/office/inefficiencies/log.md` already documents, follow the logged workaround instead of rediscovering it.
 - Check `.context_ledger/memory/system/environments.md` before guessing — a prior agent may have recorded verified commands for this environment.
 
 ### Phase 2: Review (no code changes)
@@ -492,9 +492,9 @@ git log --oneline -20
   - Note findings with severity (Critical / High / Medium / Low / Nice to Have)
   - For each finding: Description, Impact, Recommendation
 - **Deep-scan methodology:** when you find a bug, grep for the same pattern across the whole codebase. Don't fix one instance — fix all instances in one commit.
-- Check `.context_ledger/memory/reviews/` for prior findings — don't re-report what's already fixed.
-- Check `.context_ledger/memory/tasks/backlog.md` — prior agents may have already scoped items you're about to "discover."
-- Check `.context_ledger/memory/plans/decisions.md` before flagging something as an architecture problem — it may be a documented, deliberate decision.
+- Check `.context_ledger/memory/office/reviews/` for prior findings — don't re-report what's already fixed.
+- Check `.context_ledger/memory/office/tasks/backlog.md` — prior agents may have already scoped items you're about to "discover."
+- Check `.context_ledger/memory/office/plans/decisions.md` before flagging something as an architecture problem — it may be a documented, deliberate decision.
 
 ### Phase 3: Fix (code changes)
 
@@ -507,7 +507,7 @@ git log --oneline -20
   - Free text — fix what the target implies; backlog anything unrelated
 - **If Target is "general sweep"** (default), apply all safe fixes found in Phase 2.
 - "Fix safe issues" = typos, doc mismatches, missing validation, dark-mode gaps, type annotations, DRY refactors, accessibility, SSRF hardening, perf optimizations with no behavior change.
-- "Flag architectural changes" = provider config consolidation, module decomposition, theming strategy, new abstractions. Document these in the report and `.context_ledger/memory/tasks/backlog.md` but don't implement without explicit approval.
+- "Flag architectural changes" = provider config consolidation, module decomposition, theming strategy, new abstractions. Document these in the report and `.context_ledger/memory/office/tasks/backlog.md` but don't implement without explicit approval.
 - Order fixes by: security first, then bugs, then improvements, then docs.
 
 **Step 11 — Commit each fix**
@@ -535,12 +535,12 @@ git log --oneline -20
   ```
 - **Collaboration mode:** push the isolated `collab/<session-id>/<agent-id>` branch, not the shared integration branch. Rebase/pull before publishing each event or product commit. If product branches conflict at integration, the involved agents compare the alternatives and record an agreement before resolving; never force-overwrite a peer.
 - If push is rejected (non-fast-forward), pull, resolve conflicts, and push again. `.context_ledger/` event files merge by keeping both files; do not edit an existing event to resolve a conflict.
-- **If a fix breaks tests:** either fix the test or revert the change. Do NOT push broken tests. If you can't resolve it in 2 attempts, revert and document the issue in the report and `.context_ledger/memory/inefficiencies/log.md`.
+- **If a fix breaks tests:** either fix the test or revert the change. Do NOT push broken tests. If you can't resolve it in 2 attempts, revert and document the issue in the report and `.context_ledger/memory/office/inefficiencies/log.md`.
 
 ### Phase 4: Report
 
 **Step 13 — Write the report**
-- Save to `.context_ledger/memory/reviews/YYYY-MM-DD-review.md` in the repo (use today's date; create the directory if missing). If a report for today already exists, suffix the new one: `YYYY-MM-DD-review-2.md` (per `reviews/README.md`). Role overlays use their own filename (e.g., `YYYY-MM-DD-security-review.md` — see `roles/README.md`).
+- Save to `.context_ledger/memory/office/reviews/YYYY-MM-DD-review.md` in the repo (use today's date; create the directory if missing). If a report for today already exists, suffix the new one: `YYYY-MM-DD-review-2.md` (per `reviews/README.md`). Role overlays use their own filename (e.g., `YYYY-MM-DD-security-review.md` — see `roles/README.md`).
 - Structure: Executive Summary → Discovery Phase → Baseline Health → Findings (by severity) → Fixes Applied → Open Items → Recommended Next Steps.
 - **Even if no findings:** write a report saying "baseline healthy, no findings" — the next agent needs to know the review happened.
 - Commit (`docs(review): ...` or the project's convention) and push (same push workflow as Step 12).
@@ -558,33 +558,33 @@ git log --oneline -20
 > a session with no findings. Commit them together or separately with
 > the `chore(ledger):` prefix, and push.
 
-**Step 15 — Update `.context_ledger/memory/tasks/`**
-- In single-agent mode, clear `.context_ledger/memory/tasks/current.md` — mark the session's task done (or blocked, with the blocker). In collaboration mode, leave peers' task state untouched and emit a `release` or `handoff` event for each claimed scope.
-- **Clock out — when you are actually leaving.** Remove your row from `.context_ledger/memory/agents/roster.md` in this closing memory commit — the board shows who is in the office *now*, and a row left behind sends the next agent hunting for a peer who has left. Your visit is still on record: the session entry and git history keep it. `ledger-mem check` warns if a session entry was appended while your row still claims the office. **But leaving the board and finishing a unit of work are not the same event.** The session is not over until the user releases it (Pitfall #30), so if you expect a follow-up, keep your row live and clock out later. If you *did* clock out and the user brings more work, you have left and returned: **check back in first** (see the check-in rule above) — re-add your row before any edit, under the same name and codename, and extend rather than duplicate your Step 17 entry. If you ran in an isolated collaboration worktree, tear down your topology before leaving: remove the product worktree you created (`git worktree remove ../<project>-<agent-id>` — run `git status` inside it first; `--force` only on a clean tree) and delete your product branch (`git branch -d`, which refuses an unmerged branch; `git push origin --delete` too if you pushed it). Never touch a peer's worktree, and the coordination *branch* stays — it is the session's event trail, which later agents fetch to continue.
-- Append every open item you couldn't finish to `.context_ledger/memory/tasks/backlog.md` (append at the bottom; the backlog is a live queue of open work, not a log). Include enough context that a fresh agent can act on the item without this session's chat history.
+**Step 15 — Update `.context_ledger/memory/office/tasks/`**
+- In single-agent mode, clear `.context_ledger/memory/office/tasks/current.md` — mark the session's task done (or blocked, with the blocker). In collaboration mode, leave peers' task state untouched and emit a `release` or `handoff` event for each claimed scope.
+- **Clock out — when you are actually leaving.** Remove your row from `.context_ledger/memory/office/agents/roster.md` in this closing memory commit — the board shows who is in the office *now*, and a row left behind sends the next agent hunting for a peer who has left. Your visit is still on record: the session entry and git history keep it. `ledger-mem check` warns if a session entry was appended while your row still claims the office. **But leaving the board and finishing a unit of work are not the same event.** The session is not over until the user releases it (Pitfall #30), so if you expect a follow-up, keep your row live and clock out later. If you *did* clock out and the user brings more work, you have left and returned: **check back in first** (see the check-in rule above) — re-add your row before any edit, under the same name and codename, and extend rather than duplicate your Step 17 entry. If you ran in an isolated collaboration worktree, tear down your topology before leaving: remove the product worktree you created (`git worktree remove ../<project>-<agent-id>` — run `git status` inside it first; `--force` only on a clean tree) and delete your product branch (`git branch -d`, which refuses an unmerged branch; `git push origin --delete` too if you pushed it). Never touch a peer's worktree, and the coordination *branch* stays — it is the session's event trail, which later agents fetch to continue.
+- Append every open item you couldn't finish to `.context_ledger/memory/office/tasks/backlog.md` (append at the bottom; the backlog is a live queue of open work, not a log). Include enough context that a fresh agent can act on the item without this session's chat history.
 - If this session completed an existing backlog item, **delete its line** from `backlog.md` — the backlog holds only undone or partially done work. The completion record is this session's `agents/sessions.md` entry and the commit itself; git history preserves the removed line. Never delete a line whose item is still open. Leftover tombstones — a prior session checked the box (`- [x]`) instead of deleting — are swept by `ledger-mem closeout` (dry run by default; `--confirm` deletes).
 
-**Step 16 — Update `.context_ledger/memory/system/` + `.context_ledger/memory/user/` + `.context_ledger/memory/plans/`**
+**Step 16 — Update `.context_ledger/memory/system/` + `.context_ledger/memory/user/` + `.context_ledger/memory/office/plans/`**
 - `.context_ledger/memory/system/environments.md`: add/update the block for the environment you ran on (sandbox/OS, runtime versions, package manager, anything the next agent needs to reproduce your setup). Refresh its last-verified date and record the commands you verified work (install / test / lint / dev).
 - `.context_ledger/memory/system/ai-models.md`: update the row for your **(agent, model)** — bump the sessions count and last-seen date. If a row for your pair already exists, **edit it in place; do not add a second row** (a new row is only for a genuinely new agent+model pair). Add an Observations bullet for any concrete capability or limit this session demonstrated (yours or a prior agent's). Then run `sh .context_ledger/core/bin/ledger-mem check` (Windows: `.context_ledger/core/bin/ledger-mem.cmd check`) — it fails if a registry has a duplicated key.
 - `.context_ledger/memory/user/preferences.md`: record every standing preference this session revealed — corrections the user gave, patterns they approved, things they stated — with provenance + date, per the file's learning rules. One-off instructions don't count. Skip if none.
-- `.context_ledger/memory/plans/decisions.md`: append an ADR-style entry for every architectural decision made or confirmed this session (context → decision → consequences). Skip if none.
+- `.context_ledger/memory/office/plans/decisions.md`: append an ADR-style entry for every architectural decision made or confirmed this session (context → decision → consequences). Skip if none.
 
 **Step 17 — Log the session**
-- Append a session entry to `.context_ledger/memory/agents/sessions.md` (append-only). This is the permanent record: date, agent, model, platform, task, commits (count + SHA range), outcome, open items. Include the `Notes:` line — set to the `memory/sessions/<date>-<N>/notes.md` path if you created notes, or "none". In collaboration mode also record the shared session/issue IDs, event IDs, branch, and agreement/release references. **Do not confuse this with SUMMARY.md: this file gets the full ~7-line entry; SUMMARY.md gets ONE line.**
+- Append a session entry to `.context_ledger/memory/office/agents/sessions.md` (append-only). This is the permanent record: date, agent, model, platform, task, commits (count + SHA range), outcome, open items. Include the `Notes:` line — set to the `memory/office/sessions/<date>-<N>/notes.md` path if you created notes, or "none". In collaboration mode also record the shared session/issue IDs, event IDs, branch, and agreement/release references. **Do not confuse this with SUMMARY.md: this file gets the full ~7-line entry; SUMMARY.md gets ONE line.**
 - **One entry per codename `S<N>` — even across a resume.** If the user reopened the session after you already logged it, do **not** append a second `Session N`: edit your existing entry in place (extend the commit range, update the outcome and open items). A duplicate `Session N` splits one session across two records and makes the duty log lie about who did what; `ledger-mem check` warns when it sees one.
-- Append a one-line summary to `.context_ledger/memory/sessions/SUMMARY.md`. This is the prunable compressed continuity (unlike `agents/sessions.md` which is append-only forever). Format: date, agent, model, one-line outcome, and a key decision/discovery if any. **One line only — do not write the full session entry here.**
-- **Context Promotion:** if you created a `memory/sessions/<date>-<N>/notes.md` for this session, evaluate its contents before closing: *"Does anything in these notes need to survive beyond this session?"*
+- Append a one-line summary to `.context_ledger/memory/office/sessions/SUMMARY.md`. This is the prunable compressed continuity (unlike `agents/sessions.md` which is append-only forever). Format: date, agent, model, one-line outcome, and a key decision/discovery if any. **One line only — do not write the full session entry here.**
+- **Context Promotion:** if you created a `memory/office/sessions/<date>-<N>/notes.md` for this session, evaluate its contents before closing: *"Does anything in these notes need to survive beyond this session?"*
   - **Durable facts → promote.** Distill and write them into their proper persistent domain: an architectural insight → `plans/decisions.md` (ADR); a new constraint or workaround → `inefficiencies/log.md`; a new backlog item → `tasks/backlog.md`; a user preference discovered → `user/preferences.md`; a protocol friction → `flaws/log.md`. Promotion is selective — the goal is not to copy the notes; it is to move durable knowledge to where future agents will find it without reading session history. **The invariant: permanent context must never depend exclusively on an individual session.** A durable fact lives in its domain file, not only in a session directory — so deleting the session cannot delete the knowledge.
   - **Session-scoped detail → stays.** Research notes, attempted approaches, dead ends, intermediate reasoning — these remain in the notes file. A future agent can retrieve them selectively if the detail is needed.
-  - **Nothing worth keeping → no notes file needed.** A trivial session (typo fix, one-line config) that produced no research or exploration needs no `memory/sessions/` directory at all — the summary line in `agents/sessions.md` is the entire record.
+  - **Nothing worth keeping → no notes file needed.** A trivial session (typo fix, one-line config) that produced no research or exploration needs no `memory/office/sessions/` directory at all — the summary line in `agents/sessions.md` is the entire record.
   - After promotion, you may delete `notes.md` if its raw history is no longer useful. The summary line in `agents/sessions.md` is the permanent record that the session happened.
-- **SUMMARY.md pruning:** if `memory/sessions/SUMMARY.md` exceeds ~40 lines, prune entries older than the last 10. Distill any un-promoted key facts from pruned entries into the durable logs first. SUMMARY.md is prunable — never let it become another giant append-only history file. A pruned summary line MUST have a corresponding permanent entry in `agents/sessions.md`.
+- **SUMMARY.md pruning:** if `memory/office/sessions/SUMMARY.md` exceeds ~40 lines, prune entries older than the last 10. Distill any un-promoted key facts from pruned entries into the durable logs first. SUMMARY.md is prunable — never let it become another giant append-only history file. A pruned summary line MUST have a corresponding permanent entry in `agents/sessions.md`.
 - **Durable-log archiving:** `flaws/log.md` and `inefficiencies/log.md` are append-only, grow forever, and are read at startup. Once an entry is explicitly marked `RESOLVED` / `superseded` / fixed, it is cold history — move it **verbatim** (no edits) into a companion `flaws/archive.md` / `inefficiencies/archive.md`. Startup then reads only the active log; the archive stays in git, grep-able. This is a manual cut-and-paste, never automatic. Run `sh .context_ledger/core/bin/ledger-mem prune` (Windows: the `.ps1`) to see how large each log is and which entries are archive-eligible (`--list` names them). **Only an explicit closed marker makes an entry eligible — age alone never does.** An unresolved flaw stays in the active log; it's a live trap the next agent must see.
-- **Session grouping:** session history is grouped, not an endless stream. The current group's registry (`agents/sessions.md`) and summaries (`sessions/SUMMARY.md`) live in `memory/`; closed groups live in `.context_ledger/history/` (readable) and `.context_ledger/archive/` (zipped) and are **never read at session start**. When the group reaches `group_size` sessions (default 20) or hits a milestone, run `sh .context_ledger/core/bin/ledger-history close` (Windows: the `.ps1`) — a dry run prints the promotion checklist and plan; `--confirm` consolidates the group into `history/`, starts a fresh group, and rolls the oldest readable group into `archive/`. **Before closing, promote every open thread into its durable domain file** (`backlog.md`, `decisions.md`, `inefficiencies/log.md`, `flaws/log.md`, `user/preferences.md`) — the new group starts clean with no implicit carryover. `ledger-history gc --confirm` deletes the oldest `archive/` tarballs over the cap (git-recoverable). Run `ledger-history status` to see whether a close or gc is due.
-- **Session notes heuristic:** create a `memory/sessions/<date>-<N>/notes.md` if your session involved any of: more than one attempted approach, external research, a decision made after considering alternatives, a dead end you'd want the next agent to know about, or exploration that produced useful negative results. A truly trivial session (typo fix, one-line config change, docs correction with no research) needs no notes file.
-- Append every inefficiency you hit to `.context_ledger/memory/inefficiencies/log.md` (append-only): tool failures, flaky tests, misleading docs, commands that didn't work as documented, time wasted rediscovering something `.context_ledger/` should have told you. **Be honest — this log is how the protocol improves.** An empty inefficiency entry ("none this session") is valid only if literally nothing slowed you down.
-- Append every workflow/protocol flaw to `.context_ledger/memory/flaws/log.md` (append-only): ambiguous rules, missing steps, confusing templates — friction caused by the `.context_ledger` system itself, not the project. Suggest a concrete package fix in each entry (see `flaws/README.md`).
+- **Office lifecycle:** session history lives in offices, not an endless stream. The live office is the unnumbered directory `.context_ledger/memory/office/` — roster, registry, notes, tasks, plans, flaw and inefficiency logs, reviews — the only thing read at session start; durable files (`workflows/`, `collaboration/`, `system/`, `user/`, `overrides/`, `core.lock`, `secrets/`) sit at the memory root and never rotate. When the office reaches `office_size` sessions (default 20) or hits a milestone, run `sh .context_ledger/core/bin/ledger-history close` (Windows: the `.ps1`) — a dry run prints the checklist and plan; `--confirm` **freezes the office directory verbatim** (no condensing, no resetting — the roster keeps every shift) into `history/office-<NNN>/`, numbering it at that moment from the records (there is no state file), writes the **permanent accomplishments record** `history/office-<NNN>.md` (fill it in: what the office achieved, decisions still in force, open threads re-seeded — it stays in `history/` forever, even after the office is zipped into `archive/` and eventually gc'd), and opens a fresh empty office from templates. **Before closing, note every open thread that still matters; after the freeze, re-seed it into the new office's files** (`backlog.md`, `decisions.md`, `inefficiencies/log.md`, `flaws/log.md`) — the new office starts from empty skeletons with no implicit carryover. `ledger-history gc --confirm` deletes the oldest `archive/` tarballs over the cap (git-recoverable). Run `ledger-history status` to see whether a close or gc is due; `ledger-gates checkpoint` warns when the office is full.
+- **Session notes heuristic:** create a `memory/office/sessions/<date>-<N>/notes.md` if your session involved any of: more than one attempted approach, external research, a decision made after considering alternatives, a dead end you'd want the next agent to know about, or exploration that produced useful negative results. A truly trivial session (typo fix, one-line config change, docs correction with no research) needs no notes file.
+- Append every inefficiency you hit to `.context_ledger/memory/office/inefficiencies/log.md` (append-only): tool failures, flaky tests, misleading docs, commands that didn't work as documented, time wasted rediscovering something `.context_ledger/` should have told you. **Be honest — this log is how the protocol improves.** An empty inefficiency entry ("none this session") is valid only if literally nothing slowed you down.
+- Append every workflow/protocol flaw to `.context_ledger/memory/office/flaws/log.md` (append-only): ambiguous rules, missing steps, confusing templates — friction caused by the `.context_ledger` system itself, not the project. Suggest a concrete package fix in each entry (see `flaws/README.md`).
 - Commit (`chore(ledger): log session YYYY-MM-DD`) and push.
 
 ### Phase 6: Wrap up
@@ -593,7 +593,7 @@ git log --oneline -20
 - One-paragraph summary of what was done.
 - Commits made (count + SHA range).
 - Key findings by severity.
-- Open items for the next session (mirroring `.context_ledger/memory/tasks/backlog.md`).
+- Open items for the next session (mirroring `.context_ledger/memory/office/tasks/backlog.md`).
 - Remind the user to rotate the PAT.
 
 **Step 19 — Unset the PAT**
@@ -630,48 +630,59 @@ rm -f .context_ledger/memory/secrets/github-pat   # if you stored it there in St
 │   ├── roles/           # mission overlays (reviewer, security-auditor, docs-agent, feature-engineer)
 │   ├── schemas/         # ledger-schema.md — the single source of truth on every file below
 │   └── templates/       # what memory files + kickoff.md + AGENTS.md are generated from
-└── memory/              # ZONE 2 — this project's living memory: project-owned, writable
-    ├── system/
-    │   ├── environments.md  # machines/sandboxes agents have run on (machine-scoped — "Identify by")
-    │   └── ai-models.md     # registry: which agents + models have worked on this repo
-    ├── user/
-    │   ├── identity.md      # who the user is (name, git identity, role on the project)
-    │   └── preferences.md   # how the user likes things done (commit style, tone, review depth)
-    ├── workflows/
-    │   └── active.md        # workflow currently in force (protocol by agent type, scope, push policy)
-    ├── agents/
-    │   └── sessions.md      # append-only log — one entry per agent session
-    ├── collaboration/
-    │   ├── README.md        # peer workflow + immutable event contract
-    │   └── events/           # one immutable file per claim/proposal/agreement/etc.
-    ├── reviews/
-    │   └── YYYY-MM-DD-review.md  # session review reports
-    ├── tasks/
-    │   ├── current.md       # the task being worked on right now (one at a time, overwrite; the session lock)
-    │   └── backlog.md       # live queue of open items — delete a line when its item is done (ledger-mem closeout sweeps leftovers)
-    ├── plans/
-    │   └── decisions.md     # append-only ADR-style architectural decisions
-    ├── inefficiencies/
-    │   └── log.md           # append-only project-level friction (code, env, deps)
-    ├── flaws/
-    │   ├── README.md        # what goes here vs inefficiencies/ — the two-surfaces rule
-    │   └── log.md           # append-only workflow/protocol friction — flows to the package repo
-    ├── overrides/
-    │   └── rules.md         # project-local protocol adjustments — beat this edition (except secrets/append-only)
-    ├── sessions/            # per-session detailed notes (optional, deletable)
-    │   ├── SUMMARY.md     # compressed history — entries are removable
-    │   └── YYYY-MM-DD-N/
-    │       └── notes.md     # session-scoped detail — research, dead ends, reasoning
-    ├── core.lock            # last-known-good core version — written by ledger-sync, never by hand
-    └── secrets/             # LOCAL-ONLY — self-gitignored, never tracked, never travels
-        ├── .gitignore       # ignores everything here except itself + the README
-        └── <slug>           # one secret per file: line 1 = value, lines 2+ = notes
+├── memory/              # ZONE 2 — this project's living memory: project-owned, writable
+│   ├── office/              # THE live office — everything session-produced, one at a time,
+│   │   │                    #   unnumbered; frozen verbatim into history/ when it fills up
+│   │   ├── agents/
+│   │   │   ├── sessions.md  # append-only log — one entry per agent session
+│   │   │   └── roster.md    # the board by the door — who is in the office right now
+│   │   ├── sessions/        # per-session detailed notes (optional, deletable)
+│   │   │   ├── SUMMARY.md     # compressed history — entries are removable
+│   │   │   └── YYYY-MM-DD-N/
+│   │   │       └── notes.md   # session-scoped detail — research, dead ends, reasoning
+│   │   ├── tasks/
+│   │   │   ├── current.md     # the task being worked on right now (one at a time, overwrite; the session lock)
+│   │   │   └── backlog.md     # live queue of open items — delete a line when its item is done (ledger-mem closeout sweeps leftovers)
+│   │   ├── plans/
+│   │   │   └── decisions.md   # append-only ADR-style architectural decisions
+│   │   ├── inefficiencies/
+│   │   │   └── log.md         # append-only project-level friction (code, env, deps)
+│   │   ├── flaws/
+│   │   │   ├── README.md      # what goes here vs inefficiencies/ — the two-surfaces rule
+│   │   │   └── log.md         # append-only workflow/protocol friction — flows to the package repo
+│   │   └── reviews/
+│   │       └── YYYY-MM-DD-review.md  # session review reports
+│   ├── system/              # durable — never rotates
+│   │   ├── environments.md  # machines/sandboxes agents have run on (machine-scoped — "Identify by")
+│   │   └── ai-models.md     # registry: which agents + models have worked on this repo
+│   ├── user/                # durable — never rotates
+│   │   ├── identity.md      # who the user is (name, git identity, role on the project)
+│   │   └── preferences.md   # how the user likes things done (commit style, tone, review depth)
+│   ├── workflows/           # durable — never rotates
+│   │   ├── active.md        # workflow currently in force (protocol by agent type, scope, push policy)
+│   │   ├── gates.conf       # explicit lifecycle gate commands + hybrid discovery mode
+│   │   └── history.conf     # office rotation knobs (office_size, history_keep, archive_keep)
+│   ├── collaboration/       # durable — never rotates
+│   │   ├── README.md        # peer workflow + immutable event contract
+│   │   └── events/           # one immutable file per claim/proposal/agreement/etc.
+│   ├── overrides/
+│   │   └── rules.md         # project-local protocol adjustments — beat this edition (except secrets/append-only)
+│   ├── core.lock            # last-known-good core version — written by ledger-sync, never by hand
+│   └── secrets/             # LOCAL-ONLY — self-gitignored, never tracked, never travels
+│       ├── .gitignore       # ignores everything here except itself + the README
+│       └── <slug>           # one secret per file: line 1 = value, lines 2+ = notes
+├── history/             # closed offices — NOT read at session start
+│   ├── office-001.md        # permanent accomplishments record — written at close, NEVER deleted
+│   └── office-001/          # the frozen office, verbatim (roster, registry, notes, logs) —
+│                            #   kept readable for history_keep offices, then zipped into archive/
+└── archive/             # cold storage of closed offices — NOT read at session start
+    └── office-001.tar.gz    # the zipped frozen office; its permanent record stays in history/
 ```
 
 **The zone rule is absolute: never write under `.context_ledger/core/`.** It is
 a checksummed copy of the protocol package, replaced only as a whole
 tree by `ledger-sync update`. A protocol improvement belongs in
-`memory/flaws/log.md` (it flows to the package and comes back in a core
+`memory/office/flaws/log.md` (it flows to the package and comes back in a core
 release) — never patched into the vendored copy.
 
 Every `memory/` file agents write to carries its entry template in an
@@ -684,36 +695,36 @@ authoritative spec for every file (mode, scope, ownership) is
 
 | You have... | Write it to... | Mode |
 |---|---|---|
-| A review/finding about the codebase | `.context_ledger/memory/reviews/YYYY-MM-DD-review.md` | new file per session |
-| An open item you can't finish now | `.context_ledger/memory/tasks/backlog.md` | append (remove the line when done) |
-| The task you're starting/finishing | `.context_ledger/memory/tasks/current.md` | overwrite |
-| An architectural decision | `.context_ledger/memory/plans/decisions.md` | append (ADR) |
-| Project friction (tool failure, flaky test, env quirk, dependency pain) | `.context_ledger/memory/inefficiencies/log.md` | append |
-| Workflow/protocol friction (ambiguous rule, missing step, confusing template) | `.context_ledger/memory/flaws/log.md` | append |
-| Your session summary (who/what/model/commits) | `.context_ledger/memory/agents/sessions.md` | append |
+| A review/finding about the codebase | `.context_ledger/memory/office/reviews/YYYY-MM-DD-review.md` | new file per session |
+| An open item you can't finish now | `.context_ledger/memory/office/tasks/backlog.md` | append (remove the line when done) |
+| The task you're starting/finishing | `.context_ledger/memory/office/tasks/current.md` | overwrite |
+| An architectural decision | `.context_ledger/memory/office/plans/decisions.md` | append (ADR) |
+| Project friction (tool failure, flaky test, env quirk, dependency pain) | `.context_ledger/memory/office/inefficiencies/log.md` | append |
+| Workflow/protocol friction (ambiguous rule, missing step, confusing template) | `.context_ledger/memory/office/flaws/log.md` | append |
+| Your session summary (who/what/model/commits) | `.context_ledger/memory/office/agents/sessions.md` | append |
 | Facts about the machine/sandbox you ran on | `.context_ledger/memory/system/environments.md` | update |
 | Which agent + model you are | `.context_ledger/memory/system/ai-models.md` | update |
 | Something you learned about the user | `.context_ledger/memory/user/preferences.md` | update |
 | A change to the workflow itself | `.context_ledger/memory/workflows/active.md` | update |
-| Compressed session continuity | `.context_ledger/memory/sessions/SUMMARY.md` | update-in-place (entries are removable) |
-| Session-scoped detail (research, dead ends, exploration) | `.context_ledger/memory/sessions/YYYY-MM-DD-N/notes.md` | append while active; deletable after promotion |
+| Compressed session continuity | `.context_ledger/memory/office/sessions/SUMMARY.md` | update-in-place (entries are removable) |
+| Session-scoped detail (research, dead ends, exploration) | `.context_ledger/memory/office/sessions/YYYY-MM-DD-N/notes.md` | append while active; deletable after promotion |
 | A secret value the agent needs on this machine | `.context_ledger/memory/secrets/<slug>` | local-only — never committed |
 | A project-local exception to this protocol | `.context_ledger/memory/overrides/rules.md` | update |
-| A learning about this protocol itself | `.context_ledger/memory/flaws/log.md` — never edit `core/` | append (flows to the package) |
+| A learning about this protocol itself | `.context_ledger/memory/office/flaws/log.md` — never edit `core/` | append (flows to the package) |
 
 ### Rules
 
 1. **Append-only logs are append-only.** `sessions.md`, `inefficiencies/log.md`, and `decisions.md` never lose entries. If a past entry was wrong, append a correction referencing it — don't erase history. (`backlog.md` is the one live queue: delete a line only when its item is finished.)
 2. **No secrets in tracked files.** `.context_ledger/` is committed to git. Record env var *names* and where secrets live in shared files — never values. Values the agent needs live only in `.context_ledger/memory/secrets/`, whose own `.gitignore` keeps them out of the repo (rules in its README). No PATs, API keys, or connection strings anywhere else.
-3. **`chore(ledger):` commit prefix.** Context updates are not features or fixes. Keep them out of the changelog. One exception: review reports in `.context_ledger/memory/reviews/` commit as `docs(review):` (Step 13) — they're a deliverable, not bookkeeping.
+3. **`chore(ledger):` commit prefix.** Context updates are not features or fixes. Keep them out of the changelog. One exception: review reports in `.context_ledger/memory/office/reviews/` commit as `docs(review):` (Step 13) — they're a deliverable, not bookkeeping.
 4. **Friction logging is mandatory — and split by surface.** Project friction goes in `inefficiencies/log.md`; workflow/protocol friction goes in `flaws/log.md` (see `flaws/README.md` for the split, and how flaws flow back to the package repo). Both honest, every session. Wasted time you don't log is time the next agent wastes again.
 5. **Verify before trusting.** `.context_ledger/` reflects what was true when written. If it contradicts the codebase, the codebase wins — fix the `.context_ledger/` entry (append a correction).
 6. **Small and current beats big and stale.** Session entries are ~10 lines, not transcripts. Reports carry the detail.
-7. **Session data is disposable.** Detailed session notes (`memory/sessions/`) may be deleted when no longer useful. The compact summary in `memory/sessions/SUMMARY.md` is prunable; the formal registry in `agents/sessions.md` is the permanent record. Before deleting any session data, promote durable facts to their persistent domain — **permanent context must never depend exclusively on an individual session.**
+7. **Session data is disposable.** Detailed session notes (`memory/office/sessions/`) may be deleted when no longer useful. The compact summary in `memory/office/sessions/SUMMARY.md` is prunable; the formal registry in `agents/sessions.md` is the permanent record. Before deleting any session data, promote durable facts to their persistent domain — **permanent context must never depend exclusively on an individual session.**
 
 ### Entry templates
 
-**`.context_ledger/memory/agents/sessions.md`** (append one per session):
+**`.context_ledger/memory/office/agents/sessions.md`** (append one per session):
 ```markdown
 ---
 ## 2026-07-11 — Session N
@@ -722,10 +733,10 @@ authoritative spec for every file (mode, scope, ownership) is
 - **Commits:** <count> (<first-sha>..<last-sha>)
 - **Outcome:** <done / partial / blocked — one line>
 - **Open items:** <pointers into tasks/backlog.md, or "none">
-- **Report:** .context_ledger/memory/reviews/2026-07-11-review.md
+- **Report:** .context_ledger/memory/office/reviews/2026-07-11-review.md
 ```
 
-**`.context_ledger/memory/inefficiencies/log.md`** (append one block per session):
+**`.context_ledger/memory/office/inefficiencies/log.md`** (append one block per session):
 ```markdown
 ---
 ## 2026-07-11 — <agent name> / <model>
@@ -736,7 +747,7 @@ authoritative spec for every file (mode, scope, ownership) is
 - **Prevent next time:** <protocol/context change that would have avoided it>
 ```
 
-**`.context_ledger/memory/flaws/log.md`** (append when the protocol/`.context_ledger` system itself caused friction):
+**`.context_ledger/memory/office/flaws/log.md`** (append when the protocol/`.context_ledger` system itself caused friction):
 ```markdown
 ---
 ## 2026-07-11 — <agent name> / <model> (Session N)
@@ -747,7 +758,7 @@ authoritative spec for every file (mode, scope, ownership) is
 - **Status:** open | fixed in package <commit-sha or date>
 ```
 
-**`.context_ledger/memory/plans/decisions.md`** (append one per decision, ADR-style):
+**`.context_ledger/memory/office/plans/decisions.md`** (append one per decision, ADR-style):
 ```markdown
 ---
 ## ADR-N: <short title> (2026-07-11)
@@ -776,7 +787,7 @@ protocol lives inside the project and travels with every clone.
    `ls .context_ledger/.git .context_ledger/core/core .context_ledger/memory/memory 2>/dev/null` —
    any output means a nested clone or a double-copied tree; delete `.context_ledger/` and redo step 1.
 4. Fill `memory/user/identity.md` and `memory/user/preferences.md` from Pre-Flight, `memory/workflows/active.md` from Session Parameters (protocol recorded "by agent type", naming BOTH editions), and add your row to `memory/system/ai-models.md`. Then fill the generated `.context_ledger/kickoff.md`'s Project Facts per its HTML-comment rules (verified facts beat Pre-Flight; no session parameters; no secrets) and `AGENTS.md`'s `<PROJECT_NAME>` — those two are the entry points for every future session on this repo.
-5. **Migrate:** `git mv docs/report/*.md .context_ledger/memory/reviews/` if prior reviews exist; leave a pointer README behind.
+5. **Migrate:** `git mv docs/report/*.md .context_ledger/memory/office/reviews/` if prior reviews exist; leave a pointer README behind.
 6. Commit everything as one `chore(ledger): bootstrap .context_ledger/ (core <version>)` and push.
 
 ---
@@ -813,7 +824,7 @@ protocol lives inside the project and travels with every clone.
 - **Architecture doc:** _(find and note the path if it exists)_
 - **Changelog:** _(find and note the path if it exists)_
 - **Devlog / technical log:** _(find and note the path if it exists)_
-- **Prior review:** _(check `.context_ledger/memory/reviews/` first, then legacy `docs/report/` — note path + date of most recent)_
+- **Prior review:** _(check `.context_ledger/memory/office/reviews/` first, then legacy `docs/report/` — note path + date of most recent)_
 - **Env example:** _(find `.env.example` and note required vs. optional vars)_
 
 ### Conventions Discovered
@@ -866,7 +877,7 @@ git remote set-url origin https://github.com/<OWNER>/<REPO>.git
 2. **Reset locally**: `git reset --hard <sha-before-the-mistake>`
 3. **Force-push**: `git push --force-with-lease origin main`
 4. **Own it**: explain what happened in the report and chat summary.
-5. **Learn from it**: log it in `.context_ledger/memory/inefficiencies/log.md` (and the worklog) if it reveals a workflow gap.
+5. **Learn from it**: log it in `.context_ledger/memory/office/inefficiencies/log.md` (and the worklog) if it reveals a workflow gap.
 
 ### The "don't rubber-stamp" rule
 If the Pre-Flight section contains a significant decision (major version bump, "production release" declaration, breaking change), **flag it in the report** before executing. Don't ask mid-workflow — document the concern and proceed with the safer option, noting the concern for the user to review post-session.
@@ -900,15 +911,15 @@ Treat this as a production project. Think like an owner, not a contractor.
 - **Don't blindly follow instructions.** Question assumptions — including the user's. If something seems off, document the concern in the report and proceed with the safer option.
 - **Preserve existing functionality** unless a change is explicitly intended.
 - **Follow existing conventions** unless there's a compelling reason to improve them.
-- **Explain architectural decisions** in commit messages, the report, and `.context_ledger/memory/plans/decisions.md`.
+- **Explain architectural decisions** in commit messages, the report, and `.context_ledger/memory/office/plans/decisions.md`.
 
 ### Multi-agent awareness
 - **Read `.context_ledger/` before anything else** (Step 3) — it's the shared brain across agents, machines, and models.
-- **Check `.context_ledger/memory/agents/roster.md` before concluding you're alone** — an empty board is only trustworthy right after you verify it; a live row you didn't write means a peer is here now (declare or join a session; never run a solo protocol into a peer).
+- **Check `.context_ledger/memory/office/agents/roster.md` before concluding you're alone** — an empty board is only trustworthy right after you verify it; a live row you didn't write means a peer is here now (declare or join a session; never run a solo protocol into a peer).
 - **Check in and push the row before product work** — presence must be visible to peers in real time, not at wrap-up.
 - **Always pull before starting work** and after every commit.
-- **Check `.context_ledger/memory/reviews/`** for prior agent reviews — don't redo work that's already done.
-- **Check `.context_ledger/memory/tasks/current.md`** — in single-agent mode, if another agent marked a task in-progress recently, don't collide with it; in collaboration mode, use the shared session/issue event trail and claims instead, and note any overlap in your session entry.
+- **Check `.context_ledger/memory/office/reviews/`** for prior agent reviews — don't redo work that's already done.
+- **Check `.context_ledger/memory/office/tasks/current.md`** — in single-agent mode, if another agent marked a task in-progress recently, don't collide with it; in collaboration mode, use the shared session/issue event trail and claims instead, and note any overlap in your session entry.
 - **Don't assume your local state matches remote.** Check with `git fetch` and `git log HEAD..origin/main`.
 - **If your working tree has unexpected changes**, check the roster and collaboration events first to attribute them — they may be a peer's claim, not drift. If they are truly unattributed, the remote moved ahead: hard-sync `git fetch origin && git reset --hard origin/main` (after stashing in-progress work).
 
@@ -1005,7 +1016,7 @@ Evaluate:
 
 ### Review reports
 
-Place review reports in `.context_ledger/memory/reviews/` in the repo (create the directory if it doesn't exist). Naming: `YYYY-MM-DD-review.md` so they sort chronologically; role overlays use `YYYY-MM-DD-<role>-review.md`. The next agent checks this directory first — don't skip writing one. (Legacy location `docs/report/` — migrate on first session, per the `.context_ledger/` Bootstrap rules.)
+Place review reports in `.context_ledger/memory/office/reviews/` in the repo (create the directory if it doesn't exist). Naming: `YYYY-MM-DD-review.md` so they sort chronologically; role overlays use `YYYY-MM-DD-<role>-review.md`. The next agent checks this directory first — don't skip writing one. (Legacy location `docs/report/` — migrate on first session, per the `.context_ledger/` Bootstrap rules.)
 
 ---
 
@@ -1038,7 +1049,7 @@ For each issue: Severity, Description, Impact, Recommendation, Status, Related c
 
 Severities: Critical / High / Medium / Low / Nice to Have.
 
-Save to `.context_ledger/memory/reviews/YYYY-MM-DD-review.md`. Commit and push it.
+Save to `.context_ledger/memory/office/reviews/YYYY-MM-DD-review.md`. Commit and push it.
 
 ---
 
@@ -1048,7 +1059,7 @@ Save to `.context_ledger/memory/reviews/YYYY-MM-DD-review.md`. Commit and push i
 - Explain significant technical decisions in the report.
 - Document assumptions when certainty isn't possible.
 - A user correction is a standing signal, not just a one-off fix — record it in `.context_ledger/memory/user/preferences.md` at Step 16 so the user never gives the same correction twice.
-- After 2 consecutive tool-call timeouts, tell the user to restart the session — and log the timeouts in `.context_ledger/memory/inefficiencies/log.md` first if you can.
+- After 2 consecutive tool-call timeouts, tell the user to restart the session — and log the timeouts in `.context_ledger/memory/office/inefficiencies/log.md` first if you can.
 
 ---
 
@@ -1058,7 +1069,7 @@ All agents in this sandbox share a single worklog at **`/home/z/my-project/workl
 
 > **Scope note:** the sandbox worklog coordinates agents *within one sandbox*
 > and does not travel with the repo. The durable, cross-machine session record
-> is `.context_ledger/memory/agents/sessions.md` (Step 17) — write both. The worklog can be
+> is `.context_ledger/memory/office/agents/sessions.md` (Step 17) — write both. The worklog can be
 > chatty and process-heavy; the session entry is the ~10-line distillation.
 
 ### When to write:
@@ -1101,11 +1112,11 @@ Append-only. Never overwrite. Start each section with `---`.
 
 ### End-of-session gates (before Step 19 unsets the PAT)
 
-- [ ] `.context_ledger/memory/tasks/current.md` cleared, open items appended to `backlog.md` (Step 15) in single-agent mode; collaboration mode releases/handoffs each claim without clearing a peer's task
-- [ ] Roster row removed (clocked out) in `.context_ledger/memory/agents/roster.md` (Step 15)
+- [ ] `.context_ledger/memory/office/tasks/current.md` cleared, open items appended to `backlog.md` (Step 15) in single-agent mode; collaboration mode releases/handoffs each claim without clearing a peer's task
+- [ ] Roster row removed (clocked out) in `.context_ledger/memory/office/agents/roster.md` (Step 15)
 - [ ] Own product worktree(s) removed + branch deleted after merge (`git worktree list` clean; coordination branch kept — Step 15)
-- [ ] `.context_ledger/memory/system/` + `.context_ledger/memory/user/` + `.context_ledger/memory/plans/` updated (Step 16)
-- [ ] Session entry in `.context_ledger/memory/agents/sessions.md` + inefficiencies logged (Step 17)
+- [ ] `.context_ledger/memory/system/` + `.context_ledger/memory/user/` + `.context_ledger/memory/office/plans/` updated (Step 16)
+- [ ] Session entry in `.context_ledger/memory/office/agents/sessions.md` + inefficiencies logged (Step 17)
 - [ ] All `chore(ledger):` commits pushed
 
 ---
@@ -1126,7 +1137,7 @@ Append-only. Never overwrite. Start each section with `---`.
 12. **Don't forget the `[Unreleased]` link update** — update the comparison link at the bottom of the changelog when adding a new version.
 13. **Don't hardcode secrets** — PATs as transient env vars, reference as `${GIT_TOKEN}`, strip from `.git/config` after cloning and after each push.
 14. **Don't skip the discovery phase** — the Agent Discovery Phase section is your map.
-15. **Don't skip writing a report** — the next agent needs it. Put it in `.context_ledger/memory/reviews/YYYY-MM-DD-review.md`.
+15. **Don't skip writing a report** — the next agent needs it. Put it in `.context_ledger/memory/office/reviews/YYYY-MM-DD-review.md`.
 16. **Don't trust `follow_redirects=True` in HTTP clients** — SSRF protection must re-validate redirect targets. A 302 to `169.254.169.254` bypasses protection that only checks the initial URL.
 17. **Don't guess lint/typecheck commands** — read `package.json` scripts and `pyproject.toml` `[tool.*]` sections first. `tsc -b` ≠ `tsc --noEmit`; `npx eslint .` ≠ `npm run lint`.
 18. **Don't read huge files in one shot** — files >500 lines get truncated. Use `Read` with `offset`/`limit`, or `Grep` to find the relevant section first.
@@ -1163,14 +1174,14 @@ Append-only. Never overwrite. Start each section with `---`.
 ## Getting Unstuck
 
 - **PAT redacted or missing?** The upload pipeline scrubs secrets from files. Ask the user to paste it in chat. Don't proceed without it if the repo is private.
-- **Build failing?** Run the typecheck command first. Check if a recent commit broke something. Check `.context_ledger/memory/inefficiencies/log.md` — a prior agent may have hit and solved this exact failure.
+- **Build failing?** Run the typecheck command first. Check if a recent commit broke something. Check `.context_ledger/memory/office/inefficiencies/log.md` — a prior agent may have hit and solved this exact failure.
 - **Dependencies acting up?** Delete `node_modules`/`venv` and the lockfile, reinstall fresh with the correct package manager.
 - **Python `externally-managed-environment`?** Create a venv first: `python -m venv .venv && source .venv/bin/activate`.
 - **Push rejected (non-fast-forward)?** Another agent pushed. In single-agent mode, `git pull --rebase origin main`, resolve and retry. In collaboration mode, fetch/rebase your isolated branch; preserve both immutable event files. Product conflicts require peer comparison and an agreement, never a silent overwrite.
 - **Push rejected (auth)?** The remote URL was stripped of the token. Re-add it: `git remote set-url origin "https://x-access-token:${GIT_TOKEN}@github.com/..."`, push, then strip again.
 - **ORM errors?** Regenerate the client after schema changes (e.g., `prisma generate`).
 - **Tool calls timing out?** After 2 consecutive timeouts, tell the user to restart the session.
-- **Whatever unstuck you** — log it in `.context_ledger/memory/inefficiencies/log.md` so the next agent skips the struggle.
+- **Whatever unstuck you** — log it in `.context_ledger/memory/office/inefficiencies/log.md` so the next agent skips the struggle.
 
 ---
 
@@ -1186,7 +1197,7 @@ By the end of the session provide:
 - Performance optimizations
 - Security observations
 - Technical debt identified
-- Open items for the next session (mirrored in `.context_ledger/memory/tasks/backlog.md`)
+- Open items for the next session (mirrored in `.context_ledger/memory/office/tasks/backlog.md`)
 - Recommended next steps
 - Updated `.context_ledger/` (session entry, inefficiencies, tasks, system/plans — Steps 15–17)
 
@@ -1198,9 +1209,9 @@ The goal: leave the project — and its memory — in a better state than you fo
 
 This protocol is a living document. When you discover a new workflow rule, pitfall, or convention during a session, add it to the Common Pitfalls section so the next agent doesn't have to rediscover it.
 
-> **Learnings about the project** go in `.context_ledger/memory/reviews/` in the repo.
-> **Open work** goes in `.context_ledger/memory/tasks/backlog.md`.
-> **Decisions** go in `.context_ledger/memory/plans/decisions.md`.
-> **Project friction** goes in `.context_ledger/memory/inefficiencies/log.md`; **workflow/protocol friction** goes in `.context_ledger/memory/flaws/log.md` — always, honestly.
+> **Learnings about the project** go in `.context_ledger/memory/office/reviews/` in the repo.
+> **Open work** goes in `.context_ledger/memory/office/tasks/backlog.md`.
+> **Decisions** go in `.context_ledger/memory/office/plans/decisions.md`.
+> **Project friction** goes in `.context_ledger/memory/office/inefficiencies/log.md`; **workflow/protocol friction** goes in `.context_ledger/memory/office/flaws/log.md` — always, honestly.
 > **Learnings about this protocol** (like the PAT redaction issue) go back into this file.
-> **Agent process within this sandbox** goes in `/home/z/my-project/worklog.md`; the durable cross-machine record is `.context_ledger/memory/agents/sessions.md`.
+> **Agent process within this sandbox** goes in `/home/z/my-project/worklog.md`; the durable cross-machine record is `.context_ledger/memory/office/agents/sessions.md`.

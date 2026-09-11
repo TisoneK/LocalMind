@@ -18,29 +18,37 @@ is committed to git and travels with the repo. It has **two zones**:
 │   ├── schemas/          # ledger-schema.md — the single source of truth on formats
 │   ├── templates/        # what memory files are generated from
 │   └── bin/              # ledger-sync + ledger-collab (+ .ps1): sync, peer coordination, and integration checks
-└── memory/       # this project's living memory — project-owned, writable
-    ├── agents/sessions.md       # append-only session log
-    ├── collaboration/           # opt-in peer coordination
-    │   ├── README.md            # worktree + event contract
-    │   └── events/               # immutable one-file-per-event records
-    ├── tasks/current.md         # task in progress (single-agent lock only)
-    ├── tasks/backlog.md         # live queue of open items (delete a line when done; ledger-mem closeout sweeps leftovers)
-    ├── plans/decisions.md       # append-only ADRs
-    ├── flaws/log.md             # protocol friction — flows upstream to the package
-    ├── inefficiencies/log.md    # project friction
-    ├── reviews/                 # session reports
-    ├── workflows/
-    │   ├── active.md             # standing session parameters
-    │   └── gates.conf             # explicit lifecycle commands + hybrid discovery mode
-    ├── system/                  # machines + agent/model registry
-    ├── user/                    # identity + preferences
-    ├── overrides/rules.md       # project-local protocol adjustments
-    ├── sessions/                # per-session detailed notes (optional, deletable)
-    │   ├── SUMMARY.md           # compressed history — entries are removable
-    │   └── YYYY-MM-DD-N/
-    │       └── notes.md         # session-scoped detail
-    ├── core.lock                # last-known-good core version (ledger-sync writes it)
-    └── secrets/                 # LOCAL-ONLY — self-gitignored, never travels
+├── memory/       # this project's living memory — project-owned, writable
+│   ├── office/                 # THE live office — one at a time, never numbered;
+│   │                           #   frozen verbatim into history/ when it fills up
+│   │   ├── agents/sessions.md      # append-only session registry
+│   │   ├── agents/roster.md        # the "who's in the office now" board
+│   │   ├── tasks/current.md        # task in progress (single-agent lock only)
+│   │   ├── tasks/backlog.md        # live queue of open items (delete a line when done)
+│   │   ├── plans/decisions.md      # append-only ADRs
+│   │   ├── flaws/log.md            # protocol friction — flows upstream to the package
+│   │   ├── inefficiencies/log.md   # project friction
+│   │   ├── reviews/                # session reports
+│   │   └── sessions/               # per-session notes (optional)
+│   │       ├── SUMMARY.md              # compressed history — entries are removable
+│   │       └── YYYY-MM-DD-N/notes.md   # session-scoped detail
+│   ├── collaboration/          # durable — opt-in peer coordination, never rotates
+│   │   ├── README.md            # worktree + event contract
+│   │   └── events/               # immutable one-file-per-event records
+│   ├── workflows/
+│   │   ├── active.md             # standing session parameters
+│   │   ├── gates.conf             # explicit lifecycle commands + hybrid discovery mode
+│   │   └── history.conf           # office rotation knobs (office_size, keeps)
+│   ├── system/                 # durable — machines + agent/model registry
+│   ├── user/                   # durable — identity + preferences
+│   ├── overrides/rules.md      # durable — project-local protocol adjustments
+│   ├── core.lock                # last-known-good core version (ledger-sync writes it)
+│   └── secrets/                 # LOCAL-ONLY — self-gitignored, never travels
+├── history/      # closed offices + permanent records — NOT read at session start
+│   ├── office-001.md             # permanent accomplishments record (never deleted)
+│   └── office-001/               # the frozen office, verbatim (kept history_keep, then zipped)
+└── archive/      # cold storage of closed offices — NOT read at session start
+    └── office-001.tar.gz         # the zipped frozen office; its record stays in history/
 ```
 
 ## The three rules that matter most
@@ -48,7 +56,7 @@ is committed to git and travels with the repo. It has **two zones**:
 1. **Never write under `core/`.** It is a versioned, checksummed copy
    of the protocol package — updated only as a whole tree by
    `core/bin/ledger-sync`. Protocol improvements go to the package
-   repo via `memory/flaws/log.md`, not into this copy.
+   repo via `memory/office/flaws/log.md`, not into this copy.
 2. **`memory/` is this project's data.** Write it per each file's mode —
    append-only logs stay append-only, `chore(ledger):` commit prefix,
    no secret values in tracked files, ever. The full spec:

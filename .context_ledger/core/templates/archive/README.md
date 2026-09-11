@@ -1,8 +1,11 @@
-# archive/ — cold storage of old session groups
+# archive/ — cold storage of closed offices
 
-Older closed groups, one gzipped tarball each (`group-<NNN>.tar.gz`),
+Older closed offices, one gzipped tarball each (`office-<NNN>.tar.gz`),
 produced automatically by `ledger-history` when `../history/` exceeds its
-readable-keep window. Cold storage: unzip one only for a deep lookback.
+readable-keep window. Each tarball contains the whole frozen office
+directory — roster, session registry, notes, tasks, plans, flaw and
+inefficiency logs, reviews — preserved verbatim. Cold storage: extract one
+only for a deep lookback.
 
 **Not read at session start**, and never by default.
 
@@ -10,6 +13,7 @@ This zone is capped. When it exceeds `archive_keep` tarballs (default 12),
 `ledger-history gc --confirm` deletes the oldest first, down to the cap —
 a forced, consistent rule so `archive/` cannot grow unbounded either.
 Deletion removes the tarball from the working tree only; it stays
-recoverable in git history. Nothing durable is lost: every group's durable
-knowledge was promoted into the live `memory/` domain files before the group
-was ever archived.
+recoverable in git history. And nothing is ever truly forgotten: each
+office's permanent accomplishments record lives in
+`../history/office-<NNN>.md` forever, naming what the office achieved and
+where its history went.

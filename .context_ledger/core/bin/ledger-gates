@@ -162,6 +162,19 @@ checkpoint() {
   say "GATE checkpoint: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   say "Working tree:"
   (cd "$PROJECT_DIR" && git status --short)
+  # advisory nudge (never blocks): an office at capacity should close before
+  # more sessions log into it
+  _sm=$MEMORY_DIR/office/agents/sessions.md
+  if [ -f "$_sm" ]; then
+    _sc=$(grep -cE '^## [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*Session ' "$_sm" 2>/dev/null); _sc=${_sc:-0}
+    _hc=$MEMORY_DIR/workflows/history.conf
+    _gs=""; [ -f "$_hc" ] && _gs=$(sed -n 's/^office_size=//p' "$_hc" | tr -d '\r' | head -n1)
+    case "$_gs" in ''|*[!0-9]*) _gs=$(sed -n 's/^group_size=//p' "$_hc" 2>/dev/null | tr -d '\r' | head -n1) ;; esac
+    case "$_gs" in ''|*[!0-9]*) _gs=20 ;; esac
+    if [ "$_sc" -ge "$_gs" ]; then
+      say "NOTICE: the office is full ($_sc / $_gs sessions) — run: ledger-history close"
+    fi
+  fi
   if [ -n "$GATE_SESSION" ] && [ -n "$GATE_ISSUE" ]; then
     sh "$CORE_DIR/bin/ledger-collab" status --session "$GATE_SESSION" --issue "$GATE_ISSUE"
   fi

@@ -18,10 +18,10 @@ from memory of this file alone.
    routes you to the right instruction set in `.context_ledger/core/rules/`.
 3. **Sync and orient:** pull, then read
    `.context_ledger/memory/workflows/active.md` (standing params + push policy),
-   `.context_ledger/memory/agents/sessions.md` (last few entries — the real HEAD
+   `.context_ledger/memory/office/agents/sessions.md` (last few entries — the real HEAD
    and session number live here, not in the harness's start-of-session git
-   snapshot, which can be stale), and `.context_ledger/memory/tasks/current.md`.
-4. **Record the task** in `.context_ledger/memory/tasks/current.md` before editing.
+   snapshot, which can be stale), and `.context_ledger/memory/office/tasks/current.md`.
+4. **Record the task** in `.context_ledger/memory/office/tasks/current.md` before editing.
 
 Skipping this is a logged protocol failure — an agent once ran an entire
 session with zero `.context_ledger/` discipline until the user had to ask whether
