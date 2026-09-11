@@ -1,8 +1,9 @@
 # Feature: explorer-tool — Local file/folder inspection tool (Parent)
 
-**Started:** 2026-09-10 · **Status:** SHIPPED (2026-09-10, implementation +
-weak-model live gate green; one re-verify carried → B-2026-09-10-7) ·
-**Sessions:** 459 (design), 462 (implementation)
+**Started:** 2026-09-10 · **Status:** COMPLETE (2026-09-10 — implementation +
+weak-model live gate green on zai AND on the protocol's primary provider
+bankofai/qwen3.8-flash; the carried re-verify closed in S464) ·
+**Sessions:** 459 (design), 462 (implementation), 464 (primary-provider re-verify)
 
 ## What this feature is
 
@@ -117,3 +118,21 @@ updated in S462's feature commit.
   B-2026-09-10-7. zen upstream DOWN all session ("Model is unavailable");
   bankofai account empty (balance=0) — owner action. Evidence + full
   verification split: `memory/reviews/2026-09-10-review-s462.md`.
+- **Session 464 (2026-09-10, Elena / deepseek-v4-flash, macOS):** closed the
+  carried gate on the protocol's PRIMARY provider. bankofai is reachable again
+  but its configured default `deepseek-v4-flash` is no longer served, so the
+  harness first gained a per-adapter model pin (`aa08cd5`; bankofai →
+  `qwen3.8-flash`). Live run on bankofai/qwen3.8-flash: list/tree/stat
+  selection **3/3 PASS** with grounded bounded output, `system_search` and
+  `shell` non-regression **PASS**. The open content-search question is now
+  ANSWERED: `dir_explorer` does not bleed into it — the model chose `shell`
+  with a bounded `grep -rniE`, so the design's LONG_TAIL + `describe_tool`
+  fallback is **not** required. That run's `grep_search` expectation turned out
+  to be unsatisfiable: `grep_search` sits in no model-facing tier at all and
+  never has, so the model cannot select it — a pre-existing wiring gap logged
+  as **B-2026-09-10-8** (expose or retire), NOT a regression from this
+  feature. Two follow-on fixes: the phantom `grep_search` pointer was removed
+  from the description the model actually sees (`ef1c7cd`), and the stale CORE
+  tool-count pin this feature left behind was corrected (`e61fd9f`).
+  Evidence: `scratch/sse-direxplore-bankofai-*.sse` + `results-*.json`;
+  report `memory/reviews/2026-09-10-review-s464.md`.

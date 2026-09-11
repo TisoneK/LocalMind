@@ -25,7 +25,18 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Elena | S464 | deepseek-v4-flash | Live-testing `dir_explorer` on bankofai per protocol — closes the B-2026-09-10-7 grep_search verdict |
+<!-- Clock-out 2026-09-10: Elena (S464) — dir_explorer live-tested on
+bankofai/qwen3.8-flash (the protocol's PRIMARY provider): 3/3 new-capability
+picks PASS + system_search/shell non-regression PASS; the carried content-search
+question ANSWERED (no explorer bleed, so the LONG_TAIL fallback is not needed)
+and the explorer-tool feature line COMPLETED. The failing grep_search
+expectation turned out to be a PRE-EXISTING wiring gap — grep_search sits in no
+model-facing tier at all → B-2026-09-10-8. Two fixes shipped: the phantom
+grep_search pointer dropped from the dir_explorer description, and the stale
+CORE tool-count pin corrected. The harness gained a per-adapter model pin
+(bankofai's configured default deepseek-v4-flash is delisted). Solo light path:
+claim f769fae7 → release 8604b14b, check green, all claims resolved. Session
+logged, current idle. Board empty = nobody in the office. -->
 
 <!-- Clock-out 2026-09-10: Njeri (S462) — explorer-tool SHIPPED:
 dir_explorer {list,tree,stat} + wiring + 22 tests (9d85df0f), Explorer UI

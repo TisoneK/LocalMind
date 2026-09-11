@@ -89,7 +89,7 @@ block (and its "last verified" date) every time you run on it again.
     - `sh .context/core/bin/context-sync status` → "core: 0.5.0, locked: 0.5.0, source: none reachable — skipping, this is fine"
     - `git clone https://github.com/CodebuffAI/open-codebuff.git` → succeeded (public, anonymous HTTPS, no auth needed)
 
-## Local macOS development machine (last verified 2026-08-23, Session 377)
+## Local macOS development machine (last verified 2026-09-10, Session 464)
 
 - **Identify by:** workspace path `/Users/bao/Code`; macOS host; local project checkout at `/Users/bao/Code/LocalMind`
 - **OS:** macOS 15.7.7
@@ -158,6 +158,8 @@ block (and its "last verified" date) every time you run on it again.
   - **Live generic direct boundary (Session 301, 2026-08-20):** isolated z.ai/glm-4.5-flash with thinking enabled verified generic conversational shapes and the exact `What can you do?` → `Like what` flow through one context-aware chat boundary; a real file-list request stayed `fast_path=false`, `mode=execute`, and made four shell calls. Final full CI 1996 passed / 2 skipped.
   - **`LOCALMIND_SHELL_ENABLED=false` in `backend/.env`** — trace servers must set `LOCALMIND_SHELL_ENABLED=true` or the shell tool reports "Shell tool is disabled".
   - **No `timeout` CLI on macOS** (GNU coreutils) — use `curl --max-time N`.
+  - **BSD awk (`/usr/bin/awk`; `gawk` is NOT installed) aborts on non-UTF-8 bytes — so `ledger-collab check` can fail SILENTLY here (rc=2, no verdict, only `awk: towc: multibyte conversion failure`).** Six legacy markdown collab events carry a bare `0x97` (Windows-1252 em-dash) written by Windows agents. **Always run the ledger helpers as `LC_ALL=C sh .context_ledger/core/bin/ledger-collab …`** on this machine; the check then returns a real verdict. (2026-09-10, Session 464 — see inefficiencies/log.md.)
+  - **Live-test provider reality (2026-09-10, Session 464):** this machine's `~/LocalMind/settings.json` has keys for bankofai/cerebras/chutes/gemini/zai/zen. Probed: **gemini up**; **bankofai key valid but its configured default `deepseek-v4-flash` is DELISTED** (free tier answers on `qwen3.8-flash` / `glm-5.3-flash` at balance 0; `/v1/models` returns 47 ids); zen 403 (Cloudflare 1010), cerebras 403 (1010), chutes 402 (balance $0), zai 401 (key expired). Don't trust an adapter's `default_model` for live work — probe it first.
   - `test_prompt_budget.py::test_init_prompt_is_under_budget` was stale before Session 239; classify-only init now passes the 2,500-character budget. Keep the test as a guard for future prompt growth.
   - `sh scripts/ci-check.sh` → all pass: backend 1996 passed / 2 skipped; Ruff clean; TypeScript clean; ESLint 0 errors / 71 existing warnings (2026-08-20, Session 302)
   - Isolated live harness on port 8765: z.ai/glm-4.5-flash direct native parent turn → no initializer event, one iteration, 1621 provider prompt tokens; Zen/hy3-free tool turn → describe_tool(shell) then shell execution; Cerebras headroom trace returned real 402 payment_required (2026-08-20, Session 302)

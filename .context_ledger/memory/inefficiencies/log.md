@@ -1509,3 +1509,24 @@ if literally nothing slowed you down.
 - **Cause:** MSYS path conversion is off for `rev:path` syntax; pipes swallow both output and exit status (the recurring lesson family); two of three free-tier providers degraded at once — an availability reality, not a repo bug.
 - **Workaround / fix:** prefix `MSYS_NO_PATHCONV=1 git show <rev>:<path>`; never pipe a run whose FAILURE LIST you need (redirect to a file first — scratch/s462/*.txt pattern); live-test on the machine currently reaches zai only — budget cooldowns (≥40s) and score BLOCKED≠FAIL (the harness does now).
 - **Prevent next time:** bankofai quota top-up is an OWNER action item (stated in this session's report); re-check zen before planning any live-verification session on the primary provider.
+
+### 2026-09-10 — Session 464 (Elena, macOS) — `ledger-collab check` returns rc=2 with NO verdict on macOS (BSD awk vs non-UTF-8 legacy events)
+
+- **Problem:** `sh .context_ledger/core/bin/ledger-collab check` fails with exit code **2** and prints **only** `awk: towc: multibyte conversion failure on: …` — no `FAIL:` lines, no summary, no indication which event broke it. It looks like the trail is corrupt or the claim is malformed; it is neither. The gate is simply unusable, silently.
+- **Cost:** ~15 min of misdiagnosis (I suspected my own freshly-emitted claim event first).
+- **Cause:** six **legacy markdown** collab events contain a bare `0x97` byte — a Windows-1252 em-dash (`—`) written by Windows agents instead of UTF-8. `ledger-collab-check` reads every `*.md` event in one awk pass; macOS ships **BSD awk** (`/usr/bin/awk`; no `gawk` on this box), which aborts on the invalid multibyte sequence. Surfaced by macOS specifically because every prior session here was Windows/Linux, where this file set parsed fine. Files: `20260907T060837Z-mei-…-s434-bcecdd8c.md`, `20260909T124439Z-otto-…-s449-c4595969.md`, `20260909T132923Z-otto-…-s449-855bdb66.md`, `20260909T133106Z-cleo-…-s453-09a4a90a.md`, `20260909T172148Z-nia-…-s454-38453f0a.md`, `20260910T105044Z-theo-…-s460-e8a4d341.md`.
+- **Workaround / fix:** run the check as **`LC_ALL=C sh .context_ledger/core/bin/ledger-collab check …`** — byte semantics make BSD awk succeed, and the check then returns a REAL verdict (mine correctly read "claim … is not released or handed off" before the release). To name the offenders, decode each legacy event and print the ones that fail:
+  ```sh
+  for f in .context_ledger/memory/collaboration/events/*.md; do
+    python3 -c "import sys;open(sys.argv[1],'rb').read().decode('utf-8')" "$f" 2>/dev/null || echo "$f"
+  done
+  ```
+- **Prevent next time:** on macOS always invoke the collab/gate helpers with `LC_ALL=C`; treat "rc=2 + awk towc" as this trap, never as a bad event of your own making. Upstream fix worth making: have `ledger-collab-check` read events with `LC_ALL=C` itself (or validate UTF-8 and skip with a warning naming the file) so the failure is never silent.
+
+### 2026-09-10 — Session 464 (Elena, macOS) — bankofai's configured default model is delisted; the free tier is a two-model set
+
+- **Problem:** the live-testing protocol names `bankofai / deepseek-v4-flash` the PRIMARY live-test provider, but bankofai no longer serves `deepseek-v4-flash`. Every request using the adapter's `default_model` dies with **HTTP 400 `credit insufficient balance: balance=0`** — the error names BALANCE, so it reads as "account empty, owner must top up" when the real story is partly "this model id is gone". The app's own `~/LocalMind/settings.json` still says `adapter: bankofai` + `model: deepseek-v4-flash`, i.e. the installed app is configured for a model the provider will not serve.
+- **Cost:** the S462 session burned two sessions' worth of live-test time on this, and S464 hit the same wall in its first probe.
+- **Cause:** the provider rotated its catalog to `deepseek-v4.1-flash` / `deepseek-v4-pro` (both gated on balance or deposit); balance stays 0 on this account, so only the genuinely free models answer.
+- **Workaround / fix:** with balance 0 on this account, exactly **`qwen3.8-flash`** and **`glm-5.3-flash`** answered; everything else returned either `Deposit required to unlock premium models` (qwen3.8-27b, glm-5.1, gpt-5-nano, deepseek-v4-pro) or a plain **429** (hy3, minimax-*, kimi-*, gemini-3-*, claude-haiku-4.5, qwen3.8-27b on retry) — a 429 there is rate limiting, not an entitlement block, so retry before concluding a model is unavailable. `/v1/models` still authenticates with a zero balance (47 ids) and is the cheap way to distinguish "key dead" from "model gone". `scripts/live_test_dir_explorer.py` now pins `bankofai -> qwen3.8-flash` (`aa08cd5`), matching `live_test_prompt_audit.py`'s existing pin.
+- **Prevent next time:** never trust an adapter's `default_model` for live work — read it, then probe. Owner action still open: point the adapter default / app settings at a served model, or top the balance up.
