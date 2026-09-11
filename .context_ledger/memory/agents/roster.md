@@ -25,7 +25,16 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Zuri | S465 | glm-5.3-flash | Benchmark live run — model override + efficiency metrics for the suite, live test subset on Windows |
+
+<!-- Clock-out 2026-09-11: Zuri (S465) — benchmark suite extended + live run:
+per-adapter model pin + --adapter/--model + multi-turn + usage capture + new
+MEMC/KIT/REC categories (b02c3525/71ab798e); 13 tests live on
+bankofai/qwen3.8-flash — 9 PASS / 4 PARTIAL / 0 FAIL (PARTIALs: 3× CAT1
+thinking-exposure on the weak model, CAT15-1 provider stream error mid-turn
+with the fallback contract held). Finding B-2026-09-11-1 (done event carries
+no provider_usage). Flaw: rebase --continue bypassed the marker gate (stray
+marker fixed 86050a4d). Worktree torn down, branch merged, claim released.
+Board empty = nobody in the office. -->
 
 <!-- Clock-out 2026-09-10: Elena (S464) — dir_explorer live-tested on
 bankofai/qwen3.8-flash (the protocol's PRIMARY provider): 3/3 new-capability

@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260911T040915Z-Zuri-b9dc3fba",
+  "type": "release",
+  "session": "S465",
+  "agent": "Zuri",
+  "created": "2026-09-11T04:09:15Z",
+  "issue": "benchmark-live-run",
+  "body": "Claim released: benchmark harness extended and live-run complete. Product: b02c3525 (adapter pin + multi-turn + usage capture + MEMC/KIT/REC categories), 71ab798e (SSE evidence + unknown-ID warning). Verification: checkers verified offline to discriminate; 13 tests live on bankofai/qwen3.8-flash = 9 PASS / 4 PARTIAL / 0 FAIL, raw SSE + results JSON in scratch; pre-commit gate green on every commit; report memory/reviews/2026-09-11-review-s465.md. Finding B-2026-09-11-1 backlogged (wire done event carries no provider_usage).",
+  "paths": [],
+  "refs": ["20260911T031126Z-Zuri-8e26ee89", "b02c3525", "71ab798e"],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}

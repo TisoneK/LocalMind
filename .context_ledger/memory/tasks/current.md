@@ -1,40 +1,28 @@
 # Current Task
 
-**Status:** IDLE — **Session 464 (Elena / deepseek-v4-flash, local macOS)
-COMPLETE (2026-09-10).** (A peer, Zuri/S465, was live on a benchmark run at
-close-out — see `agents/roster.md`; this task file is not a lock.)
+**Status:** IDLE — **Session 465 (Zuri / glm-5.3-flash, ZCode local, Windows)
+COMPLETE (2026-09-11).**
 
-`dir_explorer` live-tested on **bankofai/qwen3.8-flash** (the live-testing
-protocol's PRIMARY provider), closing the carried **B-2026-09-10-7**:
-3/3 new-capability picks PASS (list/tree/stat), `system_search` + `shell`
-non-regression PASS, and the open content-search question ANSWERED —
-`dir_explorer` does NOT bleed into content search, so the design's LONG_TAIL
-fallback is not needed. The explorer-tool feature line is COMPLETE in
-`features/ledger.md` (manifest updated).
+Benchmark suite extended + first Windows live run ("you do alive testing"):
+`scripts/lm_benchmark.py` gained the per-adapter model pin + `--adapter`/
+`--model` (mirrors `aa08cd5`; bankofai free tier answers `qwen3.8-flash`),
+multi-turn setup support, per-test usage capture + quality-per-token summary,
+raw-SSE evidence, unknown-ID warning; new categories MEMC (temporal memory
+conflict + reason preservation), KIT (coding fixtures scored by executing the
+fixed module), REC (genuinely missing file) — product `b02c3525`/`71ab798e`.
+LIVE: 13 tests, 4 batches on bankofai/qwen3.8-flash — **9 PASS / 4 PARTIAL /
+0 FAIL**; new categories 5/5 first-run green. PARTIAL root causes named:
+3× CAT1 = weak-model `thinking_token` exposure (owner policy question);
+CAT15-1 = provider stream error mid-turn after correct injection
+identification — fallback contract held. **New:** B-2026-09-11-1 (the wire
+`done` event carries no `provider_usage` — token-efficiency measurement
+blocked until forwarded). Flaw: `rebase --continue` bypassed the marker gate
+(stray marker fixed `86050a4d`). Report:
+`memory/reviews/2026-09-11-review-s465.md`.
 
-The harness's `grep_search` expectation proved unsatisfiable: `grep_search`
-sits in **no** model-facing tier and never has — a pre-existing wiring gap, not
-a regression → **B-2026-09-10-8**.
-
-**Product commits (8):** `aa08cd5` per-adapter harness model pin (bankofai's
-default `deepseek-v4-flash` is delisted), `ef1c7cd` phantom `grep_search`
-pointer dropped from the dir_explorer description, `e61fd9f` stale CORE
-tool-count pin, `a69b8cc` `DIR_EXPLORER` agent mapping + goal-contract
-exclusion, `f2cb8fb` sysinfo prompt budget raised for the dir_explorer steering,
-`86050a4` stray conflict marker removed from the roster (left by S465's
-check-in — it was failing the exit gate repo-wide).
-
-**Gate state:** pytest **2 failed / 3,068 passed**; ruff, conflict-markers,
-tsc/eslint and bookkeeping all green. The two failures are the tracked
-date-bombs **B-2026-09-10-4** (unrelated to this work; deliberately left per the
-S458/S460/S461/S463 convention) — they are the **sole** remaining exit-gate
-blocker.
-
-**Next up:** B-2026-09-10-4 (two date-hardcoded tests — unblocks the exit gate
-for everyone) and B-2026-09-10-8 (decide `grep_search`: expose it or retire it).
-Then B-2026-09-10-5 (browser live-verify — needs `agent-browser`). Owner
-actions: bankofai's configured default model is delisted — point the adapter/app
-settings at a served model or top the balance up; `zai`'s key returns 401
-*token expired* and `zen` returns Cloudflare 403, so bankofai (qwen3.8-flash)
-and gemini are this machine's only live-test providers. Carried:
-B-2026-09-10-6, OTT-26/27/29 clean rerun, B-2026-09-09-2/3/6 peer claims.
+**Next up:** B-2026-09-11-1 (usage → SSE `done`), owner calls on
+thinking-exposure policy + B-2026-09-10-8 (`grep_search` expose-or-retire),
+B-2026-09-10-4 (date bombs — still the exit-gate pytest blocker), then
+B-2026-09-10-5/6, OTT reruns, peer claims. Candidate benchmark session: port
+CAT10 into the harness + agent-vs-direct token comparison once B-2026-09-11-1
+lands.

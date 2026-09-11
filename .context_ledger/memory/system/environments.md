@@ -20,9 +20,9 @@ block (and its "last verified" date) every time you run on it again.
 
 ---
 ---
-## Tison's local Windows machine (last verified 2026-09-10)
+## Tison's local Windows machine (last verified 2026-09-11)
 
-- **Identify by:** OS is Windows; Tisone's dev account; observed this session: hostname `DESKTOP-3LRR8MD`, user home `C:\Users\Lameck`, repo at `C:\Users\Lameck\Tisone\LocalMind` (older S421-S449 records used `C:\Users\tison` — the account path moved; same machine family: Windows 11, Tisone's local box)
+- **Identify by:** OS is Windows; Tisone's dev account; hostname `DESKTOP-3LRR8MD`; repo checkouts seen: `C:\Users\Lameck\Tisone\LocalMind` (S449-S462) AND `C:\Users\tison\Dev\LocalMind` (S421-S449 era, again live 2026-09-11 S465) — both paths are the same Windows 11 box; check `pwd` rather than assuming either.
 - **OS:** Windows 11 (PowerShell, Git Bash available)
 - **Runtimes:** Node.js v24.20.0, Python 3.14.7, backend venv `backend/.venv/Scripts/python.exe` -> Python 3.11.0 (re-verified 2026-09-09, S455)
 - **Package manager:** npm (root `package-lock.json` with workspaces); pip (system Python, not venv — on Windows, PEP 668 is advisory only)
@@ -54,6 +54,7 @@ block (and its "last verified" date) every time you run on it again.
 - Core sync verified 2026-09-10 (S458): `.context_ledger/core/bin/ledger-sync.cmd verify/status/update` all work from Git Bash in the MAIN checkout — `update` applied 0.20.0→0.21.0 cleanly (source must be a COMMITTED, manifest-consistent release in `C:/Users/Lameck/Tisone/context-ledger`; a dirty or unrelocked source is refused). `.cmd` gate/sync runs touch `memory/core.lock` (em-dash churn) — `git restore` it before staging the ledger surface.
 - Worktree junctions re-verified 2026-09-10 (S460): creating links must go through a baked-paths .bat (`cmd //c 'mklink /J "..." "..."'` direct from Git Bash mangles quoted args → "Invalid switch"); detect with `fsutil reparsepoint query` via batch, unlink with plain `rmdir` on the link. `git worktree remove` + `git worktree prune` are then safe (no reparse points left to traverse).
 - Live-test scripts run clean on this box (2026-09-10, S462): `cd backend && PYTHONPATH=../backend/src backend/.venv/Scripts/python.exe ../scripts/live_test_dir_explorer.py --label L --adapter zen|zai|bankofai` — self-contained boot on 8765 (`--port` for contention), provider key bridged from env `<PROV>_API_KEY` or the real settings.json via `harness_common.provider_key` (never printed); `MSYS_NO_PATHCONV=1 git show <rev>:<path>` — the plain form fails because Git Bash converts the colon-path (same mangling family as `cmd //c` and `$VAR` above). Provider status observed that day: zen free tier 400 "Model is unavailable" all session, bankofai `credit insufficient balance: balance=0` (owner top-up), zai flaky-with-rate-limits (cooldown ≥40s; one completed turn took 310s) — re-check providers before planning live work around one.
+- Benchmark harness live-run verified 2026-09-11 (S465, from the `C:\Users\tison\Dev\LocalMind` checkout): `cd backend && backend/.venv/Scripts/python.exe ../scripts/lm_benchmark.py --tests <ids> --adapter bankofai --model qwen3.8-flash --timeout 45 --cooldown 20` — boots 8765 + scratch home, scores 13/13 tests, saves `scratch/sse-*` evidence. Two-junction worktree setup (root `node_modules` + `backend/.venv`, baked-paths .bat + `rmdir` teardown) sufficient for gate + harness runs; pre-commit gate green in the worktree. Provider status that day: bankofai free tier answers ONLY `qwen3.8-flash`/`glm-5.3-flash` at balance 0, 429 storms after a peer's heavy use (pace batches, cooldown ≥20s); zen/zai/cerebras/chutes down (S464 map), gemini untried.
 
 ## Z.ai cloud sandbox (last verified 2026-09-03, Session 411)
 
