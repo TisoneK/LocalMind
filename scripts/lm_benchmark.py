@@ -1062,6 +1062,11 @@ def run_test(test: dict, port: int, session_id: str, is_first: bool = True, per_
 
     latency = time.time() - t0
     parsed = parse_sse(raw)
+    # Preserve the raw trace — the SSE stream is the evidence for the score.
+    try:
+        (SCRATCH / f"sse-{test['id']}-{session_id}.sse").write_text(raw, encoding="utf-8")
+    except Exception:
+        pass
     result = score_test(test, parsed, latency)
     result["id"] = test["id"]
     result["category"] = test["category"]
@@ -1098,6 +1103,12 @@ def main():
         selected = [t for t in TESTS if t["category"] == args.category]
     elif args.tests:
         ids = [s.strip() for s in args.tests.split(",")]
+        known = {t["id"] for t in TESTS}
+        unknown = [i for i in ids if i not in known]
+        if unknown:
+            # An unknown test ID must never silently shrink the run —
+            # "selected" would look complete while whole checks are missing.
+            print(f"WARNING: unknown test ID(s), skipped: {', '.join(unknown)}")
         selected = [t for t in TESTS if t["id"] in ids]
     else:
         ap.error("must specify --tests, --category, or --all")
