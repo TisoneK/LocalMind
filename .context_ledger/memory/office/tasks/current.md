@@ -1,28 +1,7 @@
 # Current Task
 
-**Status:** IDLE — **Session 469 (Zawadi / glm-5.3-flash, ZCode local, Windows)
-COMPLETE (2026-09-11): B-2026-08-25-4 fixed and live-verified.**
+**Status:** IDLE — **Session 470 (Jabari / glm-5.3-flash, ZCode local, Windows) COMPLETE (2026-09-11): context sync, core 1.0.2 → 1.0.4; the S467/S468 gate-teeth flaw verified FIXED on the vendored core.**
 
-**Outcome:** the internal "Worker report — tool execution evidence:" block no
-longer reaches the model's own context or its answers. Root cause: the
-deterministic user-facing append persisted into assistant messages and flowed
-verbatim back through the prompt tail, ParentSession tail, thinker history,
-episode distill, memory resolver, and social fast path — the model mimicked
-the format into later answers. Fix (`78fadbcc`): one canonical strip helper
-beside the format owner in `core/agent/models.py`, applied at all 7
-model-facing history feeds and at the loop's full-text emission boundaries
-(`_force_final_answer`, `_rescue_final_answer`, both buffered gate-flush
-blocks) — the deterministic renderer stays the sole author of the format and
-the fallback report still reaches the user. 14 new tests
-(`tests/core/test_work_report_strip.py`); changelog `bb9555b1`; review +
-release event + backlog line delete `b6203c2a`.
-
-**Verification:** live before/after on bankofai/qwen3.8-flash (isolated 8765,
-scratch home, 3-turn same-session scenario with a readback probe) — pre-fix
-worktree readback reproduced the internal report verbatim from context;
-post-fix, zero model-authored report text (every SSE header occurrence is the
-exact deterministic append shape). Full suite 3056 pass; failure set = the 22
-documented Windows baseline entries + the tracked date-bomb trio only.
-Evidence: `scratch/results-s469-*.json` + matching SSE/server-log captures.
+**Outcome:** pull fast-forwarded main to S469's landing (which carried core 1.0.2 + the office layout); `ledger-sync.cmd update` applied the same-MAJOR bump 1.0.2 → 1.0.4 from the local package clone (`C:/Users/tison/Dev/context-ledger` — a different path than the Lameck-checkout clone prior sync sessions used); `core.lock` churn-free; CHANGELOG absorbed (1.0.3 = Run-One gate teeth, 1.0.4 = report voice). Main finding: the Windows gate-teeth flaw is CLOSED — two real-repo exit-gate runs against the genuinely red ci-check (25 failed = documented 22 baseline + the 3 tracked date bombs) now end `ledger-gates: exit gate failed` with NO `GATE PASSED` line and wrapper rc=2 (on 1.0.2 the identical red yielded `FAILED (1)` → `GATE PASSED` + rc=0). The interim "read stdout, never trust rc" rule retires on cores ≥ 1.0.3. Flaws log carries the closure entry with both evidence legs.
 
 Feature: none
