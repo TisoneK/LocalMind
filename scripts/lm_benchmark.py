@@ -30,11 +30,65 @@ from pathlib import Path
 # hardcoded to the Linux dev box /home/z/my-project/localmind).
 REPO = Path(__file__).resolve().parents[1]
 BACKEND = REPO / "backend"
-from harness_common import kill_port, kill_process_tree, server_popen_kwargs, venv_python
+from harness_common import (
+    kill_port,
+    kill_process_tree,
+    provider_key,
+    server_popen_kwargs,
+    venv_python,
+)
 
 VENV_PY = venv_python(BACKEND)
 SCRATCH = REPO / "scratch"
 TRACEHOME = SCRATCH / "tracehome"
+REAL_SETTINGS = Path.home() / "LocalMind" / "settings.json"
+
+# Per-adapter model pin, same shape as the dir_explorer harness: the server
+# maps the settings "model" key onto {adapter}_model, and several free-tier
+# defaults have gone stale (bankofai no longer serves its configured
+# deepseek-v4-flash — its free tier answers on qwen3.8-flash). --model
+# overrides the pin; an adapter with no entry keeps its own default.
+_ADAPTER_MODEL = {
+    "bankofai": "qwen3.8-flash",
+    "zen": "deepseek-v4-flash-free",
+    "zai": "glm-4.5-flash",
+    "gemini": "gemini-2.5-flash",
+}
+
+
+def prepare_home(adapter: str, model: str = "") -> None:
+    """Scratch LOCALMIND_HOME with the real settings, provider-rewritten.
+
+    The copied settings carry api keys — never cat, never print. The "model"
+    key is pinned so the run targets a model the provider actually serves;
+    an adapter with no pin keeps its own default, because a leftover cloud
+    model from the copied settings would otherwise be mapped onto the new
+    provider.
+    """
+    TRACEHOME.mkdir(parents=True, exist_ok=True)
+    dst = TRACEHOME / "settings.json"
+    if REAL_SETTINGS.exists():
+        data = json.loads(REAL_SETTINGS.read_text(encoding="utf-8"))
+    else:
+        data = {}
+    data["adapter"] = adapter
+    resolved_model = model or _ADAPTER_MODEL.get(adapter, "")
+    if resolved_model:
+        data["model"] = resolved_model
+    else:
+        data.pop("model", None)
+    keys = data.get("api_keys") or {}
+    if adapter not in keys and not provider_key(adapter):
+        print(
+            f"ERROR: no API key configured for provider '{adapter}' "
+            f"(env {adapter.upper()}_API_KEY or settings api_keys). "
+            "This is a missing input — aborting, key never printed."
+        )
+        sys.exit(2)
+    if adapter not in keys and provider_key(adapter):
+        keys[adapter] = provider_key(adapter)  # env var → settings bridge
+        data["api_keys"] = keys
+    dst.write_text(json.dumps(data), encoding="utf-8")
 
 
 # ─── Test definitions ────────────────────────────────────────────────────────
@@ -601,16 +655,149 @@ TESTS = [
 ]
 
 
+# ─── Fixture-backed tests (coding + real tool failure + memory) ─────────────
+# Coding fixtures are rewritten fresh at run start so every run begins from
+# the buggy state; scoring re-reads the file and re-executes it after the
+# agent's turn, so the check is behavioral, not textual.
+
+KIT_DIR = SCRATCH / "bench-fixture"
+_REC_MISSING = SCRATCH / f"bench-missing-{os.getpid()}.txt"
+
+_KIT_HEADER = (
+    "# bench fixture — generated for the live benchmark. Do not reformat this file.\n"
+)
+
+_KIT_PRICING = _KIT_HEADER + '''STORE_NAME = "bench-store"  # sentinel line: must survive unchanged
+
+
+def total(items):
+    """Sum the prices of the active items."""
+    return sum(item["price"] for item in items if item["active"])
+
+
+def active_names(items):
+    return [item["name"] for item in items if item["active"]]
+'''
+
+_KIT_SHIPPING = _KIT_HEADER + '''CARRIER = "bench-carrier"  # sentinel line: must survive unchanged
+
+
+def total(items):
+    """Sum the prices of the active items."""
+    return sum(item["price"] for item in items if item["active"])
+
+
+def greeting():
+    return "hello bench"
+'''
+
+
+def _ensure_kit_fixtures() -> None:
+    """Write the coding fixtures fresh (buggy) and guarantee the recovery
+    test's target file does not exist."""
+    KIT_DIR.mkdir(parents=True, exist_ok=True)
+    (KIT_DIR / "pricing.py").write_text(_KIT_PRICING, encoding="utf-8")
+    (KIT_DIR / "shipping.py").write_text(_KIT_SHIPPING, encoding="utf-8")
+    if _REC_MISSING.exists():
+        _REC_MISSING.unlink()
+
+
+def _load_fixture(path: Path):
+    """Import a fixture module by path; raises on syntax errors (the scoring
+    machinery records that as a failed criterion)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _total_ok(path: Path) -> bool:
+    mod = _load_fixture(path)
+    cases = [
+        ([{"active": True, "name": "a"}, {"active": True, "name": "b", "price": 5.0}], 5.0),
+        ([{"active": True, "price": 2.0}], 2.0),
+        ([{"active": False, "price": 9.0}], 0.0),
+        ([], 0.0),
+    ]
+    return all(abs(mod.total(items) - want) < 1e-9 for items, want in cases)
+
+
+TESTS += [
+    # ── MEMC: memory conflict / temporal reasoning ──────────────────────────
+    {
+        "id": "MEMC-1", "category": "MEMC", "level": "L5",
+        "prompt": "Which system stores this project's vector data right now?",
+        "multi_turn": [
+            "Remember this permanently: this project stores its vector data in ChromaDB.",
+            "Update that memory: we migrated from ChromaDB to SQLite with sqlite-vec for vector search.",
+        ],
+        "expected_route": "MEMORY_RETRIEVAL",
+        "pass_criteria": [
+            ("names the current store (sqlite)", lambda p: "sqlite" in p["final_text"].lower()),
+            ("does not present ChromaDB as current", lambda p: "chroma" not in p["final_text"].lower() or bool(re.search(r"migrat|replac|instead|no longer|from chroma|previously|used to", p["final_text"].lower()))),
+        ],
+    },
+    {
+        "id": "MEMC-2", "category": "MEMC", "level": "L5",
+        "prompt": "Why did we choose SQLite for this project?",
+        "multi_turn": [
+            "Remember this permanently: we chose SQLite over PostgreSQL because deployment simplicity matters more to us than concurrent write throughput.",
+        ],
+        "expected_route": "MEMORY_RETRIEVAL",
+        "pass_criteria": [
+            ("preserves the recorded reason (deployment simplicity vs throughput)", lambda p: bool(re.search(r"deployment|simplicity|throughput", p["final_text"].lower()))),
+        ],
+    },
+    # ── KIT: coding on a real fixture file ──────────────────────────────────
+    {
+        "id": "KIT-1", "category": "KIT", "level": "L6",
+        "prompt": f"In the folder {KIT_DIR}, the file pricing.py raises KeyError: 'price' whenever an active item has no price key. Fix total() in that file so a missing price counts as 0. Change nothing else in the file.",
+        "expected_route": "TOOL_USE",
+        "timeout": 120,
+        "pass_criteria": [
+            ("fixed module passes the price cases", lambda p: _total_ok(KIT_DIR / "pricing.py")),
+            ("unrelated helper untouched", lambda p: 'return [item["name"] for item in items if item["active"]]' in (KIT_DIR / "pricing.py").read_text(encoding="utf-8")),
+            ("sentinel line intact", lambda p: 'STORE_NAME = "bench-store"' in (KIT_DIR / "pricing.py").read_text(encoding="utf-8")),
+        ],
+    },
+    {
+        "id": "KIT-2", "category": "KIT", "level": "L6",
+        "prompt": f"In the folder {KIT_DIR}, the file shipping.py raises KeyError: 'price' when an active item has no price. Fix total() in shipping.py so a missing price counts as 0, and keep every other line of the file — especially greeting() — exactly as it is.",
+        "expected_route": "TOOL_USE",
+        "timeout": 120,
+        "pass_criteria": [
+            ("fixed module passes the price cases", lambda p: _total_ok(KIT_DIR / "shipping.py")),
+            ("greeting() behavior unchanged", lambda p: _load_fixture(KIT_DIR / "shipping.py").greeting() == "hello bench"),
+            ("sentinel line intact", lambda p: 'CARRIER = "bench-carrier"' in (KIT_DIR / "shipping.py").read_text(encoding="utf-8")),
+        ],
+    },
+    # ── REC: real tool failure recovery ─────────────────────────────────────
+    {
+        "id": "REC-1", "category": "REC", "level": "L6",
+        "prompt": f"Read the file {_REC_MISSING} with your file reader and summarize its contents.",
+        "expected_route": "TOOL_USE",
+        "timeout": 90,
+        "pass_criteria": [
+            ("attempts the read (at least one tool call)", lambda p: len(p["tool_calls"]) >= 1),
+            ("reports the absence honestly", lambda p: bool(re.search(r"not found|does not exist|doesn't exist|no such|unable|couldn't|could not|failed|missing|empty", p["final_text"].lower()))),
+            ("no traceback dumped to the user", lambda p: "traceback" not in p["final_text"].lower()),
+        ],
+    },
+]
+
+
 # ─── Server boot + SSE capture ───────────────────────────────────────────────
 
 
-def boot_server(port: int, log_file: Path) -> subprocess.Popen:
+def boot_server(port: int, log_file: Path, adapter: str = "bankofai") -> subprocess.Popen:
     env = os.environ.copy()
     env.update(
         {
             "LOCALMIND_PORT": str(port),
             "LOCALMIND_HOME": str(TRACEHOME),
-            "LOCALMIND_ADAPTER": "bankofai",
+            "LOCALMIND_ADAPTER": adapter,
             "LOCALMIND_SHELL_ENABLED": "true",
             "PYTHONPATH": str(BACKEND / "src"),
         }
@@ -750,6 +937,39 @@ def _count_types(events: list) -> dict:
     return counts
 
 
+def _usage_tokens(usage) -> dict | None:
+    """Normalize a turn's provider usage into input/output/total tokens.
+
+    The adapters normalize provider fields to prompt_tokens/completion_tokens;
+    the loop accumulates a turn as total_prompt_tokens/total_completion_tokens
+    (the un-prefixed fields keep last-call semantics, the total_* fields sum
+    across every call). Returns None when the turn carried no usable usage —
+    never guess a number the provider did not report.
+    """
+    if not isinstance(usage, dict):
+        return None
+
+    def _int(*keys):
+        for k in keys:
+            v = usage.get(k)
+            if isinstance(v, (int, float)) and v > 0:
+                return int(v)
+        return None
+
+    inp = _int("total_prompt_tokens", "prompt_tokens")
+    out = _int("total_completion_tokens", "completion_tokens")
+    if inp is None and out is None:
+        return None
+    calls = usage.get("llm_calls")
+    return {
+        "input": inp,
+        "output": out,
+        "total": (inp or 0) + (out or 0),
+        "cached_input": _int("total_cached_tokens", "cached_tokens"),
+        "llm_calls": calls if isinstance(calls, int) else None,
+    }
+
+
 def score_test(test: dict, parsed: dict, latency: float) -> dict:
     """Return PASS/PARTIAL/FAIL + per-criterion results."""
     criteria_results = []
@@ -781,6 +1001,8 @@ def score_test(test: dict, parsed: dict, latency: float) -> dict:
         "answer_words": len(parsed["final_text"].split()),
         "thinking_chars": len(parsed["thinking"]),
         "n_tools": len(parsed["tool_calls"]),
+        "tool_names": [c.get("tool") or c.get("name") for c in parsed["tool_calls"]],
+        "usage_tokens": _usage_tokens(parsed.get("usage")),
         "event_types": parsed["event_type_counts"],
         "answer_excerpt": parsed["final_text"][:400] + ("…" if len(parsed["final_text"]) > 400 else ""),
         "replan_count": parsed["raw_sse"].count("agent_loop_gate_failed_replan"),
@@ -790,11 +1012,22 @@ def score_test(test: dict, parsed: dict, latency: float) -> dict:
 
 def run_test(test: dict, port: int, session_id: str, is_first: bool = True, per_test_timeout: int = 60) -> dict:
     """Run a single test, capturing SSE and scoring. Catches timeouts +
-    provider errors so one bad test doesn't kill the whole batch."""
+    provider errors so one bad test doesn't kill the whole batch.
+
+    A test may carry "multi_turn": setup prompts fired first on the SAME
+    session_id (memory/state tests) before the scored prompt. A test-level
+    "timeout" overrides the per-test default for long tool loops.
+    """
     print(f"\n[{test['id']}] {test['prompt'][:80]}{'…' if len(test['prompt']) > 80 else ''}")
+    timeout = test.get("timeout", per_test_timeout)
     t0 = time.time()
     try:
-        raw = fire_chat(port, test["prompt"], session_id, is_first=is_first, timeout=per_test_timeout)
+        turns = test.get("multi_turn") or []
+        for ti, turn in enumerate(turns):
+            print(f"  [setup turn {ti + 1}/{len(turns)}] {turn[:70]}…")
+            fire_chat(port, turn, session_id, is_first=(ti == 0), timeout=timeout)
+            time.sleep(2)
+        raw = fire_chat(port, test["prompt"], session_id, is_first=not turns, timeout=timeout)
     except TimeoutError as e:
         # Don't kill the batch — record a PARTIAL with the timeout note
         result = {
@@ -850,6 +1083,8 @@ def main():
     ap.add_argument("--list", action="store_true", help="list all test IDs and exit")
     ap.add_argument("--timeout", type=int, default=60, help="per-test timeout (default 60s)")
     ap.add_argument("--cooldown", type=int, default=15, help="cooldown between tests in seconds (default 15s — bankofai rate-limit safe)")
+    ap.add_argument("--adapter", default="bankofai", help="provider adapter (default bankofai)")
+    ap.add_argument("--model", default="", help="override the model (default: the adapter's _ADAPTER_MODEL pin)")
     args = ap.parse_args()
 
     if args.list:
@@ -869,6 +1104,8 @@ def main():
 
     SCRATCH.mkdir(parents=True, exist_ok=True)
     TRACEHOME.mkdir(parents=True, exist_ok=True)
+    prepare_home(args.adapter, args.model)
+    _ensure_kit_fixtures()
 
     port = 8765
     log_file = SCRATCH / "server-benchmark.log"
@@ -876,18 +1113,19 @@ def main():
     time.sleep(1)
 
     print(f"[boot] starting server on port {port}")
-    print(f"[config] per-test timeout: {args.timeout}s  cooldown: {args.cooldown}s  tests: {len(selected)}")
+    print(f"[config] adapter: {args.adapter}  model: {args.model or _ADAPTER_MODEL.get(args.adapter, '<adapter default>')}  per-test timeout: {args.timeout}s  cooldown: {args.cooldown}s  tests: {len(selected)}")
     proc = None
     results = []
     session_id = f"bench-{int(time.time())}"
     try:
-        proc = boot_server(port, log_file)
+        proc = boot_server(port, log_file, args.adapter)
         print(f"[boot] server ready (pid={proc.pid})")
 
         for i, test in enumerate(selected):
             if i > 0:
                 time.sleep(args.cooldown)
-            # Fresh session per test (CAT3+ multi-turn not yet supported)
+            # Fresh session per test; tests with "multi_turn" replay their
+            # setup prompts on that same session before the scored prompt.
             sid = f"{session_id}-{test['id']}"
             result = run_test(test, port, sid, is_first=True, per_test_timeout=args.timeout)
             results.append(result)
@@ -919,6 +1157,22 @@ def main():
             if r.get("score") in ("FAIL", "PARTIAL"):
                 excerpt = r.get("answer_excerpt", r.get("error", ""))[:120]
                 print(f"  [{r['id']}] {r.get('score')} — {excerpt}")
+
+    # Token-efficiency summary — only over tests where the provider actually
+    # reported usage; quality proxy is the criteria pass ratio.
+    tok = [r for r in results if r.get("usage_tokens")]
+    if tok:
+        tin = sum(r["usage_tokens"]["input"] or 0 for r in tok)
+        tout = sum(r["usage_tokens"]["output"] or 0 for r in tok)
+        tcache = sum(r["usage_tokens"].get("cached_input") or 0 for r in tok)
+        cp = sum(r.get("criteria_passed", 0) for r in tok)
+        ct = sum(r.get("criteria_total", 0) for r in tok)
+        print(f"\n=== TOKEN EFFICIENCY (provider-reported, {len(tok)}/{len(results)} tests) ===")
+        print(f"  input tokens: {tin} (cached {tcache})   output tokens: {tout}   total: {tin + tout}")
+        if ct:
+            avg = (tin + tout) / len(tok)
+            print(f"  quality (criteria pass ratio): {cp}/{ct} = {cp / ct:.0%}")
+            print(f"  avg tokens/test: {avg:.0f}   quality per 1k tokens: {(cp / ct) / max(avg / 1000.0, 0.001):.2f}")
 
 
 if __name__ == "__main__":
