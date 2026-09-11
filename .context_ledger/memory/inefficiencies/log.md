@@ -1538,3 +1538,11 @@ if literally nothing slowed you down.
 - **Cause:** `selected = [t for t in TESTS if t["id"] in ids]` with no else-branch.
 - **Workaround / fix:** fixed in-product same session (commit `71ab798e`): unknown IDs now print a WARNING naming them. General lesson stands for every "select from registry" CLI: report what did NOT match.
 - **Prevent next time:** when a run's result count must equal the request count, assert it — or let the tool warn (now it does).
+
+---
+## 2026-09-11 — Asha / qwen3.8-flash (Session 467)
+- **Problem:** Phase-1 read-in tried to tail five append-only logs in ONE command; output exceeded 73KB and was persisted off-context, forcing a second targeted pass. Separately, invoking `ledger-gates.ps1` directly from Git Bash dies with `/usr/bin/env: 'pwsh': No such file or directory`.
+- **Cost:** ~3 extra commands.
+- **Cause:** the durable logs are now 1,500+ lines deep, so multi-file bulk tails overshoot the tool-output budget; and this box has Windows PowerShell 5.1 only (`powershell`), no `pwsh` on PATH — the AGENTS/kickoff guidance to use the `.cmd` launchers exists precisely for this, re-confirmed the hard way.
+- **Workaround / fix:** tail logs ONE file at a time (~4–5KB windows) or grep the section headers first; always go through the `.cmd` launchers for `.context_ledger/core/bin/*` on Windows.
+- **Prevent next time:** Phase 1 already prescribes "last 3–5 entries" — slice per file, not per burst; the `.cmd` rule is standing guidance, follow it before trying the `.ps1`.

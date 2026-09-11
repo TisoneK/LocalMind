@@ -6716,3 +6716,15 @@ your name in the roster, present yourself by it.
 - **Open items:** B-2026-09-11-2 (design-first fix per the live-testing protocol); also still carried: B-2026-09-10-4/-5/-8, B-2026-09-10-6, OTT-26/27/29.
 - **Report:** none — logging session (the backlog entry + this record are it).
 - **Notes:** none
+
+---
+## 2026-09-11 — Session 467 — context sync + a gate-teeth finding (S467)
+
+- **Agent:** ZCode (local) | **Model:** qwen3.8-flash (per system-prompt ID cf02f3d0-2445-43ea-ae61-da470b683985/qwen3.8-flash — registered fresh per Pitfall #45) | **Platform:** Windows 11 (10.0.26200 x64), Tison's local machine (`C:\Users\Lameck\Tisone\LocalMind` checkout) | **Role:** engineer (ledger-only sync) | **Core:** 0.22.0
+- **Task:** owner: "Context Sync" — full Phase 1 sync, registry refresh, gates, session record. No product code touched.
+- **Commits:** 4 (`f5990e85` check-in, `9906035a` registries, session record, clock-out closeout)
+- **Outcome:** done — main == origin; `ledger-sync verify` core OK 0.22.0; board empty / current idle / no open collab claims / `git worktree list` = main checkout only; the `core.lock` em-dash churn present at start was the known `.cmd`-verify write, restored per the S458 note. `ledger-mem check`: registry keys clean; 5 pre-existing Session-double-entry WARNs in sessions.md (S405/S421/S431/S439/S442) left untouched (merging past entries is an owner call).
+- **Exit gate:** `ci-check.sh` RED (direct rc=1) — exactly the three tracked B-2026-09-10-4 date bombs (`test_gate_accepts_zero_tool_date_answer_without_replan`, `test_gate_still_rejects_zero_tool_fabricated_date`, `test_date_question_with_real_weekday`); left untouched per the S458–S465 convention. Bookkeeping / conflict-markers / `git diff --check` green. **NEW FINDING:** `ledger-gates.cmd run exit` printed `ledger-gates: FAILED (1): sh scripts/ci-check.sh` and still reported `GATE PASSED: exit` with rc=0 — the Windows gate swallows failures of any configured command that writes to stdout (flaw logged).
+- **Open items:** B-2026-09-10-4 (the gate's rc cannot be trusted until the flaw is fixed — read gate stdout); B-2026-09-11-1, B-2026-09-11-2, B-2026-09-10-5/-6/-8, OTT reruns (unchanged from S465/S466). Core 1.0.0 is reachable at `C:/Users/Lameck/Tisone/context-ledger` — MAJOR bump, needs the owner's go-ahead.
+- **Report:** none — sync session (the state is in the entries above).
+- **Notes:** none
