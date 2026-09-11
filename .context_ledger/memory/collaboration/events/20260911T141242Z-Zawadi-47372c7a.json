@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "id": "20260911T141242Z-Zawadi-47372c7a",
+  "type": "claim",
+  "session": "S469",
+  "agent": "Zawadi",
+  "created": "2026-09-11T14:12:42Z",
+  "issue": "worker-report-leak",
+  "body": "Claim scope for the worker-report leak fix (B-2026-08-25-4 family):\n\nROOT: the deterministic WorkReport render (models.py) is appended to user-facing answers, persists with the assistant message, and flows verbatim back into the model's own context (agent_runtime prompt tail, ParentSession recent_tail, thinker history, memory distill/resolver, social fast path) — the model then mimics the format in later answers.\n\nFix: (1) canonical strip helper beside the format owner in core/agent/models.py; (2) strip at every model-facing history feed (core/agent_runtime.py x2, core/parent_session.py, core/trivial_input.py, core/memory_resolver.py, core/episode_memory.py, core/agent/loop.py thinker history); (3) defense-in-depth strip of mimicked blocks at the loop's full-text emission sites (core/agent/loop.py: _force_final_answer, _rescue_final_answer, the two buffered gate-flush blocks) so needs_report evaluates the clean answer and the deterministic report stays the sole author of the format.\n\nTests: tests/core/test_filters.py, tests/core/test_parent_session.py, loop/runtime tests as fitting. Live before/after on the free bankofai tier (pinned model), port 8765, scratch LOCALMIND_HOME.",
+  "paths": ["backend/src/core/agent/models.py", "backend/src/core/agent/loop.py", "backend/src/core/agent_runtime.py", "backend/src/core/parent_session.py", "backend/src/core/trivial_input.py", "backend/src/core/memory_resolver.py", "backend/src/core/episode_memory.py", "tests/core/test_filters.py", "tests/core/test_parent_session.py"],
+  "refs": [],
+  "option": null,
+  "selected": null,
+  "owner": null,
+  "participants": []
+}
