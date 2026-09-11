@@ -63,6 +63,7 @@ _INTENT_TO_AGENT: dict[Intent, str] = {
     Intent.FILE_TASK: "coding",
     Intent.FIND_PATH: "coding",  # Session 125: name-match search routes to coding
     Intent.SYSTEM_SEARCH: "coding",  # Session 400: unified local search routes to coding
+    Intent.DIR_EXPLORER: "coding",  # bounded read-only folder inspection routes to coding
     Intent.FILE_WRITE: "coding",
     Intent.FILE_EDIT: "coding",
     Intent.CODE_EXEC: "coding",
