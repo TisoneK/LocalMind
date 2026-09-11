@@ -40,7 +40,6 @@ CORE tool-count pin corrected. The harness gained a per-adapter model pin
 (bankofai's configured default deepseek-v4-flash is delisted). Solo light path:
 claim f769fae7 → release 8604b14b, check green, all claims resolved. Session
 logged, current idle. Board empty = nobody in the office. -->
->>>>>>> 3cbac1db (chore(ledger): Zuri (S465) checks in — benchmark live run (suite metrics + live subset))
 
 <!-- Clock-out 2026-09-10: Njeri (S462) — explorer-tool SHIPPED:
 dir_explorer {list,tree,stat} + wiring + 22 tests (9d85df0f), Explorer UI
