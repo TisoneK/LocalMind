@@ -25,7 +25,19 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Amir | S468 | glm-5.3-flash | protocol sync — same-MAJOR core update (1.0.0 → 1.0.2) + gate-teeth flaw re-check |
+
+<!-- Clock-out 2026-09-11: Amir (S468) — protocol sync to core 1.0.2 landed
+(5ef36cb5; templates unchanged, entry points left as S467 regenerated them).
+Gate-teeth flaw RE-VERIFIED OPEN on 1.0.2 (1.0.1 fix closes the piped-consumer
+case only; Run-One child stdout still masks the verdict — probe + real
+pre-commit + this session's exit gate all demonstrate FAILED (N) → GATE
+PASSED + rc=0). Second finding fixed: gates.conf dup-check line was dead
+(silently red since the 1.0.0 migration) — re-pointed to the office backlog
+(5d959367), green. Inefficiency logged: my own invalid non-repo scratch probe
+briefly produced a false closure, rewritten pre-commit. Exit gate (before this
+closing commit): verify OK, diff-check + bookkeeping green; ci-check's sole
+red = the tracked B-2026-09-10-4 date-bomb trio. Board empty = nobody in the
+office. -->
 
 <!-- Clock-out 2026-09-11 (second): Asha (S467) — core 1.0.0 adopted with
 owner go-ahead: update + office migration clean (fbe59fa2/ddc9843b), entry
