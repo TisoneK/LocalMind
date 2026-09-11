@@ -54,6 +54,7 @@ import logging
 import re
 from typing import AsyncIterator, Optional
 
+from core.agent.models import strip_worker_reports_from_history
 from core.engine._helpers import _approx_tokens
 from core.error_normalizer import normalize_error
 from core.models import StreamChunk
@@ -786,8 +787,10 @@ async def _direct_chat_response(
         {"role": "system", "content": system_prompt},
     ]
     if history:
-        # Include the last few turns for context.
-        messages.extend(history[-4:])
+        # Include the last few turns for context. Assistant turns are stripped
+        # of internal evidence-recap blocks — the model must never read that
+        # format back, or it starts mimicking it into its own answers.
+        messages.extend(strip_worker_reports_from_history(history[-4:]))
 
     messages.append({"role": "user", "content": message})
 

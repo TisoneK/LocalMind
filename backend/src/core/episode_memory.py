@@ -34,6 +34,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Optional
 
+from core.agent.models import strip_worker_reports
+
 if TYPE_CHECKING:
     from adapters.base import BaseAdapter
     from storage.db import SessionStore
@@ -260,6 +262,11 @@ class EpisodeMemory:
             if not content:
                 continue
             content = content[:_MAX_MSG_CHARS]
+            # Keep internal evidence-recap blocks out of distilled memory —
+            # the summary feeds future prompts, and the format must not
+            # circulate back to the model.
+            if str(getattr(role, "value", role) or "").lower() == "assistant":
+                content = strip_worker_reports(content)
             line = f"{role}: {content}"
             total += len(line)
             if total > _MAX_EXCERPT_CHARS:

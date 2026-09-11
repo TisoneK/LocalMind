@@ -35,6 +35,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from core.agent.models import strip_worker_reports
+
 logger = logging.getLogger(__name__)
 
 # Maximum number of (user, assistant) pairs kept verbatim in the recent tail.
@@ -133,6 +135,12 @@ class ParentSession:
         assistant_message = (assistant_message or "").strip()
         if not user_message and not assistant_message:
             return
+
+        # Internal evidence-recap blocks appended to past answers must never
+        # enter the session state: recent_tail and the rolling summary are
+        # both injected into future prompts, and a model that reads the recap
+        # format back starts mimicking it into its answers.
+        assistant_message = strip_worker_reports(assistant_message).strip()
 
         self.recent_tail.append(
             {

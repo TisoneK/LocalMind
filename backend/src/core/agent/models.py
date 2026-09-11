@@ -39,6 +39,59 @@ class WorkReportEntry:
     succeeded: bool
 
 
+# The internal evidence-recap header. This format exists for the USER-facing
+# fallback stream only; it must never re-enter a model prompt (models that see
+# it in their own history start mimicking it into their answers), so history
+# feeds strip complete blocks via strip_worker_reports().
+WORK_REPORT_HEADER = "Worker report — tool execution evidence:"
+
+# A rendered block: the header line, the optional iteration-limit note, then
+# numbered "N. tool(input) — status" lines each optionally followed by an
+# indented "Output: …" line. Entry/Output shapes tolerate the small drift
+# models introduce when mimicking the format (")" numbering, 1–4 space
+# indents); a block still requires the exact header plus at least one entry.
+_WORK_REPORT_BLOCK_PATTERN = re.compile(
+    re.escape(WORK_REPORT_HEADER)
+    + r"(?:\nThe agent loop reached its iteration limit after these operations:)?"
+    + r"(?:\n[0-9]+[.)] .*(?:\n {1,4}Output: .*)?)+",
+)
+
+
+def strip_worker_reports(text: str) -> str:
+    """Remove rendered worker-report blocks from model-bound or model-authored text.
+
+    Two callers:
+    - history feeds: a deterministic report appended to a past assistant
+      message must never be shown back to the model (it would learn the
+      format and reproduce it in future answers);
+    - the emission boundary: if a model mimics the format anyway, the block
+      is dropped so the deterministic renderer stays the only author.
+
+    Prose that merely mentions a worker report is untouched — only a complete
+    block (header + at least one numbered entry) matches.
+    """
+    if not text or WORK_REPORT_HEADER not in text:
+        return text
+    cleaned = _WORK_REPORT_BLOCK_PATTERN.sub("", text)
+    # Collapse blank runs left by removal (max 2 consecutive newlines).
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned
+
+
+def strip_worker_reports_from_history(messages: list) -> list:
+    """Return ``messages`` with worker-report blocks stripped from assistant turns.
+
+    For prompt-bound history lists of ``{role, content}`` dicts. Non-dict
+    items and non-assistant turns pass through untouched.
+    """
+    return [
+        {**m, "content": strip_worker_reports(m.get("content", ""))}
+        if isinstance(m, dict) and m.get("role") == "assistant"
+        else m
+        for m in messages
+    ]
+
+
 # Session 122: a final answer at least this long is treated as substantive
 # and NEVER gets the deterministic evidence report appended — the execution
 # trace is already visible via the inline action cards + Actions tab.
@@ -150,7 +203,7 @@ class WorkReport:
         if not self.entries:
             return ""
 
-        lines = ["Worker report — tool execution evidence:"]
+        lines = [WORK_REPORT_HEADER]
         if self.hit_limit:
             lines.append("The agent loop reached its iteration limit after these operations:")
         for index, entry in enumerate(self.entries, 1):

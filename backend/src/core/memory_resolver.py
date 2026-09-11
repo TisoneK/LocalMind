@@ -26,6 +26,8 @@ import asyncio
 import logging
 from typing import Optional
 
+from core.agent.models import strip_worker_reports_from_history
+
 logger = logging.getLogger(__name__)
 
 # NOT_FOUND sentinel — the model's escape hatch when the conversation
@@ -54,7 +56,7 @@ def build_resolution_messages(
 ) -> list[dict]:
     """Assemble the resolution prompt: system contract + evidence transcript + ask."""
     lines: list[str] = []
-    for msg in history[-_MAX_HISTORY_TURNS:]:
+    for msg in strip_worker_reports_from_history(history[-_MAX_HISTORY_TURNS:]):
         role = str(msg.get("role", "?"))
         content = str(msg.get("content", "") or "").strip()
         if not content:

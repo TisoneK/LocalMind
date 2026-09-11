@@ -101,7 +101,7 @@ from core.agent.initialization import (
     build_initialization_prompt,
     parse_initialization,
 )
-from core.agent.models import AgentStep, AgentTrace
+from core.agent.models import AgentStep, AgentTrace, strip_worker_reports, strip_worker_reports_from_history
 from core.agent.prompts import build_agent_intent_tail, build_agent_system_prompt, build_planning_prompt
 from core.agent.turn_outcome import Recovery, TurnOutcome, classify_turn_outcome
 
@@ -3211,7 +3211,7 @@ class AgentLoop:
 
                 _pre_hist_text = "\n".join(
                     f"{h.get('role', '?')}: {str(h.get('content', ''))[:200]}"
-                    for h in messages[-4:]
+                    for h in strip_worker_reports_from_history(messages[-4:])
                     if h.get("role") != "system" and h.get("content")
                 )
                 _ev = Evidence(
@@ -6709,6 +6709,12 @@ class AgentLoop:
 
                 # If the stream already ended (short response), we're done
                 if stream_ended_early:
+                    # Drop a mimicked internal-report block before the gate
+                    # evidence check, the flush, and persistence see it.
+                    _clean_head = strip_worker_reports(_stripped_buffer)
+                    if _clean_head != _stripped_buffer:
+                        _stripped_buffer = _clean_head
+                        full_text = strip_worker_reports(full_text)
                     trace.final_response = full_text
                     trace.steps.append(
                         AgentStep(
@@ -6866,6 +6872,17 @@ class AgentLoop:
                         # Session 332-B: buffer instead of yield. The flush
                         # happens after the acceptance gate confirms is_final.
                         _iteration_clean_text += _chunk_clean
+
+                # If the model mimicked the internal evidence-recap format
+                # (it may have read it back from a polluted history), drop
+                # the block now — before the gate evidence check, the flush,
+                # and persistence see it. The deterministic renderer stays
+                # the only author of that format.
+                _raw_combined = _stripped_buffer + _iteration_clean_text
+                _clean_combined = strip_worker_reports(_raw_combined)
+                if _clean_combined != _raw_combined:
+                    full_text = strip_worker_reports(full_text)
+                    _stripped_buffer, _iteration_clean_text = _clean_combined, ""
 
                 trace.final_response = full_text
                 trace.steps.append(
@@ -9215,6 +9232,31 @@ class AgentLoop:
             return  # CRITICAL: return after yielding the exception fallback
 
         _final_text = "".join(_final_text_parts)
+        # If the synthesis mimicked the internal evidence-recap format (the
+        # observation log can echo it from polluted history), drop the block:
+        # the deterministic renderer below stays the only author, and the
+        # evidence check evaluates the clean answer.
+        _clean_final = strip_worker_reports(_final_text)
+        if _clean_final != _final_text:
+            _final_text = _clean_final
+            _seen_text = False
+            _rebuilt_chunks: list[StreamChunk] = []
+            for _chunk in _final_chunks:
+                if _chunk.text:
+                    if not _seen_text:
+                        _rebuilt_chunks.append(
+                            StreamChunk(
+                                text=_final_text,
+                                thinking=_chunk.thinking,
+                                done=False,
+                                usage=_chunk.usage,
+                            )
+                        )
+                        _seen_text = True
+                    # Subsequent text chunks carried the mimicked block — drop.
+                else:
+                    _rebuilt_chunks.append(_chunk)
+            _final_chunks = _rebuilt_chunks
         # Session 419: record that the rescue produced a REAL model answer
         # (not a deterministic fallback) so post-loop failure classification
         # can tell a rescued turn from a failed one — a capped run whose

@@ -24,6 +24,7 @@ from typing import AsyncIterator, Optional
 from agents.parent import ParentAgent
 from core.agent.constants import AGENT_ALLOWED_TOOLS
 from core.agent.loop import AgentLoop, TerminalProviderError
+from core.agent.models import strip_worker_reports
 from core.agent_workspace import build_workspace_artifacts
 from core.anomalies import detect_turn_anomalies
 from core.config import settings
@@ -835,7 +836,14 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
                         self._store.get_history, session_id
                     )
                     _hist_dicts_mem = [
-                        {"role": h.role.value, "content": h.content}
+                        {
+                            "role": h.role.value,
+                            "content": (
+                                strip_worker_reports(h.content)
+                                if h.role == Role.ASSISTANT
+                                else h.content
+                            ),
+                        }
                         for h in _hist_mem[-8:]
                         if h.content
                     ]
@@ -1504,10 +1512,16 @@ class AgentRuntime(_MemoryMixin, _PersistenceMixin, _ReflectionMixin):
         for item in history[-8:]:
             if item.role not in (Role.USER, Role.ASSISTANT) or not item.content.strip():
                 continue
+            _content = item.content[-4000:]
+            if item.role == Role.ASSISTANT:
+                # Internal evidence-recap blocks are user-facing fallback
+                # output; the model must never read its own format back or it
+                # starts mimicking it into future answers.
+                _content = strip_worker_reports(_content)
             prompt_messages.append(
                 {
                     "role": item.role.value,
-                    "content": item.content[-4000:],
+                    "content": _content,
                 }
             )
         if attachment and attachment.chunks:
