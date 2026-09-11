@@ -1546,3 +1546,11 @@ if literally nothing slowed you down.
 - **Cause:** the durable logs are now 1,500+ lines deep, so multi-file bulk tails overshoot the tool-output budget; and this box has Windows PowerShell 5.1 only (`powershell`), no `pwsh` on PATH — the AGENTS/kickoff guidance to use the `.cmd` launchers exists precisely for this, re-confirmed the hard way.
 - **Workaround / fix:** tail logs ONE file at a time (~4–5KB windows) or grep the section headers first; always go through the `.cmd` launchers for `.context_ledger/core/bin/*` on Windows.
 - **Prevent next time:** Phase 1 already prescribes "last 3–5 entries" — slice per file, not per burst; the `.cmd` rule is standing guidance, follow it before trying the `.ps1`.
+
+---
+## 2026-09-11 — Asha / qwen3.8-flash (Session 467, 1.0.0 adoption burst)
+- **Problem:** three small frictions in one burst: (1) `git push` died once with HTTP 408 (remote hangup) — retry succeeded immediately; (2) the migrated `history.conf` DISPLAYED as cp1252 mojibake (`â€"`), which read like a migration encoding bug — `od -c` showed correct UTF-8 em-dash bytes, so it was a terminal display artifact, not file corruption (a "repair" would have double-encoded the file); (3) the update flag is spelled `-Major` on the Windows ps1 port but `--major` in the POSIX port/CHANGELOG — the owner's `sh ... update core --major` form maps to `.cmd update -Major` here.
+- **Cost:** ~3 extra commands, one failed push.
+- **Cause:** (1) transient network; (2) the Bash tool's output pipeline renders some UTF-8 as cp1252 — file bytes and displayed bytes are not the same evidence; (3) two ports, two spellings for one switch.
+- **Workaround / fix:** retry pushes once before diagnosing; verify suspect encodings with `od -c` (or `git diff`) on the BYTES before editing — and remember bare `python` is the Windows Store stub (the "repair" script silently no-opped through it; use `backend/.venv/Scripts/python.exe`); use the `.cmd` launchers and their `-Major` spelling on Windows.
+- **Prevent next time:** same file-evidence discipline as the live-testing bar — display is not proof; and keep the two-spelling note next to the update instructions in `environments.md` (added).
