@@ -25,6 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Asha | S467 | qwen3.8-flash | Context sync — board read-in, registries refreshed, exit gate verified (Windows, Lameck checkout) |
 
 <!-- Clock-out 2026-09-11 (final): Njeri (S462) — re-checked in for the
 exit-gate leftovers; all four were landed first by Elena (S464) and my

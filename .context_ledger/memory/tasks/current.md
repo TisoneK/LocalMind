@@ -1,28 +1,20 @@
 # Current Task
 
-**Status:** IDLE — **Session 465 (Zuri / glm-5.3-flash, ZCode local, Windows)
-COMPLETE (2026-09-11).**
+**Status:** ACTIVE — **Session 467 (Asha / qwen3.8-flash, ZCode local, Windows)
+— context sync.**
 
-Benchmark suite extended + first Windows live run ("you do alive testing"):
-`scripts/lm_benchmark.py` gained the per-adapter model pin + `--adapter`/
-`--model` (mirrors `aa08cd5`; bankofai free tier answers `qwen3.8-flash`),
-multi-turn setup support, per-test usage capture + quality-per-token summary,
-raw-SSE evidence, unknown-ID warning; new categories MEMC (temporal memory
-conflict + reason preservation), KIT (coding fixtures scored by executing the
-fixed module), REC (genuinely missing file) — product `b02c3525`/`71ab798e`.
-LIVE: 13 tests, 4 batches on bankofai/qwen3.8-flash — **9 PASS / 4 PARTIAL /
-0 FAIL**; new categories 5/5 first-run green. PARTIAL root causes named:
-3× CAT1 = weak-model `thinking_token` exposure (owner policy question);
-CAT15-1 = provider stream error mid-turn after correct injection
-identification — fallback contract held. **New:** B-2026-09-11-1 (the wire
-`done` event carries no `provider_usage` — token-efficiency measurement
-blocked until forwarded). Flaw: `rebase --continue` bypassed the marker gate
-(stray marker fixed `86050a4d`). Report:
-`memory/reviews/2026-09-11-review-s465.md`.
-
-**Next up:** B-2026-09-11-1 (usage → SSE `done`), owner calls on
-thinking-exposure policy + B-2026-09-10-8 (`grep_search` expose-or-retire),
-B-2026-09-10-4 (date bombs — still the exit-gate pytest blocker), then
-B-2026-09-10-5/6, OTT reruns, peer claims. Candidate benchmark session: port
-CAT10 into the harness + agent-vs-direct token comparison once B-2026-09-11-1
-lands.
+- **Feature:** none (ledger-only session; no product code)
+- **Task:** owner said "Context Sync": Phase 1 sync (pull — up to date; core
+  verify — OK 0.22.0; memory read-in — board empty, no open claims, no stale
+  worktrees), refresh the update-in-place registries (`system/ai-models.md`,
+  `system/environments.md`), run the gates, log the session, exit gate with
+  the recorded S462 sequencing (exit gate BEFORE the clock-out commit),
+  clock out.
+- **Known carried state (deliberately NOT touched):** core 1.0.0 available in
+  `C:/Users/Lameck/Tisone/context-ledger` — MAJOR bump, owner go-ahead
+  required (`ledger-sync update -Major`); date-bomb family B-2026-09-10-4
+  still the sole tracked exit-gate pytest blocker.
+- **Owner decisions open (unchanged from S465/S466):** B-2026-09-11-1
+  (usage → SSE `done`), thinking-exposure policy, B-2026-09-10-8
+  (`grep_search` expose-or-retire), B-2026-09-10-4/-5/-6, OTT reruns,
+  B-2026-09-11-2 (design-first).
