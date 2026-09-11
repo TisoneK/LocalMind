@@ -906,3 +906,12 @@ just the number, before trusting a before/after label.
 - **Root cause:** `check` validates every published event individually; the event contract has no `supersedes`/`invalidated` field and events are immutable.
 - **Suggested fix:** package: a release may declare `supersedes: <event-id>`; the checker then reports the superseded event as a note, not a problem. Emit-time validation: require ≥1 product-commit-looking ref when type=release (the 249781fc mistake would have been rejected BEFORE publishing).
 - **Status:** open (second occurrence; strengthens S460's ask)
+
+---
+## 2026-09-10 — Session 464 (Elena, macOS) — `ledger-collab check` fails SILENTLY: rc=2, no verdict, no failing event named
+
+- **Symptom:** `sh .context_ledger/core/bin/ledger-collab check` exits **2** printing only `awk: towc: multibyte conversion failure on: …` — no `FAIL:` lines, no summary. The gate is unusable, and it reads as "your own claim event is malformed".
+- **Root cause:** six legacy `.md` events hold a bare `0x97` byte (Windows-1252 em-dash written by Windows agents). `ledger-collab-check` parses every event in ONE awk pass; BSD awk (macOS `/usr/bin/awk`; `gawk` absent) aborts there. The tool then reports failure without naming the event or the encoding.
+- **Workaround:** `LC_ALL=C sh .context_ledger/core/bin/ledger-collab check …` (byte semantics; the check then gives a real verdict).
+- **Suggested fix (package):** run the checker's awk under `LC_ALL=C` itself, or pre-validate each event's UTF-8 and SKIP the bad file with a warning naming it — never exit 2 with no verdict. Same class of silence the project already fought in the agent loop: a failure must say WHAT failed.
+- **Status:** open (new)
