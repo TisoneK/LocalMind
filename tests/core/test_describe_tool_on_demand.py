@@ -47,7 +47,7 @@ def test_tier_split_covers_catalog_exactly() -> None:
     # Session 411 (P0 Context Engineering): 6 tools moved from CORE to LONG_TAIL
     # (git, process, web_research, observe, sysinfo, calculator) — ~900 tok/call
     # saved on the always-present tools param. Core: 17→11, long-tail: 16→22.
-    assert len(CORE_TOOL_NAMES) == 11  # Session 411: -git, -process, -web_research, -observe, -sysinfo, -calculator
+    assert len(CORE_TOOL_NAMES) == 12  # S411 (-6); dir_explorer joined the always-present core surface
     assert len(LONG_TAIL_TOOL_NAMES) == 23  # S411 (+6); S457 (+search_tool_results, P0 slice 2 retrieval tool)
     # the ADR's named long tail is all present (browse is CORE, not long-tail)
     for name in ("delegate", "sql", "csv", "json", "best_of_n_edit",
@@ -59,7 +59,7 @@ def test_tier_split_covers_catalog_exactly() -> None:
         assert name in LONG_TAIL_TOOL_NAMES
     # the always-present core set (Session 411: git removed — now on-demand)
     for name in ("shell", "file_task", "file_write", "edit_file", "system_search",
-                 "web_search", "web_fetch", "code_exec", "browse"):
+                 "dir_explorer", "web_search", "web_fetch", "code_exec", "browse"):
         assert name in CORE_TOOL_NAMES
 
 
