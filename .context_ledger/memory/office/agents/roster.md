@@ -25,6 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Amir | S468 | glm-5.3-flash | protocol sync — same-MAJOR core update (1.0.0 → 1.0.2) + gate-teeth flaw re-check |
 
 <!-- Clock-out 2026-09-11 (second): Asha (S467) — core 1.0.0 adopted with
 owner go-ahead: update + office migration clean (fbe59fa2/ddc9843b), entry
