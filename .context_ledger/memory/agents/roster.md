@@ -25,6 +25,7 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
+| Asha | S467 | qwen3.8-flash | Core 1.0.0 adoption (owner go-ahead) — office regroup + entry-point refresh |
 
 <!-- Clock-out 2026-09-11: Asha (S467) — context sync complete: main ==
 origin, core OK 0.22.0, registries refreshed, session record + flaw landed
