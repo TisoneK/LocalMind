@@ -19,6 +19,11 @@ zai/glm-4.5-flash. Usage:
   cd backend && ../scripts/live_test_dir_explorer.py --label zen-primary
   cd backend && ../scripts/live_test_dir_explorer.py --label zai-weak \
       --adapter zai
+  cd backend && ../scripts/live_test_dir_explorer.py --label bankofai \
+      --adapter bankofai
+
+Each adapter is pinned to a currently-served model (see _ADAPTER_MODEL);
+--model overrides it when a provider rotates its free tier.
 
 Artifacts: scratch/server-direxplore-<label>.log,
 scratch/sse-direxplore-<label>-<name>.sse,
@@ -51,6 +56,18 @@ SCRATCH = REPO / "scratch"
 TRACEHOME = SCRATCH / "direxplore-home"
 REAL_SETTINGS = Path.home() / "LocalMind" / "settings.json"
 
+# Per-adapter model pin. The server maps the settings "model" key onto
+# {adapter}_model, so this is how a run targets a model the provider actually
+# serves. Needed because several adapters' built-in defaults have gone stale
+# (bankofai no longer serves its configured deepseek-v4-flash; its free tier
+# answers on qwen3.8-flash). Unlisted adapters fall back to their own default.
+_ADAPTER_MODEL = {
+    "bankofai": "qwen3.8-flash",
+    "zen": "deepseek-v4-flash-free",
+    "zai": "glm-4.5-flash",
+    "gemini": "gemini-2.5-flash",
+}
+
 # name -> (prompt, expected-first-tool, expected-operation or None)
 PROMPTS = [
     # The two new-capability prompts (design §10).
@@ -79,13 +96,14 @@ PROMPTS = [
 ]
 
 
-def prepare_home(adapter: str) -> None:
+def prepare_home(adapter: str, model: str = "") -> None:
     """Scratch LOCALMIND_HOME with the real settings, provider-rewritten.
 
-    The copied settings carry api keys — never cat, never print. The stale
-    generic "model" key is dropped so the requested provider's default
-    model applies (a leftover cloud model would otherwise be mapped onto
-    the new provider).
+    The copied settings carry api keys — never cat, never print. The "model"
+    key is pinned to the adapter's entry in _ADAPTER_MODEL (or --model) so the
+    run targets a model the provider actually serves; an adapter with no pin
+    keeps its own default, because a leftover cloud model from the copied
+    settings would otherwise be mapped onto the new provider.
     """
     TRACEHOME.mkdir(parents=True, exist_ok=True)
     dst = TRACEHOME / "settings.json"
@@ -94,7 +112,11 @@ def prepare_home(adapter: str) -> None:
     else:
         data = {}
     data["adapter"] = adapter
-    data.pop("model", None)
+    resolved_model = model or _ADAPTER_MODEL.get(adapter, "")
+    if resolved_model:
+        data["model"] = resolved_model
+    else:
+        data.pop("model", None)
     keys = data.get("api_keys") or {}
     if adapter not in keys and not provider_key(adapter):
         print(f"ERROR: no API key configured for provider '{adapter}' "
@@ -269,6 +291,7 @@ def main() -> int:
     ap.add_argument("--label", default="run")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--adapter", default="", help="zen|zai|bankofai (default: LOCALMIND_ADAPTER env)")
+    ap.add_argument("--model", default="", help="override the model (default: the adapter's _ADAPTER_MODEL pin)")
     ap.add_argument("--prompts", default=",".join(n for n, _, _, _ in PROMPTS))
     ap.add_argument("--cooldown", type=float, default=12.0)
     args = ap.parse_args()
@@ -278,9 +301,10 @@ def main() -> int:
         print("ERROR: no provider — pass --adapter (or set LOCALMIND_ADAPTER).")
         return 2
     print(f"provider adapter: {adapter} (key resolved from env/settings, never printed)")
+    print(f"model: {args.model or _ADAPTER_MODEL.get(adapter, '<adapter default>')}")
 
     SCRATCH.mkdir(exist_ok=True)
-    prepare_home(adapter)
+    prepare_home(adapter, args.model)
     log_file = SCRATCH / f"server-direxplore-{args.label}.log"
 
     kill_port(args.port)
