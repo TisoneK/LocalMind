@@ -23,8 +23,9 @@ is your stable session tag.
 | <Name> | S<NNN> | <model id> | <what you're doing> |
 -->
 
-| Name | Codename | Model | Doing |
-|------|----------|-------|-------|
+| Name | Codename | Model | Doing ||------|----------|-------|-------|
+| Elena | S464 | deepseek-v4-flash | Closing the exit gate: three more dir_explorer wiring leftovers surfaced by `ci-check` |
+
 <!-- Clock-out 2026-09-10: Elena (S464) — dir_explorer live-tested on
 bankofai/qwen3.8-flash (the protocol's PRIMARY provider): 3/3 new-capability
 picks PASS + system_search/shell non-regression PASS; the carried content-search
