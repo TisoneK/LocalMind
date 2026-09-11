@@ -194,7 +194,7 @@ TOOL_DEFINITIONS: list[dict] = [
             # your computer" local tools; the descriptions keep the
             # find-vs-inspect boundary explicit for weak models.
             "name": "dir_explorer",
-            "description": "Inspect LOCAL files/folders — use to look around a directory, sketch a project's structure, or check a path before writing. LOCAL disks only (NOT the web — that is 'browse'). For finding files by name/content use system_search/grep_search; for reading a file's contents use file_task.",  # noqa: E501
+            "description": "Inspect LOCAL files/folders — use to look around a directory, sketch a project's structure, or check a path before writing. LOCAL disks only (NOT the web — that is 'browse'). For finding files by name use system_search; for reading a file's contents use file_task.",  # noqa: E501
             "parameters": {
                 "type": "object",
                 "properties": {
