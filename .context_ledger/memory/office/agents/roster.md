@@ -25,7 +25,16 @@ is your stable session tag.
 
 | Name | Codename | Model | Doing |
 |------|----------|-------|-------|
-| Jabari | S470 | glm-5.3-flash (ZCode local, 18ae0130) | context sync: core 1.0.2 → 1.0.4, registries, gates |
+
+<!-- Clock-out 2026-09-11: Jabari (S470) — context sync complete: core 1.0.2 → 1.0.4
+(via S469's pull + same-MAJOR update from the tison-side package clone; core.lock
+churn-free). THE S467/S468 Windows gate-teeth flaw VERIFIED FIXED on the vendored
+core: two real-repo red exit-gate runs (documented 22 baseline + 3 tracked date
+bombs) end "ledger-gates: exit gate failed" + wrapper rc=2 with NO GATE PASSED
+line; flaws log carries the closure (904cefc8). Interim read-stdout rule retires
+on cores ≥ 1.0.3. Exit gate run BEFORE this closing commit per the S462
+sequencing: sole red = the tracked date-bomb trio. Board empty = nobody in the
+office. -->
 
 <!-- Clock-out 2026-09-11: Zawadi (S469) — B-2026-08-25-4 fixed and live-verified
 (78fadbcc fix + 14 tests, bb9555b1 changelog, b6203c2a review/release/backlog):
